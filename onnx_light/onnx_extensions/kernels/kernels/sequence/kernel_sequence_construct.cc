@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
@@ -103,6 +104,19 @@ Sequence SequenceConstruct::AsSequence(const Tensors &inputs) const {
   }
   out.elem_type = expected_dtype;
   return out;
+}
+
+void SequenceConstruct::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  Tensors inputs;
+  inputs.reserve(node.input_size());
+  for (int i = 0; i < node.input_size(); ++i) {
+    inputs.push_back(GetInput(node, i, rt.tensors()));
+  }
+  onnx_kernels::kernel::SequenceConstruct k(rt.kernel_ctx());
+  SetOutputSequence(node, 0, k.AsSequence(inputs), rt);
 }
 
 } // namespace kernel

@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
@@ -208,6 +209,40 @@ void TopK::operator()(const Tensor &x, int64_t k, int64_t axis, bool largest, bo
                       " preallocated Indices output shape does not match expected.");
   RawBufferAllocator *allocator = values.has_allocation() ? values.allocation_owner() : nullptr;
   RunTopK(x, k, resolved_axis, largest, sorted, values, indices, allocator);
+}
+
+void TopK::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireOutputCount(node, 2);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
+  const bool largest = GetAttributeIntOrDefault(node, "largest", 1) != 0;
+  const bool sorted = GetAttributeIntOrDefault(node, "sorted", 1) != 0;
+
+  // ``k``: from input[1] (1-D INT64 tensor of size 1) for opset >= 10,
+  // otherwise from the pre-opset-10 ``k`` INT attribute (required).
+  int64_t k = 0;
+  const int64_t opset_version = rt.kernel_ctx().opset.version;
+  if (opset_version >= 10) {
+    RequireInputCount(node, 2);
+    const Tensor &k_tensor = GetInput(node, 1, rt.tensors());
+    EXT_ENFORCE_INVALID(k_tensor.element_count() == 1,
+                        "RunNode: op 'TopK' input 'K' must be a 1-D tensor with a single element.");
+    EXT_ENFORCE_INVALID(!(k_tensor.data_type != static_cast<int32_t>(DataType::INT64)),
+                        "RunNode: op 'TopK' input 'K' must be INT64.");
+    k = k_tensor.AsInt64()[0];
+  } else {
+    RequireInputCount(node, 1);
+    const AttributeProto *k_attr = FindAttribute(node, "k");
+    EXT_ENFORCE_INVALID(k_attr != nullptr,
+                        "RunNode: op 'TopK' requires the 'k' attribute for opset < 10.");
+    k = k_attr->i();
+  }
+
+  onnx_kernels::kernel::TopK kernel(rt.kernel_ctx());
+  auto out = kernel(x, k, axis, largest, sorted);
+  SetOutput(node, 0, std::move(out.first), rt);
+  SetOutput(node, 1, std::move(out.second), rt);
 }
 
 } // namespace kernel

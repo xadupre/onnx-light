@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/elementwise_helpers.h"
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_light_helpers.h"
 #include <cstdint>
@@ -203,6 +204,41 @@ void BitwiseNot::operator()(const Tensor &x, Tensor &output) const {
   default:
     ThrowUnsupportedBitwise(kBitwiseNotName, x.data_type);
   }
+}
+
+void BitwiseAnd::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void BitwiseNot::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
+}
+
+void BitwiseOr::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
+}
+
+void BitwiseXor::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  SetOutput(node, 0, (*this)(x, y, &rt), rt);
 }
 
 } // namespace kernel

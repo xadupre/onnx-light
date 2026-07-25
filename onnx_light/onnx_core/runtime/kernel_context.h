@@ -17,10 +17,21 @@
 #include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE {
+
+// Forward declaration: kernels only hold a ``const NodeProto *`` and never
+// dereference the proto's definition here, so the full ``onnx_proto`` header is
+// intentionally not pulled into this low-level runtime header.
+class NodeProto;
+
 namespace core {
 namespace runtime {
 
 using ::onnx_light::core::runtime::RawBufferAllocator;
+
+// Forward declaration: ``KernelBase::Run`` takes ``RuntimeContext &`` by
+// reference, so a forward declaration is sufficient and avoids a circular
+// include (``runtime_context.h`` includes this header).
+class RuntimeContext;
 
 /**
  * Lightweight opset identifier used by the backend test library.
@@ -71,7 +82,7 @@ struct KernelContext {
 };
 
 /**
- * Base class for every backend test kernel.
+ * Base class for every kernel.
  *
  * Each concrete kernel class derives from ``KernelBase`` so it inherits
  * ownership of the construction-time ``KernelContext``. Derived kernels access
@@ -83,6 +94,17 @@ struct KernelContext {
  * lazy test-case lambdas capture kernels by value and may outlive the
  * ``KernelContext`` local variable used at registration time.
  *
+ * ``KernelBase`` is also the runtime dispatch interface: it exposes a virtual
+ * :cpp:func:`Run` that the runtime (:cpp:func:`RunNode` /
+ * :cpp:class:`RuntimeSession`) calls once per node. Each dispatch-registered
+ * kernel overrides :cpp:func:`Run` to read the node's current inputs from
+ * ``rt.tensors()``, invoke its own ``operator()`` and store the produced
+ * outputs back. The node the kernel runs for is attached once (during kernel
+ * resolution) via :cpp:func:`set_node`; the owning graph / execution plan
+ * outlives the kernel, so the stored pointer stays valid for the kernel's life.
+ * The default :cpp:func:`Run` throws — only kernels registered in the dispatch
+ * table (and the control-flow / custom kernels) override it.
+ *
  * Centralizing the context member here keeps every kernel class consistent,
  * makes it trivial to extend the construction-time interface (e.g. by
  * adding new fields to ``KernelContext``), and avoids a repeated
@@ -91,9 +113,26 @@ struct KernelContext {
 class KernelBase {
 public:
   explicit KernelBase(const KernelContext &ctx) : ctx_(ctx) {}
+  KernelBase(const KernelBase &) = default;
+  KernelBase &operator=(const KernelBase &) = default;
+  virtual ~KernelBase() = default;
+
+  /// Attaches the node this kernel runs for. Called once at kernel-resolution
+  /// time; the node outlives the kernel.
+  void set_node(const NodeProto &node) { node_ = &node; }
+
+  /// Runs the kernel for its node (see :cpp:func:`set_node`) against the
+  /// current state of ``rt``: reads the node's current inputs, computes and
+  /// writes the outputs back. Safe to call repeatedly. The default throws;
+  /// every dispatch-registered kernel overrides it.
+  virtual void Run(RuntimeContext &rt);
 
 protected:
   KernelContext ctx_;
+
+  /// The node this kernel was built for, or ``nullptr`` when the kernel is used
+  /// directly (e.g. in tests) without being resolved through the dispatch path.
+  const NodeProto *node_ = nullptr;
 };
 
 } // namespace runtime

@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/elementwise_helpers.h"
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
@@ -87,6 +88,26 @@ void BitShift::operator()(const Tensor &x, const Tensor &y, Direction direction,
     return;
   }
   BitShiftInPlaceDispatch(x, y, output, kRightShiftFn);
+}
+
+void BitShift::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &y = GetInput(node, 1, rt.tensors());
+  const std::string direction = GetRequiredAttributeString(node, "direction");
+  onnx_kernels::kernel::BitShift::Direction dir;
+  if (direction == "LEFT") {
+    dir = onnx_kernels::kernel::BitShift::Direction::kLeft;
+  } else if (direction == "RIGHT") {
+    dir = onnx_kernels::kernel::BitShift::Direction::kRight;
+  } else {
+    EXT_THROW_INVALID("RunNode: BitShift 'direction' must be 'LEFT' or 'RIGHT', got '", direction,
+                      "'.");
+  }
+  onnx_kernels::kernel::BitShift k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, y, dir, &rt), rt);
 }
 
 } // namespace kernel

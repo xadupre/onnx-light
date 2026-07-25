@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
@@ -169,6 +170,24 @@ void MelWeightMatrix::operator()(const Tensor &num_mel_bins, const Tensor &dft_l
   } else {
     EXT_THROW("kernel::MelWeightMatrix output_dtype must be FLOAT or DOUBLE.");
   }
+}
+
+void MelWeightMatrix::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 5);
+  RequireOutputCount(node, 1);
+  const Tensor &num_mel_bins = GetInput(node, 0, rt.tensors());
+  const Tensor &dft_length = GetInput(node, 1, rt.tensors());
+  const Tensor &sample_rate = GetInput(node, 2, rt.tensors());
+  const Tensor &lower_edge_hertz = GetInput(node, 3, rt.tensors());
+  const Tensor &upper_edge_hertz = GetInput(node, 4, rt.tensors());
+  const DataType output_dtype = static_cast<DataType>(
+      GetAttributeIntOrDefault(node, "output_datatype", static_cast<int64_t>(DataType::FLOAT)));
+  onnx_kernels::kernel::MelWeightMatrix k(rt.kernel_ctx());
+  SetOutput(
+      node, 0,
+      k(num_mel_bins, dft_length, sample_rate, lower_edge_hertz, upper_edge_hertz, output_dtype),
+      rt.tensors());
 }
 
 } // namespace kernel

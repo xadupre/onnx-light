@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
@@ -266,6 +267,18 @@ void Upsample::operator()(const Tensor &X, const Tensor &scales, const Attribute
   }
   EXT_THROW_INVALID("kernel::Upsample: unsupported mode '", attrs.mode,
                     "'. Supported modes: 'nearest', 'linear'/'bilinear'.");
+}
+
+void Upsample::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scales = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::Upsample::Attributes attrs;
+  attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
+  onnx_kernels::kernel::Upsample k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, scales, attrs, &rt), rt);
 }
 
 } // namespace kernel

@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
@@ -94,6 +96,22 @@ ONNX_LIGHT_INSTANTIATE_SCALER(int64_t);
 ONNX_LIGHT_INSTANTIATE_SCALER(int32_t);
 
 #undef ONNX_LIGHT_INSTANTIATE_SCALER
+
+void Scaler::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::vector<float> offset = GetAttributeFloatsOrDefault(node, "offset", {});
+  const std::vector<float> scale = GetAttributeFloatsOrDefault(node, "scale", {});
+  onnx_kernels::kernel::Scaler scaler(rt.kernel_ctx());
+  Tensor y = DispatchSVMByDataType(x, "Scaler", [&](auto *tag) {
+    using T = std::remove_pointer_t<decltype(tag)>;
+    (void)tag;
+    return scaler.template operator()<T>(x, offset, scale);
+  });
+  SetOutput(node, 0, std::move(y), rt.tensors());
+}
 
 } // namespace kernel
 } // namespace onnx_kernels

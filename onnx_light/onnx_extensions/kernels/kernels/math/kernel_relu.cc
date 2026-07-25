@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/cast_helper.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <stdexcept>
@@ -102,6 +103,14 @@ Tensor Relu::operator()(const Tensor &x, RuntimeContext *rt) const {
 void Relu::operator()(const Tensor &x, Tensor &output) const {
   ValidateOutput(x, output);
   Dispatch(x, output);
+}
+
+void Relu::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
 }
 
 } // namespace kernel

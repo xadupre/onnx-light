@@ -60,6 +60,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// output's element type, shape and bytes are an exact copy of ``input``.
 class Optional : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &input, RuntimeContext *rt = nullptr) const;
@@ -85,6 +86,7 @@ public:
 /// is correct in both cases. The kernel does not consume attributes.
 class OptionalGetElement : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &input, RuntimeContext *rt = nullptr) const;
@@ -109,6 +111,7 @@ public:
 /// opset-18 behavior where the input is omitted.
 class OptionalHasElement : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Tensor input: always returns ``Tensor<bool, {}>{true}`` (the input

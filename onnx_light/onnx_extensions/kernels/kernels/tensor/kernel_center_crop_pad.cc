@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <cstring>
@@ -226,6 +227,22 @@ void CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
       --axis;
     }
   }
+}
+
+void CenterCropPad::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &input_data = GetInput(node, 0, rt.tensors());
+  const Tensor &shape = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::CenterCropPad::Attributes attrs;
+  const AttributeProto *axes_attr = FindAttribute(node, "axes");
+  if (axes_attr != nullptr) {
+    attrs.axes = GetAttributeIntsOrDefault(node, "axes", {});
+    attrs.axes_present = true;
+  }
+  onnx_kernels::kernel::CenterCropPad k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input_data, shape, attrs, &rt), rt);
 }
 
 } // namespace kernel

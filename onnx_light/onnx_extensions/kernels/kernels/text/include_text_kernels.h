@@ -65,6 +65,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// NumPy-style bidirectional broadcasting.
 class StringConcat : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -91,6 +92,7 @@ public:
 /// semantics and splits on consecutive whitespace.
 class StringSplit : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   std::pair<Tensor, Tensor> operator()(const Tensor &x, const std::string &delimiter = "",
@@ -116,6 +118,7 @@ public:
 /// supports the ``"en_US"``-equivalent ASCII semantics.
 class StringNormalizer : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// ``case_change_action`` attribute values.
@@ -169,6 +172,7 @@ public:
 /// ``std::regex`` will throw ``std::invalid_argument``.
 class RegexFullMatch : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Allocating overload. Returns a freshly allocated ``tensor(bool)``
@@ -217,6 +221,7 @@ public:
 ///   empty.
 class TfIdfVectorizer : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Weighting criteria. Matches the ``mode`` attribute of the

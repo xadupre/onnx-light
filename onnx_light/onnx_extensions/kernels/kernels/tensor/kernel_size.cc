@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 
@@ -25,6 +26,15 @@ void Size::operator()(const Tensor &data, Tensor &output) const {
   EXT_ENFORCE_INVALID(output.size_bytes() == sizeof(int64_t),
                       "kernel::Size: preallocated output byte-size mismatch.");
   *reinterpret_cast<int64_t *>(output.mutable_bytes()) = n;
+}
+
+void Size::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  onnx_kernels::kernel::Size k(rt.kernel_ctx());
+  SetOutput(node, 0, k(data, &rt), rt);
 }
 
 } // namespace kernel

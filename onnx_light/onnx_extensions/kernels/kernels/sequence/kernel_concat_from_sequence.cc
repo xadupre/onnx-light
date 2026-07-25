@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
@@ -198,6 +199,20 @@ void ConcatFromSequence::operator()(const Tensors &inputs, int64_t axis, int64_t
   } else {
     CopyConcatenated(inputs, resolved_axis, out_shape, elem_size, output.data);
   }
+}
+
+void ConcatFromSequence::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+  const AttributeProto *axis_attr = FindAttribute(node, "axis");
+  EXT_ENFORCE_INVALID(axis_attr != nullptr,
+                      "RunNode: op 'ConcatFromSequence' is missing required attribute 'axis'.");
+  const int64_t axis = axis_attr->i();
+  const int64_t new_axis = GetAttributeIntOrDefault(node, "new_axis", 0);
+  onnx_kernels::kernel::ConcatFromSequence k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input_sequence.values, axis, new_axis, &rt), rt);
 }
 
 } // namespace kernel

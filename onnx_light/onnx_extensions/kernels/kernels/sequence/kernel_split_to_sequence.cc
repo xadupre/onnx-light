@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 #include <cstddef>
@@ -191,6 +192,20 @@ Sequence SplitToSequence::operator()(const Tensor &input, const Tensor *split, i
     outputs.push_back(std::move(out));
   }
   return Sequence("", input.data_type, std::move(outputs));
+}
+
+void SplitToSequence::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
+                      "' expects 1 or 2 inputs, got ", node.input_size(), ".");
+  RequireOutputCount(node, 1);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor *split = GetOptionalInput(node, 1, rt.tensors());
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+  const int64_t keepdims = GetAttributeIntOrDefault(node, "keepdims", 1);
+  onnx_kernels::kernel::SplitToSequence k(rt.kernel_ctx());
+  SetOutputSequence(node, 0, k(input, split, axis, keepdims), rt);
 }
 
 } // namespace kernel

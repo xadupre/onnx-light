@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/float16_promote.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstddef>
@@ -166,6 +167,23 @@ void Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float a
   default:
     EXT_THROW_INVALID(kGemmName, ": unsupported data type ", a.data_type, kSupportedGemmTypesMsg);
   }
+}
+
+void Gemm::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 3), "RunNode: op '",
+                      node.op_type(), "' expects between 2 and 3 input(s), got ", node.input_size(),
+                      ".");
+  RequireOutputCount(node, 1);
+  const Tensor &a = GetInput(node, 0, rt.tensors());
+  const Tensor &b = GetInput(node, 1, rt.tensors());
+  const Tensor *c = GetOptionalInput(node, 2, rt.tensors());
+  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.0f);
+  const float beta = GetAttributeFloatOrDefault(node, "beta", 1.0f);
+  const int64_t transA = GetAttributeIntOrDefault(node, "transA", 0);
+  const int64_t transB = GetAttributeIntOrDefault(node, "transB", 0);
+  onnx_kernels::kernel::Gemm k(rt.kernel_ctx());
+  SetOutput(node, 0, k(a, b, c, alpha, beta, transA, transB, &rt), rt);
 }
 
 } // namespace kernel

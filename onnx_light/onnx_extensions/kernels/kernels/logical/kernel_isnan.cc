@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
@@ -64,6 +65,14 @@ void IsNaN::operator()(const Tensor &x, Tensor &output) const {
     EXT_THROW_INVALID("unsupported data type ", x.data_type, ", ",
                       "kernel::IsNaN only supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16 tensors.");
   }
+}
+
+void IsNaN::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, &rt), rt);
 }
 
 } // namespace kernel

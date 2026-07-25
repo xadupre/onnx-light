@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cstring>
 #include <span>
 #include <stdexcept>
@@ -107,6 +109,47 @@ Tensors Split::operator()(const Tensor &input, int64_t axis, std::span<const int
     outputs.push_back(std::move(out));
   }
   return outputs;
+}
+
+void Split::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
+                      "' expects 1 or 2 inputs, got ", node.input_size(), ".");
+  EXT_ENFORCE_INVALID(!(node.output_size() < 1), "RunNode: op '", node.op_type(),
+                      "' expects at least 1 output, got 0.");
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+
+  // Resolve ``split``: from the optional 2nd input (opset >= 13), from the
+  // legacy ``split`` attribute (opset <= 12), or unspecified.
+  // When the split sizes come from a tensor input, use a zero-copy span
+  // view; otherwise fall back to an attribute-sourced vector.
+  const Tensor *split_input = GetOptionalInput(node, 1, rt.tensors());
+  std::vector<int64_t> split_attr;
+  std::span<const int64_t> split;
+  if (split_input != nullptr) {
+    split = TensorSpan<int64_t>(*split_input);
+  } else {
+    split_attr = GetAttributeIntsOrDefault(node, "split", {});
+    split = split_attr;
+  }
+
+  // ``num_outputs`` (opset >= 18) defaults to the number of outputs of the
+  // node when neither ``split`` nor the attribute is provided.
+  int64_t num_outputs = GetAttributeIntOrDefault(node, "num_outputs", 0);
+  if (split.empty() && num_outputs <= 0) {
+    num_outputs = static_cast<int64_t>(node.output_size());
+  }
+
+  onnx_kernels::kernel::Split k(rt.kernel_ctx());
+  Tensors outputs = k(input, axis, split, num_outputs);
+  EXT_ENFORCE_INVALID(!(static_cast<int>(outputs.size()) != node.output_size()),
+                      "RunNode: op 'Split' produced ", outputs.size(),
+                      " outputs but node declares ", node.output_size(), ".");
+  for (int i = 0; i < node.output_size(); ++i) {
+    SetOutput(node, i, std::move(outputs[static_cast<size_t>(i)]), rt);
+  }
 }
 
 } // namespace kernel

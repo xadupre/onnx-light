@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/reduction/include_reduction_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cmath>
@@ -243,6 +244,87 @@ void ReduceL1L2::operator()(const Tensor &data, const Tensor &axes, bool keepdim
   }
   const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
   L1L2Reduce(data, is_reduced, out_shape_noreduce, mode_, output);
+}
+
+void ReduceL1::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
+                      "' expects at most 2 inputs.");
+  RequireOutputCount(node, 1);
+  const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
+  const bool noop_with_empty_axes = GetAttributeIntOrDefault(node, "noop_with_empty_axes", 0) != 0;
+  const std::vector<int64_t> axes_attr = GetAttributeIntsOrDefault(node, "axes", {});
+  const bool has_axes_attr = !axes_attr.empty();
+  const Tensor axes_attr_tensor =
+      axes_attr.empty()
+          ? Tensor()
+          : Tensor::FromInt64("", {static_cast<int64_t>(axes_attr.size())}, axes_attr);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
+  if (axes_input != nullptr) {
+    SetOutput(node, 0, (*this)(data, *axes_input, keepdims, noop_with_empty_axes, &rt), rt);
+    return;
+  }
+  if (has_axes_attr) {
+    SetOutput(node, 0, (*this)(data, axes_attr_tensor, keepdims, noop_with_empty_axes, &rt), rt);
+    return;
+  }
+  SetOutput(node, 0, (*this)(data, keepdims, noop_with_empty_axes, &rt), rt);
+}
+
+void ReduceL2::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
+                      "' expects at most 2 inputs.");
+  RequireOutputCount(node, 1);
+  const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
+  const bool noop_with_empty_axes = GetAttributeIntOrDefault(node, "noop_with_empty_axes", 0) != 0;
+  const std::vector<int64_t> axes_attr = GetAttributeIntsOrDefault(node, "axes", {});
+  const bool has_axes_attr = !axes_attr.empty();
+  const Tensor axes_attr_tensor =
+      axes_attr.empty()
+          ? Tensor()
+          : Tensor::FromInt64("", {static_cast<int64_t>(axes_attr.size())}, axes_attr);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
+  if (axes_input != nullptr) {
+    SetOutput(node, 0, (*this)(data, *axes_input, keepdims, noop_with_empty_axes, &rt), rt);
+    return;
+  }
+  if (has_axes_attr) {
+    SetOutput(node, 0, (*this)(data, axes_attr_tensor, keepdims, noop_with_empty_axes, &rt), rt);
+    return;
+  }
+  SetOutput(node, 0, (*this)(data, keepdims, noop_with_empty_axes, &rt), rt);
+}
+
+void ReduceSumSquare::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
+                      "' expects at most 2 inputs.");
+  RequireOutputCount(node, 1);
+  const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
+  const bool noop_with_empty_axes = GetAttributeIntOrDefault(node, "noop_with_empty_axes", 0) != 0;
+  const std::vector<int64_t> axes_attr = GetAttributeIntsOrDefault(node, "axes", {});
+  const bool has_axes_attr = !axes_attr.empty();
+  const Tensor axes_attr_tensor =
+      axes_attr.empty()
+          ? Tensor()
+          : Tensor::FromInt64("", {static_cast<int64_t>(axes_attr.size())}, axes_attr);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
+  if (axes_input != nullptr) {
+    SetOutput(node, 0, (*this)(data, *axes_input, keepdims, noop_with_empty_axes, &rt), rt);
+    return;
+  }
+  if (has_axes_attr) {
+    SetOutput(node, 0, (*this)(data, axes_attr_tensor, keepdims, noop_with_empty_axes, &rt), rt);
+    return;
+  }
+  SetOutput(node, 0, (*this)(data, keepdims, noop_with_empty_axes, &rt), rt);
 }
 
 } // namespace kernel

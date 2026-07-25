@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/text/include_text_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -106,6 +107,19 @@ std::pair<Tensor, Tensor> StringSplit::operator()(const Tensor &x, const std::st
   Tensor y = Tensor::MakeString("", std::move(y_shape), std::move(y_data));
   Tensor z = Tensor::FromInt64("", x.shape, lengths, ctx_.allocator);
   return std::pair<Tensor, Tensor>(std::move(y), std::move(z));
+}
+
+void StringSplit::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 2);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::string delimiter = GetAttributeStringOrDefault(node, "delimiter", "");
+  const int64_t maxsplit = GetAttributeIntOrDefault(node, "maxsplit", -1);
+  onnx_kernels::kernel::StringSplit k(rt.kernel_ctx());
+  auto out = k(x, delimiter, maxsplit);
+  SetOutput(node, 0, std::move(out.first), rt);
+  SetOutput(node, 1, std::move(out.second), rt);
 }
 
 } // namespace kernel

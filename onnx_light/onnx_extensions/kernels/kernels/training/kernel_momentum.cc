@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/training/include_training_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -132,6 +133,46 @@ void Momentum::operator()(const Tensor &R, const Tensor &T, const Tensors &Xs, c
       pX_out[k] = static_cast<float>(x_new);
       pV_out[k] = static_cast<float>(v_new);
     }
+  }
+}
+
+void Momentum::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 5 || (node.input_size() - 2) % 3 != 0),
+                      "RunNode: op 'Momentum' expects 2 + 3*N inputs (got ", node.input_size(),
+                      ").");
+  const int64_t n = (node.input_size() - 2) / 3;
+  EXT_ENFORCE_INVALID(node.output_size() == 2 * n,
+                      "RunNode: op 'Momentum' expects 2*N outputs (got ", node.output_size(),
+                      " for N=", n, ").");
+  const Tensor &R = GetInput(node, 0, rt.tensors());
+  const Tensor &T = GetInput(node, 1, rt.tensors());
+  Tensors Xs, Gs, Vs;
+  Xs.reserve(n);
+  Gs.reserve(n);
+  Vs.reserve(n);
+  for (int64_t i = 0; i < n; ++i) {
+    Xs.push_back(GetInput(node, static_cast<int>(2 + i), rt.tensors()));
+    Gs.push_back(GetInput(node, static_cast<int>(2 + n + i), rt.tensors()));
+    Vs.push_back(GetInput(node, static_cast<int>(2 + 2 * n + i), rt.tensors()));
+  }
+  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.0f);
+  const float beta = GetAttributeFloatOrDefault(node, "beta", 0.0f);
+  const float norm_coefficient = GetAttributeFloatOrDefault(node, "norm_coefficient", 0.0f);
+  const std::string mode_str = GetAttributeStringOrDefault(node, "mode", "standard");
+  onnx_kernels::kernel::Momentum::Mode mode;
+  if (mode_str == "standard") {
+    mode = onnx_kernels::kernel::Momentum::Mode::kStandard;
+  } else if (mode_str == "nesterov") {
+    mode = onnx_kernels::kernel::Momentum::Mode::kNesterov;
+  } else {
+    EXT_THROW_INVALID("RunNode: Momentum 'mode' must be 'standard' or 'nesterov', got '", mode_str,
+                      "'.");
+  }
+  onnx_kernels::kernel::Momentum k(rt.kernel_ctx());
+  Tensors outs = k(R, T, Xs, Gs, Vs, alpha, beta, norm_coefficient, mode);
+  for (int64_t i = 0; i < 2 * n; ++i) {
+    SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]), rt.tensors());
   }
 }
 

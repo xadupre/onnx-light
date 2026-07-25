@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstring>
 #include <stdexcept>
@@ -114,6 +115,17 @@ void GatherElements::operator()(const Tensor &data, const Tensor &indices, int64
     std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(out_idx) * elem_size,
                 data.bytes() + static_cast<std::size_t>(data_idx) * elem_size, elem_size);
   }
+}
+
+void GatherElements::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &indices = GetInput(node, 1, rt.tensors());
+  const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+  onnx_kernels::kernel::GatherElements k(rt.kernel_ctx());
+  SetOutput(node, 0, k(data, indices, axis, &rt), rt);
 }
 
 } // namespace kernel

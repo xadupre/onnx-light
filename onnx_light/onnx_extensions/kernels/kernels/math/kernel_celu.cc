@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/cast_helper.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cmath>
@@ -90,6 +91,15 @@ Tensor Celu::operator()(const Tensor &x, float alpha, RuntimeContext *rt) const 
 void Celu::operator()(const Tensor &x, float alpha, Tensor &output) const {
   ValidateOutput(x, output);
   Dispatch(x, alpha, output);
+}
+
+void Celu::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.0f);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(x, alpha, &rt), rt);
 }
 
 } // namespace kernel

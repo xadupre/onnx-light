@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cmath>
@@ -262,6 +263,32 @@ void DeformConv::operator()(const Tensor &x, const Tensor &w, const Tensor &offs
       }
     }
   }
+}
+
+void DeformConv::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 3);
+  EXT_ENFORCE_INVALID(!(node.input_size() > 5),
+                      "RunNode: op 'DeformConv' expects at most 5 inputs, got ", node.input_size(),
+                      ".");
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &w = GetInput(node, 1, rt.tensors());
+  const Tensor &offset = GetInput(node, 2, rt.tensors());
+  const Tensor *b = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor *mask = GetOptionalInput(node, 4, rt.tensors());
+  onnx_kernels::kernel::DeformConv::Attributes attrs;
+  attrs.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
+  attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});
+  attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
+  attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
+  attrs.group = GetAttributeIntOrDefault(node, "group", 1);
+  attrs.offset_group = GetAttributeIntOrDefault(node, "offset_group", 1);
+  onnx_kernels::kernel::DeformConv k(rt.kernel_ctx());
+  SetOutput(
+      node, 0,
+      k(x, w, offset, b != nullptr ? *b : Tensor{}, mask != nullptr ? *mask : Tensor{}, attrs),
+      rt.tensors());
 }
 
 } // namespace kernel

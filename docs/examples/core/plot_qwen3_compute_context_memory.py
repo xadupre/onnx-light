@@ -139,7 +139,7 @@ def model_to_onnx(output_prefix, num_hidden_layers, batch, sequence_length, past
     TEST_CASE_NUM_ATTENTION_HEADS = 16
     TEST_CASE_NUM_KEY_VALUE_HEADS = 8
     TEST_CASE_HEAD_DIM = 128
-    TEST_CASE_VOCAB_SIZE = 151936
+    TEST_CASE_VOCAB_SIZE = 32000
 
     config = AutoConfig.for_model(
         TEST_CASE_MODEL_TYPE,

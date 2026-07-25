@@ -99,12 +99,19 @@ Summary of each library
         higher-level libraries.  Owns the graph-node input helpers
         (``CollectExternalInputs``, ``CollectNodeInputs``,
         ``CollectRemainingInputs``), the symbolic dimension-expression
-        library, and the ``LightOpSchema`` operator-schema data structures
-        so that ``lib_onnx_op``, ``lib_onnx_manipulations``,
-        ``lib_onnx_shape``, and ``lib_onnx_kernels`` can share them without
-        depending on each other.  Depends publicly on ``lib_onnx_proto``
-        (which owns the ``TensorType`` enumeration and ``ToTypeString``
-        converter).
+        library, the ``LightOpSchema`` operator-schema data structures, the
+        runtime execution engine, and the (initially empty) kernel and
+        shape-inference **dispatch tables** so that ``lib_onnx_op``,
+        ``lib_onnx_manipulations``, ``lib_onnx_shape``, and
+        ``lib_onnx_kernels`` can share them without depending on each other.
+        It implements *all* the generic mechanisms but registers **no**
+        concrete operators. The actual schemas, kernels, shape-inference and
+        peak-memory functions are **registered** into those shared dispatch
+        tables by the extension libraries through their
+        ``Register*Functions()`` entry points (``RegisterKernelFunctions``,
+        ``RegisterShapeFunctions``, ``RegisterPeakMemoryFunctions``, ...).
+        Depends publicly on ``lib_onnx_proto`` (which owns the
+        ``TensorType`` enumeration and ``ToTypeString`` converter).
     * - ``onnx_light::lib_onnx_op``:``onnx_light/onnx_op/``
       - Lightweight ``LightOpSchema`` registrations for ONNX operator
         domains (math, logical, tensor, sequence, traditional ML, ...),

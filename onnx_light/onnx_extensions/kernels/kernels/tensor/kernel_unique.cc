@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -409,6 +411,31 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
   out.inverse_indices = std::move(groups.inverse_indices);
   out.counts = std::move(groups.counts);
   return out;
+}
+
+void Unique::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputRange(node, 1, 4);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  onnx_kernels::kernel::Unique::Attributes attrs;
+  attrs.sorted = GetAttributeIntOrDefault(node, "sorted", 1) != 0;
+  const AttributeProto *axis_attr = FindAttribute(node, "axis");
+  if (axis_attr != nullptr) {
+    attrs.axis = axis_attr->i();
+  }
+  onnx_kernels::kernel::Unique k(rt.kernel_ctx());
+  auto out = k(x, attrs);
+  SetOutput(node, 0, std::move(out.y), rt);
+  if (node.output_size() >= 2) {
+    SetOutput(node, 1, std::move(out.indices), rt);
+  }
+  if (node.output_size() >= 3) {
+    SetOutput(node, 2, std::move(out.inverse_indices), rt);
+  }
+  if (node.output_size() >= 4) {
+    SetOutput(node, 3, std::move(out.counts), rt);
+  }
 }
 
 } // namespace kernel

@@ -92,6 +92,14 @@ public:
    */
   explicit RuntimeSession(const ExecutionPlan &plan);
 
+  // A session caches one owning ``std::unique_ptr<KernelBase>`` per node (see
+  // :cpp:member:`kernels_`), so it is move-only. It is always created in place
+  // (by value inside :cpp:class:`SubgraphSession`, or via ``std::make_shared``)
+  // and never copied; deleting the copy operations keeps that explicit and lets
+  // the Python binding treat it as a non-copyable type.
+  RuntimeSession(const RuntimeSession &) = delete;
+  RuntimeSession &operator=(const RuntimeSession &) = delete;
+
   /**
    * Executes the plan once against ``rt``: on the first call it resolves and
    * caches the kernel for every scheduled node (rejecting unsupported
@@ -164,25 +172,8 @@ private:
   /// :cpp:func:`KernelDispatchTable`) so :cpp:func:`Run` never has to
   /// recompute or re-store them separately.
   struct PreparedKernel {
-    PreparedKernel() = default;
-    PreparedKernel(const PreparedKernel &other)
-        : key(other.key),
-          instance(other.instance != nullptr ? std::make_unique<ResolvedKernel>(*other.instance)
-                                             : nullptr) {}
-    PreparedKernel &operator=(const PreparedKernel &other) {
-      if (this == &other) {
-        return *this;
-      }
-      key = other.key;
-      instance =
-          other.instance != nullptr ? std::make_unique<ResolvedKernel>(*other.instance) : nullptr;
-      return *this;
-    }
-    PreparedKernel(PreparedKernel &&) noexcept = default;
-    PreparedKernel &operator=(PreparedKernel &&) noexcept = default;
-
     std::string key;
-    std::unique_ptr<ResolvedKernel> instance;
+    std::unique_ptr<KernelBase> instance;
   };
 
   /// Resolves and builds the kernel instance for every node the plan executes,

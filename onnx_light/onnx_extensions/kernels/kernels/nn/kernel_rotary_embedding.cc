@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/float16_promote.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
@@ -213,6 +214,28 @@ void RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache, const
       }
     }
   }
+}
+
+void RotaryEmbedding::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 4), "RunNode: op '",
+                      node.op_type(), "' expects between 3 and 4 input(s), got ", node.input_size(),
+                      ".");
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &cos_cache = GetInput(node, 1, rt.tensors());
+  const Tensor &sin_cache = GetInput(node, 2, rt.tensors());
+  const Tensor *position_ids = GetOptionalInput(node, 3, rt.tensors());
+
+  onnx_kernels::kernel::RotaryEmbedding::Attributes attrs;
+  attrs.interleaved = GetAttributeIntOrDefault(node, "interleaved", 0) != 0;
+  attrs.rotary_embedding_dim = GetAttributeIntOrDefault(node, "rotary_embedding_dim", 0);
+  attrs.num_heads = GetAttributeIntOrDefault(node, "num_heads", 0);
+
+  onnx_kernels::kernel::RotaryEmbedding kernel(rt.kernel_ctx());
+  const Tensor empty;
+  const Tensor &pos = (position_ids != nullptr) ? *position_ids : empty;
+  SetOutput(node, 0, kernel(x, cos_cache, sin_cache, pos, attrs, &rt), rt);
 }
 
 } // namespace kernel

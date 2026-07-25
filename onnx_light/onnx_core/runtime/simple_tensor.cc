@@ -324,12 +324,12 @@ Tensor Tensor::BorrowStrings(std::string name, Shape shape,
   return t;
 }
 
-Tensor TensorFromProto(const TensorProto &tp) {
-  // Tensor name.
-  const std::string name = tp.name();
+Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
+  // Tensor name (borrowed from the proto; the Tensor makes its own copy).
+  const std::string &name = tp.name();
 
   // Tensor shape (dims are stored as uint64 in TensorProto).
-  std::vector<int64_t> shape;
+  Shape shape;
   shape.reserve(tp.dims().size());
   for (size_t i = 0; i < tp.dims().size(); ++i) {
     shape.push_back(static_cast<int64_t>(tp.dims()[i]));
@@ -352,60 +352,69 @@ Tensor TensorFromProto(const TensorProto &tp) {
   // The TensorProto must outlive the returned Tensor.
   if (tp.is_raw_data()) {
     const auto &rd = tp.raw_data();
-    return Tensor::Borrow(name, dtype, std::move(shape), rd.data(), rd.size());
+    return Tensor::Borrow(name, dtype, shape, rd.data(), rd.size());
   }
 
-  // Typed-field path: convert each field's values into a raw byte vector.
-  std::vector<uint8_t> bytes;
+  // Typed-field path: convert each field's values into a raw byte buffer.
+  // The buffer is acquired from ``allocator`` when provided (allocator-backed
+  // tensor), otherwise an inline ``std::vector<uint8_t>`` is used.
+  Tensor t;
+  // Creates the destination buffer of ``n_bytes`` and returns a writable
+  // pointer to it; the buffer is zero-initialised.
+  const auto make = [&](size_t n_bytes) -> uint8_t * {
+    t = MakeOutputTensor(dtype, shape, n_bytes, allocator);
+    t.name = name;
+    return t.mutable_bytes();
+  };
 
   switch (tp.data_type()) {
   case TensorProto::DataType::FLOAT: {
     const auto &fd = tp.float_data().values();
-    bytes.resize(fd.size() * sizeof(float));
+    uint8_t *dst = make(fd.size() * sizeof(float));
     if (!fd.empty()) {
-      std::memcpy(bytes.data(), fd.data(), bytes.size());
+      std::memcpy(dst, fd.data(), fd.size() * sizeof(float));
     }
     break;
   }
   case TensorProto::DataType::DOUBLE: {
     const auto &dd = tp.double_data().values();
-    bytes.resize(dd.size() * sizeof(double));
+    uint8_t *dst = make(dd.size() * sizeof(double));
     if (!dd.empty()) {
-      std::memcpy(bytes.data(), dd.data(), bytes.size());
+      std::memcpy(dst, dd.data(), dd.size() * sizeof(double));
     }
     break;
   }
   case TensorProto::DataType::INT64: {
     const auto &i64 = tp.int64_data().values();
-    bytes.resize(i64.size() * sizeof(int64_t));
+    uint8_t *dst = make(i64.size() * sizeof(int64_t));
     if (!i64.empty()) {
-      std::memcpy(bytes.data(), i64.data(), bytes.size());
+      std::memcpy(dst, i64.data(), i64.size() * sizeof(int64_t));
     }
     break;
   }
   case TensorProto::DataType::UINT64: {
     const auto &u64 = tp.uint64_data().values();
-    bytes.resize(u64.size() * sizeof(uint64_t));
+    uint8_t *dst = make(u64.size() * sizeof(uint64_t));
     if (!u64.empty()) {
-      std::memcpy(bytes.data(), u64.data(), bytes.size());
+      std::memcpy(dst, u64.data(), u64.size() * sizeof(uint64_t));
     }
     break;
   }
   case TensorProto::DataType::UINT32: {
     // uint64_data stores uint32 values as uint64; truncate each to 4 bytes.
     const auto &u64 = tp.uint64_data().values();
-    bytes.resize(u64.size() * sizeof(uint32_t));
+    uint8_t *dst = make(u64.size() * sizeof(uint32_t));
     for (size_t i = 0; i < u64.size(); ++i) {
       const uint32_t v = static_cast<uint32_t>(u64[i]);
-      std::memcpy(bytes.data() + i * sizeof(uint32_t), &v, sizeof(uint32_t));
+      std::memcpy(dst + i * sizeof(uint32_t), &v, sizeof(uint32_t));
     }
     break;
   }
   case TensorProto::DataType::INT32: {
     const auto &i32 = tp.int32_data().values();
-    bytes.resize(i32.size() * sizeof(int32_t));
+    uint8_t *dst = make(i32.size() * sizeof(int32_t));
     if (!i32.empty()) {
-      std::memcpy(bytes.data(), i32.data(), bytes.size());
+      std::memcpy(dst, i32.data(), i32.size() * sizeof(int32_t));
     }
     break;
   }
@@ -415,10 +424,10 @@ Tensor TensorFromProto(const TensorProto &tp) {
   case TensorProto::DataType::BFLOAT16: {
     // int32_data stores one 16-bit element per int32; take the low 2 bytes.
     const auto &i32 = tp.int32_data().values();
-    bytes.resize(i32.size() * sizeof(uint16_t));
+    uint8_t *dst = make(i32.size() * sizeof(uint16_t));
     for (size_t i = 0; i < i32.size(); ++i) {
       const uint16_t v = static_cast<uint16_t>(static_cast<uint32_t>(i32[i]));
-      std::memcpy(bytes.data() + i * sizeof(uint16_t), &v, sizeof(uint16_t));
+      std::memcpy(dst + i * sizeof(uint16_t), &v, sizeof(uint16_t));
     }
     break;
   }
@@ -432,9 +441,9 @@ Tensor TensorFromProto(const TensorProto &tp) {
   case TensorProto::DataType::FLOAT8E8M0: {
     // int32_data stores one 8-bit element per int32; take the low byte.
     const auto &i32 = tp.int32_data().values();
-    bytes.resize(i32.size());
+    uint8_t *dst = make(i32.size());
     for (size_t i = 0; i < i32.size(); ++i) {
-      bytes[i] = static_cast<uint8_t>(static_cast<uint32_t>(i32[i]));
+      dst[i] = static_cast<uint8_t>(static_cast<uint32_t>(i32[i]));
     }
     break;
   }
@@ -446,9 +455,9 @@ Tensor TensorFromProto(const TensorProto &tp) {
     // Sub-byte packed types: each int32 stores one packed byte (two 4-bit or
     // four 2-bit elements). Take the low byte of each int32.
     const auto &i32 = tp.int32_data().values();
-    bytes.resize(i32.size());
+    uint8_t *dst = make(i32.size());
     for (size_t i = 0; i < i32.size(); ++i) {
-      bytes[i] = static_cast<uint8_t>(static_cast<uint32_t>(i32[i]));
+      dst[i] = static_cast<uint8_t>(static_cast<uint32_t>(i32[i]));
     }
     break;
   }
@@ -456,7 +465,7 @@ Tensor TensorFromProto(const TensorProto &tp) {
     EXT_THROW_INVALID("TensorFromProto: unsupported data_type ", dtype);
   }
 
-  return Tensor(name, dtype, std::move(shape), std::move(bytes));
+  return t;
 }
 
 Tensor MakeOutputTensor(int32_t data_type, const Shape &shape, size_t n_bytes,

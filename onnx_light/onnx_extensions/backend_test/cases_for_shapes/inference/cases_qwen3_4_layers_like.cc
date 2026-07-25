@@ -33,7 +33,7 @@ namespace onnx_backend_test {
 //     past_key_values_value_N FP16[batch_size, 8, past_sequence_length, 128]
 //
 //   Outputs:
-//     output_0                FP16[batch_size, sequence_length, 151936]
+//     output_0                FP16[batch_size, sequence_length, 32000]
 //     present_key_values_key_N    FP16[batch_size, 8, past_seq+seq, 128]
 //     present_key_values_value_N  FP16[batch_size, 8, past_seq+seq, 128]
 //
@@ -117,7 +117,7 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
     AddInitializer<uint16_t>(*graph, down_proj.c_str(), {INT64_C(3072), INT64_C(1024)}, {});
   }
 
-  AddInitializer<uint16_t>(*graph, "p_lm_head_weight::T10", {INT64_C(1024), INT64_C(151936)}, {});
+  AddInitializer<uint16_t>(*graph, "p_lm_head_weight::T10", {INT64_C(1024), INT64_C(32000)}, {});
   AddInitializer<float>(
       *graph, "to_322", {INT64_C(1), INT64_C(1), INT64_C(64)},
       {1.0f,           0.80566406f,    0.64941406f,    0.5234375f,     0.42163086f,
@@ -162,7 +162,7 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
   }
 
   AddInitializer<uint16_t>(*graph, "model.norm.weight", {INT64_C(1024)}, {});
-  AddInitializer<uint16_t>(*graph, "lm_head.weight", {INT64_C(151936), INT64_C(1024)}, {});
+  AddInitializer<uint16_t>(*graph, "lm_head.weight", {INT64_C(32000), INT64_C(1024)}, {});
 
   // Golden shape-inference / in-place-reuse metadata, attached to each node as
   // it is created and verified by BigModelsInplaceInfo.
@@ -1115,7 +1115,7 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
 
   // ---- Graph outputs ------------------------------------------------------
   AppendValueInfo(*graph->add_output(), "output_0", DataType::FLOAT16,
-                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(151936))});
+                  {DimSpec("batch_size"), DimSpec("sequence_length"), DimSpec(INT64_C(32000))});
   for (int layer = 0; layer < 4; ++layer) {
     const std::string li = std::to_string(layer);
     AppendValueInfo(*graph->add_output(), "present_key_values_key_" + li, DataType::FLOAT16,

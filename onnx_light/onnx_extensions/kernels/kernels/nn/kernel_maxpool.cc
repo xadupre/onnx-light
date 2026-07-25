@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernels/nn/pool_attrs.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -344,6 +346,32 @@ std::pair<Tensor, Tensor> MaxPool::WithIndices(const Tensor &x, const Shape &ker
                                                int64_t storage_order, AutoPad auto_pad) const {
   return RunMaxPool(x, kernel_shape, strides, pads, ceil_mode, dilations, storage_order, auto_pad,
                     /*produce_indices=*/true);
+}
+
+void MaxPool::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2),
+                      "RunNode: op 'MaxPool' expects 1 or 2 output(s), got ", node.output_size(),
+                      ".");
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const PoolCommonAttrs a = ParsePoolCommonAttrs(node);
+  const int64_t storage_order = GetAttributeIntOrDefault(node, "storage_order", 0);
+  onnx_kernels::kernel::MaxPool k(rt.kernel_ctx());
+  const bool need_indices = node.output_size() == 2 && !node.output(1).empty();
+  if (need_indices) {
+    auto result = k.WithIndices(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode, a.dilations,
+                                storage_order, a.auto_pad);
+    SetOutput(node, 0, std::move(result.first), rt.tensors());
+    const std::string indices_name = node.output(1);
+    result.second.name = indices_name;
+    rt.tensors()[indices_name] = std::move(result.second);
+  } else {
+    SetOutput(node, 0,
+              k(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode, a.dilations, storage_order,
+                a.auto_pad),
+              rt.tensors());
+  }
 }
 
 } // namespace kernel

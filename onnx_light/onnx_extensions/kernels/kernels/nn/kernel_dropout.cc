@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -88,6 +90,58 @@ Tensor Dropout::operator()(const Tensor &data, float ratio, bool training_mode, 
                            training_mode, engine_seed);
   }
   return output;
+}
+
+void Dropout::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputRange(node, 1, 3);
+  RequireOutputRange(node, 1, 2);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+
+  // ``ratio``: from input[1] (scalar T1) when present, else from the
+  // pre-opset-12 ``ratio`` attribute (FLOAT, default 0.5).
+  float ratio = GetAttributeFloatOrDefault(node, "ratio", 0.5f);
+  const Tensor *ratio_input = GetOptionalInput(node, 1, rt.tensors());
+  if (ratio_input != nullptr) {
+    EXT_ENFORCE_INVALID(!(ratio_input->element_count() != 1),
+                        "RunNode: op 'Dropout' input 'ratio' must be a scalar tensor.");
+    switch (ratio_input->data_type) {
+    case static_cast<int32_t>(DataType::FLOAT):
+      ratio = ratio_input->AsFloat()[0];
+      break;
+    case static_cast<int32_t>(DataType::DOUBLE):
+      ratio = static_cast<float>(ratio_input->AsDouble()[0]);
+      break;
+    default:
+      EXT_THROW_INVALID("RunNode: op 'Dropout' input 'ratio' must be FLOAT or DOUBLE.");
+    }
+  }
+
+  // ``training_mode``: from input[2] (scalar BOOL) when present,
+  // otherwise defaults to false (inference behaviour).
+  bool training_mode = false;
+  const Tensor *training_input = GetOptionalInput(node, 2, rt.tensors());
+  if (training_input != nullptr) {
+    EXT_ENFORCE_INVALID(!(training_input->element_count() != 1),
+                        "RunNode: op 'Dropout' input 'training_mode' must be a scalar tensor.");
+    EXT_ENFORCE_INVALID(!(training_input->data_type != static_cast<int32_t>(DataType::BOOL)),
+                        "RunNode: op 'Dropout' input 'training_mode' must be BOOL.");
+    training_mode = training_input->AsBool()[0] != 0;
+  }
+
+  const int64_t seed =
+      GetAttributeIntOrDefault(node, "seed", onnx_kernels::kernel::Dropout::kNoSeed);
+
+  onnx_kernels::kernel::Dropout k(rt.kernel_ctx());
+  if (node.output_size() == 2) {
+    auto out = k(data, ratio, training_mode, seed);
+    SetOutput(node, 0, std::move(out.first), rt);
+    SetOutput(node, 1, std::move(out.second), rt);
+  } else {
+    Tensor mask("", static_cast<int32_t>(DataType::BOOL), data.shape,
+                std::vector<uint8_t>(static_cast<std::size_t>(data.element_count()), 1));
+    SetOutput(node, 0, k(data, ratio, training_mode, mask, seed, &rt), rt);
+  }
 }
 
 } // namespace kernel

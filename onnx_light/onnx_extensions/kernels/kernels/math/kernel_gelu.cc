@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/cast_helper.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <cstdint>
@@ -135,6 +136,16 @@ void Gelu::operator()(const Tensor &x, const std::string &approximate, Tensor &o
   ValidateAttribute(approximate);
   ValidateOutput(x, output);
   Dispatch(x, approximate, output);
+}
+
+void Gelu::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const std::string approximate = GetAttributeStringOrDefault(node, "approximate", "none");
+  onnx_kernels::kernel::Gelu k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, approximate, &rt), rt);
 }
 
 } // namespace kernel

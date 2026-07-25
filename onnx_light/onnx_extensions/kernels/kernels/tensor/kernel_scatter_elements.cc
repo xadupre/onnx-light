@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstring>
@@ -45,12 +46,12 @@ Tensor ReadScatterElementsIndices(const Tensor &indices, RawBufferAllocator *all
 }
 
 template <typename T>
-void ApplyScatterElementsTyped(const Tensor &updates, RawBuffer &out_bytes,
-                               const int64_t *idx_values, int64_t total, int64_t axis,
-                               int64_t axis_dim, const onnx_kernels::Shape &data_strides,
+void ApplyScatterElementsTyped(const Tensor &updates, uint8_t *out_bytes, const int64_t *idx_values,
+                               int64_t total, int64_t axis, int64_t axis_dim,
+                               const onnx_kernels::Shape &data_strides,
                                const onnx_kernels::Shape &idx_strides, const std::string &reduction,
                                int64_t r) {
-  T *out = reinterpret_cast<T *>(out_bytes.data());
+  T *out = reinterpret_cast<T *>(out_bytes);
   const T *upd = reinterpret_cast<const T *>(updates.bytes());
   onnx_kernels::Shape coord;
   coord.assign(static_cast<std::size_t>(r), 0);
@@ -93,7 +94,8 @@ void ApplyScatterElementsTyped(const Tensor &updates, RawBuffer &out_bytes,
 
 Tensor ScatterElements::operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
                                    const Attributes &attrs, RuntimeContext *rt) const {
-  Tensor out("", data.data_type, data.shape, data.data);
+  Tensor out = MakeOutputTensor(data.data_type, data.shape, data.size_bytes(),
+                                rt != nullptr ? rt->allocator() : nullptr);
   (*this)(data, indices, updates, attrs, out);
   return out;
 }
@@ -146,23 +148,28 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
 
   const int32_t dt = data.data_type;
   if (dt == static_cast<int32_t>(DataType::FLOAT)) {
-    ApplyScatterElementsTyped<float>(updates, output.data, idx_values, total_indices, axis,
-                                     axis_dim, data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<float>(updates, output.mutable_bytes(), idx_values, total_indices,
+                                     axis, axis_dim, data_strides, idx_strides, attrs.reduction, r);
   } else if (dt == static_cast<int32_t>(DataType::DOUBLE)) {
-    ApplyScatterElementsTyped<double>(updates, output.data, idx_values, total_indices, axis,
-                                      axis_dim, data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<double>(updates, output.mutable_bytes(), idx_values, total_indices,
+                                      axis, axis_dim, data_strides, idx_strides, attrs.reduction,
+                                      r);
   } else if (dt == static_cast<int32_t>(DataType::INT32)) {
-    ApplyScatterElementsTyped<int32_t>(updates, output.data, idx_values, total_indices, axis,
-                                       axis_dim, data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<int32_t>(updates, output.mutable_bytes(), idx_values, total_indices,
+                                       axis, axis_dim, data_strides, idx_strides, attrs.reduction,
+                                       r);
   } else if (dt == static_cast<int32_t>(DataType::INT64)) {
-    ApplyScatterElementsTyped<int64_t>(updates, output.data, idx_values, total_indices, axis,
-                                       axis_dim, data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<int64_t>(updates, output.mutable_bytes(), idx_values, total_indices,
+                                       axis, axis_dim, data_strides, idx_strides, attrs.reduction,
+                                       r);
   } else if (dt == static_cast<int32_t>(DataType::UINT8)) {
-    ApplyScatterElementsTyped<uint8_t>(updates, output.data, idx_values, total_indices, axis,
-                                       axis_dim, data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<uint8_t>(updates, output.mutable_bytes(), idx_values, total_indices,
+                                       axis, axis_dim, data_strides, idx_strides, attrs.reduction,
+                                       r);
   } else if (dt == static_cast<int32_t>(DataType::INT8)) {
-    ApplyScatterElementsTyped<int8_t>(updates, output.data, idx_values, total_indices, axis,
-                                      axis_dim, data_strides, idx_strides, attrs.reduction, r);
+    ApplyScatterElementsTyped<int8_t>(updates, output.mutable_bytes(), idx_values, total_indices,
+                                      axis, axis_dim, data_strides, idx_strides, attrs.reduction,
+                                      r);
   } else {
     // Fall back to byte-wise copy when reduction == "none".
     EXT_ENFORCE_INVALID(attrs.reduction == "none",
@@ -193,6 +200,20 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
                   updates.bytes() + static_cast<std::size_t>(u_idx) * elem_size, elem_size);
     }
   }
+}
+
+void ScatterElements::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &indices = GetInput(node, 1, rt.tensors());
+  const Tensor &updates = GetInput(node, 2, rt.tensors());
+  onnx_kernels::kernel::ScatterElements::Attributes attrs;
+  attrs.axis = GetAttributeIntOrDefault(node, "axis", 0);
+  attrs.reduction = GetAttributeStringOrDefault(node, "reduction", "none");
+  onnx_kernels::kernel::ScatterElements k(rt.kernel_ctx());
+  SetOutput(node, 0, k(data, indices, updates, attrs, &rt), rt);
 }
 
 } // namespace kernel

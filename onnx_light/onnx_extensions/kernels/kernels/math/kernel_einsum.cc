@@ -5,6 +5,7 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 #include "onnx_light_helpers.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
 #include <algorithm>
@@ -455,6 +456,20 @@ void Einsum::operator()(const Tensors &inputs, const std::string &equation, Tens
     EXT_THROW_INVALID(kEinsumName, ": unsupported data type ", inputs[0].data_type,
                       ", only supports FLOAT and DOUBLE inputs.");
   }
+}
+
+void Einsum::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireMinInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  Tensors inputs;
+  inputs.reserve(node.input_size());
+  for (int i = 0; i < node.input_size(); ++i) {
+    inputs.push_back(GetInput(node, i, rt.tensors()));
+  }
+  const std::string equation = GetRequiredAttributeString(node, "equation");
+  onnx_kernels::kernel::Einsum k(rt.kernel_ctx());
+  SetOutput(node, 0, k(inputs, equation, &rt), rt);
 }
 
 } // namespace kernel

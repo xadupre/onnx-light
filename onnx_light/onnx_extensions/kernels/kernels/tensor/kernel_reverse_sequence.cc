@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <cstring>
@@ -130,6 +131,19 @@ void ReverseSequence::operator()(const Tensor &input, const Tensor &sequence_len
       }
     }
   }
+}
+
+void ReverseSequence::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor &sequence_lens = GetInput(node, 1, rt.tensors());
+  onnx_kernels::kernel::ReverseSequence::Attributes attrs;
+  attrs.time_axis = GetAttributeIntOrDefault(node, "time_axis", attrs.time_axis);
+  attrs.batch_axis = GetAttributeIntOrDefault(node, "batch_axis", attrs.batch_axis);
+  onnx_kernels::kernel::ReverseSequence k(rt.kernel_ctx());
+  SetOutput(node, 0, k(input, sequence_lens, attrs, &rt), rt);
 }
 
 } // namespace kernel

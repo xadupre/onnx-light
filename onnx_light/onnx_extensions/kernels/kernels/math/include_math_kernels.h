@@ -58,6 +58,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// Element-wise absolute value.
 class Abs : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -69,6 +70,7 @@ public:
 /// Element-wise arc cosine: y = acos(x), with x in [-1, 1] and y in [0, pi].
 class Acos : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -80,6 +82,7 @@ public:
 /// Element-wise inverse hyperbolic cosine: y = acosh(x), with x >= 1.
 class Acosh : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -91,6 +94,7 @@ public:
 /// Element-wise arc sine: y = asin(x), with x in [-1, 1] and y in [-pi/2, pi/2].
 class Asin : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -102,6 +106,7 @@ public:
 /// Element-wise inverse hyperbolic sine: y = asinh(x), defined for all real x.
 class Asinh : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -113,6 +118,7 @@ public:
 /// Element-wise arc tangent: y = atan(x), defined for all real x.
 class Atan : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -124,6 +130,7 @@ public:
 /// Element-wise inverse hyperbolic tangent: y = atanh(x), with x in (-1, 1).
 class Atanh : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -135,6 +142,7 @@ public:
 /// Element-wise cosine: y = cos(x), defined for all real x with y in [-1, 1].
 class Cos : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -146,6 +154,7 @@ public:
 /// Element-wise hyperbolic cosine: y = cosh(x), defined for all real x with y >= 1.
 class Cosh : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -162,6 +171,7 @@ public:
 /// scalar (rank-0). Both input and output are FLOAT tensors.
 class Det : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -174,6 +184,7 @@ public:
 /// Element-wise ceiling: y = ceil(x), the smallest integer >= x.
 class Ceil : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -185,6 +196,7 @@ public:
 /// Element-wise floor: y = floor(x), the largest integer <= x.
 class Floor : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -202,6 +214,7 @@ public:
 /// matching the ONNX specification (``Min(max, Max(input, min))``).
 class Clip : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// Computes ``y = clip(x, min, max)``. ``min``/``max`` may be ``nullptr``
   /// to use the dtype-specific default bound. When provided, each must be a
@@ -217,6 +230,7 @@ public:
 /// Element-wise sign: y = sign(x), returning -1 for x<0, 0 for x==0, +1 for x>0.
 class Sign : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -228,6 +242,7 @@ public:
 /// Element-wise round to nearest integer, ties to even (banker's rounding).
 class Round : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -239,6 +254,7 @@ public:
 /// Element-wise exponential: y = exp(x), defined for all real x.
 class Exp : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -250,6 +266,7 @@ public:
 /// Element-wise error function: y = erf(x), defined for all real x.
 class Erf : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -261,6 +278,7 @@ public:
 /// Element-wise natural logarithm: y = log(x), with x > 0.
 class Log : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -272,6 +290,7 @@ public:
 /// Element-wise reciprocal: y = 1 / x (Inf for x = 0).
 class Reciprocal : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -283,6 +302,7 @@ public:
 /// Element-wise square root: y = sqrt(x), with x >= 0 (NaN otherwise).
 class Sqrt : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -294,6 +314,7 @@ public:
 /// Element-wise logistic sigmoid: y = 1 / (1 + exp(-x)).
 class Sigmoid : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -306,6 +327,7 @@ public:
 ///     y = max(0, min(1, alpha * x + beta)).
 class HardSigmoid : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float alpha, float beta, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, float alpha, float beta, Tensor &output) const;
@@ -318,6 +340,7 @@ public:
 ///     y = x * max(0, min(1, x/6 + 0.5)) = x * HardSigmoid(x; alpha=1/6, beta=0.5).
 class HardSwish : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -330,6 +353,7 @@ public:
 /// 0 elsewhere. The output has the same shape and dtype as the input.
 class Hardmax : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int64_t axis, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, int64_t axis, Tensor &output) const;
@@ -342,6 +366,7 @@ public:
 /// Element-wise sine: y = sin(x), defined for all real x with y in [-1, 1].
 class Sin : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -353,6 +378,7 @@ public:
 /// Softmax normalized exponential along a selected axis.
 class Softmax : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int64_t axis, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, int64_t axis, Tensor &output) const;
@@ -365,6 +391,7 @@ public:
 /// LogSoftmax: log of the normalized exponential along a selected axis.
 class LogSoftmax : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int64_t axis, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, int64_t axis, Tensor &output) const;
@@ -377,6 +404,7 @@ public:
 /// Element-wise softplus activation: y = ln(1 + exp(x)).
 class Softplus : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -389,6 +417,7 @@ public:
 /// x * tanh(ln(1 + exp(x))).
 class Mish : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -400,6 +429,7 @@ public:
 /// Element-wise softsign activation: y = x / (1 + |x|).
 class Softsign : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -417,6 +447,7 @@ public:
 /// is free to ignore ``log_prob`` when the node does not request it.
 class SoftmaxCrossEntropyLoss : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// @param scores Input scores of shape ``(N, C)`` or ``(N, C, D1, ..., Dk)``.
   /// @param labels Integer class indices of shape ``(N)`` or ``(N, D1, ..., Dk)``.
@@ -443,6 +474,7 @@ public:
 /// log-probabilities (no softmax is applied internally).
 class NegativeLogLikelihoodLoss : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// @param input Log-probabilities of shape ``(N, C)`` or ``(N, C, D1, ..., Dk)``.
   /// @param target Integer class indices of shape ``(N)`` or ``(N, D1, ..., Dk)``.
@@ -463,6 +495,7 @@ public:
 /// Element-wise hyperbolic sine: y = sinh(x), defined for all real x.
 class Sinh : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -474,6 +507,7 @@ public:
 /// Element-wise tangent: y = tan(x); undefined at x = (2k+1) * pi/2.
 class Tan : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -485,6 +519,7 @@ public:
 /// Element-wise hyperbolic tangent: y = tanh(x), with y in (-1, 1).
 class Tanh : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -497,6 +532,7 @@ public:
 /// floating-point and signed integer tensors (see schema since v14).
 class Relu : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -510,6 +546,7 @@ public:
 /// ``alpha`` defaults to 1.0 to match the ONNX schema.
 class Elu : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float alpha = 1.0f, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, float alpha, Tensor &output) const;
@@ -524,6 +561,7 @@ public:
 /// are accepted (matching the v12 schema).
 class Celu : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float alpha = 1.0f, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, float alpha, Tensor &output) const;
@@ -538,6 +576,7 @@ public:
 /// ``y = 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))`` is used.
 class Gelu : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const std::string &approximate = "none",
                     RuntimeContext *rt = nullptr) const;
@@ -551,6 +590,7 @@ public:
 /// defaults to 1.0 to match the ONNX schema (opset 24).
 class Swish : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float alpha = 1.0f, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, float alpha, Tensor &output) const;
@@ -565,6 +605,7 @@ public:
 /// ``alpha`` defaults to 1.0 to match the ONNX schema (opset 28).
 class SwiGLU : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &a, const Tensor &b, float alpha = 1.0f,
                     RuntimeContext *rt = nullptr) const;
@@ -575,6 +616,7 @@ public:
 /// otherwise. ``alpha`` defaults to 1.0 to match the ONNX schema.
 class ThresholdedRelu : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float alpha = 1.0f, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, float alpha, Tensor &output) const;
@@ -588,6 +630,7 @@ public:
 /// ``alpha`` defaults to 0.01 to match the ONNX schema.
 class LeakyRelu : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float alpha = 0.01f, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, float alpha, Tensor &output) const;
@@ -601,6 +644,7 @@ public:
 /// ``y = 0`` otherwise. ``lambd`` defaults to 0.5 and ``bias`` defaults to 0.
 class Shrink : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float bias = 0.0f, float lambd = 0.5f,
                     RuntimeContext *rt = nullptr) const;
@@ -617,6 +661,7 @@ public:
 /// (~1.6732632 and ~1.0507009 respectively).
 class Selu : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float alpha = 1.67326319217681884765625f,
                     float gamma = 1.05070102214813232421875f, RuntimeContext *rt = nullptr) const;
@@ -629,6 +674,7 @@ public:
 /// Element-wise addition with NumPy-style broadcasting.
 class Add : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -642,6 +688,7 @@ public:
 /// Element-wise subtraction with NumPy-style broadcasting.
 class Sub : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -655,6 +702,7 @@ public:
 /// Element-wise multiplication with NumPy-style broadcasting.
 class Mul : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -675,6 +723,7 @@ public:
 /// infinite inputs; see microsoft/onnxruntime#28732).
 class PRelu : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &slope, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &slope, Tensor &output) const;
@@ -688,6 +737,7 @@ public:
 /// Element-wise division with NumPy-style broadcasting.
 class Div : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -707,6 +757,7 @@ public:
 ///     integer inputs (where it coincides with C ``%`` truncated modulo).
 class Mod : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, int64_t fmod = 0,
                     RuntimeContext *rt = nullptr) const;
@@ -723,6 +774,7 @@ public:
 /// supported.
 class Neg : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
@@ -745,6 +797,7 @@ public:
 /// backend test cases.
 class Pow : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -761,6 +814,7 @@ public:
 /// the last sample is discarded (matches NumPy/ONNX conventions).
 class BlackmanWindow : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &size, bool periodic = true, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &size, bool periodic, Tensor &output) const;
@@ -775,6 +829,7 @@ public:
 /// the last sample is discarded (matches NumPy/ONNX conventions).
 class HannWindow : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &size, bool periodic = true, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &size, bool periodic, Tensor &output) const;
@@ -789,6 +844,7 @@ public:
 /// the last sample is discarded (matches NumPy/ONNX conventions).
 class HammingWindow : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &size, bool periodic = true, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &size, bool periodic, Tensor &output) const;
@@ -804,6 +860,7 @@ public:
 /// When ``c`` is ``nullptr`` the bias term is omitted (treated as zero).
 class Gemm : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
                     int64_t transA, int64_t transB, RuntimeContext *rt = nullptr) const;
@@ -822,6 +879,7 @@ public:
 /// - higher-rank prefixes are broadcast, then batched matrix multiply
 class MatMul : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &a, const Tensor &b, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &a, const Tensor &b, Tensor &output) const;
@@ -838,6 +896,7 @@ public:
 /// zero points.
 class MatMulInteger : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
   /// Returning overload allocating an INT32 output. ``a_zero_point`` /
@@ -861,6 +920,7 @@ public:
 /// all inputs and the same dtype.
 class Sum : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensors &inputs, Tensor &output) const;
@@ -878,6 +938,7 @@ public:
 /// broadcast shape of all inputs and the same dtype.
 class Max : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensors &inputs, Tensor &output) const;
@@ -894,6 +955,7 @@ public:
 /// broadcast shape of all inputs and the same dtype.
 class Min : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensors &inputs, Tensor &output) const;
@@ -909,6 +971,7 @@ public:
 /// inputs divided by the number of inputs.
 class Mean : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensors &inputs, Tensor &output) const;
@@ -925,6 +988,7 @@ public:
 /// ``output_dtype`` (default ``FLOAT``).
 class MelWeightMatrix : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &num_mel_bins, const Tensor &dft_length, const Tensor &sample_rate,
                     const Tensor &lower_edge_hertz, const Tensor &upper_edge_hertz,
@@ -945,6 +1009,7 @@ public:
 /// true, performs the summation in the opposite direction along ``axis``.
 class CumSum : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &axis, bool exclusive = false,
                     bool reverse = false, RuntimeContext *rt = nullptr) const;
@@ -965,6 +1030,7 @@ public:
 /// ``exclusive`` mode the starting value is 1 (multiplicative identity).
 class CumProd : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &axis, bool exclusive = false,
                     bool reverse = false, RuntimeContext *rt = nullptr) const;
@@ -989,6 +1055,7 @@ struct EinsumPlan;
 /// same dtype (FLOAT or DOUBLE); the output has the same dtype.
 class Einsum : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensors &inputs, const std::string &equation,
                     RuntimeContext *rt = nullptr) const;
@@ -1023,6 +1090,7 @@ private:
 /// ``2 * (signal_dim_axis - 1)`` for the IRFFT default).
 class DFT : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// ``axis`` is the signal axis (must satisfy ``-rank <= axis``, ``axis !=
   /// -1`` and ``axis < rank - 1``). ``dft_length`` is a pointer to a 0-D
@@ -1057,6 +1125,7 @@ public:
 /// or ``frame_length`` must be provided.
 class STFT : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
                     const Tensor *frame_length, bool onesided = true,
@@ -1087,6 +1156,7 @@ public:
 /// dimension replaced by ``k``.
 class TopK : public KernelBase {
 public:
+  void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   std::pair<Tensor, Tensor> operator()(const Tensor &x, int64_t k, int64_t axis = -1,
                                        bool largest = true, bool sorted = true,

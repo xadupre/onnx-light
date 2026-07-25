@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
 #include <stdexcept>
@@ -56,6 +57,19 @@ void BlackmanWindow::operator()(const Tensor &size, bool periodic, Tensor &outpu
     py[static_cast<size_t>(i)] =
         static_cast<float>(a0 + a1 * std::cos(2.0 * kPi * k) + a2 * std::cos(4.0 * kPi * k));
   }
+}
+
+void BlackmanWindow::Run(RuntimeContext &rt) {
+  const NodeProto &node = *node_;
+  RequireInputCount(node, 1);
+  RequireOutputCount(node, 1);
+  const int64_t output_datatype =
+      GetAttributeIntOrDefault(node, "output_datatype", static_cast<int64_t>(DataType::FLOAT));
+  EXT_ENFORCE_INVALID(!(output_datatype != static_cast<int64_t>(DataType::FLOAT)),
+                      "RunNode: op 'BlackmanWindow' only supports output_datatype=FLOAT.");
+  const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
+  const Tensor &size = GetInput(node, 0, rt.tensors());
+  SetOutput(node, 0, (*this)(size, periodic, &rt), rt);
 }
 
 } // namespace kernel

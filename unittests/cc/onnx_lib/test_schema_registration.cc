@@ -95,7 +95,10 @@ TEST(SchemaRegistrationTest, RegisterAllByDefaultAndManipulateSchema) {
 }
 
 TEST(SchemaRegistrationTest, RegisterAndDeregisterAllOpsetSchemaVersion) {
-  GTEST_SKIP() << "Broken";
+  // Force the one-time lazy static registration to complete before the initial
+  // deregister; otherwise the first Schema() lookup below would trigger it and
+  // repopulate the registry mid-test (fails when this test runs in isolation).
+  RegisterAllOnnxOperatorSchemas();
   DeregisterOnnxOperatorSetSchema();
   EXPECT_EQ(OpSchemaRegistry::Instance()->GetLoadedSchemaVersion(), -1);
 
@@ -132,7 +135,10 @@ TEST(SchemaRegistrationTest, RegisterAndDeregisterAllOpsetSchemaVersion) {
 }
 
 TEST(SchemaRegistrationTest, RegisterSpecifiedOpsetSchemaVersion) {
-  GTEST_SKIP() << "Broken";
+  // Force the one-time lazy static registration to complete before the initial
+  // deregister; otherwise the first Schema() lookup below would trigger it and
+  // repopulate the registry mid-test (fails when this test runs in isolation).
+  RegisterAllOnnxOperatorSchemas();
   DeregisterOnnxOperatorSetSchema();
   EXPECT_EQ(OpSchemaRegistry::Instance()->GetLoadedSchemaVersion(), -1);
 
@@ -161,7 +167,10 @@ TEST(SchemaRegistrationTest, RegisterSpecifiedOpsetSchemaVersion) {
 }
 
 TEST(SchemaRegistrationTest, RegisterMultipleOpsetSchemaVersions_UpgradeVersion) {
-  GTEST_SKIP() << "Broken";
+  // Force the one-time lazy static registration to complete before the initial
+  // deregister; otherwise the first Schema() lookup below would trigger it and
+  // repopulate the registry mid-test (fails when this test runs in isolation).
+  RegisterAllOnnxOperatorSchemas();
   DeregisterOnnxOperatorSetSchema();
   EXPECT_EQ(OpSchemaRegistry::Instance()->GetLoadedSchemaVersion(), -1);
 
@@ -194,7 +203,10 @@ TEST(SchemaRegistrationTest, RegisterMultipleOpsetSchemaVersions_UpgradeVersion)
 }
 
 TEST(SchemaRegistrationTest, RegisterMultipleOpsetSchemaVersions_DowngradeVersion) {
-  GTEST_SKIP() << "Broken";
+  // Force the one-time lazy static registration to complete before the initial
+  // deregister; otherwise the first Schema() lookup below would trigger it and
+  // repopulate the registry mid-test (fails when this test runs in isolation).
+  RegisterAllOnnxOperatorSchemas();
   DeregisterOnnxOperatorSetSchema();
   EXPECT_EQ(OpSchemaRegistry::Instance()->GetLoadedSchemaVersion(), -1);
 

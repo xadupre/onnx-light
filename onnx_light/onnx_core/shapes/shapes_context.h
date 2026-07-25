@@ -351,11 +351,14 @@ public:
   }
 
   /// Returns the concrete value bound to the symbolic dimension expression
-  /// ``expr``. Throws ``std::out_of_range`` if no such binding exists.
+  /// ``expr``. Callers should first confirm the binding exists with
+  /// :cpp:func:`HasDimValue`; this throws ``std::out_of_range`` otherwise.
   int64_t DimValue(const std::string &expr) const { return dim_values_.at(expr); }
 
   /// Binds the symbolic dimension expression ``expr`` to the concrete
-  /// value ``value``, replacing any previous binding for ``expr``.
+  /// value ``value``. An existing binding for ``expr`` is overwritten, so
+  /// callers that want to detect (rather than replace) a conflicting value
+  /// check :cpp:func:`HasDimValue` / :cpp:func:`DimValue` first.
   void SetDimValue(const std::string &expr, int64_t value) { dim_values_[expr] = value; }
 
   /// Read-only access to the underlying expression → value map (useful

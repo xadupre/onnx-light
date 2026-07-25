@@ -211,16 +211,6 @@ private:
   /// kernel has run, once :cpp:member:`session_allocator_` has been captured.
   void VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const;
 
-  /// A single declared dimension: either a concrete integer (``has_value``),
-  /// a symbolic parameter name (``has_param``), or fully unknown (neither),
-  /// which imposes no constraint on the concrete dimension.
-  struct DeclaredDim {
-    bool has_value = false;
-    int64_t value = 0;
-    bool has_param = false;
-    std::string param;
-  };
-
   /// Verifies, when :cpp:func:`check_shapes` is enabled, that the concrete
   /// shape of the tensor stored under ``name`` in ``rt`` (if any) matches the
   /// declared :cpp:class:`core::symbolic::SymShape` recorded in

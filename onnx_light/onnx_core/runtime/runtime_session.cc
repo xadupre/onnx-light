@@ -44,7 +44,7 @@ void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
       } else if (d.has_dim_param()) {
         dims.PushBack(core::symbolic::SymDim(d.dim_param().value()));
       } else {
-        dims.PushBack(core::symbolic::SymDim(std::string()));
+        dims.PushBack(core::symbolic::SymDim(""));
       }
     }
     declared_shapes_[vi.name().value()] = std::move(dims);
@@ -131,7 +131,7 @@ void RuntimeSession::VerifyDeclaredShape(const std::string &name, const RuntimeC
   }
   const core::symbolic::SymShape &declared = it->second;
   const Tensor &tensor = rt.Get(name);
-  if (declared.FitsConcreteShape(tensor.shape.size(), tensor.shape.begin(), bindings)) {
+  if (declared.FitsConcreteShape(tensor.shape.size(), tensor.shape.data(), bindings)) {
     return;
   }
   std::string concrete = "[";

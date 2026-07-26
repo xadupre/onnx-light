@@ -6,8 +6,8 @@
 
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <limits>
 #include <memory>
 #include <sstream>
@@ -21,6 +21,7 @@
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/run_nodes_internal.h"
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_light_helpers.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -117,21 +118,30 @@ template <class NameCollection> std::string FormatNameList(const NameCollection 
 // Nothing is printed when ``rt.verbose() <= 0``.
 void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
                        const std::string &op_type) {
+  // onnx_light_helpers::Logger uses destination "1" to mean stdout.
+  constexpr const char *kStdoutLoggerDestination = "1";
   if (rt.verbose() <= 0) {
     return;
   }
-  std::cout << "[ReferenceEvaluator] ";
+  std::ostringstream oss;
+  oss << "[ReferenceEvaluator] ";
   if (rt.current_subgraph_node_index() >= 0) {
-    std::cout << rt.current_subgraph_attr_name() << "@" << rt.current_subgraph_node_index() << "/";
+    oss << rt.current_subgraph_attr_name() << "@" << rt.current_subgraph_node_index() << "/";
   }
   if (rt.current_node_index() >= 0) {
-    std::cout << "#" << rt.current_node_index() << " ";
+    oss << "#" << rt.current_node_index() << " ";
   }
   if (domain != kDefaultOnnxDomain) {
-    std::cout << domain << "::";
+    oss << domain << "::";
   }
-  std::cout << op_type << "(" << FormatNameList(node.input()) << ") -> ("
-            << FormatNameList(node.output()) << ")" << std::endl;
+  oss << op_type << "(" << FormatNameList(node.input()) << ") -> (" << FormatNameList(node.output())
+      << ")";
+  const char *log_destination = std::getenv("ONNX_LIGHT_LOG");
+  // Logger("") resolves its destination from ONNX_LIGHT_LOG.
+  // If no destination is configured, force stdout with destination "1".
+  const bool has_configured_destination = log_destination != nullptr && log_destination[0] != '\0';
+  onnx_light_helpers::Logger logger(has_configured_destination ? "" : kStdoutLoggerDestination);
+  logger.log(oss.str());
 }
 
 } // namespace

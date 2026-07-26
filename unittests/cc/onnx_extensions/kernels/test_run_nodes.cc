@@ -25,17 +25,21 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <memory>
 #include <optional>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <unordered_set>
 #include <vector>
 
@@ -56,6 +60,61 @@ using core::runtime::TensorMap;
 using onnx_kernels::kernel::KernelContext;
 
 namespace {
+
+class EnvVarGuard {
+public:
+  explicit EnvVarGuard(const char *name) : name_(name) {
+    const char *value = std::getenv(name_.c_str());
+    if (value != nullptr) {
+      had_value_ = true;
+      value_ = value;
+    }
+  }
+
+  ~EnvVarGuard() {
+    if (had_value_) {
+#ifdef _WIN32
+      _putenv_s(name_.c_str(), value_.c_str());
+#else
+      setenv(name_.c_str(), value_.c_str(), 1);
+#endif
+      return;
+    }
+#ifdef _WIN32
+    _putenv_s(name_.c_str(), "");
+#else
+    unsetenv(name_.c_str());
+#endif
+  }
+
+  EnvVarGuard(const EnvVarGuard &) = delete;
+  EnvVarGuard &operator=(const EnvVarGuard &) = delete;
+  EnvVarGuard(EnvVarGuard &&) = delete;
+  EnvVarGuard &operator=(EnvVarGuard &&) = delete;
+
+private:
+  std::string name_;
+  bool had_value_ = false;
+  std::string value_;
+};
+
+class TempFileCleanupGuard {
+public:
+  explicit TempFileCleanupGuard(std::filesystem::path path) : path_(std::move(path)) {}
+
+  ~TempFileCleanupGuard() {
+    std::error_code ec;
+    std::filesystem::remove(path_, ec);
+  }
+
+  TempFileCleanupGuard(const TempFileCleanupGuard &) = delete;
+  TempFileCleanupGuard &operator=(const TempFileCleanupGuard &) = delete;
+  TempFileCleanupGuard(TempFileCleanupGuard &&) = delete;
+  TempFileCleanupGuard &operator=(TempFileCleanupGuard &&) = delete;
+
+private:
+  std::filesystem::path path_;
+};
 
 // Minimal :cpp:class:`core::runtime::KernelBase` used by the synthetic-op tests
 // below: it carries a per-run closure so each test can register a
@@ -487,6 +546,47 @@ TEST(RunNodes, RunNodeClearResetsStateButKeepsSettings) {
   EXPECT_FLOAT_EQ(got[0], 44.0f);
   EXPECT_FLOAT_EQ(got[1], 55.0f);
   EXPECT_FLOAT_EQ(got[2], 66.0f);
+}
+
+TEST(RunNodes, VerboseRunNodeLogsThroughLoggerDestination) {
+  const uint64_t time_seed =
+      static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+  const uint64_t thread_seed =
+      static_cast<uint64_t>(std::hash<std::thread::id>{}(std::this_thread::get_id()));
+  std::mt19937_64 rng(time_seed ^ thread_seed);
+  const std::filesystem::path log_path =
+      std::filesystem::temp_directory_path() /
+      ("onnx_light_verbose_progress_" + std::to_string(rng()) + ".log");
+  TempFileCleanupGuard cleanup(log_path);
+  EnvVarGuard guard("ONNX_LIGHT_LOG");
+#ifdef _WIN32
+  _putenv_s("ONNX_LIGHT_LOG", log_path.string().c_str());
+#else
+  setenv("ONNX_LIGHT_LOG", log_path.string().c_str(), 1);
+#endif
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_verbose(1);
+
+  rt.RegisterCustomKernel(
+      "com.acme", "VerboseProbe",
+      [](const NodeProto &node,
+         RuntimeContext & /*unused*/) -> std::unique_ptr<core::runtime::KernelBase> {
+        // Intentional no-op kernel: this test only verifies verbose logging
+        // plumbing in RunNode/InvokeKernel.
+        return std::make_unique<TestLambdaKernel>(
+            node, [](const NodeProto & /*unused*/, RuntimeContext & /*unused*/) {});
+      });
+
+  NodeProto node = MakeNode("VerboseProbe", {}, {}, "com.acme");
+  RunNode(node, rt);
+
+  ASSERT_TRUE(std::filesystem::exists(log_path));
+  std::ifstream in(log_path);
+  ASSERT_TRUE(in.is_open());
+  std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  EXPECT_NE(content.find("[ReferenceEvaluator]"), std::string::npos);
+  EXPECT_NE(content.find("com.acme::VerboseProbe() -> ()"), std::string::npos);
 }
 
 TEST(RunNodes, RunNodeGemmWithoutBiasUsesSchemaDefaults) {

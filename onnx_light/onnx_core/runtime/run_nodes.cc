@@ -137,6 +137,8 @@ void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const st
   oss << op_type << "(" << FormatNameList(node.input()) << ") -> (" << FormatNameList(node.output())
       << ")";
   const char *log_destination = std::getenv("ONNX_LIGHT_LOG");
+  // Logger("") resolves its destination from ONNX_LIGHT_LOG.
+  // If no destination is configured, force stdout with destination "1".
   const bool has_configured_destination = log_destination != nullptr && log_destination[0] != '\0';
   onnx_light_helpers::Logger logger(has_configured_destination ? "" : kStdoutLoggerDestination);
   logger.log(oss.str());

@@ -35,9 +35,11 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <unordered_set>
 #include <vector>
 
@@ -524,10 +526,14 @@ TEST(RunNodes, RunNodeClearResetsStateButKeepsSettings) {
 }
 
 TEST(RunNodes, VerboseRunNodeLogsThroughLoggerDestination) {
+  const uint64_t time_seed =
+      static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+  const uint64_t thread_seed =
+      static_cast<uint64_t>(std::hash<std::thread::id>{}(std::this_thread::get_id()));
+  std::mt19937_64 rng(time_seed ^ thread_seed);
   const std::filesystem::path log_path =
       std::filesystem::temp_directory_path() /
-      ("onnx_light_verbose_progress_" +
-       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".log");
+      ("onnx_light_verbose_progress_" + std::to_string(rng()) + ".log");
   EnvVarGuard guard("ONNX_LIGHT_LOG");
 #ifdef _WIN32
   _putenv_s("ONNX_LIGHT_LOG", log_path.string().c_str());
@@ -549,6 +555,7 @@ TEST(RunNodes, VerboseRunNodeLogsThroughLoggerDestination) {
   NodeProto node = MakeNode("VerboseProbe", {}, {}, "com.acme");
   RunNode(node, rt);
 
+  ASSERT_TRUE(std::filesystem::exists(log_path));
   std::ifstream in(log_path);
   ASSERT_TRUE(in.is_open());
   std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());

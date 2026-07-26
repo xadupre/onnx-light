@@ -525,7 +525,9 @@ TEST(RunNodes, RunNodeClearResetsStateButKeepsSettings) {
 TEST(RunNodes, VerboseRunNodeLogsThroughLoggerDestination) {
   const std::filesystem::path log_path =
       std::filesystem::temp_directory_path() / "onnx_light_verbose_progress.log";
-  std::remove(log_path.string().c_str());
+  std::error_code remove_error;
+  std::filesystem::remove(log_path, remove_error);
+  ASSERT_FALSE(remove_error);
   EnvVarGuard guard("ONNX_LIGHT_LOG");
 #ifdef _WIN32
   _putenv_s("ONNX_LIGHT_LOG", log_path.string().c_str());
@@ -552,7 +554,8 @@ TEST(RunNodes, VerboseRunNodeLogsThroughLoggerDestination) {
   std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   EXPECT_NE(content.find("[ReferenceEvaluator]"), std::string::npos);
   EXPECT_NE(content.find("com.acme::VerboseProbe() -> ()"), std::string::npos);
-  std::remove(log_path.string().c_str());
+  std::filesystem::remove(log_path, remove_error);
+  ASSERT_FALSE(remove_error);
 }
 
 TEST(RunNodes, RunNodeGemmWithoutBiasUsesSchemaDefaults) {

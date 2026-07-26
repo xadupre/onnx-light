@@ -117,6 +117,7 @@ template <class NameCollection> std::string FormatNameList(const NameCollection 
 // Nothing is printed when ``rt.verbose() <= 0``.
 void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
                        const std::string &op_type) {
+  constexpr const char *kStdoutLoggerDestination = "1";
   if (rt.verbose() <= 0) {
     return;
   }
@@ -138,7 +139,7 @@ void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const st
     logger.log(oss.str());
     return;
   }
-  onnx_light_helpers::Logger("1").log(oss.str());
+  onnx_light_helpers::Logger(kStdoutLoggerDestination).log(oss.str());
 }
 
 } // namespace

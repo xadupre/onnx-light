@@ -573,7 +573,7 @@ TEST(RunNodes, VerboseRunNodeLogsThroughLoggerDestination) {
       [](const NodeProto &node,
          RuntimeContext & /*unused*/) -> std::unique_ptr<core::runtime::KernelBase> {
         // Intentional no-op kernel: this test only verifies verbose logging
-        // plumbing in RunNode/InvokeKernel.
+        // plumbing in RunNode.
         return std::make_unique<TestLambdaKernel>(
             node, [](const NodeProto & /*unused*/, RuntimeContext & /*unused*/) {});
       });

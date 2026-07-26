@@ -48,15 +48,6 @@ namespace detail {
 NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
                                const std::string &op_type);
 
-/**
- * Invokes an already-built kernel instance for ``node``, wrapping the call with
- * the verbose progress line and (when enabled) the per-node timing event.
- * Shared by :cpp:func:`RunNode` and :cpp:class:`RuntimeSession` so both the
- * resolve-on-demand and the resolve-once execution paths log identically.
- */
-void InvokeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
-                  const std::string &op_type, KernelBase &kernel);
-
 } // namespace detail
 } // namespace runtime
 } // namespace core

@@ -59,9 +59,9 @@ class ResultLifetimeInfo : public std::vector<ResultLifetimeNodeInfo> {
 public:
   using std::vector<ResultLifetimeNodeInfo>::vector;
   ResultLifetimeInfo() = default;
-  ResultLifetimeInfo(const std::vector<ResultLifetimeNodeInfo> &values)
+  explicit ResultLifetimeInfo(const std::vector<ResultLifetimeNodeInfo> &values)
       : std::vector<ResultLifetimeNodeInfo>(values) {}
-  ResultLifetimeInfo(std::vector<ResultLifetimeNodeInfo> &&values)
+  explicit ResultLifetimeInfo(std::vector<ResultLifetimeNodeInfo> &&values)
       : std::vector<ResultLifetimeNodeInfo>(std::move(values)) {}
 
   /// Producer node index for every top-level intermediate (``-1`` marks a

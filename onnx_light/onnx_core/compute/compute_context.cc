@@ -781,8 +781,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   release_after.reserve(lifetime.size());
   not_used_after.reserve(lifetime.size());
   for (std::size_t i = 0; i < lifetime.size(); ++i) {
-    release_after.push_back(std::move(lifetime[i].release_after));
-    not_used_after.push_back(std::move(lifetime[i].not_used_after));
+    release_after.push_back(lifetime[i].release_after);
+    not_used_after.push_back(lifetime[i].not_used_after);
   }
 
   reuse_ = std::move(result);

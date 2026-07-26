@@ -598,8 +598,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   const std::unordered_set<std::string> &graph_outputs = lifetime.graph_outputs;
   const std::unordered_map<std::string, int> &last_use = lifetime.last_use;
   if (events_enabled_) {
-    for (std::size_t i = 0; i < lifetime.release_after.size(); ++i) {
-      for (const std::string &name : lifetime.release_after[i]) {
+    for (std::size_t i = 0; i < lifetime.size(); ++i) {
+      for (const std::string &name : lifetime[i].release_after) {
         ComputeEvent ev;
         ev.action = ComputeEventAction::kRelease;
         ev.node_index = static_cast<int>(i);
@@ -765,7 +765,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
                                             ValueTag(value_tags, out_name)});
     }
 
-    for (const std::string &name : lifetime.release_after[static_cast<std::size_t>(i)]) {
+    for (const std::string &name : lifetime[static_cast<std::size_t>(i)].release_after) {
       alive.erase(name);
     }
     for (const std::string &name : inputs_reused_from_graph_input) {
@@ -776,9 +776,18 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     }
   }
 
+  std::vector<std::vector<std::string>> release_after;
+  std::vector<std::vector<std::string>> not_used_after;
+  release_after.reserve(lifetime.size());
+  not_used_after.reserve(lifetime.size());
+  for (ResultLifetimeNodeInfo &node_lifetime : lifetime) {
+    release_after.push_back(std::move(node_lifetime.release_after));
+    not_used_after.push_back(std::move(node_lifetime.not_used_after));
+  }
+
   reuse_ = std::move(result);
-  release_after_ = std::move(lifetime.release_after);
-  not_used_after_ = std::move(lifetime.not_used_after);
+  release_after_ = std::move(release_after);
+  not_used_after_ = std::move(not_used_after);
   memory_ = std::move(memory);
 
   // Populate the shape-tagged subset from value_tags (when provided).

@@ -98,8 +98,7 @@ std::vector<std::string> CollectNodeInputs(const NodeProto &node) {
 ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow_input_overwrite) {
   const int num_nodes = graph.node().size();
   ResultLifetimeInfo info;
-  info.release_after.resize(static_cast<std::size_t>(num_nodes));
-  info.not_used_after.resize(static_cast<std::size_t>(num_nodes));
+  info.resize(static_cast<std::size_t>(num_nodes));
 
   // Names whose buffers must never be overwritten in place: declared graph
   // inputs, initializers and declared graph outputs are owned by the caller
@@ -159,7 +158,7 @@ ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow
         continue;
       }
       if (info.graph_inputs.count(name) || info.graph_initializers.count(name)) {
-        info.not_used_after[static_cast<std::size_t>(i)].push_back(name);
+        info[static_cast<std::size_t>(i)].not_used_after.push_back(name);
       }
       if (info.keep.count(name)) {
         continue;
@@ -172,7 +171,7 @@ ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow
       if (prod_it == info.producer.end() || prod_it->second < 0 || prod_it->second >= i) {
         continue;
       }
-      info.release_after[static_cast<std::size_t>(i)].push_back(name);
+      info[static_cast<std::size_t>(i)].release_after.push_back(name);
     }
   }
 

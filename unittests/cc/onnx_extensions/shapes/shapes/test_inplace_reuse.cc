@@ -12,6 +12,7 @@
 
 #include "onnx_core/compute/compute_context.h"
 #include "onnx_core/compute/execution_plan.h"
+#include "onnx_core/compute/result_lifetime.h"
 #include "onnx_core/shapes/shape_inference.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
@@ -27,6 +28,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::compute::ComputeContext;
 using core::compute::ComputeInPlaceReuse;
+using core::compute::ComputeResultLifetimeInfo;
 using core::compute::InPlaceReuse;
 using core::compute::InPlaceReuseKind;
 using core::compute::WriteInPlaceReuseToMetadata;
@@ -102,6 +104,31 @@ ValueInfoProto *AddTypedOutput(GraphProto &graph, const std::string &name,
 }
 
 } // namespace
+
+TEST(OnnxOptimInPlaceReuse, ResultLifetimeInfoGroupsPerNodeData) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  auto *init = graph.add_initializer();
+  init->set_name("W");
+  init->set_data_type(TensorProto::DataType::FLOAT);
+  init->add_dims(1);
+  init->add_float_data(1.0f);
+  *graph.add_node() = MakeNode("Add", {"X", "W"}, {"T"});
+  *graph.add_node() = MakeNode("Abs", {"T"}, {"Y"});
+
+  const core::compute::ResultLifetimeInfo lifetime =
+      ComputeResultLifetimeInfo(graph, /*allow_input_overwrite=*/false);
+
+  ASSERT_EQ(lifetime.size(), 2u);
+  EXPECT_TRUE(lifetime[0].release_after.empty());
+  EXPECT_EQ(lifetime[0].not_used_after, (std::vector<std::string>{"X", "W"}));
+  EXPECT_EQ(lifetime[1].release_after, (std::vector<std::string>{"T"}));
+  EXPECT_TRUE(lifetime[1].not_used_after.empty());
+  EXPECT_EQ(lifetime.producer.at("T"), 0);
+  EXPECT_EQ(lifetime.last_use.at("T"), 1);
+}
 
 // A linear chain of element-wise Abs nodes: every node but the first (whose
 // input is the declared graph input) may reuse its input buffer in place.

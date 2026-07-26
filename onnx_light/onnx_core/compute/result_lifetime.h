@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "onnx_proto/onnx.h"
@@ -18,10 +19,11 @@
  *
  * This header isolates the purely name-based bookkeeping that decides, for
  * every node of a graph, which referenced values reach their last use at
- * that node (:cpp:var:`ResultLifetimeInfo::release_after` /
- * :cpp:var:`ResultLifetimeInfo::not_used_after`). It does not depend on shape
- * inference or byte sizes: those live in ``compute_context.cc`` and combine
- * this lifetime information with the shape-driven in-place reuse matching.
+ * that node (:cpp:var:`ResultLifetimeNodeInfo::release_after` /
+ * :cpp:var:`ResultLifetimeNodeInfo::not_used_after`). It does not depend on
+ * shape inference or byte sizes: those live in ``compute_context.cc`` and
+ * combine this lifetime information with the shape-driven in-place reuse
+ * matching.
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -33,21 +35,34 @@ namespace compute {
 // attributes.
 std::vector<std::string> CollectNodeInputs(const NodeProto &node);
 
-/**
- * Result of :cpp:func:`ComputeResultLifetimeInfo`: per-node release / last-use
- * bookkeeping plus the producer / lifetime maps and name sets it was derived
- * from, so callers can reuse them without recomputing.
- */
-struct ResultLifetimeInfo {
+/// Per-node value-lifetime bookkeeping returned by
+/// :cpp:func:`ComputeResultLifetimeInfo`.
+struct ResultLifetimeNodeInfo {
   /// Per-node list of top-level intermediates that reach their last use at
   /// that node and are therefore releasable after it runs (excludes declared
   /// graph inputs, initializers and outputs).
-  std::vector<std::vector<std::string>> release_after;
+  std::vector<std::string> release_after;
 
   /// Per-node list of declared graph inputs / initializers that reach their
   /// last use at that node. Not released by the runtime (their lifetime is
   /// owned by the caller / model) but still exposed as "last read" info.
-  std::vector<std::vector<std::string>> not_used_after;
+  std::vector<std::string> not_used_after;
+};
+
+/**
+ * Result of :cpp:func:`ComputeResultLifetimeInfo`: a per-node list of
+ * :cpp:struct:`ResultLifetimeNodeInfo` plus the producer / lifetime maps and
+ * name sets it was derived from, so callers can reuse them without
+ * recomputing.
+ */
+class ResultLifetimeInfo : public std::vector<ResultLifetimeNodeInfo> {
+public:
+  using std::vector<ResultLifetimeNodeInfo>::vector;
+  ResultLifetimeInfo() = default;
+  ResultLifetimeInfo(const std::vector<ResultLifetimeNodeInfo> &values)
+      : std::vector<ResultLifetimeNodeInfo>(values) {}
+  ResultLifetimeInfo(std::vector<ResultLifetimeNodeInfo> &&values)
+      : std::vector<ResultLifetimeNodeInfo>(std::move(values)) {}
 
   /// Producer node index for every top-level intermediate (``-1`` marks a
   /// declared graph input made available before the first node when

@@ -173,8 +173,9 @@ public:
   using RuntimeSession::Run;
 
   /**
-   * Builds the subgraph's :cpp:class:`RuntimeSession` and caches ``graph``'s
-   * initializers (already parsed into :cpp:class:`Tensor`) and output names.
+   * Initializes this :cpp:class:`RuntimeSession` for the subgraph and caches
+   * ``graph``'s initializers (already parsed into :cpp:class:`Tensor`) and
+   * output names.
    *
    * The :cpp:class:`ExecutionPlan` is built directly from ``graph`` by the
    * base :cpp:class:`RuntimeSession` and owned by this instance (rather than

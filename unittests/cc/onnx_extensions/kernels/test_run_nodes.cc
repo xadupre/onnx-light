@@ -4246,22 +4246,20 @@ TEST(RuntimeSession, ConstructsExactlyOneKernelPerNodeAcrossMultipleRuns) {
   using core::runtime::NodeKernelFn;
   using core::runtime::RegisterKernelFn;
 
-  static int construct_count = 0;
-  static int invoke_count = 0;
-  construct_count = 0;
-  invoke_count = 0;
+  int construct_count = 0;
+  int invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel";
-  RegisterKernelFn(
-      domain, "CountingOp", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
-        ++construct_count;
-        return std::make_unique<TestLambdaKernel>(node,
-                                                  [](const NodeProto &node, RuntimeContext &rt) {
-                                                    ++invoke_count;
-                                                    rt.Set(node.output(0), rt.Get(node.input(0)));
-                                                  });
-      });
+  RegisterKernelFn(domain, "CountingOp", core::symbolic::Device::kCPU,
+                   [&construct_count, &invoke_count](const NodeProto &node, RuntimeContext &)
+                       -> std::unique_ptr<core::runtime::KernelBase> {
+                     ++construct_count;
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [&invoke_count](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
 
   GraphProto graph;
   ValueInfoProto vi_x;

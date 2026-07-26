@@ -214,7 +214,7 @@ public:
 
 protected:
   /// Constructs a session over a bare :cpp:class:`GraphProto`, owning the
-  /// resulting :cpp:class:`ExecutionPlan` in :cpp:member:`default_plan_`. Used
+  /// resulting :cpp:class:`ExecutionPlan` in ``default_plan_``. Used
   /// by :cpp:class:`SubgraphSession` so a control-flow subgraph can be a
   /// :cpp:class:`RuntimeSession` with the same default resolution behavior as a
   /// top-level graph session.

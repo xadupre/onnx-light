@@ -212,6 +212,20 @@ public:
    */
   static std::vector<std::string> CollectNodeInputs(const NodeProto &node);
 
+protected:
+  /// Builds a session over a bare :cpp:class:`GraphProto`, owning the
+  /// resulting :cpp:class:`ExecutionPlan` in :cpp:member:`default_plan_`. Used
+  /// by :cpp:class:`SubgraphSession` so a control-flow subgraph can be a
+  /// :cpp:class:`RuntimeSession` with the same default resolution behavior as a
+  /// top-level graph session.
+  explicit RuntimeSession(const GraphProto &graph, int verbose = 0);
+
+  /// Default node-kernel resolution used during
+  /// :cpp:func:`InitializeKernels`. Derived sessions inherit the exact same
+  /// resolution path unless they opt into a different one.
+  NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
+                                 const std::string &domain, const std::string &op_type) const;
+
 private:
   /// A node's kernel instance built once during
   /// :cpp:func:`InitializeKernels`, together with the normalised ``domain``

@@ -168,17 +168,19 @@ void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt);
  * can run their body subgraph without going through :cpp:func:`RunNode`
  * themselves.
  */
-class SubgraphSession {
+class SubgraphSession : public RuntimeSession {
 public:
+  using RuntimeSession::Run;
+
   /**
-   * Builds the subgraph's :cpp:class:`ExecutionPlan` and
-   * :cpp:class:`RuntimeSession`, and caches ``graph``'s initializers
-   * (already parsed into :cpp:class:`Tensor`) and output names.
+   * Builds the subgraph's :cpp:class:`RuntimeSession` and caches ``graph``'s
+   * initializers (already parsed into :cpp:class:`Tensor`) and output names.
    *
-   * The :cpp:class:`ExecutionPlan` is built directly from ``graph`` and
-   * owned by this instance (rather than obtained from ``rt``'s
-   * per-context plan cache), so that a :cpp:class:`SubgraphSession` cached
-   * once by a control-flow node's kernel factory and reused across
+   * The :cpp:class:`ExecutionPlan` is built directly from ``graph`` by the
+   * base :cpp:class:`RuntimeSession` and owned by this instance (rather than
+   * obtained from ``rt``'s per-context plan cache), so that a
+   * :cpp:class:`SubgraphSession` cached once by a control-flow node's kernel
+   * factory and reused across
    * repeated executions of that node — including when that node itself is
    * nested inside an outer ``Loop`` / ``Scan`` / ``SequenceMap`` body and
    * ``rt`` is therefore a short-lived per-iteration child context — never
@@ -253,8 +255,6 @@ public:
                           const std::string &attr_name = "");
 
 private:
-  ExecutionPlan plan_;
-  RuntimeSession session_;
   std::vector<std::pair<std::string, Tensor>> initializers_;
   std::vector<std::string> output_names_;
 };

@@ -204,7 +204,7 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
 }
 
 SubgraphSession::SubgraphSession(RuntimeContext &rt, const GraphProto &graph)
-    : plan_(graph), session_(plan_) {
+    : RuntimeSession(graph) {
   // ``rt`` is intentionally unused: the plan is now built directly from
   // ``graph`` rather than through ``rt.GetExecutionPlan``, so construction no
   // longer depends on it (see the class-level doc comment). Kept as a
@@ -242,7 +242,7 @@ SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
   for (auto &kv : sequence_bindings) {
     child.PutSequence(kv.first, std::move(kv.second));
   }
-  session_.Run(child);
+  RuntimeSession::Run(child);
 
   if (rt.events_enabled()) {
     for (auto &ev : child.events()) {
@@ -1038,8 +1038,8 @@ private:
 // control-flow operators, then user custom kernels, then the dispatch table.
 // An unsupported ``(domain, op_type)`` is rejected here (at resolution
 // time) with the same diagnostic previously emitted at run time.
-NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
-                               const std::string &op_type) {
+NodeKernelFn ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
+                                      const std::string &domain, const std::string &op_type) {
   // A node referring to a model-local FunctionProto (registered by
   // ``RegisterModelFunctions`` from ``ModelProto::functions()``) takes priority over
   // the built-in kernel dispatch table so that user-defined functions
@@ -1167,7 +1167,7 @@ void RuntimeContext::InvokeKernel(const NodeProto &node, KernelBase &kernel) {
 void RunNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
   const std::string &op_type = node.op_type().value();
-  NodeKernelFn factory = detail::ResolveNodeKernel(node, rt, domain, op_type);
+  NodeKernelFn factory = detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
   std::unique_ptr<KernelBase> resolved = factory(node, rt);
   rt.InvokeKernel(node, *resolved);
 }

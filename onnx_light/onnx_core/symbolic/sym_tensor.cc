@@ -17,6 +17,7 @@
 
 #include "onnx_core/symbolic/sym_tensor.h"
 
+#include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <algorithm>
@@ -177,6 +178,45 @@ int64_t SymShape::NumElements() const {
     total *= d.AsInt();
   }
   return total;
+}
+
+/**
+ * Checks whether a concrete shape (``rank`` dimensions stored contiguously
+ * at ``shape``) is compatible with this possibly-symbolic shape, resolving
+ * symbolic dimensions against ``bindings``.
+ *
+ * A concrete integer dimension must match exactly; a symbolic dimension is
+ * bound to its concrete value the first time it is seen and must agree with
+ * that binding on every later occurrence; a fully-unknown dimension (empty
+ * expression) is unconstrained.
+ */
+bool SymShape::FitsConcreteShape(std::size_t rank, const int64_t *shape,
+                                 core::shapes::ShapesContext &bindings) const {
+  if (rank != dims_.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < dims_.size(); ++i) {
+    const SymDim &dim = dims_[i];
+    const int64_t concrete = shape[i];
+    if (dim.IsInt()) {
+      if (dim.AsInt() != concrete) {
+        return false;
+      }
+      continue;
+    }
+    const std::string &expr = dim.AsExpr();
+    if (expr.empty()) {
+      continue;
+    }
+    if (bindings.HasDimValue(expr)) {
+      if (bindings.DimValue(expr) != concrete) {
+        return false;
+      }
+    } else {
+      bindings.SetDimValue(expr, concrete);
+    }
+  }
+  return true;
 }
 
 /**

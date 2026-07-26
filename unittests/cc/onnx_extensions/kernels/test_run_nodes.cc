@@ -5099,4 +5099,151 @@ TEST(NodeHelpers, GetAttributeShapeOrDefaultReturnsFallback) {
   EXPECT_EQ(result[1], 1);
 }
 
+// ---------------------------------------------------------------------------
+// RuntimeSession concrete-vs-symbolic shape validation (set_check_shapes)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Adds a FLOAT tensor-typed value_info named ``name`` to ``vi`` with one
+// ``Dimension`` per entry in ``dims``: a symbolic dimension when the string is
+// non-empty, a concrete ``dim_value`` when the string is empty and the integer
+// is ``>= 0``, and an unset (unknown) dimension when the integer is negative.
+void AddFloatTensorValueInfo(ValueInfoProto *vi, const std::string &name,
+                             const std::vector<std::pair<int64_t, std::string>> &dims) {
+  vi->set_name(name);
+  TypeProto::Tensor *tt = vi->ref_type().add_tensor_type();
+  tt->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+  TensorShapeProto *shape = tt->add_shape();
+  for (const auto &d : dims) {
+    TensorShapeProto::Dimension *dim = shape->add_dim();
+    if (!d.second.empty()) {
+      dim->set_dim_param(d.second);
+    } else if (d.first >= 0) {
+      dim->set_dim_value(d.first);
+    }
+  }
+}
+
+// Builds a single-node ``Add`` model whose inputs (``x``, ``y``) and output
+// (``z``) carry the supplied declared shapes.
+ModelProto MakeAddModelWithShapes(const std::vector<std::pair<int64_t, std::string>> &x_shape,
+                                  const std::vector<std::pair<int64_t, std::string>> &y_shape,
+                                  const std::vector<std::pair<int64_t, std::string>> &z_shape) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  GraphProto *g = model.add_graph();
+  g->set_name("check_shapes");
+  NodeProto *node = g->add_node();
+  node->set_op_type("Add");
+  node->add_input("x");
+  node->add_input("y");
+  node->add_output("z");
+  AddFloatTensorValueInfo(g->add_input(), "x", x_shape);
+  AddFloatTensorValueInfo(g->add_input(), "y", y_shape);
+  AddFloatTensorValueInfo(g->add_output(), "z", z_shape);
+  return model;
+}
+
+} // namespace
+
+TEST(RuntimeSessionCheckShapes, DefaultsToDisabled) {
+  ModelProto model = MakeAddModelWithShapes({{2, ""}}, {{2, ""}}, {{2, ""}});
+  RuntimeSession session(model);
+  EXPECT_FALSE(session.check_shapes());
+  session.set_check_shapes(true);
+  EXPECT_TRUE(session.check_shapes());
+}
+
+TEST(RuntimeSessionCheckShapes, PassesWhenConcreteMatchesSymbolic) {
+  // x: [N, 3], y: [N, 3], z: [N, 3]; running with N == 2 keeps the symbolic
+  // dimension consistent across inputs and output.
+  ModelProto model =
+      MakeAddModelWithShapes({{-1, "N"}, {3, ""}}, {{-1, "N"}, {3, ""}}, {{-1, "N"}, {3, ""}});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2, 3}, {1, 2, 3, 4, 5, 6}));
+  rt.Set("y", Tensor::FromFloat("y", {2, 3}, {6, 5, 4, 3, 2, 1}));
+  RuntimeSession session(model);
+  session.set_check_shapes(true);
+  EXPECT_NO_THROW(session.Run(rt));
+  ASSERT_TRUE(rt.Has("z"));
+  EXPECT_EQ(rt.Get("z").shape, std::vector<int64_t>({2, 3}));
+}
+
+TEST(RuntimeSessionCheckShapes, RejectsConcreteDimMismatchOnOutput) {
+  // z is declared FLOAT[N, 4] but the produced tensor is [2, 3]; the concrete
+  // dimension 4 mismatch must be reported.
+  ModelProto model =
+      MakeAddModelWithShapes({{-1, "N"}, {3, ""}}, {{-1, "N"}, {3, ""}}, {{-1, "N"}, {4, ""}});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2, 3}, {1, 2, 3, 4, 5, 6}));
+  rt.Set("y", Tensor::FromFloat("y", {2, 3}, {6, 5, 4, 3, 2, 1}));
+  RuntimeSession session(model);
+  session.set_check_shapes(true);
+  EXPECT_THROW(session.Run(rt), std::invalid_argument);
+}
+
+TEST(RuntimeSessionCheckShapes, RejectsInconsistentSymbolicBinding) {
+  // Both inputs share the symbolic dimension ``N`` but are seeded with
+  // different concrete values ([2] vs [3]); the inconsistency is caught during
+  // the up-front input validation, before the Add kernel runs.
+  ModelProto model = MakeAddModelWithShapes({{-1, "N"}}, {{-1, "N"}}, {{-1, "N"}});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2}, {1, 2}));
+  rt.Set("y", Tensor::FromFloat("y", {3}, {1, 2, 3}));
+  RuntimeSession session(model);
+  session.set_check_shapes(true);
+  EXPECT_THROW(session.Run(rt), std::invalid_argument);
+}
+
+TEST(RuntimeSessionCheckShapes, DisabledFlagSkipsValidation) {
+  // z declared FLOAT[N, 4] but produced as [2, 3]; with checking disabled the
+  // mismatch is ignored and Run succeeds.
+  ModelProto model =
+      MakeAddModelWithShapes({{-1, "N"}, {3, ""}}, {{-1, "N"}, {3, ""}}, {{-1, "N"}, {4, ""}});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2, 3}, {1, 2, 3, 4, 5, 6}));
+  rt.Set("y", Tensor::FromFloat("y", {2, 3}, {6, 5, 4, 3, 2, 1}));
+  RuntimeSession session(model);
+  ASSERT_FALSE(session.check_shapes());
+  EXPECT_NO_THROW(session.Run(rt));
+}
+
+TEST(RuntimeSessionCheckShapes, RejectsRankMismatch) {
+  // z declared rank 1 (FLOAT[N]) but produced rank 2 ([2, 3]).
+  ModelProto model =
+      MakeAddModelWithShapes({{-1, "N"}, {3, ""}}, {{-1, "N"}, {3, ""}}, {{-1, "N"}});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2, 3}, {1, 2, 3, 4, 5, 6}));
+  rt.Set("y", Tensor::FromFloat("y", {2, 3}, {6, 5, 4, 3, 2, 1}));
+  RuntimeSession session(model);
+  session.set_check_shapes(true);
+  EXPECT_THROW(session.Run(rt), std::invalid_argument);
+}
+
+TEST(RuntimeSessionCheckShapes, SetDeclaredShapesOnPlanBuiltSession) {
+  // A session built from an ExecutionPlan alone carries no declared shapes
+  // until SetDeclaredShapes is called; afterwards the check applies.
+  ModelProto model =
+      MakeAddModelWithShapes({{-1, "N"}, {3, ""}}, {{-1, "N"}, {3, ""}}, {{-1, "N"}, {4, ""}});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2, 3}, {1, 2, 3, 4, 5, 6}));
+  rt.Set("y", Tensor::FromFloat("y", {2, 3}, {6, 5, 4, 3, 2, 1}));
+  const ExecutionPlan &plan = rt.GetExecutionPlan(model.ref_graph());
+  RuntimeSession session(plan);
+  session.set_check_shapes(true);
+  // No declared shapes yet: nothing to validate, so the [2,3] output passes.
+  EXPECT_NO_THROW(session.Run(rt));
+
+  RuntimeContext rt2(KernelContext(DefaultOpset(18)));
+  rt2.Set("x", Tensor::FromFloat("x", {2, 3}, {1, 2, 3, 4, 5, 6}));
+  rt2.Set("y", Tensor::FromFloat("y", {2, 3}, {6, 5, 4, 3, 2, 1}));
+  RuntimeSession session2(plan);
+  session2.SetDeclaredShapes(model.ref_graph());
+  session2.set_check_shapes(true);
+  EXPECT_THROW(session2.Run(rt2), std::invalid_argument);
+}
+
 } // namespace Test

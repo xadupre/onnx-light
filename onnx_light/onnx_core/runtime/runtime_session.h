@@ -7,10 +7,12 @@
 #include "onnx_core/runtime/kernel_dispatch_table.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_parameters.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 /**
@@ -33,6 +35,12 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
+namespace shapes {
+// Forward declaration: VerifyDeclaredShape threads a ShapesContext (defined
+// in onnx_core/shapes/shapes_context.h) through SymShape::FitsConcreteShape
+// to bind symbolic dimensions to their concrete values during a run.
+class ShapesContext;
+} // namespace shapes
 namespace runtime {
 
 /**
@@ -159,6 +167,29 @@ public:
   /// :cpp:func:`Run`.
   const std::vector<std::string> &required_inputs() const noexcept { return required_inputs_; }
 
+  /// Enables or disables concrete-shape validation. When enabled, :cpp:func:`Run`
+  /// checks that the concrete shape of every tensor carrying a declared
+  /// (possibly symbolic) shape — the graph inputs, outputs and ``value_info``
+  /// recorded by :cpp:func:`SetDeclaredShapes` — is consistent with that
+  /// declaration: a concrete ``dim_value`` must match exactly, and every
+  /// symbolic ``dim_param`` must resolve to the same concrete value everywhere
+  /// it appears during a single :cpp:func:`Run`. Disabled by default so the hot
+  /// path stays free of the extra checks. Declared shapes are populated
+  /// automatically when the session is built from a :cpp:class:`ModelProto`; a
+  /// session built from an :cpp:class:`ExecutionPlan` alone must call
+  /// :cpp:func:`SetDeclaredShapes` for the check to have anything to validate.
+  void set_check_shapes(bool check_shapes) noexcept { check_shapes_ = check_shapes; }
+  bool check_shapes() const noexcept { return check_shapes_; }
+
+  /// Records the declared (possibly symbolic) shapes carried by ``graph``'s
+  /// inputs, outputs and ``value_info`` so that, when :cpp:func:`check_shapes`
+  /// is enabled, :cpp:func:`Run` can validate concrete tensor shapes against
+  /// them. Only tensor-typed values whose type carries a shape are recorded;
+  /// values without a shape (unknown rank) are ignored. Calling this replaces
+  /// any previously recorded declarations for the listed names. ``graph`` is
+  /// read but not retained, so it need not outlive the session.
+  void SetDeclaredShapes(const GraphProto &graph);
+
   /**
    * Returns the list of input names referenced by ``nodes`` that are not
    * produced as outputs by any node in the same list — i.e. the external
@@ -203,6 +234,19 @@ private:
   /// kernel has run, once :cpp:member:`session_allocator_` has been captured.
   void VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const;
 
+  /// Verifies, when :cpp:func:`check_shapes` is enabled, that the concrete
+  /// shape of the tensor stored under ``name`` in ``rt`` (if any) matches the
+  /// declared :cpp:class:`core::symbolic::SymShape` recorded in
+  /// :cpp:member:`declared_shapes_`. Concrete dimensions must match exactly;
+  /// symbolic dimensions are resolved against ``bindings`` (a
+  /// :cpp:class:`core::shapes::ShapesContext` binding each symbolic expression
+  /// to the concrete value it first resolved to during the current
+  /// :cpp:func:`Run`), so an inconsistent reuse of the same symbol is rejected.
+  /// Names without a recorded declaration, or not currently present as a
+  /// tensor, are ignored.
+  void VerifyDeclaredShape(const std::string &name, const RuntimeContext &rt,
+                           core::shapes::ShapesContext &bindings) const;
+
   /// Plan owned by the session, referenced by :cpp:member:`plan_` when the
   /// session is constructed from a :cpp:class:`ModelProto` (no external plan
   /// supplied). Built from the model's graph. Left empty (and unused) when a
@@ -211,7 +255,14 @@ private:
   const ExecutionPlan &plan_;
   std::vector<PreparedKernel> kernels_;
   std::vector<std::string> required_inputs_;
+  /// Declared (possibly symbolic) shapes keyed by tensor name, populated by
+  /// :cpp:func:`SetDeclaredShapes` and consulted by :cpp:func:`Run` when
+  /// :cpp:member:`check_shapes_` is enabled.
+  std::unordered_map<std::string, core::symbolic::SymShape> declared_shapes_;
   bool kernels_initialized_ = false;
+  /// When ``true``, :cpp:func:`Run` validates concrete tensor shapes against
+  /// the declarations in :cpp:member:`declared_shapes_`.
+  bool check_shapes_ = false;
   RuntimeParameters parameters_;
   /// Verbosity level applied to ``rt`` at the start of each :cpp:func:`Run`
   /// when non-zero (see :cpp:func:`set_verbose`).

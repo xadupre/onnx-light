@@ -509,6 +509,20 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_prop_rw("parameters", &RuntimeSession::parameters, &RuntimeSession::set_parameters,
                    "Model-independent execution parameters applied to the nodes this "
                    "session runs.")
+      .def_prop_rw("check_shapes", &RuntimeSession::check_shapes, &RuntimeSession::set_check_shapes,
+                   "When ``True``, :func:`run` validates that the concrete shape of every "
+                   "tensor carrying a declared (possibly symbolic) shape — the graph "
+                   "inputs, outputs and ``value_info`` — is consistent with that "
+                   "declaration: concrete dimensions must match exactly and every symbolic "
+                   "``dim_param`` must resolve to the same value everywhere it appears "
+                   "during a single run. Declared shapes are populated automatically when "
+                   "the session is built from a model; a session built from an "
+                   ":class:`ExecutionPlan` must call :func:`set_declared_shapes` first. "
+                   "Disabled by default.")
+      .def("set_declared_shapes", &RuntimeSession::SetDeclaredShapes, nb::arg("graph"),
+           "Records the declared (possibly symbolic) shapes carried by ``graph``'s "
+           "inputs, outputs and ``value_info`` so that, when :attr:`check_shapes` is "
+           "enabled, :func:`run` can validate concrete tensor shapes against them.")
       .def_prop_rw("verbose", &RuntimeSession::verbose, &RuntimeSession::set_verbose,
                    "Verbosity level applied to the :class:`RuntimeContext` on each "
                    ":func:`run`. When non-zero, :func:`run` enables it on ``rt`` so the "

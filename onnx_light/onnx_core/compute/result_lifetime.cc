@@ -4,102 +4,16 @@
 
 #include "onnx_core/compute/result_lifetime.h"
 
+#include "onnx_core/graph/graph_manipulations.h"
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
 namespace compute {
 
-namespace {
-
-// Recursively collects the names a subgraph reads from an enclosing scope: a
-// node input that is neither produced within ``graph`` (its own inputs,
-// initializers or node outputs) nor already produced by an ancestor subgraph
-// is a capture of the enclosing scope. ``ancestor_locals`` accumulates names
-// already produced by ancestor subgraphs tracked in ``ancestor_locals``.
-void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string> &out,
-                                std::unordered_set<std::string> &seen,
-                                const std::unordered_set<std::string> &ancestor_locals) {
-  std::unordered_set<std::string> local;
-  for (int i = 0; i < graph.input().size(); ++i) {
-    local.insert(graph.input()[i].name());
-  }
-  for (int i = 0; i < graph.initializer().size(); ++i) {
-    local.insert(graph.initializer()[i].name());
-  }
-  for (int i = 0; i < graph.node().size(); ++i) {
-    const NodeProto &nd = graph.node()[i];
-    for (int j = 0; j < nd.output().size(); ++j) {
-      const std::string name = nd.output()[j];
-      if (!name.empty()) {
-        local.insert(name);
-      }
-    }
-  }
-
-  std::unordered_set<std::string> visible_locals = ancestor_locals;
-  visible_locals.insert(local.begin(), local.end());
-
-  for (int i = 0; i < graph.node().size(); ++i) {
-    const NodeProto &nd = graph.node()[i];
-    for (int j = 0; j < nd.input().size(); ++j) {
-      const std::string name = nd.input()[j];
-      // Keep only true captures from an outer scope: skip empty names,
-      // values local to this subgraph, and names produced by ancestor
-      // subgraphs. Such names are already available within the enclosing
-      // control-flow body and are not captures of the top-level node itself.
-      if (name.empty() || local.count(name) || ancestor_locals.count(name)) {
-        continue;
-      }
-      if (seen.insert(name).second) {
-        out.push_back(name);
-      }
-    }
-    for (int a = 0; a < nd.attribute().size(); ++a) {
-      const AttributeProto &attr = nd.attribute()[a];
-      if (attr.type() == AttributeProto::AttributeType::GRAPH && attr.has_g()) {
-        CollectGraphExternalInputs(attr.g(), out, seen, visible_locals);
-      } else if (attr.type() == AttributeProto::AttributeType::GRAPHS) {
-        for (int k = 0; k < attr.graphs().size(); ++k) {
-          CollectGraphExternalInputs(attr.graphs()[k], out, seen, visible_locals);
-        }
-      }
-    }
-  }
-}
-
-} // namespace
-
-std::vector<std::string> CollectNodeInputs(const NodeProto &node) {
-  std::vector<std::string> out;
-  std::unordered_set<std::string> seen;
-  for (int i = 0; i < node.input().size(); ++i) {
-    const std::string name = node.input()[i];
-    if (name.empty()) {
-      continue;
-    }
-    if (seen.insert(name).second) {
-      out.push_back(name);
-    }
-  }
-
-  std::unordered_set<std::string> empty_outer;
-  for (int a = 0; a < node.attribute().size(); ++a) {
-    const AttributeProto &attr = node.attribute()[a];
-    if (attr.type() == AttributeProto::AttributeType::GRAPH && attr.has_g()) {
-      CollectGraphExternalInputs(attr.g(), out, seen, empty_outer);
-    } else if (attr.type() == AttributeProto::AttributeType::GRAPHS) {
-      for (int k = 0; k < attr.graphs().size(); ++k) {
-        CollectGraphExternalInputs(attr.graphs()[k], out, seen, empty_outer);
-      }
-    }
-  }
-  return out;
-}
-
 ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow_input_overwrite) {
   const int num_nodes = graph.node().size();
   ResultLifetimeInfo info;
-  info.release_after.resize(static_cast<std::size_t>(num_nodes));
-  info.not_used_after.resize(static_cast<std::size_t>(num_nodes));
+  info.resize(static_cast<std::size_t>(num_nodes));
 
   // Names whose buffers must never be overwritten in place: declared graph
   // inputs, initializers and declared graph outputs are owned by the caller
@@ -139,7 +53,7 @@ ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow
   for (int i = 0; i < num_nodes; ++i) {
     const NodeProto &node = graph.node()[i];
     std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
-    referenced = CollectNodeInputs(node);
+    referenced = ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(node);
     for (const std::string &name : referenced) {
       info.last_use[name] = i;
     }
@@ -159,7 +73,7 @@ ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow
         continue;
       }
       if (info.graph_inputs.count(name) || info.graph_initializers.count(name)) {
-        info.not_used_after[static_cast<std::size_t>(i)].push_back(name);
+        info[static_cast<std::size_t>(i)].not_used_after.push_back(name);
       }
       if (info.keep.count(name)) {
         continue;
@@ -172,7 +86,7 @@ ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow
       if (prod_it == info.producer.end() || prod_it->second < 0 || prod_it->second >= i) {
         continue;
       }
-      info.release_after[static_cast<std::size_t>(i)].push_back(name);
+      info[static_cast<std::size_t>(i)].release_after.push_back(name);
     }
   }
 

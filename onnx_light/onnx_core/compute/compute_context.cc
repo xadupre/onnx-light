@@ -17,6 +17,7 @@
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/result_lifetime.h"
 #include "onnx_core/compute/value_tags.h"
+#include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
@@ -469,7 +470,8 @@ ComputeReleasableInputsImpl(const NodeRange &nodes, const std::unordered_set<std
   per_node_inputs.reserve(n);
   std::unordered_map<std::string, std::size_t> last_use;
   for (std::size_t i = 0; i < n; ++i) {
-    std::vector<std::string> inputs = CollectNodeInputs(nodes[i]);
+    std::vector<std::string> inputs =
+        ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(nodes[i]);
     for (const auto &name : inputs) {
       last_use[name] = i;
     }
@@ -598,8 +600,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   const std::unordered_set<std::string> &graph_outputs = lifetime.graph_outputs;
   const std::unordered_map<std::string, int> &last_use = lifetime.last_use;
   if (events_enabled_) {
-    for (std::size_t i = 0; i < lifetime.release_after.size(); ++i) {
-      for (const std::string &name : lifetime.release_after[i]) {
+    for (std::size_t i = 0; i < lifetime.size(); ++i) {
+      for (const std::string &name : lifetime[i].release_after) {
         ComputeEvent ev;
         ev.action = ComputeEventAction::kRelease;
         ev.node_index = static_cast<int>(i);
@@ -765,7 +767,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
                                             ValueTag(value_tags, out_name)});
     }
 
-    for (const std::string &name : lifetime.release_after[static_cast<std::size_t>(i)]) {
+    for (const std::string &name : lifetime[static_cast<std::size_t>(i)].release_after) {
       alive.erase(name);
     }
     for (const std::string &name : inputs_reused_from_graph_input) {
@@ -777,8 +779,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   }
 
   reuse_ = std::move(result);
-  release_after_ = std::move(lifetime.release_after);
-  not_used_after_ = std::move(lifetime.not_used_after);
+  release_after_ = lifetime.MoveReleaseAfter();
+  not_used_after_ = lifetime.MoveNotUsedAfter();
   memory_ = std::move(memory);
 
   // Populate the shape-tagged subset from value_tags (when provided).

@@ -11,6 +11,7 @@
 
 #include "onnx_core/compute/inplace_reuse_types.h"
 #include "onnx_core/compute/result_lifetime.h"
+#include "onnx_core/expressions/dim_sum.h"
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
@@ -69,24 +70,13 @@ namespace compute {
 
 using ::onnx_light::core::shapes::ShapesContext;
 
-/// Memoization cache mapping a symbolic expression string to its simplified
-/// form, shared across the byte-size comparisons below to avoid re-running
-/// the symbolic simplifier on the same expression.
-using SimplifiedExpressionCache = std::unordered_map<std::string, expressions::DimType>;
-
-/// Returns ``value`` unchanged when it is already a concrete integer,
-/// otherwise the canonical simplified form of the symbolic expression it
-/// holds (memoized in ``cache`` when provided).
-expressions::DimType SimplifyDimType(const expressions::DimType &value,
-                                     SimplifiedExpressionCache *cache = nullptr);
-
 /// Returns (and memoizes in ``cache``) the packed byte-size expression of the
 /// tensor named ``name`` in ``ctx``, or ``std::nullopt`` when its element type
 /// has no fixed bit width (strings, sequences, maps, optionals, undefined).
 const std::optional<expressions::DimType> &
 GetCachedByteSizeExpr(const ShapesContext &ctx, const std::string &name,
                       std::unordered_map<std::string, std::optional<expressions::DimType>> &cache,
-                      SimplifiedExpressionCache *simplification_cache = nullptr);
+                      expressions::SimplifiedExpressionCache *simplification_cache = nullptr);
 
 /**
  * Core matching algorithm: for every node of ``graph``, pairs each output

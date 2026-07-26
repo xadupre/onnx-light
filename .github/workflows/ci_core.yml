@@ -75,6 +75,9 @@ jobs:
       - name: Install OpenSSL (Linux)
         run: sudo apt-get install -y libssl-dev
 
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
+
       - name: Set parallel build level
         shell: bash
         run: |
@@ -82,8 +85,13 @@ jobs:
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
 
+      # sccache caches compiled objects in the GitHub Actions cache so repeated
+      # runs that do not touch C++ sources are near-instant, matching the
+      # macOS/Windows core builds that already use sccache.
       - name: Build and Install package without kernels/backend
-        run: pip install -C build-dir=build -C cmake.define.ONNX_LIGHT_BUILD_KERNELS=OFF -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev] -v
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+        run: pip install -C build-dir=build -C cmake.define.ONNX_LIGHT_BUILD_KERNELS=OFF -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 
       - name: pip freeze
         run: pip freeze
@@ -117,6 +125,9 @@ jobs:
       - name: Install OpenSSL (Linux)
         run: sudo apt-get install -y libssl-dev
 
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
+
       - name: Set parallel build level
         shell: bash
         run: |
@@ -124,8 +135,13 @@ jobs:
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
 
+      # sccache caches compiled objects in the GitHub Actions cache so repeated
+      # runs that do not touch C++ sources are near-instant, matching the
+      # macOS/Windows core builds that already use sccache.
       - name: Build and Install package
-        run: pip install -Cbuild-dir=build -e .[dev] -v
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+        run: pip install -Cbuild-dir=build -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 
       - name: uninstall onnx
         run: pip uninstall -y onnx
@@ -154,6 +170,9 @@ jobs:
       - name: Install OpenSSL (Linux)
         run: sudo apt-get install -y libssl-dev
 
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
+
       - name: Set parallel build level
         shell: bash
         run: |
@@ -161,8 +180,13 @@ jobs:
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
 
+      # sccache caches compiled objects in the GitHub Actions cache so repeated
+      # runs that do not touch C++ sources are near-instant, matching the
+      # macOS/Windows core builds that already use sccache.
       - name: Build and Install package (Linux)
-        run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev] -v
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+        run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 
       - name: Install ONNX weekly
         run: pip install --upgrade onnx-weekly

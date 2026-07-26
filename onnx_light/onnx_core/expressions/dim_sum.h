@@ -53,13 +53,13 @@ public:
   /// Adds a single term to the running sum.
   void Add(const DimType &term);
 
-  /// Returns the simplified sum of every added term ('0' when empty).
+  /// Returns the simplified sum of every added term (`0` when empty).
   DimType Build(SimplifiedExpressionCache *cache = nullptr) const;
 
 private:
   int64_t constant_ = 0;
-  // Maps each distinct symbolic expression to how many times it occurs in this
-  // sum (its integer coefficient).
+  // Maps each distinct symbolic expression string to its integer coefficient
+  // (the number of times it appears in the sum).
   std::map<std::string, int64_t> coefficients_;
 };
 

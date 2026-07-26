@@ -2882,11 +2882,12 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   constexpr size_t kAllocatorSlotCapacity = 2;
   core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
-  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+  TensorMap tensors;
+  tensors.emplace("M", Tensor::FromInt64("M", {}, {3}));
+  tensors.emplace("cond", Tensor::FromBool("cond", {}, {1}));
+  tensors.emplace("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
+  RuntimeContext rt(KernelContext(DefaultOpset(18)), std::move(tensors),
                     core::runtime::RuntimeContextOptions{.allocator = &alloc});
-  rt.Set("M", Tensor::FromInt64("M", {}, {3}));
-  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
-  rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
 
   RunModelViaSession(model, rt);
 
@@ -2939,11 +2940,12 @@ TEST(RunModel, LoopNodeAllocatorBacksTransientIterAndCondScalars) {
     body->add_output()->set_name("s_out");
     body->add_output()->set_name("s_out");
 
-    RuntimeContext rt(KernelContext(DefaultOpset(18)),
+    TensorMap tensors;
+    tensors.emplace("M", Tensor::FromInt64("M", {}, {3}));
+    tensors.emplace("cond", Tensor::FromBool("cond", {}, {1}));
+    tensors.emplace("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
+    RuntimeContext rt(KernelContext(DefaultOpset(18)), std::move(tensors),
                       core::runtime::RuntimeContextOptions{.allocator = &alloc});
-    rt.Set("M", Tensor::FromInt64("M", {}, {3}));
-    rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
-    rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
 
     RunModelViaSession(model, rt);
 
@@ -2980,10 +2982,11 @@ TEST(RunLoopWithSequenceState, SequenceOnlyStateGrowsPerIteration) {
 TEST(RunLoopWithSequenceState, SequenceOnlyStateAllocatorBacksIterAndCondScalars) {
   CountingAllocator alloc(/*capacity=*/2);
   {
-    RuntimeContext rt(KernelContext(DefaultOpset(13)),
+    TensorMap tensors;
+    tensors.emplace("M", Tensor::FromInt64("M", {}, {3}));
+    tensors.emplace("cond", Tensor::FromBool("cond", {}, {1}));
+    RuntimeContext rt(KernelContext(DefaultOpset(13)), std::move(tensors),
                       core::runtime::RuntimeContextOptions{.allocator = &alloc});
-    rt.Set("M", Tensor::FromInt64("M", {}, {3}));
-    rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
     rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
 
     RunNode(MakeLoopNode({"M", "cond", "seq_init"}, {"seq_out"}, BuildSequenceLoopBody()), rt);
@@ -3066,11 +3069,12 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
   constexpr size_t kAllocatorSlotCapacity = 2;
   core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
-  RuntimeContext rt(KernelContext(DefaultOpset(13)),
+  TensorMap tensors;
+  tensors.emplace("M", Tensor::FromInt64("M", {}, {3}));
+  tensors.emplace("cond", Tensor::FromBool("cond", {}, {1}));
+  tensors.emplace("acc_init", Tensor::FromFloat("acc_init", {}, {0.0f}));
+  RuntimeContext rt(KernelContext(DefaultOpset(13)), std::move(tensors),
                     core::runtime::RuntimeContextOptions{.allocator = &alloc});
-  rt.Set("M", Tensor::FromInt64("M", {}, {3}));
-  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
-  rt.Set("acc_init", Tensor::FromFloat("acc_init", {}, {0.0f}));
   rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
 
   RunNode(MakeLoopNode({"M", "cond", "acc_init", "seq_init"}, {"acc_final", "seq_final", "scan"},

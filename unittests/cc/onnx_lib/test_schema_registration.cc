@@ -66,7 +66,41 @@ void DeregisterOnnxOperatorSetSchema() {
 
 } // namespace
 
-TEST(SchemaRegistrationTest, DisabledOnnxStaticRegistrationAPICall) {
+// Fixture that snapshots the real ai.onnx schema registry before each test and
+// restores it afterwards. These tests deliberately deregister every ai.onnx
+// schema and repopulate the registry with a small set of hand-built stubs; if
+// that state leaked into later tests running in the same process (e.g. a
+// monolithic ``./test_onnx_light`` run rather than the per-test ctest
+// processes), those tests would observe a registry missing the real operator
+// schemas and fail. Restoring the snapshot keeps each test hermetic.
+class SchemaRegistrationTest : public ::testing::Test {
+protected:
+  void SetUp() override {
+    // Ensure the one-time lazy static registration of the real ONNX schemas has
+    // completed, then snapshot the ai.onnx-domain schemas.
+    RegisterAllOnnxOperatorSchemas();
+    saved_schemas_.clear();
+    for (const auto &schema : OpSchemaRegistry::get_all_schemas_with_history()) {
+      if (schema.domain() == ONNX_DOMAIN) {
+        saved_schemas_.push_back(schema);
+      }
+    }
+    saved_loaded_version_ = OpSchemaRegistry::Instance()->GetLoadedSchemaVersion();
+  }
+
+  void TearDown() override {
+    OpSchemaRegistry::Instance()->OpSchemaDeregisterAll(ONNX_DOMAIN);
+    for (const auto &schema : saved_schemas_) {
+      RegisterSchema(schema, 0, false);
+    }
+    OpSchemaRegistry::Instance()->SetLoadedSchemaVersion(saved_loaded_version_);
+  }
+
+  std::vector<OpSchema> saved_schemas_;
+  int saved_loaded_version_ = 0;
+};
+
+TEST_F(SchemaRegistrationTest, DisabledOnnxStaticRegistrationAPICall) {
 #ifdef __ONNX_DISABLE_STATIC_REGISTRATION
   EXPECT_TRUE(IsOnnxStaticRegistrationDisabled());
 #else
@@ -74,7 +108,7 @@ TEST(SchemaRegistrationTest, DisabledOnnxStaticRegistrationAPICall) {
 #endif
 }
 
-TEST(SchemaRegistrationTest, RegisterAllByDefaultAndManipulateSchema) {
+TEST_F(SchemaRegistrationTest, RegisterAllByDefaultAndManipulateSchema) {
   DeregisterOnnxOperatorSetSchema();
 
   RegisterOnnxOperatorSetSchema();
@@ -94,7 +128,7 @@ TEST(SchemaRegistrationTest, RegisterAllByDefaultAndManipulateSchema) {
   DeregisterOnnxOperatorSetSchema();
 }
 
-TEST(SchemaRegistrationTest, RegisterAndDeregisterAllOpsetSchemaVersion) {
+TEST_F(SchemaRegistrationTest, RegisterAndDeregisterAllOpsetSchemaVersion) {
   // Force the one-time lazy static registration to complete before the initial
   // deregister; otherwise the first Schema() lookup below would trigger it and
   // repopulate the registry mid-test (fails when this test runs in isolation).
@@ -134,7 +168,7 @@ TEST(SchemaRegistrationTest, RegisterAndDeregisterAllOpsetSchemaVersion) {
   EXPECT_EQ(nullptr, OpSchemaRegistry::Schema("Trilu"));
 }
 
-TEST(SchemaRegistrationTest, RegisterSpecifiedOpsetSchemaVersion) {
+TEST_F(SchemaRegistrationTest, RegisterSpecifiedOpsetSchemaVersion) {
   // Force the one-time lazy static registration to complete before the initial
   // deregister; otherwise the first Schema() lookup below would trigger it and
   // repopulate the registry mid-test (fails when this test runs in isolation).
@@ -166,7 +200,7 @@ TEST(SchemaRegistrationTest, RegisterSpecifiedOpsetSchemaVersion) {
   DeregisterOnnxOperatorSetSchema();
 }
 
-TEST(SchemaRegistrationTest, RegisterMultipleOpsetSchemaVersions_UpgradeVersion) {
+TEST_F(SchemaRegistrationTest, RegisterMultipleOpsetSchemaVersions_UpgradeVersion) {
   // Force the one-time lazy static registration to complete before the initial
   // deregister; otherwise the first Schema() lookup below would trigger it and
   // repopulate the registry mid-test (fails when this test runs in isolation).
@@ -202,7 +236,7 @@ TEST(SchemaRegistrationTest, RegisterMultipleOpsetSchemaVersions_UpgradeVersion)
   DeregisterOnnxOperatorSetSchema();
 }
 
-TEST(SchemaRegistrationTest, RegisterMultipleOpsetSchemaVersions_DowngradeVersion) {
+TEST_F(SchemaRegistrationTest, RegisterMultipleOpsetSchemaVersions_DowngradeVersion) {
   // Force the one-time lazy static registration to complete before the initial
   // deregister; otherwise the first Schema() lookup below would trigger it and
   // repopulate the registry mid-test (fails when this test runs in isolation).
@@ -238,7 +272,7 @@ TEST(SchemaRegistrationTest, RegisterMultipleOpsetSchemaVersions_DowngradeVersio
   DeregisterOnnxOperatorSetSchema();
 }
 
-TEST(SchemaRegistrationTest, RegisterSpecificThenAllVersion) {
+TEST_F(SchemaRegistrationTest, RegisterSpecificThenAllVersion) {
   DeregisterOnnxOperatorSetSchema();
   EXPECT_EQ(OpSchemaRegistry::Instance()->GetLoadedSchemaVersion(), -1);
 
@@ -260,7 +294,7 @@ TEST(SchemaRegistrationTest, RegisterSpecificThenAllVersion) {
   DeregisterOnnxOperatorSetSchema();
 }
 
-TEST(SchemaRegistrationTest, RegisterAllThenSpecificVersion) {
+TEST_F(SchemaRegistrationTest, RegisterAllThenSpecificVersion) {
   DeregisterOnnxOperatorSetSchema();
   EXPECT_EQ(OpSchemaRegistry::Instance()->GetLoadedSchemaVersion(), -1);
 

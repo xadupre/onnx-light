@@ -776,8 +776,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     }
   }
 
-  release_after_.assign(lifetime.size(), {});
-  not_used_after_.assign(lifetime.size(), {});
+  release_after_.resize(lifetime.size());
+  not_used_after_.resize(lifetime.size());
   // `lifetime` is a local analysis result; move its per-node vectors into the
   // storage exposed by `ComputeContext` while keeping the producer / last-use
   // maps above available for the earlier analysis steps.

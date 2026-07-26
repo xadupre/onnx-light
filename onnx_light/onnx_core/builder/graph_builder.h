@@ -110,6 +110,16 @@ public:
   ///                      to resolve the "latest opset" of a domain.
   explicit GraphBuilder(std::string name = "graph", SchemaLookupFn schema_lookup = {});
 
+  /// Constructs a builder from an existing model by replaying every graph and
+  /// function node through :cpp:func:`MakeNode`.
+  ///
+  /// Graph-valued node attributes are converted into nested subgraph builders,
+  /// and the owning node stores a ``<attr_name>_ref`` STRING (or STRINGS)
+  /// attribute carrying the nested builder name(s). :cpp:func:`BuildGraph` /
+  /// :cpp:func:`ToGraph` / :cpp:func:`ToModel` materialize those references
+  /// back into GRAPH / GRAPHS attributes.
+  explicit GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup = {});
+
   ~GraphBuilder();
 
   GraphBuilder(GraphBuilder &&) noexcept;
@@ -350,6 +360,24 @@ private:
   // Seeds the owned ShapesContext with the descriptor of ``name``.
   void SeedShape(const std::string &name, SymTensor tensor);
 
+  // Imports ``graph`` by replaying its inputs, initializers, nodes and outputs.
+  void ImportGraph(const GraphProto &graph);
+
+  // Imports ``function`` by replaying its body nodes and formal inputs/outputs.
+  void ImportFunction(const FunctionProto &function);
+
+  // Converts node attributes from proto form to builder form: GRAPH/GRAPHS
+  // attributes become ``*_ref`` STRING/STRINGS attributes that reference nested
+  // subgraph builders.
+  std::vector<AttributeProto> ImportAttributes(const NodeProto &node);
+
+  // Materializes ``*_ref`` STRING/STRINGS attributes in ``node`` back to
+  // GRAPH/GRAPHS attributes from the referenced nested builders.
+  void MaterializeGraphReferences(NodeProto &node) const;
+
+  // Returns ``true`` when ``name`` ends with ``"_ref"``.
+  static bool HasGraphReferenceSuffix(const std::string &name);
+
   // Runs the whole-graph compute analyses and writes their result into
   // ``graph`` (shapes, in-place / release-after / value-tag metadata and
   // per-node peak memory).
@@ -366,6 +394,7 @@ private:
                       const std::string &name, const char *kind);
 
   std::string name_;
+  std::string function_domain_;
   SchemaLookupFn schema_lookup_;
   // Lazily-built lookup table: op_type -> normalised domain -> schema history.
   std::unordered_map<std::string, std::unordered_map<std::string, std::vector<LightOpSchema>>>

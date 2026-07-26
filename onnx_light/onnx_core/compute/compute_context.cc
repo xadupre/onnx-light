@@ -776,21 +776,19 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     }
   }
 
-  std::vector<std::vector<std::string>> release_after;
-  std::vector<std::vector<std::string>> not_used_after;
-  release_after.reserve(lifetime.size());
-  not_used_after.reserve(lifetime.size());
+  release_after_.clear();
+  not_used_after_.clear();
+  release_after_.reserve(lifetime.size());
+  not_used_after_.reserve(lifetime.size());
   // `lifetime` is a local analysis result; move its per-node vectors into the
   // storage exposed by `ComputeContext` while keeping the producer / last-use
   // maps above available for the earlier analysis steps.
   for (std::size_t i = 0; i < lifetime.size(); ++i) {
-    release_after.push_back(std::move(lifetime[i].release_after));
-    not_used_after.push_back(std::move(lifetime[i].not_used_after));
+    release_after_.push_back(std::move(lifetime[i].release_after));
+    not_used_after_.push_back(std::move(lifetime[i].not_used_after));
   }
 
   reuse_ = std::move(result);
-  release_after_ = std::move(release_after);
-  not_used_after_ = std::move(not_used_after);
   memory_ = std::move(memory);
 
   // Populate the shape-tagged subset from value_tags (when provided).

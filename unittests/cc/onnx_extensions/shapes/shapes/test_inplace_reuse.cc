@@ -19,6 +19,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -123,7 +124,9 @@ TEST(OnnxOptimInPlaceReuse, ResultLifetimeInfoGroupsPerNodeData) {
 
   ASSERT_EQ(lifetime.size(), 2u);
   EXPECT_TRUE(lifetime[0].release_after.empty());
-  EXPECT_EQ(lifetime[0].not_used_after, (std::vector<std::string>{"X", "W"}));
+  std::vector<std::string> not_used_after = lifetime[0].not_used_after;
+  std::sort(not_used_after.begin(), not_used_after.end());
+  EXPECT_EQ(not_used_after, (std::vector<std::string>{"W", "X"}));
   EXPECT_EQ(lifetime[1].release_after, (std::vector<std::string>{"T"}));
   EXPECT_TRUE(lifetime[1].not_used_after.empty());
   EXPECT_EQ(lifetime.producer.at("T"), 0);

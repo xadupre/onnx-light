@@ -419,25 +419,18 @@ public:
    * normalised to :cpp:var:`kOnnxDomain`. Replaces any previous entry
    * for the same domain.
    */
-  void SetOpsetVersion(const std::string &domain, int opset_version) {
-    opsets_[NormaliseDomain(domain)] = opset_version;
-  }
+  void SetOpsetVersion(const std::string &domain, int opset_version);
 
   /// ``true`` when an opset version has been recorded for ``domain``
   /// (after normalising the empty domain to :cpp:var:`kOnnxDomain`).
-  bool HasOpsetVersion(const std::string &domain) const {
-    return opsets_.find(NormaliseDomain(domain)) != opsets_.end();
-  }
+  bool HasOpsetVersion(const std::string &domain) const;
 
   /**
    * Returns the recorded opset version of ``domain``, or
    * :cpp:var:`kUnknownOpsetVersion` if none was recorded. An empty
    * ``domain`` is normalised to :cpp:var:`kOnnxDomain`.
    */
-  int OpsetVersion(const std::string &domain) const {
-    auto it = opsets_.find(NormaliseDomain(domain));
-    return it == opsets_.end() ? kUnknownOpsetVersion : it->second;
-  }
+  int OpsetVersion(const std::string &domain) const;
 
   /// Read-only access to the underlying ``domain → opset_version`` map.
   const std::unordered_map<std::string, int> &Opsets() const noexcept { return opsets_; }
@@ -498,30 +491,19 @@ public:
   /// ``(domain, op_type)`` pair. ``domain == ""`` is normalized to
   /// :cpp:var:`kOnnxDomain`.
   void SetCustomShapeInferenceFunction(const std::string &domain, const std::string &op_type,
-                                       CustomComputeShapeFn fn) {
-    EXT_ENFORCE_INVALID(!op_type.empty(),
-                        "SetCustomShapeInferenceFunction: op_type must not be empty.");
-    EXT_ENFORCE_INVALID(static_cast<bool>(fn),
-                        "SetCustomShapeInferenceFunction: fn must not be empty.");
-    custom_shape_inference_[NormaliseDomain(domain) + ":" + op_type] = std::move(fn);
-  }
+                                       CustomComputeShapeFn fn);
 
   /// Returns a pointer to the custom shape-inference callback
   /// registered for ``(domain, op_type)``, or ``nullptr`` if none is
   /// registered. ``domain == ""`` is normalized to :cpp:var:`kOnnxDomain`.
   const CustomComputeShapeFn *GetCustomShapeInferenceFunction(const std::string &domain,
-                                                              const std::string &op_type) const {
-    auto it = custom_shape_inference_.find(NormaliseDomain(domain) + ":" + op_type);
-    return it == custom_shape_inference_.end() ? nullptr : &it->second;
-  }
+                                                              const std::string &op_type) const;
 
   /// Removes the custom shape-inference callback registered for
   /// ``(domain, op_type)``. ``domain == ""`` is normalized to
   /// :cpp:var:`kOnnxDomain`. Returns ``true`` when an entry was removed
   /// and ``false`` when no callback matched that key.
-  bool RemoveCustomShapeInferenceFunction(const std::string &domain, const std::string &op_type) {
-    return custom_shape_inference_.erase(NormaliseDomain(domain) + ":" + op_type) > 0;
-  }
+  bool RemoveCustomShapeInferenceFunction(const std::string &domain, const std::string &op_type);
 
   /// Removes every custom shape-inference callback.
   void ClearCustomShapeInferenceFunctions() { custom_shape_inference_.clear(); }
@@ -754,10 +736,6 @@ public:
                               std::vector<std::string> inputs);
 
 private:
-  static std::string NormaliseDomain(const std::string &domain) {
-    return domain.empty() ? std::string(kOnnxDomain) : domain;
-  }
-
   /// Appends a :cpp:enumerator:`ShapeEventAction::kAdd` /
   /// :cpp:enumerator:`ShapeEventAction::kReplace` event for ``name``
   /// describing ``tensor`` (the descriptor about to be stored). Only

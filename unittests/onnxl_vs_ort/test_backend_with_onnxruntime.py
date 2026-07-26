@@ -1,5 +1,6 @@
 import platform
 import re
+import sys
 import unittest
 import numpy as np
 from onnx_light.ext_test_case import import_or_skip, InferenceSessionAllTypes
@@ -277,6 +278,17 @@ ORT_EXCLUDE_REGEX = [
     # ONNX Runtime's Where kernel does not implement these dtypes.
     r"^test_cc_where_(bool|int8|int16|uint16|uint32|uint64)$",
 ]
+
+# Exclusions that only apply on a given platform. On macOS/arm64 ONNX Runtime
+# saturates out-of-range floating-point values when casting to ``UINT16`` (for
+# example ``-1.5 -> 0``), whereas onnx-light — like ONNX Runtime on x86 —
+# applies the modular wrap the reference kernel defines (``-1.5 -> 65535``).
+# Out-of-range float-to-integer conversion is undefined behaviour, so these
+# cases only agree with ONNX Runtime off macOS; keep the coverage everywhere
+# else and drop just these here.
+_MACOS_ORT_EXCLUDE_REGEX = [r"^test_cc_cast(like)?_(FLOAT|FLOAT16|BFLOAT16)_to_UINT16$"]
+if sys.platform == "darwin":
+    ORT_EXCLUDE_REGEX.extend(_MACOS_ORT_EXCLUDE_REGEX)
 
 # Add opset-gated exclusions only for opset versions ONNX Runtime cannot load yet.
 _ORT_MAX_OPSET = ort_max_supported_opset()

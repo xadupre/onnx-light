@@ -676,6 +676,7 @@ endif()
 if(ONNX_LIGHT_BUILD_TESTS)
 
   file(GLOB_RECURSE ONNX_CPP_PROTO_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_*.cc")
+  file(GLOB_RECURSE ONNX_CPP_CORE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_core/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_LIB_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_lib/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_OP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_op/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_SHAPE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/shapes/test_*.cc")
@@ -687,6 +688,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   list(REMOVE_ITEM ONNX_CPP_PROTO_TEST_SOURCES "${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}")
   set(ONNX_CPP_TEST_SOURCES
       ${ONNX_CPP_PROTO_TEST_SOURCES}
+      ${ONNX_CPP_CORE_TEST_SOURCES}
       ${ONNX_CPP_LIB_TEST_SOURCES}
       ${ONNX_CPP_OP_TEST_SOURCES}
       ${ONNX_CPP_SHAPE_TEST_SOURCES}
@@ -745,6 +747,8 @@ if(ONNX_LIGHT_BUILD_TESTS)
   # project header to the PCH forces every translation unit in this target
   # to rebuild whenever that header changes, defeating the purpose of a
   # shared PCH; keep it limited to stable, rarely-changing standard headers.
+  # Keeping only standard-library headers also avoids forcing a particular
+  # include order onto individual translation units.
   target_precompile_headers(test_onnx_light PRIVATE
       <gtest/gtest.h>
       <cstdint>

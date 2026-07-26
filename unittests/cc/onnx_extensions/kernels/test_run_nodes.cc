@@ -27,6 +27,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -56,6 +57,38 @@ using core::runtime::TensorMap;
 using onnx_kernels::kernel::KernelContext;
 
 namespace {
+
+class EnvVarGuard {
+public:
+  explicit EnvVarGuard(const char *name) : name_(name) {
+    const char *value = std::getenv(name_);
+    if (value != nullptr) {
+      had_value_ = true;
+      value_ = value;
+    }
+  }
+
+  ~EnvVarGuard() {
+    if (had_value_) {
+#ifdef _WIN32
+      _putenv_s(name_, value_.c_str());
+#else
+      setenv(name_, value_.c_str(), 1);
+#endif
+      return;
+    }
+#ifdef _WIN32
+    _putenv_s(name_, "");
+#else
+    unsetenv(name_);
+#endif
+  }
+
+private:
+  const char *name_;
+  bool had_value_ = false;
+  std::string value_;
+};
 
 // Minimal :cpp:class:`core::runtime::KernelBase` used by the synthetic-op tests
 // below: it carries a per-run closure so each test can register a
@@ -487,6 +520,39 @@ TEST(RunNodes, RunNodeClearResetsStateButKeepsSettings) {
   EXPECT_FLOAT_EQ(got[0], 44.0f);
   EXPECT_FLOAT_EQ(got[1], 55.0f);
   EXPECT_FLOAT_EQ(got[2], 66.0f);
+}
+
+TEST(RunNodes, VerboseRunNodeLogsThroughLoggerDestination) {
+  const std::filesystem::path log_path =
+      std::filesystem::temp_directory_path() / "onnx_light_verbose_progress.log";
+  std::remove(log_path.string().c_str());
+  EnvVarGuard guard("ONNX_LIGHT_LOG");
+#ifdef _WIN32
+  _putenv_s("ONNX_LIGHT_LOG", log_path.string().c_str());
+#else
+  setenv("ONNX_LIGHT_LOG", log_path.string().c_str(), 1);
+#endif
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_verbose(1);
+
+  rt.RegisterCustomKernel(
+      "com.acme", "VerboseProbe",
+      [](const NodeProto &node,
+         RuntimeContext & /*unused*/) -> std::unique_ptr<core::runtime::KernelBase> {
+        return std::make_unique<TestLambdaKernel>(
+            node, [](const NodeProto & /*unused*/, RuntimeContext & /*unused*/) {});
+      });
+
+  NodeProto node = MakeNode("VerboseProbe", {}, {}, "com.acme");
+  RunNode(node, rt);
+
+  std::ifstream in(log_path);
+  ASSERT_TRUE(in.is_open());
+  std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  EXPECT_NE(content.find("[ReferenceEvaluator]"), std::string::npos);
+  EXPECT_NE(content.find("com.acme::VerboseProbe() -> ()"), std::string::npos);
+  std::remove(log_path.string().c_str());
 }
 
 TEST(RunNodes, RunNodeGemmWithoutBiasUsesSchemaDefaults) {

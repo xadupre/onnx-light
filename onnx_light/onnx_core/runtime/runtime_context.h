@@ -380,9 +380,9 @@ public:
   void set_events_enabled(bool enabled) noexcept { events_enabled_ = enabled; }
   bool events_enabled() const noexcept { return events_enabled_; }
 
-  /// Verbosity level used by :cpp:func:`RunNode` to print execution
-  /// progress to ``stdout`` while the graph is running. ``0`` disables
-  /// printing.
+  /// Verbosity level used by :cpp:func:`RunNode` to emit execution
+  /// progress logs while the graph is running. ``0`` disables
+  /// logging.
   void set_verbose(int verbose) noexcept { verbose_ = verbose; }
   int verbose() const noexcept { return verbose_; }
 

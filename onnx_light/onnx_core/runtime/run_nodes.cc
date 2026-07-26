@@ -7,7 +7,6 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
-#include <iostream>
 #include <limits>
 #include <memory>
 #include <sstream>
@@ -21,6 +20,7 @@
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/run_nodes_internal.h"
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_light_helpers.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -120,18 +120,25 @@ void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const st
   if (rt.verbose() <= 0) {
     return;
   }
-  std::cout << "[ReferenceEvaluator] ";
+  std::ostringstream oss;
+  oss << "[ReferenceEvaluator] ";
   if (rt.current_subgraph_node_index() >= 0) {
-    std::cout << rt.current_subgraph_attr_name() << "@" << rt.current_subgraph_node_index() << "/";
+    oss << rt.current_subgraph_attr_name() << "@" << rt.current_subgraph_node_index() << "/";
   }
   if (rt.current_node_index() >= 0) {
-    std::cout << "#" << rt.current_node_index() << " ";
+    oss << "#" << rt.current_node_index() << " ";
   }
   if (domain != kDefaultOnnxDomain) {
-    std::cout << domain << "::";
+    oss << domain << "::";
   }
-  std::cout << op_type << "(" << FormatNameList(node.input()) << ") -> ("
-            << FormatNameList(node.output()) << ")" << std::endl;
+  oss << op_type << "(" << FormatNameList(node.input()) << ") -> (" << FormatNameList(node.output())
+      << ")";
+  onnx_light_helpers::Logger logger;
+  if (logger.enabled()) {
+    logger.log(oss.str());
+    return;
+  }
+  onnx_light_helpers::Logger("1").log(oss.str());
 }
 
 } // namespace

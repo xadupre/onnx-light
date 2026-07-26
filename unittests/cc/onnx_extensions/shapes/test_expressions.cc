@@ -317,6 +317,12 @@ TEST(DimOperations, DimMul_int_int) {
   EXPECT_EQ(std::get<int64_t>(dim_mul(DimType{int64_t{3}}, DimType{int64_t{4}})), 12);
 }
 
+TEST(DimOperations, IsZeroDim_zero) { EXPECT_TRUE(is_zero_dim(DimType{int64_t{0}})); }
+
+TEST(DimOperations, IsZeroDim_nonzero) { EXPECT_FALSE(is_zero_dim(DimType{int64_t{5}})); }
+
+TEST(DimOperations, IsZeroDim_symbolic) { EXPECT_FALSE(is_zero_dim(DimType{std::string{"n"}})); }
+
 TEST(DimOperations, DimMul_zero) {
   EXPECT_EQ(std::get<int64_t>(dim_mul(DimType{int64_t{0}}, DimType{int64_t{5}})), 0);
 }

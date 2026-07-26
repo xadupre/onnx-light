@@ -1978,6 +1978,10 @@ std::string dim_to_string(const DimType &d) {
   return std::get<std::string>(d);
 }
 
+bool is_zero_dim(const DimType &d) {
+  return std::holds_alternative<int64_t>(d) && std::get<int64_t>(d) == 0;
+}
+
 static DimType simplify_dim(const std::string &expr) {
   auto r = simplify_expression(expr);
   if (std::holds_alternative<int64_t>(r))

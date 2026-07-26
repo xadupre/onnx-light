@@ -4,6 +4,9 @@
 
 #pragma once
 
+#ifndef ONNX_LIGHT_ONNX_CORE_RUNTIME_KERNEL_CONTEXT_H
+#define ONNX_LIGHT_ONNX_CORE_RUNTIME_KERNEL_CONTEXT_H
+
 // Note: this header intentionally does NOT include
 // ``onnx_core/backend_test/test_case.h``, even though that header also needs
 // ``KernelContext``/``OpsetId``: ``test_case.h`` itself includes this
@@ -138,3 +141,5 @@ protected:
 } // namespace runtime
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE
+
+#endif // ONNX_LIGHT_ONNX_CORE_RUNTIME_KERNEL_CONTEXT_H

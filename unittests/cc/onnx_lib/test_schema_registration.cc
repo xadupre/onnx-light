@@ -79,7 +79,6 @@ protected:
     // Ensure the one-time lazy static registration of the real ONNX schemas has
     // completed, then snapshot the ai.onnx-domain schemas.
     RegisterAllOnnxOperatorSchemas();
-    saved_schemas_.clear();
     for (const auto &schema : OpSchemaRegistry::get_all_schemas_with_history()) {
       if (schema.domain() == ONNX_DOMAIN) {
         saved_schemas_.push_back(schema);

@@ -28,6 +28,8 @@ The module is exposed as ``onnx_light.onnx_core.graph_builder``.
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..onnx_op import GetAllOnnxOpSchemasWithHistory
 from ..onnx_py._onnxpyoptim import builder as _C  # type: ignore[attr-defined]
 
@@ -51,7 +53,7 @@ class GraphBuilder(_C.GraphBuilder):
     ``op_type -> list[LightOpSchema]`` callable to use different schemas.
     """
 
-    def __init__(self, name: str = "graph", schema_lookup=_default_schema_lookup) -> None:
+    def __init__(self, name: str | Any = "graph", schema_lookup=_default_schema_lookup) -> None:
         super().__init__(name, schema_lookup)
 
 

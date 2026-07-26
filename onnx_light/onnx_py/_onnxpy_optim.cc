@@ -1890,6 +1890,20 @@ void AddOnnxPyBuilder(nb::module_ &m) {
                            "Incrementally builds an ONNX graph, model or function.")
       .def(
           "__init__",
+          [](GraphBuilder *self, const ModelProto &model, nb::object schema_lookup) {
+            if (schema_lookup.is_none()) {
+              new (self) GraphBuilder(model, GraphBuilder::SchemaLookupFn{});
+              return;
+            }
+            auto fn = nb::cast<GraphBuilder::SchemaLookupFn>(schema_lookup);
+            new (self) GraphBuilder(model, std::move(fn));
+          },
+          nb::arg("model"), nb::arg("schema_lookup") = nb::none(),
+          "Constructs a builder by importing ``model`` node-by-node. GRAPH/GRAPHS attributes "
+          "are represented in-builder as ``*_ref`` attributes that point to nested subgraph "
+          "builders, and are materialized back on export.")
+      .def(
+          "__init__",
           [](GraphBuilder *self, const std::string &name, nb::object schema_lookup) {
             if (schema_lookup.is_none()) {
               new (self) GraphBuilder(name, GraphBuilder::SchemaLookupFn{});

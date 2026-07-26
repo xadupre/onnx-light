@@ -20,6 +20,7 @@
 // including the multi-node control-flow / shape-inference models.
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/builder/graph_builder.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/run_nodes.h"
@@ -34,6 +35,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -223,7 +225,232 @@ bool UsesSequenceOrOptionalOp(const ModelProto &model) {
   return false;
 }
 
+void AddOpsetImport(ModelProto &model, const std::string &domain, int64_t version) {
+  OperatorSetIdProto *opset = model.add_opset_import();
+  if (!domain.empty()) {
+    opset->set_domain(domain);
+  }
+  opset->set_version(version);
+}
+
+void AddFunctionNode(FunctionProto &function, const std::string &op_type, const std::string &domain,
+                     const std::vector<std::string> &inputs,
+                     const std::vector<std::string> &outputs) {
+  NodeProto *node = function.add_node();
+  node->set_op_type(op_type);
+  if (!domain.empty()) {
+    node->set_domain(domain);
+  }
+  for (const std::string &input : inputs) {
+    node->add_input(input);
+  }
+  for (const std::string &output : outputs) {
+    node->add_output(output);
+  }
+}
+
+std::pair<ModelProto, std::vector<DataSet>> BuildThreeLevelNestedLocalFunctionCase() {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.set_producer_name("backend-test");
+  AddOpsetImport(model, "", 18);
+  AddOpsetImport(model, "custom", 1);
+
+  FunctionProto *inner = model.add_functions();
+  inner->set_name("Inner");
+  inner->set_domain("custom");
+  inner->add_input("x");
+  inner->add_output("y");
+  AddFunctionNode(*inner, "Add", "", {"x", "x"}, {"y"});
+
+  FunctionProto *middle = model.add_functions();
+  middle->set_name("Middle");
+  middle->set_domain("custom");
+  middle->add_input("x");
+  middle->add_output("y");
+  AddFunctionNode(*middle, "Inner", "custom", {"x"}, {"t"});
+  AddFunctionNode(*middle, "Inner", "custom", {"t"}, {"y"});
+
+  FunctionProto *outer = model.add_functions();
+  outer->set_name("Outer");
+  outer->set_domain("custom");
+  outer->add_input("x");
+  outer->add_output("y");
+  AddFunctionNode(*outer, "Inner", "custom", {"x"}, {"t"});
+  AddFunctionNode(*outer, "Middle", "custom", {"t"}, {"y"});
+
+  GraphProto &graph = model.ref_graph();
+  graph.set_name("test_cc_local_function_three_level_nested_calls");
+  NodeProto *call = graph.add_node();
+  call->set_op_type("Outer");
+  call->set_domain("custom");
+  call->add_input("x");
+  call->add_output("y");
+
+  Tensor x = Tensor::FromFloat("x", {3}, {1.0f, 2.5f, -3.0f});
+  Tensor y = Tensor::FromFloat("y", {3}, {8.0f, 20.0f, -24.0f});
+  FillValueInfo(x, *graph.add_input());
+  FillValueInfo(y, *graph.add_output());
+
+  DataSet ds;
+  ds.inputs = {x};
+  ds.outputs = {y};
+  std::vector<DataSet> data_sets;
+  data_sets.push_back(std::move(ds));
+  return {std::move(model), std::move(data_sets)};
+}
+
+std::pair<ModelProto, std::vector<DataSet>> BuildLinkedAttributeLocalFunctionCase() {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.set_producer_name("backend-test");
+  AddOpsetImport(model, "", 18);
+  AddOpsetImport(model, "custom", 1);
+
+  FunctionProto *function = model.add_functions();
+  function->set_name("Pick");
+  function->set_domain("custom");
+  function->add_input("cond");
+  function->add_output("out");
+  function->add_attribute("then_branch");
+  function->add_attribute("else_branch");
+  {
+    NodeProto *if_node = function->add_node();
+    if_node->set_op_type("If");
+    if_node->add_input("cond");
+    if_node->add_output("out");
+    AttributeProto *then_ref = if_node->add_attribute();
+    then_ref->set_name("then_branch");
+    then_ref->set_ref_attr_name("then_branch");
+    then_ref->set_type(AttributeProto::AttributeType::GRAPH);
+    AttributeProto *else_ref = if_node->add_attribute();
+    else_ref->set_name("else_branch");
+    else_ref->set_ref_attr_name("else_branch");
+    else_ref->set_type(AttributeProto::AttributeType::GRAPH);
+  }
+
+  GraphProto &graph = model.ref_graph();
+  graph.set_name("test_cc_local_function_linked_attribute");
+  NodeProto *call = graph.add_node();
+  call->set_op_type("Pick");
+  call->set_domain("custom");
+  call->add_input("cond");
+  call->add_output("out");
+  auto fill_branch = [](GraphProto &branch, const std::string &branch_name,
+                        const std::string &init_name, float value) {
+    branch.set_name(branch_name);
+    TensorProto *init = branch.add_initializer();
+    init->set_name(init_name);
+    init->set_data_type(TensorProto::DataType::FLOAT);
+    init->add_float_data(value);
+    NodeProto *add = branch.add_node();
+    add->set_op_type("Add");
+    add->add_input(init_name);
+    add->add_input(init_name);
+    add->add_output("z");
+    branch.add_output()->set_name("z");
+  };
+  AttributeProto *then_attr = call->add_attribute();
+  then_attr->set_name("then_branch");
+  then_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  fill_branch(*then_attr->mutable_g(), "then_g", "t", 10.0f);
+  AttributeProto *else_attr = call->add_attribute();
+  else_attr->set_name("else_branch");
+  else_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  fill_branch(*else_attr->mutable_g(), "else_g", "e", 1.0f);
+
+  Tensor cond_true = Tensor::FromBool("cond", {}, {1});
+  Tensor cond_false = Tensor::FromBool("cond", {}, {0});
+  Tensor out_true = Tensor::FromFloat("out", {}, {20.0f});
+  Tensor out_false = Tensor::FromFloat("out", {}, {2.0f});
+  FillValueInfo(cond_true, *graph.add_input());
+  FillValueInfo(out_true, *graph.add_output());
+
+  DataSet ds_true;
+  ds_true.inputs = {cond_true};
+  ds_true.outputs = {out_true};
+  DataSet ds_false;
+  ds_false.inputs = {cond_false};
+  ds_false.outputs = {out_false};
+  std::vector<DataSet> data_sets;
+  data_sets.push_back(std::move(ds_true));
+  data_sets.push_back(std::move(ds_false));
+  return {std::move(model), std::move(data_sets)};
+}
+
+void ExpectModelOutputsMatchDataSet(const ModelProto &model, const DataSet &ds) {
+  RuntimeContext rt(KernelContext(DefaultOpset(GetDefaultOpsetVersion(model))));
+  const GraphProto &graph = model.ref_graph();
+  RegisterModelFunctions(model, rt);
+  for (const Tensor &t : ds.inputs) {
+    rt.Put(t.name, t, core::runtime::RuntimeEventKind::kInput);
+  }
+  for (const Map &m : ds.maps) {
+    rt.PutMap(m.name, m);
+  }
+  for (const TensorProto &tp : graph.initializer()) {
+    if (!rt.Has(tp.name())) {
+      rt.Set(tp.name(), TensorFromProto(tp), core::runtime::RuntimeEventKind::kInitializer);
+    }
+  }
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+  ASSERT_NO_THROW(session.Run(rt));
+  ASSERT_EQ(ds.outputs.size(), graph.output().size());
+  for (size_t i = 0; i < graph.output().size(); ++i) {
+    const std::string output_name = graph.output()[i].name();
+    ASSERT_TRUE(rt.Has(output_name)) << "Missing output '" << output_name << "'.";
+    ExpectTensorBitEqual(rt.Get(output_name), ds.outputs[i]);
+  }
+}
+
 } // namespace
+
+TEST(BackendRunModelAllCases, GraphBuilderRoundTripKeepsLocalFunctionsRunnable) {
+  auto case_data = BuildThreeLevelNestedLocalFunctionCase();
+  const ModelProto &original = case_data.first;
+  core::builder::GraphBuilder rebuilt(original);
+  ASSERT_TRUE(rebuilt.HasLocalFunction("Inner"));
+  ASSERT_TRUE(rebuilt.HasLocalFunction("Middle"));
+  ASSERT_TRUE(rebuilt.HasLocalFunction("Outer"));
+  const ModelProto round_tripped = rebuilt.ToModel(original.ir_version());
+  ASSERT_EQ(round_tripped.functions().size(), original.functions().size());
+  for (const DataSet &ds : case_data.second) {
+    ExpectModelOutputsMatchDataSet(original, ds);
+    ExpectModelOutputsMatchDataSet(round_tripped, ds);
+  }
+}
+
+TEST(BackendRunModelAllCases, GraphBuilderRoundTripMaterializesGraphRefAttributes) {
+  auto case_data = BuildLinkedAttributeLocalFunctionCase();
+  const ModelProto &original = case_data.first;
+  core::builder::GraphBuilder rebuilt(original);
+  ASSERT_EQ(rebuilt.Subgraphs().size(), 2u);
+  ASSERT_EQ(rebuilt.Nodes().size(), 1u);
+
+  const ModelProto round_tripped = rebuilt.ToModel(original.ir_version());
+  ASSERT_EQ(round_tripped.graph().node().size(), 1);
+  const NodeProto &round_tripped_call = round_tripped.graph().node(0);
+  bool has_then_graph = false;
+  bool has_else_graph = false;
+  for (const auto &attribute : round_tripped_call.ref_attribute()) {
+    if (attribute.name() == "then_branch") {
+      has_then_graph = true;
+      EXPECT_EQ(attribute.type(), AttributeProto::AttributeType::GRAPH);
+    }
+    if (attribute.name() == "else_branch") {
+      has_else_graph = true;
+      EXPECT_EQ(attribute.type(), AttributeProto::AttributeType::GRAPH);
+    }
+  }
+  EXPECT_TRUE(has_then_graph);
+  EXPECT_TRUE(has_else_graph);
+
+  for (const DataSet &ds : case_data.second) {
+    ExpectModelOutputsMatchDataSet(original, ds);
+    ExpectModelOutputsMatchDataSet(round_tripped, ds);
+  }
+}
 
 // Collects every model-based backend test case (``TestMode::TEST``, no big
 // models) and, for each data set, builds a single ``RuntimeContext``,

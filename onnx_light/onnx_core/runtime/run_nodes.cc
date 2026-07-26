@@ -6,6 +6,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <memory>
@@ -117,7 +118,7 @@ template <class NameCollection> std::string FormatNameList(const NameCollection 
 // Nothing is printed when ``rt.verbose() <= 0``.
 void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
                        const std::string &op_type) {
-  // ``onnx_light_helpers::Logger`` uses destination ``"1"`` to mean stdout.
+  // onnx_light_helpers::Logger uses destination "1" to mean stdout.
   constexpr const char *kStdoutLoggerDestination = "1";
   if (rt.verbose() <= 0) {
     return;
@@ -135,12 +136,10 @@ void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const st
   }
   oss << op_type << "(" << FormatNameList(node.input()) << ") -> (" << FormatNameList(node.output())
       << ")";
-  onnx_light_helpers::Logger logger;
-  if (logger.enabled()) {
-    logger.log(oss.str());
-    return;
-  }
-  onnx_light_helpers::Logger(kStdoutLoggerDestination).log(oss.str());
+  const char *log_destination = std::getenv("ONNX_LIGHT_LOG");
+  const bool has_configured_destination = log_destination != nullptr && log_destination[0] != '\0';
+  onnx_light_helpers::Logger logger(has_configured_destination ? "" : kStdoutLoggerDestination);
+  logger.log(oss.str());
 }
 
 } // namespace

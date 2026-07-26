@@ -35,7 +35,7 @@ namespace compute {
 // attributes.
 std::vector<std::string> CollectNodeInputs(const NodeProto &node);
 
-/// Per-node value-lifetime bookkeeping returned by
+/// Holds per-node value-lifetime bookkeeping from
 /// :cpp:func:`ComputeResultLifetimeInfo`.
 struct ResultLifetimeNodeInfo {
   /// Per-node list of top-level intermediates that reach their last use at

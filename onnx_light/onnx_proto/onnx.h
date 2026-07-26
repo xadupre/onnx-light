@@ -35,7 +35,7 @@ END_PROTO()
 
 BEGIN_PROTO(TensorAnnotation, "Defines a tensor annotation, useful for quantized tensors.")
 FIELD_STR(tensor_name, 1, "tensor name")
-FIELD_REPEATED(StringStringEntryProto, quant_parameter_tensor_names, 2,
+FIELD_REPEATED_PROTO(StringStringEntryProto, quant_parameter_tensor_names, 2,
                "<key, value> pairs to annotate tensor specified by <tensor_name> above. The "
                "keys used in the mapping below must be pre-defined in ONNX spec. For example, "
                "for 8-bit linear quantization case, 'SCALE_TENSOR', 'ZERO_POINT_TENSOR' will "
@@ -395,7 +395,7 @@ FIELD_REPEATED_PACKED(uint64_t, uint64_data, 11,
                       "For uint64 and uint32 values. When this field is present, the data_type "
                       "field MUST be UINT32 or UINT64.")
 FIELD_STR(doc_string, 12, "A human-readable documentation for this tensor. Markdown is allowed.")
-FIELD_REPEATED(
+FIELD_REPEATED_PROTO(
     StringStringEntryProto, external_data, 13,
     "Data can be stored inside the protobuf file using type-specific fields or raw_data. "
     "Alternatively, raw bytes data can be stored in an external file, using the external_data "
@@ -414,7 +414,7 @@ FIELD_OPTIONAL_ENUM(
     "protobuf message. Data is stored in raw_data (if set) otherwise in type-specified field. "
     "- EXTERNAL - data stored in an external location as described by external_data field. If "
     "value not set, data is stored in raw_data (if set) otherwise in type-specified field.")
-FIELD_REPEATED(StringStringEntryProto, metadata_props, 16,
+FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 16,
                "Named metadata values; keys should be distinct.")
 inline TensorProto() { data_type_ = DataType::UNDEFINED; }
 inline void Clear() { *this = TensorProto(); }
@@ -611,7 +611,7 @@ FIELD_OPTIONAL(TypeProto, type, 2,
                "This field MUST be present in this version of the IR for inputs and outputs of "
                "the top-level graph.")
 FIELD_STR(doc_string, 3, "A human-readable documentation for this tensor. Markdown is allowed.")
-FIELD_REPEATED(StringStringEntryProto, metadata_props, 4,
+FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 4,
                "Named metadata values; keys should be distinct.")
 END_PROTO()
 
@@ -748,7 +748,7 @@ FIELD_REPEATED_PROTO(AttributeProto, attribute, 5, "Attributes associated with t
 FIELD_STR(domain, 7, "The domain of the OperatorSet that specifies the operator named by op_type.")
 FIELD_STR(overload, 8, "Overload identifier, used only to map this to a model-local function.")
 FIELD_STR(doc_string, 6, "A human-readable documentation for this node. Markdown is allowed.")
-FIELD_REPEATED(StringStringEntryProto, metadata_props, 9,
+FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 9,
                "Named metadata values; keys should be distinct.")
 FIELD_REPEATED(NodeDeviceConfigurationProto, device_configurations, 10,
                "Configuration of multi-device annotations.")
@@ -803,7 +803,7 @@ FIELD_REPEATED(
     "parameter tensors. For example: For tensor 'a', it may have {'SCALE_TENSOR', 'a_scale'} and "
     "{'ZERO_POINT_TENSOR', 'a_zero_point'} annotated, which means, tensor 'a_scale' and tensor "
     "'a_zero_point' are scale and zero point of tensor 'a' in the model.")
-FIELD_REPEATED(StringStringEntryProto, metadata_props, 16,
+FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 16,
                "Named metadata values; keys should be distinct.")
 /**
  * Appends a new node built from *op_type*, *inputs*, *outputs* and the
@@ -858,7 +858,7 @@ FIELD_REPEATED_PROTO(
     ValueInfoProto, value_info, 12,
     "Information for the values in the graph. The ValueInfoProto.name's must be distinct. "
     "It is optional for a value to appear in value_info list.")
-FIELD_REPEATED(StringStringEntryProto, metadata_props, 14,
+FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 14,
                "Named metadata values; keys should be distinct.")
 /**
  * Appends a new node built from *op_type*, *inputs*, *outputs* and the
@@ -914,7 +914,7 @@ FIELD_OPTIONAL(int64_t, model_version, 5,
 FIELD_STR(doc_string, 6, "A human-readable documentation for this graph. Markdown is allowed.")
 FIELD_OPTIONAL(GraphProto, graph, 7,
                "The parameterized graph that is evaluated to execute the model.")
-FIELD_REPEATED(StringStringEntryProto, metadata_props, 14,
+FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 14,
                "Named metadata values; keys should be distinct.")
 // FIELD_REPEATED(TrainingInfoProto, training_info, 20, ",not yet implemented")
 FIELD_REPEATED_PROTO(

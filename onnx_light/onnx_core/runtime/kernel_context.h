@@ -73,7 +73,7 @@ struct KernelContext {
   /// runtime context. ``nullptr`` when the owning
   /// :cpp:class:`RuntimeContext` has no allocator attached (the default),
   /// in which case results fall back to inline ``std::vector`` storage.
-  /// Kept in sync by :cpp:func:`RuntimeContext::set_allocator`.
+  /// Initialized from the allocator supplied to :cpp:class:`RuntimeContext`.
   RawBufferAllocator *allocator = nullptr;
 
   KernelContext() = default;

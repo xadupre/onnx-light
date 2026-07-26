@@ -44,6 +44,18 @@ class ShapesContext;
 namespace runtime {
 
 /**
+ * Construction-time settings for :cpp:class:`RuntimeSession`.
+ *
+ * Sessions are intended to be built once and reused, so these values stay
+ * fixed for the session's lifetime.
+ */
+struct RuntimeSessionOptions {
+  RuntimeParameters parameters;
+  int verbose = 0;
+  bool check_shapes = false;
+};
+
+/**
  * A reusable execution session that binds a precomputed
  * :cpp:class:`ExecutionPlan` and separates the runtime lifecycle into three
  * explicit phases:
@@ -85,13 +97,12 @@ public:
    * @param model Model whose graph drives execution. The model (and the graph
    *              it owns) must outlive the session, since the built plan holds
    *              non-owning pointers into the graph's nodes.
-   * @param verbose Verbosity level applied to the :cpp:class:`RuntimeContext`
-   *              on each :cpp:func:`Run`. When non-zero, :cpp:func:`Run`
-   *              calls :cpp:func:`RuntimeContext::set_verbose` so the graph
-   *              prints execution progress to ``stdout``; ``0`` (the default)
-   *              leaves the context's verbosity untouched.
+   * @param verbose Verbosity level used by :cpp:func:`Run` for its progress
+   *                lines. ``0`` (the default) leaves verbosity to the
+   *                :cpp:class:`RuntimeContext`.
    */
   explicit RuntimeSession(const ModelProto &model, int verbose = 0);
+  RuntimeSession(const ModelProto &model, RuntimeSessionOptions options);
 
   /**
    * Builds a session over ``plan``. Kernel resolution is deferred to the first
@@ -102,13 +113,12 @@ public:
    *             (:cpp:func:`ExecutionPlan::nodes`) drives execution. The plan
    *             (and the graph / function it was built from) must outlive the
    *             session.
-   * @param verbose Verbosity level applied to the :cpp:class:`RuntimeContext`
-   *             on each :cpp:func:`Run`. When non-zero, :cpp:func:`Run` calls
-   *             :cpp:func:`RuntimeContext::set_verbose` so the graph prints
-   *             execution progress to ``stdout``; ``0`` (the default) leaves
-   *             the context's verbosity untouched.
+   * @param verbose Verbosity level used by :cpp:func:`Run` for its progress
+   *                lines. ``0`` (the default) leaves verbosity to the
+   *                :cpp:class:`RuntimeContext`.
    */
   explicit RuntimeSession(const ExecutionPlan &plan, int verbose = 0);
+  RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions options);
 
   // A session caches one owning ``std::unique_ptr<KernelBase>`` per node (see
   // :cpp:member:`kernels_`), so it is move-only. It is always created in place
@@ -151,14 +161,11 @@ public:
   /// Model-independent execution parameters (e.g. the requested degree of
   /// parallelism, :cpp:var:`RuntimeParameters::num_threads`) applied to the
   /// nodes this session runs.
-  void set_parameters(RuntimeParameters parameters) noexcept { parameters_ = parameters; }
   const RuntimeParameters &parameters() const noexcept { return parameters_; }
 
-  /// Verbosity level applied to the :cpp:class:`RuntimeContext` on each
-  /// :cpp:func:`Run`. When non-zero, :cpp:func:`Run` enables it on ``rt`` via
-  /// :cpp:func:`RuntimeContext::set_verbose`; ``0`` leaves the context
-  /// untouched.
-  void set_verbose(int verbose) noexcept { verbose_ = verbose; }
+  /// Verbosity level requested for :cpp:func:`Run`. When non-zero, it overrides
+  /// :cpp:func:`RuntimeContext::verbose` for this session's progress lines
+  /// without mutating the context itself.
   int verbose() const noexcept { return verbose_; }
 
   /// Returns the external input names the scheduled nodes read (the inputs that
@@ -178,7 +185,6 @@ public:
   /// automatically when the session is built from a :cpp:class:`ModelProto`; a
   /// session built from an :cpp:class:`ExecutionPlan` alone must call
   /// :cpp:func:`SetDeclaredShapes` for the check to have anything to validate.
-  void set_check_shapes(bool check_shapes) noexcept { check_shapes_ = check_shapes; }
   bool check_shapes() const noexcept { return check_shapes_; }
 
   /// Records the declared (possibly symbolic) shapes carried by ``graph``'s
@@ -264,8 +270,7 @@ private:
   /// the declarations in :cpp:member:`declared_shapes_`.
   bool check_shapes_ = false;
   RuntimeParameters parameters_;
-  /// Verbosity level applied to ``rt`` at the start of each :cpp:func:`Run`
-  /// when non-zero (see :cpp:func:`set_verbose`).
+  /// Verbosity level used by :cpp:func:`Run` when non-zero.
   int verbose_ = 0;
   /// Allocator observed on ``rt`` the first time :cpp:func:`Run` executes;
   /// every output tensor produced by a scheduled node is verified to be

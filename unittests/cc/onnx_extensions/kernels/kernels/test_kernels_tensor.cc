@@ -436,8 +436,7 @@ TEST(KernelClass, CastClassToStringUsesAllocator) {
   // Capacity counts buffer slots, not bytes; the STRING output uses one
   // zero-byte allocation because its elements live in ``string_data``.
   SimpleRawBufferAllocator alloc(4);
-  RuntimeContext rt{ctx};
-  rt.set_allocator(&alloc);
+  RuntimeContext rt{ctx, core::runtime::RuntimeContextOptions{.allocator = &alloc}};
 
   Tensor x = Tensor::FromInt32("", {3}, {1, -2, 30});
   Tensor y = cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::STRING), &rt);
@@ -534,8 +533,7 @@ TEST(KernelClass, CastLikeUsesAllocatorWhenRuntimeContextHasOne) {
 
   constexpr size_t kAllocatorSlotCapacity = 1;
   SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = castlike_kernel(x, target, &rt);
 
@@ -557,8 +555,7 @@ TEST(KernelClass, CastLikeWithSaturateUsesAllocatorWhenRuntimeContextHasOne) {
 
   constexpr size_t kAllocatorSlotCapacity = 1;
   SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = castlike_kernel(x, target, /*saturate=*/true, &rt);
 
@@ -1763,8 +1760,7 @@ TEST(KernelClass, CompressUsesAllocatorWithoutScratch) {
   Tensor condition = Tensor::FromBool("", {2}, {1, 0});
 
   SimpleRawBufferAllocator alloc(1);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor output = compress(input, condition, /*axis=*/0, &rt);
   EXPECT_TRUE(output.has_allocation());

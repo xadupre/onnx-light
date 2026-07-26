@@ -330,7 +330,12 @@ const ExecutionPlan &RuntimeContext::GetExecutionPlan(const FunctionProto &func)
 void RuntimeContext::ClearExecutionPlans() noexcept { execution_plans_.clear(); }
 
 RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name) const {
-  RuntimeContext child(kernel_ctx_);
+  RuntimeContext child(kernel_ctx_, RuntimeContextOptions{
+                                        .allocator = nullptr,
+                                        .events_enabled = events_enabled_,
+                                        .verbose = verbose_,
+                                        .release_intermediates = release_intermediates_,
+                                    });
   // Subgraph contexts do not inherit the parent allocator. Body kernels use
   // inline tensor storage, and the parent's EnsureAllocatorBacked (called in
   // Put/Set) migrates final outputs to the parent allocator when results are
@@ -341,17 +346,18 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.functions() = functions_;
   child.tensors() = tensors_;
   child.sequences() = sequences_;
-  child.set_verbose(verbose_);
-  child.set_events_enabled(events_enabled_);
   child.set_current_subgraph(current_node_index_, attr_name);
   return child;
 }
 
 RuntimeContext RuntimeContext::MakeFunctionContext() const {
-  RuntimeContext child(kernel_ctx_);
-  child.set_allocator(allocator_);
+  RuntimeContext child(kernel_ctx_, RuntimeContextOptions{
+                                        .allocator = allocator_,
+                                        .events_enabled = false,
+                                        .verbose = verbose_,
+                                        .release_intermediates = release_intermediates_,
+                                    });
   child.functions() = functions_;
-  child.set_verbose(verbose_);
   return child;
 }
 

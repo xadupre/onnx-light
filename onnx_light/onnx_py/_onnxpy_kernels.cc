@@ -488,28 +488,50 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       ":class:`RuntimeContext`; subsequent calls reuse those cached instances. When "
       ":attr:`RuntimeContext.release_intermediates` is enabled, :func:`run` also "
       "frees each intermediate whose last reference has been reached.")
-      .def(nb::init<const ModelProto &, int>(), nb::arg("model"), nb::arg("verbose") = 0,
-           nb::keep_alive<1, 2>(),
-           "Builds a session over an :class:`ExecutionPlan` the session owns, "
-           "built from ``model.graph``. Use this when no precomputed plan is "
-           "available: ``model`` (and the graph it owns) must outlive the session; "
-           "this binding keeps ``model`` alive for at least as long as the session. "
-           "When ``verbose`` is non-zero, :func:`run` enables it on the "
-           ":class:`RuntimeContext` so the graph prints execution progress to stdout.")
-      .def(nb::init<const ExecutionPlan &, int>(), nb::arg("plan"), nb::arg("verbose") = 0,
-           nb::keep_alive<1, 2>(),
-           "Builds a session over ``plan``. ``plan`` (and the graph / function it "
-           "was built from) must outlive the session; this binding keeps ``plan`` "
-           "alive for at least as long as the session. When ``verbose`` is non-zero, "
-           ":func:`run` enables it on the :class:`RuntimeContext` so the graph prints "
-           "execution progress to stdout.")
+      .def(
+          "__init__",
+          [](RuntimeSession *self, const ModelProto &model, nb::object parameters_obj, int verbose,
+             bool check_shapes) {
+            RuntimeParameters parameters = parameters_obj.is_none()
+                                               ? RuntimeParameters()
+                                               : nb::cast<RuntimeParameters>(parameters_obj);
+            new (self) RuntimeSession(model, core::runtime::RuntimeSessionOptions{
+                                                 .parameters = std::move(parameters),
+                                                 .verbose = verbose,
+                                                 .check_shapes = check_shapes,
+                                             });
+          },
+          nb::arg("model"), nb::kw_only(), nb::arg("parameters").none() = nb::none(),
+          nb::arg("verbose") = 0, nb::arg("check_shapes") = false, nb::keep_alive<1, 2>(),
+          "Builds a session over an :class:`ExecutionPlan` the session owns, "
+          "built from ``model.graph``. Use this when no precomputed plan is "
+          "available: ``model`` (and the graph it owns) must outlive the session; "
+          "this binding keeps ``model`` alive for at least as long as the session.")
+      .def(
+          "__init__",
+          [](RuntimeSession *self, const ExecutionPlan &plan, nb::object parameters_obj,
+             int verbose, bool check_shapes) {
+            RuntimeParameters parameters = parameters_obj.is_none()
+                                               ? RuntimeParameters()
+                                               : nb::cast<RuntimeParameters>(parameters_obj);
+            new (self) RuntimeSession(plan, core::runtime::RuntimeSessionOptions{
+                                                .parameters = std::move(parameters),
+                                                .verbose = verbose,
+                                                .check_shapes = check_shapes,
+                                            });
+          },
+          nb::arg("plan"), nb::kw_only(), nb::arg("parameters").none() = nb::none(),
+          nb::arg("verbose") = 0, nb::arg("check_shapes") = false, nb::keep_alive<1, 2>(),
+          "Builds a session over ``plan``. ``plan`` (and the graph / function it "
+          "was built from) must outlive the session; this binding keeps ``plan`` "
+          "alive for at least as long as the session.")
       .def("run", &RuntimeSession::Run, nb::arg("rt"),
            "Executes the plan once against ``rt``, resolving, building, and caching "
            "kernel instances on the first call. Safe to call repeatedly on the same session.")
-      .def_prop_rw("parameters", &RuntimeSession::parameters, &RuntimeSession::set_parameters,
+      .def_prop_ro("parameters", &RuntimeSession::parameters,
                    "Model-independent execution parameters applied to the nodes this "
                    "session runs.")
-      .def_prop_rw("check_shapes", &RuntimeSession::check_shapes, &RuntimeSession::set_check_shapes,
+      .def_prop_ro("check_shapes", &RuntimeSession::check_shapes,
                    "When ``True``, :func:`run` validates that the concrete shape of every "
                    "tensor carrying a declared (possibly symbolic) shape — the graph "
                    "inputs, outputs and ``value_info`` — is consistent with that "
@@ -523,11 +545,10 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "Records the declared (possibly symbolic) shapes carried by ``graph``'s "
            "inputs, outputs and ``value_info`` so that, when :attr:`check_shapes` is "
            "enabled, :func:`run` can validate concrete tensor shapes against them.")
-      .def_prop_rw("verbose", &RuntimeSession::verbose, &RuntimeSession::set_verbose,
-                   "Verbosity level applied to the :class:`RuntimeContext` on each "
-                   ":func:`run`. When non-zero, :func:`run` enables it on ``rt`` so the "
-                   "graph prints execution progress to stdout; ``0`` leaves the context "
-                   "untouched.")
+      .def_prop_ro("verbose", &RuntimeSession::verbose,
+                   "Verbosity level requested for :func:`run`. When non-zero, it overrides "
+                   "the :class:`RuntimeContext` verbosity for this session's progress "
+                   "lines without mutating the context itself.")
       .def_prop_ro("required_inputs", &RuntimeSession::required_inputs,
                    "Returns the external input names the scheduled nodes read. Populated "
                    "during kernel initialization; empty until the first :func:`run`.");
@@ -558,7 +579,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   nb::class_<SimpleRawBufferAllocator>(
       rt_mod, "SimpleRawBufferAllocator",
       "Fixed-capacity pool allocator for the runtime's raw buffers. Attach one "
-      "to a :class:`RuntimeContext` via :meth:`RuntimeContext.set_allocator` so "
+      "to a :class:`RuntimeContext` via the :class:`RuntimeContext` constructor so "
       "the runtime routes tensor storage through it; every recorded "
       ":class:`RuntimeEvent` then carries the allocator's live "
       "(:attr:`RuntimeEvent.allocated_bytes`) and peak "
@@ -585,17 +606,29 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "tensor map carrying graph inputs/initializers and every intermediate value "
       "produced by previously executed nodes.")
       .def(nb::init<>())
-      .def(nb::init<KernelContext>(), nb::arg("kernel_ctx"))
-      .def_prop_rw(
+      .def(
+          "__init__",
+          [](RuntimeContext *self, KernelContext kernel_ctx, bool events_enabled, int verbose,
+             bool release_intermediates, SimpleRawBufferAllocator *allocator) {
+            new (self) RuntimeContext(std::move(kernel_ctx),
+                                      core::runtime::RuntimeContextOptions{
+                                          .allocator = allocator,
+                                          .events_enabled = events_enabled,
+                                          .verbose = verbose,
+                                          .release_intermediates = release_intermediates,
+                                      });
+          },
+          nb::arg("kernel_ctx"), nb::kw_only(), nb::arg("events_enabled") = false,
+          nb::arg("verbose") = 0, nb::arg("release_intermediates") = false,
+          nb::arg("allocator").none() = nullptr, nb::keep_alive<1, 6>())
+      .def_prop_ro(
           "events_enabled", [](const RuntimeContext &rt) { return rt.events_enabled(); },
-          [](RuntimeContext &rt, bool v) { rt.set_events_enabled(v); },
           "When ``True``, :func:`set` / :func:`put` / :func:`remove` and "
           ":func:`run_node` record events (incl. clock reads and value decoding). "
           "Default is ``False`` for maximum throughput; enable only when profiling "
           "is required.")
-      .def_prop_rw(
+      .def_prop_ro(
           "verbose", [](const RuntimeContext &rt) { return rt.verbose(); },
-          [](RuntimeContext &rt, int v) { rt.set_verbose(v); },
           "Verbosity level used by :func:`run_node` to print execution progress to "
           "``stdout`` while the graph runs. ``0`` disables printing.")
       .def_prop_rw(
@@ -609,23 +642,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "outputs and names already present in the context before the run are always "
           "preserved. Default is ``False`` so that intermediate values stay observable "
           "after the run.")
-      .def_prop_rw(
+      .def_prop_ro(
           "kernel_ctx", [](RuntimeContext &rt) -> KernelContext & { return rt.kernel_ctx(); },
-          [](RuntimeContext &rt, KernelContext k) { rt.kernel_ctx() = std::move(k); },
           nb::rv_policy::reference_internal, "Kernel construction context (opset).")
-      .def(
-          "set_allocator",
-          [](RuntimeContext &rt, SimpleRawBufferAllocator *allocator) {
-            rt.set_allocator(allocator);
-          },
-          nb::arg("allocator").none(), nb::keep_alive<1, 2>(),
-          "Attaches (or, with ``None``, detaches) a "
-          ":class:`SimpleRawBufferAllocator` used by the runtime to acquire and "
-          "release raw buffers. The allocator must outlive this context; the "
-          "binding keeps it alive for at least as long as the context. Once "
-          "attached, every recorded :class:`RuntimeEvent` carries the allocator's "
-          "live (:attr:`RuntimeEvent.allocated_bytes`) and peak "
-          "(:attr:`RuntimeEvent.peak_bytes`) memory.")
       .def("has", &RuntimeContext::Has, nb::arg("name"),
            "Returns ``True`` if a tensor named ``name`` is currently held.")
       .def("remove", &RuntimeContext::Remove, nb::arg("name"),

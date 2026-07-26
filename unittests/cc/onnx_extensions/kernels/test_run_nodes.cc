@@ -47,7 +47,9 @@ using core::runtime::KernelDispatchTable;
 using core::runtime::RegisterModelFunctions;
 using core::runtime::RunNode;
 using core::runtime::RuntimeContext;
+using core::runtime::RuntimeParameters;
 using core::runtime::RuntimeSession;
+using core::runtime::RuntimeSessionOptions;
 using core::runtime::Sequence;
 using core::runtime::SliceTensorAlongAxis;
 using core::runtime::Tensor;
@@ -456,8 +458,8 @@ TEST(RunNodes, RunNodeSingleAdd) {
 }
 
 TEST(RunNodes, RunNodeClearResetsStateButKeepsSettings) {
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.set_events_enabled(true);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.events_enabled = true});
   rt.set_release_intermediates(true);
   rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f});
   rt.tensors()["y"] = Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f});
@@ -1457,8 +1459,8 @@ TEST(RunNodes, RuntimeContextRemove) {
 TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
   using core::runtime::RuntimeEventAction;
   using core::runtime::RuntimeEventKind;
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.set_events_enabled(true);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.events_enabled = true});
   EXPECT_TRUE(rt.events().empty());
 
   // Set -> add event with values populated (element_count <= 8). Default
@@ -1538,8 +1540,8 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   // and also appends one ``kRunNode`` event per dispatched node.
   using core::runtime::RuntimeEventAction;
   using core::runtime::RuntimeEventKind;
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.set_events_enabled(true);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.events_enabled = true});
   rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
   rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
   rt.ClearEvents();
@@ -1584,9 +1586,9 @@ TEST(RunNodes, RuntimeContextEventLogCapturesAllocatorMemory) {
   // summarise the per-node dispatch (duration + memory) through summary().
   using core::runtime::RuntimeEventAction;
   core::runtime::SimpleRawBufferAllocator alloc(/*capacity=*/16);
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.set_allocator(&alloc);
-  rt.set_events_enabled(true);
+  RuntimeContext rt(
+      KernelContext(DefaultOpset(18)),
+      core::runtime::RuntimeContextOptions{.allocator = &alloc, .events_enabled = true});
   rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
   rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
   rt.ClearEvents();
@@ -1934,11 +1936,11 @@ TEST(RunModel, DelayedInitializerUsesAllocatorWhenProvided) {
   onnx_kernels::kernel::DelayedInitializer delayed(KernelContext(DefaultOpset(18)),
                                                    std::move(attrs));
 
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
   // SimpleRawBufferAllocator capacity counts buffer slots, not bytes.
   constexpr size_t kAllocatorSlotCapacity = 1;
   core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = delayed(&rt);
   ASSERT_TRUE(y.has_allocation());
@@ -2034,8 +2036,8 @@ TEST(RunModel, DelayedInitializerCpuLoadWithBothAllocators) {
   // backed by the runtime allocator, not the construction-time allocator.
   constexpr size_t kRuntimeAllocatorSlots = 1;
   core::runtime::SimpleRawBufferAllocator runtime_alloc(kRuntimeAllocatorSlots);
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.set_allocator(&runtime_alloc);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.allocator = &runtime_alloc});
 
   Tensor y = delayed(&rt);
   ASSERT_TRUE(y.has_allocation());
@@ -2880,11 +2882,11 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   constexpr size_t kAllocatorSlotCapacity = 2;
   core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.allocator = &alloc});
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
-  rt.set_allocator(&alloc);
 
   RunModelViaSession(model, rt);
 
@@ -2937,11 +2939,11 @@ TEST(RunModel, LoopNodeAllocatorBacksTransientIterAndCondScalars) {
     body->add_output()->set_name("s_out");
     body->add_output()->set_name("s_out");
 
-    RuntimeContext rt(KernelContext(DefaultOpset(18)));
+    RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                      core::runtime::RuntimeContextOptions{.allocator = &alloc});
     rt.Set("M", Tensor::FromInt64("M", {}, {3}));
     rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
     rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
-    rt.set_allocator(&alloc);
 
     RunModelViaSession(model, rt);
 
@@ -2978,11 +2980,11 @@ TEST(RunLoopWithSequenceState, SequenceOnlyStateGrowsPerIteration) {
 TEST(RunLoopWithSequenceState, SequenceOnlyStateAllocatorBacksIterAndCondScalars) {
   CountingAllocator alloc(/*capacity=*/2);
   {
-    RuntimeContext rt(KernelContext(DefaultOpset(13)));
+    RuntimeContext rt(KernelContext(DefaultOpset(13)),
+                      core::runtime::RuntimeContextOptions{.allocator = &alloc});
     rt.Set("M", Tensor::FromInt64("M", {}, {3}));
     rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
     rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
-    rt.set_allocator(&alloc);
 
     RunNode(MakeLoopNode({"M", "cond", "seq_init"}, {"seq_out"}, BuildSequenceLoopBody()), rt);
 
@@ -3064,12 +3066,12 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
   constexpr size_t kAllocatorSlotCapacity = 2;
   core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
-  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  RuntimeContext rt(KernelContext(DefaultOpset(13)),
+                    core::runtime::RuntimeContextOptions{.allocator = &alloc});
   rt.Set("M", Tensor::FromInt64("M", {}, {3}));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("acc_init", Tensor::FromFloat("acc_init", {}, {0.0f}));
   rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
-  rt.set_allocator(&alloc);
 
   RunNode(MakeLoopNode({"M", "cond", "acc_init", "seq_init"}, {"acc_final", "seq_final", "scan"},
                        BuildMixedSequenceLoopBody()),
@@ -4088,8 +4090,8 @@ TEST(RunNodes, RunGraphReleaseIntermediatesRemovesUnusedAndEmitsEvent) {
   graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
   graph.ref_node().push_back(MakeNode("Add", {"t", "z"}, {"y"}));
 
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.set_events_enabled(true);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.events_enabled = true});
   rt.set_release_intermediates(true);
   rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
   rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
@@ -4900,8 +4902,8 @@ TEST(SubgraphEventGraphName, LoopSubgraphEventsCarryBodyGraphName) {
   body_attr->set_type(AttributeProto::AttributeType::GRAPH);
   FillLoopBody(*body_attr->add_g());
 
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.set_events_enabled(true);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.events_enabled = true});
   rt.Set("M", Tensor::FromInt64("M", {}, {2}));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
@@ -4957,8 +4959,8 @@ TEST(SubgraphEventGraphName, IfSubgraphEventsCarryBranchGraphName) {
   FillConstantBranch(*else_attr->add_g(), "else_g", "e", "z", 2.0f);
 
   // Run with cond = true: the then_branch executes.
-  RuntimeContext rt_true(KernelContext(DefaultOpset(18)));
-  rt_true.set_events_enabled(true);
+  RuntimeContext rt_true(KernelContext(DefaultOpset(18)),
+                         core::runtime::RuntimeContextOptions{.events_enabled = true});
   rt_true.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt_true.ClearEvents();
   RunModelViaSession(model, rt_true);
@@ -4973,8 +4975,8 @@ TEST(SubgraphEventGraphName, IfSubgraphEventsCarryBranchGraphName) {
   EXPECT_TRUE(found_then) << "No event with subgraph_attr_name='then_branch' found";
 
   // Run with cond = false: the else_branch executes.
-  RuntimeContext rt_false(KernelContext(DefaultOpset(18)));
-  rt_false.set_events_enabled(true);
+  RuntimeContext rt_false(KernelContext(DefaultOpset(18)),
+                          core::runtime::RuntimeContextOptions{.events_enabled = true});
   rt_false.Set("cond", Tensor::FromBool("cond", {}, {0}));
   rt_false.ClearEvents();
   RunModelViaSession(model, rt_false);
@@ -5025,8 +5027,8 @@ TEST(SubgraphEventGraphName, ScanSubgraphEventsCarryBodyGraphName) {
   body->add_output()->set_name("state_out");
   body->add_output()->set_name("state_out");
 
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.set_events_enabled(true);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.events_enabled = true});
   rt.Set("state0", Tensor::FromFloat("state0", {}, {0.0f}));
   rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
   rt.ClearEvents();
@@ -5058,8 +5060,8 @@ TEST(SubgraphEventGraphName, TopLevelEventsHaveEmptyGraphName) {
   *g->add_node() = MakeNode("Abs", {"x"}, {"t"});
   *g->add_node() = MakeNode("Neg", {"t"}, {"y"});
 
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.set_events_enabled(true);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.events_enabled = true});
   rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
   rt.ClearEvents();
 
@@ -5100,7 +5102,7 @@ TEST(NodeHelpers, GetAttributeShapeOrDefaultReturnsFallback) {
 }
 
 // ---------------------------------------------------------------------------
-// RuntimeSession concrete-vs-symbolic shape validation (set_check_shapes)
+// RuntimeSession concrete-vs-symbolic shape validation (constructor option)
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -5153,8 +5155,12 @@ TEST(RuntimeSessionCheckShapes, DefaultsToDisabled) {
   ModelProto model = MakeAddModelWithShapes({{2, ""}}, {{2, ""}}, {{2, ""}});
   RuntimeSession session(model);
   EXPECT_FALSE(session.check_shapes());
-  session.set_check_shapes(true);
-  EXPECT_TRUE(session.check_shapes());
+  RuntimeSession enabled(model, RuntimeSessionOptions{
+                                    .parameters = RuntimeParameters(),
+                                    .verbose = 0,
+                                    .check_shapes = true,
+                                });
+  EXPECT_TRUE(enabled.check_shapes());
 }
 
 TEST(RuntimeSessionCheckShapes, PassesWhenConcreteMatchesSymbolic) {
@@ -5165,8 +5171,11 @@ TEST(RuntimeSessionCheckShapes, PassesWhenConcreteMatchesSymbolic) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("x", Tensor::FromFloat("x", {2, 3}, {1, 2, 3, 4, 5, 6}));
   rt.Set("y", Tensor::FromFloat("y", {2, 3}, {6, 5, 4, 3, 2, 1}));
-  RuntimeSession session(model);
-  session.set_check_shapes(true);
+  RuntimeSession session(model, RuntimeSessionOptions{
+                                    .parameters = RuntimeParameters(),
+                                    .verbose = 0,
+                                    .check_shapes = true,
+                                });
   EXPECT_NO_THROW(session.Run(rt));
   ASSERT_TRUE(rt.Has("z"));
   EXPECT_EQ(rt.Get("z").shape, std::vector<int64_t>({2, 3}));
@@ -5180,8 +5189,11 @@ TEST(RuntimeSessionCheckShapes, RejectsConcreteDimMismatchOnOutput) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("x", Tensor::FromFloat("x", {2, 3}, {1, 2, 3, 4, 5, 6}));
   rt.Set("y", Tensor::FromFloat("y", {2, 3}, {6, 5, 4, 3, 2, 1}));
-  RuntimeSession session(model);
-  session.set_check_shapes(true);
+  RuntimeSession session(model, RuntimeSessionOptions{
+                                    .parameters = RuntimeParameters(),
+                                    .verbose = 0,
+                                    .check_shapes = true,
+                                });
   EXPECT_THROW(session.Run(rt), std::invalid_argument);
 }
 
@@ -5193,8 +5205,11 @@ TEST(RuntimeSessionCheckShapes, RejectsInconsistentSymbolicBinding) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("x", Tensor::FromFloat("x", {2}, {1, 2}));
   rt.Set("y", Tensor::FromFloat("y", {3}, {1, 2, 3}));
-  RuntimeSession session(model);
-  session.set_check_shapes(true);
+  RuntimeSession session(model, RuntimeSessionOptions{
+                                    .parameters = RuntimeParameters(),
+                                    .verbose = 0,
+                                    .check_shapes = true,
+                                });
   EXPECT_THROW(session.Run(rt), std::invalid_argument);
 }
 
@@ -5218,8 +5233,11 @@ TEST(RuntimeSessionCheckShapes, RejectsRankMismatch) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("x", Tensor::FromFloat("x", {2, 3}, {1, 2, 3, 4, 5, 6}));
   rt.Set("y", Tensor::FromFloat("y", {2, 3}, {6, 5, 4, 3, 2, 1}));
-  RuntimeSession session(model);
-  session.set_check_shapes(true);
+  RuntimeSession session(model, RuntimeSessionOptions{
+                                    .parameters = RuntimeParameters(),
+                                    .verbose = 0,
+                                    .check_shapes = true,
+                                });
   EXPECT_THROW(session.Run(rt), std::invalid_argument);
 }
 
@@ -5232,17 +5250,23 @@ TEST(RuntimeSessionCheckShapes, SetDeclaredShapesOnPlanBuiltSession) {
   rt.Set("x", Tensor::FromFloat("x", {2, 3}, {1, 2, 3, 4, 5, 6}));
   rt.Set("y", Tensor::FromFloat("y", {2, 3}, {6, 5, 4, 3, 2, 1}));
   const ExecutionPlan &plan = rt.GetExecutionPlan(model.ref_graph());
-  RuntimeSession session(plan);
-  session.set_check_shapes(true);
+  RuntimeSession session(plan, RuntimeSessionOptions{
+                                   .parameters = RuntimeParameters(),
+                                   .verbose = 0,
+                                   .check_shapes = true,
+                               });
   // No declared shapes yet: nothing to validate, so the [2,3] output passes.
   EXPECT_NO_THROW(session.Run(rt));
 
   RuntimeContext rt2(KernelContext(DefaultOpset(18)));
   rt2.Set("x", Tensor::FromFloat("x", {2, 3}, {1, 2, 3, 4, 5, 6}));
   rt2.Set("y", Tensor::FromFloat("y", {2, 3}, {6, 5, 4, 3, 2, 1}));
-  RuntimeSession session2(plan);
+  RuntimeSession session2(plan, RuntimeSessionOptions{
+                                    .parameters = RuntimeParameters(),
+                                    .verbose = 0,
+                                    .check_shapes = true,
+                                });
   session2.SetDeclaredShapes(model.ref_graph());
-  session2.set_check_shapes(true);
   EXPECT_THROW(session2.Run(rt2), std::invalid_argument);
 }
 

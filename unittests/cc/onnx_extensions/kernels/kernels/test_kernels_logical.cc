@@ -591,8 +591,7 @@ TEST(KernelClass, WhereUsesAllocatorWhenRuntimeContextHasOne) {
   Where where_kernel{ctx};
   constexpr size_t kMaxAllocations = 1;
   SimpleRawBufferAllocator alloc(kMaxAllocations);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
   Tensor condition = Tensor::FromBool("condition", {2, 2}, {1, 0, 1, 0});
   Tensor x = Tensor::FromFloat("x", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("y", {2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});

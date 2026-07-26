@@ -515,8 +515,7 @@ TEST(KernelClass, Float16PromoteUsesAllocatorWhenRuntimeContextHasOne) {
   Tensor x16 =
       onnx_kernels::DemoteFromFloat32(x32, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
   SimpleRawBufferAllocator alloc(1);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = onnx_kernels::PromoteToFloat32(x16, &rt);
 
@@ -534,8 +533,7 @@ TEST(KernelClass, Float16PromoteUsesAllocatorWhenRuntimeContextHasOne) {
 TEST(KernelClass, Float16DemoteUsesAllocatorWhenRuntimeContextHasOne) {
   Tensor x32 = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 1.0f, 2.0f, 3.0f});
   SimpleRawBufferAllocator alloc(1);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = onnx_kernels::DemoteFromFloat32(
       x32, static_cast<int32_t>(core::runtime::DataType::FLOAT16), &rt);
@@ -564,8 +562,7 @@ TEST(KernelClass, MinMaxMeanSumUseAllocatorWhenRuntimeContextHasOne) {
 
   {
     SimpleRawBufferAllocator alloc(1);
-    RuntimeContext rt;
-    rt.set_allocator(&alloc);
+    RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
     Tensor zmin = min_kernel({x, y}, &rt);
     EXPECT_TRUE(zmin.has_allocation());
     EXPECT_EQ(alloc.allocated_count(), 1u);
@@ -579,8 +576,7 @@ TEST(KernelClass, MinMaxMeanSumUseAllocatorWhenRuntimeContextHasOne) {
 
   {
     SimpleRawBufferAllocator alloc(1);
-    RuntimeContext rt;
-    rt.set_allocator(&alloc);
+    RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
     Tensor zmax = max_kernel({x, y}, &rt);
     EXPECT_TRUE(zmax.has_allocation());
     EXPECT_EQ(alloc.allocated_count(), 1u);
@@ -593,8 +589,7 @@ TEST(KernelClass, MinMaxMeanSumUseAllocatorWhenRuntimeContextHasOne) {
   }
   {
     SimpleRawBufferAllocator alloc(1);
-    RuntimeContext rt;
-    rt.set_allocator(&alloc);
+    RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
     Tensor zmean = mean_kernel({x, y}, &rt);
     EXPECT_TRUE(zmean.has_allocation());
     EXPECT_EQ(alloc.allocated_count(), 1u);
@@ -607,8 +602,7 @@ TEST(KernelClass, MinMaxMeanSumUseAllocatorWhenRuntimeContextHasOne) {
   }
   {
     SimpleRawBufferAllocator alloc(1);
-    RuntimeContext rt;
-    rt.set_allocator(&alloc);
+    RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
     Tensor zsum = sum_kernel({x, y}, &rt);
     EXPECT_TRUE(zsum.has_allocation());
     EXPECT_EQ(alloc.allocated_count(), 1u);
@@ -629,8 +623,7 @@ TEST(KernelClass, CumSumClassUsesAllocatorWhenRuntimeContextHasOne) {
   Tensor axis = Tensor::FromInt32("", {}, {1});
 
   SimpleRawBufferAllocator alloc(1);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = cumsum_kernel(x, axis, false, false, &rt);
   EXPECT_TRUE(y.has_allocation());
@@ -651,8 +644,7 @@ TEST(KernelClass, CumProdClassUsesAllocatorWhenRuntimeContextHasOne) {
   Tensor axis = Tensor::FromInt32("", {}, {1});
 
   SimpleRawBufferAllocator alloc(1);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = cumprod_kernel(x, axis, false, false, &rt);
   EXPECT_TRUE(y.has_allocation());
@@ -1586,8 +1578,7 @@ TEST(KernelClass, MatMulIntegerUsesAllocatorForZeroPoints) {
   // Capacity 3: the persistent output plus the two transient zero-point buffers
   // that must be alive simultaneously during the computation.
   SimpleRawBufferAllocator alloc(3);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = mmi(a, b, a_zp, b_zp, &rt);
   EXPECT_TRUE(y.has_allocation());
@@ -1767,8 +1758,7 @@ TEST(KernelClass, EinsumUsesAllocatorWhenRuntimeContextHasOne) {
   // allocator. The scratch buffers are freed before returning, leaving only
   // the output allocation alive.
   SimpleRawBufferAllocator alloc(3);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = einsum_kernel({a, b}, "ij,jk->ik", &rt);
 
@@ -1792,8 +1782,7 @@ TEST(KernelClass, EinsumScalarUsesAllocatorWithoutError) {
   Einsum einsum_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {}, {5.0f});
   SimpleRawBufferAllocator alloc(3);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = einsum_kernel({x}, "->", &rt);
 
@@ -1997,8 +1986,7 @@ TEST(KernelClass, TopKClassUsesAllocatorWhenRuntimeContextHasOne) {
   // scratch index buffer that TopK draws from the allocator and frees before
   // returning.
   SimpleRawBufferAllocator alloc(3);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   auto [values, indices] =
       topk_kernel(x, /*k=*/2, /*axis=*/-1, /*largest=*/true, /*sorted=*/true, &rt);
@@ -2271,8 +2259,7 @@ TEST(KernelClass, PowUsesAllocatorForFloat16ExponentDecode) {
   // Capacity 2: the persistent output plus the transient decode buffer that
   // must be alive simultaneously during the computation.
   SimpleRawBufferAllocator alloc(2);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor z16 = pow_kernel(x16, y16, &rt);
   EXPECT_TRUE(z16.has_allocation());
@@ -2495,8 +2482,7 @@ TEST(KernelClass, MelWeightMatrixUsesAllocatorWhenRuntimeContextHasOne) {
   // Two concurrent slots are needed: one for the output tensor and one for the
   // transient ``bin_indices`` scratch buffer routed through the allocator.
   SimpleRawBufferAllocator alloc(2);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = kernel(num_mel_bins, dft_length, sample_rate, lower_edge_hertz, upper_edge_hertz,
                     core::runtime::DataType::FLOAT, &rt);

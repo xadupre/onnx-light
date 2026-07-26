@@ -163,8 +163,7 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertGreaterEqual(negative.effective_num_threads(), 1)
 
     def test_runtime_context_event_log_records_add_replace_remove(self):
-        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
-        ctx.events_enabled = True
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)), events_enabled=True)
         self.assertEqual(ctx.events(), [])
 
         ctx.set("x", _make_float_tensor("x", [1.0, -2.0]))
@@ -253,8 +252,7 @@ class TestRunNodesBindings(ExtTestCase):
             self.assertEqual(_unpack_floats(y), (1.25, -3.5))
 
     def test_runtime_context_event_log_truncates_large_tensors(self):
-        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
-        ctx.events_enabled = True
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)), events_enabled=True)
         # 9-element tensor: the buffer keeps only the first 8 entries,
         # data_type is set to -1 and shape is emptied to flag the truncation.
         ctx.put("big", _make_int32_tensor("big", list(range(9))))
@@ -266,8 +264,7 @@ class TestRunNodesBindings(ExtTestCase):
 
     def test_runtime_context_events_capture_run_model_intermediates(self):
         model = parser.parse_model(_MODEL_SRC)
-        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
-        ctx.events_enabled = True
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)), events_enabled=True)
         ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
         ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
         ctx.clear_events()
@@ -324,9 +321,9 @@ class TestRunNodesBindings(ExtTestCase):
         # and RuntimeEvent.summary() renders a one-line recap including them.
         model = parser.parse_model(_MODEL_SRC)
         alloc = rt.SimpleRawBufferAllocator(16)
-        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
-        ctx.set_allocator(alloc)
-        ctx.events_enabled = True
+        ctx = rt.RuntimeContext(
+            rt.KernelContext(rt.default_opset(18)), events_enabled=True, allocator=alloc
+        )
         ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
         ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
         ctx.clear_events()
@@ -353,8 +350,7 @@ class TestRunNodesBindings(ExtTestCase):
 
     def test_runtime_context_without_allocator_reports_zero_memory(self):
         # Without an allocator the memory fields default to 0 (no tracking).
-        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
-        ctx.events_enabled = True
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)), events_enabled=True)
         ctx.set("x", _make_float_tensor("x", [1.0, -2.0]))
         ev = ctx.events()[0]
         self.assertEqual(ev.allocated_bytes, 0)
@@ -873,8 +869,7 @@ class TestSubgraphEventGraphName(ExtTestCase):
     def test_top_level_events_have_empty_subgraph_attr_name(self):
         """A plain model without subgraphs has all events with empty subgraph_attr_name."""
         model = parser.parse_model(_MODEL_SRC)
-        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
-        ctx.events_enabled = True
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)), events_enabled=True)
         ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
         ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
         ctx.clear_events()
@@ -894,8 +889,7 @@ class TestSubgraphEventGraphName(ExtTestCase):
         import struct
 
         model = self._build_loop_model()
-        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
-        ctx.events_enabled = True
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)), events_enabled=True)
 
         # Set inputs
         m_tp = TensorProto()
@@ -922,8 +916,7 @@ class TestSubgraphEventGraphName(ExtTestCase):
     def test_if_then_branch_events_carry_attr_name(self):
         """Events from the then_branch of an If must carry subgraph_attr_name='then_branch'."""
         model = self._build_if_model()
-        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
-        ctx.events_enabled = True
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)), events_enabled=True)
 
         cond_tp = TensorProto()
         cond_tp.name = "cond"
@@ -944,8 +937,7 @@ class TestSubgraphEventGraphName(ExtTestCase):
     def test_if_else_branch_events_carry_attr_name(self):
         """Events from the else_branch of an If must carry subgraph_attr_name='else_branch'."""
         model = self._build_if_model()
-        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
-        ctx.events_enabled = True
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)), events_enabled=True)
 
         cond_tp = TensorProto()
         cond_tp.name = "cond"
@@ -966,8 +958,7 @@ class TestSubgraphEventGraphName(ExtTestCase):
     def test_subgraph_fields_exposed_in_as_dict(self):
         """The ``subgraph_node_index`` and ``subgraph_attr_name`` fields must be in as_dict()."""
         model = parser.parse_model(_MODEL_SRC)
-        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
-        ctx.events_enabled = True
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)), events_enabled=True)
         ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
         ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
         ctx.clear_events()

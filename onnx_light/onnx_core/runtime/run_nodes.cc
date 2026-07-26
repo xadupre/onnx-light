@@ -114,10 +114,10 @@ template <class NameCollection> std::string FormatNameList(const NameCollection 
 // Emits the ReferenceEvaluator verbose progress line for one node dispatch.
 // The format is
 // ``[ReferenceEvaluator] #<node_index> Domain::OpType(inputs) -> (outputs)``.
-// Nothing is printed when ``rt.verbose() <= 0``.
+// Nothing is printed when ``verbose <= 0``.
 void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
-                       const std::string &op_type) {
-  if (rt.verbose() <= 0) {
+                       const std::string &op_type, int verbose) {
+  if (verbose <= 0) {
     return;
   }
   std::cout << "[ReferenceEvaluator] ";
@@ -1118,10 +1118,11 @@ NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const 
 // with the verbose progress line and (when enabled) the per-node timing
 // event. Shared by :cpp:func:`RunNode` and :cpp:class:`RuntimeSession` so both
 // the resolve-on-demand and the resolve-once execution paths log identically.
-void RuntimeContext::InvokeKernel(const NodeProto &node, KernelBase &kernel) {
+void RuntimeContext::InvokeKernel(const NodeProto &node, KernelBase &kernel, int verbose_override) {
   const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
   const std::string &op_type = node.op_type().value();
-  PrintNodeProgress(*this, node, domain, op_type);
+  PrintNodeProgress(*this, node, domain, op_type,
+                    verbose_override >= 0 ? verbose_override : verbose());
 
   // Only capture timing and input names when event logging is active.
   const bool logging = events_enabled();

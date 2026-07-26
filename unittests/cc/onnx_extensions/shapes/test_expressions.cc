@@ -4,6 +4,7 @@
 // These test cases are translated from
 // https://github.com/xadupre/yet-another-onnx-builder/tree/main/unittests/xexpressions
 
+#include "onnx_core/expressions/dim_sum.h"
 #include "onnx_core/expressions/expressions.h"
 
 #include <gtest/gtest.h>
@@ -12,6 +13,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <variant>
+#include <vector>
 
 using namespace onnx_light::core::expressions;
 
@@ -603,4 +605,70 @@ TEST(DimRangesFromExpressions, UnsupportedSymbolicDivisor) {
   // x//(a*b) == rhs — non-integer divisor; variable x absent.
   auto ranges = dim_ranges_from_expressions({EqPair{"x//(a*b)", "rhs"}});
   EXPECT_EQ(ranges.find("x"), ranges.end());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// dim_sum.h
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(SimplifyDimType, IntegerPassthrough) {
+  EXPECT_EQ(simplify_dim_type(DimType{int64_t{7}}), DimType{int64_t{7}});
+}
+
+TEST(SimplifyDimType, SimplifiesSymbolic) {
+  EXPECT_EQ(simplify_dim_type(DimType{std::string{"2*batch//batch"}}), DimType{int64_t{2}});
+  EXPECT_EQ(simplify_dim_type(DimType{std::string{"a + b - a"}}), DimType{std::string{"b"}});
+}
+
+TEST(SimplifyDimType, UsesCache) {
+  SimplifiedExpressionCache cache;
+  EXPECT_EQ(simplify_dim_type(DimType{std::string{"a + a"}}, &cache), DimType{std::string{"2*a"}});
+  ASSERT_EQ(cache.size(), 1u);
+  // A second call returns the memoized result.
+  EXPECT_EQ(simplify_dim_type(DimType{std::string{"a + a"}}, &cache), DimType{std::string{"2*a"}});
+  EXPECT_EQ(cache.size(), 1u);
+}
+
+TEST(DimSum, EmptyIsZero) {
+  DimSum sum;
+  EXPECT_EQ(sum.Build(), DimType{int64_t{0}});
+}
+
+TEST(DimSum, ConstantsOnly) {
+  DimSum sum;
+  sum.Add(DimType{int64_t{3}});
+  sum.Add(DimType{int64_t{4}});
+  EXPECT_EQ(sum.Build(), DimType{int64_t{7}});
+}
+
+TEST(DimSum, GroupsIdenticalTerms) {
+  DimSum sum;
+  sum.Add(DimType{std::string{"batch"}});
+  sum.Add(DimType{std::string{"batch"}});
+  sum.Add(DimType{std::string{"batch"}});
+  EXPECT_EQ(sum.Build(), DimType{std::string{"3*batch"}});
+}
+
+TEST(DimSum, MixesConstantsAndSymbols) {
+  DimSum sum;
+  sum.Add(DimType{int64_t{5}});
+  sum.Add(DimType{std::string{"n"}});
+  sum.Add(DimType{std::string{"n"}});
+  // 5 + 2*(n) → simplified canonical form.
+  EXPECT_EQ(sum.Build(), DimType{std::string{"2*n+5"}});
+}
+
+TEST(DimSum, ByteIdenticalToDirectSum) {
+  // Summing and simplifying each term individually must match the grouped sum.
+  const std::vector<DimType> terms{DimType{std::string{"a"}}, DimType{std::string{"b"}},
+                                   DimType{std::string{"a"}}, DimType{int64_t{2}}};
+  DimType direct = int64_t{0};
+  for (const DimType &t : terms) {
+    direct = dim_add(direct, t);
+  }
+  DimSum sum;
+  for (const DimType &t : terms) {
+    sum.Add(t);
+  }
+  EXPECT_EQ(sum.Build(), simplify_dim_type(direct));
 }

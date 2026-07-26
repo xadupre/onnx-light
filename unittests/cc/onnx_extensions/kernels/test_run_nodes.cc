@@ -25,6 +25,7 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -61,7 +62,7 @@ namespace {
 class EnvVarGuard {
 public:
   explicit EnvVarGuard(const char *name) : name_(name) {
-    const char *value = std::getenv(name_);
+    const char *value = std::getenv(name_.c_str());
     if (value != nullptr) {
       had_value_ = true;
       value_ = value;
@@ -71,21 +72,21 @@ public:
   ~EnvVarGuard() {
     if (had_value_) {
 #ifdef _WIN32
-      _putenv_s(name_, value_.c_str());
+      _putenv_s(name_.c_str(), value_.c_str());
 #else
-      setenv(name_, value_.c_str(), 1);
+      setenv(name_.c_str(), value_.c_str(), 1);
 #endif
       return;
     }
 #ifdef _WIN32
-    _putenv_s(name_, "");
+    _putenv_s(name_.c_str(), "");
 #else
-    unsetenv(name_);
+    unsetenv(name_.c_str());
 #endif
   }
 
 private:
-  const char *name_;
+  std::string name_;
   bool had_value_ = false;
   std::string value_;
 };
@@ -524,10 +525,9 @@ TEST(RunNodes, RunNodeClearResetsStateButKeepsSettings) {
 
 TEST(RunNodes, VerboseRunNodeLogsThroughLoggerDestination) {
   const std::filesystem::path log_path =
-      std::filesystem::temp_directory_path() / "onnx_light_verbose_progress.log";
-  std::error_code remove_error;
-  std::filesystem::remove(log_path, remove_error);
-  ASSERT_FALSE(remove_error);
+      std::filesystem::temp_directory_path() /
+      ("onnx_light_verbose_progress_" +
+       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".log");
   EnvVarGuard guard("ONNX_LIGHT_LOG");
 #ifdef _WIN32
   _putenv_s("ONNX_LIGHT_LOG", log_path.string().c_str());
@@ -554,6 +554,7 @@ TEST(RunNodes, VerboseRunNodeLogsThroughLoggerDestination) {
   std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   EXPECT_NE(content.find("[ReferenceEvaluator]"), std::string::npos);
   EXPECT_NE(content.find("com.acme::VerboseProbe() -> ()"), std::string::npos);
+  std::error_code remove_error;
   std::filesystem::remove(log_path, remove_error);
   ASSERT_FALSE(remove_error);
 }

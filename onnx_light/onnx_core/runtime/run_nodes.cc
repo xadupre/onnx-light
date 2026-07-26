@@ -117,6 +117,7 @@ template <class NameCollection> std::string FormatNameList(const NameCollection 
 // Nothing is printed when ``rt.verbose() <= 0``.
 void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
                        const std::string &op_type) {
+  // ``onnx_light_helpers::Logger`` uses destination ``"1"`` to mean stdout.
   constexpr const char *kStdoutLoggerDestination = "1";
   if (rt.verbose() <= 0) {
     return;

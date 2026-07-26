@@ -780,9 +780,12 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   std::vector<std::vector<std::string>> not_used_after;
   release_after.reserve(lifetime.size());
   not_used_after.reserve(lifetime.size());
+  // ``lifetime`` is a local analysis result; move its per-node vectors into the
+  // storage exposed by ``ComputeContext`` while keeping the producer / last-use
+  // maps above available for the earlier analysis steps.
   for (std::size_t i = 0; i < lifetime.size(); ++i) {
-    release_after.push_back(lifetime[i].release_after);
-    not_used_after.push_back(lifetime[i].not_used_after);
+    release_after.push_back(std::move(lifetime[i].release_after));
+    not_used_after.push_back(std::move(lifetime[i].not_used_after));
   }
 
   reuse_ = std::move(result);

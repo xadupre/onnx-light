@@ -7,7 +7,6 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
 #include <vector>
 
 #include "onnx_proto/onnx.h"
@@ -59,10 +58,6 @@ class ResultLifetimeInfo : public std::vector<ResultLifetimeNodeInfo> {
 public:
   using std::vector<ResultLifetimeNodeInfo>::vector;
   ResultLifetimeInfo() = default;
-  explicit ResultLifetimeInfo(const std::vector<ResultLifetimeNodeInfo> &values)
-      : std::vector<ResultLifetimeNodeInfo>(values) {}
-  explicit ResultLifetimeInfo(std::vector<ResultLifetimeNodeInfo> &&values)
-      : std::vector<ResultLifetimeNodeInfo>(std::move(values)) {}
 
   /// Producer node index for every top-level intermediate (``-1`` marks a
   /// declared graph input made available before the first node when

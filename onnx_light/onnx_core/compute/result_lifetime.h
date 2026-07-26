@@ -30,11 +30,6 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace core {
 namespace compute {
 
-// Collects every unique value a node depends on at runtime: its direct
-// inputs plus any external values captured by nested GRAPH / GRAPHS
-// attributes.
-std::vector<std::string> CollectNodeInputs(const NodeProto &node);
-
 /// Holds per-node value-lifetime bookkeeping from :cpp:func:`ComputeResultLifetimeInfo`.
 struct ResultLifetimeNodeInfo {
   /// Per-node list of top-level intermediates that reach their last use at

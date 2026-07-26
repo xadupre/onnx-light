@@ -17,6 +17,7 @@
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/result_lifetime.h"
 #include "onnx_core/compute/value_tags.h"
+#include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
@@ -469,7 +470,8 @@ ComputeReleasableInputsImpl(const NodeRange &nodes, const std::unordered_set<std
   per_node_inputs.reserve(n);
   std::unordered_map<std::string, std::size_t> last_use;
   for (std::size_t i = 0; i < n; ++i) {
-    std::vector<std::string> inputs = CollectNodeInputs(nodes[i]);
+    std::vector<std::string> inputs =
+        ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(nodes[i]);
     for (const auto &name : inputs) {
       last_use[name] = i;
     }

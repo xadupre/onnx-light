@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -53,10 +54,50 @@ struct ResultLifetimeNodeInfo {
  * name sets it was derived from, so callers can reuse them without
  * recomputing.
  */
-class ResultLifetimeInfo : public std::vector<ResultLifetimeNodeInfo> {
+class ResultLifetimeInfo {
 public:
-  using std::vector<ResultLifetimeNodeInfo>::vector;
-  ResultLifetimeInfo() = default;
+  using value_type = ResultLifetimeNodeInfo;
+  using storage_type = std::vector<value_type>;
+  using iterator = storage_type::iterator;
+  using const_iterator = storage_type::const_iterator;
+
+  std::size_t size() const { return nodes_.size(); }
+
+  bool empty() const { return nodes_.empty(); }
+
+  void resize(std::size_t count) { nodes_.resize(count); }
+
+  value_type &operator[](std::size_t index) { return nodes_[index]; }
+
+  const value_type &operator[](std::size_t index) const { return nodes_[index]; }
+
+  iterator begin() { return nodes_.begin(); }
+
+  iterator end() { return nodes_.end(); }
+
+  const_iterator begin() const { return nodes_.begin(); }
+
+  const_iterator end() const { return nodes_.end(); }
+
+  const_iterator cbegin() const { return nodes_.cbegin(); }
+
+  const_iterator cend() const { return nodes_.cend(); }
+
+  std::vector<std::vector<std::string>> MoveReleaseAfter() {
+    std::vector<std::vector<std::string>> release_after(nodes_.size());
+    for (std::size_t i = 0; i < nodes_.size(); ++i) {
+      release_after[i].swap(nodes_[i].release_after);
+    }
+    return release_after;
+  }
+
+  std::vector<std::vector<std::string>> MoveNotUsedAfter() {
+    std::vector<std::vector<std::string>> not_used_after(nodes_.size());
+    for (std::size_t i = 0; i < nodes_.size(); ++i) {
+      not_used_after[i].swap(nodes_[i].not_used_after);
+    }
+    return not_used_after;
+  }
 
   /// Producer node index for every top-level intermediate (``-1`` marks a
   /// declared graph input made available before the first node when
@@ -75,6 +116,9 @@ public:
   std::unordered_set<std::string> graph_inputs;
   std::unordered_set<std::string> graph_initializers;
   std::unordered_set<std::string> graph_outputs;
+
+private:
+  storage_type nodes_;
 };
 
 /**

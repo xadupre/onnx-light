@@ -1309,7 +1309,7 @@ TEST(KernelClass, AttentionRejectsInvalidInputs) {
     // mask q_seq dim = 2 but actual q_seq_len = 1 and 2 != 1.
     const Tensor bad_mask = Tensor::FromFloat("", {2, 2}, {0.0f, 0.0f, 0.0f, 0.0f});
     Attention::Attributes attrs;
-    EXPECT_THROW(attention(Q, K, V, attrs, &bad_mask).Y, std::invalid_argument);
+    EXPECT_THROW(attention(Q, K, V, attrs, &bad_mask), std::invalid_argument);
   }
 }
 

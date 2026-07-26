@@ -4346,22 +4346,20 @@ TEST(RuntimeSession, ConstructsExactlyOneKernelPerNodeAcrossMultipleRuns) {
   using core::runtime::NodeKernelFn;
   using core::runtime::RegisterKernelFn;
 
-  static int construct_count = 0;
-  static int invoke_count = 0;
-  construct_count = 0;
-  invoke_count = 0;
+  int construct_count = 0;
+  int invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel";
-  RegisterKernelFn(
-      domain, "CountingOp", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
-        ++construct_count;
-        return std::make_unique<TestLambdaKernel>(node,
-                                                  [](const NodeProto &node, RuntimeContext &rt) {
-                                                    ++invoke_count;
-                                                    rt.Set(node.output(0), rt.Get(node.input(0)));
-                                                  });
-      });
+  RegisterKernelFn(domain, "CountingOp", core::symbolic::Device::kCPU,
+                   [&construct_count, &invoke_count](const NodeProto &node, RuntimeContext &)
+                       -> std::unique_ptr<core::runtime::KernelBase> {
+                     ++construct_count;
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [&invoke_count](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
 
   GraphProto graph;
   ValueInfoProto vi_x;
@@ -4674,6 +4672,48 @@ TEST(RuntimeSession, ConstructsSequenceMapBodyKernelOnceAcrossMultipleRuns) {
   session.Run(rt);
   EXPECT_EQ(construct_count, 1);
   EXPECT_EQ(invoke_count, 6);
+}
+
+TEST(SubgraphSession, ReusesInheritedKernelInitializationAcrossMultipleRuns) {
+  using core::runtime::RegisterKernelFn;
+
+  static int construct_count = 0;
+  static int invoke_count = 0;
+  construct_count = 0;
+  invoke_count = 0;
+
+  const std::string domain = "test.onnxlight.counting_kernel_subgraph";
+  RegisterKernelFn(
+      domain, "CountingOp", core::symbolic::Device::kCPU,
+      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+        ++construct_count;
+        return std::make_unique<TestLambdaKernel>(node,
+                                                  [](const NodeProto &node, RuntimeContext &rt) {
+                                                    ++invoke_count;
+                                                    rt.Set(node.output(0), rt.Get(node.input(0)));
+                                                  });
+      });
+
+  GraphProto graph;
+  graph.set_name("subgraph");
+  graph.add_input()->set_name("x");
+  graph.ref_node().push_back(MakeNode("CountingOp", {"x"}, {"y"}, domain));
+  graph.add_output()->set_name("y");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  core::runtime::SubgraphSession session(rt, graph);
+
+  core::runtime::Tensors outputs =
+      session.Run({{"x", Tensor::FromFloat("x", {2}, {1.0f, 2.0f})}}, rt, "body");
+  ASSERT_EQ(outputs.size(), 1U);
+  EXPECT_EQ(session.required_inputs(), (std::vector<std::string>{"x"}));
+  EXPECT_EQ(construct_count, 1);
+  EXPECT_EQ(invoke_count, 1);
+
+  outputs = session.Run({{"x", Tensor::FromFloat("x", {2}, {3.0f, 4.0f})}}, rt, "body");
+  ASSERT_EQ(outputs.size(), 1U);
+  EXPECT_EQ(construct_count, 1);
+  EXPECT_EQ(invoke_count, 2);
 }
 
 TEST(RuntimeSession, RejectsUnsupportedOpDuringKernelInitialization) {

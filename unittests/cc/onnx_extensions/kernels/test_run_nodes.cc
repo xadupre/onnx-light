@@ -87,10 +87,33 @@ public:
 #endif
   }
 
+  EnvVarGuard(const EnvVarGuard &) = delete;
+  EnvVarGuard &operator=(const EnvVarGuard &) = delete;
+  EnvVarGuard(EnvVarGuard &&) = delete;
+  EnvVarGuard &operator=(EnvVarGuard &&) = delete;
+
 private:
   std::string name_;
   bool had_value_ = false;
   std::string value_;
+};
+
+class TempFileCleanupGuard {
+public:
+  explicit TempFileCleanupGuard(std::filesystem::path path) : path_(std::move(path)) {}
+
+  ~TempFileCleanupGuard() {
+    std::error_code ec;
+    std::filesystem::remove(path_, ec);
+  }
+
+  TempFileCleanupGuard(const TempFileCleanupGuard &) = delete;
+  TempFileCleanupGuard &operator=(const TempFileCleanupGuard &) = delete;
+  TempFileCleanupGuard(TempFileCleanupGuard &&) = delete;
+  TempFileCleanupGuard &operator=(TempFileCleanupGuard &&) = delete;
+
+private:
+  std::filesystem::path path_;
 };
 
 // Minimal :cpp:class:`core::runtime::KernelBase` used by the synthetic-op tests
@@ -534,6 +557,7 @@ TEST(RunNodes, VerboseRunNodeLogsThroughLoggerDestination) {
   const std::filesystem::path log_path =
       std::filesystem::temp_directory_path() /
       ("onnx_light_verbose_progress_" + std::to_string(rng()) + ".log");
+  TempFileCleanupGuard cleanup(log_path);
   EnvVarGuard guard("ONNX_LIGHT_LOG");
 #ifdef _WIN32
   _putenv_s("ONNX_LIGHT_LOG", log_path.string().c_str());
@@ -561,9 +585,6 @@ TEST(RunNodes, VerboseRunNodeLogsThroughLoggerDestination) {
   std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   EXPECT_NE(content.find("[ReferenceEvaluator]"), std::string::npos);
   EXPECT_NE(content.find("com.acme::VerboseProbe() -> ()"), std::string::npos);
-  std::error_code remove_error;
-  std::filesystem::remove(log_path, remove_error);
-  ASSERT_FALSE(remove_error);
 }
 
 TEST(RunNodes, RunNodeGemmWithoutBiasUsesSchemaDefaults) {

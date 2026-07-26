@@ -29,6 +29,11 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
   SetDeclaredShapes(model.graph());
 }
 
+RuntimeSession::RuntimeSession(const GraphProto &graph, int verbose)
+    : default_plan_(graph), plan_(default_plan_), verbose_(verbose) {
+  SetDeclaredShapes(graph);
+}
+
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
     : RuntimeSession(plan, RuntimeSessionOptions{
                                .parameters = RuntimeParameters(),
@@ -92,6 +97,12 @@ std::vector<std::string> RuntimeSession::CollectNodeInputs(const NodeProto &node
   return ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(node);
 }
 
+NodeKernelFn RuntimeSession::ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
+                                               const std::string &domain,
+                                               const std::string &op_type) const {
+  return detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
+}
+
 void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
   // Resolve and build the kernel instance for every node the plan will
   // execute, once and up front. Node indices come from the plan's
@@ -114,7 +125,7 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
     const std::string op_type = node.op_type().value();
     PreparedKernel &prepared = kernels_[index];
     prepared.key = domain + ":" + op_type;
-    NodeKernelFn factory = detail::ResolveNodeKernel(node, rt, domain, op_type);
+    NodeKernelFn factory = ResolveNodeKernel(node, rt, domain, op_type);
     prepared.instance = factory(node, rt);
   }
   // Record the external inputs the scheduled nodes read (names not produced by

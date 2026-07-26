@@ -408,8 +408,8 @@ public:
   bool events_enabled() const noexcept { return events_enabled_; }
 
   /// Returns the construction-time verbosity level used by
-  /// :cpp:func:`RunNode` to print execution progress to ``stdout`` while the
-  /// graph is running. ``0`` disables printing.
+  /// :cpp:func:`RunNode` to emit execution progress logs while the graph is
+  /// running. ``0`` disables logging.
   int verbose() const noexcept { return verbose_; }
 
   /// Index of the control-flow node in the parent graph currently being

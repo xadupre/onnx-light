@@ -28,6 +28,26 @@ using ::onnx_light::core::symbolic::TensorTypeToDataType;
 GraphBuilder::GraphBuilder(std::string name, SchemaLookupFn schema_lookup)
     : name_(std::move(name)), schema_lookup_(std::move(schema_lookup)) {}
 
+GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup)
+    : name_(model.graph().name().empty() ? std::string("graph") : model.graph().name().value()),
+      schema_lookup_(std::move(schema_lookup)) {
+  for (const auto &opset : model.opset_import()) {
+    SetOpsetVersion(opset.domain().empty() ? std::string() : opset.domain().value(),
+                    static_cast<int>(opset.version()));
+  }
+  for (const auto &function : model.functions()) {
+    const std::string function_name = function.name().value();
+    const std::string function_domain =
+        function.domain().empty() ? std::string() : function.domain().value();
+    GraphBuilder &local = MakeLocalFunction(function_name, function_domain);
+    for (const auto &entry : opsets_) {
+      local.SetOpsetVersion(entry.first, entry.second);
+    }
+    local.ImportFunction(function);
+  }
+  ImportGraph(model.graph());
+}
+
 GraphBuilder::~GraphBuilder() = default;
 GraphBuilder::GraphBuilder(GraphBuilder &&) noexcept = default;
 GraphBuilder &GraphBuilder::operator=(GraphBuilder &&) noexcept = default;
@@ -126,6 +146,8 @@ const std::string &GraphBuilder::MakeInput(const ValueInfoProto &value_info) {
   SymTensor descriptor;
   if (SymTensorFromValueInfo(value_info, descriptor)) {
     SeedShape(reserved, std::move(descriptor));
+  } else {
+    SeedShape(reserved, SymTensor());
   }
   return reserved;
 }
@@ -162,6 +184,166 @@ void GraphBuilder::MakeOutput(const std::string &name) {
   ValueInfoProto vi;
   vi.set_name(name);
   outputs_.push_back(std::move(vi));
+}
+
+bool GraphBuilder::HasGraphReferenceSuffix(const std::string &name) {
+  static constexpr const char *kSuffix = "_ref";
+  const std::size_t suffix_len = 4;
+  return name.size() >= suffix_len &&
+         name.compare(name.size() - suffix_len, suffix_len, kSuffix) == 0;
+}
+
+std::vector<AttributeProto> GraphBuilder::ImportAttributes(const NodeProto &node) {
+  const auto has_graph_content = [](const GraphProto &graph) {
+    return !graph.name().empty() || graph.input().size() > 0 || graph.output().size() > 0 ||
+           graph.node().size() > 0 || graph.initializer().size() > 0 ||
+           graph.value_info().size() > 0;
+  };
+  std::vector<AttributeProto> imported;
+  imported.reserve(node.attribute().size());
+  for (const auto &attribute : node.attribute()) {
+    const bool has_single_graph_payload =
+        (attribute.has_g() && has_graph_content(attribute.g())) ||
+        (attribute.graphs().size() > 0 &&
+         has_graph_content(attribute.graphs()[static_cast<std::size_t>(0)]));
+    if (attribute.type() == AttributeProto::AttributeType::GRAPH && has_single_graph_payload) {
+      const GraphProto &graph =
+          attribute.has_g() ? attribute.g() : attribute.graphs()[static_cast<std::size_t>(0)];
+      std::string base = graph.name().empty() ? attribute.name().value() : graph.name().value();
+      if (base.empty()) {
+        base = "subgraph";
+      }
+      std::string subgraph_name = base;
+      int suffix = 0;
+      while (HasSubgraph(subgraph_name) || HasName(subgraph_name)) {
+        subgraph_name = base + "_" + std::to_string(suffix++);
+      }
+      GraphBuilder &subgraph = MakeSubgraph(subgraph_name);
+      subgraph.ImportGraph(graph);
+      AttributeProto ref;
+      ref.set_name(attribute.name().value() + "_ref");
+      ref.set_type(AttributeProto::AttributeType::STRING);
+      ref.set_s(subgraph_name);
+      imported.push_back(std::move(ref));
+      continue;
+    }
+    if (attribute.type() == AttributeProto::AttributeType::GRAPHS &&
+        attribute.graphs().size() > 0) {
+      AttributeProto refs;
+      refs.set_name(attribute.name().value() + "_ref");
+      refs.set_type(AttributeProto::AttributeType::STRINGS);
+      const auto &graphs = attribute.graphs();
+      for (int i = 0; i < graphs.size(); ++i) {
+        const GraphProto &graph = graphs[static_cast<std::size_t>(i)];
+        std::string base = graph.name().empty() ? attribute.name().value() : graph.name().value();
+        if (base.empty()) {
+          base = "subgraph";
+        }
+        std::string subgraph_name = base;
+        int suffix = 0;
+        while (HasSubgraph(subgraph_name) || HasName(subgraph_name)) {
+          subgraph_name = base + "_" + std::to_string(suffix++);
+        }
+        GraphBuilder &subgraph = MakeSubgraph(subgraph_name);
+        subgraph.ImportGraph(graph);
+        refs.add_strings(subgraph_name);
+      }
+      imported.push_back(std::move(refs));
+      continue;
+    }
+    imported.push_back(attribute);
+  }
+  return imported;
+}
+
+void GraphBuilder::ImportGraph(const GraphProto &graph) {
+  for (const auto &input : graph.input()) {
+    MakeInput(input);
+  }
+  for (const auto &initializer : graph.initializer()) {
+    MakeInitializer(initializer);
+  }
+  for (const auto &node : graph.node()) {
+    std::vector<std::string> inputs;
+    inputs.reserve(node.input().size());
+    for (int i = 0; i < node.input().size(); ++i) {
+      inputs.push_back(node.input(static_cast<std::size_t>(i)));
+    }
+    std::vector<std::string> outputs;
+    outputs.reserve(node.output().size());
+    for (int i = 0; i < node.output().size(); ++i) {
+      outputs.push_back(node.output(static_cast<std::size_t>(i)));
+    }
+    MakeNode(node.op_type().value(), inputs, outputs,
+             node.domain().empty() ? std::string() : node.domain().value(),
+             node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node));
+  }
+  for (const auto &output : graph.output()) {
+    MakeOutput(output);
+  }
+}
+
+void GraphBuilder::ImportFunction(const FunctionProto &function) {
+  for (const auto &opset : function.opset_import()) {
+    SetOpsetVersion(opset.domain().empty() ? std::string() : opset.domain().value(),
+                    static_cast<int>(opset.version()));
+  }
+  for (int i = 0; i < function.input().size(); ++i) {
+    ValueInfoProto value_info;
+    value_info.set_name(function.input(static_cast<std::size_t>(i)));
+    MakeInput(value_info);
+  }
+  for (const auto &node : function.node()) {
+    std::vector<std::string> inputs;
+    inputs.reserve(node.input().size());
+    for (int i = 0; i < node.input().size(); ++i) {
+      inputs.push_back(node.input(static_cast<std::size_t>(i)));
+    }
+    std::vector<std::string> outputs;
+    outputs.reserve(node.output().size());
+    for (int i = 0; i < node.output().size(); ++i) {
+      outputs.push_back(node.output(static_cast<std::size_t>(i)));
+    }
+    MakeNode(node.op_type().value(), inputs, outputs,
+             node.domain().empty() ? std::string() : node.domain().value(),
+             node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node));
+  }
+  for (int i = 0; i < function.output().size(); ++i) {
+    MakeOutput(function.output(static_cast<std::size_t>(i)));
+  }
+}
+
+void GraphBuilder::MaterializeGraphReferences(NodeProto &node) const {
+  for (auto &attribute : node.ref_attribute()) {
+    if (!HasGraphReferenceSuffix(attribute.name().value())) {
+      continue;
+    }
+    const std::string base_name =
+        attribute.name().value().substr(0, attribute.name().value().size() - 4);
+    if (attribute.type() == AttributeProto::AttributeType::STRING && attribute.has_s()) {
+      const std::string ref_name = attribute.s().value();
+      if (HasSubgraph(ref_name)) {
+        AttributeProto graph_attribute;
+        graph_attribute.set_name(base_name);
+        graph_attribute.set_type(AttributeProto::AttributeType::GRAPH);
+        *graph_attribute.mutable_g() = Subgraph(ref_name).BuildGraph();
+        attribute = std::move(graph_attribute);
+      }
+    } else if (attribute.type() == AttributeProto::AttributeType::STRINGS &&
+               attribute.strings().size() > 0) {
+      AttributeProto graphs_attribute;
+      graphs_attribute.set_name(base_name);
+      graphs_attribute.set_type(AttributeProto::AttributeType::GRAPHS);
+      const auto &refs = attribute.strings();
+      for (int i = 0; i < refs.size(); ++i) {
+        const std::string ref_name = refs[static_cast<std::size_t>(i)];
+        if (HasSubgraph(ref_name)) {
+          *graphs_attribute.add_graphs() = Subgraph(ref_name).BuildGraph();
+        }
+      }
+      attribute = std::move(graphs_attribute);
+    }
+  }
 }
 
 // ── Nodes ──────────────────────────────────────────────────────────────
@@ -287,7 +469,12 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
   for (const std::string &output : resolved_outputs) {
     node.add_output(output);
   }
+  NodeProto attribute_source;
   for (const AttributeProto &attribute : attributes) {
+    attribute_source.add_attribute(attribute);
+  }
+  const std::vector<AttributeProto> normalized_attributes = ImportAttributes(attribute_source);
+  for (const AttributeProto &attribute : normalized_attributes) {
     node.add_attribute(attribute);
   }
   nodes_.push_back(std::move(node));
@@ -296,7 +483,21 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
   // Run incremental shape inference for the new node when a shape function is
   // registered for its operator; unregistered operators simply leave their
   // outputs without an inferred descriptor.
-  if (ShapeFunctionAvailable(stored)) {
+  bool has_graph_reference_attribute = false;
+  bool has_unbound_graph_attribute = false;
+  for (const auto &attribute : stored.attribute()) {
+    if (HasGraphReferenceSuffix(attribute.name().value())) {
+      has_graph_reference_attribute = true;
+      break;
+    }
+    if ((attribute.type() == AttributeProto::AttributeType::GRAPH && !attribute.has_g()) ||
+        (attribute.type() == AttributeProto::AttributeType::GRAPHS &&
+         attribute.graphs().size() == 0)) {
+      has_unbound_graph_attribute = true;
+    }
+  }
+  if (!has_graph_reference_attribute && !has_unbound_graph_attribute &&
+      ShapeFunctionAvailable(stored)) {
     compute_.Shapes().ComputeShapeNode(stored);
   }
 
@@ -346,6 +547,7 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std
     SetOpsetVersion(domain, 1);
     child->SetOpsetVersion(domain, 1);
   }
+  child->function_domain_ = domain;
   GraphBuilder &ref = *child;
   local_functions_.push_back(std::move(child));
   return ref;
@@ -357,6 +559,9 @@ GraphBuilder &GraphBuilder::MakeSubgraph(const std::string &name) {
   }
   ReserveName(name);
   auto child = std::make_unique<GraphBuilder>(name, schema_lookup_);
+  for (const auto &entry : opsets_) {
+    child->SetOpsetVersion(entry.first, entry.second);
+  }
   GraphBuilder &ref = *child;
   subgraphs_.push_back(std::move(child));
   return ref;
@@ -380,7 +585,9 @@ GraphProto GraphBuilder::BuildGraph() const {
     graph.add_initializer(initializer);
   }
   for (const NodeProto &node : nodes_) {
-    graph.add_node(node);
+    NodeProto materialized = node;
+    MaterializeGraphReferences(materialized);
+    graph.add_node(materialized);
   }
   for (const ValueInfoProto &output : outputs_) {
     graph.add_output(output);
@@ -527,7 +734,7 @@ ModelProto GraphBuilder::ToModel(int64_t ir_version) {
   }
   *model.mutable_graph() = ToGraph();
   for (const auto &function : local_functions_) {
-    model.add_function(function->ToFunction(function->name()));
+    model.add_function(function->ToFunction(function->function_domain_));
   }
   return model;
 }

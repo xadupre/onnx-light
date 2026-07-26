@@ -6,8 +6,8 @@
 
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <limits>
 #include <memory>
 #include <sstream>
@@ -21,6 +21,7 @@
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/run_nodes_internal.h"
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_light_helpers.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -117,21 +118,30 @@ template <class NameCollection> std::string FormatNameList(const NameCollection 
 // Nothing is printed when ``verbose <= 0``.
 void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
                        const std::string &op_type, int verbose) {
+  // onnx_light_helpers::Logger uses destination "1" to mean stdout.
+  constexpr const char *kStdoutLoggerDestination = "1";
   if (verbose <= 0) {
     return;
   }
-  std::cout << "[ReferenceEvaluator] ";
+  std::ostringstream oss;
+  oss << "[ReferenceEvaluator] ";
   if (rt.current_subgraph_node_index() >= 0) {
-    std::cout << rt.current_subgraph_attr_name() << "@" << rt.current_subgraph_node_index() << "/";
+    oss << rt.current_subgraph_attr_name() << "@" << rt.current_subgraph_node_index() << "/";
   }
   if (rt.current_node_index() >= 0) {
-    std::cout << "#" << rt.current_node_index() << " ";
+    oss << "#" << rt.current_node_index() << " ";
   }
   if (domain != kDefaultOnnxDomain) {
-    std::cout << domain << "::";
+    oss << domain << "::";
   }
-  std::cout << op_type << "(" << FormatNameList(node.input()) << ") -> ("
-            << FormatNameList(node.output()) << ")" << std::endl;
+  oss << op_type << "(" << FormatNameList(node.input()) << ") -> (" << FormatNameList(node.output())
+      << ")";
+  const char *log_destination = std::getenv("ONNX_LIGHT_LOG");
+  // Logger("") resolves its destination from ONNX_LIGHT_LOG.
+  // If no destination is configured, force stdout with destination "1".
+  const bool has_configured_destination = log_destination != nullptr && log_destination[0] != '\0';
+  onnx_light_helpers::Logger logger(has_configured_destination ? "" : kStdoutLoggerDestination);
+  logger.log(oss.str());
 }
 
 } // namespace
@@ -204,7 +214,7 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
 }
 
 SubgraphSession::SubgraphSession(RuntimeContext &rt, const GraphProto &graph)
-    : plan_(graph), session_(plan_) {
+    : RuntimeSession(graph) {
   // ``rt`` is intentionally unused: the plan is now built directly from
   // ``graph`` rather than through ``rt.GetExecutionPlan``, so construction no
   // longer depends on it (see the class-level doc comment). Kept as a
@@ -242,7 +252,7 @@ SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
   for (auto &kv : sequence_bindings) {
     child.PutSequence(kv.first, std::move(kv.second));
   }
-  session_.Run(child);
+  RuntimeSession::Run(child);
 
   if (rt.events_enabled()) {
     for (auto &ev : child.events()) {
@@ -1038,8 +1048,8 @@ private:
 // control-flow operators, then user custom kernels, then the dispatch table.
 // An unsupported ``(domain, op_type)`` is rejected here (at resolution
 // time) with the same diagnostic previously emitted at run time.
-NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
-                               const std::string &op_type) {
+NodeKernelFn ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
+                                      const std::string &domain, const std::string &op_type) {
   // A node referring to a model-local FunctionProto (registered by
   // ``RegisterModelFunctions`` from ``ModelProto::functions()``) takes priority over
   // the built-in kernel dispatch table so that user-defined functions
@@ -1168,7 +1178,7 @@ void RuntimeContext::InvokeKernel(const NodeProto &node, KernelBase &kernel, int
 void RunNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
   const std::string &op_type = node.op_type().value();
-  NodeKernelFn factory = detail::ResolveNodeKernel(node, rt, domain, op_type);
+  NodeKernelFn factory = detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
   std::unique_ptr<KernelBase> resolved = factory(node, rt);
   rt.InvokeKernel(node, *resolved);
 }

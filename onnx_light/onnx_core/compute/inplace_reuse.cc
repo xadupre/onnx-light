@@ -79,8 +79,8 @@ std::optional<int64_t> ConcreteByteSize(const SymTensor &t) {
   return (num_elements * bits + 7) / 8;
 }
 
-std::optional<expressions::DimType> ByteSizeExpr(const SymTensor &t,
-                                                 SimplifiedExpressionCache *cache = nullptr) {
+std::optional<expressions::DimType>
+ByteSizeExpr(const SymTensor &t, expressions::SimplifiedExpressionCache *cache = nullptr) {
   const int bits = ElementBitWidth(t.Dtype());
   if (bits == 0) {
     return std::nullopt;
@@ -90,13 +90,13 @@ std::optional<expressions::DimType> ByteSizeExpr(const SymTensor &t,
     num_elements = expressions::dim_mul(num_elements, ToDimType(t.Shape()[i]));
   }
   if (bits % 8 == 0) {
-    return SimplifyDimType(
+    return expressions::simplify_dim_type(
         expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits / 8}}), cache);
   }
   // Sub-byte element types pack multiple values per byte, so the buffer size is
   // ceil(num_elements * bits / 8). ``dim_div`` is floor division, hence the
   // ``+7`` round-up term before dividing by 8.
-  return SimplifyDimType(
+  return expressions::simplify_dim_type(
       expressions::dim_div(
           expressions::dim_add(
               expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits}}),
@@ -143,7 +143,7 @@ std::optional<InPlaceReuseKind> ClassifyReuse(
     const ShapesContext &ctx, const std::string &out_name, const SymTensor &out,
     const std::string &in_name, const SymTensor &in,
     std::unordered_map<std::string, std::optional<expressions::DimType>> &byte_size_expr_cache,
-    SimplifiedExpressionCache *simplification_cache = nullptr) {
+    expressions::SimplifiedExpressionCache *simplification_cache = nullptr) {
   if (SameStorage(out, in)) {
     return InPlaceReuseKind::kEqual;
   }
@@ -174,37 +174,10 @@ std::optional<InPlaceReuseKind> ClassifyReuse(
 
 } // namespace
 
-expressions::DimType SimplifyDimType(const expressions::DimType &value,
-                                     SimplifiedExpressionCache *cache) {
-  if (std::holds_alternative<int64_t>(value)) {
-    return value;
-  }
-  const std::string &expr = std::get<std::string>(value);
-  if (cache != nullptr) {
-    auto it = cache->find(expr);
-    if (it != cache->end()) {
-      return it->second;
-    }
-  }
-  const expressions::SimplifyResult simplified = expressions::simplify_expression(expr);
-  if (std::holds_alternative<int64_t>(simplified)) {
-    const expressions::DimType simplified_value = std::get<int64_t>(simplified);
-    if (cache != nullptr) {
-      cache->emplace(expr, simplified_value);
-    }
-    return simplified_value;
-  }
-  const expressions::DimType simplified_value = std::get<std::string>(simplified);
-  if (cache != nullptr) {
-    cache->emplace(expr, simplified_value);
-  }
-  return simplified_value;
-}
-
 const std::optional<expressions::DimType> &
 GetCachedByteSizeExpr(const ShapesContext &ctx, const std::string &name,
                       std::unordered_map<std::string, std::optional<expressions::DimType>> &cache,
-                      SimplifiedExpressionCache *simplification_cache) {
+                      expressions::SimplifiedExpressionCache *simplification_cache) {
   auto [it, inserted] = cache.try_emplace(name);
   if (inserted) {
     it->second = ByteSizeExpr(ctx.Get(name), simplification_cache);
@@ -217,7 +190,7 @@ ComputeInPlaceReuseMatches(const GraphProto &graph, const ShapesContext &ctx,
                            const ResultLifetimeInfo &lifetime) {
   const int num_nodes = graph.node().size();
   std::vector<std::vector<InPlaceReuse>> result(static_cast<std::size_t>(num_nodes));
-  SimplifiedExpressionCache simplified_dim_cache;
+  expressions::SimplifiedExpressionCache simplified_dim_cache;
   std::unordered_map<std::string, std::optional<expressions::DimType>> byte_size_expr_cache;
 
   for (int i = 0; i < num_nodes; ++i) {

@@ -352,10 +352,6 @@ ShapeTag ValueTag(const std::unordered_map<std::string, std::string> &value_tags
   return it->second;
 }
 
-bool IsZeroDim(const expressions::DimType &d) {
-  return std::holds_alternative<int64_t>(d) && std::get<int64_t>(d) == 0;
-}
-
 // Accessors for the scalar / bucket entries of a NodeMemoryProfile. Only used
 // while assembling the per-node profiles below, so they live here rather than
 // in the header.
@@ -632,7 +628,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     for (const auto &kv : alive) {
       const LiveAllocation &alloc = kv.second;
       already_sum.Add(alloc.bytes);
-      if (IsZeroDim(alloc.bytes)) {
+      if (expressions::is_zero_dim(alloc.bytes)) {
         continue;
       }
       switch (alloc.source) {
@@ -672,7 +668,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       const expressions::DimType out_simplified =
           expressions::simplify_dim_type(*out_bytes, &simplified_dim_cache);
       output_sum.Add(out_simplified);
-      if (!IsZeroDim(out_simplified)) {
+      if (!expressions::is_zero_dim(out_simplified)) {
         outputs_bucket[ValueTag(value_tags, out_name)].Add(out_simplified);
       }
     }

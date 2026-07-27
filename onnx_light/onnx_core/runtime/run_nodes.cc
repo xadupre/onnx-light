@@ -1090,20 +1090,11 @@ NodeKernelFn ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
   return it->second;
 }
 
-/**
- * @brief Emits the ReferenceEvaluator verbose progress line for one dispatch.
- * @param rt Runtime context providing node-index/subgraph metadata and the
- *     default verbosity.
- * @param node Node being executed.
- * @param domain Normalized dispatch domain for the node.
- * @param op_type Operator type of the node.
- * @param verbose_override Optional verbosity override; when negative the
- *     function uses `rt.verbose()`.
- *
- * The format is
- * `[ReferenceEvaluator] #<node_index> Domain::OpType(inputs) -> (outputs)`.
- * Nothing is printed when the effective verbosity is `<= 0`.
- */
+// Emits the ReferenceEvaluator verbose progress line for one dispatch.
+// Uses ``verbose_override`` when it is non-negative; otherwise uses
+// ``rt.verbose()``. The format is
+// ``[ReferenceEvaluator] #<node_index> Domain::OpType(inputs) -> (outputs)``.
+// Prints nothing when the effective verbosity is ``<= 0``.
 void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
                        const std::string &op_type, int verbose_override) {
   // onnx_light_helpers::Logger uses destination "1" to mean stdout.
@@ -1133,20 +1124,11 @@ void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const st
   logger.log(oss.str());
 }
 
-/**
- * @brief Runs a prepared kernel with shared verbose/timing instrumentation.
- * @param rt Runtime context mutated by the kernel.
- * @param node Node being executed.
- * @param domain Normalized dispatch domain for the node.
- * @param op_type Operator type of the node.
- * @param kernel Prepared kernel instance to invoke.
- * @param verbose_override Optional verbosity override; when negative the
- *     function uses `rt.verbose()`.
- *
- * Shared by :cpp:func:`RunNode` and :cpp:class:`RuntimeSession` so both
- * execution paths emit the same progress line and the same optional
- * `kRunNode` event record.
- */
+// Runs a prepared kernel with shared verbose/timing instrumentation.
+// Uses ``verbose_override`` when it is non-negative; otherwise uses
+// ``rt.verbose()``. Shared by :cpp:func:`RunNode` and
+// :cpp:class:`RuntimeSession` so both execution paths emit the same progress
+// line and the same optional ``kRunNode`` event record.
 void RunKernelWithLogging(RuntimeContext &rt, const NodeProto &node, const std::string &domain,
                           const std::string &op_type, KernelBase &kernel, int verbose_override) {
   PrintNodeProgress(rt, node, domain, op_type, verbose_override);

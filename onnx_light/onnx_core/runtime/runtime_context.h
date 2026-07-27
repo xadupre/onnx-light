@@ -575,8 +575,8 @@ public:
   }
 
   /// Records a :cpp:enumerator:`RuntimeEventAction::kRunNode` event for
-  /// ``node`` in the event log when :cpp:func:`events_enabled` is set. This
-  /// summarizes a single kernel dispatch so callers can profile per-node
+  /// ``node`` in the event log when :cpp:func:`events_enabled` is set.
+  /// Summarizes a single kernel dispatch so callers can profile per-node
   /// execution from the event log alongside the tensor add/replace/remove
   /// records: ``timestamp_ns`` is set to ``start_time_ns`` (the wall-clock
   /// time at which the dispatch started) and ``duration_ns`` to its measured

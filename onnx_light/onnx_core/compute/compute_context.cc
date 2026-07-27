@@ -29,8 +29,8 @@ namespace {
 
 // ── Helpers shared by ComputeValueAndNodeTags overloads ─────────────────────
 
-template <typename RepeatedT>
-std::string ReadMetadataValueFromProps(const RepeatedT &props, const char *key) {
+std::string ReadMetadataValueFromProps(const utils::RepeatedField<StringStringEntryProto> &props,
+                                       const char *key) {
   for (const auto &entry : props) {
     if (entry.key() == key) {
       return entry.value();

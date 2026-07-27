@@ -672,15 +672,8 @@ public:
   ONNX_API OpSchema &FunctionBody(const utils::RepeatedProtoField<NodeProto> &func_nodes,
                                   int opset_version = kUninitializedSinceVersion);
 
-  ONNX_API OpSchema &FunctionBody(const std::vector<NodeProto> &func_nodes,
-                                  int opset_version = kUninitializedSinceVersion);
-
   ONNX_API OpSchema &FunctionBody(const utils::RepeatedProtoField<NodeProto> &func_nodes,
                                   const utils::RepeatedProtoField<OperatorSetIdProto> &opsets,
-                                  int opset_version = kUninitializedSinceVersion);
-
-  ONNX_API OpSchema &FunctionBody(const std::vector<NodeProto> &func_nodes,
-                                  const std::vector<OperatorSetIdProto> &opsets,
                                   int opset_version = kUninitializedSinceVersion);
 
   ONNX_API OpSchema &FunctionBody(const char *func_body,

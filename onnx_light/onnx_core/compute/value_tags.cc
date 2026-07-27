@@ -116,12 +116,6 @@ InferValueAndNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes) {
   return ctx.ComputeValueAndNodeTags(nodes);
 }
 
-std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
-InferValueAndNodeTags(const std::vector<NodeProto> &nodes) {
-  ComputeContext ctx;
-  return ctx.ComputeValueAndNodeTags(nodes);
-}
-
 void WriteValueAndNodeTagsToMetadata(GraphProto &graph) {
   ComputeContext ctx;
   const auto inferred = ctx.ComputeValueAndNodeTags(graph);

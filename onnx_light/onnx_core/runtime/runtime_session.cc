@@ -90,11 +90,6 @@ RuntimeSession::CollectExternalInputs(const utils::RepeatedProtoField<NodeProto>
   return ::ONNX_LIGHT_NAMESPACE::core::graph::CollectExternalInputs(nodes);
 }
 
-std::vector<std::string>
-RuntimeSession::CollectExternalInputs(const std::vector<NodeProto> &nodes) {
-  return ::ONNX_LIGHT_NAMESPACE::core::graph::CollectExternalInputs(nodes);
-}
-
 std::vector<std::string> RuntimeSession::CollectNodeInputs(const NodeProto &node) {
   return ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(node);
 }

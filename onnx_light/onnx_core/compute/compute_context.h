@@ -197,13 +197,6 @@ public:
   ComputeValueAndNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes);
 
   /**
-   * Same as :cpp:func:`ComputeValueAndNodeTags(const utils::RepeatedProtoField<NodeProto>&)`
-   * but for callers that still materialize node vectors.
-   */
-  std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
-  ComputeValueAndNodeTags(const std::vector<NodeProto> &nodes);
-
-  /**
    * Returns, for each node in ``nodes``, the list of input names that become
    * unused once that node has finished executing — i.e. names whose last
    * reference (per :cpp:func:`core::graph::CollectNodeInputs`) appears at that
@@ -216,11 +209,6 @@ public:
    */
   static std::vector<std::vector<std::string>>
   ComputeReleasableInputs(const utils::RepeatedProtoField<NodeProto> &nodes,
-                          const std::unordered_set<std::string> &keep);
-
-  /// ``std::vector``-overload of :cpp:func:`ComputeReleasableInputs`.
-  static std::vector<std::vector<std::string>>
-  ComputeReleasableInputs(const std::vector<NodeProto> &nodes,
                           const std::unordered_set<std::string> &keep);
 
   /// Read-only access to the last value-tag map computed through

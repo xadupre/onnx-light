@@ -26,9 +26,6 @@ namespace graph {
  */
 std::vector<std::string> CollectExternalInputs(const utils::RepeatedProtoField<NodeProto> &nodes);
 
-/// ``std::vector`` overload of :cpp:func:`CollectExternalInputs`.
-std::vector<std::string> CollectExternalInputs(const std::vector<NodeProto> &nodes);
-
 /// Node-pointer overload of :cpp:func:`CollectExternalInputs`, used to collect
 /// the external inputs of an :cpp:class:`ExecutionPlan`'s node list.
 std::vector<std::string> CollectExternalInputs(const std::vector<const NodeProto *> &nodes);
@@ -54,11 +51,6 @@ std::vector<std::string> CollectExternalInputs(const std::vector<const NodeProto
  */
 std::vector<std::vector<std::string>>
 CollectRemainingInputs(const utils::RepeatedProtoField<NodeProto> &nodes,
-                       const std::vector<std::string> &outputs);
-
-/// ``std::vector`` overload of :cpp:func:`CollectRemainingInputs`.
-std::vector<std::vector<std::string>>
-CollectRemainingInputs(const std::vector<NodeProto> &nodes,
                        const std::vector<std::string> &outputs);
 
 /**

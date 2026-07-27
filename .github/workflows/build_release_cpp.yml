@@ -52,7 +52,7 @@ jobs:
             archive_ext: tar.gz
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
 
@@ -129,7 +129,7 @@ jobs:
 
       # ── Upload ─────────────────────────────────────────────────────────────
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cpp-${{ matrix.artifact_suffix }}
           path: ${{ github.workspace }}/dist/onnx-light-cpp-${{ matrix.artifact_suffix }}.${{ matrix.archive_ext }}

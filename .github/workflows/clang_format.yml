@@ -16,7 +16,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check C++ formatting
         run: |
           find . \( -name "*.cc" -o -name "*.h" -o -name "*.hpp" \) \

@@ -17,11 +17,11 @@
  *        (``runtime_session.cc``).
  *
  * These declarations are not part of the public API; they exist only so the
- * resolve-on-demand path (:cpp:func:`RunNode`) and the resolve-once path
- * (:cpp:class:`RuntimeSession`) can share the exact same node dispatch and
- * kernel-invocation logic without duplicating it. Their definitions live in
- * ``run_nodes.cc`` (next to the private control-flow / function-call helpers
- * they depend on).
+ * resolve-on-demand path (:cpp:func:`RunNode`) and the default
+ * :cpp:class:`RuntimeSession` resolution path can share the exact same node
+ * dispatch and kernel-invocation logic without duplicating it. Their
+ * definitions live in ``run_nodes.cc`` (next to the private control-flow /
+ * function-call helpers they depend on).
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -45,8 +45,18 @@ namespace detail {
  * An unsupported ``(domain, op_type)`` is rejected here (at resolution time)
  * with the same diagnostic previously emitted at run time.
  */
-NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
-                               const std::string &op_type);
+NodeKernelFn ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
+                                      const std::string &domain, const std::string &op_type);
+
+/**
+ * Emits the ReferenceEvaluator verbose progress line for one node dispatch. The
+ * format is ``[ReferenceEvaluator] #<node_index> Domain::OpType(inputs) ->
+ * (outputs)``. Nothing is printed when ``rt.verbose() <= 0``. Shared by the
+ * inlined invoke logic of :cpp:func:`RunNode` (``run_nodes.cc``) and
+ * :cpp:class:`RuntimeSession` (``runtime_session.cc``) so both log identically.
+ */
+void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
+                       const std::string &op_type);
 
 } // namespace detail
 } // namespace runtime

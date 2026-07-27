@@ -17,6 +17,7 @@
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/result_lifetime.h"
 #include "onnx_core/compute/value_tags.h"
+#include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
@@ -351,10 +352,6 @@ ShapeTag ValueTag(const std::unordered_map<std::string, std::string> &value_tags
   return it->second;
 }
 
-bool IsZeroDim(const expressions::DimType &d) {
-  return std::holds_alternative<int64_t>(d) && std::get<int64_t>(d) == 0;
-}
-
 // Accessors for the scalar / bucket entries of a NodeMemoryProfile. Only used
 // while assembling the per-node profiles below, so they live here rather than
 // in the header.
@@ -403,47 +400,11 @@ const TaggedMemory &NodeMemoryProfileBucket(const NodeMemoryProfile &profile,
 // the cost of profiling large graphs. Because simplify_expression is canonical,
 // pre-merging identical terms into "coeff*(term)" before simplifying yields a
 // byte-identical result while feeding the simplifier only as many terms as there
-// are *distinct* byte-size expressions.
-class DimSum {
-public:
-  void Add(const expressions::DimType &term) {
-    if (std::holds_alternative<int64_t>(term)) {
-      constant_ += std::get<int64_t>(term);
-    } else {
-      coefficients_[std::get<std::string>(term)] += 1;
-    }
-  }
+// are *distinct* byte-size expressions. This grouping is performed by
+// expressions::DimSum (see onnx_core/expressions/dim_sum.h).
 
-  expressions::DimType Build(SimplifiedExpressionCache *cache) const {
-    if (coefficients_.empty()) {
-      return expressions::DimType{constant_};
-    }
-    std::string expr;
-    if (constant_ != 0) {
-      expr = std::to_string(constant_);
-    }
-    for (const auto &kv : coefficients_) {
-      if (!expr.empty()) {
-        expr += "+";
-      }
-      if (kv.second == 1) {
-        expr += "(" + kv.first + ")";
-      } else {
-        expr += std::to_string(kv.second) + "*(" + kv.first + ")";
-      }
-    }
-    return SimplifyDimType(expressions::DimType{expr}, cache);
-  }
-
-private:
-  int64_t constant_ = 0;
-  // Maps each distinct symbolic byte-size expression to how many times it occurs
-  // in the sum (its integer coefficient).
-  std::map<std::string, int64_t> coefficients_;
-};
-
-void FillTaggedMemory(TaggedMemory &dst, const std::map<ShapeTag, DimSum> &sums,
-                      SimplifiedExpressionCache *cache) {
+void FillTaggedMemory(TaggedMemory &dst, const std::map<ShapeTag, expressions::DimSum> &sums,
+                      expressions::SimplifiedExpressionCache *cache) {
   for (const auto &kv : sums) {
     dst[kv.first] = kv.second.Build(cache);
   }
@@ -469,7 +430,8 @@ ComputeReleasableInputsImpl(const NodeRange &nodes, const std::unordered_set<std
   per_node_inputs.reserve(n);
   std::unordered_map<std::string, std::size_t> last_use;
   for (std::size_t i = 0; i < n; ++i) {
-    std::vector<std::string> inputs = CollectNodeInputs(nodes[i]);
+    std::vector<std::string> inputs =
+        ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(nodes[i]);
     for (const auto &name : inputs) {
       last_use[name] = i;
     }
@@ -590,7 +552,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   const int num_nodes = graph.node().size();
   std::vector<NodeMemoryProfile> memory(static_cast<std::size_t>(num_nodes),
                                         MakeEmptyNodeMemoryProfile());
-  SimplifiedExpressionCache simplified_dim_cache;
+  expressions::SimplifiedExpressionCache simplified_dim_cache;
   std::unordered_map<std::string, std::optional<expressions::DimType>> byte_size_expr_cache;
 
   ResultLifetimeInfo lifetime = ComputeResultLifetimeInfo(graph, allow_input_overwrite);
@@ -598,8 +560,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   const std::unordered_set<std::string> &graph_outputs = lifetime.graph_outputs;
   const std::unordered_map<std::string, int> &last_use = lifetime.last_use;
   if (events_enabled_) {
-    for (std::size_t i = 0; i < lifetime.release_after.size(); ++i) {
-      for (const std::string &name : lifetime.release_after[i]) {
+    for (std::size_t i = 0; i < lifetime.size(); ++i) {
+      for (const std::string &name : lifetime[i].release_after) {
         ComputeEvent ev;
         ev.action = ComputeEventAction::kRelease;
         ev.node_index = static_cast<int>(i);
@@ -635,7 +597,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     if (!bytes.has_value()) {
       continue;
     }
-    alive[name] = LiveAllocation{SimplifyDimType(*bytes, &simplified_dim_cache),
+    alive[name] = LiveAllocation{expressions::simplify_dim_type(*bytes, &simplified_dim_cache),
                                  MemoryValueSource::kInitializer, ValueTag(value_tags, name)};
   }
   for (int i = 0; i < graph.input().size(); ++i) {
@@ -648,7 +610,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     if (!bytes.has_value()) {
       continue;
     }
-    alive[name] = LiveAllocation{SimplifyDimType(*bytes, &simplified_dim_cache),
+    alive[name] = LiveAllocation{expressions::simplify_dim_type(*bytes, &simplified_dim_cache),
                                  MemoryValueSource::kInput, ValueTag(value_tags, name)};
   }
 
@@ -659,14 +621,14 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     // expressions via DimSum so the symbolic simplifier only sees the distinct
     // terms. This is byte-identical to summing and simplifying each allocation
     // individually but avoids re-simplifying an ever-growing sum for every node.
-    DimSum already_sum;
-    std::map<ShapeTag, DimSum> inputs_bucket;
-    std::map<ShapeTag, DimSum> initializers_bucket;
-    std::map<ShapeTag, DimSum> intermediates_bucket;
+    expressions::DimSum already_sum;
+    std::map<ShapeTag, expressions::DimSum> inputs_bucket;
+    std::map<ShapeTag, expressions::DimSum> initializers_bucket;
+    std::map<ShapeTag, expressions::DimSum> intermediates_bucket;
     for (const auto &kv : alive) {
       const LiveAllocation &alloc = kv.second;
       already_sum.Add(alloc.bytes);
-      if (IsZeroDim(alloc.bytes)) {
+      if (expressions::is_zero_dim(alloc.bytes)) {
         continue;
       }
       switch (alloc.source) {
@@ -688,8 +650,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       reuse_by_output[static_cast<int>(reuse.output_index)] = static_cast<int>(reuse.input_index);
     }
 
-    DimSum output_sum;
-    std::map<ShapeTag, DimSum> outputs_bucket;
+    expressions::DimSum output_sum;
+    std::map<ShapeTag, expressions::DimSum> outputs_bucket;
     for (int o = 0; o < node.output_size(); ++o) {
       if (reuse_by_output.find(o) != reuse_by_output.end()) {
         continue;
@@ -704,9 +666,9 @@ void ComputeContext::ComputeInPlaceReuseGraph(
         continue;
       }
       const expressions::DimType out_simplified =
-          SimplifyDimType(*out_bytes, &simplified_dim_cache);
+          expressions::simplify_dim_type(*out_bytes, &simplified_dim_cache);
       output_sum.Add(out_simplified);
-      if (!IsZeroDim(out_simplified)) {
+      if (!expressions::is_zero_dim(out_simplified)) {
         outputs_bucket[ValueTag(value_tags, out_name)].Add(out_simplified);
       }
     }
@@ -715,7 +677,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     const expressions::DimType output_allocation = output_sum.Build(&simplified_dim_cache);
     NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) = already_allocated;
     NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey) = output_allocation;
-    NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) = SimplifyDimType(
+    NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) = expressions::simplify_dim_type(
         expressions::dim_add(already_allocated, output_allocation), &simplified_dim_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey), inputs_bucket,
                      &simplified_dim_cache);
@@ -751,7 +713,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
         if (!out_bytes.has_value()) {
           continue;
         }
-        alloc_bytes = SimplifyDimType(*out_bytes, &simplified_dim_cache);
+        alloc_bytes = expressions::simplify_dim_type(*out_bytes, &simplified_dim_cache);
       }
       const auto use_it = last_use.find(out_name);
       const bool survives_after_node = graph_outputs.find(out_name) != graph_outputs.end() ||
@@ -759,13 +721,13 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       if (!survives_after_node) {
         continue;
       }
-      outputs_to_add.emplace(out_name,
-                             LiveAllocation{SimplifyDimType(alloc_bytes, &simplified_dim_cache),
-                                            MemoryValueSource::kIntermediate,
-                                            ValueTag(value_tags, out_name)});
+      outputs_to_add.emplace(
+          out_name,
+          LiveAllocation{expressions::simplify_dim_type(alloc_bytes, &simplified_dim_cache),
+                         MemoryValueSource::kIntermediate, ValueTag(value_tags, out_name)});
     }
 
-    for (const std::string &name : lifetime.release_after[static_cast<std::size_t>(i)]) {
+    for (const std::string &name : lifetime[static_cast<std::size_t>(i)].release_after) {
       alive.erase(name);
     }
     for (const std::string &name : inputs_reused_from_graph_input) {
@@ -777,8 +739,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   }
 
   reuse_ = std::move(result);
-  release_after_ = std::move(lifetime.release_after);
-  not_used_after_ = std::move(lifetime.not_used_after);
+  release_after_ = lifetime.MoveReleaseAfter();
+  not_used_after_ = lifetime.MoveNotUsedAfter();
   memory_ = std::move(memory);
 
   // Populate the shape-tagged subset from value_tags (when provided).

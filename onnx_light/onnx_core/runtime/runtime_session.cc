@@ -7,6 +7,9 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <chrono>
+#include <string>
+
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/run_nodes_internal.h"
 #include "onnx_core/shapes/shapes_context.h"
@@ -19,6 +22,11 @@ namespace runtime {
 RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
     : default_plan_(model.graph()), plan_(default_plan_), verbose_(verbose) {
   SetDeclaredShapes(model.graph());
+}
+
+RuntimeSession::RuntimeSession(const GraphProto &graph, int verbose)
+    : default_plan_(graph), plan_(default_plan_), verbose_(verbose) {
+  SetDeclaredShapes(graph);
 }
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
@@ -76,6 +84,12 @@ std::vector<std::string> RuntimeSession::CollectNodeInputs(const NodeProto &node
   return ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(node);
 }
 
+NodeKernelFn RuntimeSession::ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
+                                               const std::string &domain,
+                                               const std::string &op_type) const {
+  return detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
+}
+
 void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
   // Resolve and build the kernel instance for every node the plan will
   // execute, once and up front. Node indices come from the plan's
@@ -98,7 +112,7 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
     const std::string op_type = node.op_type().value();
     PreparedKernel &prepared = kernels_[index];
     prepared.key = domain + ":" + op_type;
-    NodeKernelFn factory = detail::ResolveNodeKernel(node, rt, domain, op_type);
+    NodeKernelFn factory = ResolveNodeKernel(node, rt, domain, op_type);
     prepared.instance = factory(node, rt);
   }
   // Record the external inputs the scheduled nodes read (names not produced by
@@ -213,7 +227,34 @@ void RuntimeSession::Run(RuntimeContext &rt) {
                           "RuntimeSession: kernel for node index ", index,
                           " was not initialized before Run().");
       rt.set_current_node_index(static_cast<int64_t>(index));
-      rt.InvokeKernel(*nodes[index], *prepared.instance);
+      // Invoke the prepared kernel, wrapping the call with the verbose progress
+      // line and (when enabled) the per-node timing event. The same logic runs
+      // in :cpp:func:`RunNode` so both the resolve-once and the
+      // resolve-on-demand execution paths log identically.
+      const NodeProto &node = *nodes[index];
+      const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
+      const std::string &op_type = node.op_type().value();
+      detail::PrintNodeProgress(rt, node, domain, op_type);
+
+      // Only capture timing when event logging is active.
+      const bool logging = rt.events_enabled();
+      int64_t start_time_ns = 0;
+      std::chrono::steady_clock::time_point t0;
+      if (logging) {
+        start_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::system_clock::now().time_since_epoch())
+                            .count();
+        t0 = std::chrono::steady_clock::now();
+      }
+
+      prepared.instance->Run(rt);
+
+      if (logging) {
+        const int64_t duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                        std::chrono::steady_clock::now() - t0)
+                                        .count();
+        rt.RecordRunNodeEvent(node, domain, op_type, start_time_ns, duration_ns);
+      }
       VerifyOutputAllocators(*nodes[index], rt);
       if (check_shapes) {
         const NodeProto &executed = *nodes[index];

@@ -50,10 +50,11 @@ NodeKernelFn ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
 /**
  * Emits the ReferenceEvaluator verbose progress line for one node dispatch. The
  * format is ``[ReferenceEvaluator] #<node_index> Domain::OpType(inputs) ->
- * (outputs)``. Nothing is printed when the effective verbosity is ``<= 0``.
- * Shared by the inlined invoke logic of :cpp:func:`RunNode` (``run_nodes.cc``)
- * and :cpp:class:`RuntimeSession` (``runtime_session.cc``) so both log
- * identically.
+ * (outputs)``. Nothing is printed when the effective verbosity (the explicit
+ * ``verbose_override`` when it is non-negative, otherwise ``rt.verbose()``) is
+ * ``<= 0``. Shared by the inlined invoke logic of :cpp:func:`RunNode`
+ * (``run_nodes.cc``) and :cpp:class:`RuntimeSession` (``runtime_session.cc``)
+ * so both log identically.
  */
 void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
                        const std::string &op_type, int verbose_override = -1);

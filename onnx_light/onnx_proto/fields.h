@@ -259,13 +259,6 @@ public:
   }
   /** Copies elements from a vector into a RepeatedProtoField. */
   inline RepeatedProtoField(const std::vector<T> &src) { extend(src); }
-  /** Copies elements from a braced initializer list into a RepeatedProtoField. */
-  inline RepeatedProtoField(std::initializer_list<T> src) {
-    values_.reserve(src.size());
-    for (const T &v : src) {
-      values_.push_back(std::make_shared<T>(v));
-    }
-  }
   /** Reserves storage for at least n elements. */
   inline void reserve(size_t n) { values_.reserve(n); }
   /** Reserves storage for at least n elements (protobuf compat). */

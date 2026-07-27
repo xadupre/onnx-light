@@ -794,6 +794,7 @@ OpSchema &OpSchema::FunctionBody(const utils::RepeatedProtoField<NodeProto> &fun
     opset_version = since_version_;
   }
   auto function_proto = std::make_shared<FunctionProto>();
+  function_proto->mutable_node()->reserve(func_nodes.size());
   for (const auto &node : func_nodes) {
     auto *new_node = function_proto->add_node();
     new_node->CopyFrom(node);
@@ -815,10 +816,12 @@ OpSchema &OpSchema::FunctionBody(const utils::RepeatedProtoField<NodeProto> &fun
   }
 
   auto function_proto = std::make_shared<FunctionProto>();
+  function_proto->mutable_opset_import()->Reserve(relied_opsets.size());
   for (const auto &relied_opset : relied_opsets) {
     *(function_proto->mutable_opset_import()->Add()) = relied_opset;
   }
 
+  function_proto->mutable_node()->reserve(func_nodes.size());
   for (const auto &node : func_nodes) {
     auto *new_node = function_proto->add_node();
     new_node->CopyFrom(node);

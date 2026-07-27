@@ -1,4 +1,13 @@
 #pragma once
+// A traditional include guard is used in addition to ``#pragma once`` because
+// this header is baked into precompiled headers (see target_precompile_headers
+// in CMakeLists.txt) *and* re-included textually in the same translation unit.
+// GCC does not reliably honor ``#pragma once`` across the PCH boundary when the
+// baked and textual copies differ, which manifests as spurious "redefinition of
+// class" errors; the guard macro, being preserved in the PCH state, suppresses
+// the redundant textual inclusion regardless.
+#ifndef ONNX_LIGHT_ONNX_PROTO_ONNX_H
+#define ONNX_LIGHT_ONNX_PROTO_ONNX_H
 
 /**
  * @file onnx.h
@@ -1109,3 +1118,5 @@ END_PROTO()
 #undef FIELD
 #undef FIELD_REPEATED
 #endif
+
+#endif // ONNX_LIGHT_ONNX_PROTO_ONNX_H

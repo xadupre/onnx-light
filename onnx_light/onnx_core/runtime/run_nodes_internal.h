@@ -58,6 +58,15 @@ NodeKernelFn ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
 void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
                        const std::string &op_type, int verbose_override = -1);
 
+/**
+ * Runs ``kernel`` for ``node`` with the shared verbose progress and optional
+ * timing/event-recording logic used by both :cpp:func:`RunNode` and
+ * :cpp:class:`RuntimeSession`.
+ */
+void RunKernelWithLogging(RuntimeContext &rt, const NodeProto &node, const std::string &domain,
+                          const std::string &op_type, KernelBase &kernel,
+                          int verbose_override = -1);
+
 } // namespace detail
 } // namespace runtime
 } // namespace core

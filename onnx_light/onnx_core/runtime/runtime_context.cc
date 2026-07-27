@@ -258,8 +258,9 @@ void RuntimeContext::RecordRunNodeEvent(const NodeProto &node, const std::string
   ev.node_index = current_node_index_;
   ev.op_domain = domain;
   ev.op_type = op_type;
-  ev.inputs.reserve(static_cast<size_t>(node.input_size()));
-  for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
+  const size_t input_count = static_cast<size_t>(node.input_size());
+  ev.inputs.reserve(input_count);
+  for (size_t i = 0; i < input_count; ++i) {
     ev.inputs.push_back(node.input(i));
   }
   ev.duration_ns = duration_ns;

@@ -29,8 +29,8 @@ namespace runtime {
 namespace detail {
 
 /**
- * Resolves how ``node`` must be dispatched, returning the factory that builds
- * the ready-to-invoke kernel instance (without any progress printing or event
+ * Resolves how ``node`` must be dispatched, building and returning the
+ * ready-to-invoke kernel instance (without any progress printing or event
  * logging). This is the "kernel initialization" step: the ``(domain, op_type)``
  * resolution against the model-local function registry, the control-flow
  * handlers, the user-registered custom kernels and the static
@@ -44,8 +44,9 @@ namespace detail {
  * An unsupported ``(domain, op_type)`` is rejected here (at resolution time)
  * with the same diagnostic previously emitted at run time.
  */
-NodeKernelFn ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
-                                      const std::string &domain, const std::string &op_type);
+std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
+                                                     const std::string &domain,
+                                                     const std::string &op_type);
 
 /**
  * Emits the ReferenceEvaluator verbose progress line for one node dispatch. The

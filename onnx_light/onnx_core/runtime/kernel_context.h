@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#pragma once
-
 #ifndef ONNX_LIGHT_ONNX_CORE_RUNTIME_KERNEL_CONTEXT_H
 #define ONNX_LIGHT_ONNX_CORE_RUNTIME_KERNEL_CONTEXT_H
 

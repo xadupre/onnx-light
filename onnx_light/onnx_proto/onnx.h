@@ -35,11 +35,12 @@ END_PROTO()
 
 BEGIN_PROTO(TensorAnnotation, "Defines a tensor annotation, useful for quantized tensors.")
 FIELD_STR(tensor_name, 1, "tensor name")
-FIELD_REPEATED_PROTO(StringStringEntryProto, quant_parameter_tensor_names, 2,
-               "<key, value> pairs to annotate tensor specified by <tensor_name> above. The "
-               "keys used in the mapping below must be pre-defined in ONNX spec. For example, "
-               "for 8-bit linear quantization case, 'SCALE_TENSOR', 'ZERO_POINT_TENSOR' will "
-               "be pre-defined as quantization parameter keys.")
+FIELD_REPEATED_PROTO(
+    StringStringEntryProto, quant_parameter_tensor_names, 2,
+    "<key, value> pairs to annotate tensor specified by <tensor_name> above. The "
+    "keys used in the mapping below must be pre-defined in ONNX spec. For example, "
+    "for 8-bit linear quantization case, 'SCALE_TENSOR', 'ZERO_POINT_TENSOR' will "
+    "be pre-defined as quantization parameter keys.")
 END_PROTO()
 
 // DeviceConfigurationProto
@@ -99,8 +100,8 @@ FIELD_REPEATED_PROTO(
     "indicated by the following optional map. If the map contains an entry for v, then v "
     "represents a device group, and the map indicates the set of devices in that group.")
 FIELD_REPEATED_PROTO(ShardedDimProto, sharded_dim, 4,
-               "The following is the sharded-shape of the tensor, consisting of the "
-               "sharding-spec for each axis of the tensor.")
+                     "The following is the sharded-shape of the tensor, consisting of the "
+                     "sharding-spec for each axis of the tensor.")
 END_PROTO()
 
 // NodeDeviceConfigurationProto
@@ -415,7 +416,7 @@ FIELD_OPTIONAL_ENUM(
     "- EXTERNAL - data stored in an external location as described by external_data field. If "
     "value not set, data is stored in raw_data (if set) otherwise in type-specified field.")
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 16,
-               "Named metadata values; keys should be distinct.")
+                     "Named metadata values; keys should be distinct.")
 inline TensorProto() { data_type_ = DataType::UNDEFINED; }
 inline void Clear() { *this = TensorProto(); }
 /** Sets raw_data from a byte buffer (protobuf bytes-field compat). */
@@ -612,7 +613,7 @@ FIELD_OPTIONAL(TypeProto, type, 2,
                "the top-level graph.")
 FIELD_STR(doc_string, 3, "A human-readable documentation for this tensor. Markdown is allowed.")
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 4,
-               "Named metadata values; keys should be distinct.")
+                     "Named metadata values; keys should be distinct.")
 END_PROTO()
 
 // AttributeProto
@@ -749,9 +750,9 @@ FIELD_STR(domain, 7, "The domain of the OperatorSet that specifies the operator 
 FIELD_STR(overload, 8, "Overload identifier, used only to map this to a model-local function.")
 FIELD_STR(doc_string, 6, "A human-readable documentation for this node. Markdown is allowed.")
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 9,
-               "Named metadata values; keys should be distinct.")
+                     "Named metadata values; keys should be distinct.")
 FIELD_REPEATED_PROTO(NodeDeviceConfigurationProto, device_configurations, 10,
-               "Configuration of multi-device annotations.")
+                     "Configuration of multi-device annotations.")
 /**
  * Replaces an existing attribute with the same name in place, or appends
  * *attr* to ``attribute`` if no entry with that name exists yet, and returns
@@ -804,7 +805,7 @@ FIELD_REPEATED_PROTO(
     "{'ZERO_POINT_TENSOR', 'a_zero_point'} annotated, which means, tensor 'a_scale' and tensor "
     "'a_zero_point' are scale and zero point of tensor 'a' in the model.")
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 16,
-               "Named metadata values; keys should be distinct.")
+                     "Named metadata values; keys should be distinct.")
 /**
  * Appends a new node built from *op_type*, *inputs*, *outputs* and the
  * optional *domain* / *name* to the graph and returns a reference to it.
@@ -859,7 +860,7 @@ FIELD_REPEATED_PROTO(
     "Information for the values in the graph. The ValueInfoProto.name's must be distinct. "
     "It is optional for a value to appear in value_info list.")
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 14,
-               "Named metadata values; keys should be distinct.")
+                     "Named metadata values; keys should be distinct.")
 /**
  * Appends a new node built from *op_type*, *inputs*, *outputs* and the
  * optional *domain* / *name* to the function body and returns a reference to
@@ -915,7 +916,7 @@ FIELD_STR(doc_string, 6, "A human-readable documentation for this graph. Markdow
 FIELD_OPTIONAL(GraphProto, graph, 7,
                "The parameterized graph that is evaluated to execute the model.")
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 14,
-               "Named metadata values; keys should be distinct.")
+                     "Named metadata values; keys should be distinct.")
 // FIELD_REPEATED(TrainingInfoProto, training_info, 20, ",not yet implemented")
 FIELD_REPEATED_PROTO(
     FunctionProto, functions, 25,
@@ -935,9 +936,10 @@ FIELD_REPEATED_PROTO(
     "every "
     "node in the function body. One FunctionProto can reference other FunctionProto in the model, "
     "however, recursive reference is not allowed.")
-FIELD_REPEATED_PROTO(DeviceConfigurationProto, configuration, 26,
-               "Describes different target configurations for a multi-device use case. A model MAY "
-               "describe multiple multi-device configurations for execution.")
+FIELD_REPEATED_PROTO(
+    DeviceConfigurationProto, configuration, 26,
+    "Describes different target configurations for a multi-device use case. A model MAY "
+    "describe multiple multi-device configurations for execution.")
 /**
  * Appends *function* to the model's ``functions`` field and returns a
  * reference to the stored copy.

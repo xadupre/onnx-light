@@ -660,7 +660,7 @@ TEST(DimSum, MixesConstantsAndSymbols) {
   sum.Add(DimType{int64_t{5}});
   sum.Add(DimType{std::string{"n"}});
   sum.Add(DimType{std::string{"n"}});
-  // 5 + 2*(n) → simplified canonical form.
+  // 5 + 2*(n) -> simplified canonical form.
   EXPECT_EQ(sum.Build(), DimType{std::string{"2*n+5"}});
 }
 

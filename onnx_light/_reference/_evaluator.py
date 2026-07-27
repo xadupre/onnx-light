@@ -306,16 +306,17 @@ class ReferenceEvaluator:
         # context, keyed by graph/function address) instead of rebuilding it on
         # every call. The per-invocation tensor / sequence / event state is
         # reset via ``RuntimeContext.clear`` at the start of each :meth:`run`.
-        self._ctx = _runtime.RuntimeContext(self._kernel_ctx)
-        self._ctx.verbose = self._verbose
-        self._ctx.events_enabled = self._events_enabled
+        self._ctx = _runtime.RuntimeContext(
+            self._kernel_ctx,
+            verbose=self._verbose,
+            events_enabled=self._events_enabled,
+            allocator=allocator,
+        )
         # Keep a Python reference to the allocator so it outlives the context
         # (the binding also keeps it alive) and attach it so the runtime routes
         # buffer storage through it and records its live / peak memory on every
         # event.
         self._allocator = allocator
-        if allocator is not None:
-            self._ctx.set_allocator(allocator)
 
         # Mapping ``"<domain>:<op_type>" -> low-level callback``. A
         # low-level callback has the signature

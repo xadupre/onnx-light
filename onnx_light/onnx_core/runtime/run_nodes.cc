@@ -1090,15 +1090,17 @@ NodeKernelFn ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
   return it->second;
 }
 
-// Emits the ReferenceEvaluator verbose progress line for one node dispatch.
-// The format is
+// Emits the ReferenceEvaluator verbose progress line for one dispatch.
+// Uses ``verbose_override`` when it is non-negative; otherwise uses
+// ``rt.verbose()``. The format is
 // ``[ReferenceEvaluator] #<node_index> Domain::OpType(inputs) -> (outputs)``.
-// Nothing is printed when ``rt.verbose() <= 0``.
+// Prints nothing when the effective verbosity is ``<= 0``.
 void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
-                       const std::string &op_type) {
+                       const std::string &op_type, int verbose_override) {
   // onnx_light_helpers::Logger uses destination "1" to mean stdout.
   constexpr const char *kStdoutLoggerDestination = "1";
-  if (rt.verbose() <= 0) {
+  const int effective_verbose = verbose_override >= 0 ? verbose_override : rt.verbose();
+  if (effective_verbose <= 0) {
     return;
   }
   std::ostringstream oss;
@@ -1130,10 +1132,6 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   NodeKernelFn factory = detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
   std::unique_ptr<KernelBase> resolved = factory(node, rt);
 
-  // Invoke the resolved kernel, wrapping the call with the verbose progress
-  // line and (when enabled) the per-node timing event. The same logic runs in
-  // :cpp:class:`RuntimeSession` so both the resolve-on-demand and the
-  // resolve-once execution paths log identically.
   detail::PrintNodeProgress(rt, node, domain, op_type);
 
   // Only capture timing when event logging is active.

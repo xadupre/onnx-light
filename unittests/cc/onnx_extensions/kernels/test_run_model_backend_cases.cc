@@ -511,11 +511,10 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
       // Intermediates are released as scheduled so each run allocates and frees
       // the same buffers.
       core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
-      RuntimeContext rt(KernelContext(DefaultOpset(GetDefaultOpsetVersion(model))));
+      RuntimeContext rt(
+          KernelContext(DefaultOpset(GetDefaultOpsetVersion(model))),
+          core::runtime::RuntimeContextOptions{.allocator = track_peak ? &alloc : nullptr});
       rt.set_release_intermediates(true);
-      if (track_peak) {
-        rt.set_allocator(&alloc);
-      }
       RegisterModelFunctions(model, rt);
 
       const ExecutionPlan &plan = rt.GetExecutionPlan(graph);

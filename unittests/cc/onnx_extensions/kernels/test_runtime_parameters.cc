@@ -21,8 +21,10 @@ using core::backend_test::DefaultOpset;
 using core::runtime::ExecutionPlan;
 using core::runtime::KernelContext;
 using core::runtime::RuntimeContext;
+using core::runtime::RuntimeContextOptions;
 using core::runtime::RuntimeParameters;
 using core::runtime::RuntimeSession;
+using core::runtime::RuntimeSessionOptions;
 using core::runtime::Tensor;
 
 namespace {
@@ -72,8 +74,11 @@ TEST(runtime_parameters, RuntimeSessionDefaultsToNoParameters) {
 
 TEST(runtime_parameters, RuntimeSessionSetParameters) {
   ExecutionPlan plan;
-  RuntimeSession session(plan);
-  session.set_parameters(RuntimeParameters(3));
+  RuntimeSession session(plan, RuntimeSessionOptions{
+                                   .parameters = RuntimeParameters(3),
+                                   .verbose = 0,
+                                   .check_shapes = false,
+                               });
   EXPECT_EQ(session.parameters().num_threads, 3);
   EXPECT_EQ(session.parameters().EffectiveNumThreads(), 3);
 }
@@ -116,8 +121,7 @@ TEST(runtime_parameters, RuntimeSessionDefaultsToNoVerbose) {
 
 TEST(runtime_parameters, RuntimeSessionSetVerbose) {
   ExecutionPlan plan;
-  RuntimeSession session(plan);
-  session.set_verbose(2);
+  RuntimeSession session(plan, 2);
   EXPECT_EQ(session.verbose(), 2);
 }
 
@@ -128,9 +132,8 @@ TEST(runtime_parameters, RuntimeSessionConstructorVerbose) {
 }
 
 TEST(runtime_parameters, RuntimeSessionRunEnablesVerboseOnContext) {
-  // A non-zero verbosity given at construction is applied to the RuntimeContext
-  // on Run so the graph prints execution progress. A single-node Add graph is
-  // enough to exercise the propagation.
+  // A non-zero session verbosity given at construction is used while the graph
+  // runs, but it does not mutate the RuntimeContext's own verbosity.
   ModelProto model;
   GraphProto &graph = model.ref_graph();
   NodeProto *node = graph.add_node();
@@ -146,7 +149,7 @@ TEST(runtime_parameters, RuntimeSessionRunEnablesVerboseOnContext) {
 
   RuntimeSession session(model, 5);
   session.Run(rt);
-  EXPECT_EQ(rt.verbose(), 5);
+  EXPECT_EQ(rt.verbose(), 0);
 }
 
 TEST(runtime_parameters, RuntimeSessionRunLeavesContextVerboseWhenZero) {
@@ -160,10 +163,14 @@ TEST(runtime_parameters, RuntimeSessionRunLeavesContextVerboseWhenZero) {
   node->add_input("y");
   node->add_output("z");
 
-  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  RuntimeContext rt(KernelContext(DefaultOpset(18)), RuntimeContextOptions{
+                                                         .allocator = nullptr,
+                                                         .events_enabled = false,
+                                                         .verbose = 4,
+                                                         .release_intermediates = false,
+                                                     });
   rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f});
   rt.tensors()["y"] = Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f});
-  rt.set_verbose(4);
 
   RuntimeSession session(model);
   session.Run(rt);

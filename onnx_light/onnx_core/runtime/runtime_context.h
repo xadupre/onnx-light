@@ -343,6 +343,21 @@ struct RuntimeEvent {
 using RuntimeEventLog = std::vector<RuntimeEvent>;
 
 /**
+ * Construction-time settings for :cpp:class:`RuntimeContext`.
+ *
+ * These values are fixed for the lifetime of the context, except
+ * :cpp:member:`release_intermediates`, which still has a dedicated setter
+ * because callers such as :cpp:class:`ReferenceEvaluator` may need to vary it
+ * between runs depending on which outputs they request.
+ */
+struct RuntimeContextOptions {
+  RawBufferAllocator *allocator = nullptr;
+  bool events_enabled = false;
+  int verbose = 0;
+  bool release_intermediates = false;
+};
+
+/**
  * Per-invocation runtime state passed to :cpp:func:`RunNode` /
  * :cpp:class:`RuntimeSession`.
  *
@@ -367,23 +382,34 @@ class RuntimeContext {
 public:
   RuntimeContext() = default;
   ~RuntimeContext();
-  explicit RuntimeContext(KernelContext kernel_ctx) : kernel_ctx_(std::move(kernel_ctx)) {}
-  RuntimeContext(KernelContext kernel_ctx, TensorMap tensors)
-      : tensors_(std::move(tensors)), kernel_ctx_(std::move(kernel_ctx)) {}
+  explicit RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options = {})
+      : kernel_ctx_(std::move(kernel_ctx)), allocator_(options.allocator),
+        events_enabled_(options.events_enabled), verbose_(options.verbose),
+        release_intermediates_(options.release_intermediates) {
+    kernel_ctx_.allocator = allocator_;
+  }
+  RuntimeContext(KernelContext kernel_ctx, TensorMap tensors, RuntimeContextOptions options = {})
+      : tensors_(std::move(tensors)), kernel_ctx_(std::move(kernel_ctx)),
+        allocator_(options.allocator), events_enabled_(options.events_enabled),
+        verbose_(options.verbose), release_intermediates_(options.release_intermediates) {
+    kernel_ctx_.allocator = allocator_;
+  }
+  explicit RuntimeContext(RuntimeContextOptions options)
+      : allocator_(options.allocator), events_enabled_(options.events_enabled),
+        verbose_(options.verbose), release_intermediates_(options.release_intermediates) {
+    kernel_ctx_.allocator = allocator_;
+  }
 
-  /// Enables or disables event logging. When disabled (the default),
-  /// :cpp:func:`Set`, :cpp:func:`Put`, :cpp:func:`Remove` and
-  /// :cpp:func:`RunNode` skip all event construction, clock reads, and
-  /// value decoding — eliminating the profiling overhead from the hot
-  /// path. Call ``set_events_enabled(true)`` before running if per-node
-  /// profiling is required.
-  void set_events_enabled(bool enabled) noexcept { events_enabled_ = enabled; }
+  /// Returns whether event logging was enabled when the context was built.
+  /// When disabled (the default), :cpp:func:`Set`, :cpp:func:`Put`,
+  /// :cpp:func:`Remove` and :cpp:func:`RunNode` skip all event construction,
+  /// clock reads, and value decoding — eliminating the profiling overhead
+  /// from the hot path.
   bool events_enabled() const noexcept { return events_enabled_; }
 
-  /// Verbosity level used by :cpp:func:`RunNode` to emit execution
-  /// progress logs while the graph is running. ``0`` disables
-  /// logging.
-  void set_verbose(int verbose) noexcept { verbose_ = verbose; }
+  /// Returns the construction-time verbosity level used by
+  /// :cpp:func:`RunNode` to emit execution progress logs while the graph is
+  /// running. ``0`` disables logging.
   int verbose() const noexcept { return verbose_; }
 
   /// Index of the control-flow node in the parent graph currently being
@@ -417,15 +443,12 @@ public:
   const KernelContext &kernel_ctx() const noexcept { return kernel_ctx_; }
 
   /// Optional allocator used by kernels to acquire and release
-  /// :cpp:struct:`RawBuffer` instances. ``nullptr`` when no allocator has
-  /// been attached (the default). The caller retains ownership; the lifetime
-  /// of the allocator must exceed the lifetime of this context. Propagated
-  /// into :cpp:var:`KernelContext::allocator` so kernels built via
-  /// ``rt.kernel_ctx()`` route their result storage through it.
-  void set_allocator(RawBufferAllocator *allocator) noexcept {
-    allocator_ = allocator;
-    kernel_ctx_.allocator = allocator;
-  }
+  /// :cpp:struct:`RawBuffer` instances. ``nullptr`` when no allocator was
+  /// supplied at construction time (the default). The caller retains
+  /// ownership; the lifetime of the allocator must exceed the lifetime of
+  /// this context. Propagated into :cpp:var:`KernelContext::allocator` so
+  /// kernels built via ``rt.kernel_ctx()`` route their result storage
+  /// through it.
   RawBufferAllocator *allocator() noexcept { return allocator_; }
   const RawBufferAllocator *allocator() const noexcept { return allocator_; }
 
@@ -552,8 +575,8 @@ public:
   }
 
   /// Records a :cpp:enumerator:`RuntimeEventAction::kRunNode` event for
-  /// ``node`` in the event log when :cpp:func:`events_enabled` is set. This
-  /// summarises a single kernel dispatch so callers can profile per-node
+  /// ``node`` in the event log when :cpp:func:`events_enabled` is set.
+  /// Summarizes a single kernel dispatch so callers can profile per-node
   /// execution from the event log alongside the tensor add/replace/remove
   /// records: ``timestamp_ns`` is set to ``start_time_ns`` (the wall-clock
   /// time at which the dispatch started) and ``duration_ns`` to its measured

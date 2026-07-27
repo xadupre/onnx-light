@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#pragma once
+#ifndef ONNX_LIGHT_ONNX_CORE_RUNTIME_KERNEL_CONTEXT_H
+#define ONNX_LIGHT_ONNX_CORE_RUNTIME_KERNEL_CONTEXT_H
 
 // Note: this header intentionally does NOT include
 // ``onnx_core/backend_test/test_case.h``, even though that header also needs
@@ -73,7 +74,7 @@ struct KernelContext {
   /// runtime context. ``nullptr`` when the owning
   /// :cpp:class:`RuntimeContext` has no allocator attached (the default),
   /// in which case results fall back to inline ``std::vector`` storage.
-  /// Kept in sync by :cpp:func:`RuntimeContext::set_allocator`.
+  /// Initialized from the allocator supplied to :cpp:class:`RuntimeContext`.
   RawBufferAllocator *allocator = nullptr;
 
   KernelContext() = default;
@@ -138,3 +139,5 @@ protected:
 } // namespace runtime
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE
+
+#endif // ONNX_LIGHT_ONNX_CORE_RUNTIME_KERNEL_CONTEXT_H

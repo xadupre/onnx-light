@@ -43,7 +43,7 @@ DimType simplify_dim_type(const DimType &value, SimplifiedExpressionCache *cache
  *
  * Successive :cpp:func:`Add` calls bucket concrete integers into a running
  * constant and identical symbolic expressions into integer coefficients.
- * :cpp:func:`Build` emits the packed ``constant + c1*(expr1) + c2*(expr2) ...``
+ * :cpp:func:`Build` emits the packed `constant + c1*(expr1) + c2*(expr2) ...`
  * expression and simplifies it once. The result is byte-identical to summing
  * and simplifying each term individually, but the simplifier only ever sees
  * the distinct terms.
@@ -53,13 +53,13 @@ public:
   /// Adds a single term to the running sum.
   void Add(const DimType &term);
 
-  /// Returns the simplified sum of every added term (``0`` when empty).
+  /// Returns the simplified sum of every added term (`0` when empty).
   DimType Build(SimplifiedExpressionCache *cache = nullptr) const;
 
 private:
   int64_t constant_ = 0;
-  // Maps each distinct symbolic expression to how many times it occurs in the
-  // sum (its integer coefficient).
+  // Maps each distinct symbolic expression string to its integer coefficient
+  // (the number of times it appears in the sum).
   std::map<std::string, int64_t> coefficients_;
 };
 

@@ -231,8 +231,7 @@ TEST(KernelClass, NonMaxSuppressionUsesAllocatorWhenRuntimeContextHasOne) {
   // rather than silently allocate outside the allocator.
   {
     SimpleRawBufferAllocator tiny_alloc(1);
-    RuntimeContext rt;
-    rt.set_allocator(&tiny_alloc);
+    RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &tiny_alloc});
     EXPECT_THROW(nms(boxes, scores, &max_out, nullptr, nullptr, attrs, &rt), std::bad_alloc);
   }
 
@@ -241,8 +240,7 @@ TEST(KernelClass, NonMaxSuppressionUsesAllocatorWhenRuntimeContextHasOne) {
   constexpr size_t kAllocatorSlotCapacity = 8;
   constexpr size_t kExpectedAllocationCount = 1;
   SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = nms(boxes, scores, &max_out, nullptr, nullptr, attrs, &rt);
 

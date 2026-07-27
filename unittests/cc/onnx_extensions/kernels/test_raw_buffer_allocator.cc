@@ -15,6 +15,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using core::runtime::RawBuffer;
 using core::runtime::RawBufferAllocator;
 using core::runtime::RuntimeContext;
+using core::runtime::RuntimeContextOptions;
 using core::runtime::SimpleRawBufferAllocator;
 
 namespace Test {
@@ -190,31 +191,25 @@ TEST(RuntimeContextAllocator, DefaultAllocatorIsNull) {
 
 TEST(RuntimeContextAllocator, SetAndGetAllocator) {
   SimpleRawBufferAllocator alloc(4);
-  RuntimeContext ctx;
-  ctx.set_allocator(&alloc);
+  RuntimeContext ctx(RuntimeContextOptions{.allocator = &alloc});
   EXPECT_EQ(ctx.allocator(), &alloc);
 }
 
 TEST(RuntimeContextAllocator, ConstContextExposesAllocator) {
   SimpleRawBufferAllocator alloc(2);
-  RuntimeContext ctx;
-  ctx.set_allocator(&alloc);
+  RuntimeContext ctx(RuntimeContextOptions{.allocator = &alloc});
   const RuntimeContext &cref = ctx;
   EXPECT_EQ(cref.allocator(), &alloc);
 }
 
-TEST(RuntimeContextAllocator, AllocatorCanBeReset) {
-  SimpleRawBufferAllocator alloc(2);
+TEST(RuntimeContextAllocator, DefaultConstructorLeavesAllocatorUnset) {
   RuntimeContext ctx;
-  ctx.set_allocator(&alloc);
-  ctx.set_allocator(nullptr);
   EXPECT_EQ(ctx.allocator(), nullptr);
 }
 
 TEST(RuntimeContextAllocator, SetStoresAllocatorBackedTensorData) {
   SimpleRawBufferAllocator alloc(2);
-  RuntimeContext ctx;
-  ctx.set_allocator(&alloc);
+  RuntimeContext ctx(RuntimeContextOptions{.allocator = &alloc});
 
   ctx.Set("x", core::runtime::Tensor::FromInt32("", {2}, {1, 2}));
   const auto &stored = ctx.Get("x");
@@ -226,8 +221,7 @@ TEST(RuntimeContextAllocator, SetStoresAllocatorBackedTensorData) {
 
 TEST(RuntimeContextAllocator, PutReplacesAndReleasesPreviousAllocation) {
   SimpleRawBufferAllocator alloc(2);
-  RuntimeContext ctx;
-  ctx.set_allocator(&alloc);
+  RuntimeContext ctx(RuntimeContextOptions{.allocator = &alloc});
 
   ctx.Put("x", core::runtime::Tensor::FromInt32("", {2}, {1, 2}));
   const uint8_t *first = ctx.Get("x").bytes();
@@ -240,8 +234,7 @@ TEST(RuntimeContextAllocator, PutReplacesAndReleasesPreviousAllocation) {
 
 TEST(RuntimeContextAllocator, RemoveReleasesAllocatorBackedTensorData) {
   SimpleRawBufferAllocator alloc(1);
-  RuntimeContext ctx;
-  ctx.set_allocator(&alloc);
+  RuntimeContext ctx(RuntimeContextOptions{.allocator = &alloc});
 
   ctx.Set("x", core::runtime::Tensor::FromInt32("", {1}, {7}));
   EXPECT_EQ(alloc.allocated_count(), 1u);
@@ -252,8 +245,7 @@ TEST(RuntimeContextAllocator, RemoveReleasesAllocatorBackedTensorData) {
 TEST(RuntimeContextAllocator, DestroyingContextReleasesAllocatorBackedTensorData) {
   SimpleRawBufferAllocator alloc(1);
   {
-    RuntimeContext ctx;
-    ctx.set_allocator(&alloc);
+    RuntimeContext ctx(RuntimeContextOptions{.allocator = &alloc});
     ctx.Set("x", core::runtime::Tensor::FromInt32("", {1}, {7}));
     EXPECT_EQ(alloc.allocated_count(), 1u);
   }

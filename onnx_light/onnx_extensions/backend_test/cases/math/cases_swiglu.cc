@@ -78,6 +78,23 @@ void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
+
+  // BFLOAT16
+  {
+    NodeProto node;
+    node.set_op_type("SwiGLU");
+    node.add_input("A");
+    node.add_input("B");
+    node.add_output("Y");
+    Expect(registry, std::move(node), "test_cc_swiglu_bfloat16", {opset}, [=]() -> IoData {
+      // No alpha attribute: defaults to 1.0.
+      Tensor a =
+          MakeBfloat16Tensor("", {2, 4}, {1.0f, -2.0f, 3.0f, 4.0f, -1.0f, 2.0f, -3.0f, 0.5f});
+      Tensor b = MakeBfloat16Tensor("", {2, 4}, {0.5f, 1.0f, -1.0f, 2.0f, 2.0f, -1.0f, 0.5f, 1.0f});
+      Tensor y = swiglu_kernel(a, b);
+      return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
+    });
+  }
 }
 
 } // namespace onnx_backend_test

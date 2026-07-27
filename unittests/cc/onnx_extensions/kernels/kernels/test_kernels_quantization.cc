@@ -140,9 +140,8 @@ TEST(KernelClass, QuantizeLinearInt16WithZeroPoint) {
 TEST(KernelClass, QuantizeLinearPerAxisUint16ZeroPointUsesAllocator) {
   const KernelContext ctx{DefaultOpset(21)};
   QuantizeLinear q{ctx};
-  RuntimeContext rt;
   TrackingRawBufferAllocator alloc(4);
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 2.0f, 4.0f, 6.0f});
   Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -169,9 +168,8 @@ TEST(KernelClass, QuantizeLinearPerAxisUint16ZeroPointUsesAllocator) {
 TEST(KernelClass, QuantizeLinearPerAxisUint16ImplicitZeroPointUsesAllocator) {
   const KernelContext ctx{DefaultOpset(21)};
   QuantizeLinear q{ctx};
-  RuntimeContext rt;
   TrackingRawBufferAllocator alloc(4);
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 2.0f, 4.0f, 6.0f});
   Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 2.0f});

@@ -325,8 +325,7 @@ TEST(KernelClass, BatchNormalizationTrainingModeUsesAllocatorWhenRuntimeContextH
   // 3 outputs: y, running_mean, running_var.
   constexpr size_t kMaxAllocations = 5;
   SimpleRawBufferAllocator alloc(kMaxAllocations);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
   Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
   Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
   Tensor bias = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
@@ -384,8 +383,7 @@ TEST(KernelClass, BatchNormalizationInferenceUsesAllocatorForScratchBuffers) {
   // (scale_inv_std/offset), with a little headroom.
   constexpr size_t kAllocatorSlotCapacity = 8;
   PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = bn(x, scale, bias, mean, var, /*epsilon=*/1e-5f, &rt);
 
@@ -474,8 +472,7 @@ TEST(KernelClass, MeanVarianceNormalizationUsesAllocatorForScratchBuffers) {
   // (sum/sqsum/mean), with a little headroom.
   constexpr size_t kAllocatorSlotCapacity = 8;
   PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = mvn(x, {0, 2, 3}, &rt);
 
@@ -547,8 +544,7 @@ TEST(KernelClass, GRUUsesAllocatorForScratchBuffersAndMatchesFallback) {
   // Allocator-backed run: scratch buffers must come from the pool.
   constexpr size_t kAllocatorSlotCapacity = 16;
   PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
   auto [y, y_h] = gru(x, w, r, Tensor{}, Tensor{}, /*linear_before_reset=*/0, /*layout=*/0, &rt);
 
   ASSERT_TRUE(y.has_allocation());
@@ -598,8 +594,7 @@ TEST(KernelClass, GRULayout1AllocatorMatchesFallback) {
 
   constexpr size_t kAllocatorSlotCapacity = 16;
   SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
   auto [y, y_h] = gru(x, w, r, Tensor{}, Tensor{}, /*linear_before_reset=*/0, /*layout=*/1, &rt);
 
   ASSERT_TRUE(y.has_allocation());
@@ -705,8 +700,7 @@ TEST(KernelClass, RMSNormalizationUsesAllocatorForScratchBuffers) {
   // (scale_index/scale_strides/coord), with a little headroom.
   constexpr size_t kAllocatorSlotCapacity = 8;
   PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor y = rms(x, scale, -1, 1e-5f, &rt);
 
@@ -768,8 +762,7 @@ TEST(KernelClass, LSTMUsesAllocatorForScratchBuffers) {
   // (4 bias + 3 peephole + 4 state + 4 accumulator), with headroom.
   constexpr size_t kAllocatorSlotCapacity = 32;
   PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   auto [y, y_h] = lstm(x, w, r, Tensor{}, Tensor{}, Tensor{}, Tensor{}, /*layout=*/0, &rt);
 
@@ -827,8 +820,7 @@ TEST(KernelClass, LSTMLayout1AllocatorMatchesFallback) {
 
   constexpr size_t kAllocatorSlotCapacity = 32;
   SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
   auto [y, y_h] = lstm(x, w, r, Tensor{}, initial_h, initial_c, Tensor{}, /*layout=*/1, &rt);
 
   ASSERT_TRUE(y.has_allocation());
@@ -908,8 +900,7 @@ TEST(KernelClass, AttentionUsesAllocatorForScratchBuffers) {
   // scratch buffers (scores/bias/qkraw), with a little headroom.
   constexpr size_t kAllocatorSlotCapacity = 8;
   PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   const KernelContext ctx = AttentionKernelContext();
   const Attention attention{ctx};

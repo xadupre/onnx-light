@@ -441,9 +441,8 @@ TEST(KernelClass, LoopUsesPerIterRowLengthWhenMIsAbsent) {
 TEST(KernelClass, LoopUsesAllocatorWhenRuntimeContextHasOne) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
-  RuntimeContext rt(ctx);
   SimpleRawBufferAllocator alloc(1);
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(ctx, core::runtime::RuntimeContextOptions{.allocator = &alloc});
   Tensor M = Int64Scalar(2);
   Tensor cond_undef;
   Tensor s0 = Tensor::FromFloat("", {1}, {1.0f});
@@ -676,9 +675,8 @@ TEST(KernelClass, ScanStacksAlongNonLeadingAxisWhenRequested) {
 TEST(KernelClass, ScanUsesAllocatorWhenRuntimeContextHasOne) {
   const KernelContext ctx{DefaultOpset(18)};
   Scan scan_kernel{ctx};
-  RuntimeContext rt(ctx);
   SimpleRawBufferAllocator alloc(1);
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(ctx, core::runtime::RuntimeContextOptions{.allocator = &alloc});
   Tensor s0 = Tensor::FromFloat("", {1}, {10.0f});
   Tensor s1 = Tensor::FromFloat("", {1}, {20.0f});
   Tensor s2 = Tensor::FromFloat("", {1}, {30.0f});

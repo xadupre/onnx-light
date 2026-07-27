@@ -4,10 +4,9 @@
 
 #include "onnx_core/runtime/runtime_session.h"
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
-
-#include <chrono>
 #include <string>
 
 #include "onnx_core/graph/graph_manipulations.h"
@@ -20,7 +19,15 @@ namespace core {
 namespace runtime {
 
 RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
-    : default_plan_(model.graph()), plan_(default_plan_), verbose_(verbose) {
+    : RuntimeSession(model, RuntimeSessionOptions{
+                                .parameters = RuntimeParameters(),
+                                .verbose = verbose,
+                                .check_shapes = false,
+                            }) {}
+
+RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions options)
+    : default_plan_(model.graph()), plan_(default_plan_), check_shapes_(options.check_shapes),
+      parameters_(std::move(options.parameters)), verbose_(options.verbose) {
   SetDeclaredShapes(model.graph());
 }
 
@@ -30,7 +37,15 @@ RuntimeSession::RuntimeSession(const GraphProto &graph, int verbose)
 }
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
-    : plan_(plan), verbose_(verbose) {}
+    : RuntimeSession(plan, RuntimeSessionOptions{
+                               .parameters = RuntimeParameters(),
+                               .verbose = verbose,
+                               .check_shapes = false,
+                           }) {}
+
+RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions options)
+    : plan_(plan), check_shapes_(options.check_shapes), parameters_(std::move(options.parameters)),
+      verbose_(options.verbose) {}
 
 void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
   // Records the declared shape of every tensor-typed value the graph exposes
@@ -170,12 +185,10 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   if (!kernels_initialized_) {
     InitializeKernels(rt);
   }
-  // When a non-zero verbosity was requested at construction (or via
-  // set_verbose), enable it on ``rt`` so RunNode prints execution progress to
-  // stdout. Zero leaves the context's own verbosity untouched.
-  if (verbose_ != 0) {
-    rt.set_verbose(verbose_);
-  }
+  // Use the session's construction-time verbosity when it is non-zero;
+  // otherwise fall back to the RuntimeContext's own verbosity. The context
+  // itself is left untouched.
+  const int effective_verbose = verbose_ != 0 ? verbose_ : rt.verbose();
   // Capture the allocator attached to ``rt`` once, on the first Run, as the
   // session's unique allocator; every output tensor produced from here on is
   // verified against this same allocator (see VerifyOutputAllocators).
@@ -227,14 +240,10 @@ void RuntimeSession::Run(RuntimeContext &rt) {
                           "RuntimeSession: kernel for node index ", index,
                           " was not initialized before Run().");
       rt.set_current_node_index(static_cast<int64_t>(index));
-      // Invoke the prepared kernel, wrapping the call with the verbose progress
-      // line and (when enabled) the per-node timing event. The same logic runs
-      // in :cpp:func:`RunNode` so both the resolve-once and the
-      // resolve-on-demand execution paths log identically.
       const NodeProto &node = *nodes[index];
       const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
       const std::string &op_type = node.op_type().value();
-      detail::PrintNodeProgress(rt, node, domain, op_type);
+      detail::PrintNodeProgress(rt, node, domain, op_type, effective_verbose);
 
       // Only capture timing when event logging is active.
       const bool logging = rt.events_enabled();

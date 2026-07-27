@@ -188,8 +188,7 @@ TEST(KernelClass, ConstantOfShapeUsesAllocatorWhenRuntimeContextHasOne) {
   const Tensor shape = Tensor::FromInt64("", {2}, {3, 2});
   const Tensor value = Tensor::FromFloat("", {1}, {1.5f});
   SimpleRawBufferAllocator alloc(1);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
   Tensor y = kernel(shape, value, &rt);
   EXPECT_TRUE(y.has_allocation());
   EXPECT_EQ(alloc.allocated_count(), 1u);
@@ -361,8 +360,7 @@ TEST(KernelClass, BernoulliUsesAllocatorWhenRuntimeContextHasOne) {
   Bernoulli kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {4}, {0.0f, 1.0f, 0.0f, 1.0f});
   SimpleRawBufferAllocator alloc(1);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
   Tensor y = kernel(x, Bernoulli::kNoSeed, /*dtype=*/0, &rt);
   EXPECT_TRUE(y.has_allocation());
   EXPECT_EQ(alloc.allocated_count(), 1u);
@@ -563,8 +561,7 @@ TEST(KernelClass, RangeUsesAllocatorWhenRuntimeContextHasOne) {
   const Tensor limit = Tensor::FromFloat("", {}, {5.0f});
   const Tensor delta = Tensor::FromFloat("", {}, {2.0f});
   SimpleRawBufferAllocator alloc(1);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
   const Tensor y = kernel(start, limit, delta, &rt);
   EXPECT_TRUE(y.has_allocation());
   EXPECT_EQ(alloc.allocated_count(), 1u);

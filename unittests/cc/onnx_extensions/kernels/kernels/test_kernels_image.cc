@@ -652,8 +652,7 @@ TEST(KernelClass, ImageDecoderPngUsesAllocatorForInternalBuffers) {
   Tensor encoded = Tensor::FromUint8("", {static_cast<int64_t>(png_bytes.size())}, png_bytes);
 
   SimpleRawBufferAllocator alloc(kAllocatorTestCapacity);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor out = decoder(encoded, "RGB", &rt);
 
@@ -680,8 +679,7 @@ TEST(KernelClass, ImageDecoderJpegUsesAllocatorForInternalBuffers) {
                         std::vector<uint8_t>(k_jpeg_rgb_in, k_jpeg_rgb_in + sizeof(k_jpeg_rgb_in)));
 
   SimpleRawBufferAllocator alloc(kAllocatorTestCapacity);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor out = decoder(encoded, "RGB", &rt);
 
@@ -707,8 +705,7 @@ TEST(KernelClass, ImageDecoderPnmUsesAllocatorForInternalBuffers) {
   Tensor encoded = Tensor::FromUint8("", {static_cast<int64_t>(bytes.size())}, bytes);
 
   SimpleRawBufferAllocator alloc(kAllocatorTestCapacity);
-  RuntimeContext rt;
-  rt.set_allocator(&alloc);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
   Tensor out = decoder(encoded, "Grayscale", &rt);
 

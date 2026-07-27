@@ -134,7 +134,7 @@ class TestShapeInference(ExtTestCase):
         self.assertEqual([dim.dim_value for dim in result.tensor_type.shape.dim], [2, 3])
 
     def test_pad_with_constant_value_ints(self) -> None:
-        """Pad infers its padded output shape from a Constant using value_ints."""
+        """Checks that Pad infers its padded output shape from a Constant using value_ints."""
         graph = oh.make_graph(
             [
                 oh.make_node("Constant", [], ["pads"], value_ints=[0, 1, 0, 1]),

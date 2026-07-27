@@ -36,9 +36,9 @@ jobs:
           - arch: aarch64
             runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Detect runner CPU count
@@ -49,7 +49,7 @@ jobs:
           echo "count=${count}" >> "$GITHUB_OUTPUT"
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${count}"
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.23.2
+        uses: pypa/cibuildwheel@v4.1.1
         env:
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
           CIBW_ARCHS: ${{ matrix.arch }}
@@ -65,7 +65,7 @@ jobs:
             CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
             CMAKE_ARGS=-DONNX_HARDENING=ON
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-linux-${{ matrix.arch }}
           path: ./wheelhouse/*.whl
@@ -85,9 +85,9 @@ jobs:
           - arch: ARM64
             runs-on: windows-11-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Detect runner CPU count
@@ -98,7 +98,7 @@ jobs:
           echo "count=${count}" >> "$GITHUB_OUTPUT"
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${count}"
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.23.2
+        uses: pypa/cibuildwheel@v4.1.1
         env:
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
           CIBW_ARCHS: ${{ matrix.arch }}
@@ -106,7 +106,7 @@ jobs:
             CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
             CMAKE_ARGS=-DONNX_HARDENING=ON
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-windows-${{ matrix.arch }}
           path: ./wheelhouse/*.whl
@@ -120,9 +120,9 @@ jobs:
     env:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Detect runner CPU count
@@ -133,7 +133,7 @@ jobs:
           echo "count=${count}" >> "$GITHUB_OUTPUT"
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${count}"
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.23.2
+        uses: pypa/cibuildwheel@v4.1.1
         env:
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
           CIBW_ARCHS: universal2
@@ -148,7 +148,7 @@ jobs:
             MACOSX_DEPLOYMENT_TARGET=${{ env.MACOSX_DEPLOYMENT_TARGET }}
             CMAKE_ARGS='-DONNX_HARDENING=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ env.MACOSX_DEPLOYMENT_TARGET }} -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64'
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-macos-universal2
           path: ./wheelhouse/*.whl

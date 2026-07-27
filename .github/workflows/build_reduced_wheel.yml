@@ -38,12 +38,12 @@ jobs:
         # The reduced wheel targets modern interpreters only (python >= 3.12).
         python-version: ["3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -65,7 +65,7 @@ jobs:
           echo "build=${tag}-*" >> "$GITHUB_OUTPUT"
 
       - name: Build reduced wheel
-        uses: pypa/cibuildwheel@v2.23.2
+        uses: pypa/cibuildwheel@v4.1.1
         env:
           CIBW_BUILD: ${{ steps.selector.outputs.build }}
           # Restrict to 64-bit x86 only. The cibuildwheel Linux default ("auto")
@@ -91,7 +91,7 @@ jobs:
             true
 
       - name: Upload reduced wheel artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-reduced-py${{ matrix.python-version }}
           path: ./wheelhouse/*.whl

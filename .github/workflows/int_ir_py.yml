@@ -27,12 +27,12 @@ jobs:
       USE_ONNX_LIGHT: "1"
     steps:
       - name: Checkout onnx-light
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: onnx-light
 
       - name: Checkout ir-py (branch xadupre/ol)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: onnx/ir-py
           ref: xadupre/ol
@@ -40,7 +40,7 @@ jobs:
           lfs: true
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 

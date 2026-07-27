@@ -477,8 +477,8 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
   for (const AttributeProto &attribute : normalized_attributes) {
     node.add_attribute(attribute);
   }
-  nodes_.push_back(std::move(node));
-  const NodeProto &stored = nodes_.back();
+  NodeProto &stored = nodes_.add();
+  stored = std::move(node);
 
   // Run incremental shape inference for the new node when a shape function is
   // registered for its operator; unregistered operators simply leave their

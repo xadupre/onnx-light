@@ -63,6 +63,7 @@ void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
     });
   }
 
+  // FLOAT16
   {
     NodeProto node;
     node.set_op_type("SwiGLU");
@@ -70,7 +71,7 @@ void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("B");
     node.add_output("Y");
     Expect(registry, std::move(node), "test_cc_swiglu_float16", {opset}, [=]() -> IoData {
-      // No alpha attribute: defaults to 1.0. Inputs and outputs are FLOAT16.
+      // No alpha attribute: defaults to 1.0.
       Tensor a = MakeFloat16Tensor("", {2, 4}, {1.0f, -2.0f, 3.0f, 4.0f, -1.0f, 2.0f, -3.0f, 0.5f});
       Tensor b = MakeFloat16Tensor("", {2, 4}, {0.5f, 1.0f, -1.0f, 2.0f, 2.0f, -1.0f, 0.5f, 1.0f});
       Tensor y = swiglu_kernel(a, b);

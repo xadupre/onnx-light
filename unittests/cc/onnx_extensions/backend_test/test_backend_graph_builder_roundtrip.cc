@@ -94,7 +94,7 @@ bool ShouldSkip(const ModelProto &model) {
 
 // Sorts the ``metadata_props`` entries of a proto in place so their order does
 // not affect the serialized comparison.
-void SortMetadata(utils::RepeatedField<StringStringEntryProto> &props) {
+void SortMetadata(utils::RepeatedProtoField<StringStringEntryProto> &props) {
   std::vector<std::pair<std::string, std::string>> items;
   items.reserve(props.size());
   for (const StringStringEntryProto &entry : props) {

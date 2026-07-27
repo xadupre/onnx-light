@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_core/runtime/elementwise_helpers.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
@@ -48,7 +49,8 @@ void SwiGLUInPlace(const char *dtype_name, int32_t dtype, const Tensor &a, const
                                   [alpha](T x, T y) -> T { return SwiGLUOp<T>(x, y, alpha); });
 }
 
-constexpr const char *kSupportedTypesMsg = " only supports FLOAT and DOUBLE tensors.";
+constexpr const char *kSupportedTypesMsg =
+    " only supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16 tensors.";
 } // namespace
 
 Tensor SwiGLU::operator()(const Tensor &a, const Tensor &b, float alpha, RuntimeContext *rt) const {
@@ -60,6 +62,16 @@ Tensor SwiGLU::operator()(const Tensor &a, const Tensor &b, float alpha, Runtime
   case DataType::DOUBLE:
     return SwiGLUAlloc<double>("DOUBLE", DataType::DOUBLE, a, b, static_cast<double>(alpha),
                                rt ? rt->allocator() : nullptr);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfElementwiseAlloc(
+        kName, "FLOAT16", DataType::FLOAT16, a, b, Float16BitsToFloat, FloatToFloat16Bits,
+        [alpha](float x, float y) { return SwiGLUOp<float>(x, y, alpha); },
+        rt ? rt->allocator() : nullptr);
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfElementwiseAlloc(
+        kName, "BFLOAT16", DataType::BFLOAT16, a, b, Bfloat16BitsToFloat, FloatToBfloat16Bits,
+        [alpha](float x, float y) { return SwiGLUOp<float>(x, y, alpha); },
+        rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kName, ": unsupported data type ", a.data_type, kSupportedTypesMsg);
   }
@@ -73,6 +85,14 @@ void SwiGLU::operator()(const Tensor &a, const Tensor &b, float alpha, Tensor &o
   case DataType::DOUBLE:
     return SwiGLUInPlace<double>("DOUBLE", DataType::DOUBLE, a, b, static_cast<double>(alpha),
                                  output);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfElementwise(
+        kName, "FLOAT16", DataType::FLOAT16, a, b, output, Float16BitsToFloat, FloatToFloat16Bits,
+        [alpha](float x, float y) { return SwiGLUOp<float>(x, y, alpha); });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfElementwise(
+        kName, "BFLOAT16", DataType::BFLOAT16, a, b, output, Bfloat16BitsToFloat,
+        FloatToBfloat16Bits, [alpha](float x, float y) { return SwiGLUOp<float>(x, y, alpha); });
   default:
     EXT_THROW_INVALID(kName, ": unsupported data type ", a.data_type, kSupportedTypesMsg);
   }

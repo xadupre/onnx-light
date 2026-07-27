@@ -275,8 +275,8 @@ public:
   inline std::shared_ptr<T> &get(size_t index) { return values_[index]; }
   /** Returns the shared pointer at the given index (shared ownership copy). */
   inline std::shared_ptr<T> shared_at(size_t index) const { return values_[index]; }
-  /** Returns a const reference to the element at the given index. */
-  inline const T &Get(size_t index) const { return *values_[index]; }
+  /** Returns a mutable reference to the owning pointer at the given index. */
+  inline const T &Get(size_t index) { return *values_[index]; }
   /** Returns a mutable reference to the owning pointer at the given index. */
   inline T *Mutable(size_t index) { return values_[index].get(); }
   /** Removes a contiguous range; currently only start=0, step=1, and stop=size() are supported. */

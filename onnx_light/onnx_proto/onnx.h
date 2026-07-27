@@ -35,12 +35,11 @@ END_PROTO()
 
 BEGIN_PROTO(TensorAnnotation, "Defines a tensor annotation, useful for quantized tensors.")
 FIELD_STR(tensor_name, 1, "tensor name")
-FIELD_REPEATED_PROTO(
-    StringStringEntryProto, quant_parameter_tensor_names, 2,
-    "<key, value> pairs to annotate tensor specified by <tensor_name> above. The "
-    "keys used in the mapping below must be pre-defined in ONNX spec. For example, "
-    "for 8-bit linear quantization case, 'SCALE_TENSOR', 'ZERO_POINT_TENSOR' will "
-    "be pre-defined as quantization parameter keys.")
+FIELD_REPEATED(StringStringEntryProto, quant_parameter_tensor_names, 2,
+               "<key, value> pairs to annotate tensor specified by <tensor_name> above. The "
+               "keys used in the mapping below must be pre-defined in ONNX spec. For example, "
+               "for 8-bit linear quantization case, 'SCALE_TENSOR', 'ZERO_POINT_TENSOR' will "
+               "be pre-defined as quantization parameter keys.")
 END_PROTO()
 
 // DeviceConfigurationProto
@@ -74,7 +73,7 @@ FIELD(int64_t, axis, 1,
       "This field MUST be present for this version of the IR. The axis this sharding "
       "corresponds to. Must be in the range of [-r, r - 1], where r is the rank of the tensor. "
       "Negative axis values means counting from the back.")
-FIELD_REPEATED_PROTO(
+FIELD_REPEATED(
     SimpleShardedDimProto, simple_sharding, 2,
     "Describes how the tensor on the provided axis is sharded. The common-case is described by "
     "a single instance of SimpleShardedDimProto. Multiple instances can be used to handle "
@@ -93,15 +92,15 @@ FIELD_STR(
 FIELD_REPEATED(int64_t, device, 2,
                "The following is the list of devices across which the logical tensor is "
                "sharded or replicated.")
-FIELD_REPEATED_PROTO(
+FIELD_REPEATED(
     IntIntListEntryProto, index_to_device_group_map, 3,
     "Each element v in above field devices may represent either a device or a set of devices "
     "(when we want the same shard/tensor to be replicated across a subset of devices), as "
     "indicated by the following optional map. If the map contains an entry for v, then v "
     "represents a device group, and the map indicates the set of devices in that group.")
-FIELD_REPEATED_PROTO(ShardedDimProto, sharded_dim, 4,
-                     "The following is the sharded-shape of the tensor, consisting of the "
-                     "sharding-spec for each axis of the tensor.")
+FIELD_REPEATED(ShardedDimProto, sharded_dim, 4,
+               "The following is the sharded-shape of the tensor, consisting of the "
+               "sharding-spec for each axis of the tensor.")
 END_PROTO()
 
 // NodeDeviceConfigurationProto
@@ -111,7 +110,7 @@ BEGIN_PROTO(NodeDeviceConfigurationProto,
 FIELD_STR(configuration_id, 1,
           "This field MUST be present for this version of the IR., ID of the configuration. "
           "MUST match the name of a DeviceConfigurationProto.")
-FIELD_REPEATED_PROTO(ShardingSpecProto, sharding_spec, 2, "Sharding spec for the node.")
+FIELD_REPEATED(ShardingSpecProto, sharding_spec, 2, "Sharding spec for the node.")
 FIELD_OPTIONAL(int32_t, pipeline_stage, 3, "Pipeline stage of this node.")
 END_PROTO()
 
@@ -160,7 +159,7 @@ void Clear() {
 }
 END_PROTO()
 inline TensorShapeProto() {}
-FIELD_REPEATED_PROTO(Dimension, dim, 1, "Shape as a list of Dimension.")
+FIELD_REPEATED(Dimension, dim, 1, "Shape as a list of Dimension.")
 inline void Clear() { clr_dim(); }
 END_PROTO()
 
@@ -396,7 +395,7 @@ FIELD_REPEATED_PACKED(uint64_t, uint64_data, 11,
                       "For uint64 and uint32 values. When this field is present, the data_type "
                       "field MUST be UINT32 or UINT64.")
 FIELD_STR(doc_string, 12, "A human-readable documentation for this tensor. Markdown is allowed.")
-FIELD_REPEATED_PROTO(
+FIELD_REPEATED(
     StringStringEntryProto, external_data, 13,
     "Data can be stored inside the protobuf file using type-specific fields or raw_data. "
     "Alternatively, raw bytes data can be stored in an external file, using the external_data "
@@ -415,8 +414,8 @@ FIELD_OPTIONAL_ENUM(
     "protobuf message. Data is stored in raw_data (if set) otherwise in type-specified field. "
     "- EXTERNAL - data stored in an external location as described by external_data field. If "
     "value not set, data is stored in raw_data (if set) otherwise in type-specified field.")
-FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 16,
-                     "Named metadata values; keys should be distinct.")
+FIELD_REPEATED(StringStringEntryProto, metadata_props, 16,
+               "Named metadata values; keys should be distinct.")
 inline TensorProto() { data_type_ = DataType::UNDEFINED; }
 inline void Clear() { *this = TensorProto(); }
 /** Sets raw_data from a byte buffer (protobuf bytes-field compat). */
@@ -612,8 +611,8 @@ FIELD_OPTIONAL(TypeProto, type, 2,
                "This field MUST be present in this version of the IR for inputs and outputs of "
                "the top-level graph.")
 FIELD_STR(doc_string, 3, "A human-readable documentation for this tensor. Markdown is allowed.")
-FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 4,
-                     "Named metadata values; keys should be distinct.")
+FIELD_REPEATED(StringStringEntryProto, metadata_props, 4,
+               "Named metadata values; keys should be distinct.")
 END_PROTO()
 
 // AttributeProto
@@ -749,10 +748,10 @@ FIELD_REPEATED_PROTO(AttributeProto, attribute, 5, "Attributes associated with t
 FIELD_STR(domain, 7, "The domain of the OperatorSet that specifies the operator named by op_type.")
 FIELD_STR(overload, 8, "Overload identifier, used only to map this to a model-local function.")
 FIELD_STR(doc_string, 6, "A human-readable documentation for this node. Markdown is allowed.")
-FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 9,
-                     "Named metadata values; keys should be distinct.")
-FIELD_REPEATED_PROTO(NodeDeviceConfigurationProto, device_configurations, 10,
-                     "Configuration of multi-device annotations.")
+FIELD_REPEATED(StringStringEntryProto, metadata_props, 9,
+               "Named metadata values; keys should be distinct.")
+FIELD_REPEATED(NodeDeviceConfigurationProto, device_configurations, 10,
+               "Configuration of multi-device annotations.")
 /**
  * Replaces an existing attribute with the same name in place, or appends
  * *attr* to ``attribute`` if no entry with that name exists yet, and returns
@@ -798,14 +797,14 @@ FIELD_REPEATED_PROTO(
     ValueInfoProto, value_info, 13,
     "Information for the values in the graph. The ValueInfoProto.name's must be distinct. "
     "It is optional for a value to appear in value_info list.")
-FIELD_REPEATED_PROTO(
+FIELD_REPEATED(
     TensorAnnotation, quantization_annotation, 14,
     "This field carries information to indicate the mapping among a tensor and its quantization "
     "parameter tensors. For example: For tensor 'a', it may have {'SCALE_TENSOR', 'a_scale'} and "
     "{'ZERO_POINT_TENSOR', 'a_zero_point'} annotated, which means, tensor 'a_scale' and tensor "
     "'a_zero_point' are scale and zero point of tensor 'a' in the model.")
-FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 16,
-                     "Named metadata values; keys should be distinct.")
+FIELD_REPEATED(StringStringEntryProto, metadata_props, 16,
+               "Named metadata values; keys should be distinct.")
 /**
  * Appends a new node built from *op_type*, *inputs*, *outputs* and the
  * optional *domain* / *name* to the graph and returns a reference to it.
@@ -859,8 +858,8 @@ FIELD_REPEATED_PROTO(
     ValueInfoProto, value_info, 12,
     "Information for the values in the graph. The ValueInfoProto.name's must be distinct. "
     "It is optional for a value to appear in value_info list.")
-FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 14,
-                     "Named metadata values; keys should be distinct.")
+FIELD_REPEATED(StringStringEntryProto, metadata_props, 14,
+               "Named metadata values; keys should be distinct.")
 /**
  * Appends a new node built from *op_type*, *inputs*, *outputs* and the
  * optional *domain* / *name* to the function body and returns a reference to
@@ -915,8 +914,8 @@ FIELD_OPTIONAL(int64_t, model_version, 5,
 FIELD_STR(doc_string, 6, "A human-readable documentation for this graph. Markdown is allowed.")
 FIELD_OPTIONAL(GraphProto, graph, 7,
                "The parameterized graph that is evaluated to execute the model.")
-FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 14,
-                     "Named metadata values; keys should be distinct.")
+FIELD_REPEATED(StringStringEntryProto, metadata_props, 14,
+               "Named metadata values; keys should be distinct.")
 // FIELD_REPEATED(TrainingInfoProto, training_info, 20, ",not yet implemented")
 FIELD_REPEATED_PROTO(
     FunctionProto, functions, 25,
@@ -936,10 +935,9 @@ FIELD_REPEATED_PROTO(
     "every "
     "node in the function body. One FunctionProto can reference other FunctionProto in the model, "
     "however, recursive reference is not allowed.")
-FIELD_REPEATED_PROTO(
-    DeviceConfigurationProto, configuration, 26,
-    "Describes different target configurations for a multi-device use case. A model MAY "
-    "describe multiple multi-device configurations for execution.")
+FIELD_REPEATED(DeviceConfigurationProto, configuration, 26,
+               "Describes different target configurations for a multi-device use case. A model MAY "
+               "describe multiple multi-device configurations for execution.")
 /**
  * Appends *function* to the model's ``functions`` field and returns a
  * reference to the stored copy.

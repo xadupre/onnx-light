@@ -172,20 +172,6 @@ public:                                                                         
     name##_.push_back(v);                                                                          \
     return &name##_.back();                                                                        \
   }                                                                                                \
-  inline type *add_##name(type &&v) {                                                              \
-    name##_.emplace_back(std::make_shared<type>(std::move(v)));                                    \
-    return &name##_.back();                                                                        \
-  }                                                                                                \
-  inline type *add_##name(const type *v) {                                                         \
-    if (v == nullptr) {                                                                            \
-      name##_.add();                                                                               \
-    } else {                                                                                       \
-      name##_.push_back(*v);                                                                       \
-    }                                                                                              \
-    return &name##_.back();                                                                        \
-  }                                                                                                \
-  inline void add_##name(const std::vector<type> &v) { name##_.extend(v); }                        \
-  inline void extend_##name(const std::vector<type> &v) { name##_.extend(v); }                     \
   inline bool has_##name() const { return _has_field_(name##_) && !name##_.empty(); }              \
   inline int order_##name() const { return order; }                                                \
   inline void clr_##name() { name##_.clear(); }                                                    \

@@ -748,10 +748,10 @@ FIELD_REPEATED_PROTO(AttributeProto, attribute, 5, "Attributes associated with t
 FIELD_STR(domain, 7, "The domain of the OperatorSet that specifies the operator named by op_type.")
 FIELD_STR(overload, 8, "Overload identifier, used only to map this to a model-local function.")
 FIELD_STR(doc_string, 6, "A human-readable documentation for this node. Markdown is allowed.")
-FIELD_REPEATED(StringStringEntryProto, metadata_props, 9,
-               "Named metadata values; keys should be distinct.")
-FIELD_REPEATED(NodeDeviceConfigurationProto, device_configurations, 10,
-               "Configuration of multi-device annotations.")
+FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 9,
+                     "Named metadata values; keys should be distinct.")
+FIELD_REPEATED_PROTO(NodeDeviceConfigurationProto, device_configurations, 10,
+                     "Configuration of multi-device annotations.")
 /**
  * Replaces an existing attribute with the same name in place, or appends
  * *attr* to ``attribute`` if no entry with that name exists yet, and returns

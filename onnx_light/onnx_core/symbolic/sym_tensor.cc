@@ -536,16 +536,13 @@ int FindDeviceMetadataIndex(const ValueInfoProto &vi) {
 // Removes the metadata entry at ``idx`` from ``vi`` in place using a
 // swap-and-pop. ``idx`` must reference a valid entry.
 void RemoveMetadataAt(ValueInfoProto &vi, int idx) {
-  std::vector<StringStringEntryProto> &storage = vi.metadata_props().mutable_values();
+  utils::RepeatedProtoField<StringStringEntryProto> &storage = vi.metadata_props();
   const std::size_t last = storage.size() - 1;
   const std::size_t i = static_cast<std::size_t>(idx);
   if (i != last) {
-    const std::string key = storage[last].key();
-    const std::string value = storage[last].value();
-    storage[i].set_key(key);
-    storage[i].set_value(value);
+    storage.SwapElements(static_cast<int>(i), static_cast<int>(last));
   }
-  storage.pop_back();
+  storage.erase(storage.end() - 1);
 }
 
 // Writes/updates/removes a numeric metadata entry on ``vi``: when

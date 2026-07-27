@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/math/include_math_cases.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
@@ -58,6 +59,22 @@ void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor a = Tensor::FromFloat("", {2, 4}, {1.0f, -2.0f, 3.0f, 4.0f, -1.0f, 2.0f, -3.0f, 0.5f});
       Tensor b = Tensor::FromFloat("", {2, 4}, {0.5f, 1.0f, -1.0f, 2.0f, 2.0f, -1.0f, 0.5f, 1.0f});
       Tensor y = swiglu_kernel(a, b, 0.5f);
+      return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
+    });
+  }
+
+  // FLOAT16
+  {
+    NodeProto node;
+    node.set_op_type("SwiGLU");
+    node.add_input("A");
+    node.add_input("B");
+    node.add_output("Y");
+    Expect(registry, std::move(node), "test_cc_swiglu_float16", {opset}, [=]() -> IoData {
+      // No alpha attribute: defaults to 1.0.
+      Tensor a = MakeFloat16Tensor("", {2, 4}, {1.0f, -2.0f, 3.0f, 4.0f, -1.0f, 2.0f, -3.0f, 0.5f});
+      Tensor b = MakeFloat16Tensor("", {2, 4}, {0.5f, 1.0f, -1.0f, 2.0f, 2.0f, -1.0f, 0.5f, 1.0f});
+      Tensor y = swiglu_kernel(a, b);
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }

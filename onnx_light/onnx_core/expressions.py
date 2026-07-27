@@ -44,7 +44,7 @@ from __future__ import annotations
 
 from typing import TypeAlias
 
-from ..onnx_py._onnxpyoptim import expressions as _C  # type: ignore[attr-defined]
+from ..onnx_py._onnxpycore import expressions as _C  # type: ignore[attr-defined]
 
 CompareResult: TypeAlias = _C.CompareResult
 ExpressionComparison: TypeAlias = _C.ExpressionComparison

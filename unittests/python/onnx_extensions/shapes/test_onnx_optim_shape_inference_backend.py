@@ -11,7 +11,7 @@ from onnx_light.onnx_core.shape_inference import (
     infer_shapes_model,
     write_value_and_node_tags_to_metadata,
 )
-from onnx_light.onnx_py._onnxpyoptim import shape_inference as si
+from onnx_light.onnx_py._onnxpycore import shape_inference as si
 
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).

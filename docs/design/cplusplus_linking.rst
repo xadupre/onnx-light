@@ -34,7 +34,7 @@ can be set on the ``cmake`` command line with ``-D<NAME>=<VALUE>``.
     * - ``ONNX_LIGHT_BUILD_PYTHON``
       - ``ON``
       - Build the nanobind Python extensions
-        (``_onnxpyprotoop``, ``_onnxpyprotolib``, ``_onnxpyoptim``,
+        (``_onnxpyprotoop``, ``_onnxpyprotolib``, ``_onnxpycore``,
         ``_onnxpykernels`` and ``_onnxpybackend``).  Turn ``OFF`` for a
         pure C++ build; this also switches ``lib_onnx_proto`` from a
         shared library back to a static archive.
@@ -304,7 +304,7 @@ Python extension modules and proto duplication
 The Python package ships up to six nanobind extension modules,
 ``onnx_light.onnx_py._onnxpyprotoop``,
 ``onnx_light.onnx_py._onnxpyprotolib``,
-``onnx_light.onnx_py._onnxpyoptim``,
+``onnx_light.onnx_py._onnxpycore``,
 ``onnx_light.onnx_py._onnxpykernels``,
 ``onnx_light.onnx_py._onnxpybackend`` and
 ``onnx_light.onnx_py._onnxpygradient``.  The first three are always built;
@@ -339,12 +339,12 @@ proto classes have a single set of out-of-line member definitions and a
 single ``std::type_info`` instance.  Consequently
 ``&typeid(ModelProto)`` evaluates to the same pointer in every
 extension, and nanobind's cross-module type registry resolves
-:class:`~onnx_light.onnx_lib.ModelProto` references coming from ``_onnxpyoptim`` or
+:class:`~onnx_light.onnx_lib.ModelProto` references coming from ``_onnxpycore`` or
 ``_onnxpybackend`` against the
 ``nb::class_<ModelProto>`` that ``_onnxpyprotoop`` registered.  In
 practice, only ``_onnxpyprotoop`` declares
 ``nb::class_<NodeProto>`` / ``nb::class_<ModelProto>`` / ...; the
-``_onnxpyprotolib``, ``_onnxpyoptim``, ``_onnxpykernels``,
+``_onnxpyprotolib``, ``_onnxpycore``, ``_onnxpykernels``,
 ``_onnxpybackend`` and ``_onnxpygradient`` modules return proto values by
 reference (for example
 ``TestCase.model``, see ``onnx_light/onnx_py/_onnxpy_backend_test.cc``)
@@ -353,7 +353,7 @@ binding.  Every Python module that consumes a proto value imports the
 proto classes directly from ``_onnxpyprotoop`` (for example
 ``from ..onnx_py._onnxpyprotoop import ModelProto``), which guarantees that
 ``_onnxpyprotoop`` is loaded — and its ``nb::class_<ModelProto>`` binding
-registered — before any ``_onnxpyprotolib`` / ``_onnxpyoptim`` /
+registered — before any ``_onnxpyprotolib`` / ``_onnxpycore`` /
 ``_onnxpykernels`` / ``_onnxpybackend`` / ``_onnxpygradient`` accessor is
 used.
 

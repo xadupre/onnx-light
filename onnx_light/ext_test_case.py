@@ -11,7 +11,7 @@ from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-HAS_OPTIM_EXT: bool = importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None
+HAS_OPTIM_EXT: bool = importlib.util.find_spec("onnx_light.onnx_py._onnxpycore") is not None
 
 
 def is_windows() -> bool:

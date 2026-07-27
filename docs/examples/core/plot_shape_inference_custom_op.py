@@ -39,7 +39,7 @@ from __future__ import annotations
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
-from onnx_light.onnx_py._onnxpyoptim import shape_inference as si
+from onnx_light.onnx_py._onnxpycore import shape_inference as si
 
 # Make sure the built-in operator schemas are registered before running
 # shape inference (the C++ dispatch table looks them up for standard ops).

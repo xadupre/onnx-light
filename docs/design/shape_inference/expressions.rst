@@ -351,8 +351,8 @@ The C++ header and implementation files live in:
                              transformers, evaluator, unparser)
 
 The Python module ``onnx_light.onnx_core.expressions`` wraps the C++ functions
-exposed via the ``_onnxpyoptim.expressions`` nanobind submodule (defined in
-``onnx_light/onnx_py/_onnxpy_optim.cc``).
+exposed via the ``_onnxpycore.expressions`` nanobind submodule (defined in
+``onnx_light/onnx_py/_onnxpy_core.cc``).
 
 Python wrapper:
 

@@ -17,7 +17,7 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace {
 
-using StringStringEntryProtos = utils::RepeatedField<StringStringEntryProto>;
+using StringStringEntryProtos = utils::RepeatedProtoField<StringStringEntryProto>;
 
 static_assert(32 >= std::numeric_limits<uint64_t>::digits10 + 1,
               "PrintNumber buffer must hold uint64_t decimal text");

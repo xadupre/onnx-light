@@ -112,38 +112,6 @@ template <class NameCollection> std::string FormatNameList(const NameCollection 
   return oss.str();
 }
 
-// Emits the ReferenceEvaluator verbose progress line for one node dispatch.
-// The format is
-// ``[ReferenceEvaluator] #<node_index> Domain::OpType(inputs) -> (outputs)``.
-// Nothing is printed when ``rt.verbose() <= 0``.
-void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
-                       const std::string &op_type) {
-  // onnx_light_helpers::Logger uses destination "1" to mean stdout.
-  constexpr const char *kStdoutLoggerDestination = "1";
-  if (rt.verbose() <= 0) {
-    return;
-  }
-  std::ostringstream oss;
-  oss << "[ReferenceEvaluator] ";
-  if (rt.current_subgraph_node_index() >= 0) {
-    oss << rt.current_subgraph_attr_name() << "@" << rt.current_subgraph_node_index() << "/";
-  }
-  if (rt.current_node_index() >= 0) {
-    oss << "#" << rt.current_node_index() << " ";
-  }
-  if (domain != kDefaultOnnxDomain) {
-    oss << domain << "::";
-  }
-  oss << op_type << "(" << FormatNameList(node.input()) << ") -> (" << FormatNameList(node.output())
-      << ")";
-  const char *log_destination = std::getenv("ONNX_LIGHT_LOG");
-  // Logger("") resolves its destination from ONNX_LIGHT_LOG.
-  // If no destination is configured, force stdout with destination "1".
-  const bool has_configured_destination = log_destination != nullptr && log_destination[0] != '\0';
-  onnx_light_helpers::Logger logger(has_configured_destination ? "" : kStdoutLoggerDestination);
-  logger.log(oss.str());
-}
-
 } // namespace
 
 int64_t ResolveAxis(int64_t axis, size_t rank, const std::string &op_name) {
@@ -1122,19 +1090,54 @@ NodeKernelFn ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
   return it->second;
 }
 
+// Emits the ReferenceEvaluator verbose progress line for one node dispatch.
+// The format is
+// ``[ReferenceEvaluator] #<node_index> Domain::OpType(inputs) -> (outputs)``.
+// Nothing is printed when ``rt.verbose() <= 0``.
+void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
+                       const std::string &op_type) {
+  // onnx_light_helpers::Logger uses destination "1" to mean stdout.
+  constexpr const char *kStdoutLoggerDestination = "1";
+  if (rt.verbose() <= 0) {
+    return;
+  }
+  std::ostringstream oss;
+  oss << "[ReferenceEvaluator] ";
+  if (rt.current_subgraph_node_index() >= 0) {
+    oss << rt.current_subgraph_attr_name() << "@" << rt.current_subgraph_node_index() << "/";
+  }
+  if (rt.current_node_index() >= 0) {
+    oss << "#" << rt.current_node_index() << " ";
+  }
+  if (domain != kDefaultOnnxDomain) {
+    oss << domain << "::";
+  }
+  oss << op_type << "(" << FormatNameList(node.input()) << ") -> (" << FormatNameList(node.output())
+      << ")";
+  const char *log_destination = std::getenv("ONNX_LIGHT_LOG");
+  // Logger("") resolves its destination from ONNX_LIGHT_LOG.
+  // If no destination is configured, force stdout with destination "1".
+  const bool has_configured_destination = log_destination != nullptr && log_destination[0] != '\0';
+  onnx_light_helpers::Logger logger(has_configured_destination ? "" : kStdoutLoggerDestination);
+  logger.log(oss.str());
+}
+
 } // namespace detail
 
-// Invokes an already-built kernel instance for ``node``, wrapping the call
-// with the verbose progress line and (when enabled) the per-node timing
-// event. Shared by :cpp:func:`RunNode` and :cpp:class:`RuntimeSession` so both
-// the resolve-on-demand and the resolve-once execution paths log identically.
-void RuntimeContext::InvokeKernel(const NodeProto &node, KernelBase &kernel) {
+void RunNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
   const std::string &op_type = node.op_type().value();
-  PrintNodeProgress(*this, node, domain, op_type);
+  NodeKernelFn factory = detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
+  std::unique_ptr<KernelBase> resolved = factory(node, rt);
 
-  // Only capture timing and input names when event logging is active.
-  const bool logging = events_enabled();
+  // Invoke the resolved kernel, wrapping the call with the verbose progress
+  // line and (when enabled) the per-node timing event. The same logic runs in
+  // :cpp:class:`RuntimeSession` so both the resolve-on-demand and the
+  // resolve-once execution paths log identically.
+  detail::PrintNodeProgress(rt, node, domain, op_type);
+
+  // Only capture timing when event logging is active.
+  const bool logging = rt.events_enabled();
   int64_t start_time_ns = 0;
   std::chrono::steady_clock::time_point t0;
   if (logging) {
@@ -1144,42 +1147,14 @@ void RuntimeContext::InvokeKernel(const NodeProto &node, KernelBase &kernel) {
     t0 = std::chrono::steady_clock::now();
   }
 
-  kernel.Run(*this);
+  resolved->Run(rt);
 
   if (logging) {
     const int64_t duration_ns =
         std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0)
             .count();
-    // Record the dispatch as a kRunNode RuntimeEvent so callers can profile
-    // per-node execution from the event log alongside the tensor
-    // add/replace/remove records.
-    RuntimeEvent ev;
-    ev.action = RuntimeEventAction::kRunNode;
-    ev.kind = RuntimeEventKind::kUnknown;
-    ev.timestamp_ns = start_time_ns;
-    ev.data_type = static_cast<int32_t>(DataType::UNDEFINED);
-    ev.value_count = 0;
-    ev.node_index = current_node_index_;
-    ev.op_domain = domain;
-    ev.op_type = op_type;
-    ev.inputs.reserve(static_cast<size_t>(node.input_size()));
-    for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
-      ev.inputs.push_back(node.input(i));
-    }
-    ev.duration_ns = duration_ns;
-    ev.subgraph_node_index = current_subgraph_node_index_;
-    ev.subgraph_attr_name = current_subgraph_attr_name_;
-    StampAllocatorMemory(ev);
-    events_.push_back(std::move(ev));
+    rt.RecordRunNodeEvent(node, domain, op_type, start_time_ns, duration_ns);
   }
-}
-
-void RunNode(const NodeProto &node, RuntimeContext &rt) {
-  const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
-  const std::string &op_type = node.op_type().value();
-  NodeKernelFn factory = detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
-  std::unique_ptr<KernelBase> resolved = factory(node, rt);
-  rt.InvokeKernel(node, *resolved);
 }
 
 void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {

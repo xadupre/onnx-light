@@ -551,18 +551,20 @@ public:
     current_node_index_ = -1;
   }
 
-  /// Invokes an already-built ``kernel`` instance for ``node``, wrapping
-  /// the call with the verbose progress line and (when event logging is
-  /// enabled) the per-node timing record. Shared by :cpp:func:`RunNode`
-  /// and :cpp:class:`RuntimeSession` so both the resolve-on-demand and the
-  /// resolve-once execution paths log identically. The per-node timing is
-  /// appended to the event log as a :cpp:class:`RuntimeEvent` with action
-  /// :cpp:enumerator:`RuntimeEventAction::kRunNode`: ``timestamp_ns`` is
-  /// set to the wall-clock time at which the dispatch started and
-  /// ``duration_ns`` to its measured wall-clock duration in nanoseconds,
-  /// so callers can profile per-node execution from the event log
-  /// alongside the tensor add/replace/remove records.
-  void InvokeKernel(const NodeProto &node, KernelBase &kernel);
+  /// Records a :cpp:enumerator:`RuntimeEventAction::kRunNode` event for
+  /// ``node`` in the event log when :cpp:func:`events_enabled` is set. This
+  /// summarises a single kernel dispatch so callers can profile per-node
+  /// execution from the event log alongside the tensor add/replace/remove
+  /// records: ``timestamp_ns`` is set to ``start_time_ns`` (the wall-clock
+  /// time at which the dispatch started) and ``duration_ns`` to its measured
+  /// wall-clock duration in nanoseconds. ``domain`` / ``op_type`` identify the
+  /// dispatched op and the node's input names are copied into the event. The
+  /// invoke logic itself is inlined in :cpp:func:`RunNode` and
+  /// :cpp:class:`RuntimeSession` so both the resolve-on-demand and the
+  /// resolve-once execution paths log identically.
+  void RecordRunNodeEvent(const NodeProto &node, const std::string &domain,
+                          const std::string &op_type, int64_t start_time_ns,
+                          int64_t duration_ns) noexcept;
 
   /// Returns the cached :cpp:class:`ExecutionPlan` for ``graph``,
   /// building it on first use. The plan precomputes, for every node in

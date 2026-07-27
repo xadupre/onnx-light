@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import TypeAlias
 
-from ..onnx_py._onnxpyoptim import shape_inference as _C  # type: ignore[attr-defined]
+from ..onnx_py._onnxpycore import shape_inference as _C  # type: ignore[attr-defined]
 
 apply_inferred_shapes_to_model = _C.apply_inferred_shapes_to_model
 check_inputs_available = _C.check_inputs_available

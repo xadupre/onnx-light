@@ -10,7 +10,7 @@ from onnx_light.onnx_core import shape_inference as si
 
 class TestInPlaceReuse(ExtTestCase):
     """Python tests for the ``compute_inplace_reuse`` binding exposed by
-    ``onnx_light.onnx_py._onnxpyoptim.shape_inference``."""
+    ``onnx_light.onnx_py._onnxpycore.shape_inference``."""
 
     _LONG_SYMBOLIC_DIM_NAME = "very_long_dynamic_dimension_name_" * 16 + "N"
 

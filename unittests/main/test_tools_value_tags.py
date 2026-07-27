@@ -31,7 +31,7 @@ class TestValueTagsErrors(unittest.TestCase):
         with (
             patch.object(_proto_utils, "_shape_inference", None),
             self.assertRaisesRegex(
-                RuntimeError, "onnx_light\\.onnx_py\\._onnxpyoptim.*is unavailable"
+                RuntimeError, "onnx_light\\.onnx_py\\._onnxpycore.*is unavailable"
             ),
         ):
             compute_value_and_node_tags([])

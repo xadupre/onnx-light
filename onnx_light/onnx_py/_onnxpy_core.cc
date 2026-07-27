@@ -55,8 +55,8 @@ void AddOnnxPyExpressions(nb::module_ &m);
 void AddOnnxPyShapeInference(nb::module_ &m);
 void AddOnnxPyBuilder(nb::module_ &m);
 
-NB_MODULE(_onnxpyoptim, m) {
-  m.doc() = "onnx optim bindings from python: symbolic dimension expressions and "
+NB_MODULE(_onnxpycore, m) {
+  m.doc() = "onnx core bindings from python: symbolic dimension expressions and "
             "shape inference helpers (operating on the same proto format).";
   AddOnnxPyExpressions(m);
   AddOnnxPyShapeInference(m);

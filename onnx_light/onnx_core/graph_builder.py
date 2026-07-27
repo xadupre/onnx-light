@@ -31,13 +31,13 @@ from __future__ import annotations
 from typing import Any
 
 from ..onnx_op import GetAllOnnxOpSchemasWithHistory
-from ..onnx_py._onnxpyoptim import builder as _C  # type: ignore[attr-defined]
+from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
 
 
 def _default_schema_lookup(op_type: str) -> list:
     """Returns the built-in ONNX schema history for ``op_type``.
 
-    The schemas live in the ``onnx_op`` extension, which the ``_onnxpyoptim``
+    The schemas live in the ``onnx_op`` extension, which the ``_onnxpycore``
     extension does not link against; this callable bridges the two so the
     builder can resolve opsets and validate nodes without that link.
     """

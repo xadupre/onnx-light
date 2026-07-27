@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 _shape_inference: Any = None
 
-if importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None:
+if importlib.util.find_spec("onnx_light.onnx_py._onnxpycore") is not None:
     with contextlib.suppress(ImportError):  # pragma: no cover
         from ..onnx_core import shape_inference as _shape_inference
 
@@ -211,7 +211,7 @@ def _require_shape_inference_extension() -> Any:
     """
     if _shape_inference is None:
         raise RuntimeError(
-            "onnx_light.onnx_py._onnxpyoptim is unavailable, so "
+            "onnx_light.onnx_py._onnxpycore is unavailable, so "
             "onnx_light.onnx_core.shape_inference cannot be used. "
             "Install the onnx_light C++ extension to use value/node tag inference."
         )

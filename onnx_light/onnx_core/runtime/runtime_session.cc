@@ -243,8 +243,27 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       const NodeProto &node = *nodes[index];
       const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
       const std::string &op_type = node.op_type().value();
-      detail::RunKernelWithLogging(rt, node, domain, op_type, *prepared.instance,
-                                   effective_verbose);
+      detail::PrintNodeProgress(rt, node, domain, op_type, effective_verbose);
+
+      // Only capture timing when event logging is active.
+      const bool logging = rt.events_enabled();
+      int64_t start_time_ns = 0;
+      std::chrono::steady_clock::time_point t0;
+      if (logging) {
+        start_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::system_clock::now().time_since_epoch())
+                            .count();
+        t0 = std::chrono::steady_clock::now();
+      }
+
+      prepared.instance->Run(rt);
+
+      if (logging) {
+        const int64_t duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                        std::chrono::steady_clock::now() - t0)
+                                        .count();
+        rt.RecordRunNodeEvent(node, domain, op_type, start_time_ns, duration_ns);
+      }
       VerifyOutputAllocators(*nodes[index], rt);
       if (check_shapes) {
         const NodeProto &executed = *nodes[index];

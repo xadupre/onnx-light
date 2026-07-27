@@ -1124,14 +1124,15 @@ void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const st
   logger.log(oss.str());
 }
 
-// Runs a prepared kernel with shared verbose/timing instrumentation.
-// Uses ``verbose_override`` when it is non-negative; otherwise uses
-// ``rt.verbose()``. Shared by :cpp:func:`RunNode` and
-// :cpp:class:`RuntimeSession` so both execution paths emit the same progress
-// line and the same optional ``kRunNode`` event record.
-void RunKernelWithLogging(RuntimeContext &rt, const NodeProto &node, const std::string &domain,
-                          const std::string &op_type, KernelBase &kernel, int verbose_override) {
-  PrintNodeProgress(rt, node, domain, op_type, verbose_override);
+} // namespace detail
+
+void RunNode(const NodeProto &node, RuntimeContext &rt) {
+  const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
+  const std::string &op_type = node.op_type().value();
+  NodeKernelFn factory = detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
+  std::unique_ptr<KernelBase> resolved = factory(node, rt);
+
+  detail::PrintNodeProgress(rt, node, domain, op_type);
 
   // Only capture timing when event logging is active.
   const bool logging = rt.events_enabled();
@@ -1144,7 +1145,7 @@ void RunKernelWithLogging(RuntimeContext &rt, const NodeProto &node, const std::
     t0 = std::chrono::steady_clock::now();
   }
 
-  kernel.Run(rt);
+  resolved->Run(rt);
 
   if (logging) {
     const int64_t duration_ns =
@@ -1152,16 +1153,6 @@ void RunKernelWithLogging(RuntimeContext &rt, const NodeProto &node, const std::
             .count();
     rt.RecordRunNodeEvent(node, domain, op_type, start_time_ns, duration_ns);
   }
-}
-
-} // namespace detail
-
-void RunNode(const NodeProto &node, RuntimeContext &rt) {
-  const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
-  const std::string &op_type = node.op_type().value();
-  NodeKernelFn factory = detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
-  std::unique_ptr<KernelBase> resolved = factory(node, rt);
-  detail::RunKernelWithLogging(rt, node, domain, op_type, *resolved);
 }
 
 void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {

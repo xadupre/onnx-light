@@ -4,6 +4,10 @@
 
 #pragma once
 
+// This header is used as a precompiled header (see target_precompile_headers in
+// CMakeLists.txt) and therefore bakes ``onnx.h`` into the PCH. ``onnx.h`` relies
+// on a traditional include guard so a stale PCH cannot redefine its classes when
+// the header is also re-included textually in the same translation unit.
 #include "onnx.h"
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/simple_map.h"

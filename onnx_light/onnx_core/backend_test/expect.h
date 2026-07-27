@@ -4,6 +4,8 @@
 
 #pragma once
 
+// Precompiled-header source (see target_precompile_headers): transitively bakes
+// ``onnx.h``, which uses an include guard to stay safe against stale PCHs.
 #include "onnx_core/backend_test/io_data.h"
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/random.h"

@@ -237,7 +237,7 @@ public:
                                     const std::vector<AttributeProto> &attributes = {});
 
   /// Read-only access to the accumulated nodes (in insertion order).
-  const std::vector<NodeProto> &Nodes() const noexcept { return nodes_; }
+  const utils::RepeatedProtoField<NodeProto> &Nodes() const noexcept { return nodes_; }
 
   // ── Local functions / subgraphs ──────────────────────────────────────
 
@@ -402,7 +402,7 @@ private:
   ComputeContext compute_;
   std::vector<ValueInfoProto> inputs_;
   std::vector<ValueInfoProto> outputs_;
-  std::vector<NodeProto> nodes_;
+  utils::RepeatedProtoField<NodeProto> nodes_;
   std::vector<TensorProto> initializers_;
   std::vector<std::unique_ptr<GraphBuilder>> local_functions_;
   std::vector<std::unique_ptr<GraphBuilder>> subgraphs_;

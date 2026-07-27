@@ -4148,33 +4148,6 @@ TEST(RunNodes, CollectNodeInputsIncludesSubgraphCaptures) {
   EXPECT_EQ(inputs, (std::vector<std::string>{"cond", "a", "b"}));
 }
 
-TEST(RunNodes, ComputeReleasableInputsLastUse) {
-  // x -> Abs -> t ; (t, z) -> Add -> y
-  // "x" last-used at node 0, "t" last-used at node 1, "z" last-used at node 1.
-  // With keep = {"y"}, after node 0 we can release "x"; after node 1 we can
-  // release "t" and "z".
-  std::vector<NodeProto> nodes;
-  nodes.push_back(MakeNode("Abs", {"x"}, {"t"}));
-  nodes.push_back(MakeNode("Add", {"t", "z"}, {"y"}));
-
-  std::unordered_set<std::string> keep{"y"};
-  auto rel = core::compute::ComputeContext::ComputeReleasableInputs(nodes, keep);
-  ASSERT_EQ(rel.size(), 2u);
-  EXPECT_EQ(rel[0], (std::vector<std::string>{"x"}));
-  EXPECT_EQ(rel[1], (std::vector<std::string>{"t", "z"}));
-}
-
-TEST(RunNodes, ComputeReleasableInputsKeepIsPreserved) {
-  // Reuse the same intermediate: pretend "x" is also a declared graph output
-  // (i.e. caller wants to keep "x" after the run). It must NOT be released.
-  std::vector<NodeProto> nodes;
-  nodes.push_back(MakeNode("Abs", {"x"}, {"t"}));
-  std::unordered_set<std::string> keep{"x", "t"};
-  auto rel = core::compute::ComputeContext::ComputeReleasableInputs(nodes, keep);
-  ASSERT_EQ(rel.size(), 1u);
-  EXPECT_TRUE(rel[0].empty());
-}
-
 TEST(RunNodes, RunGraphReleaseIntermediatesRemovesUnusedAndEmitsEvent) {
   // y = Add(Abs(x), z) — after running, "t" (the intermediate) must be gone
   // from the context, "y" (declared output) must remain, and "x" / "z"

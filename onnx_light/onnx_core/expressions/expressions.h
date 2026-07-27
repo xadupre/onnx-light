@@ -620,6 +620,16 @@ inline const DimType kDimInfinity{std::string{"+inf"}};
  */
 std::string dim_to_string(const DimType &d);
 
+/**
+ * @brief Returns whether @p d is the concrete integer dimension zero.
+ *
+ * A symbolic dimension is never considered zero.
+ *
+ * @param d The dimension value to test.
+ * @returns `true` if @p d holds the integer value `0`; `false` otherwise.
+ */
+bool is_zero_dim(const DimType &d);
+
 // ─────────────────────── dimension operations ─────────────────────────
 
 /**

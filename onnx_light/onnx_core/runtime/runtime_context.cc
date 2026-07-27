@@ -240,6 +240,35 @@ void RuntimeContext::StampAllocatorMemory(RuntimeEvent &ev) const noexcept {
   ev.peak_bytes = static_cast<int64_t>(allocator_->PeakAllocatedSize());
 }
 
+void RuntimeContext::RecordRunNodeEvent(const NodeProto &node, const std::string &domain,
+                                        const std::string &op_type, int64_t start_time_ns,
+                                        int64_t duration_ns) noexcept {
+  if (!events_enabled_) {
+    return;
+  }
+  // Record the dispatch as a kRunNode RuntimeEvent so callers can profile
+  // per-node execution from the event log alongside the tensor
+  // add/replace/remove records.
+  RuntimeEvent ev;
+  ev.action = RuntimeEventAction::kRunNode;
+  ev.kind = RuntimeEventKind::kUnknown;
+  ev.timestamp_ns = start_time_ns;
+  ev.data_type = static_cast<int32_t>(DataType::UNDEFINED);
+  ev.value_count = 0;
+  ev.node_index = current_node_index_;
+  ev.op_domain = domain;
+  ev.op_type = op_type;
+  ev.inputs.reserve(static_cast<size_t>(node.input_size()));
+  for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
+    ev.inputs.push_back(node.input(i));
+  }
+  ev.duration_ns = duration_ns;
+  ev.subgraph_node_index = current_subgraph_node_index_;
+  ev.subgraph_attr_name = current_subgraph_attr_name_;
+  StampAllocatorMemory(ev);
+  events_.push_back(std::move(ev));
+}
+
 RuntimeContext::~RuntimeContext() {
   for (auto &it : tensors_) {
     ReleaseTensorAllocation(it.second);

@@ -126,6 +126,13 @@ template <typename T> OptionalField<T> &OptionalField<T>::operator=(const T &v) 
   return *this;
 }
 
+template <typename T> OptionalField<T> &OptionalField<T>::operator=(T &&v) {
+  // Steal the contents of v instead of copying them: the field owns a single
+  // pointer, so a move-construct into a fresh T avoids the CopyFrom above.
+  value_.reset(new T(std::move(v)));
+  return *this;
+}
+
 template <typename T> OptionalField<T> &OptionalField<T>::operator=(const OptionalField<T> &v) {
   // We make a copy.
   reset();

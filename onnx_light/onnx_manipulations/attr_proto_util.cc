@@ -24,7 +24,7 @@ namespace ONNX_LIGHT_NAMESPACE {
     AttributeProto a;                                                                              \
     a.set_name(std::move(attr_name));                                                              \
     a.set_type(enumType);                                                                          \
-    a.set_##field(value);                                                                          \
+    a.set_##field(std::move(value));                                                               \
     return a;                                                                                      \
   }
 
@@ -45,7 +45,7 @@ namespace ONNX_LIGHT_NAMESPACE {
     a.set_name(std::move(attr_name));                                                              \
     a.set_type(enumType);                                                                          \
     for (auto &&val : std::move(values)) {                                                         \
-      a.add_##field(val);                                                                          \
+      a.add_##field(std::move(val));                                                               \
     }                                                                                              \
     return a;                                                                                      \
   }
@@ -55,8 +55,8 @@ namespace ONNX_LIGHT_NAMESPACE {
     AttributeProto a;                                                                              \
     a.set_name(std::move(attr_name));                                                              \
     a.set_type(enumType);                                                                          \
-    for (const auto &val : values) {                                                               \
-      a.add_##field(val);                                                                          \
+    for (auto &val : values) {                                                                     \
+      a.add_##field(std::move(val));                                                               \
     }                                                                                              \
     return a;                                                                                      \
   }

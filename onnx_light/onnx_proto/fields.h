@@ -505,6 +505,8 @@ public:
   const T &operator*() const;
   /** Assigns a copy of the given value. */
   OptionalField<T> &operator=(const T &other);
+  /** Assigns by moving the given value into the field. */
+  OptionalField<T> &operator=(T &&other);
   /** Assigns from another optional field. */
   OptionalField<T> &operator=(const OptionalField<T> &other);
   /** Moves from another optional field. */

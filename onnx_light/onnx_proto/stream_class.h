@@ -168,6 +168,10 @@ public:                                                                         
   inline const utils::RepeatedProtoField<type> &name() const { return name##_; }                   \
   inline const utils::RepeatedProtoField<type> *ptr_##name() const { return &name##_; }            \
   inline type *add_##name() { return &name##_.add(); }                                             \
+  inline type *add_##name(type &&v) {                                                              \
+    name##_.push_back(std::move(v));                                                               \
+    return &name##_.back();                                                                        \
+  }                                                                                                \
   inline type *add_##name(const type &v) {                                                         \
     name##_.push_back(v);                                                                          \
     return &name##_.back();                                                                        \
@@ -241,6 +245,7 @@ public:                                                                         
     return &(*name##_);                                                                            \
   }                                                                                                \
   inline void set_##name(const type &v) { name##_ = v; }                                           \
+  inline void set_##name(type &&v) { name##_ = std::move(v); }                                     \
   inline void reset_##name() { name##_.reset(); }                                                  \
   inline void clear_##name() { name##_.reset(); }                                                  \
   inline bool has_##name() const { return name##_.has_value(); }                                   \

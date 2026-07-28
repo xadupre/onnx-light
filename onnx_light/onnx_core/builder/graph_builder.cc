@@ -396,12 +396,11 @@ bool GraphBuilder::ShapeFunctionAvailable(const NodeProto &node) const {
   return table.find(key) != table.end();
 }
 
-std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
-                                                const std::vector<std::string> &inputs,
-                                                const std::vector<std::string> &outputs,
-                                                const std::string &domain, const std::string &name,
-                                                const utils::RepeatedProtoField<AttributeProto>
-                                                    &attributes) {
+std::vector<std::string>
+GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string> &inputs,
+                       const std::vector<std::string> &outputs, const std::string &domain,
+                       const std::string &name,
+                       const utils::RepeatedProtoField<AttributeProto> &attributes) {
   // Every non-empty input must reference a value that already exists. Empty
   // strings denote skipped optional inputs and are allowed.
   for (const std::string &input : inputs) {

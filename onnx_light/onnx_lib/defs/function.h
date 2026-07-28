@@ -78,9 +78,9 @@ public:
    * - ``{{"Z"}, "Foo", {"X", "Y"}, {}, "customdomain"}`` targets a custom-domain operator.
    *
    * @param node_defs Node definitions describing outputs, op type, inputs, and attributes.
-   * @return Vector of materialized nodes for a function body.
+   * @return List of materialized nodes for a function body.
    */
-  ONNX_API static std::vector<NodeProto> BuildNodes(const std::vector<NodeDef> &node_defs);
+  ONNX_API static NodeList BuildNodes(const std::vector<NodeDef> &node_defs);
 
   /**
    * Appends NodeProto entries into a repeated proto field from lightweight node definitions.

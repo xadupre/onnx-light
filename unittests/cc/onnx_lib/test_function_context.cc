@@ -136,6 +136,13 @@ static NodeProto MakeSubNode() {
   return n;
 }
 
+// Wraps MakeSubNode() in a single-element NodeList for FunctionBody().
+static FunctionBodyHelper::NodeList MakeSubBody() {
+  FunctionBodyHelper::NodeList nodes;
+  nodes.push_back(MakeSubNode());
+  return nodes;
+}
+
 class GeluFunctionBodyBuildContext final : public FunctionBodyBuildContext {
 public:
   GeluFunctionBodyBuildContext(const NodeProto &node_proto,
@@ -186,7 +193,7 @@ void RegisterMySubSchemas() {
       .Output(0, "Z", "Output tensor Z", "T", OpSchema::Single)
       .TypeConstraint("T", {"tensor(float)", "tensor(double)"},
                       "Type of the input and output values")
-      .FunctionBody({MakeSubNode()}, 2);
+      .FunctionBody(MakeSubBody(), 2);
   RegisterSchema(std::move(schema_ver2), 0, /*fail_duplicate_schema=*/false);
 
   // MySub at sinceVersion 9: function bodies at opsets 9 and 16.
@@ -200,8 +207,8 @@ void RegisterMySubSchemas() {
       .Output(0, "Z", "Output tensor Z", "T", OpSchema::Single)
       .TypeConstraint("T", {"tensor(float)", "tensor(double)"},
                       "Type of the input and output values")
-      .FunctionBody({MakeSubNode()}, 9)
-      .FunctionBody({MakeSubNode()}, 16);
+      .FunctionBody(MakeSubBody(), 9)
+      .FunctionBody(MakeSubBody(), 16);
   RegisterSchema(std::move(schema_ver9), 0, /*fail_duplicate_schema=*/false);
 }
 

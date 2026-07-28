@@ -163,19 +163,6 @@ ComputeContext::ComputeValueAndNodeTags(const utils::RepeatedProtoField<NodeProt
   return {value_tags_, node_tags_};
 }
 
-std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
-ComputeContext::ComputeValueAndNodeTags(const std::vector<NodeProto> &nodes) {
-  value_tags_.clear();
-  node_tags_.clear();
-  std::vector<const NodeProto *> ptrs;
-  ptrs.reserve(nodes.size());
-  for (const NodeProto &node : nodes) {
-    ptrs.push_back(&node);
-  }
-  InferNodesTags(ptrs, value_tags_, node_tags_, this);
-  return {value_tags_, node_tags_};
-}
-
 bool ComputeContext::TrySetValueTag(const std::string &name, const std::string &tag) {
   const bool changed =
       ::ONNX_LIGHT_NAMESPACE::core::compute::TrySetValueTag(value_tags_, name, tag);

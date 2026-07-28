@@ -794,6 +794,7 @@ OpSchema &OpSchema::FunctionBody(const utils::RepeatedProtoField<NodeProto> &fun
     opset_version = since_version_;
   }
   auto function_proto = std::make_shared<FunctionProto>();
+  function_proto->mutable_node()->reserve(func_nodes.size());
   for (const auto &node : func_nodes) {
     auto *new_node = function_proto->add_node();
     new_node->CopyFrom(node);
@@ -804,10 +805,6 @@ OpSchema &OpSchema::FunctionBody(const utils::RepeatedProtoField<NodeProto> &fun
   UpdateFunctionProtoOpsetImportVersion(*function_proto, opset_version);
   opset_version_to_function_body_.emplace(opset_version, std::move(function_proto));
   return *this;
-}
-
-OpSchema &OpSchema::FunctionBody(const std::vector<NodeProto> &func_nodes, int opset_version) {
-  return FunctionBody(utils::RepeatedProtoField<NodeProto>(func_nodes), opset_version);
 }
 
 OpSchema &OpSchema::FunctionBody(const utils::RepeatedProtoField<NodeProto> &func_nodes,
@@ -819,10 +816,12 @@ OpSchema &OpSchema::FunctionBody(const utils::RepeatedProtoField<NodeProto> &fun
   }
 
   auto function_proto = std::make_shared<FunctionProto>();
+  function_proto->mutable_opset_import()->Reserve(relied_opsets.size());
   for (const auto &relied_opset : relied_opsets) {
     *(function_proto->mutable_opset_import()->Add()) = relied_opset;
   }
 
+  function_proto->mutable_node()->reserve(func_nodes.size());
   for (const auto &node : func_nodes) {
     auto *new_node = function_proto->add_node();
     new_node->CopyFrom(node);
@@ -832,13 +831,6 @@ OpSchema &OpSchema::FunctionBody(const utils::RepeatedProtoField<NodeProto> &fun
   UpdateFunctionProtoOpsetImportVersion(*function_proto, opset_version);
   opset_version_to_function_body_.emplace(opset_version, std::move(function_proto));
   return *this;
-}
-
-OpSchema &OpSchema::FunctionBody(const std::vector<NodeProto> &func_nodes,
-                                 const std::vector<OperatorSetIdProto> &relied_opsets,
-                                 int opset_version) {
-  return FunctionBody(utils::RepeatedProtoField<NodeProto>(func_nodes),
-                      utils::RepeatedProtoField<OperatorSetIdProto>(relied_opsets), opset_version);
 }
 
 const FunctionProto *OpSchema::GetFunction(int requested_opset_version, bool validate) const {

@@ -193,22 +193,12 @@ std::vector<std::string> CollectExternalInputs(const utils::RepeatedProtoField<N
   return CollectExternalInputsImpl(nodes);
 }
 
-std::vector<std::string> CollectExternalInputs(const std::vector<NodeProto> &nodes) {
-  return CollectExternalInputsImpl(nodes);
-}
-
 std::vector<std::string> CollectExternalInputs(const std::vector<const NodeProto *> &nodes) {
   return CollectExternalInputsImpl(NodePointerRange{nodes});
 }
 
 std::vector<std::vector<std::string>>
 CollectRemainingInputs(const utils::RepeatedProtoField<NodeProto> &nodes,
-                       const std::vector<std::string> &outputs) {
-  return CollectRemainingInputsImpl(nodes, outputs);
-}
-
-std::vector<std::vector<std::string>>
-CollectRemainingInputs(const std::vector<NodeProto> &nodes,
                        const std::vector<std::string> &outputs) {
   return CollectRemainingInputsImpl(nodes, outputs);
 }

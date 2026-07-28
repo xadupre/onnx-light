@@ -116,14 +116,9 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
   }
 }
 
-std::vector<NodeProto> FunctionBodyHelper::BuildNodes(const std::vector<NodeDef> &node_defs) {
-  NodeList repeated_nodes;
-  BuildNodes(repeated_nodes, node_defs);
-  std::vector<NodeProto> nodes;
-  nodes.reserve(repeated_nodes.size());
-  for (const auto &node : repeated_nodes) {
-    nodes.push_back(node);
-  }
+FunctionBodyHelper::NodeList FunctionBodyHelper::BuildNodes(const std::vector<NodeDef> &node_defs) {
+  NodeList nodes;
+  BuildNodes(nodes, node_defs);
   return nodes;
 }
 

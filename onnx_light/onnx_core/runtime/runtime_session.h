@@ -206,9 +206,6 @@ public:
   static std::vector<std::string>
   CollectExternalInputs(const utils::RepeatedProtoField<NodeProto> &nodes);
 
-  /// ``std::vector``-overload of :cpp:func:`CollectExternalInputs`.
-  static std::vector<std::string> CollectExternalInputs(const std::vector<NodeProto> &nodes);
-
   /**
    * Returns the full list of tensor / sequence names a single ``node`` depends
    * on at runtime: the names referenced by ``node.input()`` (skipping empty

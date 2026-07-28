@@ -52,7 +52,14 @@ template <typename T> inline const T &RepeatedProtoField<T>::operator[](size_t i
   return *values_[index];
 }
 
-template <typename T> void RepeatedProtoField<T>::push_back(const T &v) { add().CopyFrom(v); }
+template <typename T> void RepeatedProtoField<T>::push_back(const T &v) {
+  // Deep-copy member-wise through T's copy constructor instead of routing through
+  // CopyFrom (which serializes v and re-parses it). The serialize/parse round-trip
+  // is an unnecessary copy of the whole subtree - notably expensive for message
+  // fields holding TensorProto payloads - whereas the copy constructor recurses
+  // through the owning-pointer wrappers directly.
+  values_.emplace_back(std::make_shared<T>(v));
+}
 
 template <typename T> void RepeatedProtoField<T>::push_back(T &&v) {
   values_.emplace_back(std::make_shared<T>(std::move(v)));
@@ -118,11 +125,12 @@ template <typename T> const T &OptionalField<T>::operator*() const {
 }
 
 template <typename T> OptionalField<T> &OptionalField<T>::operator=(const T &v) {
-  // Reset to a fresh empty value so that CopyFrom (which internally calls
-  // ParseFromStream) starts from a clean state. Without this, repeated fields
-  // in an existing value would be appended to rather than replaced.
-  set_empty_value();
-  value_->CopyFrom(v);
+  // Deep-copy member-wise through T's copy constructor. Building a fresh T avoids
+  // the previous set_empty_value()+CopyFrom() path, which serialized v and
+  // re-parsed it into the owned value - an unnecessary copy of the whole subtree
+  // (e.g. a TensorProto payload). Constructing anew also guarantees the clean
+  // state that CopyFrom required (no leftover repeated entries).
+  value_.reset(new T(v));
   return *this;
 }
 
@@ -134,16 +142,16 @@ template <typename T> OptionalField<T> &OptionalField<T>::operator=(T &&v) {
 }
 
 template <typename T> OptionalField<T> &OptionalField<T>::operator=(const OptionalField<T> &v) {
-  // We make a copy.
-  reset();
+  // Deep-copy member-wise through T's copy constructor rather than serializing the
+  // held value and re-parsing it into a fresh one. The old serialize/parse round-trip
+  // was an unnecessary copy of the whole subtree.
+  if (this == &v) {
+    return *this;
+  }
   if (v.has_value()) {
-    set_empty_value();
-    StringWriteStream stream;
-    SerializeOptions opts;
-    (*v).SerializeToStream(stream, opts);
-    StringStream rstream(stream.data(), stream.size());
-    ParseOptions ropts;
-    value_->ParseFromStream(rstream, ropts);
+    value_.reset(new T(*v.value_));
+  } else {
+    value_.reset();
   }
   return *this;
 }

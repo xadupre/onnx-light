@@ -181,10 +181,4 @@ bool FunctionBodyHelper::BuildFunctionProto(FunctionProto &functionProto, const 
   return true;
 }
 
-bool FunctionBodyHelper::BuildFunctionProto(FunctionProto &functionProto, const OpSchema &schema,
-                                            const std::vector<NodeDef> &node_defs,
-                                            const std::vector<OperatorSetIdProto> &relied_opsets) {
-  return BuildFunctionProto(functionProto, schema, node_defs, OperatorSetList(relied_opsets));
-}
-
 } // namespace ONNX_LIGHT_NAMESPACE

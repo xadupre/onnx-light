@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "onnx_core/compute/compute_context.h"
@@ -96,7 +97,308 @@ void RecurseSubgraphs(NodeProto &node) {
   }
 }
 
+// ── Helpers shared by ComputeValueAndNodeTags overloads ─────────────────────
+
+std::string
+ReadMetadataValueFromProps(const utils::RepeatedProtoField<StringStringEntryProto> &props,
+                           const char *key) {
+  for (const auto &entry : props) {
+    if (entry.key() == key) {
+      return entry.value();
+    }
+  }
+  return {};
+}
+
+template <typename T> std::string ReadMetadataValue(const T &obj, const char *key) {
+  return ReadMetadataValueFromProps(obj.metadata_props(), key);
+}
+
+void SetValueTag(std::unordered_map<std::string, std::string> &value_tags, const std::string &name,
+                 const std::string &tag) {
+  static_cast<void>(TrySetValueTag(value_tags, name, tag));
+}
+
+// Returns the input indices that can safely inherit the given output tag when
+// running backward propagation from consumers to producers.
+std::vector<int> BackwardTagInputIndices(const NodeProto &node, const std::string &output_tag) {
+  const std::string op_type = node.op_type();
+  if (op_type == "Concat") {
+    // Do not propagate "ambiguous" backward to avoid overwriting inputs that
+    // already carry a more specific tag (e.g. "shape" or "axes").
+    if (output_tag == "ambiguous") {
+      return {};
+    }
+    std::vector<int> all_inputs;
+    all_inputs.reserve(static_cast<std::size_t>(node.input().size()));
+    for (int i = 0; i < node.input().size(); ++i) {
+      all_inputs.push_back(i);
+    }
+    return all_inputs;
+  }
+  // Reshape and Cast preserve the semantics of their first input: the output
+  // carries the same tag as input[0].  Back-propagate so that an untagged
+  // producer can inherit the tag that the consumer determines.
+  if (op_type == "Identity" || op_type == "Cast" || op_type == "Reshape" || op_type == "Squeeze" ||
+      op_type == "Unsqueeze" || op_type == "Gather" || op_type == "Slice") {
+    return {0};
+  }
+  // Element-wise binary ops: propagate backward only when the output is a
+  // "weight" tensor (both operands belong to the same semantic category).
+  // Shape or axes tags must NOT flow back: Mul(shape, weight) → shape should
+  // not retag the weight scalar as "shape".
+  static const std::unordered_set<std::string> kBinaryElemwiseOps = {
+      "Add",   "And",     "BitAnd",         "BitOr", "BitShift",    "BitXor", "Div",
+      "Equal", "Greater", "GreaterOrEqual", "Less",  "LessOrEqual", "Mod",    "Mul",
+      "Or",    "Pow",     "PRelu",          "Sub",   "Xor"};
+  if (kBinaryElemwiseOps.count(op_type) && output_tag == "weight") {
+    return {0, 1};
+  }
+  return {};
+}
+
 } // namespace
+
+std::string NormalizeValueTag(std::string_view tag) {
+  std::string lower;
+  lower.reserve(tag.size());
+  for (char c : tag) {
+    if (c >= 'A' && c <= 'Z') {
+      lower.push_back(static_cast<char>(c - 'A' + 'a'));
+    } else {
+      lower.push_back(c);
+    }
+  }
+  while (!lower.empty() && lower.front() == ' ') {
+    lower.erase(lower.begin());
+  }
+  while (!lower.empty() && lower.back() == ' ') {
+    lower.pop_back();
+  }
+  if (lower == "shape" || lower == "axes" || lower == "weight" || lower == "ambiguous") {
+    return lower;
+  }
+  return {};
+}
+
+bool TrySetValueTag(std::unordered_map<std::string, std::string> &value_tags,
+                    const std::string &name, const std::string &tag) {
+  if (name.empty()) {
+    return false;
+  }
+  const std::string norm = NormalizeValueTag(tag);
+  if (!norm.empty()) {
+    auto it = value_tags.find(name);
+    if (it != value_tags.end()) {
+      if (it->second == norm) {
+        return false;
+      }
+      if (it->second == "ambiguous") {
+        return false;
+      }
+      // "shape" and "axes" are more specific tags and win over "weight".
+      if (norm == "weight" && (it->second == "shape" || it->second == "axes")) {
+        return false;
+      }
+      if (it->second == "weight" && (norm == "shape" || norm == "axes")) {
+        it->second = norm;
+        return true;
+      }
+      it->second = "ambiguous";
+      return true;
+    }
+    value_tags[name] = norm;
+    return true;
+  }
+  return false;
+}
+
+void CollectGraphSeedTags(const GraphProto &graph,
+                          std::unordered_map<std::string, std::string> &value_tags) {
+  for (int i = 0; i < graph.input().size(); ++i) {
+    const auto &value = graph.input()[i];
+    std::string tag = ReadMetadataValue(value, kValueTagMetadataKey);
+    if (tag.empty()) {
+      // All graph inputs are unconditionally seeded as "weight": they represent
+      // model data or parameters, and this tag is always known at graph level.
+      tag = "weight";
+    }
+    SetValueTag(value_tags, value.name(), tag);
+  }
+  for (int i = 0; i < graph.initializer().size(); ++i) {
+    const auto &value = graph.initializer()[i];
+    std::string tag = ReadMetadataValue(value, kValueTagMetadataKey);
+    if (tag.empty()) {
+      tag = "weight";
+    }
+    SetValueTag(value_tags, value.name(), tag);
+  }
+  for (int i = 0; i < graph.value_info().size(); ++i) {
+    const auto &value = graph.value_info()[i];
+    SetValueTag(value_tags, value.name(), ReadMetadataValue(value, kValueTagMetadataKey));
+  }
+  for (int i = 0; i < graph.output().size(); ++i) {
+    const auto &value = graph.output()[i];
+    SetValueTag(value_tags, value.name(), ReadMetadataValue(value, kValueTagMetadataKey));
+  }
+}
+
+void InferNodesTags(const std::vector<const NodeProto *> &nodes,
+                    std::unordered_map<std::string, std::string> &value_tags,
+                    std::vector<std::string> &node_tags, ComputeContext *ctx) {
+  node_tags.assign(nodes.size(), std::string());
+  std::vector<char> has_custom_node_tag_override(nodes.size(), 0);
+  bool changed = true;
+  while (changed) {
+    changed = false;
+    for (std::size_t n = 0; n < nodes.size(); ++n) {
+      const NodeProto *node = nodes[n];
+      const std::string op_type = node->op_type();
+      std::string explicit_output_tag;
+      if (op_type == "Shape" || op_type == "Size") {
+        explicit_output_tag = "shape";
+      } else if (op_type == "Constant") {
+        explicit_output_tag = "weight";
+      }
+
+      if (node->input().size() >= 2) {
+        if (op_type == "Reshape" || op_type == "Expand" || op_type == "Slice") {
+          changed |= TrySetValueTag(value_tags, node->input(1), "shape");
+        } else if (op_type == "Squeeze" || op_type == "Unsqueeze" || op_type == "ReduceSum" ||
+                   op_type == "ReduceMean" || op_type == "ReduceMax" || op_type == "ReduceMin") {
+          changed |= TrySetValueTag(value_tags, node->input(1), "axes");
+        }
+      }
+      if (op_type == "Slice") {
+        if (node->input().size() > 2) {
+          changed |= TrySetValueTag(value_tags, node->input(2), "shape");
+        }
+        if (node->input().size() > 3) {
+          changed |= TrySetValueTag(value_tags, node->input(3), "axes");
+        }
+        if (node->input().size() > 4) {
+          changed |= TrySetValueTag(value_tags, node->input(4), "shape");
+        }
+      }
+      // Custom callbacks run for every node type.
+      bool custom_callback_set_node_tag = false;
+      if (ctx != nullptr) {
+        const auto *custom = ctx->GetCustomValueTagFunction(node->domain(), op_type);
+        if (custom != nullptr) {
+          // Snapshot before callback to detect whether this callback
+          // produced a node-tag override for this node.
+          const std::string node_tag_before_callback = node_tags[n];
+          ctx->ClearCustomValueTagChangedFlag();
+          (*custom)(*ctx, *node, n);
+          // Only non-empty node tags are treated as callback overrides.
+          // The non-empty check remains defensive for future callback-side
+          // mutation paths.
+          const bool callback_changed_node_tag = node_tags[n] != node_tag_before_callback;
+          const bool callback_set_non_empty_node_tag = !node_tags[n].empty();
+          if (callback_changed_node_tag && callback_set_non_empty_node_tag) {
+            has_custom_node_tag_override[n] = 1;
+          }
+          custom_callback_set_node_tag =
+              has_custom_node_tag_override[n] != 0 ||
+              (callback_changed_node_tag && callback_set_non_empty_node_tag);
+          if (ctx->ConsumeCustomValueTagChangedFlag()) {
+            changed = true;
+          }
+        }
+      }
+
+      std::string current_output_tag;
+      bool output_tags_are_consistent = true;
+      for (int o = 0; o < node->output().size(); ++o) {
+        auto it = value_tags.find(node->output(o));
+        if (it != value_tags.end()) {
+          if (current_output_tag.empty()) {
+            current_output_tag = it->second;
+          } else if (current_output_tag != it->second) {
+            output_tags_are_consistent = false;
+            break;
+          }
+        }
+      }
+      if (op_type == "Constant" && output_tags_are_consistent && !current_output_tag.empty()) {
+        explicit_output_tag = current_output_tag;
+      }
+
+      std::string inherited_tag;
+      if (op_type == "Concat") {
+        // Concat output tag is determined by examining all inputs:
+        //   * if any input carries "weight"                     → "weight" wins
+        //   * if all tagged inputs share the same tag          → that tag
+        //   * if tagged inputs have different (non-weight) tags → "ambiguous"
+        //   * if no input has a known tag                      → no tag
+        bool any_weight = false;
+        bool has_tag = false;
+        bool all_same = true;
+        std::string first_known_tag;
+        for (int i = 0; i < node->input().size(); ++i) {
+          auto it = value_tags.find(node->input(i));
+          if (it != value_tags.end() && !it->second.empty()) {
+            if (it->second == "weight") {
+              any_weight = true;
+            }
+            if (first_known_tag.empty()) {
+              first_known_tag = it->second;
+              has_tag = true;
+            } else if (first_known_tag != it->second) {
+              all_same = false;
+            }
+          }
+        }
+        if (any_weight) {
+          inherited_tag = "weight";
+        } else if (has_tag && all_same) {
+          inherited_tag = first_known_tag;
+        } else if (has_tag && !all_same) {
+          inherited_tag = "ambiguous";
+        }
+      } else if (!node->input().empty()) {
+        auto it = value_tags.find(node->input(0));
+        if (it != value_tags.end()) {
+          inherited_tag = it->second;
+        }
+      }
+      std::string node_tag;
+      if (custom_callback_set_node_tag) {
+        node_tag = node_tags[n];
+      } else {
+        // Without a callback override, built-in explicit/inherited inference
+        // remains authoritative over previously inferred tags.
+        if (!explicit_output_tag.empty()) {
+          node_tag = explicit_output_tag;
+        } else if (!inherited_tag.empty()) {
+          node_tag = inherited_tag;
+        } else {
+          node_tag = node_tags[n];
+        }
+      }
+      if (node_tags[n] != node_tag) {
+        node_tags[n] = node_tag;
+        changed = true;
+      }
+      if (!node_tag.empty()) {
+        for (int o = 0; o < node->output().size(); ++o) {
+          changed |= TrySetValueTag(value_tags, node->output(o), node_tag);
+        }
+      }
+
+      const std::vector<int> backward_inputs = BackwardTagInputIndices(*node, current_output_tag);
+      if (!backward_inputs.empty()) {
+        if (output_tags_are_consistent && !current_output_tag.empty()) {
+          for (int idx : backward_inputs) {
+            if (idx >= 0 && idx < node->input().size()) {
+              changed |= TrySetValueTag(value_tags, node->input(idx), current_output_tag);
+            }
+          }
+        }
+      }
+    }
+  }
+}
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 InferValueAndNodeTags(const GraphProto &graph) {

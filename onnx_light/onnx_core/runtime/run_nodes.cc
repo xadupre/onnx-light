@@ -355,9 +355,9 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         tensor_bindings.emplace_back(bname, std::move(t));
       }
     }
-    // The body's kernels were resolved once (in the NodeKernelFn factory)
-    // and are cached in ``body_session``; only the per-iteration child
-    // context is rebuilt here.
+    // The body's kernels were resolved once (when this kernel was built during
+    // node resolution) and are cached in ``body_session``; only the
+    // per-iteration child context is rebuilt here.
     RuntimeContext child =
         body_session.RunChild(std::move(tensor_bindings), std::move(sequence_bindings), rt, "body");
 
@@ -728,9 +728,9 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt, SubgraphSessi
     body_outputs_per_iter[k].reserve(n);
   }
 
-  // The body's kernels were resolved once (in the NodeKernelFn factory) and
-  // are cached in ``body_session``; reused here for every iteration and
-  // across repeated invocations of this node.
+  // The body's kernels were resolved once (when this kernel was built during
+  // node resolution) and are cached in ``body_session``; reused here for every
+  // iteration and across repeated invocations of this node.
 
   for (std::size_t i = 0; i < n; ++i) {
     std::vector<std::pair<std::string, Tensor>> bindings;
@@ -1003,7 +1003,8 @@ private:
 
 } // namespace
 
-// the ready-to-invoke kernel instance (without any progress printing or event
+// Resolves how ``node`` must be dispatched, building and returning the
+// ready-to-invoke kernel instance (without any progress printing or event
 // logging). This is the "kernel initialization" step: the (domain, op_type)
 // resolution against the model-local function registry, the control-flow
 // handlers, the user-registered custom kernels and the static
@@ -1016,8 +1017,9 @@ private:
 // control-flow operators, then user custom kernels, then the dispatch table.
 // An unsupported ``(domain, op_type)`` is rejected here (at resolution
 // time) with the same diagnostic previously emitted at run time.
-NodeKernelFn ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
-                                      const std::string &domain, const std::string &op_type) {
+std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
+                                                     const std::string &domain,
+                                                     const std::string &op_type) {
   // A node referring to a model-local FunctionProto (registered by
   // ``RegisterModelFunctions`` from ``ModelProto::functions()``) takes priority over
   // the built-in kernel dispatch table so that user-defined functions
@@ -1028,48 +1030,38 @@ NodeKernelFn ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
     auto fit = rt.functions().find(fkey);
     if (fit != rt.functions().end()) {
       const FunctionProto *func = fit->second;
-      return [func](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<KernelBase> {
-        return std::make_unique<ModelLocalFunctionKernel>(node, *func);
-      };
+      return std::make_unique<ModelLocalFunctionKernel>(node, *func);
     }
   }
 
   if (domain == kDefaultOnnxDomain && op_type == "If") {
-    return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
-      const GraphProto &then_branch = GetRequiredGraphAttribute(node, "then_branch");
-      const GraphProto &else_branch = GetRequiredGraphAttribute(node, "else_branch");
-      // Resolving the branches' kernels is the expensive part of dispatching
-      // an ``If`` node, so build both branch sessions once here (during
-      // kernel initialization) and hand them to the returned kernel so
-      // every subsequent invocation of this node reuses them instead of
-      // re-resolving the selected branch's kernels from scratch.
-      auto then_session = std::make_shared<SubgraphSession>(rt, then_branch);
-      auto else_session = std::make_shared<SubgraphSession>(rt, else_branch);
-      return std::make_unique<IfKernel>(node, std::move(then_session), std::move(else_session));
-    };
+    const GraphProto &then_branch = GetRequiredGraphAttribute(node, "then_branch");
+    const GraphProto &else_branch = GetRequiredGraphAttribute(node, "else_branch");
+    // Resolving the branches' kernels is the expensive part of dispatching
+    // an ``If`` node, so build both branch sessions once here (during
+    // kernel initialization) and hand them to the kernel so every subsequent
+    // invocation of this node reuses them instead of re-resolving the
+    // selected branch's kernels from scratch.
+    auto then_session = std::make_shared<SubgraphSession>(rt, then_branch);
+    auto else_session = std::make_shared<SubgraphSession>(rt, else_branch);
+    return std::make_unique<IfKernel>(node, std::move(then_session), std::move(else_session));
   }
   if (domain == kDefaultOnnxDomain && op_type == "Loop") {
-    return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
-      const GraphProto &body = GetRequiredGraphAttribute(node, "body");
-      // Built once here so the body's kernels are resolved a single time and
-      // reused across every iteration of every invocation of this node.
-      auto body_session = std::make_shared<SubgraphSession>(rt, body);
-      return std::make_unique<LoopKernel>(node, std::move(body_session));
-    };
+    const GraphProto &body = GetRequiredGraphAttribute(node, "body");
+    // Built once here so the body's kernels are resolved a single time and
+    // reused across every iteration of every invocation of this node.
+    auto body_session = std::make_shared<SubgraphSession>(rt, body);
+    return std::make_unique<LoopKernel>(node, std::move(body_session));
   }
   if (domain == kDefaultOnnxDomain && op_type == "Scan") {
-    return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
-      const GraphProto &body = GetRequiredGraphAttribute(node, "body");
-      auto body_session = std::make_shared<SubgraphSession>(rt, body);
-      return std::make_unique<ScanKernel>(node, std::move(body_session));
-    };
+    const GraphProto &body = GetRequiredGraphAttribute(node, "body");
+    auto body_session = std::make_shared<SubgraphSession>(rt, body);
+    return std::make_unique<ScanKernel>(node, std::move(body_session));
   }
   if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
-    return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
-      const GraphProto &body = GetRequiredGraphAttribute(node, "body");
-      auto body_session = std::make_shared<SubgraphSession>(rt, body);
-      return std::make_unique<SequenceMapKernel>(node, std::move(body_session));
-    };
+    const GraphProto &body = GetRequiredGraphAttribute(node, "body");
+    auto body_session = std::make_shared<SubgraphSession>(rt, body);
+    return std::make_unique<SequenceMapKernel>(node, std::move(body_session));
   }
 
   const std::string key = domain + ":" + op_type;
@@ -1079,15 +1071,13 @@ NodeKernelFn ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
   auto ckit = rt.custom_kernels().find(key);
   if (ckit != rt.custom_kernels().end()) {
     CustomKernelFn fn = ckit->second;
-    return [fn](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<KernelBase> {
-      return std::make_unique<CustomKernelAdapter>(node, fn);
-    };
+    return std::make_unique<CustomKernelAdapter>(node, fn);
   }
   const auto &table = KernelDispatchTable();
   auto it = table.find(key);
   EXT_ENFORCE_INVALID(it != table.end(), "RunNode: unsupported op_type '", op_type, "' in domain '",
                       domain, "'.");
-  return it->second;
+  return it->second(node, rt);
 }
 
 // Emits the ReferenceEvaluator verbose progress line for one dispatch.
@@ -1129,8 +1119,8 @@ void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const st
 void RunNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
   const std::string &op_type = node.op_type().value();
-  NodeKernelFn factory = detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
-  std::unique_ptr<KernelBase> resolved = factory(node, rt);
+  std::unique_ptr<KernelBase> resolved =
+      detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
 
   detail::PrintNodeProgress(rt, node, domain, op_type);
 

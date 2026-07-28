@@ -134,6 +134,11 @@ template <typename T> OptionalField<T> &OptionalField<T>::operator=(T &&v) {
 }
 
 template <typename T> OptionalField<T> &OptionalField<T>::operator=(const OptionalField<T> &v) {
+  // Guard against self-assignment: reset() below would otherwise destroy our own
+  // value before we could copy it.
+  if (this == &v) {
+    return *this;
+  }
   // We make a copy.
   reset();
   if (v.has_value()) {

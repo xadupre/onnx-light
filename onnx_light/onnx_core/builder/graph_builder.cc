@@ -193,13 +193,13 @@ bool GraphBuilder::HasGraphReferenceSuffix(const std::string &name) {
          name.compare(name.size() - suffix_len, suffix_len, kSuffix) == 0;
 }
 
-std::vector<AttributeProto> GraphBuilder::ImportAttributes(const NodeProto &node) {
+utils::RepeatedProtoField<AttributeProto> GraphBuilder::ImportAttributes(const NodeProto &node) {
   const auto has_graph_content = [](const GraphProto &graph) {
     return !graph.name().empty() || graph.input().size() > 0 || graph.output().size() > 0 ||
            graph.node().size() > 0 || graph.initializer().size() > 0 ||
            graph.value_info().size() > 0;
   };
-  std::vector<AttributeProto> imported;
+  utils::RepeatedProtoField<AttributeProto> imported;
   imported.reserve(node.attribute().size());
   for (const auto &attribute : node.attribute()) {
     const bool has_single_graph_payload =
@@ -400,7 +400,8 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
                                                 const std::vector<std::string> &inputs,
                                                 const std::vector<std::string> &outputs,
                                                 const std::string &domain, const std::string &name,
-                                                const std::vector<AttributeProto> &attributes) {
+                                                const utils::RepeatedProtoField<AttributeProto>
+                                                    &attributes) {
   // Every non-empty input must reference a value that already exists. Empty
   // strings denote skipped optional inputs and are allowed.
   for (const std::string &input : inputs) {
@@ -473,7 +474,8 @@ std::vector<std::string> GraphBuilder::MakeNode(const std::string &op_type,
   for (const AttributeProto &attribute : attributes) {
     attribute_source.add_attribute(attribute);
   }
-  const std::vector<AttributeProto> normalized_attributes = ImportAttributes(attribute_source);
+  const utils::RepeatedProtoField<AttributeProto> normalized_attributes =
+      ImportAttributes(attribute_source);
   for (const AttributeProto &attribute : normalized_attributes) {
     node.add_attribute(attribute);
   }

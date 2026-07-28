@@ -318,6 +318,8 @@ public:
   inline void Clear() { clear(); }
   /** Appends a copy of v at the end. */
   void push_back(const T &v);
+  /** Appends v at the end by stealing its contents (no copy). */
+  void push_back(T &&v);
   /** Appends all elements from a vector. */
   void extend(const std::vector<T> &v);
   /** Appends all elements from another RepeatedProtoField by copy. */

@@ -942,7 +942,9 @@ void AddOnnxPyProto(nb::module_ &m) {
 
   m.def(
       "collect_external_inputs",
-      [](const std::vector<NodeProto> &nodes) { return core::graph::CollectExternalInputs(nodes); },
+      [](const std::vector<NodeProto> &nodes) {
+        return core::graph::CollectExternalInputs(utils::RepeatedProtoField<NodeProto>(nodes));
+      },
       nb::arg("nodes"),
       "Returns the list of input names referenced by ``nodes`` that are not "
       "produced as outputs by any node in the same list. The function "
@@ -962,7 +964,8 @@ void AddOnnxPyProto(nb::module_ &m) {
   m.def(
       "collect_remaining_inputs",
       [](const std::vector<NodeProto> &nodes, const std::vector<std::string> &outputs) {
-        return core::graph::CollectRemainingInputs(nodes, outputs);
+        return core::graph::CollectRemainingInputs(utils::RepeatedProtoField<NodeProto>(nodes),
+                                                   outputs);
       },
       nb::arg("nodes"), nb::arg("outputs"),
       "Returns, for every node in ``nodes``, the list of input names that must "

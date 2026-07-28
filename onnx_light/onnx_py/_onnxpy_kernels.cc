@@ -909,7 +909,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_static(
           "collect_external_inputs",
           [](const std::vector<NodeProto> &nodes) {
-            return core::runtime::RuntimeSession::CollectExternalInputs(nodes);
+            return core::runtime::RuntimeSession::CollectExternalInputs(
+                utils::RepeatedProtoField<NodeProto>(nodes));
           },
           nb::arg("nodes"),
           "Returns the list of input names referenced by ``nodes`` that are not "

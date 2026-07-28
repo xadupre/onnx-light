@@ -17,7 +17,6 @@
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/result_lifetime.h"
 #include "onnx_core/compute/value_tags.h"
-#include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
@@ -120,51 +119,9 @@ NodeMemoryProfile MakeEmptyNodeMemoryProfile() {
   return profile;
 }
 
-template <class NodeRange>
-std::vector<std::vector<std::string>>
-ComputeReleasableInputsImpl(const NodeRange &nodes, const std::unordered_set<std::string> &keep) {
-  const std::size_t n = nodes.size();
-  std::vector<std::vector<std::string>> per_node_inputs;
-  per_node_inputs.reserve(n);
-  std::unordered_map<std::string, std::size_t> last_use;
-  for (std::size_t i = 0; i < n; ++i) {
-    std::vector<std::string> inputs =
-        ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(nodes[i]);
-    for (const auto &name : inputs) {
-      last_use[name] = i;
-    }
-    per_node_inputs.push_back(std::move(inputs));
-  }
-  std::vector<std::vector<std::string>> out(n);
-  for (std::size_t i = 0; i < n; ++i) {
-    for (const auto &name : per_node_inputs[i]) {
-      if (keep.count(name)) {
-        continue;
-      }
-      auto it = last_use.find(name);
-      if (it != last_use.end() && it->second == i) {
-        out[i].push_back(name);
-      }
-    }
-  }
-  return out;
-}
-
 } // namespace
 
 // ── ComputeContext method implementations ────────────────────────────────────
-
-std::vector<std::vector<std::string>>
-ComputeContext::ComputeReleasableInputs(const utils::RepeatedProtoField<NodeProto> &nodes,
-                                        const std::unordered_set<std::string> &keep) {
-  return ComputeReleasableInputsImpl(nodes, keep);
-}
-
-std::vector<std::vector<std::string>>
-ComputeContext::ComputeReleasableInputs(const std::vector<NodeProto> &nodes,
-                                        const std::unordered_set<std::string> &keep) {
-  return ComputeReleasableInputsImpl(nodes, keep);
-}
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 ComputeContext::ComputeValueAndNodeTags(const GraphProto &graph) {

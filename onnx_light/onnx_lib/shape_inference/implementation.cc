@@ -596,9 +596,8 @@ public:
     // TODO: avoid copy if possible. This is currently needed to support attribute binding for
     // FunctionProto-based inference, but ideally we should be able to bind attributes without
     // needing to copy the node.
-    // Member-wise copy construction instead of CopyFrom avoids serializing n and re-parsing it
-    // into copy_n; n owns the source data and outlives this transient copy.
-    NodeProto copy_n(n);
+    NodeProto copy_n;
+    copy_n.CopyFrom(n);
     attribute_binder.VisitNode(copy_n);
     Process(copy_n);
   }

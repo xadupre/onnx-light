@@ -99,8 +99,9 @@ void RecurseSubgraphs(NodeProto &node) {
 
 // ── Helpers shared by ComputeValueAndNodeTags overloads ─────────────────────
 
-std::string ReadMetadataValueFromProps(const utils::RepeatedField<StringStringEntryProto> &props,
-                                       const char *key) {
+std::string
+ReadMetadataValueFromProps(const utils::RepeatedProtoField<StringStringEntryProto> &props,
+                           const char *key) {
   for (const auto &entry : props) {
     if (entry.key() == key) {
       return entry.value();

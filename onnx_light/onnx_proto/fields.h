@@ -259,6 +259,27 @@ public:
   }
   /** Copies elements from a vector into a RepeatedProtoField. */
   inline RepeatedProtoField(const std::vector<T> &src) { extend(src); }
+  /** Deep-copies elements from another RepeatedProtoField (protobuf value semantics:
+   *  each owned element is cloned rather than sharing ownership). */
+  inline RepeatedProtoField(const RepeatedProtoField<T> &src) { extend(src); }
+  /** Move-constructs by stealing ownership from another RepeatedProtoField. */
+  inline RepeatedProtoField(RepeatedProtoField<T> &&src) noexcept
+      : values_(std::move(src.values_)) {}
+  /** Deep-copies elements from another RepeatedProtoField (protobuf value semantics). */
+  inline RepeatedProtoField &operator=(const RepeatedProtoField<T> &src) {
+    if (this != &src) {
+      clear();
+      extend(src);
+    }
+    return *this;
+  }
+  /** Move-assigns by stealing ownership from another RepeatedProtoField. */
+  inline RepeatedProtoField &operator=(RepeatedProtoField<T> &&src) noexcept {
+    if (this != &src) {
+      values_ = std::move(src.values_);
+    }
+    return *this;
+  }
   /** Reserves storage for at least n elements. */
   inline void reserve(size_t n) { values_.reserve(n); }
   /** Reserves storage for at least n elements (protobuf compat). */
@@ -276,7 +297,7 @@ public:
   /** Returns the shared pointer at the given index (shared ownership copy). */
   inline std::shared_ptr<T> shared_at(size_t index) const { return values_[index]; }
   /** Returns a mutable reference to the owning pointer at the given index. */
-  inline const T &Get(size_t index) { return *values_[index]; }
+  inline const T &Get(size_t index) const { return *values_[index]; }
   /** Returns a mutable reference to the owning pointer at the given index. */
   inline T *Mutable(size_t index) { return values_[index].get(); }
   /** Removes a contiguous range; currently only start=0, step=1, and stop=size() are supported. */

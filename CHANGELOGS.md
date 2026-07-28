@@ -5,9 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.9] – Unreleased
 
+### New Features
+
+- Introduced a `RuntimeSession` that separates one-time kernel initialization from execution, and extended `ComputeContext` to orchestrate graph analyses and build the `ExecutionPlan`.
+
+### Improvements
+
+- Routed kernel intermediate and output buffers through the `RuntimeContext` allocator instead of temporary `std::vector`s (`Attention`, `FlexAttention`, `Gather`, `GatherND`, `Range`, `Resize`, `Momentum`, `RegexFullMatch`, `RNN`, `LinearClassifier`, `SVMClassifier`, and a direct-to-output `Gemm`).
+- Migrated many kernels to the fixed-capacity `Shape` type for rank-sized working arrays instead of `std::vector<int64_t>` (conv/pool, `Reduce*`, `Squeeze`/`Unsqueeze`, `Where`, `Pad`, `Slice`, `Compress`, `Expand`, `CenterCropPad`, `DequantizeLinear`, `QLinearConv`, `QLinearMatMul`, and the `RowMajorStrides`/`ResolveAxes` helpers).
+- Cached the `Einsum` contraction plan, built `TreeEnsemble*` structures in the kernel constructors, and reused per-row/per-sample scratch in `TfIdfVectorizer` and `TreeEnsembleClassifier`.
+
 ### Documentation & CI
 
-- Bumped the release version to `0.1.9`.
+- Refreshed the design-page links and shape-inference docs to match the current library layout, and bumped the release version to `0.1.9`.
 
 ## [0.1.8] – 2026-07-22
 

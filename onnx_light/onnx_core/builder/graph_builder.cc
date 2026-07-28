@@ -157,7 +157,7 @@ const std::string &GraphBuilder::MakeInput(const std::string &name, const SymTen
   vi.set_name(name);
   SymTensorToValueInfo(type, vi);
   const std::string &reserved = ReserveName(name);
-  inputs_.push_back(std::move(vi));
+  inputs_.add() = std::move(vi);
   SeedShape(reserved, type);
   return reserved;
 }
@@ -173,7 +173,7 @@ void GraphBuilder::MakeOutput(const std::string &name, const SymTensor &type) {
   ValueInfoProto vi;
   vi.set_name(name);
   SymTensorToValueInfo(type, vi);
-  outputs_.push_back(std::move(vi));
+  outputs_.add() = std::move(vi);
 }
 
 void GraphBuilder::MakeOutput(const std::string &name, TensorType dtype, const SymShape &shape) {
@@ -183,7 +183,7 @@ void GraphBuilder::MakeOutput(const std::string &name, TensorType dtype, const S
 void GraphBuilder::MakeOutput(const std::string &name) {
   ValueInfoProto vi;
   vi.set_name(name);
-  outputs_.push_back(std::move(vi));
+  outputs_.add() = std::move(vi);
 }
 
 bool GraphBuilder::HasGraphReferenceSuffix(const std::string &name) {

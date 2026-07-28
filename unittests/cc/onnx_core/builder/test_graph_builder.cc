@@ -115,7 +115,7 @@ TEST(GraphBuilder, ExternalInitializerIsRecorded) {
                                   64);
   EXPECT_TRUE(builder.HasName("w"));
   ASSERT_EQ(builder.Initializers().size(), 1u);
-  const TensorProto &init = builder.Initializers().front();
+  const TensorProto &init = builder.Initializers()[0];
   EXPECT_EQ(init.name().value(), "w");
   EXPECT_EQ(init.data_location(), TensorProto::DataLocation::EXTERNAL);
 }

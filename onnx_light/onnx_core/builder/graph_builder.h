@@ -177,7 +177,9 @@ public:
                                              int64_t length);
 
   /// Read-only access to the graph initializers, in declaration order.
-  const std::vector<TensorProto> &Initializers() const noexcept { return initializers_; }
+  const utils::RepeatedProtoField<TensorProto> &Initializers() const noexcept {
+    return initializers_;
+  }
 
   // ── Inputs / outputs ─────────────────────────────────────────────────
 
@@ -207,10 +209,10 @@ public:
   void MakeOutput(const std::string &name);
 
   /// Read-only access to the declared graph inputs (in declaration order).
-  const std::vector<ValueInfoProto> &Inputs() const noexcept { return inputs_; }
+  const utils::RepeatedProtoField<ValueInfoProto> &Inputs() const noexcept { return inputs_; }
 
   /// Read-only access to the declared graph outputs (in declaration order).
-  const std::vector<ValueInfoProto> &Outputs() const noexcept { return outputs_; }
+  const utils::RepeatedProtoField<ValueInfoProto> &Outputs() const noexcept { return outputs_; }
 
   // ── Nodes ────────────────────────────────────────────────────────────
 
@@ -400,10 +402,10 @@ private:
   std::unordered_map<std::string, std::unordered_map<std::string, std::vector<LightOpSchema>>>
       schema_table_;
   ComputeContext compute_;
-  std::vector<ValueInfoProto> inputs_;
-  std::vector<ValueInfoProto> outputs_;
+  utils::RepeatedProtoField<ValueInfoProto> inputs_;
+  utils::RepeatedProtoField<ValueInfoProto> outputs_;
   utils::RepeatedProtoField<NodeProto> nodes_;
-  std::vector<TensorProto> initializers_;
+  utils::RepeatedProtoField<TensorProto> initializers_;
   std::vector<std::unique_ptr<GraphBuilder>> local_functions_;
   std::vector<std::unique_ptr<GraphBuilder>> subgraphs_;
   std::unordered_set<std::string> names_;

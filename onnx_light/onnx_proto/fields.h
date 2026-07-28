@@ -284,6 +284,9 @@ public:
   inline void reserve(size_t n) { values_.reserve(n); }
   /** Reserves storage for at least n elements (protobuf compat). */
   inline void Reserve(size_t n) { values_.reserve(static_cast<size_t>(n)); }
+  /** Resizes the field to contain exactly n elements, appending
+   *  default-constructed elements or removing trailing elements as needed. */
+  void resize(size_t n);
   /** Returns true if the field contains no elements. */
   inline bool empty() const { return values_.empty(); }
   /** Returns the number of elements. */

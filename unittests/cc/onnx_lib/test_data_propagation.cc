@@ -166,7 +166,7 @@ private:
   std::unordered_map<size_t, std::string> inputIndexToNameMap_;
   std::unordered_map<size_t, std::string> outputIndexToNameMap_;
   std::vector<const TypeProto *> allInputTypes_;
-  std::vector<TypeProto> allOutputTypes_;
+  utils::RepeatedProtoField<TypeProto> allOutputTypes_;
   DataValueMap &generatedShapeData_;
   std::unordered_map<std::string, const AttributeProto *> attributesByName_;
 };

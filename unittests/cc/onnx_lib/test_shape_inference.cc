@@ -182,7 +182,8 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_Basic) {
   *add_node->add_output() = "Y";
 
   // Create input types: two float tensors with shape [3, 4]
-  std::vector<TypeProto> input_types(2);
+  utils::RepeatedProtoField<TypeProto> input_types;
+  input_types.resize(2);
   for (int i = 0; i < 2; ++i) {
     TypeProto::Tensor *tensor = input_types[i].add_tensor_type();
     tensor->set_elem_type(1); // FLOAT
@@ -195,8 +196,7 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_Basic) {
   std::vector<AttributeProto> attributes;
 
   // Infer output types
-  std::vector<TypeProto> output_types =
-      shape_inference::InferFunctionOutputTypes(function, input_types, attributes);
+  auto output_types = shape_inference::InferFunctionOutputTypes(function, input_types, attributes);
 
   // Verify results
   ASSERT_EQ(output_types.size(), 1);
@@ -234,7 +234,8 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_MultipleOutputs) {
   axis_attr->set_i(0);
 
   // Create input type: float tensor with shape [4, 3]
-  std::vector<TypeProto> input_types(1);
+  utils::RepeatedProtoField<TypeProto> input_types;
+  input_types.resize(1);
   TypeProto::Tensor *tensor = input_types[0].add_tensor_type();
   tensor->set_elem_type(1); // FLOAT
   TensorShapeProto *shape = tensor->add_shape();
@@ -244,8 +245,7 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_MultipleOutputs) {
   std::vector<AttributeProto> attributes;
 
   // Infer output types
-  std::vector<TypeProto> output_types =
-      shape_inference::InferFunctionOutputTypes(function, input_types, attributes);
+  auto output_types = shape_inference::InferFunctionOutputTypes(function, input_types, attributes);
 
   // Verify results - should have two outputs
   ASSERT_EQ(output_types.size(), 2);
@@ -282,7 +282,8 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_WithAttributes) {
   *pad_node2->add_output() = "Y";
 
   // Create input type
-  std::vector<TypeProto> input_types(1);
+  utils::RepeatedProtoField<TypeProto> input_types;
+  input_types.resize(1);
   TypeProto::Tensor *tensor = input_types[0].add_tensor_type();
   tensor->set_elem_type(1); // FLOAT
   TensorShapeProto *shape = tensor->add_shape();
@@ -302,8 +303,7 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_WithAttributes) {
   pads_tensor->add_int64_data(1);
 
   // Infer output types
-  std::vector<TypeProto> output_types =
-      shape_inference::InferFunctionOutputTypes(function, input_types, attributes);
+  auto output_types = shape_inference::InferFunctionOutputTypes(function, input_types, attributes);
 
   // Verify results
   ASSERT_EQ(output_types.size(), 1);
@@ -330,7 +330,8 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_MissingOptionalInput) {
   *identity_node->add_output() = "Z";
 
   // Create input types with second input missing (VALUE_NOT_SET)
-  std::vector<TypeProto> input_types(2);
+  utils::RepeatedProtoField<TypeProto> input_types;
+  input_types.resize(2);
   TypeProto::Tensor *tensor = input_types[0].add_tensor_type();
   tensor->set_elem_type(1); // FLOAT
   TensorShapeProto *shape = tensor->add_shape();
@@ -340,8 +341,7 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_MissingOptionalInput) {
   std::vector<AttributeProto> attributes;
 
   // Infer output types
-  std::vector<TypeProto> output_types =
-      shape_inference::InferFunctionOutputTypes(function, input_types, attributes);
+  auto output_types = shape_inference::InferFunctionOutputTypes(function, input_types, attributes);
 
   // Verify results
   ASSERT_EQ(output_types.size(), 1);

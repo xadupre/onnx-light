@@ -293,7 +293,7 @@ struct InferenceContextImpl : public InferenceContext {
   std::unordered_map<std::string, const AttributeProto *> attributesByName_;
   std::unordered_map<std::string, GraphProto *> graphProtoAttributesByName_;
   std::vector<const TypeProto *> allInputTypes_;
-  std::vector<TypeProto> allOutputTypes_;
+  utils::RepeatedProtoField<TypeProto> allOutputTypes_;
   GraphInferenceContext *graphInferenceContext_;
 
   // mutable as internal cache of GraphInferencer instances
@@ -450,7 +450,7 @@ struct DataPropagationContextImpl : public DataPropagationContext {
   std::unordered_map<size_t, std::string> inputIndexToNameMap_;
   std::unordered_map<size_t, std::string> outputIndexToNameMap_;
   std::vector<const TypeProto *> allInputTypes_;
-  std::vector<TypeProto> allOutputTypes_;
+  utils::RepeatedProtoField<TypeProto> allOutputTypes_;
   DataValueMap &generatedShapeData_;
   std::unordered_map<std::string, const AttributeProto *> attributesByName_;
 };
@@ -519,9 +519,10 @@ void InferShapeForFunctionNode(const FunctionProto &func_proto,
 /// A TypeProto with value_case() == TypeProto::ValueCase::VALUE_NOT_SET is used
 /// for missing optional parameters.
 ///
-std::vector<TypeProto> InferFunctionOutputTypes(const FunctionProto &function_proto,
-                                                const std::vector<TypeProto> &input_types,
-                                                const std::vector<AttributeProto> &attributes);
+utils::RepeatedProtoField<TypeProto>
+InferFunctionOutputTypes(const FunctionProto &function_proto,
+                         const utils::RepeatedProtoField<TypeProto> &input_types,
+                         const std::vector<AttributeProto> &attributes);
 
 std::string GetErrorWithNodeInfo(const NodeProto &n, const std::runtime_error &err);
 

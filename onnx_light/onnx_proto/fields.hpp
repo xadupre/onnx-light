@@ -33,6 +33,17 @@ void RepeatedField<T>::PrintToStringStream(std::stringstream &ss,
 
 template <typename T> void RepeatedProtoField<T>::clear() { values_.clear(); }
 
+template <typename T> void RepeatedProtoField<T>::resize(size_t n) {
+  if (n < values_.size()) {
+    values_.resize(n);
+  } else {
+    values_.reserve(n);
+    while (values_.size() < n) {
+      values_.emplace_back(std::make_shared<T>());
+    }
+  }
+}
+
 template <typename T> inline T &RepeatedProtoField<T>::operator[](size_t index) {
   return *values_[index];
 }

@@ -610,7 +610,8 @@ public:
     // Get a temporary tensor-shape map
     const int num_actual_inputs = static_cast<int>(ctx.getNumInputs());
     const auto num_func_inputs = func_proto.input_size();
-    std::vector<TypeProto> types_cache(num_func_inputs);
+    utils::RepeatedProtoField<TypeProto> types_cache;
+    types_cache.resize(num_func_inputs);
     for (int i = 0; i < num_func_inputs; ++i) {
       const auto &parameter_name = func_proto.input().Get(i);
       const auto *const type_ptr = (i < num_actual_inputs) ? ctx.getInputType(i) : nullptr;
@@ -873,7 +874,7 @@ namespace {
 
 struct FunctionInferenceContext : public InferenceContext {
   FunctionInferenceContext(const FunctionProto &func_proto,
-                           const std::vector<TypeProto> &input_types,
+                           const utils::RepeatedProtoField<TypeProto> &input_types,
                            const std::vector<AttributeProto> &attributes,
                            const ShapeInferenceOptions &options)
       : input_types_(input_types), options_(options), func_proto_(&func_proto) {
@@ -932,7 +933,7 @@ struct FunctionInferenceContext : public InferenceContext {
     return nullptr;
   }
 
-  std::vector<TypeProto> popOutputTypes() { return std::move(output_types_); }
+  utils::RepeatedProtoField<TypeProto> popOutputTypes() { return std::move(output_types_); }
 
   std::string getDisplayName() const override {
     if (func_proto_ == nullptr)
@@ -948,8 +949,8 @@ struct FunctionInferenceContext : public InferenceContext {
   }
 
 private:
-  const std::vector<TypeProto> &input_types_;
-  std::vector<TypeProto> output_types_;
+  const utils::RepeatedProtoField<TypeProto> &input_types_;
+  utils::RepeatedProtoField<TypeProto> output_types_;
   std::unordered_map<std::string, const AttributeProto *> attributesByName_;
   ShapeInferenceOptions options_;
   const FunctionProto *func_proto_;
@@ -957,9 +958,10 @@ private:
 
 } // namespace
 
-std::vector<TypeProto> InferFunctionOutputTypes(const FunctionProto &function_proto,
-                                                const std::vector<TypeProto> &input_types,
-                                                const std::vector<AttributeProto> &attributes) {
+utils::RepeatedProtoField<TypeProto>
+InferFunctionOutputTypes(const FunctionProto &function_proto,
+                         const utils::RepeatedProtoField<TypeProto> &input_types,
+                         const std::vector<AttributeProto> &attributes) {
   // TODO(ONNX): if it is desirable for infer_function_output_types to provide check_type,
   // strict_mode, data_prop, we can add them to the Python API. For now we just assume the default
   // options.

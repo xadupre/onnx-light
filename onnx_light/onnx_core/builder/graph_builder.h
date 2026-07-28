@@ -236,7 +236,8 @@ public:
                                     const std::vector<std::string> &inputs,
                                     const std::vector<std::string> &outputs = {},
                                     const std::string &domain = "", const std::string &name = "",
-                                    const std::vector<AttributeProto> &attributes = {});
+                                    const utils::RepeatedProtoField<AttributeProto> &attributes =
+                                        utils::RepeatedProtoField<AttributeProto>());
 
   /// Read-only access to the accumulated nodes (in insertion order).
   const utils::RepeatedProtoField<NodeProto> &Nodes() const noexcept { return nodes_; }
@@ -371,7 +372,7 @@ private:
   // Converts node attributes from proto form to builder form: GRAPH/GRAPHS
   // attributes become ``*_ref`` STRING/STRINGS attributes that reference nested
   // subgraph builders.
-  std::vector<AttributeProto> ImportAttributes(const NodeProto &node);
+  utils::RepeatedProtoField<AttributeProto> ImportAttributes(const NodeProto &node);
 
   // Materializes ``*_ref`` STRING/STRINGS attributes in ``node`` back to
   // GRAPH/GRAPHS attributes from the referenced nested builders.

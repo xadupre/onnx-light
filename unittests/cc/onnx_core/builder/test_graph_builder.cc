@@ -109,6 +109,26 @@ TEST(GraphBuilder, MakeNodeRejectsUnknownInput) {
   EXPECT_THROW(builder.MakeNode("Add", {"missing", "y"}), core::builder::BuilderError);
 }
 
+TEST(GraphBuilder, MakeNodeAcceptsRepeatedProtoFieldAttributes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  AttributeProto &alpha = attributes.add();
+  alpha.set_name("alpha");
+  alpha.set_type(AttributeProto::AttributeType::FLOAT);
+  alpha.set_f(0.25f);
+
+  const std::vector<std::string> outputs =
+      builder.MakeNode("LeakyRelu", {"x"}, {}, "", "", attributes);
+  ASSERT_EQ(outputs.size(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  const NodeProto &node = builder.Nodes()[0];
+  ASSERT_EQ(node.attribute().size(), 1);
+  EXPECT_EQ(node.attribute()[0].name().value(), "alpha");
+  EXPECT_FLOAT_EQ(node.attribute()[0].f(), 0.25f);
+}
+
 TEST(GraphBuilder, ExternalInitializerIsRecorded) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeExternalInitializer("w", core::symbolic::TensorType::kFloat, {4, 4}, "weights.bin", 0,

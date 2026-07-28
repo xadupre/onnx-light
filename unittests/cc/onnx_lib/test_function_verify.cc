@@ -127,11 +127,13 @@ TEST(FunctionVerification, VerifyFunctionBodyWithMultipleDomains) {
       {{"y"}, "OpB", {"z"}, {}, "onnx.light.test.domain_b"},
   };
 
-  std::vector<OperatorSetIdProto> relied_opsets(2);
-  relied_opsets[0].set_domain("onnx.light.test.domain_a");
-  relied_opsets[0].set_version(1);
-  relied_opsets[1].set_domain("onnx.light.test.domain_b");
-  relied_opsets[1].set_version(1);
+  FunctionBodyHelper::OperatorSetList relied_opsets;
+  auto *opset_a = relied_opsets.Add();
+  opset_a->set_domain("onnx.light.test.domain_a");
+  opset_a->set_version(1);
+  auto *opset_b = relied_opsets.Add();
+  opset_b->set_domain("onnx.light.test.domain_b");
+  opset_b->set_version(1);
 
   FunctionProto function_proto;
   ASSERT_TRUE(

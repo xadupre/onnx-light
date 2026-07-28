@@ -108,9 +108,6 @@ public:
   ONNX_API static bool BuildFunctionProto(FunctionProto &functionProto, const OpSchema &schema,
                                           const std::vector<NodeDef> &node_defs,
                                           const OperatorSetList &relied_opsets);
-  ONNX_API static bool BuildFunctionProto(FunctionProto &functionProto, const OpSchema &schema,
-                                          const std::vector<NodeDef> &node_defs,
-                                          const std::vector<OperatorSetIdProto> &relied_opsets);
 
   /**
    * Creates a scalar Constant node from a single value.

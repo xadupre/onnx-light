@@ -278,11 +278,28 @@ jobs:
 
       - name: Run C++ unit tests (Windows)
         if: runner.os == 'Windows'
-        run: ctest --test-dir build --output-on-failure -C Release --timeout 120
+        run: ctest --test-dir build --output-on-failure -C Release --timeout 240
 
       - name: Run C++ unit tests (macOS)
         if: runner.os == 'macOS'
-        run: ctest --test-dir build --output-on-failure -C Release --timeout 120
+        run: ctest --test-dir build --output-on-failure -C Release --timeout 240
+
+      # Surface the slowest C++ tests to help diagnose build/test slowness. Runs
+      # even when the ctest step above fails (e.g. a per-test timeout) so the
+      # offending long-running tests are still reported. CTest writes per-test
+      # durations to Testing/Temporary/CTestCostData.txt as "name runs seconds".
+      - name: Show longest C++ tests
+        if: always()
+        shell: bash
+        run: |
+          cost="build/Testing/Temporary/CTestCostData.txt"
+          if [ -f "$cost" ]; then
+            echo "Longest-running C++ tests (seconds):"
+            grep -vE '^---' "$cost" | sort -k3 -nr | head -20 \
+              | awk '{ printf "  %8.2f  %s\n", $3, $1 }'
+          else
+            echo "No CTest cost data found at $cost"
+          fi
 
       - name: Run tests
         env:

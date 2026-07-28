@@ -94,9 +94,10 @@ std::vector<std::string> RuntimeSession::CollectNodeInputs(const NodeProto &node
   return ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(node);
 }
 
-NodeKernelFn RuntimeSession::ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
-                                               const std::string &domain,
-                                               const std::string &op_type) const {
+std::unique_ptr<KernelBase> RuntimeSession::ResolveNodeKernel(const NodeProto &node,
+                                                              RuntimeContext &rt,
+                                                              const std::string &domain,
+                                                              const std::string &op_type) const {
   return detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
 }
 
@@ -122,8 +123,7 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
     const std::string op_type = node.op_type().value();
     PreparedKernel &prepared = kernels_[index];
     prepared.key = domain + ":" + op_type;
-    NodeKernelFn factory = ResolveNodeKernel(node, rt, domain, op_type);
-    prepared.instance = factory(node, rt);
+    prepared.instance = ResolveNodeKernel(node, rt, domain, op_type);
   }
   // Record the external inputs the scheduled nodes read (names not produced by
   // any node in the plan, including values captured by subgraph attributes) so

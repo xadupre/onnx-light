@@ -226,9 +226,11 @@ protected:
   /// Default node-kernel resolution used during
   /// :cpp:func:`InitializeKernels`, so :cpp:class:`RuntimeSession` and
   /// derived sessions that reuse the base initialization path share the same
-  /// default resolution behavior.
-  NodeKernelFn ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
-                                 const std::string &domain, const std::string &op_type) const;
+  /// default resolution behavior. Builds and returns the ready-to-invoke
+  /// kernel instance for ``node``.
+  std::unique_ptr<KernelBase> ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
+                                                const std::string &domain,
+                                                const std::string &op_type) const;
 
 private:
   /// A node's kernel instance built once during

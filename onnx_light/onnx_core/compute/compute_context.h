@@ -196,21 +196,6 @@ public:
   std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
   ComputeValueAndNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes);
 
-  /**
-   * Returns, for each node in ``nodes``, the list of input names that become
-   * unused once that node has finished executing — i.e. names whose last
-   * reference (per :cpp:func:`core::graph::CollectNodeInputs`) appears at that
-   * node and that do not appear in ``keep``.
-   *
-   * Empty names (optional inputs left unbound) are skipped. The returned
-   * vector has exactly ``nodes.size()`` entries; each inner vector preserves
-   * the order in which the corresponding names were first encountered in the
-   * input list of the producing/consuming node.
-   */
-  static std::vector<std::vector<std::string>>
-  ComputeReleasableInputs(const utils::RepeatedProtoField<NodeProto> &nodes,
-                          const std::unordered_set<std::string> &keep);
-
   /// Read-only access to the last value-tag map computed through
   /// :cpp:func:`ComputeValueAndNodeTags`.
   const std::unordered_map<std::string, std::string> &ValueTags() const noexcept {

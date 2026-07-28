@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "_onnxpy_node_list.h"
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/compute/execute_action.h"
 #include "onnx_core/compute/execution_plan.h"
@@ -908,9 +909,10 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "has been mutated in place (rare).")
       .def_static(
           "collect_external_inputs",
-          [](const std::vector<NodeProto> &nodes) {
-            return core::runtime::RuntimeSession::CollectExternalInputs(
-                utils::RepeatedProtoField<NodeProto>(nodes));
+          [](nb::handle nodes) {
+            return WithNodeList(nodes, [](const utils::RepeatedProtoField<NodeProto> &typed_nodes) {
+              return core::runtime::RuntimeSession::CollectExternalInputs(typed_nodes);
+            });
           },
           nb::arg("nodes"),
           "Returns the list of input names referenced by ``nodes`` that are not "

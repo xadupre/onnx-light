@@ -1,3 +1,4 @@
+#include "_onnxpy_node_list.h"
 #include "_onnxpyprotoop.h"
 #include "onnx.h"
 #include "onnx_core/graph/graph_manipulations.h"
@@ -942,8 +943,10 @@ void AddOnnxPyProto(nb::module_ &m) {
 
   m.def(
       "collect_external_inputs",
-      [](const std::vector<NodeProto> &nodes) {
-        return core::graph::CollectExternalInputs(utils::RepeatedProtoField<NodeProto>(nodes));
+      [](nb::handle nodes) {
+        return WithNodeList(nodes, [](const utils::RepeatedProtoField<NodeProto> &typed_nodes) {
+          return core::graph::CollectExternalInputs(typed_nodes);
+        });
       },
       nb::arg("nodes"),
       "Returns the list of input names referenced by ``nodes`` that are not "
@@ -963,9 +966,11 @@ void AddOnnxPyProto(nb::module_ &m) {
 
   m.def(
       "collect_remaining_inputs",
-      [](const std::vector<NodeProto> &nodes, const std::vector<std::string> &outputs) {
-        return core::graph::CollectRemainingInputs(utils::RepeatedProtoField<NodeProto>(nodes),
-                                                   outputs);
+      [](nb::handle nodes, const std::vector<std::string> &outputs) {
+        return WithNodeList(nodes,
+                            [&outputs](const utils::RepeatedProtoField<NodeProto> &typed_nodes) {
+                              return core::graph::CollectRemainingInputs(typed_nodes, outputs);
+                            });
       },
       nb::arg("nodes"), nb::arg("outputs"),
       "Returns, for every node in ``nodes``, the list of input names that must "

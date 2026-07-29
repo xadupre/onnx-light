@@ -352,38 +352,9 @@ private:
   // Returns ``true`` when a shape function is registered for ``node``.
   bool ShapeFunctionAvailable(const NodeProto &node) const;
 
-  // Recomputes the annotations that must stay current as nodes are added:
-  // semantic value / node tags ("shape_tag") and in-place buffer reuse. Both
-  // depend on the graph built so far, so they are refreshed after every
-  // MakeNode. The release-after (last-use) lifetime is intentionally *not*
-  // finalized here: a value's last use is only settled once no further node can
-  // extend it, so it is computed by the finalizers (see Finalize) instead.
-  void RefreshAnnotations();
-
-  // RAII guard used during bulk import (ImportGraph / ImportFunction). While a
-  // guard is alive, MakeNode skips its per-node RefreshAnnotations call — those
-  // whole-graph analyses only need to reflect the final graph, so recomputing
-  // them after every one of N nodes turns import into an O(N^2) operation.
-  // The destructor merely restores the flag; the outermost importer runs
-  // RefreshAnnotations once, in normal control flow, when Outermost() is true.
-  class DeferAnnotations {
-  public:
-    explicit DeferAnnotations(GraphBuilder &owner) noexcept
-        : owner_(owner), was_deferring_(owner.defer_annotations_) {
-      owner_.defer_annotations_ = true;
-    }
-    ~DeferAnnotations() { owner_.defer_annotations_ = was_deferring_; }
-    DeferAnnotations(const DeferAnnotations &) = delete;
-    DeferAnnotations &operator=(const DeferAnnotations &) = delete;
-
-    // True when this guard started the outermost deferral and is therefore
-    // responsible for the single post-import RefreshAnnotations call.
-    bool Outermost() const noexcept { return !was_deferring_; }
-
-  private:
-    GraphBuilder &owner_;
-    bool was_deferring_;
-  };
+  // Seeds the incremental annotation state (value tag + in-place-reuse
+  // lifetime) for a declared graph input named ``name``.
+  void SeedInputAnnotations(const std::string &name);
 
   // Seeds the owned ShapesContext with the descriptor of ``name``.
   void SeedShape(const std::string &name, SymTensor tensor);
@@ -439,9 +410,6 @@ private:
   std::unordered_set<std::string> user_opsets_;
   Device device_ = Device::kUndefined;
   std::uint64_t auto_counter_ = 0;
-  // When true, MakeNode defers RefreshAnnotations to the enclosing
-  // DeferAnnotations guard (set during bulk import to avoid O(N^2) recompute).
-  bool defer_annotations_ = false;
 };
 
 } // namespace builder

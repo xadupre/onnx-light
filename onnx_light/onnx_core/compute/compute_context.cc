@@ -5,6 +5,7 @@
 #include "onnx_core/compute/compute_context.h"
 
 #include <algorithm>
+#include <deque>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -17,6 +18,7 @@
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/result_lifetime.h"
 #include "onnx_core/compute/value_tags.h"
+#include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
@@ -186,6 +188,211 @@ bool ComputeContext::SetNodeTag(std::size_t node_index, const std::string &tag) 
   node_tags_[node_index] = norm;
   custom_value_tags_changed_ = true;
   return true;
+}
+
+void ComputeContext::SeedValueTag(const std::string &name, const std::string &tag) {
+  ::ONNX_LIGHT_NAMESPACE::core::compute::TrySetValueTag(value_tags_, name, tag);
+}
+
+void ComputeContext::AppendNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                    std::size_t node_index) {
+  if (node_tags_.size() <= node_index) {
+    node_tags_.resize(node_index + 1);
+  }
+  if (node_tag_custom_override_.size() <= node_index) {
+    node_tag_custom_override_.resize(node_index + 1, 0);
+  }
+  const NodeProto &new_node = nodes[node_index];
+  // Register the new node's producer/consumer edges so tag changes flowing out
+  // of it (forward) or back into its inputs (backward) can re-queue the exact
+  // set of dependent nodes without scanning the whole graph.
+  for (int i = 0; i < new_node.input().size(); ++i) {
+    const std::string &in = new_node.input(static_cast<std::size_t>(i));
+    if (!in.empty()) {
+      tag_consumers_[in].push_back(static_cast<int>(node_index));
+    }
+  }
+  for (int o = 0; o < new_node.output().size(); ++o) {
+    const std::string &out = new_node.output(static_cast<std::size_t>(o));
+    if (!out.empty()) {
+      tag_producer_node_.emplace(out, static_cast<int>(node_index));
+    }
+  }
+
+  // Monotone worklist: process the new node, then any node that produces or
+  // consumes a value whose tag changed, until nothing changes. Tags only ever
+  // escalate (weight → shape/axes → ambiguous), so this terminates at the same
+  // least fixed point a whole-graph pass would reach.
+  std::deque<int> queue;
+  std::unordered_set<int> queued;
+  queue.push_back(static_cast<int>(node_index));
+  queued.insert(static_cast<int>(node_index));
+  std::vector<std::string> changed;
+  while (!queue.empty()) {
+    const int n = queue.front();
+    queue.pop_front();
+    queued.erase(n);
+    changed.clear();
+    ProcessNodeTags(nodes[static_cast<std::size_t>(n)], static_cast<std::size_t>(n), value_tags_,
+                    node_tags_, node_tag_custom_override_, this, &changed);
+    for (const std::string &value : changed) {
+      auto producer_it = tag_producer_node_.find(value);
+      if (producer_it != tag_producer_node_.end() && producer_it->second != n &&
+          queued.insert(producer_it->second).second) {
+        queue.push_back(producer_it->second);
+      }
+      auto consumers_it = tag_consumers_.find(value);
+      if (consumers_it != tag_consumers_.end()) {
+        for (int consumer : consumers_it->second) {
+          if (consumer != n && queued.insert(consumer).second) {
+            queue.push_back(consumer);
+          }
+        }
+      }
+    }
+  }
+}
+
+void ComputeContext::SeedReuseInput(const std::string &name, bool is_graph_input,
+                                    bool is_initializer, bool allow_input_overwrite) {
+  if (name.empty()) {
+    return;
+  }
+  if (is_graph_input) {
+    incr_graph_inputs_.insert(name);
+    if (allow_input_overwrite) {
+      // Available before the first node so it can be reused at its last use.
+      incr_producer_[name] = -1;
+    } else {
+      incr_keep_.insert(name);
+    }
+  }
+  if (is_initializer) {
+    incr_graph_initializers_.insert(name);
+    incr_keep_.insert(name);
+  }
+}
+
+namespace {
+
+// Removes every occurrence of ``value`` from ``list``.
+void EraseValueFromList(std::vector<std::string> &list, const std::string &value) {
+  list.erase(std::remove(list.begin(), list.end(), value), list.end());
+}
+
+} // namespace
+
+void ComputeContext::SeedReuseOutput(const std::string &name) {
+  if (name.empty()) {
+    return;
+  }
+  incr_keep_.insert(name);
+  incr_graph_outputs_.insert(name);
+  // A graph output must survive the run, so undo any earlier node's decision to
+  // release it (declared graph outputs are usually added after the nodes).
+  auto last_use_it = incr_last_use_.find(name);
+  if (last_use_it != incr_last_use_.end() && last_use_it->second >= 0) {
+    const std::size_t idx = static_cast<std::size_t>(last_use_it->second);
+    if (idx < release_after_.size()) {
+      EraseValueFromList(release_after_[idx], name);
+    }
+    if (idx < release_after_shape_tagged_.size()) {
+      EraseValueFromList(release_after_shape_tagged_[idx], name);
+    }
+  }
+}
+
+void ComputeContext::AppendNodeReuse(const NodeProto &node, std::size_t node_index,
+                                     const ShapesContext &ctx) {
+  const int i = static_cast<int>(node_index);
+  const std::vector<std::string> referenced =
+      ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(node);
+
+  // Advance the last-use of every referenced value to this node, remembering
+  // the previous last-use so the earlier node's release bookkeeping can be
+  // corrected: a value used again here is no longer releasable back there.
+  std::unordered_map<std::string, int> previous_last_use;
+  for (const std::string &name : referenced) {
+    if (name.empty()) {
+      continue;
+    }
+    auto it = incr_last_use_.find(name);
+    previous_last_use.emplace(name, it != incr_last_use_.end() ? it->second : -1);
+    incr_last_use_[name] = i;
+  }
+  for (const auto &entry : previous_last_use) {
+    const int prev = entry.second;
+    if (prev < 0 || static_cast<std::size_t>(prev) >= release_after_.size()) {
+      continue;
+    }
+    const std::size_t p = static_cast<std::size_t>(prev);
+    EraseValueFromList(release_after_[p], entry.first);
+    if (p < not_used_after_.size()) {
+      EraseValueFromList(not_used_after_[p], entry.first);
+    }
+    if (p < release_after_shape_tagged_.size()) {
+      EraseValueFromList(release_after_shape_tagged_[p], entry.first);
+    }
+  }
+
+  // In-place reuse matches for this node, from the running lifetime maps. This
+  // is the very same per-node core the whole-graph analysis runs.
+  std::vector<InPlaceReuse> matches =
+      ComputeSingleNodeReuse(node, i, ctx, incr_keep_, incr_producer_, incr_last_use_,
+                             incr_byte_size_expr_cache_, incr_simplified_dim_cache_);
+
+  // Register this node's outputs as producers (first producer wins), matching
+  // ComputeResultLifetimeInfo.
+  for (int o = 0; o < node.output_size(); ++o) {
+    const std::string name = node.output(o);
+    if (!name.empty()) {
+      incr_producer_.emplace(name, i);
+    }
+  }
+
+  // Release-after / not-used-after for this node (mirrors the second pass of
+  // ComputeResultLifetimeInfo, restricted to the current node).
+  std::vector<std::string> release_after;
+  std::vector<std::string> not_used_after;
+  for (const std::string &name : referenced) {
+    if (name.empty()) {
+      continue;
+    }
+    auto use_it = incr_last_use_.find(name);
+    if (use_it == incr_last_use_.end() || use_it->second != i) {
+      continue;
+    }
+    if (incr_graph_inputs_.count(name) || incr_graph_initializers_.count(name)) {
+      not_used_after.push_back(name);
+    }
+    if (incr_keep_.count(name)) {
+      continue;
+    }
+    auto prod_it = incr_producer_.find(name);
+    if (prod_it == incr_producer_.end() || prod_it->second < 0 || prod_it->second >= i) {
+      continue;
+    }
+    release_after.push_back(name);
+  }
+
+  // Shape-tagged subset of the release list, from the tags computed so far.
+  std::vector<std::string> release_after_shape_tagged;
+  for (const std::string &name : release_after) {
+    auto tag_it = value_tags_.find(name);
+    if (tag_it != value_tags_.end() && tag_it->second == "shape") {
+      release_after_shape_tagged.push_back(name);
+    }
+  }
+
+  // Append exactly one entry to every per-node vector so they stay aligned with
+  // reuse_ (Size()). The per-node memory profile is only meaningful once the
+  // whole graph is known, so it is left empty here and recomputed by the
+  // finalizers' whole-graph ComputeInPlaceReuseGraph pass.
+  reuse_.push_back(std::move(matches));
+  release_after_.push_back(std::move(release_after));
+  not_used_after_.push_back(std::move(not_used_after));
+  release_after_shape_tagged_.push_back(std::move(release_after_shape_tagged));
+  memory_.push_back(MakeEmptyNodeMemoryProfile());
 }
 
 void ComputeContext::ComputeInPlaceReuseGraph(

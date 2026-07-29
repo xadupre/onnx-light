@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "onnx_core/compute/inplace_reuse_types.h"
@@ -99,6 +100,33 @@ GetCachedByteSizeExpr(const ShapesContext &ctx, const std::string &name,
 std::vector<std::vector<InPlaceReuse>>
 ComputeInPlaceReuseMatches(const GraphProto &graph, const ShapesContext &ctx,
                            const ResultLifetimeInfo &lifetime);
+
+/**
+ * Computes the in-place reuse opportunities for a single node ``node`` at index
+ * ``i`` in a graph, given the shapes inferred into ``ctx`` and the lifetime maps
+ * (``keep`` / ``producer`` / ``last_use``) accumulated for the nodes up to and
+ * including ``node``. This is the per-node core shared by
+ * :cpp:func:`ComputeInPlaceReuseMatches` (whole-graph) and the incremental
+ * :cpp:func:`ComputeContext::AppendNodeReuse` path, so both produce identical
+ * results for the same lifetime state.
+ *
+ * @param node                 Node to analyse.
+ * @param i                    Index of ``node`` within its graph.
+ * @param ctx                  Shapes context populated for the graph so far.
+ * @param keep                 Names that must never be reused in place.
+ * @param producer             Map from value name to its producing node index.
+ * @param last_use             Map from value name to the index of its last use.
+ * @param byte_size_expr_cache Memoization cache for symbolic byte-size exprs.
+ * @param simplified_dim_cache Memoization cache for simplified dimensions.
+ * @return The reuse opportunities for ``node``, ordered by output index.
+ */
+std::vector<InPlaceReuse> ComputeSingleNodeReuse(
+    const NodeProto &node, int i, const ShapesContext &ctx,
+    const std::unordered_set<std::string> &keep,
+    const std::unordered_map<std::string, int> &producer,
+    const std::unordered_map<std::string, int> &last_use,
+    std::unordered_map<std::string, std::optional<expressions::DimType>> &byte_size_expr_cache,
+    expressions::SimplifiedExpressionCache &simplified_dim_cache);
 
 /**
  * Convenience wrapper around :cpp:func:`ComputeContext::ComputeInPlaceReuseGraph`:

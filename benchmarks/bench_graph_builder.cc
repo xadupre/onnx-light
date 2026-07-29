@@ -105,7 +105,10 @@ int main(int argc, char **argv) {
   {
     utils::MmapFileStream stream(model_path);
     ParseOptions opts;
-    model.ParseFromStream(stream, opts);
+    if (!model.ParseFromStream(stream, opts)) {
+      std::cerr << "Failed to parse model from: " << model_path << "\n";
+      return 1;
+    }
   }
   if (inline_functions) {
     inliner::InlineLocalFunctions(model);

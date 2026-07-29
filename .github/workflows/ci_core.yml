@@ -210,7 +210,9 @@ jobs:
     needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # windows-latest gets +2 minutes over the other matrix OSes because its
+    # C++ build is the slowest and was running close to the limit.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 32 || 30 }}
     permissions:
       contents: read
       id-token: write

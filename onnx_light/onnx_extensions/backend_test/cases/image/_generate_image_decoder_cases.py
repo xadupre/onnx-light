@@ -4,7 +4,16 @@ import onnx
 from onnx import numpy_helper
 
 base = os.path.dirname(onnx.__file__) + "/backend/test/data/node"
-cases = sorted(d for d in os.listdir(base) if d.startswith("test_image_decoder_"))
+
+# The TIFF, WebP and JPEG2000 formats are intentionally not decoded by the
+# lightweight ``ImageDecoder`` kernel, so their upstream reference cases are
+# skipped to keep the generated registry in sync with the kernel behavior.
+skipped_formats = ("tiff", "webp", "jpeg2k", "jpeg2000")
+cases = sorted(
+    d
+    for d in os.listdir(base)
+    if d.startswith("test_image_decoder_") and not any(fmt in d for fmt in skipped_formats)
+)
 
 
 def emit_uint8_array(name, data):

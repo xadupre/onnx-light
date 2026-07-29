@@ -54,13 +54,6 @@ can be set on the ``cmake`` command line with ``-D<NAME>=<VALUE>``.
     * - ``ONNX_ML``
       - ``ON``
       - Enable ``ai.onnx.ml`` (traditional ML) operator support.
-    * - ``ONNX_LIGHT_BUILD_IMAGE_CODECS``
-      - ``ON``
-      - Build the TIFF, WebP and JPEG2000 decoders in the ``ImageDecoder``
-        kernel.  Turn ``OFF`` for a lighter ``lib_onnx_kernels``: those three
-        formats then fall back to the empty-matrix path while BMP, JPEG, PNG
-        and PNM remain decoded natively.  Only meaningful with
-        ``ONNX_LIGHT_BUILD_KERNELS=ON``.
     * - ``ONNX_LIGHT_BUILD_TESTS``
       - ``OFF``
       - Build the C++ unit-test executable ``test_onnx_light`` and

@@ -12,6 +12,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -118,6 +120,56 @@ TEST(KernelClass, AbsClassParallelPathMatchesReference) {
   const float *py = y.AsFloat();
   for (int64_t i = 0; i < n; ++i) {
     ASSERT_FLOAT_EQ(py[static_cast<size_t>(i)], static_cast<float>(i));
+  }
+}
+
+TEST(ParallelFor, ReusesPersistentPoolAcrossManyCalls) {
+  // The pool is created once and reused: driving many parallel regions in a row
+  // must keep every element covered exactly once on each call.
+  const int64_t n = 4 * core::runtime::kParallelForGrainSize + 3;
+  std::vector<int64_t> out(static_cast<size_t>(n), 0);
+  for (int rep = 0; rep < 50; ++rep) {
+    std::fill(out.begin(), out.end(), 0);
+    core::runtime::ParallelFor(n, [&out](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        out[static_cast<size_t>(i)] += 1;
+      }
+    });
+    for (int64_t i = 0; i < n; ++i) {
+      ASSERT_EQ(out[static_cast<size_t>(i)], 1) << "rep=" << rep << " i=" << i;
+    }
+  }
+}
+
+TEST(ParallelFor, NestedCallRunsInlineWithoutDeadlock) {
+  // A ParallelFor launched from within a running block must fall back to the
+  // serial path instead of deadlocking on the shared pool, and still cover the
+  // whole inner range.
+  const int64_t outer = 4 * core::runtime::kParallelForGrainSize + 1;
+  const int64_t inner = 2 * core::runtime::kParallelForGrainSize + 1;
+  std::atomic<int64_t> inner_sum{0};
+  core::runtime::ParallelFor(outer, [&](int64_t obegin, int64_t oend) {
+    for (int64_t o = obegin; o < oend; ++o) {
+      if (o == obegin) {
+        core::runtime::ParallelFor(inner, [&inner_sum](int64_t ibegin, int64_t iend) {
+          inner_sum.fetch_add(iend - ibegin, std::memory_order_relaxed);
+        });
+      }
+    }
+  });
+  // Each outer block ran the inner loop once over the full [0, inner) range.
+  EXPECT_EQ(inner_sum.load() % inner, 0);
+  EXPECT_GT(inner_sum.load(), 0);
+}
+
+TEST(ThreadPool, ZeroWorkersRunsBlocksInline) {
+  core::runtime::ThreadPool pool(0);
+  EXPECT_EQ(pool.worker_count(), 0);
+  std::vector<int> hits(5, 0);
+  pool.Run(static_cast<int64_t>(hits.size()),
+           [&hits](int64_t b) { hits[static_cast<size_t>(b)] += 1; });
+  for (int h : hits) {
+    EXPECT_EQ(h, 1);
   }
 }
 

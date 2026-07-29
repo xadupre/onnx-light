@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_core/runtime/float16_promote.h"
 #include "onnx_core/runtime/kernel_context.h"
+#include "onnx_core/runtime/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
@@ -96,6 +97,28 @@ TEST(KernelClass, AbsClassMatchesReference) {
   EXPECT_FLOAT_EQ(py[0], 1.0f);
   EXPECT_FLOAT_EQ(py[1], 0.0f);
   EXPECT_FLOAT_EQ(py[2], 2.5f);
+}
+
+TEST(KernelClass, AbsClassParallelPathMatchesReference) {
+  // Exercises the multi-threaded ParallelFor path used by the Abs kernel: the
+  // element count is large enough to exceed the grain size so several worker
+  // threads process disjoint blocks. The result must stay bit-exact and cover
+  // the whole range regardless of the number of threads.
+  const KernelContext ctx{DefaultOpset(13)};
+  Abs abs_kernel{ctx};
+
+  const int64_t n = 4 * core::runtime::kParallelForGrainSize + 7;
+  std::vector<float> values(static_cast<size_t>(n));
+  for (int64_t i = 0; i < n; ++i) {
+    values[static_cast<size_t>(i)] = (i % 2 == 0) ? -static_cast<float>(i) : static_cast<float>(i);
+  }
+  Tensor x = Tensor::FromFloat("", {n}, values);
+  Tensor y = abs_kernel(x);
+  ASSERT_EQ(y.element_count(), n);
+  const float *py = y.AsFloat();
+  for (int64_t i = 0; i < n; ++i) {
+    ASSERT_FLOAT_EQ(py[static_cast<size_t>(i)], static_cast<float>(i));
+  }
 }
 
 TEST(KernelClass, NegClassMatchesReference) {

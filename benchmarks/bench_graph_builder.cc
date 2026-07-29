@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
   std::cout << "nodes:  " << node_count << " (top-level " << model.graph().node().size() << ")\n";
   std::cout << "functions: " << model.functions().size() << "\n";
 
-  // Warm-up build so lazily-initialised caches (schema table, dispatch table)
+  // Warm-up build so lazily-initialized caches (schema table, dispatch table)
   // are populated before timing.
   { core::builder::GraphBuilder warmup(model); }
 

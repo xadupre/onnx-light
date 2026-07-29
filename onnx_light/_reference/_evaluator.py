@@ -123,10 +123,12 @@ def _numpy_to_cpp_tensor(name: str, arr: np.ndarray) -> Any:
     return _runtime.tensor_from_proto(tp)
 
 
-def _run_via_session(graph_or_function: Any, ctx: Any) -> None:
+def _run_via_session(
+    graph_or_function: Any, ctx: Any, sessions: dict[int, Any] | None = None
+) -> None:
     """Runs ``graph_or_function`` by building (or reusing) its cached
     :class:`~onnx_light.onnx_py._onnxpykernels.runtime.ExecutionPlan` and
-    driving it through a fresh
+    driving it through a (reused)
     :class:`~onnx_light.onnx_py._onnxpykernels.runtime.RuntimeSession`.
 
     When ``graph_or_function`` is a ``GraphProto``, every declared
@@ -135,6 +137,13 @@ def _run_via_session(graph_or_function: Any, ctx: Any) -> None:
     seeded in that case. For a full model, call
     :func:`_runtime.register_model_functions` first so nodes referring to
     model-local functions resolve, then call this on ``model.graph``.
+
+    ``sessions`` is an optional cache mapping a plan's identity to the
+    ``(plan, RuntimeSession)`` pair built for it. Reusing the session across
+    calls keeps the per-node kernel resolution that :cpp:func:`RuntimeSession::Run`
+    performs on its first run instead of rediscovering (and rebuilding) every
+    node's kernel on each call. When ``sessions`` is ``None`` a fresh session
+    is built for this single run.
     """
     initializers = getattr(graph_or_function, "initializer", None)
     if initializers is not None:
@@ -142,7 +151,16 @@ def _run_via_session(graph_or_function: Any, ctx: Any) -> None:
             if not ctx.has(init.name):
                 ctx.set(init.name, _runtime.tensor_from_proto(init), "initializer")
     plan = ctx.get_execution_plan(graph_or_function)
-    _runtime.RuntimeSession(plan).run(ctx)
+    if sessions is None:
+        _runtime.RuntimeSession(plan).run(ctx)
+        return
+    entry = sessions.get(id(plan))
+    if entry is None:
+        # Cache the plan alongside the session so the plan (and therefore its
+        # identity) stays alive for as long as the session that wraps it.
+        entry = (plan, _runtime.RuntimeSession(plan))
+        sessions[id(plan)] = entry
+    entry[1].run(ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -327,6 +345,14 @@ class ReferenceEvaluator:
         # user-provided callable.
         self._custom_kernels: dict[str, Any] = {}
 
+        # Cache of ``id(plan) -> (plan, RuntimeSession)`` so the RuntimeSession
+        # is reused across :meth:`run` calls. The first run of a session
+        # resolves and builds every node's kernel once; reusing the session
+        # keeps that work instead of redoing the per-node dispatch on every
+        # call. Registering a custom kernel clears the cache so the next run
+        # rebuilds the sessions and picks the new kernel up.
+        self._sessions: dict[int, Any] = {}
+
     # -- custom kernels -----------------------------------------------------
 
     def register_custom_kernel(self, domain: str, op_type: str, fn: Any) -> None:
@@ -397,6 +423,9 @@ class ReferenceEvaluator:
         # later registration for the same (domain, op_type) overwrites the
         # previous one, matching the dict-based bookkeeping above.
         self._ctx.register_custom_kernel(domain, op_type, _wrapper)
+        # Drop any cached RuntimeSession: its kernels were resolved before this
+        # custom kernel existed, so the next run must rebuild them to pick it up.
+        self._sessions.clear()
 
     # -- proto loading ------------------------------------------------------
 
@@ -554,11 +583,11 @@ class ReferenceEvaluator:
 
         if self._model is not None:
             _runtime.register_model_functions(self._model, ctx)
-            _run_via_session(self._model.graph, ctx)
+            _run_via_session(self._model.graph, ctx, self._sessions)
         elif self._function is not None:
-            _run_via_session(self._function, ctx)
+            _run_via_session(self._function, ctx, self._sessions)
         else:
-            _run_via_session(self._graph, ctx)
+            _run_via_session(self._graph, ctx, self._sessions)
 
         self._last_ctx = ctx
 

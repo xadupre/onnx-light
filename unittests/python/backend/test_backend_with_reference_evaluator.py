@@ -71,11 +71,9 @@ def _iter_ops(graph) -> list[str]:
 TestReferenceEvaluatorBackend = make_test_class(
     reference_evaluator_backend,
     exclude_regex=[
-        "image_decoder_decode_jpeg2k_rgb",
         "image_decoder_decode_jpeg_bgr",
         "image_decoder_decode_jpeg_grayscale",
         "image_decoder_decode_jpeg_rgb",
-        "image_decoder_decode_webp_rgb",
     ],
 )
 

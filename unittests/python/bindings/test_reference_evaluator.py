@@ -738,24 +738,6 @@ sess.run(
             "test_cc_image_decoder_decode_jpeg_grayscale", (32, 32, 1), 1
         )
 
-    def test_image_decoder_decode_tiff_rgb(self):
-        # Regression test for ``test_cc_image_decoder_decode_tiff_rgb``: the
-        # baseline TIFF decoder must produce the same ``(32, 32, 3)`` uint8
-        # tensor as the upstream reference (uncompressed, chunky, 8-bit per
-        # sample TIFF) rather than the empty-matrix fallback ``(0, 0, 3)``.
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
-
-        tc = collect_test_case().get("test_cc_image_decoder_decode_tiff_rgb")
-        self.assertIsNotNone(tc)
-        inputs, outputs = tc.data_sets[0]
-        sess = ReferenceEvaluator(tc.model)
-        got = sess.run(None, dict(zip(sess.input_names, inputs)))
-        self.assertEqual(len(got), 1)
-        self.assertEqual(got[0].dtype, np.uint8)
-        self.assertEqual(got[0].shape, (32, 32, 3))
-        self.assertEqual(got[0].shape, outputs[0].shape)
-        np.testing.assert_array_equal(got[0], outputs[0])
-
     def test_image_decoder_decode_png_rgb(self):
         # Regression test for ``test_cc_image_decoder_decode_png_rgb``: the
         # ``ImageDecoder`` kernel must inflate the PNG bytestream (deflate +
@@ -790,50 +772,6 @@ sess.run(
         got = sess.run(None, dict(zip(sess.input_names, inputs)))
         self.assertEqual(len(got), 1)
         self.assertEqual(got[0].dtype, np.uint8)
-        self.assertEqual(got[0].shape, (32, 32, 3))
-        self.assertEqual(got[0].shape, outputs[0].shape)
-        np.testing.assert_array_equal(got[0], outputs[0])
-
-    def test_image_decoder_decode_jpeg2k_rgb(self):
-        # Regression test for ``test_cc_image_decoder_decode_jpeg2k_rgb``:
-        # when ``libopenjp2`` (OpenJPEG) is available at runtime,
-        # ``ImageDecoder`` must decode the JPEG2000 (JP2) bytestream into the
-        # expected ``(32, 32, 3)`` tensor rather than the empty-matrix
-        # fallback ``(0, 0, 3)`` returned by earlier versions of the kernel.
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
-
-        tc = collect_test_case().get("test_cc_image_decoder_decode_jpeg2k_rgb")
-        self.assertIsNotNone(tc)
-        inputs, outputs = tc.data_sets[0]
-        sess = ReferenceEvaluator(tc.model)
-        got = sess.run(None, dict(zip(sess.input_names, inputs)))
-        self.assertEqual(len(got), 1)
-        self.assertEqual(got[0].dtype, np.uint8)
-        if got[0].size == 0:
-            self.skipTest(
-                "libopenjp2 is not available at runtime; ImageDecoder falls back to empty output"
-            )
-        self.assertEqual(got[0].shape, (32, 32, 3))
-        self.assertEqual(got[0].shape, outputs[0].shape)
-        np.testing.assert_array_equal(got[0], outputs[0])
-
-    def test_image_decoder_decode_webp_rgb(self):
-        # Regression test for ``test_cc_image_decoder_decode_webp_rgb``:
-        # when ``libwebp`` is available at runtime, ``ImageDecoder`` must
-        # decode WebP bytestreams into the expected ``(32, 32, 3)`` tensor.
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
-
-        tc = collect_test_case().get("test_cc_image_decoder_decode_webp_rgb")
-        self.assertIsNotNone(tc)
-        inputs, outputs = tc.data_sets[0]
-        sess = ReferenceEvaluator(tc.model)
-        got = sess.run(None, dict(zip(sess.input_names, inputs)))
-        self.assertEqual(len(got), 1)
-        self.assertEqual(got[0].dtype, np.uint8)
-        if got[0].size == 0:
-            self.skipTest(
-                "libwebp is not available at runtime; ImageDecoder falls back to empty output"
-            )
         self.assertEqual(got[0].shape, (32, 32, 3))
         self.assertEqual(got[0].shape, outputs[0].shape)
         np.testing.assert_array_equal(got[0], outputs[0])

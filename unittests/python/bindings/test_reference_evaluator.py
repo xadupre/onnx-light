@@ -930,7 +930,33 @@ sess.run(
         self.assertEqual(present_key.shape, (1, 4, 5, 4))
         self.assertEqual(present_value.shape, (1, 4, 5, 4))
 
-    def test_tiny_llm_bfloat16(self):
+    def test_tiny_llm_reuses_runtime_session(self):
+        # The evaluator caches and reuses a single RuntimeSession across
+        # run() calls (so the per-node kernel resolution done on the session's
+        # first Run is not repeated on every call), and repeated runs on the
+        # same inputs return bit-identical results.
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get("test_cc_shape_inference_tiny_llm")
+        self.assertIsNotNone(tc)
+        sess = ReferenceEvaluator(tc.model)
+        inputs = self._tiny_llm_inputs()
+
+        # run() returns zero-copy views over the runtime's tensor buffers,
+        # which the allocator reuses on the next run(); copies the first run's
+        # outputs so they survive the second run() before comparing.
+        first = [np.array(out, copy=True) for out in sess.run(None, inputs)]
+        # A single session is cached after the first run.
+        self.assertEqual(len(sess._sessions), 1)
+        cached = next(iter(sess._sessions.values()))
+
+        second = sess.run(None, inputs)
+        # The same (plan, session) entry is reused, not rebuilt.
+        self.assertEqual(len(sess._sessions), 1)
+        self.assertIs(next(iter(sess._sessions.values())), cached)
+        for expected, actual in zip(first, second):
+            np.testing.assert_array_equal(expected, actual)
+
         # Companion to ``test_tiny_llm_float32``: the same decoder runs in
         # BFLOAT16 (exercising the half-precision promote/demote paths of
         # RMSNormalization, Attention and the elementwise kernels) and the
@@ -1012,6 +1038,24 @@ class TestReferenceEvaluatorCustomKernels(ExtTestCase):
         sess.register_custom_kernel("", "Abs", lambda node, x: x + 100.0)
         (y,) = sess.run(None, {"x": np.array([-1.0, 2.0, -3.5], dtype=np.float32)})
         np.testing.assert_array_equal(y, np.array([99.0, 102.0, 96.5], dtype=np.float32))
+
+    def test_custom_kernel_registered_after_run(self):
+        # Registering a custom kernel after a first run() must take effect on
+        # the next run: register_custom_kernel invalidates the cached
+        # RuntimeSession so its per-node kernels are re-resolved.
+        model = parser.parse_model(self._CUSTOM_MODEL_SRC)
+        sess = ReferenceEvaluator(model)
+        x = np.array([-1.0, 2.0, -3.5], dtype=np.float32)
+
+        sess.register_custom_kernel("my.domain", "Square", lambda node, v: v * v)
+        (first,) = sess.run(None, {"x": x})
+        np.testing.assert_array_equal(first, x * x)
+
+        # Re-register a different kernel for the same op; the next run must use
+        # it rather than the kernel cached in the previous run's session.
+        sess.register_custom_kernel("my.domain", "Square", lambda node, v: v + 1.0)
+        (second,) = sess.run(None, {"x": x})
+        np.testing.assert_array_equal(second, x + 1.0)
 
     def test_custom_kernel_multi_output(self):
         src = (

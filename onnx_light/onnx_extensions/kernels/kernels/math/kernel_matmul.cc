@@ -77,6 +77,35 @@ template <typename T> void MatMulCompute(const Tensor &a, const Tensor &b, Tenso
   const size_t a_prefix_rank = a_prefix.size();
   const size_t b_prefix_rank = b_prefix.size();
 
+  // Strides addressing the (i, j) element of each output matrix. They are loop
+  // invariant, so resolve the 1-D operand special cases once here rather than
+  // per element. When A (resp. B) is 1-D the row (resp. column) dimension
+  // collapses and its output stride is 0 (m, resp. n, is 1 in that case).
+  const bool a_is_matrix = a.shape.size() != 1;
+  const bool b_is_matrix = b.shape.size() != 1;
+  int64_t y_row_stride = 0;
+  int64_t y_col_stride = 0;
+  if (a_is_matrix && b_is_matrix) {
+    y_row_stride = out_strides[batch_rank];
+    y_col_stride = out_strides[batch_rank + 1];
+  } else if (!a_is_matrix && b_is_matrix) {
+    y_col_stride = out_strides[batch_rank];
+  } else if (a_is_matrix && !b_is_matrix) {
+    y_row_stride = out_strides[batch_rank];
+  }
+
+  const int64_t a_row_stride = a_strides[a2.size() - 2];
+  const int64_t a_k_stride = a_strides[a2.size() - 1];
+  const int64_t b_k_stride = b_strides[b2.size() - 2];
+  const int64_t b_col_stride = b_strides[b2.size() - 1];
+
+  // The i-k-j loop below accumulates into the output, so start from zero. For
+  // every output element it keeps the same k accumulation order as a plain
+  // i-j-k dot product (k ascending), so the result stays bit-for-bit identical
+  // while the innermost loop walks A/B/Y with contiguous (unit-stride) access
+  // in the common row-major case, which the compiler can vectorise.
+  std::memset(py, 0, output.size_bytes());
+
   for (int64_t batch = 0; batch < batch_count; ++batch) {
     int64_t a_base = 0;
     int64_t b_base = 0;
@@ -96,28 +125,15 @@ template <typename T> void MatMulCompute(const Tensor &a, const Tensor &b, Tenso
       y_base += coord * out_strides[d];
     }
 
-    const int64_t a_row_stride = a_strides[a2.size() - 2];
-    const int64_t a_k_stride = a_strides[a2.size() - 1];
-    const int64_t b_k_stride = b_strides[b2.size() - 2];
-    const int64_t b_col_stride = b_strides[b2.size() - 1];
-
     for (int64_t i = 0; i < m; ++i) {
-      for (int64_t j = 0; j < n; ++j) {
-        T sum = T{0};
-        for (int64_t kk = 0; kk < k; ++kk) {
-          const T av = pa[a_base + i * a_row_stride + kk * a_k_stride];
-          const T bv = pb[b_base + kk * b_k_stride + j * b_col_stride];
-          sum += av * bv;
+      const int64_t a_row = a_base + i * a_row_stride;
+      const int64_t y_row = y_base + i * y_row_stride;
+      for (int64_t kk = 0; kk < k; ++kk) {
+        const T av = pa[a_row + kk * a_k_stride];
+        const int64_t b_row = b_base + kk * b_k_stride;
+        for (int64_t j = 0; j < n; ++j) {
+          py[y_row + j * y_col_stride] += av * pb[b_row + j * b_col_stride];
         }
-        int64_t y_index = y_base;
-        if (a.shape.size() != 1 && b.shape.size() != 1) {
-          y_index += i * out_strides[batch_rank] + j * out_strides[batch_rank + 1];
-        } else if (a.shape.size() == 1 && b.shape.size() != 1) {
-          y_index += j * out_strides[batch_rank];
-        } else if (a.shape.size() != 1 && b.shape.size() == 1) {
-          y_index += i * out_strides[batch_rank];
-        }
-        py[y_index] = sum;
       }
     }
 

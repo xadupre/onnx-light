@@ -52,8 +52,15 @@ class TestCaseStatus:
 
     onnxruntime_cpu: float | None
     """Maximum absolute discrepancy between reference and ORT outputs, or
-    ``None`` when ORT could not load / run the model (registered op missing,
-    unsupported domain, ...)."""
+    ``None`` when ORT could not load / run the model, or when the test case
+    carries no reference outputs to compare against (registered op missing,
+    unsupported domain, no expected values, ...)."""
+
+    onnxruntime_ok: bool
+    """``True`` when ORT ran and every output matched the recorded reference
+    within the test-case ``atol``/``rtol`` tolerances. ``False`` when ORT could
+    not run, when an output differed, or when the case has no reference outputs
+    to compare against."""
 
     onnxruntime_error: str | None
     """Error message returned by ORT when ``onnxruntime_cpu`` is ``None``."""
@@ -77,21 +84,6 @@ class TestCaseStatus:
         the principal domain), otherwise the principal op :attr:`domain`.
         """
         return self.tag or self.domain
-
-    @property
-    def onnxruntime_ok(self) -> bool:
-        """``True`` when ORT ran and outputs matched within tolerances."""
-        if self.onnxruntime_cpu is None:
-            return False
-        # Compare against atol + rtol * scale, where scale conservatively
-        # bounds typical reference output magnitudes. Backend test cases set
-        # ``rtol`` for relative comparisons; the diff was computed as
-        # ``max(|out - exp|)`` so we approximate the allowed slack as
-        # ``atol + rtol``. This is enough to keep tests with ``atol == 0`` and
-        # a non-zero ``rtol`` (e.g. trigonometric ops) reported as passing.
-        atol = getattr(self, "_atol", 1e-3)
-        rtol = getattr(self, "_rtol", 0.0)
-        return self.onnxruntime_cpu <= atol + rtol
 
 
 def _principal_op(tc: TestCase) -> tuple[str, str]:
@@ -124,65 +116,88 @@ def _principal_op(tc: TestCase) -> tuple[str, str]:
 _ORT_SKIP_CASES = frozenset({"test_cc_shape_inference_shape_identity_unsqueeze"})
 
 
-def _run_onnxruntime(tc: TestCase) -> tuple[float | None, str | None]:
-    """Runs ``tc.model`` with onnxruntime CPU and returns ``(max_diff, error)``.
+def _run_onnxruntime(tc: TestCase) -> tuple[float | None, bool, str | None]:
+    """Runs ``tc.model`` with onnxruntime CPU and returns ``(max_diff, ok, error)``.
 
-    Returns ``(None, message)`` if ``onnxruntime`` cannot load or run the
-    model. Returns ``(float('inf'), 'dtype/shape mismatch ...')`` if a
-    structural mismatch (different element type, different shape, ...)
-    prevents a meaningful numerical comparison.
+    ``max_diff`` is the maximum absolute discrepancy between the reference and
+    ORT outputs (for display), ``ok`` is ``True`` only when every output matched
+    within the test-case ``atol``/``rtol`` tolerances, and ``error`` carries a
+    short message when the comparison could not be performed.
+
+    Returns ``(None, False, message)`` if ``onnxruntime`` cannot load or run the
+    model, or if the test case carries no reference outputs to compare against.
+    Returns ``(float('inf'), False, 'dtype/shape mismatch ...')`` if a
+    structural mismatch (different element type, different shape, ...) prevents
+    a meaningful numerical comparison.
     """
     try:
         import onnxruntime as ort
     except ImportError as exc:
-        return (None, f"onnxruntime not available ({exc})")
+        return (None, False, f"onnxruntime not available ({exc})")
 
     if tc.model is None:
-        return (None, "no model")
+        return (None, False, "no model")
 
     if tc.name in _ORT_SKIP_CASES:
-        return (None, "skipped: known to abort onnxruntime (see microsoft/onnxruntime#28778)")
+        return (
+            None,
+            False,
+            "skipped: known to abort onnxruntime (see microsoft/onnxruntime#28778)",
+        )
 
     try:
         sess = ort.InferenceSession(
             tc.model.SerializeToString(), providers=["CPUExecutionProvider"]
         )
     except Exception as exc:  # noqa: BLE001
-        return (None, type(exc).__name__ + ": " + str(exc).splitlines()[0])
+        return (None, False, type(exc).__name__ + ": " + str(exc).splitlines()[0])
 
     if not tc.data_sets:
-        # No reference outputs — the test only validates that ORT can load it.
-        return (0.0, None)
+        # No reference outputs to compare against: the test only validates that
+        # ORT can load the model. Report ``n/a`` rather than a fake ``0.0``
+        # discrepancy, so a missing comparison is never counted as a pass.
+        return (None, False, "no reference outputs")
 
     max_diff = 0.0
+    ok = True
     input_names = [i.name for i in sess.get_inputs()]
     for inputs, expected in tc.data_sets:
         try:
             outputs = sess.run(None, dict(zip(input_names, inputs)))
         except Exception as exc:  # noqa: BLE001
-            return (None, type(exc).__name__ + ": " + str(exc).splitlines()[0])
+            return (None, False, type(exc).__name__ + ": " + str(exc).splitlines()[0])
         for out, exp in zip(outputs, expected):
             ea = np.asarray(exp)
             oa = np.asarray(out)
             if ea.dtype.kind in ("U", "S", "O"):
                 if ea.shape != oa.shape or not (ea == oa).all():
-                    return (float("inf"), "string output mismatch")
+                    return (float("inf"), False, "string output mismatch")
                 continue
             if ea.shape != oa.shape:
-                return (float("inf"), f"shape mismatch {ea.shape} vs {oa.shape}")
+                return (float("inf"), False, f"shape mismatch {ea.shape} vs {oa.shape}")
             if ea.size == 0:
                 # Nothing to compare element-wise; matching shapes already
                 # implies an equal output.
                 continue
+            eaf = ea.astype(np.float64)
+            oaf = oa.astype(np.float64)
             # ``np.errstate(invalid="ignore")`` keeps NaN inputs from emitting
             # a ``RuntimeWarning`` to stderr; such a warning would otherwise be
             # captured by ``sphinx_runpython`` when this report is rendered in
             # the documentation and would corrupt the surrounding reST output.
             with np.errstate(invalid="ignore"):
-                diff = float(np.max(np.abs(ea.astype(np.float64) - oa.astype(np.float64))))
-            if diff > max_diff:
+                diff = float(np.max(np.abs(eaf - oaf)))
+                # Pass/fail must honour the test-case tolerances the way
+                # ``assert_allclose`` does: the allowed slack is ``atol +
+                # rtol * |expected|`` per element, not a single ``atol + rtol``
+                # threshold on the maximum absolute error. ``equal_nan`` keeps
+                # NaN-producing cases (e.g. ``nan_inf`` tagged tests) passing
+                # when the reference is NaN in the same positions.
+                if not np.allclose(oaf, eaf, rtol=tc.rtol, atol=tc.atol, equal_nan=True):
+                    ok = False
+            if np.isfinite(diff) and diff > max_diff:
                 max_diff = diff
-    return (max_diff, None)
+    return (max_diff, ok, None)
 
 
 def _clone_model(model: onnxl.ModelProto) -> onnxl.ModelProto:
@@ -363,7 +378,7 @@ def compute_runtime_coverage(
         if tc.model is None:
             continue
         op_type, domain = _principal_op(tc)
-        ort_diff, ort_err = _run_onnxruntime(tc)
+        ort_diff, ort_ok, ort_err = _run_onnxruntime(tc)
         static_ok, static_err = _run_static_shape(tc)
         dynamic_ok, dynamic_err = _run_dynamic_shapes(tc)
         status = TestCaseStatus(
@@ -372,15 +387,13 @@ def compute_runtime_coverage(
             domain=domain,
             tag=getattr(tc, "tag", ""),
             onnxruntime_cpu=ort_diff,
+            onnxruntime_ok=ort_ok,
             onnxruntime_error=ort_err,
             static_shape=static_ok,
             static_shape_error=static_err,
             dynamic_shapes=dynamic_ok,
             dynamic_shapes_error=dynamic_err,
         )
-        # Attach the test-case tolerances so onnxruntime_ok can apply them.
-        status._atol = tc.atol  # type: ignore[attr-defined]
-        status._rtol = tc.rtol  # type: ignore[attr-defined]
         report.statuses.append(status)
 
         group = status.group

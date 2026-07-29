@@ -942,7 +942,10 @@ sess.run(
         sess = ReferenceEvaluator(tc.model)
         inputs = self._tiny_llm_inputs()
 
-        first = sess.run(None, inputs)
+        # run() returns zero-copy views over the runtime's tensor buffers,
+        # which the allocator reuses on the next run(); copy the first run's
+        # outputs so they survive the second run() before comparing.
+        first = [np.array(out, copy=True) for out in sess.run(None, inputs)]
         # A single session is cached after the first run.
         self.assertEqual(len(sess._sessions), 1)
         cached = next(iter(sess._sessions.values()))

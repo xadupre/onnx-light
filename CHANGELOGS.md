@@ -8,16 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### New Features
 
 - Introduced a `RuntimeSession` that separates one-time kernel initialization from execution, and extended `ComputeContext` to orchestrate graph analyses and build the `ExecutionPlan`.
+- Added an incremental `GraphBuilder` in `onnx_core/builder` with Python bindings, a `ModelProto`-to-`GraphBuilder` import path (with local-function/subgraph round-trip support), and an opt-in `check_shapes` flag on `RuntimeSession` to validate concrete against symbolic shapes.
 
 ### Improvements
 
 - Routed kernel intermediate and output buffers through the `RuntimeContext` allocator instead of temporary `std::vector`s (`Attention`, `FlexAttention`, `Gather`, `GatherND`, `Range`, `Resize`, `Momentum`, `RegexFullMatch`, `RNN`, `LinearClassifier`, `SVMClassifier`, and a direct-to-output `Gemm`).
 - Migrated many kernels to the fixed-capacity `Shape` type for rank-sized working arrays instead of `std::vector<int64_t>` (conv/pool, `Reduce*`, `Squeeze`/`Unsqueeze`, `Where`, `Pad`, `Slice`, `Compress`, `Expand`, `CenterCropPad`, `DequantizeLinear`, `QLinearConv`, `QLinearMatMul`, and the `RowMajorStrides`/`ResolveAxes` helpers).
 - Cached the `Einsum` contraction plan, built `TreeEnsemble*` structures in the kernel constructors, and reused per-row/per-sample scratch in `TfIdfVectorizer` and `TreeEnsembleClassifier`.
+- Migrated repeated proto-message fields from `std::vector<T>` to `RepeatedProtoField<T>` across `NodeProto`, the `GraphBuilder` inputs/outputs/initializers/attributes, and the shape-inference and schema APIs (including `TypeProto`).
+- Moved `DimSum` and `IsZeroDim` into the `expressions` module and renamed the `_onnxpyoptim` extension module to `_onnxpycore`.
+
+### Testing
+
+- Added C++ and Python tests that run every backend model case through `RuntimeSession`, plus `GraphBuilder` round-trip coverage over all backend test cases.
 
 ### Documentation & CI
 
-- Refreshed the design-page links and shape-inference docs to match the current library layout, and bumped the release version to `0.1.9`.
+- Refreshed the design-page links and shape-inference docs to match the current library layout, showed all top-level navigation links, renamed "Operators" to "Ops" on the documentation main page, and bumped the release version to `0.1.9`.
+- Enabled `sccache` on the Ubuntu CI jobs, bumped the GitHub Actions versions, and enabled ASan container-overflow detection.
 
 ## [0.1.8] – 2026-07-22
 

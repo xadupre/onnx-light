@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/runtime/parallel_for.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/node_helpers.h"
@@ -22,13 +23,15 @@ template <typename T> void ComputeInPlace(const Tensor &x, Tensor &output) {
   const int64_t n = x.element_count();
   const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.mutable_bytes());
-  for (int64_t i = 0; i < n; ++i) {
-    const T v = px[i];
-    // Numerically stable softplus: log1p(exp(-|x|)) + max(x, 0).
-    const T abs_x = std::fabs(v);
-    const T sp = std::log1p(std::exp(-abs_x)) + std::fmax(v, static_cast<T>(0));
-    py[i] = v * std::tanh(sp);
-  }
+  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    for (int64_t i = begin; i < end; ++i) {
+      const T v = px[i];
+      // Numerically stable softplus: log1p(exp(-|x|)) + max(x, 0).
+      const T abs_x = std::fabs(v);
+      const T sp = std::log1p(std::exp(-abs_x)) + std::fmax(v, static_cast<T>(0));
+      py[i] = v * std::tanh(sp);
+    }
+  });
 }
 
 void Dispatch(const Tensor &x, Tensor &output) {

@@ -4,6 +4,7 @@
 
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_core/runtime/elementwise_helpers.h"
+#include "onnx_core/runtime/parallel_for.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/node_helpers.h"
@@ -28,9 +29,11 @@ template <typename T> void NegInt(const Tensor &x, Tensor &output) {
   const int64_t n = x.element_count();
   const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.mutable_bytes());
-  for (int64_t i = 0; i < n; ++i) {
-    py[i] = static_cast<T>(U{0} - static_cast<U>(px[i]));
-  }
+  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    for (int64_t i = begin; i < end; ++i) {
+      py[i] = static_cast<T>(U{0} - static_cast<U>(px[i]));
+    }
+  });
 }
 
 } // namespace
@@ -53,17 +56,21 @@ void Neg::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = -px[i];
-    }
+    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        py[i] = -px[i];
+      }
+    });
     return;
   }
   case DataType::DOUBLE: {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = -px[i];
-    }
+    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        py[i] = -px[i];
+      }
+    });
     return;
   }
   case DataType::FLOAT16:

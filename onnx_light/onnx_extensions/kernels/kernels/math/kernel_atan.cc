@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/runtime/parallel_for.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/node_helpers.h"
@@ -32,9 +33,11 @@ void Atan::operator()(const Tensor &x, Tensor &output) const {
                       "kernel::Atan preallocated output buffer has unexpected size in bytes.");
   const float *px = x.AsFloat();
   float *py = output.AsFloat();
-  for (int64_t i = 0; i < n; ++i) {
-    py[static_cast<size_t>(i)] = std::atan(px[i]);
-  }
+  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    for (int64_t i = begin; i < end; ++i) {
+      py[static_cast<size_t>(i)] = std::atan(px[i]);
+    }
+  });
 }
 
 void Atan::Run(RuntimeContext &rt) {

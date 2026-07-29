@@ -4,6 +4,7 @@
 
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_core/runtime/elementwise_helpers.h"
+#include "onnx_core/runtime/parallel_for.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/node_helpers.h"
@@ -25,9 +26,11 @@ template <typename T> void SignUnsigned(const Tensor &x, Tensor &output) {
   const int64_t n = x.element_count();
   const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.mutable_bytes());
-  for (int64_t i = 0; i < n; ++i) {
-    py[i] = px[i] > T{0} ? T{1} : T{0};
-  }
+  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    for (int64_t i = begin; i < end; ++i) {
+      py[i] = px[i] > T{0} ? T{1} : T{0};
+    }
+  });
 }
 
 // sign(x) for signed types: -1, 0, or 1.
@@ -35,9 +38,11 @@ template <typename T> void SignSigned(const Tensor &x, Tensor &output) {
   const int64_t n = x.element_count();
   const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.mutable_bytes());
-  for (int64_t i = 0; i < n; ++i) {
-    py[i] = px[i] > T{0} ? T{1} : (px[i] < T{0} ? T{-1} : T{0});
-  }
+  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    for (int64_t i = begin; i < end; ++i) {
+      py[i] = px[i] > T{0} ? T{1} : (px[i] < T{0} ? T{-1} : T{0});
+    }
+  });
 }
 
 } // namespace
@@ -60,17 +65,21 @@ void Sign::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = (px[i] > 0.0f) ? 1.0f : (px[i] < 0.0f ? -1.0f : 0.0f);
-    }
+    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        py[i] = (px[i] > 0.0f) ? 1.0f : (px[i] < 0.0f ? -1.0f : 0.0f);
+      }
+    });
     return;
   }
   case DataType::DOUBLE: {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = (px[i] > 0.0) ? 1.0 : (px[i] < 0.0 ? -1.0 : 0.0);
-    }
+    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        py[i] = (px[i] > 0.0) ? 1.0 : (px[i] < 0.0 ? -1.0 : 0.0);
+      }
+    });
     return;
   }
   case DataType::FLOAT16:

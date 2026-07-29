@@ -4,6 +4,8 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/parallel_for.h"
+
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
@@ -41,12 +43,14 @@ void HardSwish::operator()(const Tensor &x, Tensor &output) const {
 
   const float *px = x.AsFloat();
   float *py = output.AsFloat();
-  for (int64_t i = 0; i < n; ++i) {
-    const size_t idx = static_cast<size_t>(i);
-    const float v = px[idx];
-    const float hs = std::max(0.0f, std::min(1.0f, kHardSwishAlpha * v + kHardSwishBeta));
-    py[idx] = v * hs;
-  }
+  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    for (int64_t i = begin; i < end; ++i) {
+      const size_t idx = static_cast<size_t>(i);
+      const float v = px[idx];
+      const float hs = std::max(0.0f, std::min(1.0f, kHardSwishAlpha * v + kHardSwishBeta));
+      py[idx] = v * hs;
+    }
+  });
 }
 
 void HardSwish::Run(RuntimeContext &rt) {

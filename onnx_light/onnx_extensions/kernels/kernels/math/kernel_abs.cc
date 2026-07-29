@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/cast_helper.h"
-#include "onnx_core/runtime/elementwise_helpers.h"
+#include "onnx_core/runtime/parallel_for.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/node_helpers.h"
@@ -40,61 +40,85 @@ void Abs::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = std::fabs(px[i]);
-    }
+    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        py[i] = std::fabs(px[i]);
+      }
+    });
     return;
   }
   case DataType::DOUBLE: {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = std::fabs(px[i]);
-    }
+    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        py[i] = std::fabs(px[i]);
+      }
+    });
     return;
   }
-  case DataType::FLOAT16:
-    detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
-                                 [](float v) { return std::fabs(v); });
+  case DataType::FLOAT16: {
+    const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+    uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
+    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        py[i] = FloatToFloat16Bits(std::fabs(Float16BitsToFloat(px[i])));
+      }
+    });
     return;
-  case DataType::BFLOAT16:
-    detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                 [](float v) { return std::fabs(v); });
+  }
+  case DataType::BFLOAT16: {
+    const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+    uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
+    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        py[i] = FloatToBfloat16Bits(std::fabs(Bfloat16BitsToFloat(px[i])));
+      }
+    });
     return;
+  }
   case DataType::INT8: {
     const int8_t *px = x.AsInt8();
     int8_t *py = output.AsInt8();
-    for (int64_t i = 0; i < n; ++i) {
-      const int32_t v = static_cast<int32_t>(px[i]);
-      py[i] = static_cast<int8_t>(v < 0 ? -v : v);
-    }
+    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        const int32_t v = static_cast<int32_t>(px[i]);
+        py[i] = static_cast<int8_t>(v < 0 ? -v : v);
+      }
+    });
     return;
   }
   case DataType::INT16: {
     const int16_t *px = x.AsInt16();
     int16_t *py = output.AsInt16();
-    for (int64_t i = 0; i < n; ++i) {
-      const int32_t v = static_cast<int32_t>(px[i]);
-      py[i] = static_cast<int16_t>(v < 0 ? -v : v);
-    }
+    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        const int32_t v = static_cast<int32_t>(px[i]);
+        py[i] = static_cast<int16_t>(v < 0 ? -v : v);
+      }
+    });
     return;
   }
   case DataType::INT32: {
     const int32_t *px = x.AsInt32();
     int32_t *py = output.AsInt32();
-    for (int64_t i = 0; i < n; ++i) {
-      const int64_t v = static_cast<int64_t>(px[i]);
-      py[i] = static_cast<int32_t>(v < 0 ? -v : v);
-    }
+    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        const int64_t v = static_cast<int64_t>(px[i]);
+        py[i] = static_cast<int32_t>(v < 0 ? -v : v);
+      }
+    });
     return;
   }
   case DataType::INT64: {
     const int64_t *px = x.AsInt64();
     int64_t *py = output.AsInt64();
-    for (int64_t i = 0; i < n; ++i) {
-      const uint64_t u = static_cast<uint64_t>(px[i]);
-      py[i] = static_cast<int64_t>(px[i] < 0 ? (~u + 1) : u);
-    }
+    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        const uint64_t u = static_cast<uint64_t>(px[i]);
+        py[i] = static_cast<int64_t>(px[i] < 0 ? (~u + 1) : u);
+      }
+    });
     return;
   }
   default:

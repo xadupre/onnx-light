@@ -187,14 +187,22 @@ def _run_onnxruntime(tc: TestCase) -> tuple[float | None, bool, str | None]:
             # the documentation and would corrupt the surrounding reST output.
             with np.errstate(invalid="ignore"):
                 diff = float(np.max(np.abs(eaf - oaf)))
-                # Pass/fail must honour the test-case tolerances the way
+                # Pass/fail must honor the test-case tolerances the way
                 # ``assert_allclose`` does: the allowed slack is ``atol +
                 # rtol * |expected|`` per element, not a single ``atol + rtol``
                 # threshold on the maximum absolute error. ``equal_nan`` keeps
                 # NaN-producing cases (e.g. ``nan_inf`` tagged tests) passing
                 # when the reference is NaN in the same positions.
-                if not np.allclose(oaf, eaf, rtol=tc.rtol, atol=tc.atol, equal_nan=True):
-                    ok = False
+                close = np.allclose(oaf, eaf, rtol=tc.rtol, atol=tc.atol, equal_nan=True)
+            if not close:
+                ok = False
+                if not np.isfinite(diff):
+                    # A non-finite maximum means the reference and ORT outputs
+                    # disagree on NaN/inf placement. There is no finite
+                    # magnitude to display, so surface it as ``mismatch``
+                    # instead of a misleading ``0`` discrepancy.
+                    max_diff = float("inf")
+                    continue
             if np.isfinite(diff) and diff > max_diff:
                 max_diff = diff
     return (max_diff, ok, None)

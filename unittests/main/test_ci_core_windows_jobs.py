@@ -40,7 +40,7 @@ class TestCiCoreWindowsJobs(unittest.TestCase):
                 r"cmake\.define\.ONNX_LIGHT_BUILD_TESTS=ON.*?"
                 r"- name: Run C\+\+ unit tests \(Windows\)\s+"
                 r"if: runner\.os == 'Windows'\s+"
-                r"run: ctest --test-dir build --output-on-failure -C Release --timeout 120"
+                r"run: ctest --test-dir build --output-on-failure -C Release --timeout 240"
             ),
         )
 

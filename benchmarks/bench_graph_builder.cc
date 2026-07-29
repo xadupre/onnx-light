@@ -6,10 +6,16 @@
  * ``ModelProto`` (which replays every graph and function node through
  * ``MakeNode`` and runs the incremental compute analyses).
  *
- * By default it profiles the Qwen3-like model retrieved from the backend test
- * cases (``test_cc_shape_inference_big_qwen3_4_layers_like``), optionally with
- * its local functions inlined so the flattened graph exercises the per-node
- * cost of the builder on a realistic multi-layer transformer.
+ * The model is loaded from a ``.onnx`` file passed with ``-f``. Point it at a
+ * realistic multi-layer transformer (optionally with its local functions
+ * inlined via the default, or left as-is with ``--no-inline``) to exercise the
+ * per-node cost of the builder.
+ *
+ * GraphBuilder can execute operator kernels while building, but it must assume
+ * kernels may be missing, so this benchmark intentionally does NOT link against
+ * ``lib_onnx_kernels`` (nor ``lib_onnx_backend_test``, which pulls it in). It
+ * only needs the model file loader, the operator schemas and the incremental
+ * shape functions.
  *
  * Designed to be compiled with RelWithDebInfo (-O2 -g) so that Linux profiling
  * tools (perf, gprof, valgrind/callgrind) can attribute wall-clock or
@@ -23,26 +29,27 @@
  *   cmake --build build --target bench_graph_builder -j
  *
  * Usage:
- *   ./build/bench_graph_builder [OPTIONS]
+ *   ./build/bench_graph_builder -f <model.onnx> [OPTIONS]
+ *     -f <file>     Path to the .onnx model to build (required)
  *     -n <iters>    Number of GraphBuilder construction iterations (default: 5)
- *     -m <regex>    Backend test case name regex to load
- *                   (default: test_cc_shape_inference_big_qwen3_4_layers_like)
  *     --no-inline   Do not inline model-local functions before building
  *
  * Typical profiling workflow:
  *
- *   perf record -g ./build/bench_graph_builder -n 5
+ *   perf record -g ./build/bench_graph_builder -f model.onnx -n 5
  *   perf report --stdio --no-children -n | head -60
  */
 
-#include "onnx_core/backend_test/test_case.h"
+#include "onnx.h"
 #include "onnx_core/builder/graph_builder.h"
 #include "onnx_extensions/shapes/dispatch_table.h"
 #include "onnx_lib/inliner/inliner.h"
+#include "stream.h"
 
 #include <chrono>
 #include <cstring>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -69,14 +76,14 @@ int64_t CountNodes(const GraphProto &graph) {
 
 int main(int argc, char **argv) {
   int iters = 5;
-  std::string name_regex = "test_cc_shape_inference_big_qwen3_4_layers_like";
+  std::string model_path;
   bool inline_functions = true;
 
   for (int i = 1; i < argc; ++i) {
     if (std::strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
       iters = std::atoi(argv[++i]);
-    } else if (std::strcmp(argv[i], "-m") == 0 && i + 1 < argc) {
-      name_regex = argv[++i];
+    } else if (std::strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
+      model_path = argv[++i];
     } else if (std::strcmp(argv[i], "--no-inline") == 0) {
       inline_functions = false;
     } else {
@@ -85,24 +92,27 @@ int main(int argc, char **argv) {
     }
   }
 
+  if (model_path.empty()) {
+    std::cerr << "Missing required -f <model.onnx> argument\n";
+    return 1;
+  }
+
   // Shape functions are looked up by GraphBuilder's incremental shape
   // inference; register the built-ins before building.
   onnx_shapes::RegisterShapeFunctions();
 
-  std::vector<core::backend_test::TestCase> cases =
-      core::backend_test::CollectTestCasesByName(name_regex, /*include_big=*/true);
-  if (cases.empty()) {
-    std::cerr << "No backend test case matched regex: " << name_regex << "\n";
-    return 1;
+  ModelProto model;
+  {
+    utils::MmapFileStream stream(model_path);
+    ParseOptions opts;
+    model.ParseFromStream(stream, opts);
   }
-
-  ModelProto model = cases.front().model();
   if (inline_functions) {
     inliner::InlineLocalFunctions(model);
   }
 
   const int64_t node_count = CountNodes(model.graph());
-  std::cout << "case:   " << cases.front().name << "\n";
+  std::cout << "model:  " << model_path << "\n";
   std::cout << "inline: " << (inline_functions ? "yes" : "no") << "\n";
   std::cout << "nodes:  " << node_count << " (top-level " << model.graph().node().size() << ")\n";
   std::cout << "functions: " << model.functions().size() << "\n";

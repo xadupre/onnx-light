@@ -109,6 +109,11 @@ const std::string &GraphBuilder::MakeInitializer(const TensorProto &tensor) {
   if (SymTensorFromTensorProto(added, descriptor)) {
     SeedShape(reserved, std::move(descriptor));
   }
+  // Seed the incremental annotations: an initializer is a "weight" and is kept
+  // from in-place reuse.
+  compute_.SeedValueTag(reserved, "weight");
+  compute_.SeedReuseInput(reserved, /*is_graph_input=*/false, /*is_initializer=*/true,
+                          /*allow_input_overwrite=*/false);
   // ``reserved`` references the entry stored in ``names_`` and remains valid.
   return reserved;
 }
@@ -149,6 +154,7 @@ const std::string &GraphBuilder::MakeInput(const ValueInfoProto &value_info) {
   } else {
     SeedShape(reserved, SymTensor());
   }
+  SeedInputAnnotations(reserved);
   return reserved;
 }
 
@@ -159,6 +165,7 @@ const std::string &GraphBuilder::MakeInput(const std::string &name, const SymTen
   const std::string &reserved = ReserveName(name);
   inputs_.add() = std::move(vi);
   SeedShape(reserved, type);
+  SeedInputAnnotations(reserved);
   return reserved;
 }
 
@@ -167,13 +174,17 @@ const std::string &GraphBuilder::MakeInput(const std::string &name, TensorType d
   return MakeInput(name, SymTensor(nullptr, dtype, shape));
 }
 
-void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) { outputs_.push_back(value_info); }
+void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
+  outputs_.push_back(value_info);
+  compute_.SeedReuseOutput(value_info.name().value());
+}
 
 void GraphBuilder::MakeOutput(const std::string &name, const SymTensor &type) {
   ValueInfoProto vi;
   vi.set_name(name);
   SymTensorToValueInfo(type, vi);
   outputs_.add() = std::move(vi);
+  compute_.SeedReuseOutput(name);
 }
 
 void GraphBuilder::MakeOutput(const std::string &name, TensorType dtype, const SymShape &shape) {
@@ -184,6 +195,15 @@ void GraphBuilder::MakeOutput(const std::string &name) {
   ValueInfoProto vi;
   vi.set_name(name);
   outputs_.add() = std::move(vi);
+  compute_.SeedReuseOutput(name);
+}
+
+// Seeds the incremental annotations for a declared graph input: it is a
+// "weight" and is kept from in-place reuse.
+void GraphBuilder::SeedInputAnnotations(const std::string &name) {
+  compute_.SeedValueTag(name, "weight");
+  compute_.SeedReuseInput(name, /*is_graph_input=*/true, /*is_initializer=*/false,
+                          /*allow_input_overwrite=*/false);
 }
 
 bool GraphBuilder::HasGraphReferenceSuffix(const std::string &name) {
@@ -503,9 +523,15 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   }
 
   // Keep the semantic value / node tags ("shape_tag") and the in-place buffer
-  // reuse up to date with the graph built so far. Release-after lifetime is
-  // deferred to the finalizers (see Finalize).
-  RefreshAnnotations();
+  // reuse up to date with the graph built so far. Both are maintained
+  // incrementally: only the appended node and its immediate dependents are
+  // touched, so importing N nodes stays linear instead of O(N^2). Release-after
+  // lifetime and per-node memory are finalized over the complete graph (see
+  // Finalize), since a value's last use is only settled once no further node
+  // can extend it.
+  const std::size_t node_index = nodes_.size() - 1;
+  compute_.AppendNodeTags(nodes_, node_index);
+  compute_.AppendNodeReuse(stored, node_index, compute_.Shapes());
 
   return resolved_outputs;
 }
@@ -695,18 +721,6 @@ std::string GraphBuilder::ToString() const {
 }
 
 // ── Finalization ───────────────────────────────────────────────────────
-
-void GraphBuilder::RefreshAnnotations() {
-  // Value / node tags and in-place reuse both need the whole graph built so
-  // far, so recompute them over the current content. This keeps the builder's
-  // live analysis state (queried through Compute()) consistent as nodes are
-  // added; the finalizers recompute the same information (plus the release-after
-  // lifetime and peak memory) over the complete graph before writing it out.
-  const GraphProto graph = BuildGraph();
-  const auto tags = compute_.ComputeValueAndNodeTags(graph);
-  compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
-                                    tags.first);
-}
 
 void GraphBuilder::Finalize(GraphProto &graph) {
   const auto tags = compute_.ComputeValueAndNodeTags(graph);

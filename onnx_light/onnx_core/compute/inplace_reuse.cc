@@ -185,6 +185,104 @@ GetCachedByteSizeExpr(const ShapesContext &ctx, const std::string &name,
   return it->second;
 }
 
+std::vector<InPlaceReuse> ComputeSingleNodeReuse(
+    const NodeProto &node, int i, const ShapesContext &ctx,
+    const std::unordered_set<std::string> &keep,
+    const std::unordered_map<std::string, int> &producer,
+    const std::unordered_map<std::string, int> &last_use,
+    std::unordered_map<std::string, std::optional<expressions::DimType>> &byte_size_expr_cache,
+    expressions::SimplifiedExpressionCache &simplified_dim_cache) {
+  std::vector<InPlaceReuse> node_result;
+  const std::string op_type = node.op_type();
+  const bool is_squeeze = op_type == "Squeeze";
+  const bool is_unsqueeze = op_type == "Unsqueeze";
+
+  // Count direct-input occurrences so a value read twice is never aliased.
+  std::unordered_map<std::string, int> input_occurrences;
+  for (int k = 0; k < node.input_size(); ++k) {
+    const std::string name = node.input(k);
+    if (!name.empty()) {
+      ++input_occurrences[name];
+    }
+  }
+
+  std::unordered_set<int> used_inputs;
+  std::unordered_set<int> matched_outputs;
+  // Two passes so that same-sized (kEqual) reuse is always preferred over a
+  // strictly larger (kGreater) input before either buffer is claimed.
+  for (const InPlaceReuseKind kind : {InPlaceReuseKind::kEqual, InPlaceReuseKind::kGreater}) {
+    for (int o = 0; o < node.output_size(); ++o) {
+      if (matched_outputs.count(o)) {
+        continue;
+      }
+      const std::string out_name = node.output(o);
+      if (out_name.empty() || !ctx.Has(out_name)) {
+        continue;
+      }
+      const SymTensor &out_tensor = ctx.Get(out_name);
+
+      for (int k = 0; k < node.input_size(); ++k) {
+        if (used_inputs.count(k)) {
+          continue;
+        }
+        const std::string in_name = node.input(k);
+        if (in_name.empty() || in_name == out_name) {
+          continue;
+        }
+        if (input_occurrences[in_name] != 1) {
+          continue;
+        }
+        if (keep.count(in_name)) {
+          continue;
+        }
+        auto prod_it = producer.find(in_name);
+        if (prod_it == producer.end() || prod_it->second >= i) {
+          continue;
+        }
+        auto use_it = last_use.find(in_name);
+        if (use_it == last_use.end() || use_it->second != i) {
+          continue;
+        }
+        if (!ctx.Has(in_name)) {
+          continue;
+        }
+        std::optional<InPlaceReuseKind> match;
+        // Squeeze/Unsqueeze are shape-only view transforms on their data
+        // input: they keep dtype and element count, so the output can always
+        // alias that input when lifetime constraints allow it.
+        // The dtype guard keeps this fast-path defensive for malformed graphs
+        // or partial type information: aliasing is only safe when input/output
+        // element storage matches.
+        if (((k == kSqueezeDataInputIndex && is_squeeze) ||
+             (k == kUnsqueezeDataInputIndex && is_unsqueeze)) &&
+            out_tensor.Dtype() == ctx.Get(in_name).Dtype()) {
+          match = InPlaceReuseKind::kEqual;
+        } else {
+          match = ClassifyReuse(ctx, out_name, out_tensor, in_name, ctx.Get(in_name),
+                                byte_size_expr_cache, &simplified_dim_cache);
+        }
+        if (!match.has_value() || *match != kind) {
+          continue;
+        }
+        InPlaceReuse reuse;
+        reuse.output_index = o;
+        reuse.input_index = k;
+        reuse.kind = kind;
+        node_result.push_back(reuse);
+        used_inputs.insert(k);
+        matched_outputs.insert(o);
+        break;
+      }
+    }
+  }
+  // Keep each node's opportunities ordered by output index regardless of the
+  // pass in which they were discovered.
+  std::sort(
+      node_result.begin(), node_result.end(),
+      [](const InPlaceReuse &a, const InPlaceReuse &b) { return a.output_index < b.output_index; });
+  return node_result;
+}
+
 std::vector<std::vector<InPlaceReuse>>
 ComputeInPlaceReuseMatches(const GraphProto &graph, const ShapesContext &ctx,
                            const ResultLifetimeInfo &lifetime) {
@@ -194,96 +292,9 @@ ComputeInPlaceReuseMatches(const GraphProto &graph, const ShapesContext &ctx,
   std::unordered_map<std::string, std::optional<expressions::DimType>> byte_size_expr_cache;
 
   for (int i = 0; i < num_nodes; ++i) {
-    const NodeProto &node = graph.node()[i];
-    const std::string op_type = node.op_type();
-    const bool is_squeeze = op_type == "Squeeze";
-    const bool is_unsqueeze = op_type == "Unsqueeze";
-
-    // Count direct-input occurrences so a value read twice is never aliased.
-    std::unordered_map<std::string, int> input_occurrences;
-    for (int k = 0; k < node.input_size(); ++k) {
-      const std::string name = node.input(k);
-      if (!name.empty()) {
-        ++input_occurrences[name];
-      }
-    }
-
-    std::unordered_set<int> used_inputs;
-    std::unordered_set<int> matched_outputs;
-    // Two passes so that same-sized (kEqual) reuse is always preferred over a
-    // strictly larger (kGreater) input before either buffer is claimed.
-    for (const InPlaceReuseKind kind : {InPlaceReuseKind::kEqual, InPlaceReuseKind::kGreater}) {
-      for (int o = 0; o < node.output_size(); ++o) {
-        if (matched_outputs.count(o)) {
-          continue;
-        }
-        const std::string out_name = node.output(o);
-        if (out_name.empty() || !ctx.Has(out_name)) {
-          continue;
-        }
-        const SymTensor &out_tensor = ctx.Get(out_name);
-
-        for (int k = 0; k < node.input_size(); ++k) {
-          if (used_inputs.count(k)) {
-            continue;
-          }
-          const std::string in_name = node.input(k);
-          if (in_name.empty() || in_name == out_name) {
-            continue;
-          }
-          if (input_occurrences[in_name] != 1) {
-            continue;
-          }
-          if (lifetime.keep.count(in_name)) {
-            continue;
-          }
-          auto prod_it = lifetime.producer.find(in_name);
-          if (prod_it == lifetime.producer.end() || prod_it->second >= i) {
-            continue;
-          }
-          auto use_it = lifetime.last_use.find(in_name);
-          if (use_it == lifetime.last_use.end() || use_it->second != i) {
-            continue;
-          }
-          if (!ctx.Has(in_name)) {
-            continue;
-          }
-          std::optional<InPlaceReuseKind> match;
-          // Squeeze/Unsqueeze are shape-only view transforms on their data
-          // input: they keep dtype and element count, so the output can always
-          // alias that input when lifetime constraints allow it.
-          // The dtype guard keeps this fast-path defensive for malformed graphs
-          // or partial type information: aliasing is only safe when input/output
-          // element storage matches.
-          if (((k == kSqueezeDataInputIndex && is_squeeze) ||
-               (k == kUnsqueezeDataInputIndex && is_unsqueeze)) &&
-              out_tensor.Dtype() == ctx.Get(in_name).Dtype()) {
-            match = InPlaceReuseKind::kEqual;
-          } else {
-            match = ClassifyReuse(ctx, out_name, out_tensor, in_name, ctx.Get(in_name),
-                                  byte_size_expr_cache, &simplified_dim_cache);
-          }
-          if (!match.has_value() || *match != kind) {
-            continue;
-          }
-          InPlaceReuse reuse;
-          reuse.output_index = o;
-          reuse.input_index = k;
-          reuse.kind = kind;
-          result[static_cast<std::size_t>(i)].push_back(reuse);
-          used_inputs.insert(k);
-          matched_outputs.insert(o);
-          break;
-        }
-      }
-    }
-    // Keep each node's opportunities ordered by output index regardless of the
-    // pass in which they were discovered.
-    std::sort(result[static_cast<std::size_t>(i)].begin(),
-              result[static_cast<std::size_t>(i)].end(),
-              [](const InPlaceReuse &a, const InPlaceReuse &b) {
-                return a.output_index < b.output_index;
-              });
+    result[static_cast<std::size_t>(i)] =
+        ComputeSingleNodeReuse(graph.node()[i], i, ctx, lifetime.keep, lifetime.producer,
+                               lifetime.last_use, byte_size_expr_cache, simplified_dim_cache);
   }
   return result;
 }

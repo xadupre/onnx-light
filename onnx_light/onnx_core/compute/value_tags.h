@@ -36,6 +36,19 @@ bool TrySetValueTag(std::unordered_map<std::string, std::string> &value_tags,
 void CollectGraphSeedTags(const GraphProto &graph,
                           std::unordered_map<std::string, std::string> &value_tags);
 
+// Applies the tag-inference rules for a single node ``node`` at index ``n``,
+// updating ``value_tags`` and ``node_tags`` in place. ``has_custom_node_tag_override``
+// (sized to the node count) persists whether a custom callback already set a
+// node-tag override for a node across passes. ``ctx`` (may be null) provides
+// custom per-op value-tag callbacks. When ``changed_values`` is non-null, the
+// names of values whose tag changed are appended to it so incremental callers
+// can re-queue dependent nodes. Returns whether anything changed for this node.
+bool ProcessNodeTags(const NodeProto &node, std::size_t n,
+                     std::unordered_map<std::string, std::string> &value_tags,
+                     std::vector<std::string> &node_tags,
+                     std::vector<char> &has_custom_node_tag_override, ComputeContext *ctx,
+                     std::vector<std::string> *changed_values);
+
 // Runs the fixed-point value/node tag inference over ``nodes``, updating
 // ``value_tags`` and ``node_tags`` in place. ``ctx`` (may be null) provides
 // custom per-op value-tag callbacks.

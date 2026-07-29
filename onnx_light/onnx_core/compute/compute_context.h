@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -17,6 +18,7 @@
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/inplace_reuse_types.h"
 #include "onnx_core/compute/peak_memory.h"
+#include "onnx_core/expressions/dim_sum.h"
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
@@ -196,6 +198,20 @@ public:
   std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
   ComputeValueAndNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes);
 
+  /// Seeds an initial value tag for a graph input, initializer, value_info or
+  /// output so it participates in the incremental tag inference driven by
+  /// :cpp:func:`AppendNodeTags`. Mirrors the seeding performed whole-graph by
+  /// :cpp:func:`CollectGraphSeedTags`.
+  void SeedValueTag(const std::string &name, const std::string &tag);
+
+  /// Incrementally updates the value/node tags after the node at ``node_index``
+  /// (the last node of ``nodes``) has been appended. Only that node and the
+  /// nodes whose values it changes are (re)processed through a monotone
+  /// worklist — no whole-graph loop — so appending ``N`` nodes stays linear in
+  /// the graph size instead of quadratic. The built-in inference rules converge
+  /// to the same least fixed point as :cpp:func:`ComputeValueAndNodeTags`.
+  void AppendNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t node_index);
+
   /// Read-only access to the last value-tag map computed through
   /// :cpp:func:`ComputeValueAndNodeTags`.
   const std::unordered_map<std::string, std::string> &ValueTags() const noexcept {
@@ -290,6 +306,29 @@ public:
   ComputeInPlaceReuseGraph(const GraphProto &graph, const ShapesContext &ctx,
                            bool allow_input_overwrite = false,
                            const std::unordered_map<std::string, std::string> &value_tags = {});
+
+  /// Seeds the incremental in-place-reuse lifetime state for a declared graph
+  /// input (``is_graph_input``) or initializer (``is_initializer``). When
+  /// ``allow_input_overwrite`` is ``false`` the value is protected (kept) from
+  /// reuse; when ``true`` a graph input is instead made available before the
+  /// first node (producer index ``-1``) so it can be reused at its last use.
+  /// Mirrors the seeding performed whole-graph by
+  /// :cpp:func:`ComputeResultLifetimeInfo`.
+  void SeedReuseInput(const std::string &name, bool is_graph_input, bool is_initializer,
+                      bool allow_input_overwrite);
+
+  /// Seeds the incremental in-place-reuse lifetime state for a declared graph
+  /// output: the value is kept alive and removed from the release / not-used
+  /// lists of any earlier node that had treated it as releasable.
+  void SeedReuseOutput(const std::string &name);
+
+  /// Incrementally updates the in-place reuse and release-after annotations
+  /// after the node ``node`` at ``node_index`` has been appended, using the
+  /// shapes already inferred into ``ctx``. Only this node and the previous
+  /// last-users of its inputs are touched — no whole-graph loop — via
+  /// :cpp:func:`ComputeSingleNodeReuse`. Appends exactly one entry to each of
+  /// the per-node result vectors so they stay aligned with :cpp:func:`Size`.
+  void AppendNodeReuse(const NodeProto &node, std::size_t node_index, const ShapesContext &ctx);
 
   /// Number of nodes for which reuse has been computed (one entry per node of
   /// the analysed graph, in ``graph.node()`` order). Zero before
@@ -550,6 +589,17 @@ public:
     memory_.clear();
     peak_memory_.clear();
     shapes_.Clear();
+    node_tag_custom_override_.clear();
+    tag_producer_node_.clear();
+    tag_consumers_.clear();
+    incr_producer_.clear();
+    incr_last_use_.clear();
+    incr_keep_.clear();
+    incr_graph_inputs_.clear();
+    incr_graph_initializers_.clear();
+    incr_graph_outputs_.clear();
+    incr_byte_size_expr_cache_.clear();
+    incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
   }
 
 private:
@@ -574,6 +624,25 @@ private:
   std::vector<int64_t> peak_memory_;
   ComputeEventLog events_;
   bool events_enabled_ = false;
+
+  // ── Incremental (per-node) annotation state ──────────────────────────
+  // Maintained by AppendNodeTags / AppendNodeReuse so each appended node only
+  // touches itself and its immediate dependents (no whole-graph rescan).
+
+  // Value/node tag worklist state.
+  std::vector<char> node_tag_custom_override_;
+  std::unordered_map<std::string, int> tag_producer_node_;
+  std::unordered_map<std::string, std::vector<int>> tag_consumers_;
+
+  // In-place reuse lifetime state.
+  std::unordered_map<std::string, int> incr_producer_;
+  std::unordered_map<std::string, int> incr_last_use_;
+  std::unordered_set<std::string> incr_keep_;
+  std::unordered_set<std::string> incr_graph_inputs_;
+  std::unordered_set<std::string> incr_graph_initializers_;
+  std::unordered_set<std::string> incr_graph_outputs_;
+  std::unordered_map<std::string, std::optional<expressions::DimType>> incr_byte_size_expr_cache_;
+  expressions::SimplifiedExpressionCache incr_simplified_dim_cache_;
 };
 
 } // namespace compute

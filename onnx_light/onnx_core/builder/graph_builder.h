@@ -352,13 +352,9 @@ private:
   // Returns ``true`` when a shape function is registered for ``node``.
   bool ShapeFunctionAvailable(const NodeProto &node) const;
 
-  // Recomputes the annotations that must stay current as nodes are added:
-  // semantic value / node tags ("shape_tag") and in-place buffer reuse. Both
-  // depend on the graph built so far, so they are refreshed after every
-  // MakeNode. The release-after (last-use) lifetime is intentionally *not*
-  // finalized here: a value's last use is only settled once no further node can
-  // extend it, so it is computed by the finalizers (see Finalize) instead.
-  void RefreshAnnotations();
+  // Seeds the incremental annotation state (value tag + in-place-reuse
+  // lifetime) for a declared graph input named ``name``.
+  void SeedInputAnnotations(const std::string &name);
 
   // Seeds the owned ShapesContext with the descriptor of ``name``.
   void SeedShape(const std::string &name, SymTensor tensor);

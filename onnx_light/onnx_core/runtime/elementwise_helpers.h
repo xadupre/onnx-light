@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/parallel_for.h"
 #include "onnx_core/runtime/simple_tensor.h"
 
 #include <cstdint>
@@ -366,9 +367,11 @@ void UnaryHalfElementwise(const Tensor &x, Tensor &output, HalfDecodeFunc decode
   const int64_t n = x.element_count();
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
   uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
-  for (int64_t i = 0; i < n; ++i) {
-    py[i] = encode(op(decode(px[i])));
-  }
+  ParallelFor(n, [px, py, decode, encode, op](int64_t begin, int64_t end) {
+    for (int64_t i = begin; i < end; ++i) {
+      py[i] = encode(op(decode(px[i])));
+    }
+  });
 }
 
 /// In-place half-precision binary comparison kernel (decode→compare→BOOL).

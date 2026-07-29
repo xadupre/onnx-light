@@ -5,6 +5,7 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cfenv>
 #include <cmath>
@@ -34,14 +35,17 @@ void Round::operator()(const Tensor &x, Tensor &output) const {
   const float *px = x.AsFloat();
   float *py = output.AsFloat();
   // ONNX Round rounds halves to the nearest even integer (banker's rounding).
-  // std::nearbyint honors the current rounding mode, which defaults to
-  // FE_TONEAREST (round-to-nearest, ties-to-even) per IEEE 754.
-  const int previous_rounding_mode = std::fegetround();
-  std::fesetround(FE_TONEAREST);
-  for (int64_t i = 0; i < n; ++i) {
-    py[static_cast<size_t>(i)] = std::nearbyint(px[i]);
-  }
-  std::fesetround(previous_rounding_mode);
+  // std::nearbyint honors the current rounding mode, so each parallel block
+  // pins it to FE_TONEAREST (round-to-nearest, ties-to-even) per IEEE 754 and
+  // restores the previous mode afterwards.
+  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    const int previous_rounding_mode = std::fegetround();
+    std::fesetround(FE_TONEAREST);
+    for (int64_t i = begin; i < end; ++i) {
+      py[static_cast<size_t>(i)] = std::nearbyint(px[i]);
+    }
+    std::fesetround(previous_rounding_mode);
+  });
 }
 
 void Round::Run(RuntimeContext &rt) {

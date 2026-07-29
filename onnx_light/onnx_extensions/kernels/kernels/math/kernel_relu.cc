@@ -4,6 +4,8 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/parallel_for.h"
+
 #include "onnx_core/runtime/cast_helper.h"
 
 #include "onnx_core/runtime/node_helpers.h"
@@ -24,30 +26,36 @@ template <typename T> void ComputeInPlace(const Tensor &x, Tensor &output) {
   const int64_t n = x.element_count();
   const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.mutable_bytes());
-  for (int64_t i = 0; i < n; ++i) {
-    const T v = px[i];
-    py[i] = v > static_cast<T>(0) ? v : static_cast<T>(0);
-  }
+  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    for (int64_t i = begin; i < end; ++i) {
+      const T v = px[i];
+      py[i] = v > static_cast<T>(0) ? v : static_cast<T>(0);
+    }
+  });
 }
 
 void ComputeFloat16(const Tensor &x, Tensor &output) {
   const int64_t n = x.element_count();
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
   uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
-  for (int64_t i = 0; i < n; ++i) {
-    const float v = Float16BitsToFloat(px[i]);
-    py[i] = FloatToFloat16Bits(v > 0.0f ? v : 0.0f);
-  }
+  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    for (int64_t i = begin; i < end; ++i) {
+      const float v = Float16BitsToFloat(px[i]);
+      py[i] = FloatToFloat16Bits(v > 0.0f ? v : 0.0f);
+    }
+  });
 }
 
 void ComputeBfloat16(const Tensor &x, Tensor &output) {
   const int64_t n = x.element_count();
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
   uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
-  for (int64_t i = 0; i < n; ++i) {
-    const float v = Bfloat16BitsToFloat(px[i]);
-    py[i] = FloatToBfloat16Bits(v > 0.0f ? v : 0.0f);
-  }
+  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    for (int64_t i = begin; i < end; ++i) {
+      const float v = Bfloat16BitsToFloat(px[i]);
+      py[i] = FloatToBfloat16Bits(v > 0.0f ? v : 0.0f);
+    }
+  });
 }
 
 void Dispatch(const Tensor &x, Tensor &output) {

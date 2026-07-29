@@ -4,6 +4,7 @@
 
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_core/runtime/elementwise_helpers.h"
+#include "onnx_core/runtime/parallel_for.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/node_helpers.h"
@@ -40,17 +41,21 @@ void Erf::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = std::erf(px[i]);
-    }
+    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        py[i] = std::erf(px[i]);
+      }
+    });
     return;
   }
   case DataType::DOUBLE: {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = std::erf(px[i]);
-    }
+    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        py[i] = std::erf(px[i]);
+      }
+    });
     return;
   }
   case DataType::FLOAT16:

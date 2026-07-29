@@ -862,6 +862,22 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
         "ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON but no `onnx` target was created; "
         "BENCH_HAS_UPSTREAM_ONNX will NOT be defined for bench_load_file.")
     endif()
+
+    # bench_graph_builder profiles GraphBuilder construction from the Qwen3
+    # backend test model, so it additionally needs the backend-test registry
+    # (the model), the shape functions (incremental shape inference) and the
+    # operator schemas. These live in the kernel/shape/op libraries built only
+    # when ONNX_LIGHT_BUILD_KERNELS=ON.
+    if(benchmark_target STREQUAL "bench_graph_builder")
+      if(TARGET lib_onnx_backend_test)
+        target_link_libraries(${benchmark_target} PRIVATE
+            lib_onnx_backend_test lib_onnx_shape lib_onnx_op)
+      else()
+        message(WARNING
+          "bench_graph_builder requires ONNX_LIGHT_BUILD_KERNELS=ON (lib_onnx_backend_test); "
+          "it will fail to link without it.")
+      endif()
+    endif()
   endforeach()
 endif()
 

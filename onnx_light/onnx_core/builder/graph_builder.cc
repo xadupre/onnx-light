@@ -257,6 +257,9 @@ utils::RepeatedProtoField<AttributeProto> GraphBuilder::ImportAttributes(const N
 }
 
 void GraphBuilder::ImportGraph(const GraphProto &graph) {
+  // Suppress the per-node annotation refresh while replaying the graph and run
+  // it once at the end (see DeferAnnotations); this keeps import linear.
+  DeferAnnotations defer(*this);
   for (const auto &input : graph.input()) {
     MakeInput(input);
   }
@@ -281,9 +284,15 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
   for (const auto &output : graph.output()) {
     MakeOutput(output);
   }
+  if (defer.Outermost()) {
+    RefreshAnnotations();
+  }
 }
 
 void GraphBuilder::ImportFunction(const FunctionProto &function) {
+  // Suppress the per-node annotation refresh while replaying the function and
+  // run it once at the end (see DeferAnnotations); this keeps import linear.
+  DeferAnnotations defer(*this);
   for (const auto &opset : function.opset_import()) {
     SetOpsetVersion(opset.domain().empty() ? std::string() : opset.domain().value(),
                     static_cast<int>(opset.version()));
@@ -310,6 +319,9 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
   }
   for (int i = 0; i < function.output().size(); ++i) {
     MakeOutput(function.output(static_cast<std::size_t>(i)));
+  }
+  if (defer.Outermost()) {
+    RefreshAnnotations();
   }
 }
 
@@ -504,8 +516,12 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
 
   // Keep the semantic value / node tags ("shape_tag") and the in-place buffer
   // reuse up to date with the graph built so far. Release-after lifetime is
-  // deferred to the finalizers (see Finalize).
-  RefreshAnnotations();
+  // deferred to the finalizers (see Finalize). During bulk import a
+  // DeferAnnotations guard suppresses this per-node refresh and runs it once at
+  // the end, so importing N nodes stays linear instead of O(N^2).
+  if (!defer_annotations_) {
+    RefreshAnnotations();
+  }
 
   return resolved_outputs;
 }

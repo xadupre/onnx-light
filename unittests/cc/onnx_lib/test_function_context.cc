@@ -355,7 +355,7 @@ TEST_F(FunctionContextTest, TypeContextTest) {
   TypeProto floatTypeProto;
   floatTypeProto.ref_tensor_type().set_elem_type(TensorProto::DataType::FLOAT);
 
-  FunctionBodyBuildContextImpl ctx(nodeProto, {floatTypeProto});
+  FunctionBodyBuildContextImpl ctx(nodeProto, std::vector<TypeProto>{floatTypeProto});
   FunctionProto fnProto;
   // In onnx-light, BuildContextDependentFunction returns void.
   schema->BuildContextDependentFunction(ctx, fnProto);

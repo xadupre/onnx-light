@@ -80,7 +80,7 @@ void LoopInferenceFunction(InferenceContext &ctx) {
   std::vector<const TypeProto *> subgraph_input_types;
   subgraph_input_types.reserve(num_inputs);
 
-  std::vector<TypeProto> temporary_type_protos;
+  utils::RepeatedProtoField<TypeProto> temporary_type_protos;
   temporary_type_protos.reserve(num_inputs - 2);
 
   // create TypeProto to validate iteration number type is the same as the
@@ -234,7 +234,7 @@ void ScanInferenceFunction(InferenceContext &ctx) {
     output_axes.insert(output_axes.end(), num_scan_outputs, 0);
   }
 
-  std::vector<TypeProto> temporary_type_protos;
+  utils::RepeatedProtoField<TypeProto> temporary_type_protos;
   temporary_type_protos.reserve(num_inputs);
 
   std::vector<const TypeProto *> subgraph_input_types;
@@ -279,7 +279,7 @@ void ScanInferenceFunction(InferenceContext &ctx) {
         const auto &dims = shape.dim();
         mergeInDimensionInfo(dims.Get(axis), sequence_len_dim, 1);
 
-        temporary_type_protos.emplace_back(RemoveIthDimensionFromShape(*input_type, axis));
+        temporary_type_protos.push_back(RemoveIthDimensionFromShape(*input_type, axis));
         subgraph_input_types.emplace_back(&temporary_type_protos.back());
 
       } else {

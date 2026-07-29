@@ -33,6 +33,17 @@ void RepeatedField<T>::PrintToStringStream(std::stringstream &ss,
 
 template <typename T> void RepeatedProtoField<T>::clear() { values_.clear(); }
 
+template <typename T> void RepeatedProtoField<T>::resize(size_t n) {
+  if (n < values_.size()) {
+    values_.resize(n);
+  } else {
+    values_.reserve(n);
+    while (values_.size() < n) {
+      values_.emplace_back(std::make_shared<T>());
+    }
+  }
+}
+
 template <typename T> inline T &RepeatedProtoField<T>::operator[](size_t index) {
   return *values_[index];
 }
@@ -42,6 +53,10 @@ template <typename T> inline const T &RepeatedProtoField<T>::operator[](size_t i
 }
 
 template <typename T> void RepeatedProtoField<T>::push_back(const T &v) { add().CopyFrom(v); }
+
+template <typename T> void RepeatedProtoField<T>::push_back(T &&v) {
+  values_.emplace_back(std::make_shared<T>(std::move(v)));
+}
 
 template <typename T> void RepeatedProtoField<T>::extend(const std::vector<T> &v) {
   values_.reserve(values_.size() + v.size());
@@ -111,7 +126,19 @@ template <typename T> OptionalField<T> &OptionalField<T>::operator=(const T &v) 
   return *this;
 }
 
+template <typename T> OptionalField<T> &OptionalField<T>::operator=(T &&v) {
+  // Steal the contents of v instead of copying them: the field owns a single
+  // pointer, so a move-construct into a fresh T avoids the CopyFrom above.
+  value_.reset(new T(std::move(v)));
+  return *this;
+}
+
 template <typename T> OptionalField<T> &OptionalField<T>::operator=(const OptionalField<T> &v) {
+  // Guard against self-assignment: reset() below would otherwise destroy our own
+  // value before we could copy it.
+  if (this == &v) {
+    return *this;
+  }
   // We make a copy.
   reset();
   if (v.has_value()) {

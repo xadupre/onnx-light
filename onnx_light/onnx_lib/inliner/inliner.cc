@@ -564,7 +564,7 @@ struct InlinerImpl {
 #ifdef ONNX_LIGHT_VERSION_CONVERTER
         shape_inference::InferShapes(model); // TODO(ONNX): do shape inference incrementally
 #endif
-        std::vector<TypeProto> input_types;
+        utils::RepeatedProtoField<TypeProto> input_types;
         for (const auto &input : node.input()) {
           const TypeProto *t = TryGetType(model, input);
           if (t == nullptr) {
@@ -574,7 +574,7 @@ struct InlinerImpl {
             // function body without types, so leave this call uninlined.
             return false;
           }
-          input_types.emplace_back(*t);
+          input_types.push_back(*t);
         }
         ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContextImpl function_body_ctx(node, input_types);
         target_version = kNoConversion;

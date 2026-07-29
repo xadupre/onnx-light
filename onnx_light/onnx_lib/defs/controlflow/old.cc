@@ -701,7 +701,7 @@ void ScanInferenceFunction_opset8(InferenceContext &ctx) {
   }
   auto num_loop_state_vars = num_inputs - 1 - num_scan_inputs;
 
-  std::vector<TypeProto> temporary_type_protos;
+  utils::RepeatedProtoField<TypeProto> temporary_type_protos;
   temporary_type_protos.reserve(num_inputs);
 
   std::vector<const TypeProto *> subgraph_input_types;
@@ -730,7 +730,7 @@ void ScanInferenceFunction_opset8(InferenceContext &ctx) {
         propagateShapeFromInputToOutput(ctx, i, i - 1);
 
         // remove batch size dimension and add to subgraph_input_types
-        temporary_type_protos.emplace_back(RemoveDimensionsFromShape(*input_type, 1));
+        temporary_type_protos.push_back(RemoveDimensionsFromShape(*input_type, 1));
         subgraph_input_types.emplace_back(&temporary_type_protos.back());
       } else {
         subgraph_input_types.emplace_back(input_type);
@@ -743,7 +743,7 @@ void ScanInferenceFunction_opset8(InferenceContext &ctx) {
       if (has_shape) {
         // remove batch size and sequence length dimensions and add to
         // subgraph_input_types
-        temporary_type_protos.emplace_back(RemoveDimensionsFromShape(*input_type, 2));
+        temporary_type_protos.push_back(RemoveDimensionsFromShape(*input_type, 2));
         subgraph_input_types.emplace_back(&temporary_type_protos.back());
 
         // update batch_size and sequence_len if a value is available
@@ -859,7 +859,7 @@ static void ScanInferenceFunction_opset9(InferenceContext &ctx) {
     output_axes.insert(output_axes.end(), num_scan_outputs, 0);
   }
 
-  std::vector<TypeProto> temporary_type_protos;
+  utils::RepeatedProtoField<TypeProto> temporary_type_protos;
   temporary_type_protos.reserve(num_inputs);
 
   std::vector<const TypeProto *> subgraph_input_types;
@@ -903,7 +903,7 @@ static void ScanInferenceFunction_opset9(InferenceContext &ctx) {
         const auto &dims = shape.dim();
         mergeInDimensionInfo(dims.Get(axis), sequence_len_dim, 1);
 
-        temporary_type_protos.emplace_back(RemoveIthDimensionFromShape(*input_type, axis));
+        temporary_type_protos.push_back(RemoveIthDimensionFromShape(*input_type, axis));
         subgraph_input_types.emplace_back(&temporary_type_protos.back());
 
       } else {
@@ -1152,7 +1152,7 @@ static void LoopInferenceFunction_opset8(InferenceContext &ctx) {
 
   std::vector<const TypeProto *> subgraph_input_types;
 
-  std::vector<TypeProto> temporary_type_protos;
+  utils::RepeatedProtoField<TypeProto> temporary_type_protos;
   temporary_type_protos.reserve(num_inputs - 2);
 
   // create TypeProto to validate iteration number type is the same as the
@@ -1172,7 +1172,7 @@ static void LoopInferenceFunction_opset8(InferenceContext &ctx) {
 
     // copy so we can remove the shape before passing to the subgraph
     // inferencing
-    temporary_type_protos.emplace_back(*ctx.getInputType(i));
+    temporary_type_protos.push_back(*ctx.getInputType(i));
     auto &input_type = temporary_type_protos.back();
     input_type.mutable_tensor_type()->clear_shape();
 
@@ -1400,7 +1400,7 @@ static void LoopInferenceFunction_opset11(InferenceContext &ctx) {
 
   std::vector<const TypeProto *> subgraph_input_types;
 
-  std::vector<TypeProto> temporary_type_protos;
+  utils::RepeatedProtoField<TypeProto> temporary_type_protos;
   temporary_type_protos.reserve(num_inputs - 2);
 
   // create TypeProto to validate iteration number type is the same as the
@@ -1420,7 +1420,7 @@ static void LoopInferenceFunction_opset11(InferenceContext &ctx) {
 
     // copy so we can remove the shape before passing to the subgraph
     // inferencing
-    temporary_type_protos.emplace_back(*ctx.getInputType(i));
+    temporary_type_protos.push_back(*ctx.getInputType(i));
     auto &input_type = temporary_type_protos.back();
     input_type.mutable_tensor_type()->clear_shape();
 
@@ -1990,7 +1990,7 @@ static void LoopInferenceFunction_opset13(InferenceContext &ctx) {
   std::vector<const TypeProto *> subgraph_input_types;
   subgraph_input_types.reserve(num_inputs);
 
-  std::vector<TypeProto> temporary_type_protos;
+  utils::RepeatedProtoField<TypeProto> temporary_type_protos;
   temporary_type_protos.reserve(num_inputs - 2);
 
   // create TypeProto to validate iteration number type is the same as the
@@ -2010,7 +2010,7 @@ static void LoopInferenceFunction_opset13(InferenceContext &ctx) {
 
     // copy so we can remove the shape before passing to the subgraph
     // inferencing
-    temporary_type_protos.emplace_back(*ctx.getInputType(i));
+    temporary_type_protos.push_back(*ctx.getInputType(i));
     auto &input_type = temporary_type_protos.back();
 
     if (input_type.has_tensor_type()) {

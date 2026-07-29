@@ -362,7 +362,8 @@ static void SequenceMapInferenceFunction(InferenceContext &ctx) {
   auto num_outputs = ctx.getNumOutputs();
   assert(num_outputs > 0);
 
-  std::vector<TypeProto> tmp_type_protos(num_inputs);
+  utils::RepeatedProtoField<TypeProto> tmp_type_protos;
+  tmp_type_protos.resize(num_inputs);
   std::vector<const TypeProto *> subgraph_input_types;
   subgraph_input_types.reserve(num_inputs);
   for (size_t inputIndex = 0; inputIndex < num_inputs; inputIndex++) {

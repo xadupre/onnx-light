@@ -46,7 +46,8 @@ struct FunctionBodyBuildContextImpl : public FunctionBodyBuildContext {
   // It can be used for functions that do not depend on the type-context, but
   // will not be sufficient for functions that do use the type-context.
   explicit FunctionBodyBuildContextImpl(const NodeProto &node_proto,
-                                        const std::vector<TypeProto> &input_types = {})
+                                        const utils::RepeatedProtoField<TypeProto> &input_types =
+                                            utils::RepeatedProtoField<TypeProto>{})
       : node_proto_(node_proto), input_types_(input_types) {
     for (const auto &attr : node_proto.attribute()) {
       attributesByName_[attr.name()] = &attr;
@@ -89,7 +90,7 @@ struct FunctionBodyBuildContextImpl : public FunctionBodyBuildContext {
   std::unordered_map<std::string, const AttributeProto *> attributesByName_;
 
   NodeProto node_proto_;
-  std::vector<TypeProto> input_types_;
+  utils::RepeatedProtoField<TypeProto> input_types_;
 };
 
 using FunctionBodyQueryFunction = std::function<bool(FunctionBodyBuildContext &)>;

@@ -766,11 +766,13 @@ std::size_t GraphBuilder::DeduplicateInitializers(const InitializerContentIndex 
     const int64_t hash = initializer.ContentHash(/*include_content=*/false);
     if (output_names.find(initializer.name().value()) == output_names.end()) {
       const TensorProto *survivor = nullptr;
-      const auto range = index.equal_range(hash);
-      for (auto it = range.first; it != range.second; ++it) {
-        if (SameInitializerContent(*it->second, initializer)) {
-          survivor = it->second;
-          break;
+      auto candidates = index.find(hash);
+      if (candidates != index.end()) {
+        for (const TensorProto *candidate : candidates->second) {
+          if (SameInitializerContent(*candidate, initializer)) {
+            survivor = candidate;
+            break;
+          }
         }
       }
       if (survivor != nullptr) {
@@ -783,7 +785,7 @@ std::size_t GraphBuilder::DeduplicateInitializers(const InitializerContentIndex 
     // Register the survivor right away so later initializers in this same scope
     // (and, once the loop is done, subgraphs) can collapse onto it. Elements are
     // heap-owned by the field, so the pointer stays valid as ``kept`` grows.
-    index.emplace(hash, &kept[kept.size() - 1]);
+    index[hash].push_back(&kept[kept.size() - 1]);
   }
   initializers_ = std::move(kept);
 

@@ -244,18 +244,18 @@ void SetExternalDataLocation(TensorProto &tensor, const std::string &location) {
 // nested in node attributes (AttributeProto.g / AttributeProto.graphs),
 // invoking ``fn`` on each.
 template <typename F> void ForEachInitializerTensor(GraphProto &graph, F &&fn) {
-  for (int i = 0; i < graph.ref_initializer().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(graph.ref_initializer().size()); ++i) {
     fn(graph.ref_initializer()[i]);
   }
-  for (int i = 0; i < graph.ref_node().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(graph.ref_node().size()); ++i) {
     NodeProto &node = graph.ref_node()[i];
-    for (int j = 0; j < node.ref_attribute().size(); ++j) {
+    for (int j = 0; j < static_cast<int>(node.ref_attribute().size()); ++j) {
       AttributeProto &attr = node.ref_attribute()[j];
       if (attr.has_g()) {
         ForEachInitializerTensor(attr.ref_g(), fn);
       }
       if (attr.has_graphs()) {
-        for (int k = 0; k < attr.ref_graphs().size(); ++k) {
+        for (int k = 0; k < static_cast<int>(attr.ref_graphs().size()); ++k) {
           ForEachInitializerTensor(attr.ref_graphs()[k], fn);
         }
       }
@@ -273,15 +273,15 @@ template <typename F> void ForEachAttributeTensorInGraph(GraphProto &graph, F &&
 }
 
 template <typename Nodes, typename F> void ForEachAttributeTensorInNodes(Nodes &nodes, F &&fn) {
-  for (int i = 0; i < nodes.size(); ++i) {
+  for (int i = 0; i < static_cast<int>(nodes.size()); ++i) {
     NodeProto &node = nodes[i];
-    for (int j = 0; j < node.ref_attribute().size(); ++j) {
+    for (int j = 0; j < static_cast<int>(node.ref_attribute().size()); ++j) {
       AttributeProto &attr = node.ref_attribute()[j];
       if (attr.has_t()) {
         fn(attr.ref_t());
       }
       if (attr.has_tensors()) {
-        for (int k = 0; k < attr.ref_tensors().size(); ++k) {
+        for (int k = 0; k < static_cast<int>(attr.ref_tensors().size()); ++k) {
           fn(attr.ref_tensors()[k]);
         }
       }
@@ -289,7 +289,7 @@ template <typename Nodes, typename F> void ForEachAttributeTensorInNodes(Nodes &
         ForEachAttributeTensorInGraph(attr.ref_g(), fn);
       }
       if (attr.has_graphs()) {
-        for (int k = 0; k < attr.ref_graphs().size(); ++k) {
+        for (int k = 0; k < static_cast<int>(attr.ref_graphs().size()); ++k) {
           ForEachAttributeTensorInGraph(attr.ref_graphs()[k], fn);
         }
       }
@@ -388,7 +388,7 @@ void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file,
       ForEachAttributeTensorInGraph(model.ref_graph(), handle_tensor);
     }
     if (model.has_functions()) {
-      for (int i = 0; i < model.ref_functions().size(); ++i) {
+      for (int i = 0; i < static_cast<int>(model.ref_functions().size()); ++i) {
         FunctionProto &fn = model.ref_functions()[i];
         ForEachAttributeTensorInNodes(fn.ref_node(), handle_tensor);
       }
@@ -412,7 +412,7 @@ void LoadExternalDataForModel(ModelProto &model, const std::string &base_dir) {
     ForEachAttributeTensorInGraph(model.ref_graph(), handle_tensor);
   }
   if (model.has_functions()) {
-    for (int i = 0; i < model.ref_functions().size(); ++i) {
+    for (int i = 0; i < static_cast<int>(model.ref_functions().size()); ++i) {
       FunctionProto &fn = model.ref_functions()[i];
       ForEachAttributeTensorInNodes(fn.ref_node(), handle_tensor);
     }
@@ -447,7 +447,7 @@ void ReadExternalDataEntries(const TensorProto &tensor, std::string &location, i
   offset = 0;
   length = -1;
   bool has_offset = false;
-  for (int i = 0; i < tensor.ref_external_data().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(tensor.ref_external_data().size()); ++i) {
     const StringStringEntryProto &entry = tensor.ref_external_data()[i];
     const utils::OptionalString &key = entry.ref_key();
     if (key == "location") {
@@ -473,7 +473,7 @@ void RewriteExternalDataEntries(TensorProto &tensor, const std::string &new_loca
                                 int64_t new_offset, int64_t length) {
   std::string checksum;
   bool has_checksum = false;
-  for (int i = 0; i < tensor.ref_external_data().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(tensor.ref_external_data().size()); ++i) {
     const StringStringEntryProto &entry = tensor.ref_external_data()[i];
     if (entry.ref_key() == "checksum") {
       checksum = entry.ref_value();
@@ -1049,7 +1049,7 @@ bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
           std::string location;
           int64_t offset = 0;
           int64_t length = -1;
-          for (int k = 0; k < it_chunks->ref_external_data().size(); ++k) {
+          for (int k = 0; k < static_cast<int>(it_chunks->ref_external_data().size()); ++k) {
             const StringStringEntryProto &entry = it_chunks->ref_external_data()[k];
             const utils::OptionalString &key = entry.ref_key();
             if (key == "location") {
@@ -1168,7 +1168,7 @@ bool ReadIntegerValues(const TensorProto &tensor_proto, std::vector<int64_t> &ou
   // Type-specific storage takes precedence over raw_data when populated.
   if (dtype == TensorProto::DataType::INT64 && tensor_proto.int64_data().size() > 0) {
     out.reserve(tensor_proto.int64_data().size());
-    for (int i = 0; i < tensor_proto.int64_data().size(); ++i) {
+    for (int i = 0; i < static_cast<int>(tensor_proto.int64_data().size()); ++i) {
       out.push_back(tensor_proto.int64_data()[i]);
     }
     return true;
@@ -1178,7 +1178,7 @@ bool ReadIntegerValues(const TensorProto &tensor_proto, std::vector<int64_t> &ou
        dtype == TensorProto::DataType::UINT8) &&
       tensor_proto.int32_data().size() > 0) {
     out.reserve(tensor_proto.int32_data().size());
-    for (int i = 0; i < tensor_proto.int32_data().size(); ++i) {
+    for (int i = 0; i < static_cast<int>(tensor_proto.int32_data().size()); ++i) {
       out.push_back(static_cast<int64_t>(tensor_proto.int32_data()[i]));
     }
     return true;
@@ -1186,7 +1186,7 @@ bool ReadIntegerValues(const TensorProto &tensor_proto, std::vector<int64_t> &ou
   if ((dtype == TensorProto::DataType::UINT64 || dtype == TensorProto::DataType::UINT32) &&
       tensor_proto.uint64_data().size() > 0) {
     out.reserve(tensor_proto.uint64_data().size());
-    for (int i = 0; i < tensor_proto.uint64_data().size(); ++i) {
+    for (int i = 0; i < static_cast<int>(tensor_proto.uint64_data().size()); ++i) {
       out.push_back(static_cast<int64_t>(tensor_proto.uint64_data()[i]));
     }
     return true;
@@ -1272,14 +1272,14 @@ bool ReadFloatingValues(const TensorProto &tensor_proto, std::vector<double> &ou
   // Type-specific storage takes precedence over raw_data when populated.
   if (dtype == TensorProto::DataType::FLOAT && tensor_proto.float_data().size() > 0) {
     out.reserve(tensor_proto.float_data().size());
-    for (int i = 0; i < tensor_proto.float_data().size(); ++i) {
+    for (int i = 0; i < static_cast<int>(tensor_proto.float_data().size()); ++i) {
       out.push_back(static_cast<double>(tensor_proto.float_data()[i]));
     }
     return true;
   }
   if (dtype == TensorProto::DataType::DOUBLE && tensor_proto.double_data().size() > 0) {
     out.reserve(tensor_proto.double_data().size());
-    for (int i = 0; i < tensor_proto.double_data().size(); ++i) {
+    for (int i = 0; i < static_cast<int>(tensor_proto.double_data().size()); ++i) {
       out.push_back(tensor_proto.double_data()[i]);
     }
     return true;
@@ -1336,7 +1336,7 @@ const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_nam
                                      const char *context) {
   const std::string prefix =
       (context != nullptr && context[0] != '\0') ? (std::string(context) + ": ") : std::string();
-  for (int i = 0; i < node.attribute().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(node.attribute().size()); ++i) {
     const AttributeProto &attr = node.attribute()[i];
     if (attr.name() != attr_name) {
       continue;

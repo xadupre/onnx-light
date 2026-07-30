@@ -143,7 +143,7 @@ TEST(OnnxOpReductionRegistrationTest, ReduceMaxMinSupports8BitAndBool) {
   const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory();
 
-  for (const std::string &op : {"ReduceMax", "ReduceMin"}) {
+  for (const std::string &op : {std::string("ReduceMax"), std::string("ReduceMin")}) {
     const std::vector<core::schema::LightOpSchema> op_schemas =
         onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory(op);
     const core::schema::LightOpSchema *const v20 = FindByVersion(op_schemas, 20);
@@ -201,7 +201,7 @@ TEST(OnnxOpReductionRegistrationTest, ArgReduceSchemas) {
   const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory();
 
-  for (const std::string &op : {"ArgMax", "ArgMin"}) {
+  for (const std::string &op : {std::string("ArgMax"), std::string("ArgMin")}) {
     const std::vector<core::schema::LightOpSchema> op_schemas =
         onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory(op);
     const core::schema::LightOpSchema *const v13 = FindByVersion(op_schemas, 13);

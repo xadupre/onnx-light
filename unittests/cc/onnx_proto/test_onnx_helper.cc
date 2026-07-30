@@ -2252,7 +2252,7 @@ TEST(onnx_alignment, AlignExternalDataStreamingRewritesAlignedWeights) {
     std::string loc;
     int64_t off = -1;
     int64_t len = -1;
-    for (int j = 0; j < meta.ref_external_data().size(); ++j) {
+    for (int j = 0; j < static_cast<int>(meta.ref_external_data().size()); ++j) {
       const StringStringEntryProto &e = meta.ref_external_data()[j];
       if (e.ref_key() == "location")
         loc = e.ref_value();
@@ -2347,7 +2347,7 @@ TEST(onnx_alignment, SaveModelWithSharedExternalDataReusesFirstModelWeights) {
   for (size_t i = 0; i < first_meta.ref_graph().ref_initializer().size(); ++i) {
     TensorProto *t = g2->add_initializer();
     *t = first_meta.ref_graph().ref_initializer()[i];
-    for (int j = 0; j < t->ref_external_data().size(); ++j) {
+    for (int j = 0; j < static_cast<int>(t->ref_external_data().size()); ++j) {
       const StringStringEntryProto &e = t->ref_external_data()[j];
       if (e.ref_key() == "location") {
         reused_expected_location[t->ref_name()] = e.ref_value();
@@ -2385,14 +2385,14 @@ TEST(onnx_alignment, SaveModelWithSharedExternalDataReusesFirstModelWeights) {
     ParseProtoFromStream(meta, meta_stream, meta_opts, /*clear_external_data=*/false);
   }
   ASSERT_EQ(meta.ref_graph().ref_initializer().size(), 3);
-  for (int i = 0; i < meta.ref_graph().ref_initializer().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(meta.ref_graph().ref_initializer().size()); ++i) {
     const TensorProto &t = meta.ref_graph().ref_initializer()[i];
     ASSERT_TRUE(t.has_data_location());
     ASSERT_EQ(t.ref_data_location(), TensorProto::DataLocation::EXTERNAL);
     std::string loc;
     int64_t off = -1;
     int64_t len = -1;
-    for (int j = 0; j < t.ref_external_data().size(); ++j) {
+    for (int j = 0; j < static_cast<int>(t.ref_external_data().size()); ++j) {
       const StringStringEntryProto &e = t.ref_external_data()[j];
       if (e.ref_key() == "location")
         loc = e.ref_value();

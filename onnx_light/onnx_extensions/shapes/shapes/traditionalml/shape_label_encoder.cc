@@ -24,7 +24,7 @@ namespace {
 // value.
 std::vector<TensorType> CollectLabelEncoderValueTypes(const NodeProto &node) {
   std::vector<TensorType> types;
-  for (int i = 0; i < node.attribute().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(node.attribute().size()); ++i) {
     const AttributeProto &attr = node.attribute()[i];
     const std::string name = attr.name();
     if (name == "values_tensor") {

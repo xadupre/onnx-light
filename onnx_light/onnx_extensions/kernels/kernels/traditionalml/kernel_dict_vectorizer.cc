@@ -141,7 +141,7 @@ void DictVectorizer::Run(RuntimeContext &rt) {
     const std::vector<std::string> &keys = x_keys.AsStrings();
     std::vector<std::string> vocab;
     vocab.reserve(str_vocab->strings_size());
-    for (size_t i = 0; i < str_vocab->strings_size(); ++i) {
+    for (int i = 0; i < static_cast<int>(str_vocab->strings_size()); ++i) {
       vocab.emplace_back(str_vocab->strings(i));
     }
     switch (x_values.data_type) {
@@ -168,7 +168,7 @@ void DictVectorizer::Run(RuntimeContext &rt) {
     const std::span<const int64_t> keys = TensorSpan<int64_t>(x_keys);
     std::vector<int64_t> vocab;
     vocab.reserve(int_vocab->ints_size());
-    for (size_t i = 0; i < int_vocab->ints_size(); ++i) {
+    for (int i = 0; i < static_cast<int>(int_vocab->ints_size()); ++i) {
       vocab.push_back(int_vocab->ints(i));
     }
     switch (x_values.data_type) {

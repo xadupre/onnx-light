@@ -50,11 +50,6 @@ Shape RowMajorStrides(const Shape &shape) {
   return strides;
 }
 
-void ValidateFloat(const Tensor &t, const char *name) {
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::ReduceMinMax: ", name, " must be a FLOAT tensor.");
-}
-
 void ValidateFloatOrBool(const Tensor &t, const char *name) {
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT) ||
                           t.data_type == static_cast<int32_t>(DataType::BOOL),

@@ -682,7 +682,7 @@ LightOpSchema MakeSqueezeSchema(int since_version, const std::vector<TensorType>
                : "List of integers indicating the dimensions to squeeze. Negative value means "
                  "counting dimensions from the back. Accepted range is [-r, r-1] where r = "
                  "rank(data).",
-           AttributeType::INTS, /*required=*/false},
+           AttributeType::INTS, /*required=*/false, std::monostate{}},
       });
 }
 

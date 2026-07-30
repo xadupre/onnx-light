@@ -2026,6 +2026,12 @@ void AddOnnxPyBuilder(nb::module_ &m) {
            "initializer. The deduplication spans the enclosing graph and its subgraphs (a "
            "subgraph body sees the enclosing scope), while local functions are deduplicated on "
            "their own, and returns the total number of initializers removed.")
+      .def("remove_identity_nodes", &GraphBuilder::RemoveIdentityNodes,
+           "Recursively removes default-domain Identity nodes, rewriting every reference to a "
+           "dropped identity's output to its input and collapsing chains of identities in a "
+           "single pass. An Identity whose output is a declared graph output is kept. The removal "
+           "descends into nested subgraphs and local functions, and returns the total number of "
+           "Identity nodes removed.")
       .def(
           "build_graph", [](const GraphBuilder &self) { return self.BuildGraph(); },
           "Assembles the accumulated inputs, initializers, nodes and outputs into a "

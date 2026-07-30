@@ -279,6 +279,27 @@ public:
   ///         from nested subgraphs and local functions.
   std::size_t RemoveDuplicateInitializers();
 
+  /// Removes :onnx:`Identity` nodes from the builder.
+  ///
+  /// Every default-domain ``Identity`` node simply forwards its single input to
+  /// its single output. Such a node is dropped and every reference to its
+  /// output -- in this builder's node inputs and in the node inputs of nested
+  /// subgraphs, which capture values from the enclosing scope -- is rewritten to
+  /// the node's input. Chains of identities are collapsed transitively, so a
+  /// value that flowed through several identities ends up pointing at the
+  /// original producer in a single pass.
+  ///
+  /// An ``Identity`` whose output is a declared graph output is kept, because
+  /// the graph must still produce a value under that name. Nodes with an empty
+  /// input or output name are left untouched.
+  ///
+  /// The removal is recursive: it descends into nested subgraphs and local
+  /// functions to remove their own identities as well.
+  ///
+  /// @return The total number of ``Identity`` nodes removed, including those
+  ///         pruned from nested subgraphs and local functions.
+  std::size_t RemoveIdentityNodes();
+
   // ── Local functions / subgraphs ──────────────────────────────────────
 
   /// Creates and returns a nested builder for a local function named ``name``.

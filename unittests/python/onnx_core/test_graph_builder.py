@@ -228,6 +228,55 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(len(body_graph.initializer), 0)
         self.assertEqual(body_graph.node[0].input[1], "w")
 
+    def test_remove_identity_nodes(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 3])
+        # A chain of two identities feeding a live consumer.
+        (i1,) = builder.make_node("Identity", ["x"])
+        (i2,) = builder.make_node("Identity", [i1])
+        (used,) = builder.make_node("Neg", [i2])
+        builder.make_output(used)
+
+        self.assertEqual(len(builder.build_graph().node), 3)
+        self.assertEqual(builder.remove_identity_nodes(), 2)
+        graph = builder.build_graph()
+        self.assertEqual(len(graph.node), 1)
+        self.assertEqual(graph.node[0].op_type, "Neg")
+        # The chain collapses onto the original producer.
+        self.assertEqual(graph.node[0].input[0], "x")
+        # A second pass has nothing left to remove.
+        self.assertEqual(builder.remove_identity_nodes(), 0)
+
+    def test_remove_identity_nodes_keeps_graph_output(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 3])
+        # The identity output is a declared graph output, so it is kept.
+        (out,) = builder.make_node("Identity", ["x"])
+        builder.make_output(out)
+
+        self.assertEqual(builder.remove_identity_nodes(), 0)
+        graph = builder.build_graph()
+        self.assertEqual(len(graph.node), 1)
+        self.assertEqual(graph.node[0].op_type, "Identity")
+
+    def test_remove_identity_nodes_recurses_into_subgraphs(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 3])
+        (top,) = builder.make_node("Neg", ["x"])
+        builder.make_output(top)
+
+        body = builder.make_subgraph("body")
+        body.make_input("a", FLOAT, [2, 3])
+        (inner,) = body.make_node("Identity", ["a"])
+        (body_used,) = body.make_node("Neg", [inner])
+        body.make_output(body_used)
+
+        self.assertEqual(builder.remove_identity_nodes(), 1)
+        body_graph = body.build_graph()
+        self.assertEqual(len(body_graph.node), 1)
+        self.assertEqual(body_graph.node[0].op_type, "Neg")
+        self.assertEqual(body_graph.node[0].input[0], "a")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

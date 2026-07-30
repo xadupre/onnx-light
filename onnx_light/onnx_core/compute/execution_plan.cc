@@ -105,6 +105,7 @@ ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
 }
 
 ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
+  inputs_.reserve(graph.input().size());
   for (size_t i = 0; i < graph.input().size(); ++i) {
     const std::string name = graph.input()[i].name();
     if (!name.empty()) {
@@ -112,6 +113,7 @@ ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
       inputs_.push_back(name);
     }
   }
+  initializers_.reserve(graph.initializer().size());
   for (size_t i = 0; i < graph.initializer().size(); ++i) {
     const std::string name = graph.initializer()[i].name();
     if (!name.empty()) {
@@ -119,6 +121,7 @@ ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
       initializers_.push_back(name);
     }
   }
+  outputs_.reserve(graph.output().size());
   for (size_t i = 0; i < graph.output().size(); ++i) {
     const std::string name = graph.output()[i].name();
     if (!name.empty()) {
@@ -135,6 +138,7 @@ ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
 }
 
 ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
+  inputs_.reserve(func.input_size());
   for (size_t i = 0; i < func.input_size(); ++i) {
     const std::string name = func.input(i);
     if (!name.empty()) {
@@ -142,6 +146,7 @@ ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
       inputs_.push_back(name);
     }
   }
+  outputs_.reserve(func.output_size());
   for (size_t i = 0; i < func.output_size(); ++i) {
     const std::string name = func.output(i);
     if (!name.empty()) {
@@ -162,6 +167,9 @@ void ExecutionPlan::BuildActions() {
   if (nodes_.empty()) {
     return;
   }
+  // Each node typically emits lock-input, allocate-output, execute, and
+  // release actions; 4× the node count is a reasonable lower bound.
+  actions_.reserve(4 * nodes_.size());
 
   const std::unordered_set<std::string> input_set(inputs_.begin(), inputs_.end());
   const std::unordered_set<std::string> initializer_set(initializers_.begin(), initializers_.end());

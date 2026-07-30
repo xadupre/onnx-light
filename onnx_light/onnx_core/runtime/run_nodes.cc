@@ -937,18 +937,96 @@ namespace detail {
 
 namespace {
 
-// Kernel that dispatches a node to a model-local ``FunctionProto`` body,
-// resolved once during kernel initialization (see :cpp:func:`ResolveNodeKernel`).
+// Kernel that dispatches a node to a model-local ``FunctionProto`` body.
+// The bound function (with resolved attribute references) is computed once at
+// construction time, and the execution plan + per-node kernel instances are
+// resolved on the first ``Run`` and reused across all subsequent calls.
+// This avoids the per-call deep-copy of the FunctionProto, re-building the
+// ExecutionPlan, and re-resolving every kernel that ``CallModelLocalFunction``
+// would otherwise perform.
 class ModelLocalFunctionKernel : public KernelBase {
 public:
   ModelLocalFunctionKernel(const NodeProto &node, const FunctionProto &func)
       : KernelBase(KernelContext{}), func_(func) {
     set_node(node);
+    // Pre-bind attribute references at construction time (the call-site
+    // node and function body are both fixed for this kernel's lifetime).
+    std::unordered_map<std::string, const AttributeProto *> attr_map;
+    for (size_t i = 0; i < func_.attribute_proto().size(); ++i) {
+      const AttributeProto &a = func_.attribute_proto()[i];
+      attr_map[a.name()] = &a;
+    }
+    for (size_t i = 0; i < node.attribute().size(); ++i) {
+      const AttributeProto &a = node.attribute()[i];
+      attr_map[a.name()] = &a;
+    }
+    bound_func_.CopyFrom(func_);
+    for (size_t i = 0; i < bound_func_.node().size(); ++i) {
+      BindRefAttributes(bound_func_.ref_node()[i], attr_map);
+    }
+    plan_ = std::make_unique<ExecutionPlan>(bound_func_);
   }
-  void Run(RuntimeContext &rt) override { CallModelLocalFunction(*node_, func_, rt); }
+
+  void Run(RuntimeContext &rt) override {
+    const std::string op_type = node_->op_type();
+    EXT_ENFORCE_INVALID(
+        !(static_cast<int>(node_->input_size()) != static_cast<int>(func_.input_size())),
+        "RunNode: call to model-local function '", op_type, "' expects ", func_.input_size(),
+        " input(s), got ", node_->input_size(), ".");
+    EXT_ENFORCE_INVALID(
+        !(static_cast<int>(node_->output_size()) != static_cast<int>(func_.output_size())),
+        "RunNode: call to model-local function '", op_type, "' expects ", func_.output_size(),
+        " output(s), got ", node_->output_size(), ".");
+
+    RuntimeContext child = rt.MakeFunctionContext();
+
+    // Bind formal function inputs (borrow, no deep-copy).
+    for (size_t i = 0; i < func_.input_size(); ++i) {
+      const std::string caller_name = node_->input(i);
+      const std::string param_name = func_.input(i);
+      if (caller_name.empty() || param_name.empty()) {
+        continue;
+      }
+      auto it = rt.tensors().find(caller_name);
+      EXT_ENFORCE_INVALID(it != rt.tensors().end(), "RunNode: input '", caller_name,
+                          "' of call to model-local function '", op_type,
+                          "' is missing from the tensor map.");
+      const Tensor &src = it->second;
+      Tensor bound =
+          (static_cast<DataType>(src.data_type) == DataType::STRING)
+              ? Tensor::BorrowStrings(param_name, src.shape, src.AsStrings())
+              : Tensor::Borrow(param_name, src.data_type, src.shape, src.bytes(), src.size_bytes());
+      child.Put(param_name, std::move(bound), RuntimeEventKind::kInput);
+    }
+
+    // Resolve kernels once on first run, reuse on subsequent calls.
+    if (!session_) {
+      session_ = std::make_unique<RuntimeSession>(*plan_);
+    }
+    session_->Run(child);
+
+    // Propagate formal outputs back to the caller's tensor map.
+    for (size_t i = 0; i < func_.output_size(); ++i) {
+      const std::string caller_name = node_->output(i);
+      const std::string param_name = func_.output(i);
+      if (caller_name.empty()) {
+        continue;
+      }
+      auto it = child.tensors().find(param_name);
+      EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: output '", param_name,
+                          "' of model-local function '", op_type,
+                          "' was not produced by the function body.");
+      Tensor result = CloneTensor(it->second, rt.allocator());
+      result.name = caller_name;
+      rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
+    }
+  }
 
 private:
   const FunctionProto &func_;
+  FunctionProto bound_func_;
+  std::unique_ptr<ExecutionPlan> plan_;
+  std::unique_ptr<RuntimeSession> session_;
 };
 
 // Control-flow kernels: each owns the subgraph session(s) built once during

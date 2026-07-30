@@ -128,6 +128,10 @@ find_package(OpenMP QUIET)
 # Find OpenSSL (optional – enables encrypted model save/load)
 find_package(OpenSSL QUIET)
 
+# BLAKE3 (vendored, onnx_light/onnx_proto/blake3) is written in C, so enable the
+# C language for the few translation units that make up the hasher.
+enable_language(C)
+
 # Set include directories
 set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_helpers/include")
 set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto")
@@ -188,8 +192,23 @@ file(GLOB ONNX_SHAPE_INFERENCE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE
 file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/version_converter/*.cc")
 set(ONNX_CHECKER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/checker.cc" )
 file(GLOB_RECURSE ONNX_LIGHT_BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_*.cc")
+
+# Vendored BLAKE3 hasher (onnx_light/onnx_proto/blake3). Compiled portable-only
+# (no SIMD/assembly object files) and with BLAKE3_USE_TBB so the std::async based
+# join in blake3_join.cc parallelizes large hashes without a oneTBB dependency.
+set(ONNX_BLAKE3_PATH "${ONNX_PROTO_PATH}/blake3")
+set(ONNX_BLAKE3_SOURCES
+    "${ONNX_BLAKE3_PATH}/blake3.c"
+    "${ONNX_BLAKE3_PATH}/blake3_dispatch.c"
+    "${ONNX_BLAKE3_PATH}/blake3_portable.c"
+    "${ONNX_BLAKE3_PATH}/blake3_join.cc"
+    "${ONNX_BLAKE3_PATH}/blake3_hash.cc")
+set_source_files_properties(${ONNX_BLAKE3_SOURCES} PROPERTIES COMPILE_DEFINITIONS
+    "BLAKE3_USE_TBB;BLAKE3_NO_SSE2;BLAKE3_NO_SSE41;BLAKE3_NO_AVX2;BLAKE3_NO_AVX512;BLAKE3_USE_NEON=0")
+
 set(ONNX_LIGHT_PROTO_ALL_SOURCES
     ${ONNX_LIGHT_SOURCES}
+    ${ONNX_BLAKE3_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_helpers/onnx_light_helpers.cc")
 set(ONNX_LIGHT_LIB_ALL_SOURCES
     "${ONNX_COMMON_PATH}/ir_pb_converter.cc"

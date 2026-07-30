@@ -1,0 +1,3 @@
+# Vendored BLAKE3 sources are kept verbatim from upstream; do not reformat them.
+DisableFormat: true
+SortIncludes: false

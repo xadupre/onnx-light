@@ -1,5 +1,6 @@
 #include "../common/proto_utils.h"
 #include "../common/string_utils.h"
+#include "blake3/blake3_hash.h"
 #include "onnx.h"
 #include "onnx_alias.h"
 #include "onnx_helper.h"
@@ -621,6 +622,80 @@ TEST(onnx_proto, TensorProtoContentHash) {
 
   // The return type is int64_t.
   static_assert(std::is_same<decltype(a.ContentHash(true)), int64_t>::value);
+}
+
+TEST(onnx_proto, Blake3HasherMatchesOfficialVectors) {
+  // The content hash reduces the official BLAKE3 digest to its first eight bytes
+  // read little-endian. These expectations pin the vendored library (and its
+  // parallel join) to the canonical BLAKE3 output for the standard test inputs
+  // (message byte i == i % 251).
+  auto reduce = [](const std::vector<uint8_t> &digest) {
+    uint64_t value = 0;
+    for (int i = 0; i < 8; ++i) {
+      value |= static_cast<uint64_t>(digest[i]) << (8 * i);
+    }
+    return static_cast<int64_t>(value);
+  };
+
+  {
+    // Empty input: af1349b9f5f9a1a6...
+    utils::Blake3Hasher hasher;
+    EXPECT_EQ(hasher.Finalize64(), reduce({0xaf, 0x13, 0x49, 0xb9, 0xf5, 0xf9, 0xa1, 0xa6}));
+  }
+  {
+    // 1024-byte input crosses a full BLAKE3 chunk: 42214739f095a406...
+    std::vector<uint8_t> input(1024);
+    for (std::size_t i = 0; i < input.size(); ++i) {
+      input[i] = static_cast<uint8_t>(i % 251);
+    }
+    utils::Blake3Hasher hasher;
+    hasher.Update(input.data(), input.size());
+    EXPECT_EQ(hasher.Finalize64(), reduce({0x42, 0x21, 0x47, 0x39, 0xf0, 0x95, 0xa4, 0x06}));
+  }
+}
+
+TEST(onnx_proto, TensorProtoContentHashParallelRawData) {
+  // A payload larger than the parallel threshold (256 KiB) exercises the
+  // multi-threaded BLAKE3 tree join. The digest must be deterministic and
+  // independent of the number of threads used.
+  const std::size_t size = 4 * 1024 * 1024; // 4 MiB
+  auto make = [size](uint8_t seed) {
+    TensorProto tp;
+    tp.set_data_type(TensorProto::DataType::UINT8);
+    tp.add_dims(static_cast<uint64_t>(size));
+    std::string raw(size, static_cast<char>(0));
+    for (std::size_t i = 0; i < size; ++i) {
+      raw[i] = static_cast<char>((i + seed) % 251);
+    }
+    tp.set_raw_data(raw);
+    return tp;
+  };
+
+  const TensorProto a = make(0);
+  const TensorProto b = make(0);
+  const TensorProto c = make(1);
+
+  // Identical content hashes equal, and the result is stable across repeated
+  // (independently parallelized) calls.
+  EXPECT_EQ(a.ContentHash(true), b.ContentHash(true));
+  EXPECT_EQ(a.ContentHash(true), a.ContentHash(true));
+
+  // A different payload of the same size yields a different content hash while
+  // the metadata-only hash still collides.
+  EXPECT_EQ(a.ContentHash(false), c.ContentHash(false));
+  EXPECT_NE(a.ContentHash(true), c.ContentHash(true));
+
+  // Flipping a single byte flips the content hash.
+  std::string raw(size, static_cast<char>(0));
+  for (std::size_t i = 0; i < size; ++i) {
+    raw[i] = static_cast<char>(i % 251);
+  }
+  raw[size / 2] = static_cast<char>(raw[size / 2] ^ 0x01);
+  TensorProto flipped;
+  flipped.set_data_type(TensorProto::DataType::UINT8);
+  flipped.add_dims(static_cast<uint64_t>(size));
+  flipped.set_raw_data(raw);
+  EXPECT_NE(a.ContentHash(true), flipped.ContentHash(true));
 }
 
 TEST(onnx_proto, TensorProtoName2) {

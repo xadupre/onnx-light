@@ -334,7 +334,7 @@ FIELD_DEFAULT(int64_t, begin, 1, 0, "Segment start.")
 FIELD_DEFAULT(int64_t, end, 2, 0, "Segment end.")
 END_PROTO()
 
-FIELD_REPEATED(uint64_t, dims, 1, "The shape of the tensor.")
+FIELD_REPEATED(int64_t, dims, 1, "The shape of the tensor.")
 FIELD(DataType, data_type, 2,
       "The data type of the tensor. This field MUST have a valid TensorProto.DataType value")
 FIELD_OPTIONAL(

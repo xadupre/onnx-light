@@ -703,7 +703,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelSeedsInitializerAsShape) {
   TensorProto *init = graph->add_initializer();
   init->set_name("S");
   init->set_data_type(TensorProto::DataType::INT64);
-  init->add_dims(std::vector<uint64_t>{2});
+  init->add_dims(std::vector<int64_t>{2});
   init->add_int64_data(std::vector<int64_t>{-1, 2});
   *graph->add_node() = MakeNode("Reshape", {"X", "S"}, {"Y"});
 
@@ -1314,7 +1314,7 @@ TEST(OnnxOptimShapesContextEventLog, NodeIndexTagsInputsInitializersAndNodes) {
   TensorProto *init = graph->add_initializer();
   init->set_name("S");
   init->set_data_type(TensorProto::DataType::INT64);
-  init->add_dims(std::vector<uint64_t>{2});
+  init->add_dims(std::vector<int64_t>{2});
   init->add_int64_data(std::vector<int64_t>{-1, 2});
   *graph->add_node() = MakeNode("Reshape", {"X", "S"}, {"Y"});
 

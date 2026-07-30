@@ -118,7 +118,9 @@ jobs:
     permissions:
       contents: read
     env:
-      MACOSX_DEPLOYMENT_TARGET: "13.0"
+      # Floating-point std::to_chars/std::from_chars require macOS >= 13.3 in
+      # libc++; a lower target fails to compile with -Wunguarded-availability-new.
+      MACOSX_DEPLOYMENT_TARGET: "13.3"
     steps:
       - uses: actions/checkout@v7
       - name: Set up Python

@@ -47,7 +47,11 @@ jobs:
           # ── macOS ──────────────────────────────────────────────────────────
           - artifact_suffix: macos-universal2
             runs-on: macos-latest
-            macosx_deployment_target: "13.0"
+            # Floating-point std::to_chars/std::from_chars (used by the printer
+            # and parser) are marked available only on macOS >= 13.3 in libc++,
+            # so a lower deployment target fails to compile with
+            # -Wunguarded-availability-new.
+            macosx_deployment_target: "13.3"
             macosx_architectures: "arm64;x86_64"
             archive_ext: tar.gz
 

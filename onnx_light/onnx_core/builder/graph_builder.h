@@ -412,7 +412,7 @@ private:
   // the owning builder's ``initializers_``). Collisions are resolved by an
   // exact field-by-field comparison. Used by RemoveDuplicateInitializers to
   // collapse duplicates across the enclosing graph and its subgraphs.
-  using InitializerContentIndex = std::unordered_multimap<std::size_t, const TensorProto *>;
+  using InitializerContentIndex = std::unordered_multimap<int64_t, const TensorProto *>;
 
   // Collapses duplicated initializers in this scope against ``inherited`` (the
   // initializers visible from enclosing graphs) and recurses into subgraphs

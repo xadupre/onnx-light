@@ -28,31 +28,6 @@ using ::onnx_light::core::symbolic::TensorTypeToDataType;
 
 namespace {
 
-// Combines ``value`` into the running hash ``seed`` (boost-style mixing).
-inline void HashCombine(std::size_t &seed, std::size_t value) {
-  seed ^= value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
-}
-
-// Returns a cheap hash of the fields that are quick to read: element type,
-// shape and the sizes of each payload field. It never copies or serializes the
-// tensor. Collisions are resolved by SameInitializerContent, so the hash only
-// needs to be inexpensive and reasonably discriminating.
-std::size_t InitializerContentHash(const TensorProto &tensor) {
-  std::size_t seed = std::hash<int>()(static_cast<int>(tensor.data_type()));
-  for (uint64_t dim : tensor.dims().values()) {
-    HashCombine(seed, static_cast<std::size_t>(dim));
-  }
-  HashCombine(seed, tensor.raw_data().size());
-  HashCombine(seed, tensor.float_data().size());
-  HashCombine(seed, tensor.int32_data().size());
-  HashCombine(seed, tensor.int64_data().size());
-  HashCombine(seed, tensor.double_data().size());
-  HashCombine(seed, tensor.uint64_data().size());
-  HashCombine(seed, tensor.string_data().size());
-  HashCombine(seed, tensor.external_data().size());
-  return seed;
-}
-
 // Compares two packed payload fields byte-for-byte without copying.
 template <typename T>
 bool SamePackedData(const utils::RepeatedField<T> &lhs, const utils::RepeatedField<T> &rhs) {
@@ -788,7 +763,7 @@ std::size_t GraphBuilder::DeduplicateInitializers(const InitializerContentIndex 
   kept.reserve(initializers_.size());
   std::size_t removed = 0;
   for (TensorProto &initializer : initializers_) {
-    const std::size_t hash = InitializerContentHash(initializer);
+    const int64_t hash = initializer.ContentHash(/*include_content=*/false);
     if (output_names.find(initializer.name().value()) == output_names.end()) {
       const TensorProto *survivor = nullptr;
       const auto range = index.equal_range(hash);

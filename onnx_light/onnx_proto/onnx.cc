@@ -3,10 +3,13 @@
 #include "stream_class.hpp"
 #include <algorithm>
 #include <charconv>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <sstream>
+#include <string_view>
 
 namespace ONNX_LIGHT_NAMESPACE {
 
@@ -182,6 +185,31 @@ private:
   std::vector<uint8_t> main_buffer_;
   std::unordered_map<std::string, std::vector<uint8_t>> external_buffers_;
 };
+
+// Mixes ``value`` into the running hash ``seed`` (boost-style mixing).
+inline void HashCombine(uint64_t &seed, uint64_t value) {
+  seed ^= value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+}
+
+// Mixes ``size`` bytes at ``data`` into ``seed`` (no-op on empty input).
+inline void HashBytes(uint64_t &seed, const void *data, std::size_t size) {
+  if (size == 0) {
+    return;
+  }
+  HashCombine(seed, static_cast<uint64_t>(std::hash<std::string_view>()(
+                        std::string_view(static_cast<const char *>(data), size))));
+}
+
+// Mixes a packed payload field into ``seed``: its element count is always mixed
+// in, and the raw bytes as well when ``include_content`` is set.
+template <typename T>
+inline void HashPackedField(uint64_t &seed, const utils::RepeatedField<T> &field,
+                            bool include_content) {
+  HashCombine(seed, static_cast<uint64_t>(field.size()));
+  if (include_content) {
+    HashBytes(seed, field.data(), field.size() * sizeof(T));
+  }
+}
 
 } // namespace
 
@@ -915,6 +943,42 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
                 "TensorProto::LoadExternalData short read from '", data_path.string(),
                 "': expected ", length, " bytes, got ", static_cast<int64_t>(file.gcount()), ".");
   }
+}
+int64_t TensorProto::ContentHash(bool include_content) const {
+  uint64_t seed = static_cast<uint64_t>(std::hash<int>()(static_cast<int>(data_type())));
+  for (uint64_t dim : dims().values()) {
+    HashCombine(seed, dim);
+  }
+  const int location = has_data_location() ? static_cast<int>(data_location()) : 0;
+  HashCombine(seed, static_cast<uint64_t>(location));
+
+  HashCombine(seed, static_cast<uint64_t>(raw_data().size()));
+  if (include_content) {
+    HashBytes(seed, raw_data().data(), raw_data().size());
+  }
+  HashPackedField(seed, float_data(), include_content);
+  HashPackedField(seed, int32_data(), include_content);
+  HashPackedField(seed, int64_data(), include_content);
+  HashPackedField(seed, double_data(), include_content);
+  HashPackedField(seed, uint64_data(), include_content);
+
+  HashCombine(seed, static_cast<uint64_t>(string_data().size()));
+  if (include_content) {
+    for (const utils::String &value : string_data().values()) {
+      HashBytes(seed, value.data(), value.size());
+    }
+  }
+
+  HashCombine(seed, static_cast<uint64_t>(external_data().size()));
+  if (include_content) {
+    for (std::size_t i = 0; i < external_data().size(); ++i) {
+      const std::string_view key = external_data()[i].key().sv();
+      const std::string_view value = external_data()[i].value().sv();
+      HashBytes(seed, key.data(), key.size());
+      HashBytes(seed, value.data(), value.size());
+    }
+  }
+  return static_cast<int64_t>(seed);
 }
 void TensorProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(

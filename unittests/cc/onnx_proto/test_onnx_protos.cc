@@ -589,6 +589,40 @@ TEST(onnx_proto, TensorProtoName1) {
   EXPECT_EQ(tp.order_name(), 8);
 }
 
+TEST(onnx_proto, TensorProtoContentHash) {
+  auto make = [](const std::string &name, const std::vector<float> &data) {
+    TensorProto tp;
+    tp.set_name(name);
+    tp.set_data_type(TensorProto::DataType::FLOAT);
+    tp.add_dims(static_cast<uint64_t>(data.size()));
+    for (float v : data) {
+      tp.add_float_data(v);
+    }
+    return tp;
+  };
+
+  const TensorProto a = make("a", {1.0f, 2.0f, 3.0f});
+  const TensorProto b = make("b", {1.0f, 2.0f, 3.0f});
+  const TensorProto c = make("c", {1.0f, 2.0f, 9.0f});
+
+  // The name is never part of the hash.
+  EXPECT_EQ(a.ContentHash(false), b.ContentHash(false));
+  EXPECT_EQ(a.ContentHash(true), b.ContentHash(true));
+
+  // Same shape/type but different content: the size-only hash collides while the
+  // content hash discriminates.
+  EXPECT_EQ(a.ContentHash(false), c.ContentHash(false));
+  EXPECT_NE(a.ContentHash(true), c.ContentHash(true));
+
+  // A different shape changes both hashes.
+  const TensorProto d = make("d", {1.0f, 2.0f});
+  EXPECT_NE(a.ContentHash(false), d.ContentHash(false));
+  EXPECT_NE(a.ContentHash(true), d.ContentHash(true));
+
+  // The return type is int64_t.
+  static_assert(std::is_same<decltype(a.ContentHash(true)), int64_t>::value);
+}
+
 TEST(onnx_proto, TensorProtoName2) {
   TensorProto tp;
   EXPECT_EQ(tp.name_.data(), nullptr);

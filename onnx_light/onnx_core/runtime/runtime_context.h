@@ -383,20 +383,20 @@ public:
   RuntimeContext() = default;
   ~RuntimeContext();
   explicit RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options = {})
-      : kernel_ctx_(std::move(kernel_ctx)), allocator_(options.allocator),
-        events_enabled_(options.events_enabled), verbose_(options.verbose),
-        release_intermediates_(options.release_intermediates) {
+      : kernel_ctx_(std::move(kernel_ctx)), events_enabled_(options.events_enabled),
+        verbose_(options.verbose), release_intermediates_(options.release_intermediates),
+        allocator_(options.allocator) {
     kernel_ctx_.allocator = allocator_;
   }
   RuntimeContext(KernelContext kernel_ctx, TensorMap tensors, RuntimeContextOptions options = {})
       : tensors_(std::move(tensors)), kernel_ctx_(std::move(kernel_ctx)),
-        allocator_(options.allocator), events_enabled_(options.events_enabled),
-        verbose_(options.verbose), release_intermediates_(options.release_intermediates) {
+        events_enabled_(options.events_enabled), verbose_(options.verbose),
+        release_intermediates_(options.release_intermediates), allocator_(options.allocator) {
     kernel_ctx_.allocator = allocator_;
   }
   explicit RuntimeContext(RuntimeContextOptions options)
-      : allocator_(options.allocator), events_enabled_(options.events_enabled),
-        verbose_(options.verbose), release_intermediates_(options.release_intermediates) {
+      : events_enabled_(options.events_enabled), verbose_(options.verbose),
+        release_intermediates_(options.release_intermediates), allocator_(options.allocator) {
     kernel_ctx_.allocator = allocator_;
   }
 

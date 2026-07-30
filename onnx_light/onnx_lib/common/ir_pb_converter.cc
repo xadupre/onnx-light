@@ -24,7 +24,7 @@ static Tensor tensorProtoToTensor(const TensorProto &tp) {
   Tensor ret;
 
   ret.sizes().reserve(tp.dims().size());
-  for (int i = 0; i < tp.dims().size(); i++) {
+  for (int i = 0; i < static_cast<int>(tp.dims().size()); i++) {
     ret.sizes().push_back(static_cast<int64_t>(tp.dims()[i]));
   }
 
@@ -33,7 +33,7 @@ static Tensor tensorProtoToTensor(const TensorProto &tp) {
   case TensorProto::DataType::FLOAT:
   case TensorProto::DataType::COMPLEX64: {
     ret.floats().reserve(tp.float_data().size());
-    for (int i = 0; i < tp.float_data().size(); i++) {
+    for (int i = 0; i < static_cast<int>(tp.float_data().size()); i++) {
       ret.floats().push_back(tp.float_data()[i]);
     }
     break;
@@ -57,14 +57,14 @@ static Tensor tensorProtoToTensor(const TensorProto &tp) {
   case TensorProto::DataType::FLOAT8E8M0:
   case TensorProto::DataType::FLOAT4E2M1: {
     ret.int32s().reserve(tp.int32_data().size());
-    for (int i = 0; i < tp.int32_data().size(); i++) {
+    for (int i = 0; i < static_cast<int>(tp.int32_data().size()); i++) {
       ret.int32s().push_back(tp.int32_data()[i]);
     }
     break;
   }
   case TensorProto::DataType::INT64: {
     ret.int64s().reserve(tp.int64_data().size());
-    for (int i = 0; i < tp.int64_data().size(); i++) {
+    for (int i = 0; i < static_cast<int>(tp.int64_data().size()); i++) {
       ret.int64s().push_back(tp.int64_data()[i]);
     }
     break;
@@ -72,7 +72,7 @@ static Tensor tensorProtoToTensor(const TensorProto &tp) {
   case TensorProto::DataType::UINT32:
   case TensorProto::DataType::UINT64: {
     ret.uint64s().reserve(tp.uint64_data().size());
-    for (int i = 0; i < tp.uint64_data().size(); i++) {
+    for (int i = 0; i < static_cast<int>(tp.uint64_data().size()); i++) {
       ret.uint64s().push_back(tp.uint64_data()[i]);
     }
     break;
@@ -80,14 +80,14 @@ static Tensor tensorProtoToTensor(const TensorProto &tp) {
   case TensorProto::DataType::DOUBLE:
   case TensorProto::DataType::COMPLEX128: {
     ret.doubles().reserve(tp.double_data().size());
-    for (int i = 0; i < tp.double_data().size(); i++) {
+    for (int i = 0; i < static_cast<int>(tp.double_data().size()); i++) {
       ret.doubles().push_back(tp.double_data()[i]);
     }
     break;
   }
   case TensorProto::DataType::STRING: {
     ret.strings().reserve(tp.string_data().size());
-    for (int i = 0; i < tp.string_data().size(); i++) {
+    for (int i = 0; i < static_cast<int>(tp.string_data().size()); i++) {
       ret.strings().push_back(tp.string_data()[i]);
     }
     break;
@@ -114,7 +114,7 @@ static Tensor tensorProtoToTensor(const TensorProto &tp) {
     ret.set_segment_begin_and_end(tp.segment().begin(), tp.segment().end());
   }
 
-  for (int i = 0; i < tp.external_data().size(); i++) {
+  for (int i = 0; i < static_cast<int>(tp.external_data().size()); i++) {
     ret.external_data().emplace_back(tp.external_data()[i].key(), tp.external_data()[i].value());
   }
   if (tp.has_data_location()) {
@@ -133,7 +133,7 @@ static void convertAttribute(const AttributeProto &ap, Node &n,
   case AttributeProto::AttributeType::FLOATS: {
     std::vector<double> floats;
     floats.reserve(ap.floats().size());
-    for (int i = 0; i < ap.floats().size(); i++) {
+    for (int i = 0; i < static_cast<int>(ap.floats().size()); i++) {
       floats.push_back(ap.floats()[i]);
     }
     n.fs_(sym, std::move(floats));
@@ -145,7 +145,7 @@ static void convertAttribute(const AttributeProto &ap, Node &n,
   case AttributeProto::AttributeType::INTS: {
     std::vector<int64_t> ints;
     ints.reserve(ap.ints().size());
-    for (int i = 0; i < ap.ints().size(); i++) {
+    for (int i = 0; i < static_cast<int>(ap.ints().size()); i++) {
       ints.push_back(ap.ints()[i]);
     }
     n.is_(sym, std::move(ints));
@@ -157,7 +157,7 @@ static void convertAttribute(const AttributeProto &ap, Node &n,
   case AttributeProto::AttributeType::STRINGS: {
     std::vector<std::string> strings;
     strings.reserve(ap.strings().size());
-    for (int i = 0; i < ap.strings().size(); i++) {
+    for (int i = 0; i < static_cast<int>(ap.strings().size()); i++) {
       strings.push_back(ap.strings()[i]);
     }
     n.ss_(sym, std::move(strings));
@@ -169,7 +169,7 @@ static void convertAttribute(const AttributeProto &ap, Node &n,
   case AttributeProto::AttributeType::TENSORS: {
     std::vector<Tensor> tensors;
     tensors.reserve(ap.tensors().size());
-    for (int i = 0; i < ap.tensors().size(); i++) {
+    for (int i = 0; i < static_cast<int>(ap.tensors().size()); i++) {
       tensors.emplace_back(tensorProtoToTensor(ap.tensors()[i]));
     }
     n.ts_(sym, std::move(tensors));
@@ -181,7 +181,7 @@ static void convertAttribute(const AttributeProto &ap, Node &n,
   case AttributeProto::AttributeType::TYPE_PROTOS: {
     std::vector<TypeProto> types;
     types.reserve(ap.type_protos().size());
-    for (int i = 0; i < ap.type_protos().size(); i++) {
+    for (int i = 0; i < static_cast<int>(ap.type_protos().size()); i++) {
       types.push_back(ap.type_protos()[i]);
     }
     n.tps_(sym, std::move(types));
@@ -193,7 +193,7 @@ static void convertAttribute(const AttributeProto &ap, Node &n,
   case AttributeProto::AttributeType::GRAPHS: {
     std::vector<std::shared_ptr<Graph>> graphs;
     graphs.reserve(ap.graphs().size());
-    for (int i = 0; i < ap.graphs().size(); i++) {
+    for (int i = 0; i < static_cast<int>(ap.graphs().size()); i++) {
       graphs.push_back(graphProtoToGraph(ap.graphs()[i], true, ir_version));
     }
     n.gs_(sym, std::move(graphs));
@@ -210,7 +210,7 @@ static void convertAttribute(const AttributeProto &ap, Node &n,
 }
 
 static void convertAttributes(const NodeProto &np, Node &n, const int64_t ir_version = IR_VERSION) {
-  for (int i = 0; i < np.attribute().size(); i++) {
+  for (int i = 0; i < static_cast<int>(np.attribute().size()); i++) {
     convertAttribute(np.attribute()[i], n, ir_version);
   }
 }
@@ -218,7 +218,7 @@ static void convertAttributes(const NodeProto &np, Node &n, const int64_t ir_ver
 static std::vector<Dimension> tensorShapeProtoToDimensions(const TensorShapeProto &tsp) {
   std::vector<Dimension> dims;
   dims.reserve(tsp.dim().size());
-  for (int i = 0; i < tsp.dim().size(); i++) {
+  for (int i = 0; i < static_cast<int>(tsp.dim().size()); i++) {
     if (tsp.dim()[i].has_dim_value()) {
       dims.emplace_back(tsp.dim()[i].dim_value());
     } else if (tsp.dim()[i].has_dim_param()) {
@@ -289,7 +289,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
     value_by_name_of[""] = n->outputs()[0];
   }
 
-  for (int i = 0; i < gp.input().size(); i++) {
+  for (int i = 0; i < static_cast<int>(gp.input().size()); i++) {
     const auto &vip = gp.input()[i];
     auto *v = g->addInput();
     const auto &tensor_type = vip.type().tensor_type();
@@ -311,7 +311,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
 
   // initializers should be added before all nodes,
   // otherwise getNextUnique() may conflicts with an existing initializer name.
-  for (int i = 0; i < gp.initializer().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(gp.initializer().size()); ++i) {
     auto init = tensorProtoToTensor(gp.initializer()[i]);
     // If ir_version >= 4, initializer does not have to be included in input
     // Create a Value from initializer by addInitializerNode if name does not exist in input
@@ -326,11 +326,11 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
     }
   }
 
-  for (int i = 0; i < gp.node().size(); i++) {
+  for (int i = 0; i < static_cast<int>(gp.node().size()); i++) {
     const auto &np = gp.node()[i];
     auto *n = g->create(Symbol(np.op_type()), /* num_outputs = */ np.output().size());
     g->appendNode(n);
-    for (int j = 0; j < np.output().size(); j++) {
+    for (int j = 0; j < static_cast<int>(np.output().size()); j++) {
       auto *out = n->outputs()[j];
       // we don't know the real type here, so that's done in a later pass
       out->setElemType(TensorProto::DataType::UNDEFINED);
@@ -340,7 +340,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
     convertAttributes(np, *n, ir_version);
     std::vector<std::string> inputs;
     inputs.reserve(np.input().size());
-    for (int j = 0; j < np.input().size(); j++) {
+    for (int j = 0; j < static_cast<int>(np.input().size()); j++) {
       inputs.push_back(np.input()[j]);
     }
     inputs_by_node[n] = inputs;
@@ -377,7 +377,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
     }
   }
 
-  for (int i = 0; i < gp.output().size(); i++) {
+  for (int i = 0; i < static_cast<int>(gp.output().size()); i++) {
     const auto &output = gp.output()[i];
     const std::string output_name = output.name();
     auto it = value_by_name_of.find(output_name);
@@ -406,7 +406,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
     g->registerOutput(output_value);
   }
 
-  for (int i = 0; i < gp.value_info().size(); i++) {
+  for (int i = 0; i < static_cast<int>(gp.value_info().size()); i++) {
     const auto &tensor_type = gp.value_info()[i].type().tensor_type();
     auto it = value_by_name_of.find(gp.value_info()[i].name());
     if (it == value_by_name_of.end()) {
@@ -442,7 +442,7 @@ std::unique_ptr<Graph> ImportModelProto(const ModelProto &mp) {
   }
 
   std::unique_ptr<Graph> g(graphProtoToGraph(mp.graph(), false, mp.ir_version()));
-  for (int i = 0; i < mp.opset_import().size(); i++) {
+  for (int i = 0; i < static_cast<int>(mp.opset_import().size()); i++) {
     OpSetID new_opset_version(mp.opset_import()[i].domain(), mp.opset_import()[i].version());
     g->forSelfAndEachSubGraph([&new_opset_version](Graph *graph) {
       graph->opset_versions_mutable().emplace_back(new_opset_version);
@@ -761,7 +761,7 @@ ModelProto PrepareOutput(const ModelProto &mp_in) {
   if (mp_in.has_doc_string()) {
     mp_out.set_doc_string(mp_in.doc_string());
   }
-  for (int i = 0; i < mp_in.opset_import().size(); i++) {
+  for (int i = 0; i < static_cast<int>(mp_in.opset_import().size()); i++) {
     const auto &oi_in = mp_in.opset_import()[i];
     auto *oi_out = mp_out.add_opset_import();
     if (oi_in.has_domain()) {
@@ -771,7 +771,7 @@ ModelProto PrepareOutput(const ModelProto &mp_in) {
       oi_out->set_version(oi_in.version());
     }
   }
-  for (int i = 0; i < mp_in.metadata_props().size(); i++) {
+  for (int i = 0; i < static_cast<int>(mp_in.metadata_props().size()); i++) {
     const auto &pp_in = mp_in.metadata_props()[i];
     auto *pp_out = mp_out.add_metadata_props();
     if (pp_in.has_key()) {

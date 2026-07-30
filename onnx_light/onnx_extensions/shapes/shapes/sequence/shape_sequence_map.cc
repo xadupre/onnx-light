@@ -50,13 +50,13 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
 
   const GraphProto &body = FindGraphAttribute(node, "body", "ComputeShapeSequenceMap");
 
-  EXT_ENFORCE_INVALID(body.input().size() == node.input_size(),
+  EXT_ENFORCE_INVALID(static_cast<int>(body.input().size()) == node.input_size(),
                       "ComputeShapeSequenceMap: 'body' sub-graph declares ",
                       std::to_string(body.input().size()), " input(s), expected ",
                       std::to_string(node.input_size()),
                       " (one per SequenceMap input: the per-iteration element of "
                       "input_sequence followed by the additional inputs).");
-  EXT_ENFORCE_INVALID(body.output().size() == node.output_size(),
+  EXT_ENFORCE_INVALID(static_cast<int>(body.output().size()) == node.output_size(),
                       "ComputeShapeSequenceMap: 'body' sub-graph declares ",
                       std::to_string(body.output().size()), " output(s), expected ",
                       std::to_string(node.output_size()),
@@ -93,7 +93,7 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
   local.ComputeShapes(body.node());
 
   // Validate that every body output is known in the local context.
-  for (int i = 0; i < body.output().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(body.output().size()); ++i) {
     const std::string body_out = body.output()[i].name();
     EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeSequenceMap: body output '", body_out,
                         "' is missing from the inferred context.");

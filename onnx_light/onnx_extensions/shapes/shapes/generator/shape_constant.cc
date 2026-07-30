@@ -62,7 +62,7 @@ int CollectConstantValueAttributes(
     const AttributeProto *&value_string, const AttributeProto *&value_strings) {
   value = sparse_value = value_int = value_ints = value_float = value_floats = value_string =
       value_strings = nullptr;
-  for (int i = 0; i < node.attribute().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(node.attribute().size()); ++i) {
     const AttributeProto &attr = node.attribute()[i];
     const std::string name = attr.name();
     if (name == "value" && value == nullptr) {
@@ -139,7 +139,7 @@ void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node) {
     output = SymTensor(nullptr, TensorType::kInt64, std::move(shape));
     if (static_cast<int64_t>(ints.size()) < kConstantValueAsShapeMaxElements) {
       SymShape value_shape;
-      for (int i = 0; i < ints.size(); ++i) {
+      for (int i = 0; i < static_cast<int>(ints.size()); ++i) {
         value_shape.PushBack(SymDim(ints[i]));
       }
       output.SetValueAsShape(std::move(value_shape));
@@ -163,7 +163,7 @@ void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node) {
     const SparseTensorProto &sparse = sparse_value->sparse_tensor();
     const TensorType dtype = DataTypeToTensorType(sparse.values().data_type());
     SymShape shape;
-    for (int i = 0; i < sparse.dims().size(); ++i) {
+    for (int i = 0; i < static_cast<int>(sparse.dims().size()); ++i) {
       shape.PushBack(SymDim(static_cast<int64_t>(sparse.dims()[i])));
     }
     output = SymTensor(nullptr, dtype, std::move(shape));

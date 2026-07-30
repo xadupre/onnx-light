@@ -30,7 +30,7 @@ SymTensor OptimTensorFromTensorTypeProto(const TypeProto &tp) {
   SymShape shape;
   if (tt.has_shape()) {
     const TensorShapeProto &sp = tt.shape();
-    for (int i = 0; i < sp.dim().size(); ++i) {
+    for (int i = 0; i < static_cast<int>(sp.dim().size()); ++i) {
       const TensorShapeProto::Dimension &d = sp.dim()[i];
       if (d.has_dim_value()) {
         shape.PushBack(SymDim(static_cast<int64_t>(d.dim_value())));

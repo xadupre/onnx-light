@@ -751,7 +751,7 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelFillsOutputAndValueInfo)
   EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
   // The intermediate S tensor (Constant output) ends up in value_info.
   bool found_s = false;
-  for (std::size_t i = 0; i < graph.value_info_size(); ++i) {
+  for (int i = 0; i < static_cast<int>(graph.value_info_size()); ++i) {
     const ValueInfoProto &vi = graph.value_info()[i];
     if (vi.name() == "S") {
       found_s = true;
@@ -763,7 +763,7 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelFillsOutputAndValueInfo)
   }
   EXPECT_TRUE(found_s);
   // The X input is not duplicated in value_info.
-  for (std::size_t i = 0; i < graph.value_info_size(); ++i) {
+  for (int i = 0; i < static_cast<int>(graph.value_info_size()); ++i) {
     EXPECT_NE(std::string(graph.value_info()[i].name()), std::string("X"));
   }
 }

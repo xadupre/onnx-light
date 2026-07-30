@@ -388,6 +388,7 @@ public:
 
 using ConstNodeMap = std::unordered_map<std::string, const NodeProto *>;
 
+#ifdef ONNX_LIGHT_VERSION_CONVERTER
 ConstNodeMap FindConstantNodes(const GraphProto &graph) {
   ConstNodeMap result;
   for (const NodeProto &node : graph.node()) {
@@ -419,6 +420,7 @@ const TypeProto &GetType(const ModelProto &model, const std::string &var) {
   ONNX_ASSERTM(type != nullptr, "Type unknown for ", var)
   return *type;
 }
+#endif // ONNX_LIGHT_VERSION_CONVERTER
 
 #ifdef ONNX_LIGHT_VERSION_CONVERTER
 void ConvertVersion(ModelProto &model, const NodeProto &call_node, FunctionProto &function,

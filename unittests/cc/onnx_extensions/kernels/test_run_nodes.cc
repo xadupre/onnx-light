@@ -4040,6 +4040,79 @@ TEST(RunNodes, RunNodeCustomKernelOverridesBuiltin) {
   EXPECT_FLOAT_EQ(yp[2], 3.0f);
 }
 
+// Unregistering a custom kernel that overrode a built-in op restores the
+// built-in original: the next RunNode dispatches to KernelDispatchTable()
+// again. UnregisterCustomKernel returns true when an entry was removed.
+TEST(RunNodes, UnregisterCustomKernelRestoresBuiltin) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {-1.0f, -2.0f, -3.0f}));
+
+  // Override Abs with negation, then verify the override is used.
+  rt.RegisterCustomKernel("", "Abs", [](const NodeProto &node, RuntimeContext &ctx) {
+    const Tensor &in = ctx.Get(node.input(0));
+    std::vector<float> out(static_cast<size_t>(in.element_count()));
+    const float *src = in.AsFloat();
+    for (size_t i = 0; i < out.size(); ++i) {
+      out[i] = -src[i];
+    }
+    ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, out));
+  });
+
+  NodeProto node = MakeNode("Abs", {"x"}, {"y"});
+  RunNode(node, rt);
+  {
+    const Tensor &y = rt.tensors().at("y");
+    ASSERT_EQ(y.element_count(), 3);
+    const float *yp = y.AsFloat();
+    EXPECT_FLOAT_EQ(yp[0], 1.0f);
+    EXPECT_FLOAT_EQ(yp[1], 2.0f);
+    EXPECT_FLOAT_EQ(yp[2], 3.0f);
+  }
+
+  // The empty domain is normalised to "ai.onnx", so unregistering with the
+  // explicit "ai.onnx" domain removes the same entry.
+  EXPECT_TRUE(rt.UnregisterCustomKernel("ai.onnx", "Abs"));
+
+  // The built-in Abs is restored: negatives become their absolute value.
+  RunNode(node, rt);
+  {
+    const Tensor &y = rt.tensors().at("y");
+    ASSERT_EQ(y.element_count(), 3);
+    const float *yp = y.AsFloat();
+    EXPECT_FLOAT_EQ(yp[0], 1.0f);
+    EXPECT_FLOAT_EQ(yp[1], 2.0f);
+    EXPECT_FLOAT_EQ(yp[2], 3.0f);
+  }
+
+  // A second unregister for the same key finds nothing to remove.
+  EXPECT_FALSE(rt.UnregisterCustomKernel("", "Abs"));
+}
+
+// Unregistering a custom-only op (one with no built-in dispatch entry) makes
+// RunNode fail again with std::invalid_argument, matching the pre-registration
+// behaviour.
+TEST(RunNodes, UnregisterCustomKernelForUnknownOpFailsAgain) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+
+  rt.RegisterCustomKernel("my.domain", "Scale", [](const NodeProto &node, RuntimeContext &ctx) {
+    const Tensor &in = ctx.Get(node.input(0));
+    std::vector<float> out(static_cast<size_t>(in.element_count()));
+    const float *src = in.AsFloat();
+    for (size_t i = 0; i < out.size(); ++i) {
+      out[i] = src[i] * src[i];
+    }
+    ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, out));
+  });
+
+  NodeProto node = MakeNode("Scale", {"x"}, {"y"}, "my.domain");
+  RunNode(node, rt);
+  EXPECT_EQ(rt.tensors().at("y").element_count(), 3);
+
+  EXPECT_TRUE(rt.UnregisterCustomKernel("my.domain", "Scale"));
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
+}
+
 // Running the model chains a built-in kernel and a custom kernel together;
 // the CustomKernelMap survives across nodes within the same context.
 TEST(RunModel, CustomKernelChainsWithBuiltinKernels) {

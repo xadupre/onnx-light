@@ -835,102 +835,6 @@ void BindRefAttributes(NodeProto &node,
   }
 }
 
-// Invokes a model-local FunctionProto in response to a call site
-// ``node``. The function is executed in a child RuntimeContext so its
-// local names cannot collide with the caller's tensor map; only the
-// formal outputs are propagated back to the caller under the names
-// declared by ``node.output(i)``.
-//
-// Before execution, every attribute reference (``ref_attr_name``) in
-// the function body is resolved against the call-site attributes,
-// falling back to the typed defaults declared in
-// ``FunctionProto::attribute_proto`` when the call-site omits a value.
-void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, RuntimeContext &rt) {
-  const std::string op_type = node.op_type();
-  EXT_ENFORCE_INVALID(!(static_cast<int>(node.input_size()) != static_cast<int>(func.input_size())),
-                      "RunNode: call to model-local function '", op_type, "' expects ",
-                      func.input_size(), " input(s), got ", node.input_size(), ".");
-  EXT_ENFORCE_INVALID(
-      !(static_cast<int>(node.output_size()) != static_cast<int>(func.output_size())),
-      "RunNode: call to model-local function '", op_type, "' expects ", func.output_size(),
-      " output(s), got ", node.output_size(), ".");
-
-  // Build a child runtime context that shares the kernel construction
-  // context and the function registry (so nested function calls work)
-  // but starts with a fresh, isolated tensor map.
-  RuntimeContext child = rt.MakeFunctionContext();
-
-  // Bind formal function inputs to the caller's actuals.
-  for (size_t i = 0; i < func.input_size(); ++i) {
-    const std::string caller_name = node.input(i);
-    const std::string param_name = func.input(i);
-    // Optional/unused function inputs (empty actual or formal name) are skipped.
-    if (caller_name.empty() || param_name.empty()) {
-      continue;
-    }
-    auto it = rt.tensors().find(caller_name);
-    EXT_ENFORCE_INVALID(it != rt.tensors().end(), "RunNode: input '", caller_name,
-                        "' of call to model-local "
-                        "function '",
-                        op_type, "' is missing from the tensor map.");
-    // Borrow the caller's tensor bytes instead of deep-copying. The
-    // caller's tensor map outlives the child context (the function body
-    // runs and returns before the caller continues), so the borrowed
-    // view never dangles. This avoids a full memcpy for every function
-    // input on every call.
-    const Tensor &src = it->second;
-    Tensor bound =
-        (static_cast<DataType>(src.data_type) == DataType::STRING)
-            ? Tensor::BorrowStrings(param_name, src.shape, src.AsStrings())
-            : Tensor::Borrow(param_name, src.data_type, src.shape, src.bytes(), src.size_bytes());
-    child.Put(param_name, std::move(bound), RuntimeEventKind::kInput);
-  }
-
-  // Resolve attribute references (``ref_attr_name``) inside the
-  // function body. Resolution proceeds in two steps: the call-site
-  // attributes take precedence, and any unresolved reference falls
-  // back to the typed default declared in
-  // ``FunctionProto::attribute_proto``. Resolution is performed on a
-  // local copy of the function so the caller's ModelProto is not
-  // mutated and the runtime stays thread-safe with respect to the
-  // shared function registry.
-  std::unordered_map<std::string, const AttributeProto *> attr_map;
-  for (size_t i = 0; i < func.attribute_proto().size(); ++i) {
-    const AttributeProto &a = func.attribute_proto()[i];
-    attr_map[a.name()] = &a;
-  }
-  for (size_t i = 0; i < node.attribute().size(); ++i) {
-    const AttributeProto &a = node.attribute()[i];
-    attr_map[a.name()] = &a;
-  }
-  FunctionProto bound_func;
-  bound_func.CopyFrom(func);
-  for (size_t i = 0; i < bound_func.node().size(); ++i) {
-    BindRefAttributes(bound_func.ref_node()[i], attr_map);
-  }
-  const ExecutionPlan &plan = child.GetExecutionPlan(bound_func);
-  RuntimeSession session(plan);
-  session.Run(child);
-
-  // Copy the function's formal outputs back into the caller's tensor
-  // map under the names declared by the node's output list.
-  for (size_t i = 0; i < func.output_size(); ++i) {
-    const std::string caller_name = node.output(i);
-    const std::string param_name = func.output(i);
-    if (caller_name.empty()) {
-      // The caller does not want this output; skip it.
-      continue;
-    }
-    auto it = child.tensors().find(param_name);
-    EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: output '", param_name,
-                        "' of model-local function '", op_type,
-                        "' was not produced by the function body.");
-    Tensor result = CloneTensor(it->second, rt.allocator());
-    result.name = caller_name;
-    rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
-  }
-}
-
 } // namespace
 
 namespace detail {
@@ -941,9 +845,6 @@ namespace {
 // The bound function (with resolved attribute references) is computed once at
 // construction time, and the execution plan + per-node kernel instances are
 // resolved on the first ``Run`` and reused across all subsequent calls.
-// This avoids the per-call deep-copy of the FunctionProto, re-building the
-// ExecutionPlan, and re-resolving every kernel that ``CallModelLocalFunction``
-// would otherwise perform.
 class ModelLocalFunctionKernel : public KernelBase {
 public:
   ModelLocalFunctionKernel(const NodeProto &node, const FunctionProto &func)
@@ -1245,7 +1146,7 @@ void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {
                       "RegisterModelFunctions: the ModelProto does not contain a graph.");
   // Register every model-local function so that nodes referring to
   // them by (domain, op_type, overload) are dispatched to
-  // :cpp:func:`CallModelLocalFunction` rather than rejected as unsupported
+  // ``ModelLocalFunctionKernel`` rather than rejected as unsupported
   // ops.
   const auto &fns = model.functions();
   for (size_t i = 0; i < fns.size(); ++i) {

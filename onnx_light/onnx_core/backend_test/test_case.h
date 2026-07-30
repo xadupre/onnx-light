@@ -428,6 +428,29 @@ std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex,
                                              bool include_big = false,
                                              TestMode mode = TestMode::TEST);
 
+/**
+ * Returns the single C++-implemented backend test case whose
+ * :attr:`TestCase::name` equals ``name`` exactly, or an empty optional if no
+ * such case exists.
+ *
+ * Unlike :func:`CollectTestCasesByName` this performs a plain string
+ * comparison instead of compiling a ``std::regex`` and avoids copying all
+ * non-matching cases. It is therefore the most efficient way to retrieve a
+ * single known case by name.
+ *
+ * @param name        The exact test case name to look up (e.g.
+ *                    ``"test_cc_abs"``).
+ * @param include_big When ``false`` (the default), a case whose name contains
+ *                    ``"_big_"`` is excluded even if it matches ``name``.
+ * @param mode        Forwarded to :func:`CollectTestCases`; selects standard
+ *                    or benchmark-sized case generation.
+ *
+ * @return A vector containing at most one :class:`TestCase`. An empty vector
+ *         signals that no case with the requested name was found.
+ */
+std::vector<TestCase> GetTestCaseByName(const std::string &name, bool include_big = false,
+                                        TestMode mode = TestMode::TEST);
+
 } // namespace backend_test
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

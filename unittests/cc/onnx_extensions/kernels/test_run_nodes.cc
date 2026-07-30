@@ -516,6 +516,69 @@ TEST(RunNodes, RunNodeSingleAdd) {
   EXPECT_FLOAT_EQ(got[2], 33.0f);
 }
 
+TEST(RunNodes, RunNodeNonCpuDeviceWithoutKernelThrows) {
+  // The C++ ReferenceEvaluator only ships CPU kernels. Selecting a non-CPU
+  // device makes the device-qualified dispatch key miss so RunNode fails with
+  // a diagnostic naming the device instead of silently running on the CPU
+  // kernel.
+  const core::symbolic::Device gpu = core::symbolic::MakeGPUDevice(0);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.device = gpu});
+  EXPECT_EQ(rt.device(), gpu);
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f});
+  rt.tensors()["y"] = Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f});
+  NodeProto node = MakeNode("Add", {"x", "y"}, {"z"});
+  try {
+    RunNode(node, rt);
+    FAIL() << "expected RunNode to throw for a non-CPU device";
+  } catch (const std::invalid_argument &e) {
+    const std::string msg = e.what();
+    EXPECT_NE(msg.find("unsupported op_type 'Add'"), std::string::npos) << msg;
+    EXPECT_NE(msg.find("on device 'GPU0'"), std::string::npos) << msg;
+  }
+}
+
+TEST(RunNodes, RunNodeDispatchesDeviceQualifiedKernel) {
+  // A kernel registered for a specific device is keyed separately from the
+  // CPU/default entry (see :cpp:func:`RegisterKernelFn`). Running a context
+  // pinned to that device must resolve the device-qualified kernel rather than
+  // falling back to the CPU one.
+  using core::runtime::NodeKernelFn;
+  using core::runtime::RegisterKernelFn;
+
+  const core::symbolic::Device gpu = core::symbolic::MakeGPUDevice(0);
+  const std::string domain = "test.onnxlight.device_dispatch";
+  bool cpu_invoked = false;
+  bool gpu_invoked = false;
+  RegisterKernelFn(domain, "DeviceOp", core::symbolic::Device::kCPU,
+                   [&cpu_invoked](const NodeProto &node,
+                                  RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [&cpu_invoked](const NodeProto &node, RuntimeContext &rt) {
+                           cpu_invoked = true;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
+  RegisterKernelFn(domain, "DeviceOp", gpu,
+                   [&gpu_invoked](const NodeProto &node,
+                                  RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [&gpu_invoked](const NodeProto &node, RuntimeContext &rt) {
+                           gpu_invoked = true;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.device = gpu});
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2}, {1.0f, 2.0f});
+  NodeProto node = MakeNode("DeviceOp", {"x"}, {"y"}, domain);
+  RunNode(node, rt);
+  EXPECT_TRUE(gpu_invoked);
+  EXPECT_FALSE(cpu_invoked);
+  ASSERT_NE(rt.tensors().find("y"), rt.tensors().end());
+}
+
 TEST(RunNodes, RunNodeClearResetsStateButKeepsSettings) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)),
                     core::runtime::RuntimeContextOptions{.events_enabled = true});

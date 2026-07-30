@@ -1069,10 +1069,27 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
     CustomKernelFn fn = ckit->second;
     return std::make_unique<CustomKernelAdapter>(node, fn);
   }
+  // A kernel's identity in :cpp:func:`KernelDispatchTable` is
+  // ``(domain, op_type, device)``. The default host devices
+  // (:cpp:enumerator:`symbolic::Device::kCPU` and
+  // :cpp:enumerator:`symbolic::Device::kUndefined`) keep the plain
+  // ``"<domain>:<op_type>"`` key; any other device appends
+  // ``":<device>"`` (see :cpp:func:`symbolic::DeviceKeySuffix`). Because the
+  // C++ reference runtime only ships CPU kernels, running on a non-CPU device
+  // finds no entry and fails below with a message naming the device rather
+  // than silently dispatching to the CPU kernel.
+  const symbolic::Device device = rt.device();
+  const std::string device_suffix = symbolic::DeviceKeySuffix(device);
   const auto &table = KernelDispatchTable();
-  auto it = table.find(key);
-  EXT_ENFORCE_INVALID(it != table.end(), "RunNode: unsupported op_type '", op_type, "' in domain '",
-                      domain, "'.");
+  auto it = table.find(key + device_suffix);
+  if (device_suffix.empty()) {
+    EXT_ENFORCE_INVALID(it != table.end(), "RunNode: unsupported op_type '", op_type,
+                        "' in domain '", domain, "'.");
+  } else {
+    EXT_ENFORCE_INVALID(it != table.end(), "RunNode: unsupported op_type '", op_type,
+                        "' in domain '", domain, "' on device '", symbolic::DeviceName(device),
+                        "'.");
+  }
   return it->second(node, rt);
 }
 

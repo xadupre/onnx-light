@@ -60,7 +60,6 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
 
 TestOptimShapeInferenceBackend = make_test_class(
     shape_inference_check,
-    include_big=True,
     exclude_regex=[
         "test_cc_shape_inference_add_concat_reshape.*",
         "test_cc_shape_inference_nonzero_chain_anon.*",

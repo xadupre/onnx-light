@@ -7051,3 +7051,55 @@ TEST(onnx_proto, ParseFromIstream_TensorProto) {
   EXPECT_EQ(parsed.ref_float_data()[0], 1.0f);
   EXPECT_EQ(parsed.ref_float_data()[1], 2.0f);
 }
+
+// ---------- RepeatedProtoField move-from-vector overloads ----------
+
+TEST(RepeatedProtoField, MoveConstructFromVector) {
+  std::vector<NodeProto> nodes(2);
+  nodes[0].set_op_type("Add");
+  nodes[0].add_input("a");
+  nodes[1].set_op_type("Mul");
+  nodes[1].add_input("b");
+
+  utils::RepeatedProtoField<NodeProto> field(std::move(nodes));
+
+  ASSERT_EQ(field.size(), 2u);
+  EXPECT_EQ(field[0].ref_op_type(), "Add");
+  EXPECT_EQ(field[0].ref_input()[0], "a");
+  EXPECT_EQ(field[1].ref_op_type(), "Mul");
+  EXPECT_EQ(field[1].ref_input()[0], "b");
+  // The source vector should have been drained.
+  EXPECT_TRUE(nodes.empty()); // NOLINT(bugprone-use-after-move)
+}
+
+TEST(RepeatedProtoField, ExtendFromMovedVector) {
+  utils::RepeatedProtoField<NodeProto> field;
+  NodeProto seed;
+  seed.set_op_type("Neg");
+  field.push_back(seed);
+
+  std::vector<NodeProto> extras(2);
+  extras[0].set_op_type("Exp");
+  extras[1].set_op_type("Log");
+
+  field.extend(std::move(extras));
+
+  ASSERT_EQ(field.size(), 3u);
+  EXPECT_EQ(field[0].ref_op_type(), "Neg");
+  EXPECT_EQ(field[1].ref_op_type(), "Exp");
+  EXPECT_EQ(field[2].ref_op_type(), "Log");
+  EXPECT_TRUE(extras.empty()); // NOLINT(bugprone-use-after-move)
+}
+
+TEST(RepeatedProtoField, MoveConstructFromTemporaryVector) {
+  // Implicit conversion from a temporary vector — the rvalue overload
+  // should be selected so no deep copy happens.
+  auto make = []() {
+    std::vector<NodeProto> v(1);
+    v[0].set_op_type("Relu");
+    return v;
+  };
+  utils::RepeatedProtoField<NodeProto> field(make());
+  ASSERT_EQ(field.size(), 1u);
+  EXPECT_EQ(field[0].ref_op_type(), "Relu");
+}

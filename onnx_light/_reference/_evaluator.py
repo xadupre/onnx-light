@@ -427,6 +427,52 @@ class ReferenceEvaluator:
         # custom kernel existed, so the next run must rebuild them to pick it up.
         self._sessions.clear()
 
+    def unregister_custom_kernel(self, domain: str, op_type: str) -> bool:
+        """Removes a custom kernel previously registered for ``(domain, op_type)``.
+
+        Custom kernels are consulted before the built-in onnx-light
+        dispatch table, so unregistering one restores the original
+        built-in kernel for that ``(domain, op_type)`` when there is one
+        (a subsequent :meth:`run` dispatches to it again). If no built-in
+        kernel exists for the pair, running a graph that uses it fails
+        with an ``unsupported op_type`` error, as it would before any
+        custom kernel was registered.
+
+        Parameters
+        ----------
+        domain:
+            Operator domain. The empty string is treated as
+            ``ai.onnx``.
+        op_type:
+            Operator name (``NodeProto.op_type``).
+
+        Returns
+        -------
+        bool
+            ``True`` when a custom kernel was removed, ``False`` when no
+            custom kernel was registered for ``(domain, op_type)``.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            sess.register_custom_kernel("", "Abs", lambda node, x: -x)
+            sess.unregister_custom_kernel("", "Abs")  # restores built-in Abs
+        """
+        key = f"{domain or 'ai.onnx'}:{op_type}"
+        if key not in self._custom_kernels:
+            return False
+        del self._custom_kernels[key]
+        # Remove the wrapper from the persistent RuntimeContext so the next
+        # run falls back to the built-in kernel dispatch table (the original
+        # kernel) for this (domain, op_type).
+        self._ctx.unregister_custom_kernel(domain, op_type)
+        # Drop any cached RuntimeSession: its kernels were resolved while the
+        # custom kernel existed, so the next run must rebuild them to pick up
+        # the restored built-in kernel.
+        self._sessions.clear()
+        return True
+
     # -- proto loading ------------------------------------------------------
 
     @staticmethod

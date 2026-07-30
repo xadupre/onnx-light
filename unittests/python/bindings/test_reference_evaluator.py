@@ -1050,5 +1050,68 @@ class TestReferenceEvaluatorCustomKernels(ExtTestCase):
         np.testing.assert_array_equal(y, x * x + x)
 
 
+class TestReferenceEvaluatorUnregisterCustomKernels(ExtTestCase):
+    """Tests for :meth:`ReferenceEvaluator.unregister_custom_kernel`."""
+
+    def test_unregister_restores_builtin(self):
+        # Overriding a built-in op and then unregistering restores the original.
+        src = (
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "agraph (float[3] x) => (float[3] y) { y = Abs(x) }\n"
+        )
+        sess = ReferenceEvaluator(parser.parse_model(src))
+        x = np.array([-1.0, 2.0, -3.5], dtype=np.float32)
+
+        sess.register_custom_kernel("", "Abs", lambda node, v: v + 100.0)
+        (overridden,) = sess.run(None, {"x": x})
+        np.testing.assert_array_equal(overridden, x + 100.0)
+
+        self.assertTrue(sess.unregister_custom_kernel("", "Abs"))
+        (restored,) = sess.run(None, {"x": x})
+        np.testing.assert_array_equal(restored, np.abs(x))
+
+    def test_unregister_returns_false_when_absent(self):
+        src = (
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "agraph (float[3] x) => (float[3] y) { y = Abs(x) }\n"
+        )
+        sess = ReferenceEvaluator(parser.parse_model(src))
+        self.assertFalse(sess.unregister_custom_kernel("", "Abs"))
+        self.assertFalse(sess.unregister_custom_kernel("my.domain", "Missing"))
+
+    def test_unregister_domain_normalisation(self):
+        # The empty domain is normalised to "ai.onnx", so a kernel registered
+        # with "" can be unregistered with "ai.onnx" and vice versa.
+        src = (
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "agraph (float[3] x) => (float[3] y) { y = Abs(x) }\n"
+        )
+        sess = ReferenceEvaluator(parser.parse_model(src))
+        sess.register_custom_kernel("", "Abs", lambda node, v: v + 1.0)
+        self.assertTrue(sess.unregister_custom_kernel("ai.onnx", "Abs"))
+        (restored,) = sess.run(None, {"x": np.array([-1.0, 2.0, -3.5], dtype=np.float32)})
+        np.testing.assert_array_equal(restored, np.array([1.0, 2.0, 3.5], dtype=np.float32))
+
+    def test_unregister_removes_user_domain_kernel(self):
+        # Unregistering a custom-only op (no built-in) makes the graph fail
+        # again with an unsupported op error.
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18, "my.domain" : 1]>\n'
+            "agraph (float[3] x) => (float[3] y) {\n"
+            "  y = my.domain.Square(x)\n"
+            "}\n"
+        )
+        sess = ReferenceEvaluator(model)
+        sess.register_custom_kernel("my.domain", "Square", lambda node, v: v * v)
+        x = np.array([-1.0, 2.0, -3.5], dtype=np.float32)
+        (y,) = sess.run(None, {"x": x})
+        np.testing.assert_array_equal(y, x * x)
+
+        self.assertTrue(sess.unregister_custom_kernel("my.domain", "Square"))
+        with self.assertRaises(ValueError) as ctx:
+            sess.run(None, {"x": x})
+        self.assertIn("unsupported op_type", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

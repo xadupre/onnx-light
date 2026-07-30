@@ -128,6 +128,31 @@ kernel without patching the C++ runtime.
           (y,) = sess.run(None, {"x": np.array([-1.0, -2.0, -3.0], dtype=np.float32)})
           # Abs replaced by negation: y == [1., 2., 3.]
 
+Unregister a kernel and restore the original
+--------------------------------------------
+
+:py:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.unregister_custom_kernel`
+removes a previously registered custom kernel. Because custom kernels are
+consulted before the built-in
+:cpp:func:`onnx_light::core::runtime::KernelDispatchTable`, unregistering one
+that overrode a built-in operator restores the original built-in kernel on the
+next :py:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run`. It returns
+``True`` when a custom kernel was removed and ``False`` otherwise; the empty
+domain is normalised to ``"ai.onnx"`` just like when registering.
+
+.. code-block:: python
+
+    sess.register_custom_kernel("", "Abs", lambda node, x: -x)
+    # ... use the negated override ...
+    sess.unregister_custom_kernel("", "Abs")  # restores the built-in Abs
+    (y,) = sess.run(None, {"x": np.array([-1.0, -2.0, -3.0], dtype=np.float32)})
+    # y == [1., 2., 3.] (built-in Abs again)
+
+At the C++ / low-level binding layer the same is achieved with
+:cpp:func:`onnx_light::core::runtime::RuntimeContext::UnregisterCustomKernel`,
+which erases the custom entry so :cpp:func:`RunNode` falls back to the built-in
+kernel.
+
    .. tab-item:: C++
       :sync: cpp
 

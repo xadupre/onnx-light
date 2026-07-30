@@ -163,6 +163,24 @@ class TestGraphBuilder(ExtTestCase):
         body.make_input("a", FLOAT, [2, 3])
         self.assertRaise(lambda: builder.make_subgraph("body"), ValueError)
 
+    def test_remove_unused_nodes(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 3])
+        builder.make_input("y", FLOAT, [2, 3])
+        (used,) = builder.make_node("Add", ["x", "y"])
+        # Two chained dead-end nodes that no output depends on.
+        (dead,) = builder.make_node("Mul", ["x", "y"])
+        builder.make_node("Neg", [dead])
+        builder.make_output(used)
+
+        self.assertEqual(len(builder.build_graph().node), 3)
+        self.assertEqual(builder.remove_unused_nodes(), 2)
+        graph = builder.build_graph()
+        self.assertEqual(len(graph.node), 1)
+        self.assertEqual(graph.node[0].op_type, "Add")
+        # A second pass has nothing left to remove.
+        self.assertEqual(builder.remove_unused_nodes(), 0)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -2017,6 +2017,9 @@ void AddOnnxPyBuilder(nb::module_ &m) {
            "Returns True when the shape of ``name`` has been inferred.")
       .def("get_shape", &GraphBuilder::GetShape, nb::arg("name"), nb::rv_policy::reference_internal,
            "Returns the inferred descriptor of ``name``.")
+      .def("remove_unused_nodes", &GraphBuilder::RemoveUnusedNodes,
+           "Recursively removes dead-end (unused) nodes, descending into nested subgraphs and "
+           "local functions, and returns the total number of nodes removed.")
       .def(
           "build_graph", [](const GraphBuilder &self) { return self.BuildGraph(); },
           "Assembles the accumulated inputs, initializers, nodes and outputs into a "

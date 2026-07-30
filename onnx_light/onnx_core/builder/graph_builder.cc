@@ -536,7 +536,148 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   return resolved_outputs;
 }
 
-// ── Local functions / subgraphs ─────────────────────────────────────────
+std::vector<GraphBuilder *> GraphBuilder::ReferencedSubgraphs(const NodeProto &node) const {
+  std::vector<GraphBuilder *> referenced;
+  for (const auto &attribute : node.attribute()) {
+    if (!HasGraphReferenceSuffix(attribute.name().value())) {
+      continue;
+    }
+    if (attribute.type() == AttributeProto::AttributeType::STRING && attribute.has_s()) {
+      GraphBuilder *subgraph = FindNamedBuilder(subgraphs_, attribute.s().value());
+      if (subgraph != nullptr) {
+        referenced.push_back(subgraph);
+      }
+    } else if (attribute.type() == AttributeProto::AttributeType::STRINGS) {
+      const auto &refs = attribute.strings();
+      for (int i = 0; i < refs.size(); ++i) {
+        GraphBuilder *subgraph =
+            FindNamedBuilder(subgraphs_, std::string(refs[static_cast<std::size_t>(i)]));
+        if (subgraph != nullptr) {
+          referenced.push_back(subgraph);
+        }
+      }
+    }
+  }
+  return referenced;
+}
+
+void GraphBuilder::CollectImplicitInputs(std::unordered_set<std::string> &out) const {
+  // Every value name defined in this scope: graph inputs, initializers and the
+  // outputs of the nodes accumulated so far.
+  std::unordered_set<std::string> defined;
+  for (const ValueInfoProto &input : inputs_) {
+    defined.insert(input.name().value());
+  }
+  for (const TensorProto &initializer : initializers_) {
+    defined.insert(initializer.name().value());
+  }
+  for (const NodeProto &node : nodes_) {
+    for (int i = 0; i < node.output().size(); ++i) {
+      std::string name(node.output(static_cast<std::size_t>(i)));
+      if (!name.empty()) {
+        defined.insert(std::move(name));
+      }
+    }
+  }
+  const auto reference = [&](const std::string &name) {
+    if (!name.empty() && defined.find(name) == defined.end()) {
+      out.insert(name);
+    }
+  };
+  for (const NodeProto &node : nodes_) {
+    std::vector<std::string> refs;
+    CollectNodeReferences(node, refs);
+    for (const std::string &ref : refs) {
+      reference(ref);
+    }
+  }
+  for (const ValueInfoProto &output : outputs_) {
+    reference(output.name().value());
+  }
+}
+
+void GraphBuilder::CollectNodeReferences(const NodeProto &node,
+                                         std::vector<std::string> &refs) const {
+  for (int i = 0; i < node.input().size(); ++i) {
+    std::string name(node.input(static_cast<std::size_t>(i)));
+    if (!name.empty()) {
+      refs.push_back(std::move(name));
+    }
+  }
+  for (const GraphBuilder *subgraph : ReferencedSubgraphs(node)) {
+    std::unordered_set<std::string> implicit_inputs;
+    subgraph->CollectImplicitInputs(implicit_inputs);
+    for (const std::string &name : implicit_inputs) {
+      refs.push_back(name);
+    }
+  }
+}
+
+std::size_t GraphBuilder::RemoveUnusedNodes() {
+  // Prune nested builders first: a leaner subgraph or local function may stop
+  // referencing outer values, which can in turn make an owning node unused.
+  std::size_t removed = 0;
+  for (const auto &function : local_functions_) {
+    removed += function->RemoveUnusedNodes();
+  }
+  for (const auto &subgraph : subgraphs_) {
+    removed += subgraph->RemoveUnusedNodes();
+  }
+
+  const std::size_t num_nodes = nodes_.size();
+  if (num_nodes == 0) {
+    return removed;
+  }
+
+  // Map each produced value name to the index of the node that produces it.
+  std::unordered_map<std::string, std::size_t> producer;
+  for (std::size_t i = 0; i < num_nodes; ++i) {
+    const NodeProto &node = nodes_[i];
+    for (int j = 0; j < node.output().size(); ++j) {
+      std::string name(node.output(static_cast<std::size_t>(j)));
+      if (!name.empty()) {
+        producer.emplace(std::move(name), i);
+      }
+    }
+  }
+
+  // Recursively mark every node reachable backwards from the graph outputs.
+  std::vector<bool> live(num_nodes, false);
+  std::function<void(std::size_t)> mark_node = [&](std::size_t index) {
+    if (live[index]) {
+      return;
+    }
+    live[index] = true;
+    std::vector<std::string> refs;
+    CollectNodeReferences(nodes_[index], refs);
+    for (const std::string &ref : refs) {
+      auto it = producer.find(ref);
+      if (it != producer.end()) {
+        mark_node(it->second);
+      }
+    }
+  };
+  for (const ValueInfoProto &output : outputs_) {
+    auto it = producer.find(output.name().value());
+    if (it != producer.end()) {
+      mark_node(it->second);
+    }
+  }
+
+  // Rebuild the node list, keeping the live nodes in their original order.
+  utils::RepeatedProtoField<NodeProto> kept;
+  kept.reserve(num_nodes);
+  std::size_t local_removed = 0;
+  for (std::size_t i = 0; i < num_nodes; ++i) {
+    if (live[i]) {
+      kept.push_back(std::move(nodes_[i]));
+    } else {
+      ++local_removed;
+    }
+  }
+  nodes_ = std::move(kept);
+  return removed + local_removed;
+}
 
 GraphBuilder *
 GraphBuilder::FindNamedBuilder(const std::vector<std::unique_ptr<GraphBuilder>> &builders,

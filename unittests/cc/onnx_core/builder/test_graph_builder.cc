@@ -233,4 +233,60 @@ TEST(GraphBuilder, SubgraphIsANestedBuilder) {
   EXPECT_THROW(builder.MakeSubgraph("body"), core::builder::BuilderError);
 }
 
+TEST(GraphBuilder, RemoveUnusedNodesDropsDeadEnds) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("y", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  const std::vector<std::string> used = builder.MakeNode("Add", {"x", "y"});
+  // Two chained nodes that no graph output depends on: both are dead ends.
+  const std::vector<std::string> dead = builder.MakeNode("Mul", {"x", "y"});
+  builder.MakeNode("Neg", {dead[0]});
+  builder.MakeOutput(used[0]);
+
+  EXPECT_EQ(builder.Nodes().size(), 3u);
+  EXPECT_EQ(builder.RemoveUnusedNodes(), 2u);
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Add");
+  // A second pass has nothing left to remove.
+  EXPECT_EQ(builder.RemoveUnusedNodes(), 0u);
+}
+
+TEST(GraphBuilder, RemoveUnusedNodesKeepsSharedProducer) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  // A shared producer feeding one used and one unused consumer must be kept.
+  const std::vector<std::string> shared = builder.MakeNode("Neg", {"x"});
+  const std::vector<std::string> used = builder.MakeNode("Abs", {shared[0]});
+  builder.MakeNode("Abs", {shared[0]}); // dead-end consumer of the shared value
+  builder.MakeOutput(used[0]);
+
+  EXPECT_EQ(builder.RemoveUnusedNodes(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Neg");
+  EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Abs");
+}
+
+TEST(GraphBuilder, RemoveUnusedNodesRecursesIntoSubgraphs) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  // A nested subgraph with one live and one dead-end node.
+  core::builder::GraphBuilder &body = builder.MakeSubgraph("body");
+  body.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> body_used = body.MakeNode("Neg", {"a"});
+  body.MakeNode("Abs", {"a"}); // dead end inside the subgraph
+  body.MakeOutput(body_used[0]);
+
+  const std::vector<std::string> used = builder.MakeNode("Identity", {"x"});
+  builder.MakeOutput(used[0]);
+
+  // The removal descends into the subgraph and prunes its dead-end node.
+  EXPECT_EQ(builder.RemoveUnusedNodes(), 1u);
+  EXPECT_EQ(builder.Nodes().size(), 1u);
+  ASSERT_EQ(builder.Subgraph("body").Nodes().size(), 1u);
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[0].op_type().value(), "Neg");
+}
+
 } // namespace Test

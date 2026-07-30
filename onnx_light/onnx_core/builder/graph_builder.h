@@ -242,6 +242,20 @@ public:
   /// Read-only access to the accumulated nodes (in insertion order).
   const utils::RepeatedProtoField<NodeProto> &Nodes() const noexcept { return nodes_; }
 
+  /// Removes dead-end (unused) nodes from the builder.
+  ///
+  /// A node is kept only when at least one of its outputs is (transitively)
+  /// needed to compute a declared graph output. The analysis is recursive:
+  /// removing a node can turn the nodes that only fed it into dead ends as
+  /// well, and the pruning descends into nested subgraphs and local functions
+  /// to remove their own unused nodes. Values a subgraph consumes from the
+  /// enclosing scope are treated as inputs of the owning control-flow node, so
+  /// the producers a subgraph body relies on are kept alive.
+  ///
+  /// @return The total number of nodes removed, including those pruned from
+  ///         nested subgraphs and local functions.
+  std::size_t RemoveUnusedNodes();
+
   // ── Local functions / subgraphs ──────────────────────────────────────
 
   /// Creates and returns a nested builder for a local function named ``name``.
@@ -351,6 +365,20 @@ private:
 
   // Returns ``true`` when a shape function is registered for ``node``.
   bool ShapeFunctionAvailable(const NodeProto &node) const;
+
+  // Returns the nested subgraph builders referenced by ``node`` through its
+  // ``*_ref`` STRING / STRINGS attributes.
+  std::vector<GraphBuilder *> ReferencedSubgraphs(const NodeProto &node) const;
+
+  // Collects the implicit inputs of this builder (value names it references but
+  // does not itself define as an input, initializer or node output) into
+  // ``out``. Implicit inputs of nested subgraphs are resolved relative to this
+  // scope and propagated when they remain undefined here.
+  void CollectImplicitInputs(std::unordered_set<std::string> &out) const;
+
+  // Appends to ``refs`` the value names ``node`` depends on: its explicit
+  // inputs plus the implicit inputs of any nested subgraph it references.
+  void CollectNodeReferences(const NodeProto &node, std::vector<std::string> &refs) const;
 
   // Seeds the incremental annotation state (value tag + in-place-reuse
   // lifetime) for a declared graph input named ``name``.

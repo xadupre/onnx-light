@@ -202,6 +202,32 @@ class TestGraphBuilder(ExtTestCase):
         # A second pass has nothing left to collapse.
         self.assertEqual(builder.remove_duplicate_initializers(), 0)
 
+    def test_remove_duplicate_initializers_across_scopes(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 2])
+        w = oh.make_tensor("w", FLOAT, [2, 2], [1.0, 1.0, 1.0, 1.0])
+        builder.make_initializer(w)
+        (a,) = builder.make_node("Add", ["x", "w"])
+        builder.make_output(a)
+
+        # The subgraph declares its own initializer with the same content; it is
+        # collapsed onto the enclosing "w" since a subgraph body sees the outer
+        # scope.
+        body = builder.make_subgraph("body")
+        body.make_input("b", FLOAT, [2, 2])
+        c = oh.make_tensor("c", FLOAT, [2, 2], [1.0, 1.0, 1.0, 1.0])
+        body.make_initializer(c)
+        (s,) = body.make_node("Add", ["b", "c"])
+        body.make_output(s)
+
+        self.assertEqual(builder.remove_duplicate_initializers(), 1)
+        graph = builder.build_graph()
+        self.assertEqual(len(graph.initializer), 1)
+        self.assertEqual(graph.initializer[0].name, "w")
+        body_graph = body.build_graph()
+        self.assertEqual(len(body_graph.initializer), 0)
+        self.assertEqual(body_graph.node[0].input[1], "w")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

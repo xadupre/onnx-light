@@ -347,4 +347,29 @@ TEST(GraphBuilder, RemoveDuplicateInitializersRecursesIntoSubgraphs) {
   EXPECT_EQ(builder.Subgraph("body").Nodes()[0].input(1), "c1");
 }
 
+TEST(GraphBuilder, RemoveDuplicateInitializersCollapsesAcrossScopes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 2}));
+
+  // An initializer in the enclosing graph.
+  builder.MakeInitializer(MakeInitializer<float>("w", {2, 2}, {1.0f, 1.0f, 1.0f, 1.0f}));
+  const std::vector<std::string> a = builder.MakeNode("Add", {"x", "w"});
+  builder.MakeOutput(a[0]);
+
+  // The subgraph declares its own initializer with the same content. Because a
+  // subgraph body sees the enclosing scope, the duplicate is collapsed onto the
+  // enclosing initializer and its reference is rewritten to "w".
+  core::builder::GraphBuilder &body = builder.MakeSubgraph("body");
+  body.MakeInput("b", core::symbolic::TensorType::kFloat, MakeShape({2, 2}));
+  body.MakeInitializer(MakeInitializer<float>("c", {2, 2}, {1.0f, 1.0f, 1.0f, 1.0f}));
+  const std::vector<std::string> s = body.MakeNode("Add", {"b", "c"});
+  body.MakeOutput(s[0]);
+
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 1u);
+  ASSERT_EQ(builder.Initializers().size(), 1u);
+  EXPECT_EQ(builder.Initializers()[0].name().value(), "w");
+  EXPECT_EQ(builder.Subgraph("body").Initializers().size(), 0u);
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[0].input(1), "w");
+}
+
 } // namespace Test

@@ -261,13 +261,19 @@ public:
   /// Initializers that carry byte-for-byte identical content (same element
   /// type, shape and data, whether stored inline or as external data) are
   /// collapsed onto a single copy: the first occurrence is kept and every
-  /// later duplicate is dropped. All references to a dropped initializer -- in
+  /// later duplicate is dropped. The content is compared field by field --
+  /// element type and shape first, then the payload -- without copying or
+  /// serializing the tensors. All references to a dropped initializer -- in
   /// this builder's node inputs and in the node inputs of nested subgraphs,
   /// which capture values from the enclosing scope -- are rewritten to the
   /// surviving initializer name. An initializer that also happens to be a
-  /// declared graph output keeps its own name and is never dropped. The pruning
-  /// descends into nested subgraphs and local functions to collapse their own
-  /// duplicated initializers independently.
+  /// declared graph output keeps its own name and is never dropped.
+  ///
+  /// The deduplication spans the enclosing graph and its subgraphs: because a
+  /// subgraph body sees the initializers of the enclosing scope, a subgraph
+  /// initializer that duplicates one visible from an enclosing graph is dropped
+  /// and its references rewritten to that enclosing initializer. Local
+  /// functions have an isolated scope and are deduplicated on their own.
   ///
   /// @return The total number of initializers removed, including those pruned
   ///         from nested subgraphs and local functions.
@@ -401,6 +407,18 @@ private:
   // given by ``rename`` (dropped name -> kept name). The rewrite descends into
   // nested subgraphs, whose bodies capture values from the enclosing scope.
   void RewriteInitializerReferences(const std::unordered_map<std::string, std::string> &rename);
+
+  // Maps a cheap content hash to initializers visible in scope (pointers into
+  // the owning builder's ``initializers_``). Collisions are resolved by an
+  // exact field-by-field comparison. Used by RemoveDuplicateInitializers to
+  // collapse duplicates across the enclosing graph and its subgraphs.
+  using InitializerContentIndex = std::unordered_multimap<std::size_t, const TensorProto *>;
+
+  // Collapses duplicated initializers in this scope against ``inherited`` (the
+  // initializers visible from enclosing graphs) and recurses into subgraphs
+  // (passing down the augmented index) and local functions (with a fresh,
+  // isolated index). Returns the number of initializers removed.
+  std::size_t DeduplicateInitializers(const InitializerContentIndex &inherited);
 
   // Seeds the incremental annotation state (value tag + in-place-reuse
   // lifetime) for a declared graph input named ``name``.

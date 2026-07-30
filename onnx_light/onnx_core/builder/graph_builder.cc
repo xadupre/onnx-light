@@ -5,6 +5,7 @@
 #include "onnx_core/builder/graph_builder.h"
 
 #include <algorithm>
+#include <cstring>
 #include <limits>
 #include <sstream>
 #include <utility>
@@ -27,16 +28,86 @@ using ::onnx_light::core::symbolic::TensorTypeToDataType;
 
 namespace {
 
-// Returns a content key uniquely identifying an initializer's payload while
-// ignoring its name: two initializers with the same element type, shape and
-// data (inline or external) produce identical keys. The key is the serialized
-// TensorProto with its name cleared, so the comparison is byte-for-byte.
-std::string InitializerContentKey(const TensorProto &tensor) {
-  TensorProto copy = tensor;
-  copy.set_name("");
-  std::string key;
-  copy.SerializeToString(key);
-  return key;
+// Combines ``value`` into the running hash ``seed`` (boost-style mixing).
+inline void HashCombine(std::size_t &seed, std::size_t value) {
+  seed ^= value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+}
+
+// Returns a cheap hash of the fields that are quick to read: element type,
+// shape and the sizes of each payload field. It never copies or serializes the
+// tensor. Collisions are resolved by SameInitializerContent, so the hash only
+// needs to be inexpensive and reasonably discriminating.
+std::size_t InitializerContentHash(const TensorProto &tensor) {
+  std::size_t seed = std::hash<int>()(static_cast<int>(tensor.data_type()));
+  for (uint64_t dim : tensor.dims().values()) {
+    HashCombine(seed, static_cast<std::size_t>(dim));
+  }
+  HashCombine(seed, tensor.raw_data().size());
+  HashCombine(seed, tensor.float_data().size());
+  HashCombine(seed, tensor.int32_data().size());
+  HashCombine(seed, tensor.int64_data().size());
+  HashCombine(seed, tensor.double_data().size());
+  HashCombine(seed, tensor.uint64_data().size());
+  HashCombine(seed, tensor.string_data().size());
+  HashCombine(seed, tensor.external_data().size());
+  return seed;
+}
+
+// Compares two packed payload fields byte-for-byte without copying.
+template <typename T>
+bool SamePackedData(const utils::RepeatedField<T> &lhs, const utils::RepeatedField<T> &rhs) {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+  return lhs.size() == 0 || std::memcmp(lhs.data(), rhs.data(), lhs.size() * sizeof(T)) == 0;
+}
+
+// Compares the external_data key/value entries of two tensors.
+bool SameExternalData(const TensorProto &lhs, const TensorProto &rhs) {
+  const auto &left = lhs.external_data();
+  const auto &right = rhs.external_data();
+  if (left.size() != right.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < left.size(); ++i) {
+    if (!(left[i].key() == right[i].key()) || !(left[i].value() == right[i].value())) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Returns true when two initializers carry byte-for-byte identical content
+// (ignoring their names). Cheap discriminators -- element type then shape --
+// are checked first so mismatched tensors are rejected before any payload is
+// compared. Inline payloads (raw_data or typed data) and external data are all
+// supported. Nothing is copied and nothing is serialized.
+bool SameInitializerContent(const TensorProto &lhs, const TensorProto &rhs) {
+  if (lhs.data_type() != rhs.data_type()) {
+    return false;
+  }
+  if (lhs.dims().values() != rhs.dims().values()) {
+    return false;
+  }
+  const int lhs_location = lhs.has_data_location() ? static_cast<int>(lhs.data_location()) : 0;
+  const int rhs_location = rhs.has_data_location() ? static_cast<int>(rhs.data_location()) : 0;
+  if (lhs_location != rhs_location) {
+    return false;
+  }
+  if (lhs.raw_data() != rhs.raw_data()) {
+    return false;
+  }
+  if (!SamePackedData(lhs.float_data(), rhs.float_data()) ||
+      !SamePackedData(lhs.int32_data(), rhs.int32_data()) ||
+      !SamePackedData(lhs.int64_data(), rhs.int64_data()) ||
+      !SamePackedData(lhs.double_data(), rhs.double_data()) ||
+      !SamePackedData(lhs.uint64_data(), rhs.uint64_data())) {
+    return false;
+  }
+  if (lhs.string_data().values() != rhs.string_data().values()) {
+    return false;
+  }
+  return SameExternalData(lhs, rhs);
 }
 
 } // namespace
@@ -696,54 +767,62 @@ std::size_t GraphBuilder::RemoveUnusedNodes() {
 }
 
 std::size_t GraphBuilder::RemoveDuplicateInitializers() {
-  // Collapse duplicates inside nested builders first: each nested scope keeps
-  // its own initializers, so its deduplication is independent of this one.
-  std::size_t removed = 0;
-  for (const auto &function : local_functions_) {
-    removed += function->RemoveDuplicateInitializers();
-  }
-  for (const auto &subgraph : subgraphs_) {
-    removed += subgraph->RemoveDuplicateInitializers();
-  }
+  return DeduplicateInitializers(InitializerContentIndex{});
+}
 
-  if (initializers_.size() < 2) {
-    return removed;
-  }
-
-  // Initializers that also serve as declared graph outputs must keep their own
-  // name; they are never dropped as duplicates.
+std::size_t GraphBuilder::DeduplicateInitializers(const InitializerContentIndex &inherited) {
+  // Declared graph outputs must keep their own name; they are never dropped as
+  // duplicates (but can still act as the survivor for a later duplicate).
   std::unordered_set<std::string> output_names;
   for (const ValueInfoProto &output : outputs_) {
     output_names.insert(output.name().value());
   }
 
-  // The first initializer with a given content wins; every later duplicate is
-  // dropped and its references are rewritten to the surviving name.
-  std::unordered_map<std::string, std::string> kept_by_content;
+  // Start from the initializers visible in the enclosing scope and add this
+  // scope's survivors as we go. The first initializer with a given content
+  // wins; every later duplicate is dropped and its references are rewritten to
+  // the surviving name.
+  InitializerContentIndex index = inherited;
   std::unordered_map<std::string, std::string> rename;
   utils::RepeatedProtoField<TensorProto> kept;
   kept.reserve(initializers_.size());
-  std::size_t local_removed = 0;
+  std::size_t removed = 0;
   for (TensorProto &initializer : initializers_) {
-    std::string initializer_name = initializer.name().value();
-    if (output_names.find(initializer_name) != output_names.end()) {
-      kept.push_back(std::move(initializer));
-      continue;
+    const std::size_t hash = InitializerContentHash(initializer);
+    if (output_names.find(initializer.name().value()) == output_names.end()) {
+      const TensorProto *survivor = nullptr;
+      const auto range = index.equal_range(hash);
+      for (auto it = range.first; it != range.second; ++it) {
+        if (SameInitializerContent(*it->second, initializer)) {
+          survivor = it->second;
+          break;
+        }
+      }
+      if (survivor != nullptr) {
+        rename.emplace(initializer.name().value(), survivor->name().value());
+        ++removed;
+        continue;
+      }
     }
-    std::string content = InitializerContentKey(initializer);
-    auto it = kept_by_content.find(content);
-    if (it == kept_by_content.end()) {
-      kept_by_content.emplace(std::move(content), std::move(initializer_name));
-      kept.push_back(std::move(initializer));
-    } else {
-      rename.emplace(std::move(initializer_name), it->second);
-      ++local_removed;
-    }
+    kept.push_back(std::move(initializer));
+    // Register the survivor right away so later initializers in this same scope
+    // (and, once the loop is done, subgraphs) can collapse onto it. Elements are
+    // heap-owned by the field, so the pointer stays valid as ``kept`` grows.
+    index.emplace(hash, &kept[kept.size() - 1]);
   }
   initializers_ = std::move(kept);
 
   RewriteInitializerReferences(rename);
-  return removed + local_removed;
+
+  // Subgraph bodies see the enclosing scope, so pass the augmented index down.
+  // Local functions have an isolated scope and start from a fresh index.
+  for (const auto &subgraph : subgraphs_) {
+    removed += subgraph->DeduplicateInitializers(index);
+  }
+  for (const auto &function : local_functions_) {
+    removed += function->DeduplicateInitializers(InitializerContentIndex{});
+  }
+  return removed;
 }
 
 void GraphBuilder::RewriteInitializerReferences(

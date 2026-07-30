@@ -5,8 +5,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.10] – Unreleased
 
+### New Features
+
+- Added `ReferenceEvaluator.unregister_custom_kernel` to restore a built-in kernel after a custom one has been registered.
+
+### Improvements
+
+- Extended `ParallelFor` to the unary elementwise kernels and parallelized the `Abs` kernel execution.
+- Reused `RuntimeSession` instances and made the `MatMul` kernel more cache-friendly after profiling `RuntimeSession` on `tiny_llm`.
+- Fixed the O(N²) `GraphBuilder` construction from a `ModelProto`.
+- Simplified `run_nodes` and removed the unused `CallModelLocalFunction` helper.
+- Improved the Python bindings and the `collect_test_case` backend-test collection helpers.
+- Removed the TIFF/WebP/JPEG2000 `ImageDecoder` support and the `ONNX_LIGHT_BUILD_IMAGE_CODECS` flag.
+
+### Testing
+
+- Added the missing `Softmax` backend test cases to match the ONNX node tests.
+- Fixed the runtime coverage report to honor tolerances and flag missing reference outputs.
+
 ### Documentation & CI
 
+- Documented how to run and verify `clang-format` in the Copilot guidelines.
+- Fixed the release wheel build by dropping the unsupported `cp313t` cibuildwheel selector.
 - Bumped the release version to `0.1.10`.
 
 ## [0.1.9] – 2026-07-29

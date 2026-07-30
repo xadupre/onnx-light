@@ -73,22 +73,29 @@ extern "C" void blake3_compress_subtree_wide_join_tbb(
     size_t *r_n) noexcept {
   if (use_tbb && (l_input_len + r_input_len) >= kParallelThreshold && TryAcquireThread()) {
     // Hash the right half on a worker thread while the left half runs here.
-    // std::async can throw (e.g. resource exhaustion); fall back to serial
-    // hashing in that case so the digest is always produced.
+    // std::async can throw (e.g. resource exhaustion) when spawning the thread;
+    // in that case fall back to serial hashing so the digest is always produced.
+    // Only the launch is guarded: blake3_compress_subtree_wide does not throw,
+    // so no exception can escape once the worker is running.
+    std::future<void> right;
+    bool launched = false;
     try {
-      std::future<void> right = std::async(std::launch::async, [&]() {
+      right = std::async(std::launch::async, [&]() {
         *r_n = blake3_compress_subtree_wide(r_input, r_input_len, key, r_chunk_counter, flags,
                                             r_cvs, use_tbb);
       });
+      launched = true;
+    } catch (const std::exception &) {
+      launched = false;
+    }
+    if (launched) {
       *l_n = blake3_compress_subtree_wide(l_input, l_input_len, key, l_chunk_counter, flags, l_cvs,
                                           use_tbb);
       right.get();
       ReleaseThread();
       return;
-    } catch (const std::exception &) {
-      // Thread creation / resource failure: fall through to serial hashing.
-      ReleaseThread();
     }
+    ReleaseThread();
   }
   *l_n = blake3_compress_subtree_wide(l_input, l_input_len, key, l_chunk_counter, flags, l_cvs,
                                       use_tbb);

@@ -10,7 +10,7 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 #     pixi run pip install --no-build-isolation -e .
 
 [dependencies]
-python = ">=3.10"
+python = ">=3.11"
 numpy = ">=2.1"
 ml_dtypes = "*"
 cmake = ">=3.27"

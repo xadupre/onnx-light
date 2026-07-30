@@ -284,6 +284,188 @@ def expect(
     )
 
 
+def _init_dtype_maps():
+    """Initializes and returns the dtype mapping tables (lazily, on first call).
+
+    Returns:
+        A tuple ``(DTYPE_TO_NP, SUB_BYTE_DTYPES)`` used by the tensor
+        conversion helpers.
+    """
+    import ml_dtypes as _ml_dtypes
+
+    dtype_to_np = {
+        int(onnx.TensorProto.FLOAT): np.float32,
+        int(onnx.TensorProto.DOUBLE): np.float64,
+        int(onnx.TensorProto.INT32): np.int32,
+        int(onnx.TensorProto.INT64): np.int64,
+        int(onnx.TensorProto.UINT8): np.uint8,
+        int(onnx.TensorProto.INT8): np.int8,
+        int(onnx.TensorProto.BOOL): np.bool_,
+        int(onnx.TensorProto.UINT16): np.uint16,
+        int(onnx.TensorProto.INT16): np.int16,
+        int(onnx.TensorProto.UINT32): np.uint32,
+        int(onnx.TensorProto.UINT64): np.uint64,
+        int(onnx.TensorProto.FLOAT16): np.float16,
+        int(onnx.TensorProto.BFLOAT16): _ml_dtypes.bfloat16,
+        int(onnx.TensorProto.FLOAT8E4M3FN): _ml_dtypes.float8_e4m3fn,
+        int(onnx.TensorProto.FLOAT8E4M3FNUZ): _ml_dtypes.float8_e4m3fnuz,
+        int(onnx.TensorProto.FLOAT8E5M2): _ml_dtypes.float8_e5m2,
+        int(onnx.TensorProto.FLOAT8E5M2FNUZ): _ml_dtypes.float8_e5m2fnuz,
+        int(onnx.TensorProto.FLOAT8E8M0): _ml_dtypes.float8_e8m0fnu,
+    }
+    sub_byte_dtypes = {
+        int(onnx.TensorProto.INT4): (_ml_dtypes.int4, 4, True),
+        int(onnx.TensorProto.UINT4): (_ml_dtypes.uint4, 4, False),
+        int(onnx.TensorProto.INT2): (_ml_dtypes.int2, 2, True),
+        int(onnx.TensorProto.UINT2): (_ml_dtypes.uint2, 2, False),
+    }
+    return dtype_to_np, sub_byte_dtypes
+
+
+_DTYPE_MAPS: tuple[dict, dict] | None = None
+
+
+def _get_dtype_maps():
+    """Returns the cached ``(DTYPE_TO_NP, SUB_BYTE_DTYPES)`` tuple."""
+    global _DTYPE_MAPS
+    if _DTYPE_MAPS is None:
+        _DTYPE_MAPS = _init_dtype_maps()
+    return _DTYPE_MAPS
+
+
+def _unpack_sub_byte(raw: bytes, shape, dtype, bits: int, signed: bool):
+    """Unpacks sub-byte packed integers from raw bytes into a numpy array."""
+    n = 1
+    for d in shape:
+        n *= int(d)
+    per_byte = 8 // bits
+    mask = (1 << bits) - 1
+    sign_bit = 1 << (bits - 1)
+    buf = np.frombuffer(raw, dtype=np.uint8)
+    out = np.empty(n, dtype=np.int64 if signed else np.uint64)
+    for i in range(n):
+        byte = int(buf[i // per_byte])
+        v = (byte >> (bits * (i % per_byte))) & mask
+        if signed and (v & sign_bit):
+            v -= 1 << bits
+        out[i] = v
+    return out.astype(dtype).reshape(tuple(int(d) for d in shape))
+
+
+def _unpack_float4_e2m1(raw: bytes, shape):
+    """Unpacks FLOAT4E2M1 values from raw bytes into a numpy array."""
+    import ml_dtypes as _ml_dtypes
+
+    n = 1
+    for d in shape:
+        n *= int(d)
+    buf = np.frombuffer(raw, dtype=np.uint8)
+    nibbles = np.empty(n, dtype=np.uint8)
+    for i in range(n):
+        byte = int(buf[i // 2])
+        nibbles[i] = (byte >> (4 * (i % 2))) & 0x0F
+    return nibbles.view(_ml_dtypes.float4_e2m1fn).reshape(tuple(int(d) for d in shape))
+
+
+def _tensor_to_np(t):
+    """Converts a C++ backend-test ``Tensor`` to a numpy array."""
+    if int(t.data_type) == int(onnx.TensorProto.STRING):
+        values = t.string_data()
+        arr = np.array(values, dtype=object)
+        return arr.reshape(tuple(int(d) for d in t.shape))
+    dtype_to_np, sub_byte_dtypes = _get_dtype_maps()
+    sub = sub_byte_dtypes.get(int(t.data_type))
+    if sub is not None:
+        dtype, bits, signed = sub
+        return _unpack_sub_byte(t.raw_data(), t.shape, dtype, bits, signed)
+    if int(t.data_type) == int(onnx.TensorProto.FLOAT4E2M1):
+        return _unpack_float4_e2m1(t.raw_data(), t.shape)
+    dtype = dtype_to_np.get(int(t.data_type))
+    if dtype is None:
+        raise NotImplementedError(
+            f"Cannot convert C++ Tensor with data_type={t.data_type} to numpy."
+        )
+    arr = np.frombuffer(t.raw_data(), dtype=dtype)
+    return arr.reshape(tuple(int(d) for d in t.shape))
+
+
+def _ds_inputs_to_python(tc: Any) -> list[list[np.ndarray | dict[Any, Any] | None]]:
+    """Returns per-DataSet positional inputs for ``tc``.
+
+    For graph inputs declared with ``map(K, V)`` type (used by
+    ``ai.onnx.ml::DictVectorizer`` and ``ai.onnx.ml::CastMap``), the
+    DataSet stores a Map object in ``ds.maps``. The keys and values
+    tensors are combined into a single Python ``dict`` so the backend
+    harness (which zips them against ``sess.input_names``) feeds the
+    map under its original graph-input name.
+    """
+    graph_inputs = list(tc.model.graph.input)
+    data_sets: list[list[np.ndarray | dict[Any, Any] | None]] = []
+    for ds in tc.data_sets:
+        by_name = {t.name: _tensor_to_np(t) for t in ds.inputs}
+        maps_by_name = {m.name: m for m in ds.maps} if ds.maps else {}
+        inputs: list[np.ndarray | dict[Any, Any] | None] = []
+        for gi in graph_inputs:
+            if gi.type.has_map_type():
+                m = maps_by_name.get(gi.name)
+                if m is not None:
+                    keys_np = _tensor_to_np(m.keys)
+                    values_np = _tensor_to_np(m.values)
+                    inputs.append(dict(zip(keys_np.tolist(), values_np.tolist())))
+                else:
+                    inputs.append(by_name.get(gi.name))
+            else:
+                inputs.append(by_name.get(gi.name))
+        data_sets.append(inputs)
+    return data_sets
+
+
+def _expected_output_to_python(t, sequence_outputs):
+    """Converts a DataSet output ``Tensor`` to its Python expected value.
+
+    Sequence-typed graph outputs are materialized by the C++ test cases as a
+    single stacked tensor whose outer (axis 0) dimension is the sequence
+    length. Splits such a tensor back into a list of per-element arrays so it
+    matches the sequence value (a list of arrays) produced by the runtime,
+    instead of a single stacked array that would mismatch as
+    "sequence vs non-sequence".
+
+    Returns:
+        A list of per-element ``numpy.ndarray`` when ``t`` names a
+        sequence-typed graph output, otherwise the single ``numpy.ndarray``.
+    """
+    arr = _tensor_to_np(t)
+    if t.name in sequence_outputs:
+        return [arr[i] for i in range(arr.shape[0])]
+    return arr
+
+
+def _cc_to_python_test_case(cc_tc: Any) -> TestCase:
+    """Converts a single C++ ``TestCase`` to the Python :class:`TestCase`.
+
+    Wraps the C++-side model and data sets into the Python ``TestCase``
+    subclass with numpy arrays (instead of raw-byte ``Tensor`` instances).
+    """
+    sequence_outputs = {o.name for o in cc_tc.model.graph.output if o.type.has_sequence_type()}
+    py_inputs = _ds_inputs_to_python(cc_tc)
+    data_sets = [
+        (py_inputs[i], [_expected_output_to_python(y, sequence_outputs) for y in ds.outputs])
+        for i, ds in enumerate(cc_tc.data_sets)
+    ]
+    return TestCase(
+        name=cc_tc.name,
+        model_name=cc_tc.model_name,
+        url=None,
+        model_dir=None,
+        model=cc_tc.model,
+        data_sets=data_sets,
+        kind=cc_tc.kind,
+        atol=cc_tc.atol,
+        rtol=cc_tc.rtol,
+        tag=cc_tc.tag,
+    )
+
+
 def _collect_cc_test_cases(
     include_big: bool = False, mode: "_backend_test_cc.TestMode | None" = None
 ) -> dict[str, TestCase]:
@@ -308,136 +490,7 @@ def _collect_cc_test_cases(
     Returns:
         A dictionary mapping test case names to TestCase instances.
     """
-    import ml_dtypes as _ml_dtypes
-
     from .....onnx_py._onnxpybackend import backend_test as _backend_test_cc  # type: ignore[attr-defined]
-
-    _DTYPE_TO_NP = {
-        int(onnx.TensorProto.FLOAT): np.float32,
-        int(onnx.TensorProto.DOUBLE): np.float64,
-        int(onnx.TensorProto.INT32): np.int32,
-        int(onnx.TensorProto.INT64): np.int64,
-        int(onnx.TensorProto.UINT8): np.uint8,
-        int(onnx.TensorProto.INT8): np.int8,
-        int(onnx.TensorProto.BOOL): np.bool_,
-        int(onnx.TensorProto.UINT16): np.uint16,
-        int(onnx.TensorProto.INT16): np.int16,
-        int(onnx.TensorProto.UINT32): np.uint32,
-        int(onnx.TensorProto.UINT64): np.uint64,
-        int(onnx.TensorProto.FLOAT16): np.float16,
-        int(onnx.TensorProto.BFLOAT16): _ml_dtypes.bfloat16,
-        int(onnx.TensorProto.FLOAT8E4M3FN): _ml_dtypes.float8_e4m3fn,
-        int(onnx.TensorProto.FLOAT8E4M3FNUZ): _ml_dtypes.float8_e4m3fnuz,
-        int(onnx.TensorProto.FLOAT8E5M2): _ml_dtypes.float8_e5m2,
-        int(onnx.TensorProto.FLOAT8E5M2FNUZ): _ml_dtypes.float8_e5m2fnuz,
-        int(onnx.TensorProto.FLOAT8E8M0): _ml_dtypes.float8_e8m0fnu,
-    }
-
-    # Sub-byte packed integer dtypes: ONNX stores these row-major with the
-    # least-significant element first within each byte (low nibble for 4-bit,
-    # lowest pair for 2-bit). Trailing slots in the final byte are zero-padded.
-    _SUB_BYTE_DTYPES = {
-        int(onnx.TensorProto.INT4): (_ml_dtypes.int4, 4, True),
-        int(onnx.TensorProto.UINT4): (_ml_dtypes.uint4, 4, False),
-        int(onnx.TensorProto.INT2): (_ml_dtypes.int2, 2, True),
-        int(onnx.TensorProto.UINT2): (_ml_dtypes.uint2, 2, False),
-    }
-
-    def _unpack_sub_byte(raw: bytes, shape, dtype, bits: int, signed: bool):
-        n = 1
-        for d in shape:
-            n *= int(d)
-        per_byte = 8 // bits
-        mask = (1 << bits) - 1
-        sign_bit = 1 << (bits - 1)
-        buf = np.frombuffer(raw, dtype=np.uint8)
-        out = np.empty(n, dtype=np.int64 if signed else np.uint64)
-        for i in range(n):
-            byte = int(buf[i // per_byte])
-            v = (byte >> (bits * (i % per_byte))) & mask
-            if signed and (v & sign_bit):
-                v -= 1 << bits
-            out[i] = v
-        return out.astype(dtype).reshape(tuple(int(d) for d in shape))
-
-    def _unpack_float4_e2m1(raw: bytes, shape):
-        n = 1
-        for d in shape:
-            n *= int(d)
-        buf = np.frombuffer(raw, dtype=np.uint8)
-        nibbles = np.empty(n, dtype=np.uint8)
-        for i in range(n):
-            byte = int(buf[i // 2])
-            nibbles[i] = (byte >> (4 * (i % 2))) & 0x0F
-        return nibbles.view(_ml_dtypes.float4_e2m1fn).reshape(tuple(int(d) for d in shape))
-
-    def _tensor_to_np(t):
-        if int(t.data_type) == int(onnx.TensorProto.STRING):
-            values = t.string_data()
-            arr = np.array(values, dtype=object)
-            return arr.reshape(tuple(int(d) for d in t.shape))
-        sub = _SUB_BYTE_DTYPES.get(int(t.data_type))
-        if sub is not None:
-            dtype, bits, signed = sub
-            return _unpack_sub_byte(t.raw_data(), t.shape, dtype, bits, signed)
-        if int(t.data_type) == int(onnx.TensorProto.FLOAT4E2M1):
-            return _unpack_float4_e2m1(t.raw_data(), t.shape)
-        dtype = _DTYPE_TO_NP.get(int(t.data_type))
-        if dtype is None:
-            raise NotImplementedError(
-                f"Cannot convert C++ Tensor with data_type={t.data_type} to numpy."
-            )
-        arr = np.frombuffer(t.raw_data(), dtype=dtype)
-        return arr.reshape(tuple(int(d) for d in t.shape))
-
-    def _ds_inputs_to_python(tc: Any) -> list[list[np.ndarray | dict[Any, Any] | None]]:
-        """Returns per-DataSet positional inputs for ``tc``.
-
-        For graph inputs declared with ``map(K, V)`` type (used by
-        ``ai.onnx.ml::DictVectorizer`` and ``ai.onnx.ml::CastMap``), the
-        DataSet stores a Map object in ``ds.maps``. The keys and values
-        tensors are combined into a single Python ``dict`` so the backend
-        harness (which zips them against ``sess.input_names``) feeds the
-        map under its original graph-input name.
-        """
-        graph_inputs = list(tc.model.graph.input)
-        data_sets: list[list[np.ndarray | dict[Any, Any] | None]] = []
-        for ds in tc.data_sets:
-            by_name = {t.name: _tensor_to_np(t) for t in ds.inputs}
-            maps_by_name = {m.name: m for m in ds.maps} if ds.maps else {}
-            inputs: list[np.ndarray | dict[Any, Any] | None] = []
-            for gi in graph_inputs:
-                if gi.type.has_map_type():
-                    m = maps_by_name.get(gi.name)
-                    if m is not None:
-                        keys_np = _tensor_to_np(m.keys)
-                        values_np = _tensor_to_np(m.values)
-                        inputs.append(dict(zip(keys_np.tolist(), values_np.tolist())))
-                    else:
-                        inputs.append(by_name.get(gi.name))
-                else:
-                    inputs.append(by_name.get(gi.name))
-            data_sets.append(inputs)
-        return data_sets
-
-    def _expected_output_to_python(t, sequence_outputs):
-        """Converts a DataSet output ``Tensor`` to its Python expected value.
-
-        Sequence-typed graph outputs are materialized by the C++ test cases as a
-        single stacked tensor whose outer (axis 0) dimension is the sequence
-        length. Splits such a tensor back into a list of per-element arrays so it
-        matches the sequence value (a list of arrays) produced by the runtime,
-        instead of a single stacked array that would mismatch as
-        "sequence vs non-sequence".
-
-        Returns:
-            A list of per-element ``numpy.ndarray`` when ``t`` names a
-            sequence-typed graph output, otherwise the single ``numpy.ndarray``.
-        """
-        arr = _tensor_to_np(t)
-        if t.name in sequence_outputs:
-            return [arr[i] for i in range(arr.shape[0])]
-        return arr
 
     result: dict[str, TestCase] = {}
     if mode is None:
@@ -445,24 +498,7 @@ def _collect_cc_test_cases(
     for tc in _backend_test_cc.collect_test_cases(include_big=include_big, mode=mode):
         if tc.name.startswith("test_cc_zipmap_"):
             continue
-        sequence_outputs = {o.name for o in tc.model.graph.output if o.type.has_sequence_type()}
-        py_inputs = _ds_inputs_to_python(tc)
-        data_sets = [
-            (py_inputs[i], [_expected_output_to_python(y, sequence_outputs) for y in ds.outputs])
-            for i, ds in enumerate(tc.data_sets)
-        ]
-        result[tc.name] = TestCase(
-            name=tc.name,
-            model_name=tc.model_name,
-            url=None,
-            model_dir=None,
-            model=tc.model,
-            data_sets=data_sets,
-            kind=tc.kind,
-            atol=tc.atol,
-            rtol=tc.rtol,
-            tag=tc.tag,
-        )
+        result[tc.name] = _cc_to_python_test_case(tc)
     return result
 
 
@@ -516,6 +552,35 @@ def collect_test_case(
     result = dict(ALL_TESTS)
     ALL_TESTS.clear()
     return result
+
+
+def get_test_case(name: str, mode: "_backend_test_cc.TestMode | None" = None) -> TestCase | None:
+    """Returns a single backend test case by exact name, or ``None``.
+
+    Unlike :func:`collect_test_case`, which collects *all* C++ test cases
+    and converts every one to Python, this function uses the C++ exact-name
+    lookup (:func:`get_test_case_by_name`) to retrieve only the requested
+    case without regex overhead. This is significantly faster when only one
+    case is needed.
+
+    Args:
+        name: The exact test case name (e.g.
+            ``"test_cc_loop_zero_trip_count"``).
+        mode: The generation mode (a ``TestMode`` value). When ``None``
+            (default), defaults to ``TestMode.TEST``.
+
+    Returns:
+        The :class:`TestCase` instance, or ``None`` if no case with that
+        name exists.
+    """
+    from .....onnx_py._onnxpybackend import backend_test as _bt  # type: ignore[attr-defined]
+
+    if mode is None:
+        mode = _bt.TestMode.TEST
+    cases = _bt.get_test_case_by_name(name, include_big=True, mode=mode)
+    if not cases:
+        return None
+    return _cc_to_python_test_case(cases[0])
 
 
 def get_test_cases_for_op(

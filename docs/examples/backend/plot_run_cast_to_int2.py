@@ -18,7 +18,7 @@ visible in the runtime output below.
 This example:
 
 * retrieves the ``test_cc_cast_FLOAT_to_INT2`` case via
-  :func:`onnx_light.onnx.backend.collect_test_case`,
+  :func:`onnx_light.onnx.backend.get_test_case`,
 * displays its single-node ``Cast`` ``ModelProto``,
 * runs the model with
   :class:`onnx_light.onnx.reference.ReferenceEvaluator` and prints the
@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from onnx_light.onnx.backend import collect_test_case
+from onnx_light.onnx.backend import get_test_case
 from onnx_light.onnx.reference import ReferenceEvaluator
 from onnx_light.tools import pretty_onnx
 
@@ -41,14 +41,10 @@ from onnx_light.tools import pretty_onnx
 # Retrieve the float-to-int2 cast case
 # ++++++++++++++++++++++++++++++++++++
 #
-# ``collect_test_case`` returns every registered backend test case as a
-# ``dict`` mapping each case name to its ``TestCase``. We pick the
-# ``test_cc_cast_FLOAT_to_INT2`` entry from it.
+# ``get_test_case`` retrieves a single backend test case by exact name,
+# using the C++ name-based filter for efficiency.
 
-all_cases = collect_test_case()
-print(f"Total number of backend test cases: {len(all_cases)}")
-
-tc = all_cases["test_cc_cast_FLOAT_to_INT2"]
+tc = get_test_case("test_cc_cast_FLOAT_to_INT2")
 print(f"name      : {tc.name}")
 print(f"model_name: {tc.model_name}")
 print(f"kind      : {tc.kind}")
@@ -92,7 +88,7 @@ print(output.astype(np.int8).ravel())
 # Run the corresponding backend test
 # ++++++++++++++++++++++++++++++++++
 #
-# The same case retrieved with ``collect_test_case`` *is* the backend
+# The same case retrieved with ``get_test_case`` *is* the backend
 # test: every :class:`TestCase` carries the reference input/output data
 # sets and an :meth:`~onnx_light.onnx_lib.backend.test.case.base.TestCase.assert_allclose`
 # method. A backend test only needs a runtime callable with the
@@ -113,7 +109,7 @@ def reference_runtime(model, *inputs: np.ndarray) -> list[np.ndarray]:
     return sess.run(None, feeds)
 
 
-# ``tc`` was retrieved above from ``collect_test_case()``; run its
+# ``tc`` was retrieved above from ``get_test_case()``; run its
 # backend test directly. ``assert_allclose`` raises an ``AssertionError``
 # on a mismatch and returns ``None`` on success.
 tc.assert_allclose(reference_runtime)

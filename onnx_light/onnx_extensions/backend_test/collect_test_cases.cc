@@ -164,6 +164,18 @@ std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex, bool
   return filtered;
 }
 
+std::vector<TestCase> GetTestCaseByName(const std::string &name, bool include_big, TestMode mode) {
+  std::vector<TestCase> all_cases = CollectTestCases("", include_big, mode);
+  std::vector<TestCase> result;
+  for (auto &tc : all_cases) {
+    if (tc.name == name) {
+      result.emplace_back(std::move(tc));
+      break;
+    }
+  }
+  return result;
+}
+
 } // namespace backend_test
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

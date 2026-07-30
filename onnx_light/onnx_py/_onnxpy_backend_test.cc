@@ -300,4 +300,16 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       "benchmark-sized cases instead of the standard correctness cases where "
       "supported. Raises ``ValueError`` if ``name_regex`` is not a valid "
       "regular expression.");
+
+  bt_mod.def(
+      "get_test_case_by_name",
+      [](const std::string &name, bool include_big, TestMode mode) {
+        return core::backend_test::GetTestCaseByName(name, include_big, mode);
+      },
+      nb::arg("name"), nb::arg("include_big") = false, nb::arg("mode") = TestMode::TEST,
+      "Returns the single C++-implemented backend test case whose ``name`` "
+      "matches exactly, as a list of at most one element. An empty list signals "
+      "that no case with the requested name was found. More efficient than "
+      "``collect_test_cases_by_name`` for exact-name lookups because it avoids "
+      "regex compilation and stops at the first match.");
 }

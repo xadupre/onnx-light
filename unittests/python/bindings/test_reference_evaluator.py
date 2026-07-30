@@ -486,9 +486,9 @@ sess.run(
         # output's dtype/trailing shape from the body's declared output
         # value-info; otherwise the downstream numpy conversion raises
         # ``"The element type in the input tensor is UNDEFINED."``.
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
-        tc = collect_test_case().get("test_cc_loop_zero_trip_count")
+        tc = get_test_case("test_cc_loop_zero_trip_count")
         self.assertIsNotNone(tc)
         inputs, outputs = tc.data_sets[0]
         sess = ReferenceEvaluator(tc.model)
@@ -506,9 +506,9 @@ sess.run(
         # ``kernel::Sub only supports FLOAT, INT8, INT16, UINT8, UINT16,
         # UINT32 and UINT64 inputs.``, which broke the FlexAttention path
         # whenever a ``score_mod`` subgraph subtracted query/key indices.
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
-        tc = collect_test_case().get("test_cc_flexattention_relative_positional")
+        tc = get_test_case("test_cc_flexattention_relative_positional")
         self.assertIsNotNone(tc)
         inputs, outputs = tc.data_sets[0]
         sess = ReferenceEvaluator(tc.model)
@@ -522,9 +522,9 @@ sess.run(
         # Regression test for test_cc_sequence_erase_pos1: the graph output
         # is a SequenceType, so ReferenceEvaluator.run() must return a list
         # of numpy arrays rather than raise "Output was not produced".
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
-        tc = collect_test_case().get("test_cc_sequence_erase_pos1")
+        tc = get_test_case("test_cc_sequence_erase_pos1")
         self.assertIsNotNone(tc)
         inputs, outputs = tc.data_sets[0]
         sess = ReferenceEvaluator(tc.model)
@@ -543,9 +543,9 @@ sess.run(
         # Regression test for test_cc_sequence_erase_default: the graph output
         # is a SequenceType, so ReferenceEvaluator.run() must return a list
         # of numpy arrays rather than raise "Output was not produced".
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
-        tc = collect_test_case().get("test_cc_sequence_erase_default")
+        tc = get_test_case("test_cc_sequence_erase_default")
         self.assertIsNotNone(tc)
         inputs, outputs = tc.data_sets[0]
         sess = ReferenceEvaluator(tc.model)
@@ -566,9 +566,9 @@ sess.run(
         # return a list of numpy arrays rather than raise "Output was not
         # produced". The scalar 'split' input (value 2) splits the [3, 6] data
         # along axis=1 into three [3, 2] chunks.
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
-        tc = collect_test_case().get("test_cc_split_to_sequence_1")
+        tc = get_test_case("test_cc_split_to_sequence_1")
         self.assertIsNotNone(tc)
         inputs, outputs = tc.data_sets[0]
         sess = ReferenceEvaluator(tc.model)
@@ -590,9 +590,9 @@ sess.run(
         # applies an Identity body to each element of a single input sequence,
         # so ReferenceEvaluator.run() must execute the body subgraph once per
         # element and return the result as a list of numpy arrays.
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
-        tc = collect_test_case().get("test_cc_sequence_map_identity_float")
+        tc = get_test_case("test_cc_sequence_map_identity_float")
         self.assertIsNotNone(tc)
         inputs, outputs = tc.data_sets[0]
         sess = ReferenceEvaluator(tc.model)
@@ -670,9 +670,9 @@ sess.run(
         # sequences (y0, y1) through a two-input/two-output Identity body, so
         # ReferenceEvaluator.run() must return one list of numpy arrays per
         # output sequence.
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
-        tc = collect_test_case().get("test_cc_sequence_map_identity_2_sequences")
+        tc = get_test_case("test_cc_sequence_map_identity_2_sequences")
         self.assertIsNotNone(tc)
         inputs, outputs = tc.data_sets[0]
         sess = ReferenceEvaluator(tc.model)
@@ -689,9 +689,9 @@ sess.run(
         # ``ImageDecoder`` kernel must decode the BMP bytestream and return
         # the correct ``(32, 32, 3)`` uint8 tensor rather than the empty-matrix
         # fallback ``(0, 0, 3)`` returned by earlier versions of the kernel.
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
-        tc = collect_test_case().get("test_cc_image_decoder_decode_bmp_rgb")
+        tc = get_test_case("test_cc_image_decoder_decode_bmp_rgb")
         self.assertIsNotNone(tc)
         inputs, outputs = tc.data_sets[0]
         sess = ReferenceEvaluator(tc.model)
@@ -710,9 +710,9 @@ sess.run(
         # values that closely match the upstream Pillow reference (small
         # integer rounding differences are tolerated since the reference is
         # produced by libjpeg-turbo).
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
-        tc = collect_test_case().get(test_name)
+        tc = get_test_case(test_name)
         self.assertIsNotNone(tc)
         inputs, outputs = tc.data_sets[0]
         sess = ReferenceEvaluator(tc.model)
@@ -744,9 +744,9 @@ sess.run(
         # PNG filters) and return the correct ``(32, 32, 3)`` uint8 tensor
         # rather than the empty-matrix fallback ``(0, 0, 3)`` returned by
         # earlier versions of the kernel that lacked a PNG decoder.
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
-        tc = collect_test_case().get("test_cc_image_decoder_decode_png_rgb")
+        tc = get_test_case("test_cc_image_decoder_decode_png_rgb")
         self.assertIsNotNone(tc)
         inputs, outputs = tc.data_sets[0]
         sess = ReferenceEvaluator(tc.model)
@@ -763,9 +763,9 @@ sess.run(
         # bytestream and return the correct ``(32, 32, 3)`` uint8 tensor
         # rather than the empty-matrix fallback ``(0, 0, 3)`` returned by
         # earlier versions of the kernel that lacked a PNM decoder.
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
-        tc = collect_test_case().get("test_cc_image_decoder_decode_pnm_rgb")
+        tc = get_test_case("test_cc_image_decoder_decode_pnm_rgb")
         self.assertIsNotNone(tc)
         inputs, outputs = tc.data_sets[0]
         sess = ReferenceEvaluator(tc.model)
@@ -784,9 +784,9 @@ sess.run(
         # when ``scale * input_width`` is fractional. The C++ ``Resize``
         # kernel mirrors that convention; this test locks in bit-exact
         # agreement with the upstream backend reference outputs.
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
-        tc = collect_test_case().get(test_name)
+        tc = get_test_case(test_name)
         self.assertIsNotNone(tc)
         inputs, outputs = tc.data_sets[0]
         sess = ReferenceEvaluator(tc.model)
@@ -857,9 +857,9 @@ sess.run(
     def test_tiny_llm_float32(self):
         # Runs the ``tiny_llm`` Llama-style decoder end to end in float32 and
         # locks in the output ranks/dtypes (logits and the updated KV cache).
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
-        tc = collect_test_case().get("test_cc_shape_inference_tiny_llm")
+        tc = get_test_case("test_cc_shape_inference_tiny_llm")
         self.assertIsNotNone(tc)
         sess = ReferenceEvaluator(tc.model)
         logits, present_key, present_value = sess.run(None, self._tiny_llm_inputs())
@@ -873,9 +873,9 @@ sess.run(
         # run() calls (so the per-node kernel resolution done on the session's
         # first Run is not repeated on every call), and repeated runs on the
         # same inputs return bit-identical results.
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
-        tc = collect_test_case().get("test_cc_shape_inference_tiny_llm")
+        tc = get_test_case("test_cc_shape_inference_tiny_llm")
         self.assertIsNotNone(tc)
         sess = ReferenceEvaluator(tc.model)
         inputs = self._tiny_llm_inputs()
@@ -899,10 +899,10 @@ sess.run(
         # BFLOAT16 (exercising the half-precision promote/demote paths of
         # RMSNormalization, Attention and the elementwise kernels) and the
         # de-quantized outputs stay close to the float32 reference.
-        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+        from onnx_light.onnx_lib.backend.test.case import get_test_case
 
         bfloat16 = import_or_skip("ml_dtypes", "bfloat16")
-        tc = collect_test_case().get("test_cc_shape_inference_tiny_llm")
+        tc = get_test_case("test_cc_shape_inference_tiny_llm")
         self.assertIsNotNone(tc)
 
         ref = ReferenceEvaluator(tc.model).run(None, self._tiny_llm_inputs())

@@ -43,7 +43,7 @@ RegisterFunctionThreeLevelNestedCallsCase(std::vector<TestCase> &registry,
 /// Registers a test case where a model-local function declares formal
 /// attributes (``then_branch``/``else_branch``) that the body's ``If``
 /// node references via ``ref_attr_name``. Exercises that
-/// ``CallModelLocalFunction`` resolves the references against the
+/// ``ModelLocalFunctionKernel`` resolves the references against the
 /// call-site attributes before executing the function body.
 ONNX_LIGHT_BACKEND_TEST_LOCAL void
 RegisterFunctionLinkedAttributeCase(std::vector<TestCase> &registry,

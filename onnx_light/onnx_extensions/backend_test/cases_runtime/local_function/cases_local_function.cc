@@ -186,7 +186,7 @@ void RegisterFunctionThreeLevelNestedCallsCase(std::vector<TestCase> &registry, 
 //                            else_branch = ref(else_branch) }
 //
 // The call-site supplies concrete branch sub-graphs as GRAPH attributes
-// of the call node, and ``CallModelLocalFunction`` must resolve the
+// of the call node, and ``ModelLocalFunctionKernel`` must resolve the
 // ``ref_attr_name`` references in the function body to those sub-graphs
 // before executing the ``If``. Each branch is a constant-only graph
 // that emits a single FLOAT scalar; the test asserts the value selected

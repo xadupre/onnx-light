@@ -25,6 +25,22 @@ using ::onnx_light::core::symbolic::SymTensorFromValueInfo;
 using ::onnx_light::core::symbolic::SymTensorToValueInfo;
 using ::onnx_light::core::symbolic::TensorTypeToDataType;
 
+namespace {
+
+// Returns a content key uniquely identifying an initializer's payload while
+// ignoring its name: two initializers with the same element type, shape and
+// data (inline or external) produce identical keys. The key is the serialized
+// TensorProto with its name cleared, so the comparison is byte-for-byte.
+std::string InitializerContentKey(const TensorProto &tensor) {
+  TensorProto copy = tensor;
+  copy.set_name("");
+  std::string key;
+  copy.SerializeToString(key);
+  return key;
+}
+
+} // namespace
+
 GraphBuilder::GraphBuilder(std::string name, SchemaLookupFn schema_lookup)
     : name_(std::move(name)), schema_lookup_(std::move(schema_lookup)) {}
 
@@ -677,6 +693,78 @@ std::size_t GraphBuilder::RemoveUnusedNodes() {
   }
   nodes_ = std::move(kept);
   return removed + local_removed;
+}
+
+std::size_t GraphBuilder::RemoveDuplicateInitializers() {
+  // Collapse duplicates inside nested builders first: each nested scope keeps
+  // its own initializers, so its deduplication is independent of this one.
+  std::size_t removed = 0;
+  for (const auto &function : local_functions_) {
+    removed += function->RemoveDuplicateInitializers();
+  }
+  for (const auto &subgraph : subgraphs_) {
+    removed += subgraph->RemoveDuplicateInitializers();
+  }
+
+  if (initializers_.size() < 2) {
+    return removed;
+  }
+
+  // Initializers that also serve as declared graph outputs must keep their own
+  // name; they are never dropped as duplicates.
+  std::unordered_set<std::string> output_names;
+  for (const ValueInfoProto &output : outputs_) {
+    output_names.insert(output.name().value());
+  }
+
+  // The first initializer with a given content wins; every later duplicate is
+  // dropped and its references are rewritten to the surviving name.
+  std::unordered_map<std::string, std::string> kept_by_content;
+  std::unordered_map<std::string, std::string> rename;
+  utils::RepeatedProtoField<TensorProto> kept;
+  kept.reserve(initializers_.size());
+  std::size_t local_removed = 0;
+  for (TensorProto &initializer : initializers_) {
+    std::string initializer_name = initializer.name().value();
+    if (output_names.find(initializer_name) != output_names.end()) {
+      kept.push_back(std::move(initializer));
+      continue;
+    }
+    std::string content = InitializerContentKey(initializer);
+    auto it = kept_by_content.find(content);
+    if (it == kept_by_content.end()) {
+      kept_by_content.emplace(std::move(content), std::move(initializer_name));
+      kept.push_back(std::move(initializer));
+    } else {
+      rename.emplace(std::move(initializer_name), it->second);
+      ++local_removed;
+    }
+  }
+  initializers_ = std::move(kept);
+
+  RewriteInitializerReferences(rename);
+  return removed + local_removed;
+}
+
+void GraphBuilder::RewriteInitializerReferences(
+    const std::unordered_map<std::string, std::string> &rename) {
+  if (rename.empty()) {
+    return;
+  }
+  for (NodeProto &node : nodes_) {
+    for (int i = 0; i < node.input().size(); ++i) {
+      auto it = rename.find(node.input(static_cast<std::size_t>(i)));
+      if (it != rename.end()) {
+        node.mutable_input(static_cast<std::size_t>(i))->assign(it->second);
+      }
+    }
+  }
+  // Subgraph bodies capture values from the enclosing scope, so a duplicate
+  // initializer they reference must be rewritten here too. Local functions have
+  // an isolated scope and cannot see this builder's initializers.
+  for (const auto &subgraph : subgraphs_) {
+    subgraph->RewriteInitializerReferences(rename);
+  }
 }
 
 GraphBuilder *

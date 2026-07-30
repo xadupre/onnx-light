@@ -181,6 +181,27 @@ class TestGraphBuilder(ExtTestCase):
         # A second pass has nothing left to remove.
         self.assertEqual(builder.remove_unused_nodes(), 0)
 
+    def test_remove_duplicate_initializers(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 2])
+        w1 = oh.make_tensor("w1", FLOAT, [2, 2], [1.0, 2.0, 3.0, 4.0])
+        w2 = oh.make_tensor("w2", FLOAT, [2, 2], [1.0, 2.0, 3.0, 4.0])
+        builder.make_initializer(w1)
+        builder.make_initializer(w2)
+        (a,) = builder.make_node("Add", ["x", "w1"])
+        (b,) = builder.make_node("Add", ["x", "w2"])
+        builder.make_output(a)
+        builder.make_output(b)
+
+        self.assertEqual(builder.remove_duplicate_initializers(), 1)
+        graph = builder.build_graph()
+        self.assertEqual(len(graph.initializer), 1)
+        self.assertEqual(graph.initializer[0].name, "w1")
+        # The reference to the dropped duplicate is rewritten to the survivor.
+        self.assertEqual(graph.node[1].input[1], "w1")
+        # A second pass has nothing left to collapse.
+        self.assertEqual(builder.remove_duplicate_initializers(), 0)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

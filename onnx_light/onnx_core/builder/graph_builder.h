@@ -256,6 +256,23 @@ public:
   ///         nested subgraphs and local functions.
   std::size_t RemoveUnusedNodes();
 
+  /// Removes duplicated initializers from the builder.
+  ///
+  /// Initializers that carry byte-for-byte identical content (same element
+  /// type, shape and data, whether stored inline or as external data) are
+  /// collapsed onto a single copy: the first occurrence is kept and every
+  /// later duplicate is dropped. All references to a dropped initializer -- in
+  /// this builder's node inputs and in the node inputs of nested subgraphs,
+  /// which capture values from the enclosing scope -- are rewritten to the
+  /// surviving initializer name. An initializer that also happens to be a
+  /// declared graph output keeps its own name and is never dropped. The pruning
+  /// descends into nested subgraphs and local functions to collapse their own
+  /// duplicated initializers independently.
+  ///
+  /// @return The total number of initializers removed, including those pruned
+  ///         from nested subgraphs and local functions.
+  std::size_t RemoveDuplicateInitializers();
+
   // ── Local functions / subgraphs ──────────────────────────────────────
 
   /// Creates and returns a nested builder for a local function named ``name``.
@@ -379,6 +396,12 @@ private:
   // Appends to ``refs`` the value names ``node`` depends on: its explicit
   // inputs plus the implicit inputs of any nested subgraph it references.
   void CollectNodeReferences(const NodeProto &node, std::vector<std::string> &refs) const;
+
+  // Rewrites node inputs that name a dropped initializer to the surviving name
+  // given by ``rename`` (dropped name -> kept name). The rewrite descends into
+  // nested subgraphs, whose bodies capture values from the enclosing scope.
+  void
+  RewriteInitializerReferences(const std::unordered_map<std::string, std::string> &rename);
 
   // Seeds the incremental annotation state (value tag + in-place-reuse
   // lifetime) for a declared graph input named ``name``.

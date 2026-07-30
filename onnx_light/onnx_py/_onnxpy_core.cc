@@ -2020,6 +2020,11 @@ void AddOnnxPyBuilder(nb::module_ &m) {
       .def("remove_unused_nodes", &GraphBuilder::RemoveUnusedNodes,
            "Recursively removes dead-end (unused) nodes, descending into nested subgraphs and "
            "local functions, and returns the total number of nodes removed.")
+      .def("remove_duplicate_initializers", &GraphBuilder::RemoveDuplicateInitializers,
+           "Recursively removes duplicated initializers (initializers with byte-for-byte "
+           "identical content), rewriting every reference to a dropped duplicate to the surviving "
+           "initializer, descending into nested subgraphs and local functions, and returns the "
+           "total number of initializers removed.")
       .def(
           "build_graph", [](const GraphBuilder &self) { return self.BuildGraph(); },
           "Assembles the accumulated inputs, initializers, nodes and outputs into a "

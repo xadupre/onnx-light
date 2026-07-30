@@ -439,4 +439,142 @@ TEST(GraphBuilder, RemoveIdentityNodesRecursesIntoSubgraphs) {
   EXPECT_EQ(builder.Subgraph("body").Nodes()[0].input(0), "a");
 }
 
+TEST(GraphBuilder, InlineLocalFunctionsExpandsCallSite) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+
+  // A local function computing Neg(Add(a, b)).
+  core::builder::GraphBuilder &fct = builder.MakeLocalFunction("MyFct", "custom");
+  fct.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  fct.MakeInput("b", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> sum = fct.MakeNode("Add", {"a", "b"});
+  const std::vector<std::string> neg = fct.MakeNode("Neg", {sum[0]});
+  fct.MakeOutput(neg[0]);
+
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("z", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> call = builder.MakeNode("MyFct", {"x", "z"}, {}, "custom");
+  builder.MakeOutput(call[0]);
+
+  EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
+  // The call node is replaced by the two body nodes, and the fully inlined
+  // function definition is dropped.
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Add");
+  EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Neg");
+  // Formal inputs are rewired to the call inputs.
+  EXPECT_EQ(builder.Nodes()[0].input(0), "x");
+  EXPECT_EQ(builder.Nodes()[0].input(1), "z");
+  // The formal output is rewired to the call output.
+  EXPECT_EQ(builder.Nodes()[1].output(0), call[0]);
+  EXPECT_FALSE(builder.HasLocalFunction("MyFct"));
+  // A second pass has nothing left to inline.
+  EXPECT_EQ(builder.InlineLocalFunctions(), 0u);
+}
+
+TEST(GraphBuilder, InlineLocalFunctionsRewiresIntermediates) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+
+  core::builder::GraphBuilder &fct = builder.MakeLocalFunction("MyFct", "custom");
+  fct.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> inner = fct.MakeNode("Neg", {"a"});
+  const std::vector<std::string> outer = fct.MakeNode("Neg", {inner[0]});
+  fct.MakeOutput(outer[0]);
+
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> call = builder.MakeNode("MyFct", {"x"}, {}, "custom");
+  builder.MakeOutput(call[0]);
+
+  EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  // The intermediate value is renamed to a fresh, unused name that chains the
+  // two body nodes together.
+  const std::string intermediate = builder.Nodes()[0].output(0);
+  EXPECT_EQ(builder.Nodes()[0].input(0), "x");
+  EXPECT_EQ(builder.Nodes()[1].input(0), intermediate);
+  EXPECT_NE(intermediate, "x");
+  EXPECT_EQ(builder.Nodes()[1].output(0), call[0]);
+}
+
+TEST(GraphBuilder, InlineLocalFunctionsExpandsNestedCalls) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+
+  // Inner function Neg(a).
+  core::builder::GraphBuilder &inner = builder.MakeLocalFunction("Inner", "custom");
+  inner.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> inner_out = inner.MakeNode("Neg", {"a"});
+  inner.MakeOutput(inner_out[0]);
+
+  // Outer function calls Inner and forwards its result.
+  core::builder::GraphBuilder &outer = builder.MakeLocalFunction("Outer", "custom");
+  outer.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> nested = outer.MakeNode("Inner", {"a"}, {}, "custom");
+  outer.MakeOutput(nested[0]);
+
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> call = builder.MakeNode("Outer", {"x"}, {}, "custom");
+  builder.MakeOutput(call[0]);
+
+  // Both the outer call and the nested inner call are expanded.
+  EXPECT_EQ(builder.InlineLocalFunctions(), 2u);
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Neg");
+  EXPECT_EQ(builder.Nodes()[0].input(0), "x");
+  EXPECT_EQ(builder.Nodes()[0].output(0), call[0]);
+  EXPECT_FALSE(builder.HasLocalFunction("Outer"));
+  EXPECT_FALSE(builder.HasLocalFunction("Inner"));
+}
+
+TEST(GraphBuilder, InlineLocalFunctionsKeepsUncalledFunction) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+
+  core::builder::GraphBuilder &fct = builder.MakeLocalFunction("MyFct", "custom");
+  fct.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> out = fct.MakeNode("Neg", {"a"});
+  fct.MakeOutput(out[0]);
+
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> top = builder.MakeNode("Neg", {"x"});
+  builder.MakeOutput(top[0]);
+
+  // No call site, so nothing is inlined and the definition is left in place.
+  EXPECT_EQ(builder.InlineLocalFunctions(), 0u);
+  EXPECT_TRUE(builder.HasLocalFunction("MyFct"));
+}
+
+TEST(GraphBuilder, InlineLocalFunctionsResolvesAttributeReferences) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+
+  // A local function whose body forwards a function attribute to a body node.
+  core::builder::GraphBuilder &fct = builder.MakeLocalFunction("Scaled", "custom");
+  fct.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  AttributeProto ref;
+  ref.set_name("alpha");
+  ref.set_ref_attr_name("alpha");
+  ref.set_type(AttributeProto::AttributeType::FLOAT);
+  utils::RepeatedProtoField<AttributeProto> body_attrs;
+  body_attrs.push_back(ref);
+  const std::vector<std::string> scaled = fct.MakeNode("LeakyRelu", {"a"}, {}, "", "", body_attrs);
+  fct.MakeOutput(scaled[0]);
+
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  AttributeProto alpha;
+  alpha.set_name("alpha");
+  alpha.set_type(AttributeProto::AttributeType::FLOAT);
+  alpha.set_f(0.25f);
+  utils::RepeatedProtoField<AttributeProto> call_attrs;
+  call_attrs.push_back(alpha);
+  const std::vector<std::string> call =
+      builder.MakeNode("Scaled", {"x"}, {}, "custom", "", call_attrs);
+  builder.MakeOutput(call[0]);
+
+  EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "LeakyRelu");
+  ASSERT_EQ(builder.Nodes()[0].attribute().size(), 1);
+  const AttributeProto &resolved = builder.Nodes()[0].attribute()[0];
+  EXPECT_EQ(resolved.name().value(), "alpha");
+  EXPECT_TRUE(resolved.ref_attr_name().empty());
+  EXPECT_FLOAT_EQ(resolved.f(), 0.25f);
+}
+
 } // namespace Test

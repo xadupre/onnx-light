@@ -2050,6 +2050,8 @@ void AddOnnxPyBuilder(nb::module_ &m) {
           nb::arg("name"), nb::arg("domain") = "", nb::rv_policy::reference_internal,
           "Creates and returns a nested builder for a local function; local functions are "
           "emitted into the produced ModelProto.")
+      .def("has_local_function", &GraphBuilder::HasLocalFunction, nb::arg("name"),
+           "Returns True when a local function named ``name`` exists.")
       .def(
           "make_subgraph",
           [](GraphBuilder &self, const std::string &name) -> GraphBuilder & {

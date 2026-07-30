@@ -870,7 +870,11 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
     if (rename.find(old_name) != rename.end()) {
       continue;
     }
-    const std::string new_name = UniqueName(function.name() + "_" + old_name);
+    std::string new_name = function.name() + "_" + old_name;
+    int suffix = 0;
+    while (HasName(new_name)) {
+      new_name = function.name() + "_" + old_name + "_" + std::to_string(suffix++);
+    }
     TensorProto clone = initializer;
     clone.set_name(new_name);
     MakeInitializer(clone);

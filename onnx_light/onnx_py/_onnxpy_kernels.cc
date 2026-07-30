@@ -1046,6 +1046,6 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       },
       nb::arg("name"), nb::arg("data_type"), nb::arg("shape"), nb::arg("raw"),
       "Constructs an owned :class:`Tensor` by copying raw element bytes from a "
-      "contiguous 1-D ``uint8`` NumPy array. This is the fast input path that "
-      "avoids the triple-copy overhead of serializing through ``TensorProto``.");
+      "contiguous 1-D ``uint8`` NumPy array with an explicit ONNX data type. "
+      "Use this overload for bfloat16, float8, and sub-byte packed types.");
 }

@@ -398,6 +398,7 @@ ConstNodeMap FindConstantNodes(const GraphProto &graph) {
   }
   return result;
 }
+#endif // ONNX_LIGHT_VERSION_CONVERTER
 
 const TypeProto *TryGetType(const ModelProto &model, const std::string &var) {
   for (const auto &vi : model.graph().value_info()) {
@@ -415,14 +416,12 @@ const TypeProto *TryGetType(const ModelProto &model, const std::string &var) {
   return nullptr;
 }
 
+#ifdef ONNX_LIGHT_VERSION_CONVERTER
 const TypeProto &GetType(const ModelProto &model, const std::string &var) {
   const TypeProto *type = TryGetType(model, var);
   ONNX_ASSERTM(type != nullptr, "Type unknown for ", var)
   return *type;
 }
-#endif // ONNX_LIGHT_VERSION_CONVERTER
-
-#ifdef ONNX_LIGHT_VERSION_CONVERTER
 void ConvertVersion(ModelProto &model, const NodeProto &call_node, FunctionProto &function,
                     int target_version) {
   shape_inference::InferShapes(model);

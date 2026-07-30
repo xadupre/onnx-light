@@ -259,6 +259,8 @@ public:
   }
   /** Copies elements from a vector into a RepeatedProtoField. */
   inline RepeatedProtoField(const std::vector<T> &src) { extend(src); }
+  /** Move-constructs by moving each element from a vector into the field (no deep copy). */
+  inline RepeatedProtoField(std::vector<T> &&src) { extend(std::move(src)); }
   /** Deep-copies elements from another RepeatedProtoField (protobuf value semantics:
    *  each owned element is cloned rather than sharing ownership). */
   inline RepeatedProtoField(const RepeatedProtoField<T> &src) { extend(src); }
@@ -322,6 +324,8 @@ public:
   void push_back(T &&v);
   /** Appends all elements from a vector. */
   void extend(const std::vector<T> &v);
+  /** Appends all elements from a vector by move (no per-element copy). */
+  void extend(std::vector<T> &&v);
   /** Appends all elements from another RepeatedProtoField by copy. */
   void extend(const RepeatedProtoField<T> &v);
   /** Appends all elements from another RepeatedProtoField by move (steals ownership). */

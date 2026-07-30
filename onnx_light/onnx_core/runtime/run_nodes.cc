@@ -61,7 +61,7 @@ Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator = nullptr
  */
 Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator) {
   if (static_cast<DataType>(tensor.data_type) == DataType::STRING) {
-    return Tensor::MakeString(tensor.name, tensor.shape, tensor.string_data);
+    return Tensor::MakeString(tensor.name, tensor.shape, tensor.AsStrings());
   }
   if (allocator == nullptr) {
     std::vector<uint8_t> data(tensor.size_bytes());
@@ -211,7 +211,16 @@ SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
   RuntimeContext child = rt.MakeSubgraphContext(attr_name);
   for (const auto &kv : initializers_) {
     if (!child.Has(kv.first)) {
-      child.Set(kv.first, kv.second, RuntimeEventKind::kInitializer);
+      // Borrow the initializer's bytes instead of deep-copying. The
+      // ``initializers_`` vector outlives the child context (built once
+      // at SubgraphSession construction, reused across iterations), so
+      // the borrowed view never dangles.
+      const Tensor &src = kv.second;
+      Tensor borrowed =
+          (static_cast<DataType>(src.data_type) == DataType::STRING)
+              ? Tensor::BorrowStrings(kv.first, src.shape, src.AsStrings())
+              : Tensor::Borrow(kv.first, src.data_type, src.shape, src.bytes(), src.size_bytes());
+      child.Set(kv.first, std::move(borrowed), RuntimeEventKind::kInitializer);
     }
   }
   for (auto &kv : bindings) {
@@ -864,8 +873,16 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
                         "' of call to model-local "
                         "function '",
                         op_type, "' is missing from the tensor map.");
-    Tensor bound = it->second;
-    bound.name = param_name;
+    // Borrow the caller's tensor bytes instead of deep-copying. The
+    // caller's tensor map outlives the child context (the function body
+    // runs and returns before the caller continues), so the borrowed
+    // view never dangles. This avoids a full memcpy for every function
+    // input on every call.
+    const Tensor &src = it->second;
+    Tensor bound =
+        (static_cast<DataType>(src.data_type) == DataType::STRING)
+            ? Tensor::BorrowStrings(param_name, src.shape, src.AsStrings())
+            : Tensor::Borrow(param_name, src.data_type, src.shape, src.bytes(), src.size_bytes());
     child.Put(param_name, std::move(bound), RuntimeEventKind::kInput);
   }
 

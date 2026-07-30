@@ -104,20 +104,17 @@ def _cpp_tensor_to_numpy(t: Any) -> np.ndarray:
 def _numpy_to_cpp_tensor(name: str, arr: np.ndarray) -> Any:
     """Converts a :class:`numpy.ndarray` to a runtime ``Tensor``.
 
-    For standard fixed-width dtypes, builds a minimal :class:`TensorProto`
-    with only ``raw_data``, ``data_type`` and ``dims`` populated, avoiding
-    the overhead of the full :func:`numpy_helper.from_array` path.
+    For standard fixed-width dtypes, copies the array's raw bytes directly
+    into the C++ ``Tensor`` via :func:`_runtime.tensor_from_numpy`, avoiding
+    the triple-copy overhead of serializing through a ``TensorProto``
+    intermediate.
     """
     if not isinstance(arr, np.ndarray):
         arr = np.asarray(arr)
     onnx_dtype = _NP_TO_DTYPE.get(arr.dtype.type)
     if onnx_dtype is not None:
-        tp = TensorProto()
-        tp.name = name
-        tp.data_type = onnx_dtype
-        tp.dims.extend(arr.shape)
-        tp.raw_data = arr.tobytes()
-        return _runtime.tensor_from_proto(tp)
+        raw = np.ascontiguousarray(arr).view(np.uint8).ravel()
+        return _runtime.tensor_from_numpy(name, onnx_dtype, list(arr.shape), raw)
     # Fallback for strings, sub-byte types, and exotic dtypes.
     tp = numpy_helper.from_array(arr, name=name)
     return _runtime.tensor_from_proto(tp)

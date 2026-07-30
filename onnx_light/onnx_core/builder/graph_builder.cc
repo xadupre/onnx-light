@@ -741,6 +741,83 @@ std::size_t GraphBuilder::RemoveUnusedNodes() {
   return removed + local_removed;
 }
 
+namespace {
+
+// Returns true when the node is a plain default-domain Identity that forwards
+// its single input to its single output, both under a non-empty name.
+bool IsForwardingIdentity(const NodeProto &node) {
+  const std::string domain = node.domain().empty() ? std::string() : node.domain().value();
+  if (!domain.empty() || node.op_type().value() != "Identity") {
+    return false;
+  }
+  if (node.input().size() != 1 || node.output().size() != 1) {
+    return false;
+  }
+  return !std::string(node.input(0)).empty() && !std::string(node.output(0)).empty();
+}
+
+} // namespace
+
+std::size_t GraphBuilder::RemoveIdentityNodes() {
+  // Prune nested builders first so a collapsed identity inside a subgraph or
+  // local function is handled in its own scope.
+  std::size_t removed = 0;
+  for (const auto &function : local_functions_) {
+    removed += function->RemoveIdentityNodes();
+  }
+  for (const auto &subgraph : subgraphs_) {
+    removed += subgraph->RemoveIdentityNodes();
+  }
+
+  const std::size_t num_nodes = nodes_.size();
+  if (num_nodes == 0) {
+    return removed;
+  }
+
+  // Declared graph outputs must keep their own name, so an Identity that
+  // produces one is never dropped.
+  std::unordered_set<std::string> output_names;
+  for (const ValueInfoProto &output : outputs_) {
+    output_names.insert(output.name().value());
+  }
+
+  // Drop every forwarding Identity, recording output -> input so consumers can
+  // be rewired to the identity's source.
+  std::unordered_map<std::string, std::string> rename;
+  utils::RepeatedProtoField<NodeProto> kept;
+  kept.reserve(num_nodes);
+  std::size_t local_removed = 0;
+  for (NodeProto &node : nodes_) {
+    if (IsForwardingIdentity(node) &&
+        output_names.find(std::string(node.output(0))) == output_names.end()) {
+      rename.emplace(std::string(node.output(0)), std::string(node.input(0)));
+      ++local_removed;
+      continue;
+    }
+    kept.push_back(std::move(node));
+  }
+  nodes_ = std::move(kept);
+
+  // Collapse chains of identities: an identity input can itself be another
+  // removed identity's output, so follow each rename target to its final value.
+  for (auto &entry : rename) {
+    std::string target = entry.second;
+    std::unordered_set<std::string> seen{entry.first};
+    auto it = rename.find(target);
+    while (it != rename.end() && seen.insert(target).second) {
+      target = it->second;
+      it = rename.find(target);
+    }
+    entry.second = target;
+  }
+
+  // Rewrite every consumer of a dropped identity output, descending into
+  // subgraphs whose bodies capture values from this enclosing scope.
+  RewriteInitializerReferences(rename);
+
+  return removed + local_removed;
+}
+
 std::size_t GraphBuilder::RemoveDuplicateInitializers() {
   return DeduplicateInitializers(InitializerContentIndex{});
 }

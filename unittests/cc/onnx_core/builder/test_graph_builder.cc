@@ -372,4 +372,71 @@ TEST(GraphBuilder, RemoveDuplicateInitializersCollapsesAcrossScopes) {
   EXPECT_EQ(builder.Subgraph("body").Nodes()[0].input(1), "w");
 }
 
+TEST(GraphBuilder, RemoveIdentityNodesRewiresConsumers) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  // Identity forwards x; a downstream node consumes the forwarded value.
+  const std::vector<std::string> ident = builder.MakeNode("Identity", {"x"});
+  const std::vector<std::string> used = builder.MakeNode("Neg", {ident[0]});
+  builder.MakeOutput(used[0]);
+
+  EXPECT_EQ(builder.RemoveIdentityNodes(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Neg");
+  // The consumer now reads directly from the identity's input.
+  EXPECT_EQ(builder.Nodes()[0].input(0), "x");
+  // A second pass has nothing left to remove.
+  EXPECT_EQ(builder.RemoveIdentityNodes(), 0u);
+}
+
+TEST(GraphBuilder, RemoveIdentityNodesCollapsesChains) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  // A chain of two identities feeding a live consumer must collapse onto x.
+  const std::vector<std::string> i1 = builder.MakeNode("Identity", {"x"});
+  const std::vector<std::string> i2 = builder.MakeNode("Identity", {i1[0]});
+  const std::vector<std::string> used = builder.MakeNode("Neg", {i2[0]});
+  builder.MakeOutput(used[0]);
+
+  EXPECT_EQ(builder.RemoveIdentityNodes(), 2u);
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Neg");
+  EXPECT_EQ(builder.Nodes()[0].input(0), "x");
+}
+
+TEST(GraphBuilder, RemoveIdentityNodesKeepsGraphOutputIdentity) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  // The identity output is a declared graph output, so the node is kept.
+  const std::vector<std::string> ident = builder.MakeNode("Identity", {"x"});
+  builder.MakeOutput(ident[0]);
+
+  EXPECT_EQ(builder.RemoveIdentityNodes(), 0u);
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Identity");
+}
+
+TEST(GraphBuilder, RemoveIdentityNodesRecursesIntoSubgraphs) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  // A nested subgraph with an interior identity to collapse.
+  core::builder::GraphBuilder &body = builder.MakeSubgraph("body");
+  body.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> inner = body.MakeNode("Identity", {"a"});
+  const std::vector<std::string> body_used = body.MakeNode("Neg", {inner[0]});
+  body.MakeOutput(body_used[0]);
+
+  const std::vector<std::string> top = builder.MakeNode("Neg", {"x"});
+  builder.MakeOutput(top[0]);
+
+  EXPECT_EQ(builder.RemoveIdentityNodes(), 1u);
+  ASSERT_EQ(builder.Subgraph("body").Nodes().size(), 1u);
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[0].op_type().value(), "Neg");
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[0].input(0), "a");
+}
+
 } // namespace Test

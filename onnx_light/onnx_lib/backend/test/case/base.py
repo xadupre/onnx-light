@@ -577,6 +577,7 @@ def make_test_class(
     exclude_regex: Sequence[str] | None = None,
     atols: dict[str, float] | None = None,
     rtols: dict[str, float] | None = None,
+    include_big: bool = False,
 ):
     """
     Collects all test cases with collect_test_case.
@@ -590,7 +591,7 @@ def make_test_class(
     path used by :mod:`onnx_light.onnx.checker` (``check_model``).
     """
     # Collect all test cases
-    all_tests = collect_test_case()
+    all_tests = collect_test_case(include_big=include_big)
 
     # Filter tests based on include_regex and exclude_regex
     filtered_tests = {}

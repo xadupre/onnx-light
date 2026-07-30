@@ -1027,4 +1027,25 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "of the returned array (it is the array's ``base``) so the borrowed view never "
       "dangles. Callers reinterpret the bytes via ``ndarray.view(dtype).reshape(shape)``. "
       "``STRING`` tensors have no raw buffer and must go through :func:`tensor_to_proto`.");
+
+  rt_mod.def(
+      "tensor_from_numpy",
+      [](const std::string &name, int32_t data_type, std::vector<int64_t> shape,
+         nb::ndarray<const uint8_t, nb::ndim<1>, nb::c_contig> raw) {
+        // Constructs an owned ``Tensor`` by copying the raw element bytes
+        // directly from a contiguous NumPy uint8 buffer. This avoids the
+        // triple-copy path of ``tobytes`` → ``TensorProto.raw_data`` →
+        // ``tensor_from_proto``: the caller reinterprets the source array
+        // as a flat uint8 view (``arr.view(np.uint8).ravel()``) and we
+        // copy those bytes into the tensor's owned storage in a single
+        // ``memcpy``.
+        const uint8_t *ptr = raw.data();
+        size_t n = raw.shape(0);
+        std::vector<uint8_t> owned(ptr, ptr + n);
+        return Tensor(std::string(name), data_type, std::move(shape), std::move(owned));
+      },
+      nb::arg("name"), nb::arg("data_type"), nb::arg("shape"), nb::arg("raw"),
+      "Constructs an owned :class:`Tensor` by copying raw element bytes from a "
+      "contiguous 1-D ``uint8`` NumPy array. This is the fast input path that "
+      "avoids the triple-copy overhead of serializing through ``TensorProto``.");
 }

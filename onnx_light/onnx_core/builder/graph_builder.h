@@ -400,8 +400,7 @@ private:
   // Rewrites node inputs that name a dropped initializer to the surviving name
   // given by ``rename`` (dropped name -> kept name). The rewrite descends into
   // nested subgraphs, whose bodies capture values from the enclosing scope.
-  void
-  RewriteInitializerReferences(const std::unordered_map<std::string, std::string> &rename);
+  void RewriteInitializerReferences(const std::unordered_map<std::string, std::string> &rename);
 
   // Seeds the incremental annotation state (value tag + in-place-reuse
   // lifetime) for a declared graph input named ``name``.

@@ -365,6 +365,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
                                         .events_enabled = events_enabled_,
                                         .verbose = verbose_,
                                         .release_intermediates = release_intermediates_,
+                                        .device = device_,
                                     });
   // Subgraph contexts do not inherit the parent allocator. Body kernels use
   // inline tensor storage, and the parent's EnsureAllocatorBacked (called in
@@ -386,6 +387,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                                         .events_enabled = false,
                                         .verbose = verbose_,
                                         .release_intermediates = release_intermediates_,
+                                        .device = device_,
                                     });
   child.functions() = functions_;
   return child;

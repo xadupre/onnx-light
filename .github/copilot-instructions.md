@@ -5,6 +5,8 @@
 - Run `clang-format -i` on any modified C++ files (`.cpp`, `.h`, `.hpp`, `*.cc`) to ensure proper C++ code formatting.
   The repository `.clang-format` config (LLVM-based, 100-column limit) governs the style.
   To format all C++ files at once: `find . -name "*.cpp" -o -name "*.h" -o -name "*.hpp" -o -name "*.cc" | grep -v ".git" | xargs clang-format -i`
+  To check formatting the same way CI does (fails on any diff, matching `.github/workflows/clang_format.yml`):
+  `find . \( -name "*.cc" -o -name "*.h" -o -name "*.hpp" \) | grep -v ".git" | xargs clang-format --dry-run --Werror`
 
 ### Docstring Style
 - Write docstrings using **third-person singular** verbs (e.g., "Returns the value.", "Computes the output shape.", not "Return the value." or "Compute the output shape.")

@@ -370,14 +370,14 @@ private:
   // ``*_ref`` STRING / STRINGS attributes.
   std::vector<GraphBuilder *> ReferencedSubgraphs(const NodeProto &node) const;
 
-  // Collects the free variables of this builder (value names it references but
+  // Collects the implicit inputs of this builder (value names it references but
   // does not itself define as an input, initializer or node output) into
-  // ``out``. Free variables of nested subgraphs are resolved relative to this
+  // ``out``. Implicit inputs of nested subgraphs are resolved relative to this
   // scope and propagated when they remain undefined here.
-  void CollectFreeVariables(std::unordered_set<std::string> &out) const;
+  void CollectImplicitInputs(std::unordered_set<std::string> &out) const;
 
   // Appends to ``refs`` the value names ``node`` depends on: its explicit
-  // inputs plus the free variables of any nested subgraph it references.
+  // inputs plus the implicit inputs of any nested subgraph it references.
   void CollectNodeReferences(const NodeProto &node, std::vector<std::string> &refs) const;
 
   // Seeds the incremental annotation state (value tag + in-place-reuse

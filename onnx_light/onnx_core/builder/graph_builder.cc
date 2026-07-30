@@ -561,7 +561,7 @@ std::vector<GraphBuilder *> GraphBuilder::ReferencedSubgraphs(const NodeProto &n
   return referenced;
 }
 
-void GraphBuilder::CollectFreeVariables(std::unordered_set<std::string> &out) const {
+void GraphBuilder::CollectImplicitInputs(std::unordered_set<std::string> &out) const {
   // Every value name defined in this scope: graph inputs, initializers and the
   // outputs of the nodes accumulated so far.
   std::unordered_set<std::string> defined;
@@ -605,9 +605,9 @@ void GraphBuilder::CollectNodeReferences(const NodeProto &node,
     }
   }
   for (const GraphBuilder *subgraph : ReferencedSubgraphs(node)) {
-    std::unordered_set<std::string> free_variables;
-    subgraph->CollectFreeVariables(free_variables);
-    for (const std::string &name : free_variables) {
+    std::unordered_set<std::string> implicit_inputs;
+    subgraph->CollectImplicitInputs(implicit_inputs);
+    for (const std::string &name : implicit_inputs) {
       refs.push_back(name);
     }
   }

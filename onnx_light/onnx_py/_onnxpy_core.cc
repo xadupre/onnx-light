@@ -2032,6 +2032,13 @@ void AddOnnxPyBuilder(nb::module_ &m) {
            "single pass. An Identity whose output is a declared graph output is kept. The removal "
            "descends into nested subgraphs and local functions, and returns the total number of "
            "Identity nodes removed.")
+      .def("inline_local_functions", &GraphBuilder::InlineLocalFunctions,
+           "Inlines every call to a local function into the calling graph: the call node is "
+           "replaced by a renamed copy of the function body (formal inputs/outputs rewired to the "
+           "call inputs/outputs, every other body value given a fresh name, and ``ref_attr_name`` "
+           "attributes resolved against the call attributes). The expansion runs to a fixed point "
+           "and descends into nested subgraphs; local function definitions left without any caller "
+           "are dropped. Returns the total number of call nodes inlined.")
       .def(
           "build_graph", [](const GraphBuilder &self) { return self.BuildGraph(); },
           "Assembles the accumulated inputs, initializers, nodes and outputs into a "

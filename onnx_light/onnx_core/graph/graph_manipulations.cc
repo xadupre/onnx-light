@@ -205,6 +205,7 @@ CollectRemainingInputs(const utils::RepeatedProtoField<NodeProto> &nodes,
 
 std::vector<std::string> CollectNodeInputs(const NodeProto &node) {
   std::vector<std::string> out;
+  out.reserve(node.input().size());
   std::unordered_set<std::string> seen;
   for (size_t i = 0; i < node.input().size(); ++i) {
     const std::string &name = node.input()[i];

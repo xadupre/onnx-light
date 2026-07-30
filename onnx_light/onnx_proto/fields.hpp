@@ -65,6 +65,14 @@ template <typename T> void RepeatedProtoField<T>::extend(const std::vector<T> &v
   }
 }
 
+template <typename T> void RepeatedProtoField<T>::extend(std::vector<T> &&v) {
+  values_.reserve(values_.size() + v.size());
+  for (auto &value : v) {
+    push_back(std::move(value));
+  }
+  v.clear();
+}
+
 template <typename T> void RepeatedProtoField<T>::extend(const RepeatedProtoField<T> &v) {
   values_.reserve(values_.size() + v.values_.size());
   for (size_t i = 0; i < v.size(); ++i)

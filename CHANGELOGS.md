@@ -3,7 +3,13 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.1.10] – Unreleased
+## [0.1.11] – Unreleased
+
+### Documentation & CI
+
+- Bumped the release version to `0.1.11`.
+
+## [0.1.10] – 2026-07-30
 
 ### New Features
 

@@ -1263,10 +1263,7 @@ class TestVersionConverter(ExtTestCase):
         )
         model = oh.make_model(
             graph,
-            opset_imports=[
-                oh.make_operatorsetid("", 8),
-                oh.make_operatorsetid("my.domain", 1),
-            ],
+            opset_imports=[oh.make_operatorsetid("", 8), oh.make_operatorsetid("my.domain", 1)],
         )
         checker.check_model(model)
 

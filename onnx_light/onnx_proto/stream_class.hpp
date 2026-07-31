@@ -372,8 +372,10 @@ template <typename cls> bool _ParseFromFileDescriptor(cls &self, int fd) {
   char chunk[kChunkSize];
   for (;;) {
     auto n = ::read(fd, chunk, kChunkSize);
-    if (n < 0) return false;
-    if (n == 0) break;
+    if (n < 0)
+      return false;
+    if (n == 0)
+      break;
     buffer.append(chunk, static_cast<size_t>(n));
   }
   return self.ParseFromString(buffer);

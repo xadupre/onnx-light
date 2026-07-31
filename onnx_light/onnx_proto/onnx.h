@@ -421,7 +421,10 @@ FIELD_OPTIONAL_ENUM(
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 16,
                      "Named metadata values; keys should be distinct.")
 inline TensorProto() { data_type_ = DataType::UNDEFINED; }
-inline void Clear() { this->~TensorProto(); new (this) TensorProto(); }
+inline void Clear() {
+  this->~TensorProto();
+  new (this) TensorProto();
+}
 /** Sets raw_data from a byte buffer (protobuf bytes-field compat). */
 inline void set_raw_data(const void *data, size_t size) {
   raw_data_.resize(size);
@@ -760,7 +763,10 @@ FIELD_REPEATED_PROTO(SparseTensorProto, sparse_tensors, 23, "Optional repeated t
 FIELD_REPEATED_PROTO(GraphProto, graphs, 11, "Optional repeated graph attribute.")
 FIELD_OPTIONAL(TypeProto, tp, 14, "Type proto")
 FIELD_REPEATED_PROTO(TypeProto, type_protos, 15, "Optional repeated type_proto attribute.")
-inline void Clear() { this->~AttributeProto(); new (this) AttributeProto(); }
+inline void Clear() {
+  this->~AttributeProto();
+  new (this) AttributeProto();
+}
 END_PROTO()
 
 // NodeProto

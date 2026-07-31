@@ -99,8 +99,7 @@ public:
   /** Constructs an empty field. */
   explicit inline RepeatedField() {}
   /** Constructs from an iterator range. */
-  template <typename Iter>
-  inline RepeatedField(Iter first, Iter last) : values_(first, last) {}
+  template <typename Iter> inline RepeatedField(Iter first, Iter last) : values_(first, last) {}
   inline RepeatedField &operator=(std::initializer_list<T> init) {
     values_.assign(init.begin(), init.end());
     return *this;
@@ -315,9 +314,11 @@ public:
   inline std::shared_ptr<T> shared_at(size_t index) const { return values_[index]; }
   /** Returns a mutable reference to the owning pointer at the given index. */
   inline const T &Get(size_t index) const { return *values_[index]; }
-  /** Returns a const reference to the element at the given index (bounds-checked, protobuf compat). */
+  /** Returns a const reference to the element at the given index (bounds-checked, protobuf compat).
+   */
   inline const T &at(size_t index) const { return *values_.at(index); }
-  /** Returns a mutable reference to the element at the given index (bounds-checked, protobuf compat). */
+  /** Returns a mutable reference to the element at the given index (bounds-checked, protobuf
+   * compat). */
   inline T &at(size_t index) { return *values_.at(index); }
   /** Returns a mutable reference to the owning pointer at the given index. */
   inline T *Mutable(size_t index) { return values_[index].get(); }

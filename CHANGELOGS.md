@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.11] – Unreleased
 
+### New Features
+
+- Added the `SwiGLU` gated-activation operator (opset 28, ai.onnx) as a function-op computing `Y = Swish_alpha(A) * B` over two equal-shaped inputs with no broadcasting, including its schema, shape inference, C++ kernel, and backend test cases (propagated from onnx/onnx#8202).
+
 ### Improvements
 
 - Made the C++ `RunNode` / `RuntimeSession` dispatch device-aware: a `RuntimeContext` pinned to a non-CPU device now resolves the device-qualified kernel and fails with a diagnostic naming the device when none is registered, instead of silently dispatching to the CPU kernel.

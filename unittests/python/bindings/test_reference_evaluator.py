@@ -932,6 +932,71 @@ sess.run(
         self._check_resize_backend_case("test_resize_downsample_sizes_cubic_antialias")
 
 
+class TestReferenceEvaluatorTensorConversion(ExtTestCase):
+    """Tests for the runtime ``Tensor`` -> numpy conversion helper, which
+    imports standard dtypes through the DLPack exchange protocol."""
+
+    @classmethod
+    def setUpClass(cls):
+        from onnx_light._reference import _evaluator
+
+        cls._evaluator = _evaluator
+        cls._rt = _evaluator._runtime
+
+    def _make_tensor(self, dtype_enum, array):
+        tp = onnxl.TensorProto()
+        tp.name = "x"
+        tp.data_type = int(dtype_enum)
+        tp.dims.extend(array.shape)
+        tp.raw_data = array.tobytes()
+        return self._rt.tensor_from_proto(tp)
+
+    def test_dlpack_dtypes_exclude_subbyte_and_string(self):
+        # Sub-byte packed types, STRING, and bfloat16/float8 must not be routed
+        # through ``numpy.from_dlpack`` (no stock NumPy dtype).
+        dlpack = self._evaluator._DLPACK_DTYPES
+        self.assertIn(int(onnxl.TensorProto.FLOAT), dlpack)
+        self.assertIn(int(onnxl.TensorProto.BOOL), dlpack)
+        self.assertNotIn(int(onnxl.TensorProto.STRING), dlpack)
+        self.assertNotIn(int(onnxl.TensorProto.BFLOAT16), dlpack)
+
+    def test_dlpack_conversion_is_zero_copy(self):
+        # Standard dtypes take the DLPack path: the resulting array shares the
+        # tensor's buffer (``base`` is set) and matches shape/dtype/values.
+        expected = np.arange(6, dtype=np.float32).reshape(2, 3)
+        out = self._evaluator._cpp_tensor_to_numpy(
+            self._make_tensor(onnxl.TensorProto.FLOAT, expected)
+        )
+        self.assertEqual(out.dtype, np.float32)
+        self.assertEqual(out.shape, (2, 3))
+        self.assertIsNotNone(out.base)
+        np.testing.assert_array_equal(out, expected)
+
+    def test_dlpack_conversion_various_dtypes(self):
+        cases = [
+            (onnxl.TensorProto.DOUBLE, np.array([1.5, 2.5], dtype=np.float64)),
+            (onnxl.TensorProto.INT64, np.array([[1, 2], [3, 4]], dtype=np.int64)),
+            (onnxl.TensorProto.UINT8, np.array([1, 2, 3], dtype=np.uint8)),
+            (onnxl.TensorProto.BOOL, np.array([True, False, True])),
+        ]
+        for dtype_enum, array in cases:
+            with self.subTest(dtype=dtype_enum):
+                out = self._evaluator._cpp_tensor_to_numpy(self._make_tensor(dtype_enum, array))
+                self.assertEqual(out.dtype, array.dtype)
+                np.testing.assert_array_equal(out, array)
+
+    def test_bfloat16_uses_ml_dtypes_fallback(self):
+        # bfloat16 has no stock NumPy dtype, so it bypasses the DLPack path and
+        # is reinterpreted as ``ml_dtypes.bfloat16``.
+        ml_dtypes = import_or_skip("ml_dtypes", "bfloat16")
+        expected = np.array([1.5, -2.5, 3.0], dtype=ml_dtypes)
+        raw = expected.view(np.uint8).ravel()
+        t = self._rt.tensor_from_numpy("x", int(onnxl.TensorProto.BFLOAT16), [3], raw)
+        out = self._evaluator._cpp_tensor_to_numpy(t)
+        self.assertEqual(out.dtype, ml_dtypes)
+        np.testing.assert_array_equal(out, expected)
+
+
 class TestReferenceEvaluatorCustomKernels(ExtTestCase):
     """Tests for :meth:`ReferenceEvaluator.register_custom_kernel`."""
 

@@ -756,36 +756,6 @@ bool IsForwardingIdentity(const NodeProto &node) {
   return !std::string(node.input(0)).empty() && !std::string(node.output(0)).empty();
 }
 
-// Builds a canonical signature that identifies the computation performed by
-// ``node``: its operator type, normalised domain, resolved inputs and
-// attributes. ``resolved_inputs`` already accounts for earlier-dropped
-// duplicates, so two nodes computing the same value share the same signature.
-// Attributes are serialised individually and sorted so their declaration order
-// does not affect the signature. Non-printable separators keep the fields
-// unambiguous. Nodes referencing subgraphs (through ``*_ref`` attributes that
-// carry a per-node unique builder name) get a unique signature, so they are
-// never treated as duplicates.
-std::string NodeSignature(const NodeProto &node, const std::vector<std::string> &resolved_inputs) {
-  std::ostringstream signature;
-  signature << node.op_type().value() << '\x1f'
-            << NormaliseDomain(node.domain().empty() ? std::string() : node.domain().value())
-            << '\x1f';
-  for (const std::string &input : resolved_inputs) {
-    signature << input << '\x1e';
-  }
-  signature << '\x1f';
-  std::vector<std::string> attributes;
-  attributes.reserve(static_cast<std::size_t>(node.attribute().size()));
-  for (const auto &attribute : node.attribute()) {
-    attributes.push_back(attribute.SerializeAsString());
-  }
-  std::sort(attributes.begin(), attributes.end());
-  for (const std::string &attribute : attributes) {
-    signature << attribute << '\x1d';
-  }
-  return signature.str();
-}
-
 // Returns true when ``node`` can be dropped in favour of a survivor whose
 // outputs are ``survivor_outputs``. The survivor must expose at least as many
 // outputs, and every position where ``node`` names a non-empty output must be
@@ -921,7 +891,9 @@ std::size_t GraphBuilder::RemoveDuplicateNodes() {
       }
     }
 
-    const std::string signature = NodeSignature(node, resolved_inputs);
+    // Nodes referencing subgraphs carry per-node-unique ``*_ref`` attribute
+    // names, so their signatures never collide and control flow is never merged.
+    const std::string signature = node.Signature(resolved_inputs);
     auto it = seen.find(signature);
     if (it != seen.end() && !produces_output && CanReuseOutputs(node, it->second)) {
       // Drop the duplicate and rewire each of its outputs onto the survivor.

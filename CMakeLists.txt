@@ -71,6 +71,39 @@ endif()
 
 include(GNUInstallDirs)
 
+# Precompiled headers vs. compiler-cache launchers (sccache/ccache).
+#
+# A PCH turns the heaviest shared headers into a one-shot parse cost and speeds
+# up a single cold build noticeably. However, PCH is fundamentally incompatible
+# with sccache on MSVC: sccache marks every ``/Fp`` (use-PCH) and ``/Yc``
+# (create-PCH) compilation as *non-cacheable*. In CI the whole point of the
+# launcher is to reuse compiled objects across runs, so with PCH enabled the
+# cache hit rate collapses (observed ~9% on the Windows core build, with 659
+# ``/Fp`` non-cacheable compilations) and every run recompiles the bulk of the
+# tree from scratch, making the build dramatically slower than it should be.
+#
+# So: when a compiler-cache launcher is configured (as it is in CI via
+# ``CMAKE_CXX_COMPILER_LAUNCHER=sccache``), disable PCH by default so the
+# launcher can cache 100% of the translation units and warm runs are near
+# instant. Plain local builds (no launcher) keep PCH on to speed up the cold
+# build. ``ONNX_LIGHT_USE_PCH`` lets users force either behaviour explicitly.
+if(DEFINED ONNX_LIGHT_USE_PCH)
+  set(_onnx_light_use_pch ${ONNX_LIGHT_USE_PCH})
+elseif(CMAKE_CXX_COMPILER_LAUNCHER MATCHES "sccache|ccache"
+    OR CMAKE_C_COMPILER_LAUNCHER MATCHES "sccache|ccache")
+  set(_onnx_light_use_pch OFF)
+else()
+  set(_onnx_light_use_pch ON)
+endif()
+message(STATUS "onnx-light: precompiled headers (ONNX_LIGHT_USE_PCH): ${_onnx_light_use_pch}")
+
+# Wrapper around ``target_precompile_headers`` that honours ``_onnx_light_use_pch``.
+function(onnx_light_target_precompile_headers target)
+  if(_onnx_light_use_pch)
+    target_precompile_headers(${target} ${ARGN})
+  endif()
+endfunction()
+
 # Optional OpenSSF compiler hardening flags. Resolves the list of supported
 # flags up front so each target definition can call onnx_light_apply_hardening
 # unconditionally.
@@ -338,7 +371,7 @@ if(ONNX_ML)
   target_compile_definitions(lib_onnx_lib PUBLIC ONNX_ML=1)
 endif()
 # Precompiled headers: compile the heaviest shared headers once for all translation units.
-target_precompile_headers(lib_onnx_lib PRIVATE
+onnx_light_target_precompile_headers(lib_onnx_lib PRIVATE
     <algorithm>
     <functional>
     <memory>
@@ -414,7 +447,7 @@ target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_core)
 # Same PCH rationale as ``lib_onnx_backend_test``: kernel translation
 # units all pull in ``test_case.h`` (via ``kernel_context.h``) and the
 # usual standard-library headers.
-target_precompile_headers(lib_onnx_kernels PRIVATE
+onnx_light_target_precompile_headers(lib_onnx_kernels PRIVATE
     "${ONNX_CORE_PATH}/backend_test/test_case.h"
     <algorithm>
     <cmath>
@@ -466,7 +499,7 @@ target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto lib_onnx_kerne
 # This is a transparent optimization (no source changes required) and
 # only affects targets that opt in. Other targets that link against
 # ``lib_onnx_backend_test`` still see the regular public headers.
-target_precompile_headers(lib_onnx_backend_test PRIVATE
+onnx_light_target_precompile_headers(lib_onnx_backend_test PRIVATE
     "${ONNX_CORE_PATH}/backend_test/expect.h"
     "${ONNX_CORE_PATH}/backend_test/test_case_registry.h"
     <algorithm>
@@ -757,7 +790,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   # shared PCH; keep it limited to stable, rarely-changing standard headers.
   # Keeping only standard-library headers also avoids forcing a particular
   # include order onto individual translation units.
-  target_precompile_headers(test_onnx_light PRIVATE
+  onnx_light_target_precompile_headers(test_onnx_light PRIVATE
       <gtest/gtest.h>
       <cstdint>
       <stdexcept>

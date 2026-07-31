@@ -170,6 +170,9 @@ void VerifyTensor(const TensorProto &tensor) {
                         "' data_type requires data to be stored in 'string_data'.");
     break;
   case TensorProto::INT32:
+    EXT_ENFORCE_INVALID(has_int32, "TensorProto '", tensor.name(),
+                        "' data_type requires data to be stored in 'int32_data'.");
+    break;
   case TensorProto::UINT8:
   case TensorProto::INT8:
   case TensorProto::UINT16:
@@ -182,14 +185,41 @@ void VerifyTensor(const TensorProto &tensor) {
   case TensorProto::FLOAT8E5M2:
   case TensorProto::FLOAT8E5M2FNUZ:
   case TensorProto::FLOAT8E8M0:
-  case TensorProto::UINT4:
-  case TensorProto::INT4:
-  case TensorProto::FLOAT4E2M1:
-  case TensorProto::UINT2:
-  case TensorProto::INT2:
     EXT_ENFORCE_INVALID(has_int32, "TensorProto '", tensor.name(),
                         "' data_type requires data to be stored in 'int32_data'.");
+    // These types are not packed: each element occupies one int32_data entry.
+    EXT_ENFORCE_INVALID(static_cast<int64_t>(tensor.int32_data().size()) >= nelem, "TensorProto '",
+                        tensor.name(), "' int32_data size (", tensor.int32_data().size(),
+                        ") is too small for the declared shape (", nelem,
+                        " int32 values required).");
     break;
+  case TensorProto::UINT4:
+  case TensorProto::INT4:
+  case TensorProto::FLOAT4E2M1: {
+    EXT_ENFORCE_INVALID(has_int32, "TensorProto '", tensor.name(),
+                        "' data_type requires data to be stored in 'int32_data'.");
+    // Each int32 packs 8 4-bit elements.
+    const int64_t expected_int32s = (nelem + 7) / 8;
+    EXT_ENFORCE_INVALID(static_cast<int64_t>(tensor.int32_data().size()) >= expected_int32s,
+                        "TensorProto '", tensor.name(), "' int32_data size (",
+                        tensor.int32_data().size(),
+                        ") is too small for the declared shape and packed type (", expected_int32s,
+                        " int32 values required).");
+    break;
+  }
+  case TensorProto::UINT2:
+  case TensorProto::INT2: {
+    EXT_ENFORCE_INVALID(has_int32, "TensorProto '", tensor.name(),
+                        "' data_type requires data to be stored in 'int32_data'.");
+    // Each int32 packs 16 2-bit elements.
+    const int64_t expected_int32s = (nelem + 15) / 16;
+    EXT_ENFORCE_INVALID(static_cast<int64_t>(tensor.int32_data().size()) >= expected_int32s,
+                        "TensorProto '", tensor.name(), "' int32_data size (",
+                        tensor.int32_data().size(),
+                        ") is too small for the declared shape and packed type (", expected_int32s,
+                        " int32 values required).");
+    break;
+  }
   default:
     EXT_THROW_INVALID("TensorProto '", tensor.name(), "' has an unrecognized data_type (",
                       static_cast<int>(tensor.data_type()), ").");

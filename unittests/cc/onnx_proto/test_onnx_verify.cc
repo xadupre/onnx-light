@@ -137,6 +137,76 @@ TEST(onnx_verify, VerifyTensor_ZeroElementsWithData) {
   EXPECT_THROW(VerifyTensor(tensor), std::invalid_argument);
 }
 
+// Non-packed int32_data-stored types require one int32 entry per element.
+TEST(onnx_verify, VerifyTensor_UnpackedInt32DataTooSmall) {
+  for (TensorProto::DataType dtype :
+       {TensorProto::BOOL, TensorProto::INT8, TensorProto::UINT8, TensorProto::INT16,
+        TensorProto::UINT16, TensorProto::FLOAT16, TensorProto::BFLOAT16, TensorProto::FLOAT8E4M3FN,
+        TensorProto::FLOAT8E4M3FNUZ, TensorProto::FLOAT8E5M2, TensorProto::FLOAT8E5M2FNUZ,
+        TensorProto::FLOAT8E8M0}) {
+    // 4 int32_data entries for a 32-element tensor: the 4-bit packed formula
+    // ceil(32/8) = 4 would accept this, but these types need nelem=32 entries.
+    TensorProto t;
+    t.set_name("w");
+    t.set_data_type(dtype);
+    t.add_dims(32);
+    for (int i = 0; i < 4; ++i) {
+      t.add_int32_data(0);
+    }
+    EXPECT_THROW(VerifyTensor(t), std::invalid_argument);
+
+    TensorProto ok;
+    ok.set_name("w");
+    ok.set_data_type(dtype);
+    ok.add_dims(32);
+    for (int i = 0; i < 32; ++i) {
+      ok.add_int32_data(0);
+    }
+    EXPECT_NO_THROW(VerifyTensor(ok));
+  }
+}
+
+// Packed 4-bit types need ceil(nelem/8) int32 entries.
+TEST(onnx_verify, VerifyTensor_Packed4BitInt32DataTooSmall) {
+  for (TensorProto::DataType dtype :
+       {TensorProto::INT4, TensorProto::UINT4, TensorProto::FLOAT4E2M1}) {
+    TensorProto t;
+    t.set_name("w");
+    t.set_data_type(dtype);
+    t.add_dims(10); // ceil(10/8) = 2
+    t.add_int32_data(0);
+    EXPECT_THROW(VerifyTensor(t), std::invalid_argument);
+
+    TensorProto ok;
+    ok.set_name("w");
+    ok.set_data_type(dtype);
+    ok.add_dims(10);
+    ok.add_int32_data(0);
+    ok.add_int32_data(0);
+    EXPECT_NO_THROW(VerifyTensor(ok));
+  }
+}
+
+// Packed 2-bit types need ceil(nelem/16) int32 entries.
+TEST(onnx_verify, VerifyTensor_Packed2BitInt32DataTooSmall) {
+  for (TensorProto::DataType dtype : {TensorProto::INT2, TensorProto::UINT2}) {
+    TensorProto t;
+    t.set_name("w");
+    t.set_data_type(dtype);
+    t.add_dims(20); // ceil(20/16) = 2
+    t.add_int32_data(0);
+    EXPECT_THROW(VerifyTensor(t), std::invalid_argument);
+
+    TensorProto ok;
+    ok.set_name("w");
+    ok.set_data_type(dtype);
+    ok.add_dims(20);
+    ok.add_int32_data(0);
+    ok.add_int32_data(0);
+    EXPECT_NO_THROW(VerifyTensor(ok));
+  }
+}
+
 TEST(onnx_verify, VerifyAttribute_RefAttrNameOutsideFunction) {
   AttributeProto attr;
   attr.set_name("alpha");

@@ -320,8 +320,18 @@ public:
   /// once every call site has been inlined are dropped, so a fully inlined
   /// model carries no leftover function.
   ///
+  /// The set of functions to inline is selected by name. When both
+  /// ``include`` and ``exclude`` are empty (the default) every local function
+  /// is inlined. When ``include`` is non-empty only the functions it names are
+  /// inlined. When ``exclude`` is non-empty every local function except those
+  /// it names is inlined. Passing a non-empty ``include`` together with a
+  /// non-empty ``exclude`` throws a ``BuilderError``.
+  ///
+  /// @param include Names of the only local functions to inline; empty for all.
+  /// @param exclude Names of the local functions to leave untouched.
   /// @return The total number of call nodes that were inlined.
-  std::size_t InlineLocalFunctions();
+  std::size_t InlineLocalFunctions(const std::vector<std::string> &include = {},
+                                   const std::vector<std::string> &exclude = {});
 
   // ── Local functions / subgraphs ──────────────────────────────────────
 

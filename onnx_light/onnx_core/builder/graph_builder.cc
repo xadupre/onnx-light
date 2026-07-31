@@ -979,11 +979,27 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
   return inlined;
 }
 
-std::size_t GraphBuilder::InlineLocalFunctions() {
+std::size_t GraphBuilder::InlineLocalFunctions(const std::vector<std::string> &include,
+                                               const std::vector<std::string> &exclude) {
+  if (!include.empty() && !exclude.empty()) {
+    throw BuilderError("GraphBuilder: InlineLocalFunctions accepts an include list or an exclude "
+                       "list, not both.");
+  }
+  const std::unordered_set<std::string> include_set(include.begin(), include.end());
+  const std::unordered_set<std::string> exclude_set(exclude.begin(), exclude.end());
+  const auto selected = [&](const std::string &name) {
+    if (!include_set.empty()) {
+      return include_set.find(name) != include_set.end();
+    }
+    return exclude_set.find(name) == exclude_set.end();
+  };
+
   std::vector<GraphBuilder *> functions;
   functions.reserve(local_functions_.size());
   for (const auto &function : local_functions_) {
-    functions.push_back(function.get());
+    if (selected(function->name())) {
+      functions.push_back(function.get());
+    }
   }
 
   // Record which functions are called anywhere (the calling graph, its

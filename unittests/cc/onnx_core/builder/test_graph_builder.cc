@@ -577,4 +577,64 @@ TEST(GraphBuilder, InlineLocalFunctionsResolvesAttributeReferences) {
   EXPECT_FLOAT_EQ(resolved.f(), 0.25f);
 }
 
+TEST(GraphBuilder, InlineLocalFunctionsIncludeSelectsFunctions) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+
+  core::builder::GraphBuilder &keep = builder.MakeLocalFunction("Keep", "custom");
+  keep.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> keep_out = keep.MakeNode("Neg", {"a"});
+  keep.MakeOutput(keep_out[0]);
+
+  core::builder::GraphBuilder &drop = builder.MakeLocalFunction("Drop", "custom");
+  drop.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> drop_out = drop.MakeNode("Neg", {"a"});
+  drop.MakeOutput(drop_out[0]);
+
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> keep_call = builder.MakeNode("Keep", {"x"}, {}, "custom");
+  const std::vector<std::string> drop_call = builder.MakeNode("Drop", {keep_call[0]}, {}, "custom");
+  builder.MakeOutput(drop_call[0]);
+
+  // Only "Drop" is inlined; the "Keep" call and its definition are untouched.
+  EXPECT_EQ(builder.InlineLocalFunctions({"Drop"}), 1u);
+  EXPECT_TRUE(builder.HasLocalFunction("Keep"));
+  EXPECT_FALSE(builder.HasLocalFunction("Drop"));
+  bool has_keep_call = false;
+  for (const auto &node : builder.Nodes()) {
+    if (node.op_type().value() == "Keep") {
+      has_keep_call = true;
+    }
+  }
+  EXPECT_TRUE(has_keep_call);
+}
+
+TEST(GraphBuilder, InlineLocalFunctionsExcludeSkipsFunctions) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+
+  core::builder::GraphBuilder &keep = builder.MakeLocalFunction("Keep", "custom");
+  keep.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> keep_out = keep.MakeNode("Neg", {"a"});
+  keep.MakeOutput(keep_out[0]);
+
+  core::builder::GraphBuilder &drop = builder.MakeLocalFunction("Drop", "custom");
+  drop.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> drop_out = drop.MakeNode("Neg", {"a"});
+  drop.MakeOutput(drop_out[0]);
+
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> keep_call = builder.MakeNode("Keep", {"x"}, {}, "custom");
+  const std::vector<std::string> drop_call = builder.MakeNode("Drop", {keep_call[0]}, {}, "custom");
+  builder.MakeOutput(drop_call[0]);
+
+  // Everything except "Keep" is inlined.
+  EXPECT_EQ(builder.InlineLocalFunctions({}, {"Keep"}), 1u);
+  EXPECT_TRUE(builder.HasLocalFunction("Keep"));
+  EXPECT_FALSE(builder.HasLocalFunction("Drop"));
+}
+
+TEST(GraphBuilder, InlineLocalFunctionsRejectsIncludeAndExclude) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  EXPECT_THROW(builder.InlineLocalFunctions({"A"}, {"B"}), core::builder::BuilderError);
+}
+
 } // namespace Test

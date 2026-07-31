@@ -322,6 +322,42 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(builder.inline_local_functions(), 0)
         self.assertTrue(builder.has_local_function("MyFct"))
 
+    def test_inline_local_functions_include_exclude(self):
+        def build():
+            builder = GraphBuilder("g")
+            keep = builder.make_local_function("Keep", domain="custom")
+            keep.make_input("a", FLOAT, [2, 3])
+            (kn,) = keep.make_node("Neg", ["a"])
+            keep.make_output(kn)
+
+            drop = builder.make_local_function("Drop", domain="custom")
+            drop.make_input("a", FLOAT, [2, 3])
+            (dn,) = drop.make_node("Neg", ["a"])
+            drop.make_output(dn)
+
+            builder.make_input("x", FLOAT, [2, 3])
+            (kc,) = builder.make_node("Keep", ["x"], domain="custom")
+            (dc,) = builder.make_node("Drop", [kc], domain="custom")
+            builder.make_output(dc)
+            return builder
+
+        # include: only "Drop" is inlined.
+        builder = build()
+        self.assertEqual(builder.inline_local_functions(include=["Drop"]), 1)
+        self.assertTrue(builder.has_local_function("Keep"))
+        self.assertFalse(builder.has_local_function("Drop"))
+
+        # exclude: everything except "Keep" is inlined.
+        builder = build()
+        self.assertEqual(builder.inline_local_functions(exclude=["Keep"]), 1)
+        self.assertTrue(builder.has_local_function("Keep"))
+        self.assertFalse(builder.has_local_function("Drop"))
+
+        # Passing both include and exclude is rejected.
+        builder = build()
+        with self.assertRaises(ValueError):
+            builder.inline_local_functions(include=["Keep"], exclude=["Drop"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

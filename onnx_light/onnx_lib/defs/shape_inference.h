@@ -668,12 +668,12 @@ multidirectionalBroadcastShapeInference(const std::vector<const TensorShapeProto
     result_shape_size = std::max(static_cast<size_t>(shape->dim_size()), result_shape_size);
   }
 
-  for (int i = 0; i < result_shape_size; ++i) {
+  for (int i = 0; i < static_cast<int>(result_shape_size); ++i) {
     int64_t dim_value = 1;
     TensorShapeProto::Dimension symbolic_dim;
     int num_symbolic_dims = 0;
     for (const auto *shape : shapes) {
-      if (i < result_shape_size - shape->dim_size()) {
+      if (i < static_cast<int>(result_shape_size - shape->dim_size())) {
         // Shape j will be filled with 1 at dimension i;
         continue;
       }

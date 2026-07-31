@@ -127,7 +127,7 @@ ModelProto MakeValueAsShapeModel() {
   TensorProto *init = graph->add_initializer();
   init->set_name("one");
   init->set_data_type(static_cast<int>(TensorProto::DataType::INT64));
-  init->add_dims(std::vector<uint64_t>{1});
+  init->add_dims(std::vector<int64_t>{1});
   init->add_int64_data(std::vector<int64_t>{1});
 
   // n = Shape(x, start=0, end=1)

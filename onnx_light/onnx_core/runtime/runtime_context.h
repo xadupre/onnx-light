@@ -11,6 +11,7 @@
 #include "onnx_core/runtime/simple_map.h"
 #include "onnx_core/runtime/simple_sequence.h"
 #include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_light_helpers.h"
 #include "onnx_proto/onnx.h"
 
@@ -355,6 +356,14 @@ struct RuntimeContextOptions {
   bool events_enabled = false;
   int verbose = 0;
   bool release_intermediates = false;
+  /// Logical device the graph is evaluated on. The C++ reference runtime
+  /// only ships CPU kernels, so the meaningful values are
+  /// :cpp:enumerator:`symbolic::Device::kUndefined` (the default) and
+  /// :cpp:enumerator:`symbolic::Device::kCPU`, which both select the plain
+  /// host dispatch entry. Any other device selects the device-qualified
+  /// kernel (see :cpp:func:`RegisterKernelFn`) and, when none is registered,
+  /// makes :cpp:func:`RunNode` fail with a diagnostic naming the device.
+  symbolic::Device device = symbolic::Device::kUndefined;
 };
 
 /**
@@ -383,20 +392,22 @@ public:
   RuntimeContext() = default;
   ~RuntimeContext();
   explicit RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options = {})
-      : kernel_ctx_(std::move(kernel_ctx)), allocator_(options.allocator),
-        events_enabled_(options.events_enabled), verbose_(options.verbose),
-        release_intermediates_(options.release_intermediates) {
+      : kernel_ctx_(std::move(kernel_ctx)), events_enabled_(options.events_enabled),
+        verbose_(options.verbose), release_intermediates_(options.release_intermediates),
+        allocator_(options.allocator), device_(options.device) {
     kernel_ctx_.allocator = allocator_;
   }
   RuntimeContext(KernelContext kernel_ctx, TensorMap tensors, RuntimeContextOptions options = {})
       : tensors_(std::move(tensors)), kernel_ctx_(std::move(kernel_ctx)),
-        allocator_(options.allocator), events_enabled_(options.events_enabled),
-        verbose_(options.verbose), release_intermediates_(options.release_intermediates) {
+        events_enabled_(options.events_enabled), verbose_(options.verbose),
+        release_intermediates_(options.release_intermediates), allocator_(options.allocator),
+        device_(options.device) {
     kernel_ctx_.allocator = allocator_;
   }
   explicit RuntimeContext(RuntimeContextOptions options)
-      : allocator_(options.allocator), events_enabled_(options.events_enabled),
-        verbose_(options.verbose), release_intermediates_(options.release_intermediates) {
+      : events_enabled_(options.events_enabled), verbose_(options.verbose),
+        release_intermediates_(options.release_intermediates), allocator_(options.allocator),
+        device_(options.device) {
     kernel_ctx_.allocator = allocator_;
   }
 
@@ -451,6 +462,15 @@ public:
   /// through it.
   RawBufferAllocator *allocator() noexcept { return allocator_; }
   const RawBufferAllocator *allocator() const noexcept { return allocator_; }
+
+  /// Logical device the graph is evaluated on (see
+  /// :cpp:member:`RuntimeContextOptions::device`). The C++ reference runtime
+  /// only ships CPU kernels; :cpp:enumerator:`symbolic::Device::kUndefined`
+  /// (the default) and :cpp:enumerator:`symbolic::Device::kCPU` both select
+  /// the plain host dispatch entry. Any other device selects the
+  /// device-qualified kernel entry, and :cpp:func:`RunNode` fails with a
+  /// diagnostic naming the device when no kernel is registered for it.
+  symbolic::Device device() const noexcept { return device_; }
 
   /// Model-local function registry consulted by :cpp:func:`RunNode`
   /// before falling back to the built-in kernel dispatch table.
@@ -759,6 +779,8 @@ private:
   /// Optional allocator for :cpp:struct:`RawBuffer` instances. Non-owning;
   /// ``nullptr`` when no allocator has been attached.
   RawBufferAllocator *allocator_ = nullptr;
+  /// Logical device the graph is evaluated on. See :cpp:func:`device`.
+  symbolic::Device device_ = symbolic::Device::kUndefined;
 };
 
 } // namespace runtime

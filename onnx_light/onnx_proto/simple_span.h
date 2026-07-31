@@ -242,9 +242,9 @@ public:
 
   /** Move constructor: for aligned-owned mode the pointer remains valid after the move. */
   inline ByteSpan(ByteSpan &&other) noexcept
-      : Span(other.ptr_, other.size_),
-        owned_(std::move(other.owned_)), borrowed_(other.borrowed_),
-        aligned_owned_(other.aligned_owned_), align_(other.align_), owner_(std::move(other.owner_)) {
+      : Span(other.ptr_, other.size_), owned_(std::move(other.owned_)), borrowed_(other.borrowed_),
+        aligned_owned_(other.aligned_owned_), align_(other.align_),
+        owner_(std::move(other.owner_)) {
     other.ptr_ = nullptr;
     other.size_ = 0;
     other.borrowed_ = false;

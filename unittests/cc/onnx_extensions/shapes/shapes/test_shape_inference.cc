@@ -703,7 +703,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelSeedsInitializerAsShape) {
   TensorProto *init = graph->add_initializer();
   init->set_name("S");
   init->set_data_type(TensorProto::DataType::INT64);
-  init->add_dims(std::vector<uint64_t>{2});
+  init->add_dims(std::vector<int64_t>{2});
   init->add_int64_data(std::vector<int64_t>{-1, 2});
   *graph->add_node() = MakeNode("Reshape", {"X", "S"}, {"Y"});
 
@@ -751,7 +751,7 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelFillsOutputAndValueInfo)
   EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
   // The intermediate S tensor (Constant output) ends up in value_info.
   bool found_s = false;
-  for (std::size_t i = 0; i < graph.value_info_size(); ++i) {
+  for (int i = 0; i < static_cast<int>(graph.value_info_size()); ++i) {
     const ValueInfoProto &vi = graph.value_info()[i];
     if (vi.name() == "S") {
       found_s = true;
@@ -763,7 +763,7 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelFillsOutputAndValueInfo)
   }
   EXPECT_TRUE(found_s);
   // The X input is not duplicated in value_info.
-  for (std::size_t i = 0; i < graph.value_info_size(); ++i) {
+  for (int i = 0; i < static_cast<int>(graph.value_info_size()); ++i) {
     EXPECT_NE(std::string(graph.value_info()[i].name()), std::string("X"));
   }
 }
@@ -1314,7 +1314,7 @@ TEST(OnnxOptimShapesContextEventLog, NodeIndexTagsInputsInitializersAndNodes) {
   TensorProto *init = graph->add_initializer();
   init->set_name("S");
   init->set_data_type(TensorProto::DataType::INT64);
-  init->add_dims(std::vector<uint64_t>{2});
+  init->add_dims(std::vector<int64_t>{2});
   init->add_int64_data(std::vector<int64_t>{-1, 2});
   *graph->add_node() = MakeNode("Reshape", {"X", "S"}, {"Y"});
 

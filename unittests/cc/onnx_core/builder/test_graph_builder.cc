@@ -4,6 +4,7 @@
 
 #include "onnx_core/builder/graph_builder.h"
 
+#include "onnx_helper.h"
 #include "onnx_op/operator_sets.h"
 
 #include <gtest/gtest.h>
@@ -287,6 +288,155 @@ TEST(GraphBuilder, RemoveUnusedNodesRecursesIntoSubgraphs) {
   EXPECT_EQ(builder.Nodes().size(), 1u);
   ASSERT_EQ(builder.Subgraph("body").Nodes().size(), 1u);
   EXPECT_EQ(builder.Subgraph("body").Nodes()[0].op_type().value(), "Neg");
+}
+
+TEST(GraphBuilder, RemoveDuplicateInitializersCollapsesEqual) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 2}));
+
+  // Two initializers with byte-for-byte identical content.
+  builder.MakeInitializer(MakeInitializer<float>("w1", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f}));
+  builder.MakeInitializer(MakeInitializer<float>("w2", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f}));
+
+  const std::vector<std::string> a = builder.MakeNode("Add", {"x", "w1"});
+  const std::vector<std::string> b = builder.MakeNode("Add", {"x", "w2"});
+  builder.MakeOutput(a[0]);
+  builder.MakeOutput(b[0]);
+
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 1u);
+  ASSERT_EQ(builder.Initializers().size(), 1u);
+  EXPECT_EQ(builder.Initializers()[0].name().value(), "w1");
+  // The reference to the dropped duplicate is rewritten to the surviving name.
+  EXPECT_EQ(builder.Nodes()[1].input(1), "w1");
+  // A second pass has nothing left to collapse.
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 0u);
+}
+
+TEST(GraphBuilder, RemoveDuplicateInitializersKeepsDistinctContent) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 2}));
+
+  // Same shape and type but different data: not duplicates.
+  builder.MakeInitializer(MakeInitializer<float>("w1", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f}));
+  builder.MakeInitializer(MakeInitializer<float>("w2", {2, 2}, {5.0f, 6.0f, 7.0f, 8.0f}));
+
+  const std::vector<std::string> a = builder.MakeNode("Add", {"x", "w1"});
+  const std::vector<std::string> b = builder.MakeNode("Add", {"x", "w2"});
+  builder.MakeOutput(a[0]);
+  builder.MakeOutput(b[0]);
+
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 0u);
+  EXPECT_EQ(builder.Initializers().size(), 2u);
+}
+
+TEST(GraphBuilder, RemoveDuplicateInitializersRecursesIntoSubgraphs) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 2}));
+
+  core::builder::GraphBuilder &body = builder.MakeSubgraph("body");
+  body.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 2}));
+  body.MakeInitializer(MakeInitializer<float>("c1", {2, 2}, {1.0f, 1.0f, 1.0f, 1.0f}));
+  body.MakeInitializer(MakeInitializer<float>("c2", {2, 2}, {1.0f, 1.0f, 1.0f, 1.0f}));
+  const std::vector<std::string> s = body.MakeNode("Add", {"a", "c2"});
+  body.MakeOutput(s[0]);
+
+  // The dedup descends into the subgraph and collapses its duplicate.
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 1u);
+  ASSERT_EQ(builder.Subgraph("body").Initializers().size(), 1u);
+  EXPECT_EQ(builder.Subgraph("body").Initializers()[0].name().value(), "c1");
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[0].input(1), "c1");
+}
+
+TEST(GraphBuilder, RemoveDuplicateInitializersCollapsesAcrossScopes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 2}));
+
+  // An initializer in the enclosing graph.
+  builder.MakeInitializer(MakeInitializer<float>("w", {2, 2}, {1.0f, 1.0f, 1.0f, 1.0f}));
+  const std::vector<std::string> a = builder.MakeNode("Add", {"x", "w"});
+  builder.MakeOutput(a[0]);
+
+  // The subgraph declares its own initializer with the same content. Because a
+  // subgraph body sees the enclosing scope, the duplicate is collapsed onto the
+  // enclosing initializer and its reference is rewritten to "w".
+  core::builder::GraphBuilder &body = builder.MakeSubgraph("body");
+  body.MakeInput("b", core::symbolic::TensorType::kFloat, MakeShape({2, 2}));
+  body.MakeInitializer(MakeInitializer<float>("c", {2, 2}, {1.0f, 1.0f, 1.0f, 1.0f}));
+  const std::vector<std::string> s = body.MakeNode("Add", {"b", "c"});
+  body.MakeOutput(s[0]);
+
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 1u);
+  ASSERT_EQ(builder.Initializers().size(), 1u);
+  EXPECT_EQ(builder.Initializers()[0].name().value(), "w");
+  EXPECT_EQ(builder.Subgraph("body").Initializers().size(), 0u);
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[0].input(1), "w");
+}
+
+TEST(GraphBuilder, RemoveIdentityNodesRewiresConsumers) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  // Identity forwards x; a downstream node consumes the forwarded value.
+  const std::vector<std::string> ident = builder.MakeNode("Identity", {"x"});
+  const std::vector<std::string> used = builder.MakeNode("Neg", {ident[0]});
+  builder.MakeOutput(used[0]);
+
+  EXPECT_EQ(builder.RemoveIdentityNodes(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Neg");
+  // The consumer now reads directly from the identity's input.
+  EXPECT_EQ(builder.Nodes()[0].input(0), "x");
+  // A second pass has nothing left to remove.
+  EXPECT_EQ(builder.RemoveIdentityNodes(), 0u);
+}
+
+TEST(GraphBuilder, RemoveIdentityNodesCollapsesChains) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  // A chain of two identities feeding a live consumer must collapse onto x.
+  const std::vector<std::string> i1 = builder.MakeNode("Identity", {"x"});
+  const std::vector<std::string> i2 = builder.MakeNode("Identity", {i1[0]});
+  const std::vector<std::string> used = builder.MakeNode("Neg", {i2[0]});
+  builder.MakeOutput(used[0]);
+
+  EXPECT_EQ(builder.RemoveIdentityNodes(), 2u);
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Neg");
+  EXPECT_EQ(builder.Nodes()[0].input(0), "x");
+}
+
+TEST(GraphBuilder, RemoveIdentityNodesKeepsGraphOutputIdentity) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  // The identity output is a declared graph output, so the node is kept.
+  const std::vector<std::string> ident = builder.MakeNode("Identity", {"x"});
+  builder.MakeOutput(ident[0]);
+
+  EXPECT_EQ(builder.RemoveIdentityNodes(), 0u);
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Identity");
+}
+
+TEST(GraphBuilder, RemoveIdentityNodesRecursesIntoSubgraphs) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  // A nested subgraph with an interior identity to collapse.
+  core::builder::GraphBuilder &body = builder.MakeSubgraph("body");
+  body.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> inner = body.MakeNode("Identity", {"a"});
+  const std::vector<std::string> body_used = body.MakeNode("Neg", {inner[0]});
+  body.MakeOutput(body_used[0]);
+
+  const std::vector<std::string> top = builder.MakeNode("Neg", {"x"});
+  builder.MakeOutput(top[0]);
+
+  EXPECT_EQ(builder.RemoveIdentityNodes(), 1u);
+  ASSERT_EQ(builder.Subgraph("body").Nodes().size(), 1u);
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[0].op_type().value(), "Neg");
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[0].input(0), "a");
 }
 
 } // namespace Test

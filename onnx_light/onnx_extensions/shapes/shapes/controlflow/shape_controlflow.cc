@@ -39,7 +39,7 @@ ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch
                             const GraphProto &subgraph) {
   ShapesContext local = parent_ctx;
   local.set_current_subgraph(local.current_node_index(), branch_name);
-  for (int i = 0; i < subgraph.initializer().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(subgraph.initializer().size()); ++i) {
     const TensorProto &init = subgraph.initializer()[i];
     const std::string name = init.name();
     if (name.empty() || local.Has(name)) {
@@ -71,9 +71,10 @@ ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch
 // value is unknown / is a sequence rather than a tensor.
 const SymTensor &GetSubgraphOutput(const ShapesContext &local_ctx, const GraphProto &subgraph,
                                    const char *branch_name, int output_index, int expected) {
-  EXT_ENFORCE_INVALID(subgraph.output().size() == expected, "ComputeShapeIf: sub-graph '",
-                      branch_name, "' declares ", std::to_string(subgraph.output().size()),
-                      " output(s), expected ", std::to_string(expected), ".");
+  EXT_ENFORCE_INVALID(static_cast<int>(subgraph.output().size()) == expected,
+                      "ComputeShapeIf: sub-graph '", branch_name, "' declares ",
+                      std::to_string(subgraph.output().size()), " output(s), expected ",
+                      std::to_string(expected), ".");
   const std::string name = subgraph.output()[output_index].name();
   EXT_ENFORCE_INVALID(local_ctx.Has(name), "ComputeShapeIf: output '", name, "' of sub-graph '",
                       branch_name, "' is missing from the inferred context.");
@@ -134,11 +135,11 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
   const GraphProto &else_branch = FindGraphAttribute(node, "else_branch", "ComputeShapeIf");
 
   const int n_outputs = node.output_size();
-  EXT_ENFORCE_INVALID(then_branch.output().size() == n_outputs,
+  EXT_ENFORCE_INVALID(static_cast<int>(then_branch.output().size()) == n_outputs,
                       "ComputeShapeIf: 'then_branch' sub-graph declares ",
                       std::to_string(then_branch.output().size()), " output(s), expected ",
                       std::to_string(n_outputs), ".");
-  EXT_ENFORCE_INVALID(else_branch.output().size() == n_outputs,
+  EXT_ENFORCE_INVALID(static_cast<int>(else_branch.output().size()) == n_outputs,
                       "ComputeShapeIf: 'else_branch' sub-graph declares ",
                       std::to_string(else_branch.output().size()), " output(s), expected ",
                       std::to_string(n_outputs), ".");
@@ -193,12 +194,12 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
                       " loop-carried outputs.");
   const int k_scan = node.output_size() - n_carried;
 
-  EXT_ENFORCE_INVALID(body.input().size() == n_carried + 2,
+  EXT_ENFORCE_INVALID(static_cast<int>(body.input().size()) == n_carried + 2,
                       "ComputeShapeLoop: 'body' sub-graph declares ",
                       std::to_string(body.input().size()),
                       " input(s), expected 2 + N = ", std::to_string(n_carried + 2), ".");
   EXT_ENFORCE_INVALID(
-      body.output().size() == n_carried + k_scan + 1,
+      static_cast<int>(body.output().size()) == n_carried + k_scan + 1,
       "ComputeShapeLoop: 'body' sub-graph declares ", std::to_string(body.output().size()),
       " output(s), expected 1 + N + K = ", std::to_string(n_carried + k_scan + 1), ".");
 
@@ -210,7 +211,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   // descriptor.
   ShapesContext local = ctx;
   local.set_current_subgraph(local.current_node_index(), "body");
-  for (int i = 0; i < body.initializer().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(body.initializer().size()); ++i) {
     const TensorProto &init = body.initializer()[i];
     const std::string name = init.name();
     if (name.empty() || local.Has(name)) {
@@ -242,7 +243,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   }
 
   // Validate that every body output is known in the local context.
-  for (int i = 0; i < body.output().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(body.output().size()); ++i) {
     const std::string body_out = body.output()[i].name();
     EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeLoop: body output '", body_out,
                         "' is missing from the inferred context.");
@@ -364,10 +365,10 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   const int k_scan = node.output_size() - n_state;
 
   EXT_ENFORCE_INVALID(
-      body.input().size() == n_state + num_scan_inputs,
+      static_cast<int>(body.input().size()) == n_state + num_scan_inputs,
       "ComputeShapeScan: 'body' sub-graph declares ", std::to_string(body.input().size()),
       " input(s), expected N + M = ", std::to_string(n_state + num_scan_inputs), ".");
-  EXT_ENFORCE_INVALID(body.output().size() == n_state + k_scan,
+  EXT_ENFORCE_INVALID(static_cast<int>(body.output().size()) == n_state + k_scan,
                       "ComputeShapeScan: 'body' sub-graph declares ",
                       std::to_string(body.output().size()),
                       " output(s), expected N + K = ", std::to_string(n_state + k_scan), ".");
@@ -403,7 +404,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   //   scan input  [B, T, D...] → body input [D...]  (B and T stripped)
   ShapesContext local = ctx;
   local.set_current_subgraph(local.current_node_index(), "body");
-  for (int i = 0; i < body.initializer().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(body.initializer().size()); ++i) {
     const TensorProto &init = body.initializer()[i];
     const std::string name = init.name();
     if (name.empty() || local.Has(name)) {
@@ -507,7 +508,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
     }
   }
 
-  for (int i = 0; i < body.output().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(body.output().size()); ++i) {
     const std::string body_out = body.output()[i].name();
     EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeScan: body output '", body_out,
                         "' is missing from the inferred context.");

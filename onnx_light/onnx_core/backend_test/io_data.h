@@ -24,7 +24,7 @@ struct IoData {
   /// ``BuildSingleNodeCase`` declares the corresponding graph input with a
   /// ``map(key_type, value_type)`` TypeProto and stores the Map in the
   /// ``DataSet::maps`` collection so the runtime can retrieve it by name.
-  std::vector<Map> maps;
+  std::vector<Map> maps = {};
 };
 
 } // namespace backend_test

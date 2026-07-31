@@ -388,6 +388,7 @@ public:
 
 using ConstNodeMap = std::unordered_map<std::string, const NodeProto *>;
 
+#ifdef ONNX_LIGHT_VERSION_CONVERTER
 ConstNodeMap FindConstantNodes(const GraphProto &graph) {
   ConstNodeMap result;
   for (const NodeProto &node : graph.node()) {
@@ -397,6 +398,7 @@ ConstNodeMap FindConstantNodes(const GraphProto &graph) {
   }
   return result;
 }
+#endif // ONNX_LIGHT_VERSION_CONVERTER
 
 const TypeProto *TryGetType(const ModelProto &model, const std::string &var) {
   for (const auto &vi : model.graph().value_info()) {
@@ -414,13 +416,12 @@ const TypeProto *TryGetType(const ModelProto &model, const std::string &var) {
   return nullptr;
 }
 
+#ifdef ONNX_LIGHT_VERSION_CONVERTER
 const TypeProto &GetType(const ModelProto &model, const std::string &var) {
   const TypeProto *type = TryGetType(model, var);
   ONNX_ASSERTM(type != nullptr, "Type unknown for ", var)
   return *type;
 }
-
-#ifdef ONNX_LIGHT_VERSION_CONVERTER
 void ConvertVersion(ModelProto &model, const NodeProto &call_node, FunctionProto &function,
                     int target_version) {
   shape_inference::InferShapes(model);

@@ -209,10 +209,8 @@ void ConvTranspose::operator()(const Tensor &x, const Tensor &w, const Tensor &b
     }
     return strides;
   };
-  const onnx_kernels::Shape in_strides = compute_strides(iD);
   const onnx_kernels::Shape out_strides = compute_strides(oD);
   const onnx_kernels::Shape &k_shape = resolved.kernel_shape;
-  const onnx_kernels::Shape ker_strides = compute_strides(k_shape);
 
   int64_t in_spatial_size = 1;
   for (int64_t d : iD) {

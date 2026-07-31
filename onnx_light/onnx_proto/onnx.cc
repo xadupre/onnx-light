@@ -1,12 +1,16 @@
 #include "onnx.h"
+#include "blake3/blake3_hash.h"
 #include "onnx_helper.h"
 #include "stream_class.hpp"
 #include <algorithm>
 #include <charconv>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <sstream>
+#include <string_view>
 
 namespace ONNX_LIGHT_NAMESPACE {
 
@@ -182,6 +186,11 @@ private:
   std::vector<uint8_t> main_buffer_;
   std::unordered_map<std::string, std::vector<uint8_t>> external_buffers_;
 };
+
+// Mixes ``value`` into the running hash ``seed`` (boost-style mixing).
+inline void HashCombine(uint64_t &seed, uint64_t value) {
+  seed ^= value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+}
 
 } // namespace
 
@@ -915,6 +924,73 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
                 "TensorProto::LoadExternalData short read from '", data_path.string(),
                 "': expected ", length, " bytes, got ", static_cast<int64_t>(file.gcount()), ".");
   }
+}
+int64_t TensorProto::ContentHash(bool include_content) const {
+  if (!include_content) {
+    // Cheap metadata-only hash: element type, shape, data location and the
+    // size of every payload field. Two tensors sharing this hash are candidates
+    // for an exact byte comparison, nothing more.
+    uint64_t seed = static_cast<uint64_t>(std::hash<int>()(static_cast<int>(data_type())));
+    for (int64_t dim : dims().values()) {
+      HashCombine(seed, dim);
+    }
+    const int location = has_data_location() ? static_cast<int>(data_location()) : 0;
+    HashCombine(seed, static_cast<uint64_t>(location));
+    HashCombine(seed, static_cast<uint64_t>(raw_data().size()));
+    HashCombine(seed, static_cast<uint64_t>(float_data().size()));
+    HashCombine(seed, static_cast<uint64_t>(int32_data().size()));
+    HashCombine(seed, static_cast<uint64_t>(int64_data().size()));
+    HashCombine(seed, static_cast<uint64_t>(double_data().size()));
+    HashCombine(seed, static_cast<uint64_t>(uint64_data().size()));
+    HashCombine(seed, static_cast<uint64_t>(string_data().size()));
+    HashCombine(seed, static_cast<uint64_t>(external_data().size()));
+    return static_cast<int64_t>(seed);
+  }
+
+  // Content-sensitive hash: BLAKE3 over the element type, shape, data location
+  // and every payload byte. Large payloads are hashed in parallel through the
+  // BLAKE3 tree (see onnx_proto/blake3), so the result is stable regardless of
+  // the number of threads used.
+  utils::Blake3Hasher hasher;
+  auto absorb_size = [&hasher](uint64_t value) { hasher.Update(&value, sizeof(value)); };
+
+  absorb_size(static_cast<uint64_t>(data_type()));
+  for (int64_t dim : dims().values()) {
+    absorb_size(dim);
+  }
+  absorb_size(static_cast<uint64_t>(has_data_location() ? static_cast<int>(data_location()) : 0));
+
+  // Prefix each field with its element count so that, for example, an empty
+  // float_data followed by populated int32_data cannot collide with the reverse.
+  auto absorb_packed = [&hasher, &absorb_size](const auto &field) {
+    absorb_size(static_cast<uint64_t>(field.size()));
+    hasher.Update(field.data(), field.size() * sizeof(*field.data()));
+  };
+
+  absorb_size(static_cast<uint64_t>(raw_data().size()));
+  hasher.Update(raw_data().data(), raw_data().size());
+  absorb_packed(float_data());
+  absorb_packed(int32_data());
+  absorb_packed(int64_data());
+  absorb_packed(double_data());
+  absorb_packed(uint64_data());
+
+  absorb_size(static_cast<uint64_t>(string_data().size()));
+  for (const utils::String &value : string_data().values()) {
+    absorb_size(static_cast<uint64_t>(value.size()));
+    hasher.Update(value.data(), value.size());
+  }
+
+  absorb_size(static_cast<uint64_t>(external_data().size()));
+  for (std::size_t i = 0; i < external_data().size(); ++i) {
+    const std::string_view key = external_data()[i].key().sv();
+    const std::string_view value = external_data()[i].value().sv();
+    absorb_size(static_cast<uint64_t>(key.size()));
+    hasher.Update(key.data(), key.size());
+    absorb_size(static_cast<uint64_t>(value.size()));
+    hasher.Update(value.data(), value.size());
+  }
+  return hasher.Finalize64();
 }
 void TensorProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(

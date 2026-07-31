@@ -53,7 +53,7 @@ void AddInt64Initializer(GraphProto &graph, const std::string &name,
   TensorProto *init = graph.add_initializer();
   init->set_name(name);
   init->set_data_type(static_cast<int>(TensorProto::DataType::INT64));
-  init->add_dims(std::vector<uint64_t>{values.size()});
+  init->add_dims(std::vector<int64_t>{static_cast<int64_t>(values.size())});
   init->add_int64_data(values);
 }
 
@@ -362,7 +362,7 @@ TEST(OnnxOptimShapeBuilder, ReshapeReshapePreservesRankAndPartialDims) {
     TensorProto *one_init = graph->add_initializer();
     one_init->set_name("one");
     one_init->set_data_type(static_cast<int>(TensorProto::DataType::FLOAT));
-    one_init->add_dims(std::vector<uint64_t>{1});
+    one_init->add_dims(std::vector<int64_t>{1});
     one_init->add_float_data(std::vector<float>{1.0f});
   }
 
@@ -537,7 +537,7 @@ TEST(OnnxOptimShapeBuilder, ValueAsShapeFromShapeConcatMatMulReshapeTranspose) {
 
   // ── MatMul outputs ───────────────────────────────────────────────────────
   // ids_weight(batch,seq,256) @ A(256,256) → A1(batch,seq,256)
-  for (const std::string &name : {"A1", "B1", "C1"}) {
+  for (const std::string &name : {std::string("A1"), std::string("B1"), std::string("C1")}) {
     ASSERT_TRUE(ctx.Has(name)) << "missing: " << name;
     ASSERT_EQ(ctx.Get(name).Shape().Rank(), 3u) << name;
     EXPECT_EQ(ctx.Get(name).Dtype(), core::symbolic::TensorType::kFloat) << name;
@@ -549,7 +549,8 @@ TEST(OnnxOptimShapeBuilder, ValueAsShapeFromShapeConcatMatMulReshapeTranspose) {
   // ── Reshape outputs ──────────────────────────────────────────────────────
   // Reshape(A1=(batch,seq,256), new_shape.ValueAsShape=(batch,seq,32,8))
   //   → (batch, seq, 32, 8)
-  for (const std::string &name : {"Areshaped", "Breshaped", "Creshaped"}) {
+  for (const std::string &name :
+       {std::string("Areshaped"), std::string("Breshaped"), std::string("Creshaped")}) {
     ASSERT_TRUE(ctx.Has(name)) << "missing: " << name;
     ASSERT_EQ(ctx.Get(name).Shape().Rank(), 4u) << name;
     EXPECT_EQ(ctx.Get(name).Dtype(), core::symbolic::TensorType::kFloat) << name;
@@ -561,7 +562,7 @@ TEST(OnnxOptimShapeBuilder, ValueAsShapeFromShapeConcatMatMulReshapeTranspose) {
 
   // ── Transpose outputs ────────────────────────────────────────────────────
   // Transpose(Areshaped=(batch,seq,32,8), perm=[0,2,1,3]) → (batch,32,seq,8)
-  for (const std::string &name : {"At", "Bt", "Ct"}) {
+  for (const std::string &name : {std::string("At"), std::string("Bt"), std::string("Ct")}) {
     ASSERT_TRUE(ctx.Has(name)) << "missing: " << name;
     ASSERT_EQ(ctx.Get(name).Shape().Rank(), 4u) << name;
     EXPECT_EQ(ctx.Get(name).Dtype(), core::symbolic::TensorType::kFloat) << name;
@@ -697,7 +698,7 @@ TEST(OnnxOptimShapeBuilder, ConcatSplitApplyInferredShapesToGraph) {
   CheckSymbolicDim(ctx, "xy", 1, "b+c");
 
   // S1, S2: each has rank 2; the non-concat dim is "a"; axis dim is symbolic
-  for (const std::string &name : {"S1", "S2"}) {
+  for (const std::string &name : {std::string("S1"), std::string("S2")}) {
     ASSERT_TRUE(ctx.Has(name)) << "missing: " << name;
     ASSERT_EQ(ctx.Get(name).Shape().Rank(), 2u) << name;
     EXPECT_EQ(ctx.Get(name).Dtype(), core::symbolic::TensorType::kFloat) << name;
@@ -727,12 +728,14 @@ TEST(OnnxOptimShapeBuilder, ConcatSplitApplyInferredShapesToGraph) {
     const ValueInfoProto &vi = model.graph().value_info(i);
     vi_map[vi.name()] = &vi;
   }
-  for (const std::string &name : {"xy", "S1", "S2", "zs"}) {
+  for (const std::string &name :
+       {std::string("xy"), std::string("S1"), std::string("S2"), std::string("zs")}) {
     EXPECT_TRUE(vi_map.count(name) > 0) << "value_info missing for " << name;
   }
 
   // Each intermediate value_info has rank 2, float, with the first dim_param = "a"
-  for (const std::string &name : {"xy", "S1", "S2", "zs"}) {
+  for (const std::string &name :
+       {std::string("xy"), std::string("S1"), std::string("S2"), std::string("zs")}) {
     auto it = vi_map.find(name);
     if (it == vi_map.end()) {
       continue;

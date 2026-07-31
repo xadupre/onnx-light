@@ -757,7 +757,7 @@ TEST(OnnxOptimValueInfo, ToValueInfoWritesMinMaxMetadata) {
   ASSERT_EQ(vi.metadata_props().size(), 2u);
   bool seen_min = false;
   bool seen_max = false;
-  for (int i = 0; i < vi.metadata_props().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(vi.metadata_props().size()); ++i) {
     const std::string key = vi.metadata_props()[i].key();
     const std::string value = vi.metadata_props()[i].value();
     if (key == core::symbolic::kValueInfoMinMetadataKey) {

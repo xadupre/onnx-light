@@ -5,6 +5,7 @@
 #include "onnx_core/builder/graph_builder.h"
 
 #include <algorithm>
+#include <cstring>
 #include <limits>
 #include <sstream>
 #include <utility>
@@ -24,6 +25,67 @@ using ::onnx_light::core::symbolic::SymTensorFromTensorProto;
 using ::onnx_light::core::symbolic::SymTensorFromValueInfo;
 using ::onnx_light::core::symbolic::SymTensorToValueInfo;
 using ::onnx_light::core::symbolic::TensorTypeToDataType;
+
+namespace {
+
+// Compares two packed payload fields byte-for-byte without copying.
+template <typename T>
+bool SamePackedData(const utils::RepeatedField<T> &lhs, const utils::RepeatedField<T> &rhs) {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+  return lhs.size() == 0 || std::memcmp(lhs.data(), rhs.data(), lhs.size() * sizeof(T)) == 0;
+}
+
+// Compares the external_data key/value entries of two tensors.
+bool SameExternalData(const TensorProto &lhs, const TensorProto &rhs) {
+  const auto &left = lhs.external_data();
+  const auto &right = rhs.external_data();
+  if (left.size() != right.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < left.size(); ++i) {
+    if (!(left[i].key() == right[i].key()) || !(left[i].value() == right[i].value())) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Returns true when two initializers carry byte-for-byte identical content
+// (ignoring their names). Cheap discriminators -- element type then shape --
+// are checked first so mismatched tensors are rejected before any payload is
+// compared. Inline payloads (raw_data or typed data) and external data are all
+// supported. Nothing is copied and nothing is serialized.
+bool SameInitializerContent(const TensorProto &lhs, const TensorProto &rhs) {
+  if (lhs.data_type() != rhs.data_type()) {
+    return false;
+  }
+  if (lhs.dims().values() != rhs.dims().values()) {
+    return false;
+  }
+  const int lhs_location = lhs.has_data_location() ? static_cast<int>(lhs.data_location()) : 0;
+  const int rhs_location = rhs.has_data_location() ? static_cast<int>(rhs.data_location()) : 0;
+  if (lhs_location != rhs_location) {
+    return false;
+  }
+  if (lhs.raw_data() != rhs.raw_data()) {
+    return false;
+  }
+  if (!SamePackedData(lhs.float_data(), rhs.float_data()) ||
+      !SamePackedData(lhs.int32_data(), rhs.int32_data()) ||
+      !SamePackedData(lhs.int64_data(), rhs.int64_data()) ||
+      !SamePackedData(lhs.double_data(), rhs.double_data()) ||
+      !SamePackedData(lhs.uint64_data(), rhs.uint64_data())) {
+    return false;
+  }
+  if (lhs.string_data().values() != rhs.string_data().values()) {
+    return false;
+  }
+  return SameExternalData(lhs, rhs);
+}
+
+} // namespace
 
 GraphBuilder::GraphBuilder(std::string name, SchemaLookupFn schema_lookup)
     : name_(std::move(name)), schema_lookup_(std::move(schema_lookup)) {}
@@ -677,6 +739,165 @@ std::size_t GraphBuilder::RemoveUnusedNodes() {
   }
   nodes_ = std::move(kept);
   return removed + local_removed;
+}
+
+namespace {
+
+// Returns true when the node is a plain default-domain Identity that forwards
+// its single input to its single output, both under a non-empty name.
+bool IsForwardingIdentity(const NodeProto &node) {
+  const std::string domain = node.domain().empty() ? std::string() : node.domain().value();
+  if (!domain.empty() || node.op_type().value() != "Identity") {
+    return false;
+  }
+  if (node.input().size() != 1 || node.output().size() != 1) {
+    return false;
+  }
+  return !std::string(node.input(0)).empty() && !std::string(node.output(0)).empty();
+}
+
+} // namespace
+
+std::size_t GraphBuilder::RemoveIdentityNodes() {
+  // Prune nested builders first so a collapsed identity inside a subgraph or
+  // local function is handled in its own scope.
+  std::size_t removed = 0;
+  for (const auto &function : local_functions_) {
+    removed += function->RemoveIdentityNodes();
+  }
+  for (const auto &subgraph : subgraphs_) {
+    removed += subgraph->RemoveIdentityNodes();
+  }
+
+  const std::size_t num_nodes = nodes_.size();
+  if (num_nodes == 0) {
+    return removed;
+  }
+
+  // Declared graph outputs must keep their own name, so an Identity that
+  // produces one is never dropped.
+  std::unordered_set<std::string> output_names;
+  for (const ValueInfoProto &output : outputs_) {
+    output_names.insert(output.name().value());
+  }
+
+  // Drop every forwarding Identity, recording output -> input so consumers can
+  // be rewired to the identity's source.
+  std::unordered_map<std::string, std::string> rename;
+  utils::RepeatedProtoField<NodeProto> kept;
+  kept.reserve(num_nodes);
+  std::size_t local_removed = 0;
+  for (NodeProto &node : nodes_) {
+    if (IsForwardingIdentity(node) &&
+        output_names.find(std::string(node.output(0))) == output_names.end()) {
+      rename.emplace(std::string(node.output(0)), std::string(node.input(0)));
+      ++local_removed;
+      continue;
+    }
+    kept.push_back(std::move(node));
+  }
+  nodes_ = std::move(kept);
+
+  // Collapse chains of identities: an identity input can itself be another
+  // removed identity's output, so follow each rename target to its final value.
+  for (auto &entry : rename) {
+    std::string target = entry.second;
+    std::unordered_set<std::string> seen{entry.first};
+    auto it = rename.find(target);
+    while (it != rename.end() && seen.insert(target).second) {
+      target = it->second;
+      it = rename.find(target);
+    }
+    entry.second = target;
+  }
+
+  // Rewrite every consumer of a dropped identity output, descending into
+  // subgraphs whose bodies capture values from this enclosing scope.
+  RewriteInitializerReferences(rename);
+
+  return removed + local_removed;
+}
+
+std::size_t GraphBuilder::RemoveDuplicateInitializers() {
+  return DeduplicateInitializers(InitializerContentIndex{});
+}
+
+std::size_t GraphBuilder::DeduplicateInitializers(const InitializerContentIndex &inherited) {
+  // Declared graph outputs must keep their own name; they are never dropped as
+  // duplicates (but can still act as the survivor for a later duplicate).
+  std::unordered_set<std::string> output_names;
+  for (const ValueInfoProto &output : outputs_) {
+    output_names.insert(output.name().value());
+  }
+
+  // Start from the initializers visible in the enclosing scope and add this
+  // scope's survivors as we go. The first initializer with a given content
+  // wins; every later duplicate is dropped and its references are rewritten to
+  // the surviving name.
+  InitializerContentIndex index = inherited;
+  std::unordered_map<std::string, std::string> rename;
+  utils::RepeatedProtoField<TensorProto> kept;
+  kept.reserve(initializers_.size());
+  std::size_t removed = 0;
+  for (TensorProto &initializer : initializers_) {
+    const int64_t hash = initializer.ContentHash(/*include_content=*/false);
+    if (output_names.find(initializer.name().value()) == output_names.end()) {
+      const TensorProto *survivor = nullptr;
+      auto candidates = index.find(hash);
+      if (candidates != index.end()) {
+        for (const TensorProto *candidate : candidates->second) {
+          if (SameInitializerContent(*candidate, initializer)) {
+            survivor = candidate;
+            break;
+          }
+        }
+      }
+      if (survivor != nullptr) {
+        rename.emplace(initializer.name().value(), survivor->name().value());
+        ++removed;
+        continue;
+      }
+    }
+    kept.push_back(std::move(initializer));
+    // Register the survivor right away so later initializers in this same scope
+    // (and, once the loop is done, subgraphs) can collapse onto it. Elements are
+    // heap-owned by the field, so the pointer stays valid as ``kept`` grows.
+    index[hash].push_back(&kept[kept.size() - 1]);
+  }
+  initializers_ = std::move(kept);
+
+  RewriteInitializerReferences(rename);
+
+  // Subgraph bodies see the enclosing scope, so pass the augmented index down.
+  // Local functions have an isolated scope and start from a fresh index.
+  for (const auto &subgraph : subgraphs_) {
+    removed += subgraph->DeduplicateInitializers(index);
+  }
+  for (const auto &function : local_functions_) {
+    removed += function->DeduplicateInitializers(InitializerContentIndex{});
+  }
+  return removed;
+}
+
+void GraphBuilder::RewriteInitializerReferences(
+    const std::unordered_map<std::string, std::string> &rename) {
+  if (rename.empty()) {
+    return;
+  }
+  for (NodeProto &node : nodes_) {
+    for (int i = 0; i < node.input().size(); ++i) {
+      auto it = rename.find(node.input(static_cast<std::size_t>(i)));
+      if (it != rename.end()) {
+        node.mutable_input(static_cast<std::size_t>(i))->assign(it->second);
+      }
+    }
+  }
+  // Subgraph bodies capture values from the enclosing scope, so a duplicate
+  // initializer they reference must be rewritten here too. Local functions have
+  // an isolated scope and cannot see this builder's initializers.
+  for (const auto &subgraph : subgraphs_) {
+    subgraph->RewriteInitializerReferences(rename);
+  }
 }
 
 GraphBuilder *

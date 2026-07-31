@@ -186,7 +186,7 @@ TEST(CHECKER_COVERAGE, TensorZeroElementsWithDataRejected) {
   TensorProto t;
   t.set_name("z");
   t.set_data_type(TensorProto::FLOAT);
-  t.add_dims(uint64_t{0});
+  t.add_dims(int64_t{0});
   t.add_float_data(1.0f);
   EXPECT_THROW(checker::check_tensor(t, MakeCtx()), ValidationError);
 }
@@ -385,7 +385,7 @@ TEST(CHECKER_COVERAGE, TensorPackedSubByteZeroElems) {
     TensorProto t;
     t.set_name("t");
     t.set_data_type(dtype);
-    t.add_dims(uint64_t{0});
+    t.add_dims(int64_t{0});
     EXPECT_NO_THROW(checker::check_tensor(t, MakeCtx()));
   }
 }
@@ -421,7 +421,7 @@ TEST(CHECKER_COVERAGE, SparseTensorZeroDenseRankRejected) {
   auto *v = &s.ref_values();
   v->set_name("vals");
   v->set_data_type(TensorProto::FLOAT);
-  v->add_dims(uint64_t{0});
+  v->add_dims(int64_t{0});
   // No dense dims => rank 0.
   EXPECT_THROW(checker::check_sparse_tensor(s, MakeCtx()), ValidationError);
 }
@@ -431,7 +431,7 @@ TEST(CHECKER_COVERAGE, SparseTensorNonPositiveDimRejected) {
   auto *v = &s.ref_values();
   v->set_name("vals");
   v->set_data_type(TensorProto::FLOAT);
-  v->add_dims(uint64_t{0});
+  v->add_dims(int64_t{0});
   s.add_dims(int64_t{0}); // not > 0
   EXPECT_THROW(checker::check_sparse_tensor(s, MakeCtx()), ValidationError);
 }

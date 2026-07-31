@@ -80,23 +80,6 @@ bool DimEqualsInt(const core::symbolic::SymDim &d, int64_t v) {
   return d.IsInt() && d.AsInt() == v;
 }
 
-// Strip whitespace so that assertions on symbolic expressions are robust
-// against harmless re-formattings by the expressions library.
-std::string Canonicalise(const std::string &s) {
-  std::string out;
-  out.reserve(s.size());
-  for (char c : s) {
-    if (c != ' ') {
-      out.push_back(c);
-    }
-  }
-  return out;
-}
-
-bool DimEqualsExpr(const core::symbolic::SymDim &d, const std::string &s) {
-  return d.IsExpr() && Canonicalise(d.AsExpr()) == Canonicalise(s);
-}
-
 } // namespace
 
 // ─────────────────────────────────────────────────────────────────────────────

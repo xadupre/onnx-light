@@ -644,7 +644,7 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToMetadataShapeTag) {
   bool found_release_after = false;
   bool found_shape_tag = false;
   bool found_not_used_after = false;
-  for (int i = 0; i < graph.node()[1].metadata_props().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(graph.node()[1].metadata_props().size()); ++i) {
     const auto &prop = graph.node()[1].metadata_props()[i];
     if (prop.key() == std::string(core::compute::kReleaseAfterMetadataKey)) {
       EXPECT_EQ(prop.value(), std::string("S"));
@@ -686,8 +686,8 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextNoValueTagsYieldsEmptyShapeTagged) {
   EXPECT_TRUE(inplace.ReleaseAfterShapeTagged().empty());
 
   // kReleaseAfterShapeTagMetadataKey must not appear in metadata.
-  for (int n = 0; n < graph.node().size(); ++n) {
-    for (int i = 0; i < graph.node()[n].metadata_props().size(); ++i) {
+  for (int n = 0; n < static_cast<int>(graph.node().size()); ++n) {
+    for (int i = 0; i < static_cast<int>(graph.node()[n].metadata_props().size()); ++i) {
       EXPECT_NE(std::string(graph.node()[n].metadata_props()[i].key()),
                 std::string(core::compute::kReleaseAfterShapeTagMetadataKey));
     }
@@ -779,7 +779,7 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataWithShapeTags) {
   WriteInPlaceReuseToMetadata(graph, ctx, value_tags);
 
   bool found_shape_tag = false;
-  for (int i = 0; i < graph.node()[1].metadata_props().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(graph.node()[1].metadata_props().size()); ++i) {
     if (std::string(graph.node()[1].metadata_props()[i].key()) ==
         std::string(core::compute::kReleaseAfterShapeTagMetadataKey)) {
       EXPECT_EQ(std::string(graph.node()[1].metadata_props()[i].value()), std::string("S"));
@@ -839,7 +839,7 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToGraph) {
 
   // The release-after metadata is present on the node freeing "A".
   bool found_release = false;
-  for (int i = 0; i < graph.node()[1].metadata_props().size(); ++i) {
+  for (int i = 0; i < static_cast<int>(graph.node()[1].metadata_props().size()); ++i) {
     if (std::string(graph.node()[1].metadata_props()[i].key()) ==
         std::string(core::compute::kReleaseAfterMetadataKey)) {
       found_release = true;

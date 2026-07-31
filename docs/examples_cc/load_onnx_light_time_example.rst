@@ -62,9 +62,17 @@ Example output:
 .. code-block:: text
 
     Loaded: path/to/model.onnx
+      File size (MB)   : 42.000
+      Iterations       : 10
+      Num threads      : 1
+      Copy mode        : default
+      Touch pages      : false
+      Total load (ms)  : 53.210
       Average load (ms): 5.321
+      Median load (ms) : 5.300
       Min load (ms)    : 5.002
       Max load (ms)    : 5.889
+      Std load (ms)    : 0.250
       IR version       : 9
       Producer name    : my_framework
       Graph name       : my_graph
@@ -97,11 +105,12 @@ messages and does not need operator-aware APIs:
 main.cc
 --------
 
-The program opens the ONNX file with :cpp:class:`onnx::utils::FileStream`,
-parses it with :cpp:func:`onnx::ParseModelProtoFromStream`, reports parse-time
-statistics from repeated in-process iterations, and prints model metadata.
-File-not-found and parse errors are caught and reported to ``stderr``.
-Before timing, the program tunes the glibc allocator
+The program opens the ONNX file with :cpp:class:`onnx_light::utils::MmapFileStream`
+(the default fast path) or :cpp:class:`onnx_light::utils::FileStream` (for the
+``nocopy`` mode), parses it with :cpp:func:`onnx_light::ParseModelProtoFromStream`,
+reports parse-time statistics from repeated in-process iterations, and prints
+model metadata. File-not-found and parse errors are caught and reported to
+``stderr``. Before timing, the program tunes the glibc allocator
 (``mallopt(M_TRIM_THRESHOLD, -1)`` and ``mallopt(M_MMAP_MAX, 0)``) so that the
 large per-tensor ``raw_data`` buffers freed at the end of each iteration are
 kept in the allocator arena for reuse instead of being returned to the OS.
@@ -109,8 +118,9 @@ Without this, every iteration re-``mmap``\ s those buffers and pays the
 kernel's page zero-fill cost on first touch, which dominates the measurement
 and makes the short-lived executable look several times slower than the
 equivalent in-process Python loop (whose long-lived heap already retains the
-freed blocks).
-``FileStream`` reads the file sequentially using a buffered read-ahead approach:
+freed blocks). A warm-up iteration is also executed before timing to avoid
+cold-cache effects. An abbreviated illustration of the core parse-and-print
+pattern:
 
 .. code-block:: cpp
 
@@ -119,8 +129,9 @@ freed blocks).
     #include "stream.h"
 
     #include <iostream>
-    #include <stdexcept>
     #include <string>
+
+    namespace onnx_light = ONNX_LIGHT_NAMESPACE;
 
     int main(int argc, char *argv[]) {
       if (argc < 2) {
@@ -130,11 +141,11 @@ freed blocks).
 
       const std::string file_path = argv[1];
 
-      onnx::ModelProto model;
+      onnx_light::ModelProto model;
       try {
-        onnx::utils::FileStream stream(file_path);
-        onnx::ParseOptions opts;
-        onnx::ParseModelProtoFromStream(model, stream, opts);
+        onnx_light::utils::MmapFileStream stream(file_path);
+        onnx_light::ParseOptions opts;
+        onnx_light::ParseModelProtoFromStream(model, stream, opts);
       } catch (const std::exception &e) {
         std::cerr << "Error loading '" << file_path << "': " << e.what() << "\n";
         return 1;
@@ -143,17 +154,17 @@ freed blocks).
       std::cout << "Loaded: " << file_path << "\n";
 
       if (model.has_ir_version())
-        std::cout << "  IR version   : " << model.ref_ir_version() << "\n";
+        std::cout << "  IR version       : " << model.ref_ir_version() << "\n";
       if (model.has_producer_name())
-        std::cout << "  Producer     : " << model.ref_producer_name() << "\n";
+        std::cout << "  Producer name    : " << model.ref_producer_name() << "\n";
 
       if (model.has_graph()) {
-        const onnx::GraphProto &graph = model.ref_graph();
-        std::cout << "  Graph name   : " << graph.ref_name() << "\n";
-        std::cout << "  Nodes        : " << graph.ref_node().size() << "\n";
-        std::cout << "  Inputs       : " << graph.ref_input().size() << "\n";
-        std::cout << "  Outputs      : " << graph.ref_output().size() << "\n";
-        std::cout << "  Initializers : " << graph.ref_initializer().size() << "\n";
+        const onnx_light::GraphProto &graph = model.ref_graph();
+        std::cout << "  Graph name       : " << graph.ref_name() << "\n";
+        std::cout << "  Nodes            : " << graph.ref_node().size() << "\n";
+        std::cout << "  Inputs           : " << graph.ref_input().size() << "\n";
+        std::cout << "  Outputs          : " << graph.ref_output().size() << "\n";
+        std::cout << "  Initializers     : " << graph.ref_initializer().size() << "\n";
       }
 
       return 0;
@@ -162,27 +173,26 @@ freed blocks).
 Key API types
 -------------
 
-:cpp:class:`onnx::utils::FileStream`
-    Buffered binary input stream.  Constructed with the path to the ``.onnx``
-    file; throws ``std::runtime_error`` if the file cannot be opened.  Uses a
-    read-ahead buffer and supports optional parallel tensor loading via an
-    internal thread pool.  Also serves as the base class for
-    :cpp:class:`onnx::utils::TwoFilesStream`.
+:cpp:class:`onnx_light::utils::MmapFileStream`
+    Memory-mapped binary input stream.  Used as the default stream for fast
+    single-file loads; falls back to a ``FileStream``-backed path when
+    ``no_copy=true`` is requested.  Also serves as the base class for the
+    external-data stream :cpp:class:`onnx_light::utils::TwoFilesStream`.
 
-:cpp:class:`onnx::ParseOptions`
+:cpp:class:`onnx_light::ParseOptions`
     Controls parsing behaviour.  Set ``num_threads = N`` (with ``N > 1``,
     or a negative value to use the number of CPU cores) to enable parallel
     tensor loading across *N* threads
     (useful for large models with many initializers).
 
-:cpp:func:`onnx::ParseModelProtoFromStream`
-    Parses the binary protobuf stream into a :cpp:class:`onnx::ModelProto`.
+:cpp:func:`onnx_light::ParseModelProtoFromStream`
+    Parses the binary protobuf stream into a :cpp:class:`onnx_light::ModelProto`.
     Handles both single-file models and models with external data (via
-    :cpp:class:`onnx::utils::TwoFilesStream`).
+    :cpp:class:`onnx_light::utils::TwoFilesStream`).
 
-:cpp:class:`onnx::ModelProto`
+:cpp:class:`onnx_light::ModelProto`
     Top-level ONNX model container.  Access the embedded graph with
-    ``model.ref_graph()`` (returns :cpp:class:`onnx::GraphProto`).
+    ``model.ref_graph()`` (returns :cpp:class:`onnx_light::GraphProto`).
 
 See also
 --------

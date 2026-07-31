@@ -16,12 +16,12 @@ and a full-copy memory pattern. *onnx-light* bypasses protobuf entirely, so a
 common deployment workflow is:
 
 #. open the (potentially huge, encrypted, or split) ONNX file with
-   :cpp:class:`onnx::utils::MmapFileStream` and parse it with
-   :cpp:func:`onnx::ParseModelProtoFromStream`;
-#. inspect, patch, or decrypt the in-memory :cpp:class:`onnx::ModelProto`;
+   :cpp:class:`onnx_light::utils::MmapFileStream` and parse it with
+   :cpp:func:`onnx_light::ParseModelProtoFromStream`;
+#. inspect, patch, or decrypt the in-memory :cpp:class:`onnx_light::ModelProto`;
 #. re-serialize a clean, protobuf-compatible model to a temporary file
-   with :cpp:func:`onnx::SerializeModelProtoToStream` and
-   :cpp:class:`onnx::utils::FileWriteStream`;
+   with :cpp:func:`onnx_light::SerializeModelProtoToStream` and
+   :cpp:class:`onnx_light::utils::FileWriteStream`;
 #. hand that file to Aidge's ``Aidge::loadONNX`` to instantiate the
    computation graph.
 
@@ -137,10 +137,10 @@ optional unless ``-DAIDGE_ONNX_LIGHT_REQUIRE_AIDGE=ON`` is passed:
 main.cc
 -------
 
-The program loads the model with :cpp:class:`onnx::utils::MmapFileStream`
-and :cpp:func:`onnx::ParseModelProtoFromStream`, re-serializes it through
-:cpp:class:`onnx::utils::FileWriteStream` and
-:cpp:func:`onnx::SerializeModelProtoToStream`, and -- when compiled with
+The program loads the model with :cpp:class:`onnx_light::utils::MmapFileStream`
+and :cpp:func:`onnx_light::ParseModelProtoFromStream`, re-serializes it through
+:cpp:class:`onnx_light::utils::FileWriteStream` and
+:cpp:func:`onnx_light::SerializeModelProtoToStream`, and -- when compiled with
 Aidge -- calls ``Aidge::loadONNX`` on the re-serialized file:
 
 .. code-block:: cpp
@@ -157,15 +157,16 @@ Aidge -- calls ``Aidge::loadONNX`` on the re-serialized file:
     int main(int argc, char *argv[]) {
       const std::string input_path = argv[1];
 
-      onnx::ModelProto model;
-      onnx::utils::MmapFileStream in_stream(input_path);
-      onnx::ParseOptions parse_opts;
-      onnx::ParseModelProtoFromStream(model, in_stream, parse_opts);
+      namespace onnx_light = ONNX_LIGHT_NAMESPACE;
+      onnx_light::ModelProto model;
+      onnx_light::utils::MmapFileStream in_stream(input_path);
+      onnx_light::ParseOptions parse_opts;
+      onnx_light::ParseModelProtoFromStream(model, in_stream, parse_opts);
 
       const std::string output_path = input_path + ".onnxlight.tmp";
-      onnx::utils::FileWriteStream out_stream(output_path);
-      onnx::SerializeOptions ser_opts;
-      onnx::SerializeModelProtoToStream(model, out_stream, ser_opts);
+      onnx_light::utils::FileWriteStream out_stream(output_path);
+      onnx_light::SerializeOptions ser_opts;
+      onnx_light::SerializeModelProtoToStream(model, out_stream, ser_opts);
 
     #ifdef AIDGE_ONNX_LIGHT_HAS_AIDGE
       std::shared_ptr<Aidge::GraphView> graph = Aidge::loadONNX(output_path);
@@ -176,19 +177,19 @@ Aidge -- calls ``Aidge::loadONNX`` on the re-serialized file:
 Key API types
 -------------
 
-:cpp:class:`onnx::utils::MmapFileStream`
+:cpp:class:`onnx_light::utils::MmapFileStream`
     Memory-mapped binary input stream.  Used here to load the ONNX file
     without copying it into a protobuf message, which is what enables the
     multi-gigabyte and zero-copy properties of *onnx-light*.
 
-:cpp:func:`onnx::ParseModelProtoFromStream`
-    Parses the binary protobuf stream into an :cpp:class:`onnx::ModelProto`.
+:cpp:func:`onnx_light::ParseModelProtoFromStream`
+    Parses the binary protobuf stream into an :cpp:class:`onnx_light::ModelProto`.
 
-:cpp:class:`onnx::utils::FileWriteStream`
+:cpp:class:`onnx_light::utils::FileWriteStream`
     Buffered binary output stream backing the re-serialization step.
 
-:cpp:func:`onnx::SerializeModelProtoToStream`
-    Writes a :cpp:class:`onnx::ModelProto` back to a binary protobuf stream,
+:cpp:func:`onnx_light::SerializeModelProtoToStream`
+    Writes a :cpp:class:`onnx_light::ModelProto` back to a binary protobuf stream,
     producing an artefact byte-compatible with the standard ONNX bindings
     (and therefore consumable by Aidge's ``loadONNX``).
 
@@ -204,4 +205,4 @@ See also
 * :ref:`l-cpp-load-onnx-light-time-example` -- a simpler example that only
   loads an ONNX file with *onnx-light* and reports timing statistics.
 * :ref:`l-cpp-build-save-load-onnx-proto-example` -- demonstrates building
-  and saving a :cpp:class:`onnx::ModelProto` from scratch.
+  and saving a :cpp:class:`onnx_light::ModelProto` from scratch.

@@ -97,10 +97,12 @@ back through :cpp:func:`onnx_light::core::runtime::RuntimeContext::Put`.
           // node has op_type="Scale", domain="my.domain", input "x", output "y".
           RunNode(node, rt);  // y == [3., 6., 9.]
 
-Registrations are stored on the evaluator and reapplied to the fresh
-:class:`RuntimeContext` built on every
-:py:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run` call, so the
-same evaluator can be reused across runs.
+Registrations are stored on the evaluator's persistent
+:class:`RuntimeContext`, so the same evaluator can be reused across runs.
+Registering or unregistering a kernel invalidates the evaluator's cached
+runtime sessions; the next
+:py:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run` rebuilds them
+and picks up the updated dispatch.
 
 Override a built-in kernel
 --------------------------
@@ -206,7 +208,9 @@ tensor encoding/decoding.  This Python binding mirrors the C++
               c.put(str(node.output[0]), ..., "output")
 
           ctx.register_custom_kernel("my.domain", "Scale", scale)
-          rt.run_model(model, ctx)
+          rt.register_model_functions(model, ctx)
+          plan = ctx.get_execution_plan(model.graph)
+          rt.RuntimeSession(plan).run(ctx)
 
    .. tab-item:: C++
       :sync: cpp
@@ -228,7 +232,9 @@ tensor encoding/decoding.  This Python binding mirrors the C++
                 // ...
                 c.Put(node.output(0), /* Tensor */ ...);
               });
-          RunModel(model, ctx);
+          RegisterModelFunctions(model, ctx);
+          const auto &plan = ctx.GetExecutionPlan(model.graph());
+          RuntimeSession(plan).Run(ctx);
 
 The low-level binding and the C++ tab above are two faces of the same
 :cpp:func:`onnx_light::core::runtime::RuntimeContext::RegisterCustomKernel` entry

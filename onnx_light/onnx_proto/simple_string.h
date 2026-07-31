@@ -187,6 +187,13 @@ public:
   inline std::string_view sv() const {
     return has_value() ? std::string_view(value()) : std::string_view();
   }
+  /** Returns a shared empty string, usable to bind a reference to a default value. */
+  static inline const std::string &empty_value() {
+    static const std::string kEmpty;
+    return kEmpty;
+  }
+  /** Returns the stored string, or a shared empty string when unset (never throws). */
+  inline const std::string &value() const { return has_value() ? base::value() : empty_value(); }
   /** Returns the character at the specified index (requires a value). */
   inline char operator[](size_t i) const { return value()[i]; }
   /** Parses the content as a signed 64-bit integer. */

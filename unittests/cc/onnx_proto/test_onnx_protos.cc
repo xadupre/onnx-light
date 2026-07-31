@@ -505,6 +505,17 @@ TEST(onnx_string, String_NullVersusSizeZero) {
   EXPECT_TRUE(present.empty());
   EXPECT_EQ(present.size(), 0);
   EXPECT_NE(present.data(), nullptr);
+
+  // value() returns a const std::string& and never throws, even when unset.
+  static_assert(std::is_same_v<decltype(unset.value()), const std::string &>,
+                "OptionalString::value() must return const std::string&");
+  EXPECT_EQ(unset.value(), std::string());
+  EXPECT_TRUE(unset.value().empty());
+
+  utils::OptionalString set_value("hello");
+  EXPECT_EQ(set_value.value(), "hello");
+  const std::string &bound = set_value.value();
+  EXPECT_EQ(&bound, &set_value.value());
 }
 
 TEST(onnx_proto, NodeProtoDomainKeepsExplicitEmptyString) {

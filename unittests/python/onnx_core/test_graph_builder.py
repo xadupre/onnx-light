@@ -277,6 +277,101 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(body_graph.node[0].op_type, "Neg")
         self.assertEqual(body_graph.node[0].input[0], "a")
 
+    def test_inline_local_functions(self):
+        builder = GraphBuilder("g")
+        # A local function computing Neg(Add(a, b)).
+        fct = builder.make_local_function("MyFct", domain="custom")
+        fct.make_input("a", FLOAT, [2, 3])
+        fct.make_input("b", FLOAT, [2, 3])
+        (s,) = fct.make_node("Add", ["a", "b"])
+        (n,) = fct.make_node("Neg", [s])
+        fct.make_output(n)
+
+        builder.make_input("x", FLOAT, [2, 3])
+        builder.make_input("z", FLOAT, [2, 3])
+        (out,) = builder.make_node("MyFct", ["x", "z"], domain="custom")
+        builder.make_output(out)
+
+        self.assertEqual(builder.inline_local_functions(), 1)
+        graph = builder.build_graph()
+        # The call node is replaced by the two body nodes.
+        self.assertEqual(len(graph.node), 2)
+        self.assertEqual(graph.node[0].op_type, "Add")
+        self.assertEqual(list(graph.node[0].input), ["x", "z"])
+        self.assertEqual(graph.node[1].op_type, "Neg")
+        self.assertEqual(graph.node[1].output[0], out)
+        # The fully inlined function definition is dropped from the model.
+        self.assertFalse(builder.has_local_function("MyFct"))
+        model = builder.to_onnx("model")
+        self.assertEqual(len(model.functions), 0)
+        # A second pass has nothing left to inline.
+        self.assertEqual(builder.inline_local_functions(), 0)
+
+    def test_inline_local_functions_keeps_uncalled_function(self):
+        builder = GraphBuilder("g")
+        fct = builder.make_local_function("MyFct", domain="custom")
+        fct.make_input("a", FLOAT, [2, 3])
+        (n,) = fct.make_node("Neg", ["a"])
+        fct.make_output(n)
+
+        builder.make_input("x", FLOAT, [2, 3])
+        (top,) = builder.make_node("Neg", ["x"])
+        builder.make_output(top)
+
+        # No call site, so nothing is inlined and the definition is left in place.
+        self.assertEqual(builder.inline_local_functions(), 0)
+        self.assertTrue(builder.has_local_function("MyFct"))
+
+    def test_inline_local_functions_include_exclude(self):
+        def build():
+            builder = GraphBuilder("g")
+            keep = builder.make_local_function("Keep", domain="custom")
+            keep.make_input("a", FLOAT, [2, 3])
+            (kn,) = keep.make_node("Neg", ["a"])
+            keep.make_output(kn)
+
+            drop = builder.make_local_function("Drop", domain="custom")
+            drop.make_input("a", FLOAT, [2, 3])
+            (dn,) = drop.make_node("Neg", ["a"])
+            drop.make_output(dn)
+
+            builder.make_input("x", FLOAT, [2, 3])
+            (kc,) = builder.make_node("Keep", ["x"], domain="custom")
+            (dc,) = builder.make_node("Drop", [kc], domain="custom")
+            builder.make_output(dc)
+            return builder
+
+        # include: only "Drop" is inlined; a (domain, name) tuple selects it.
+        builder = build()
+        self.assertEqual(builder.inline_local_functions(include=[("custom", "Drop")]), 1)
+        self.assertTrue(builder.has_local_function("Keep"))
+        self.assertFalse(builder.has_local_function("Drop"))
+
+        # exclude: everything except "Keep" is inlined.
+        builder = build()
+        self.assertEqual(builder.inline_local_functions(exclude=[("custom", "Keep")]), 1)
+        self.assertTrue(builder.has_local_function("Keep"))
+        self.assertFalse(builder.has_local_function("Drop"))
+
+        # An empty domain matches every function sharing the name.
+        builder = build()
+        self.assertEqual(builder.inline_local_functions(include=[("", "Drop")]), 1)
+        self.assertTrue(builder.has_local_function("Keep"))
+        self.assertFalse(builder.has_local_function("Drop"))
+
+        # An empty name matches every function in the domain (here both).
+        builder = build()
+        self.assertEqual(builder.inline_local_functions(include=[("custom", "")]), 2)
+        self.assertFalse(builder.has_local_function("Keep"))
+        self.assertFalse(builder.has_local_function("Drop"))
+
+        # Passing both include and exclude is rejected.
+        builder = build()
+        with self.assertRaises(ValueError):
+            builder.inline_local_functions(
+                include=[("custom", "Keep")], exclude=[("custom", "Drop")]
+            )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -44,6 +44,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "onnx_core/compute/compute_context.h"
@@ -300,6 +301,46 @@ public:
   ///         pruned from nested subgraphs and local functions.
   std::size_t RemoveIdentityNodes();
 
+  /// Inlines calls to local functions into the calling graph.
+  ///
+  /// A node calls a local function when its operator type and domain match a
+  /// local function declared on this builder. Every such call is replaced,
+  /// in place, by a renamed copy of the function body: the function formal
+  /// inputs are rewired to the call inputs, the formal outputs to the call
+  /// outputs, and every other body value (node outputs, and any function
+  /// initializers or control-flow subgraphs) is copied under a fresh, unused
+  /// name so it can never collide with a value of the calling graph. Body-node
+  /// attributes that reference a function attribute (``ref_attr_name``) are
+  /// resolved against the attributes carried by the call node, falling back to
+  /// the operator default when the call leaves the attribute unset.
+  ///
+  /// The expansion runs to a fixed point, so a function that itself calls
+  /// another local function is fully inlined in a single pass, and it descends
+  /// into nested subgraphs, whose bodies may call the enclosing local
+  /// functions too. Local function definitions that are no longer referenced
+  /// once every call site has been inlined are dropped, so a fully inlined
+  /// model carries no leftover function.
+  ///
+  /// The set of functions to inline is selected by ``(domain, name)`` pairs.
+  /// A pair matches a local function when both its domain and name match; an
+  /// empty domain matches every domain (all functions sharing the name) and an
+  /// empty name matches every name (all functions in the domain), so an
+  /// empty-empty pair matches every function. When both ``include`` and
+  /// ``exclude`` are empty (the default) every local function is inlined. When
+  /// ``include`` is non-empty only the functions matched by one of its pairs
+  /// are inlined. When ``exclude`` is non-empty every local function except
+  /// those matched by one of its pairs is inlined. Passing a non-empty
+  /// ``include`` together with a non-empty ``exclude`` throws a ``BuilderError``.
+  ///
+  /// @param include ``(domain, name)`` pairs of the only functions to inline;
+  ///                empty for all.
+  /// @param exclude ``(domain, name)`` pairs of the functions to leave
+  ///                untouched.
+  /// @return The total number of call nodes that were inlined.
+  std::size_t
+  InlineLocalFunctions(const std::vector<std::pair<std::string, std::string>> &include = {},
+                       const std::vector<std::pair<std::string, std::string>> &exclude = {});
+
   // ── Local functions / subgraphs ──────────────────────────────────────
 
   /// Creates and returns a nested builder for a local function named ``name``.
@@ -428,6 +469,26 @@ private:
   // given by ``rename`` (dropped name -> kept name). The rewrite descends into
   // nested subgraphs, whose bodies capture values from the enclosing scope.
   void RewriteInitializerReferences(const std::unordered_map<std::string, std::string> &rename);
+
+  // Inlines every call (in this builder's nodes and, recursively, in its nested
+  // subgraphs) to one of ``functions``, expanding matches to a fixed point.
+  // Returns the number of call nodes inlined.
+  std::size_t InlineFunctionCalls(const std::vector<GraphBuilder *> &functions);
+
+  // Returns the function in ``functions`` called by ``node`` (its operator type
+  // and domain match the function name and domain), or nullptr when none does.
+  static GraphBuilder *FindCalledFunction(const std::vector<GraphBuilder *> &functions,
+                                          const NodeProto &node);
+
+  // Expands the body of ``function`` for the call ``call`` and appends the
+  // renamed body nodes to ``out``. Function initializers and control-flow
+  // subgraphs are cloned into this builder under fresh names.
+  void AppendInlinedBody(GraphBuilder &function, const NodeProto &call,
+                         utils::RepeatedProtoField<NodeProto> &out);
+
+  // Counts, in this builder's nodes and recursively in its nested subgraphs,
+  // the nodes that call the function named ``name`` in domain ``domain``.
+  std::size_t CountFunctionCalls(const std::string &name, const std::string &domain) const;
 
   // Maps a cheap content hash to initializers visible in scope (pointers into
   // the owning builder's ``initializers_``). Collisions are resolved by an

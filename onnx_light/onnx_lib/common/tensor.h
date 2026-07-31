@@ -9,9 +9,8 @@
 
 #include "assertions.h"
 #include "onnx_pb.h"
+#include "safe_math.h"
 
-#include <functional>
-#include <numeric>
 #include <string>
 #include <utility>
 #include <vector>
@@ -60,7 +59,7 @@ public:
    * @brief Returns the total number of elements.
    */
   int64_t elem_num() const {
-    return std::accumulate(sizes_.begin(), sizes_.end(), (int64_t)1, std::multiplies<int64_t>{});
+    return safe_dim_product(sizes_, [](const char *msg) { throw_tensor_error(msg); });
   }
 
   /**
@@ -72,8 +71,8 @@ public:
       dim += static_cast<int>(sizes_.size());
     }
     ONNX_ASSERT(dim >= 0 && static_cast<size_t>(dim) < sizes_.size())
-    return std::accumulate(sizes_.begin() + dim, sizes_.end(), (int64_t)1,
-                           std::multiplies<int64_t>{});
+    return safe_dim_product(sizes_.begin() + dim, sizes_.end(),
+                            [](const char *msg) { throw_tensor_error(msg); });
   }
 
   /**

@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
+#include <limits>
 #include <stdexcept>
 #include <type_traits>
 
@@ -183,6 +184,18 @@ TEST(onnx_common, TensorHelpers) {
   string_tensor.set_raw_data("x");
   EXPECT_THROW(static_cast<void>(string_tensor.data<std::string>()),
                ONNX_LIGHT_NAMESPACE::assert_error);
+}
+
+TEST(onnx_common, TensorElemNumErrors) {
+  ONNX_LIGHT_NAMESPACE::Tensor negative_tensor;
+  negative_tensor.sizes() = {2, -3};
+  EXPECT_THROW(static_cast<void>(negative_tensor.elem_num()), ONNX_LIGHT_NAMESPACE::tensor_error);
+
+  ONNX_LIGHT_NAMESPACE::Tensor overflow_tensor;
+  overflow_tensor.sizes() = {std::numeric_limits<int64_t>::max(), 2};
+  EXPECT_THROW(static_cast<void>(overflow_tensor.elem_num()), ONNX_LIGHT_NAMESPACE::tensor_error);
+  EXPECT_THROW(static_cast<void>(overflow_tensor.size_from_dim(0)),
+               ONNX_LIGHT_NAMESPACE::tensor_error);
 }
 
 #ifdef _WIN32

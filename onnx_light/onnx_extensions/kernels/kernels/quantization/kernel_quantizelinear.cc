@@ -466,11 +466,22 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, Tensor &
   case static_cast<int32_t>(DataType::INT16):
     QuantizeLoop<int16_t>(x, scale, /*y_zero_point=*/0, output);
     break;
+  case static_cast<int32_t>(DataType::FLOAT4E2M1): {
+    // No y_zero_point: do not add a zero point so that signed zero is
+    // preserved (adding 0.0f to -0.0f would flip the sign to +0.0f).
+    const int64_t n = x.element_count();
+    const float *pxf = x.AsFloat();
+    std::uint8_t *py = output.mutable_bytes();
+    for (int64_t i = 0; i < n; ++i) {
+      Write4BitElement(py, i, FloatRoundToFloat4E2M1Nibble(pxf[i] / scale));
+    }
+    break;
+  }
   default:
     EXT_THROW_INVALID(
         "unsupported data type ", output.data_type, ", ",
-        "kernel::QuantizeLinear: only UINT8, INT8, UINT16 and INT16 outputs are supported "
-        "(no-zero-point overload).");
+        "kernel::QuantizeLinear: only UINT8, INT8, UINT16, INT16 and FLOAT4E2M1 outputs are "
+        "supported (no-zero-point overload).");
   }
 }
 

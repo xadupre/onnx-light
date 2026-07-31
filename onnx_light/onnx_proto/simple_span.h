@@ -242,9 +242,9 @@ public:
 
   /** Move constructor: for aligned-owned mode the pointer remains valid after the move. */
   inline ByteSpan(ByteSpan &&other) noexcept
-      : owned_(std::move(other.owned_)), borrowed_(other.borrowed_),
-        aligned_owned_(other.aligned_owned_), align_(other.align_), owner_(std::move(other.owner_)),
-        Span(other.ptr_, other.size_) {
+      : Span(other.ptr_, other.size_),
+        owned_(std::move(other.owned_)), borrowed_(other.borrowed_),
+        aligned_owned_(other.aligned_owned_), align_(other.align_), owner_(std::move(other.owner_)) {
     other.ptr_ = nullptr;
     other.size_ = 0;
     other.borrowed_ = false;
@@ -327,6 +327,17 @@ public:
   /** Returns true when the ByteSpans differ in size or content. */
   inline bool operator!=(const ByteSpan &other) const { return !(*this == other); }
 
+  /** Compare with std::string (byte-level comparison). */
+  inline bool operator==(const std::string &other) const {
+    return size() == other.size() &&
+           (size() == 0 || std::memcmp(data(), other.data(), size()) == 0);
+  }
+  inline bool operator!=(const std::string &other) const { return !(*this == other); }
+
+  /** Allow std::string == ByteSpan. */
+  friend inline bool operator==(const std::string &lhs, const ByteSpan &rhs) { return rhs == lhs; }
+  friend inline bool operator!=(const std::string &lhs, const ByteSpan &rhs) { return rhs != lhs; }
+
   // --- Mutable operations ---
 
   /** Returns a mutable pointer to the owned data.
@@ -352,6 +363,18 @@ public:
     align_ = 0;
     owner_.reset();
     owned_.resize(n);
+  }
+
+  inline void assign(const char *data, size_t len) {
+    resize(len);
+    if (len > 0)
+      std::memcpy(this->data(), data, len);
+  }
+
+  inline void assign(const void *data, size_t len) {
+    resize(len);
+    if (len > 0)
+      std::memcpy(this->data(), data, len);
   }
 
   /** Resizes the owned buffer ensuring data() is aligned to align bytes.

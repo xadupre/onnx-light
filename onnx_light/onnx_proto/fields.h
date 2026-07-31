@@ -5,6 +5,7 @@
 #include "simple_string.h"
 #include <cstddef>
 #include <cstring>
+#include <initializer_list>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -97,6 +98,13 @@ template <typename T> class RepeatedField {
 public:
   /** Constructs an empty field. */
   explicit inline RepeatedField() {}
+  /** Constructs from an iterator range. */
+  template <typename Iter>
+  inline RepeatedField(Iter first, Iter last) : values_(first, last) {}
+  inline RepeatedField &operator=(std::initializer_list<T> init) {
+    values_.assign(init.begin(), init.end());
+    return *this;
+  }
   /** Reserves storage for at least n elements. */
   inline void reserve(size_t n) { values_.reserve(n); }
   /** Reserves storage for at least n elements (protobuf compat). */
@@ -117,6 +125,8 @@ public:
   inline T &operator[](size_t index) { return values_[index]; }
   /** Returns a const reference to the element at the given index. */
   inline const T &Get(size_t index) const { return values_[index]; }
+  /** Sets the element at the given index (protobuf compat). */
+  inline void Set(size_t index, const T &value) { values_[index] = value; }
   /** Returns a mutable reference to the owning pointer at the given index. */
   inline T *Mutable(size_t index) { return &values_[index]; }
   /** Returns a const reference to the underlying vector. */
@@ -174,6 +184,8 @@ public:
   }
   /** Returns a pointer to the underlying data array. */
   inline T *data() { return values_.data(); }
+  /** Returns a mutable pointer to the underlying data array (protobuf compat). */
+  inline T *mutable_data() { return values_.data(); }
   /** Returns a const pointer to the underlying data array. */
   inline const T *data() const { return values_.data(); }
   /** Resizes the field to n elements, filling new slots with value. */
@@ -303,6 +315,10 @@ public:
   inline std::shared_ptr<T> shared_at(size_t index) const { return values_[index]; }
   /** Returns a mutable reference to the owning pointer at the given index. */
   inline const T &Get(size_t index) const { return *values_[index]; }
+  /** Returns a const reference to the element at the given index (bounds-checked, protobuf compat). */
+  inline const T &at(size_t index) const { return *values_.at(index); }
+  /** Returns a mutable reference to the element at the given index (bounds-checked, protobuf compat). */
+  inline T &at(size_t index) { return *values_.at(index); }
   /** Returns a mutable reference to the owning pointer at the given index. */
   inline T *Mutable(size_t index) { return values_[index].get(); }
   /** Removes a contiguous range; currently only start=0, step=1, and stop=size() are supported. */
@@ -318,6 +334,10 @@ public:
   void clear();
   /** Removes all elements. */
   inline void Clear() { clear(); }
+  inline void RemoveLast() {
+    if (!values_.empty())
+      values_.pop_back();
+  }
   /** Appends a copy of v at the end. */
   void push_back(const T &v);
   /** Appends v at the end by stealing its contents (no copy). */
@@ -353,6 +373,13 @@ public:
 
   /** Mutable iterator for repeated proto fields. */
   class iterator {
+  public:
+    using iterator_category = std::random_access_iterator_tag;
+    using value_type = T;
+    using difference_type = std::ptrdiff_t;
+    using pointer = T *;
+    using reference = T &;
+
   private:
     RepeatedProtoField<T> *parent_;
     size_t pos_;
@@ -372,8 +399,8 @@ public:
     /** Returns true if the iterators differ. */
     bool operator!=(const iterator &other) const { return !(*this == other); }
     /** Returns the distance between two iterators (random-access compat). */
-    std::ptrdiff_t operator-(const iterator &other) const {
-      return static_cast<std::ptrdiff_t>(pos_) - static_cast<std::ptrdiff_t>(other.pos_);
+    inline difference_type operator-(const iterator &other) const {
+      return static_cast<difference_type>(pos_) - static_cast<difference_type>(other.pos_);
     }
     /** Returns an iterator advanced backwards by n positions (random-access compat). */
     iterator operator-(std::ptrdiff_t n) const {
@@ -452,6 +479,13 @@ public:
 
   /** Const iterator for repeated proto fields. */
   class const_iterator {
+  public:
+    using iterator_category = std::random_access_iterator_tag;
+    using value_type = T;
+    using difference_type = std::ptrdiff_t;
+    using pointer = const T *;
+    using reference = const T &;
+
   private:
     const RepeatedProtoField<T> *parent_;
     size_t pos_;
@@ -471,6 +505,9 @@ public:
     }
     /** Returns true if the iterators differ. */
     bool operator!=(const const_iterator &other) const { return !(*this == other); }
+    inline difference_type operator-(const const_iterator &other) const {
+      return static_cast<difference_type>(pos_) - static_cast<difference_type>(other.pos_);
+    }
     /** Dereferences to the current element. */
     const T &operator*() const { return (*parent_)[pos_]; }
     const T *operator->() const { return &(**this); }

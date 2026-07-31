@@ -7,6 +7,11 @@
 #include "stream_class_write.hpp"
 #include <cstring>
 #include <istream>
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 ////////////////
 // macro helpers
@@ -29,6 +34,7 @@
     return _ParseFromZeroCopyStream(*this, stream, opts);                                          \
   }                                                                                                \
   bool cls::ParseFromIstream(std::istream *input) { return _ParseFromIstream(*this, input); }      \
+  bool cls::ParseFromFileDescriptor(int fd) { return _ParseFromFileDescriptor(*this, fd); }        \
   std::string cls::SerializeAsString() const { return _SerializeAsString(*this); }                 \
   bool cls::SerializeToArray(void *data, int size) const {                                         \
     return _SerializeToArray(*this, data, size);                                                   \
@@ -357,6 +363,20 @@ template <typename cls> bool _ParseFromIstream(cls &self, std::istream *input) {
   ONNX_LIGHT_NAMESPACE::utils::StringStream st(ptr, static_cast<int64_t>(buffer.size()));
   self.ParseFromStream(st, opts);
   return true;
+}
+
+template <typename cls> bool _ParseFromFileDescriptor(cls &self, int fd) {
+  // Read the entire file descriptor into memory, then parse.
+  std::string buffer;
+  constexpr size_t kChunkSize = 4096;
+  char chunk[kChunkSize];
+  for (;;) {
+    auto n = ::read(fd, chunk, kChunkSize);
+    if (n < 0) return false;
+    if (n == 0) break;
+    buffer.append(chunk, static_cast<size_t>(n));
+  }
+  return self.ParseFromString(buffer);
 }
 
 template <typename cls> bool _SerializeToString(cls &self, std::string &out) {

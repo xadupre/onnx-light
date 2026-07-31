@@ -18,7 +18,7 @@
 namespace ONNX_LIGHT_NAMESPACE {
 
 /** Indicates whether an operator is experimental or stable in the ONNX spec. */
-enum OperatorStatus { EXPERIMENTAL = 0, STABLE = 1 };
+enum OperatorStatus : int { EXPERIMENTAL = 0, STABLE = 1 };
 
 // StringStringEntryProto
 
@@ -153,11 +153,6 @@ inline ValueCase value_case() const {
     return ValueCase::kDimParam;
   return ValueCase::VALUE_NOT_SET;
 }
-void Clear() {
-  dim_value_.reset();
-  dim_param_.reset();
-  denotation_.reset();
-}
 END_PROTO()
 inline TensorShapeProto() {}
 FIELD_REPEATED_PROTO(Dimension, dim, 1, "Shape as a list of Dimension.")
@@ -258,6 +253,10 @@ enum DataType : int32_t {
 };
 
 inline static constexpr bool DataType_IsValid(DataType t) { return t != DataType::UNDEFINED; }
+/** Overload accepting int for protobuf compatibility. */
+inline static constexpr bool DataType_IsValid(int t) {
+  return DataType_IsValid(static_cast<DataType>(t));
+}
 inline static constexpr const char *DataType_Name(DataType t) {
   switch (t) {
   case FLOAT:
@@ -317,6 +316,10 @@ inline static constexpr const char *DataType_Name(DataType t) {
     return "UNDEFINED";
   }
 }
+/** Overload accepting int for protobuf compatibility. */
+inline static constexpr const char *DataType_Name(int t) {
+  return DataType_Name(static_cast<DataType>(t));
+}
 
 enum DataLocation : int32_t {
   DEFAULT = 0,
@@ -334,7 +337,7 @@ FIELD_DEFAULT(int64_t, begin, 1, 0, "Segment start.")
 FIELD_DEFAULT(int64_t, end, 2, 0, "Segment end.")
 END_PROTO()
 
-FIELD_REPEATED(uint64_t, dims, 1, "The shape of the tensor.")
+FIELD_REPEATED(int64_t, dims, 1, "The shape of the tensor.")
 FIELD(DataType, data_type, 2,
       "The data type of the tensor. This field MUST have a valid TensorProto.DataType value")
 FIELD_OPTIONAL(
@@ -418,7 +421,7 @@ FIELD_OPTIONAL_ENUM(
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 16,
                      "Named metadata values; keys should be distinct.")
 inline TensorProto() { data_type_ = DataType::UNDEFINED; }
-inline void Clear() { *this = TensorProto(); }
+inline void Clear() { this->~TensorProto(); new (this) TensorProto(); }
 /** Sets raw_data from a byte buffer (protobuf bytes-field compat). */
 inline void set_raw_data(const void *data, size_t size) {
   raw_data_.resize(size);
@@ -427,6 +430,7 @@ inline void set_raw_data(const void *data, size_t size) {
 }
 /** Sets raw_data from a std::string (protobuf bytes-field compat). */
 inline void set_raw_data(const std::string &data) { set_raw_data(data.data(), data.size()); }
+inline void clear_raw_data() { raw_data_.clear(); }
 inline void set_data_type(int v) { data_type_ = static_cast<DataType>(v); }
 inline bool is_raw_data() const { return !raw_data_.empty(); }
 /**
@@ -696,6 +700,10 @@ inline static constexpr const char *AttributeType_Name(AttributeType t) {
     return "UNDEFINED";
   }
 }
+/** Overload accepting int for protobuf compatibility. */
+inline static constexpr const char *AttributeType_Name(int t) {
+  return AttributeType_Name(static_cast<AttributeType>(t));
+}
 
 inline AttributeProto() { type_ = AttributeType::UNDEFINED; }
 
@@ -717,6 +725,14 @@ FIELD(
 FIELD_OPTIONAL(float, f, 2, "Optional float attribute.")
 FIELD_OPTIONAL(int64_t, i, 3, "Optional int64 attribute.")
 FIELD_STR(s, 4, "Optional string attribute.")
+/** Releases ownership of the string field s (protobuf compat). Caller owns the result. */
+inline std::string *release_s() {
+  if (!has_s())
+    return nullptr;
+  auto *p = new std::string(std::move(s_.value()));
+  s_.reset();
+  return p;
+}
 FIELD_OPTIONAL(TensorProto, t, 5, "Optional tensor attribute.")
 FIELD_OPTIONAL(GraphProto, g, 6, "Optional graph attribute.")
 FIELD_OPTIONAL(SparseTensorProto, sparse_tensor, 22, "Optional sparse tensor attribute.")
@@ -728,7 +744,7 @@ FIELD_REPEATED_PROTO(SparseTensorProto, sparse_tensors, 23, "Optional repeated t
 FIELD_REPEATED_PROTO(GraphProto, graphs, 11, "Optional repeated graph attribute.")
 FIELD_OPTIONAL(TypeProto, tp, 14, "Type proto")
 FIELD_REPEATED_PROTO(TypeProto, type_protos, 15, "Optional repeated type_proto attribute.")
-inline void Clear() { *this = AttributeProto(); }
+inline void Clear() { this->~AttributeProto(); new (this) AttributeProto(); }
 END_PROTO()
 
 // NodeProto
@@ -1101,6 +1117,17 @@ inline bool has_value() const {
 }
 inline void set_elem_type(int t) { set_elem_type(static_cast<DataType>(t)); }
 END_PROTO()
+
+// Protobuf-style flattened enum constants for SequenceProto::DataType.
+inline constexpr auto SequenceProto_DataType_UNDEFINED = SequenceProto::DataType::UNDEFINED;
+inline constexpr auto SequenceProto_DataType_TENSOR = SequenceProto::DataType::TENSOR;
+inline constexpr auto SequenceProto_DataType_SPARSE_TENSOR = SequenceProto::DataType::SPARSE_TENSOR;
+inline constexpr auto SequenceProto_DataType_SEQUENCE = SequenceProto::DataType::SEQUENCE;
+inline constexpr auto SequenceProto_DataType_MAP = SequenceProto::DataType::MAP;
+inline constexpr auto SequenceProto_DataType_OPTIONAL = SequenceProto::DataType::OPTIONAL;
+
+// Protobuf-style type alias for OptionalProto::DataType.
+using OptionalProto_DataType = OptionalProto::DataType;
 
 } // namespace ONNX_LIGHT_NAMESPACE
 

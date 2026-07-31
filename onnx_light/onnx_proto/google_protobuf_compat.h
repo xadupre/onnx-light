@@ -74,6 +74,9 @@ using StringOutputStream = ONNX_LIGHT_NAMESPACE::utils::StdStringWriteStream;
 /** Zero-copy output stream wrapping a file descriptor. */
 using FileOutputStream = ONNX_LIGHT_NAMESPACE::utils::FdWriteStream;
 
+/** Zero-copy input stream wrapping a file descriptor. */
+using FileInputStream = ONNX_LIGHT_NAMESPACE::utils::FdReadStream;
+
 /** Zero-copy input stream that owns a copy of a std::istream's contents. */
 using IstreamInputStream = ONNX_LIGHT_NAMESPACE::utils::IstreamStream;
 
@@ -81,5 +84,28 @@ using IstreamInputStream = ONNX_LIGHT_NAMESPACE::utils::IstreamStream;
 using OstreamOutputStream = ONNX_LIGHT_NAMESPACE::utils::OstreamWriteStream;
 
 } // namespace io
+
+namespace internal {
+
+/** Alias for the iterator of a RepeatedPtrField (protobuf compat).
+ *  Maps const T to the const_iterator and non-const T to the mutable iterator. */
+template <typename T, bool IsConst = std::is_const_v<T>>
+struct RepeatedPtrIteratorHelper;
+
+template <typename T>
+struct RepeatedPtrIteratorHelper<T, true> {
+  using type = typename ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField<
+      std::remove_const_t<T>>::const_iterator;
+};
+
+template <typename T>
+struct RepeatedPtrIteratorHelper<T, false> {
+  using type = typename ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField<T>::iterator;
+};
+
+template <typename T>
+using RepeatedPtrIterator = typename RepeatedPtrIteratorHelper<T>::type;
+
+} // namespace internal
 } // namespace protobuf
 } // namespace google

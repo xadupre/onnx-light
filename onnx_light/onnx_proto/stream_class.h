@@ -19,19 +19,49 @@
   size_t ByteSizeLong() const;                                                                     \
   bool ParseFromString(const std::string &raw);                                                    \
   bool ParseFromString(const std::string &raw, ParseOptions &opts);                                \
+  /** Parses from a raw byte buffer (protobuf compat). */                                          \
+  inline bool ParseFromArray(const void *data, int size) {                                         \
+    return ParseFromString(std::string(static_cast<const char *>(data), static_cast<size_t>(size)));\
+  }                                                                                                \
   bool ParseFromZeroCopyStream(utils::BinaryStream *stream);                                       \
   bool ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts);                   \
+  /** Parses from a FdReadStream (protobuf FileInputStream compat). */                             \
+  inline bool ParseFromZeroCopyStream(utils::FdReadStream *input) {                                \
+    std::string buf;                                                                               \
+    const void *data; int size;                                                                    \
+    while (input->Next(&data, &size))                                                              \
+      buf.append(static_cast<const char *>(data), static_cast<size_t>(size));                      \
+    return ParseFromString(buf);                                                                   \
+  }                                                                                                \
+  /** Parses from a FdReadStream with options (protobuf FileInputStream compat). */                \
+  inline bool ParseFromZeroCopyStream(utils::FdReadStream *input, ParseOptions &opts) {            \
+    std::string buf;                                                                               \
+    const void *data; int size;                                                                    \
+    while (input->Next(&data, &size))                                                              \
+      buf.append(static_cast<const char *>(data), static_cast<size_t>(size));                      \
+    return ParseFromString(buf, opts);                                                             \
+  }                                                                                                \
   bool ParseFromIstream(std::istream *input);                                                      \
   std::string SerializeAsString() const;                                                           \
   bool SerializeToArray(void *data, int size) const;                                               \
   bool SerializeToOstream(std::ostream *output) const;                                             \
   bool SerializeToOStream(std::ostream *output) const;                                             \
+  /** Serializes to a zero-copy output stream (protobuf compat). */                                \
+  inline bool SerializeToZeroCopyStream(utils::BinaryWriteStream *output) const {                  \
+    std::string buf;                                                                               \
+    if (!SerializeToString(buf)) return false;                                                     \
+    output->write_raw_bytes(reinterpret_cast<const uint8_t *>(buf.data()), buf.size());            \
+    return true;                                                                                   \
+  }                                                                                                \
   bool SerializeToString(std::string &out) const;                                                  \
+  /** Pointer overload for protobuf compatibility. */                                              \
+  inline bool SerializeToString(std::string *out) const { return SerializeToString(*out); }        \
   bool SerializeToString(std::string &out, SerializeOptions &opts) const;                          \
   bool SerializeToFileDescriptor(int fd) const;                                                    \
   bool SerializeToFileDescriptor(int fd, SerializeOptions &opts) const;                            \
   bool SaveToFileDescriptor(int fd) const;                                                         \
   bool SaveToFileDescriptor(int fd, SerializeOptions &opts) const;                                 \
+  bool ParseFromFileDescriptor(int fd);                                                            \
   SerializeSizeResult SerializeSize(utils::BinaryWriteStream &stream, SerializeOptions &opts)      \
       const;                                                                                       \
   bool ParseFromStream(utils::BinaryStream &stream, ParseOptions &options);                        \
@@ -44,6 +74,8 @@
   public:                                                                                          \
     static inline constexpr const char *DOC = doc;                                                 \
     explicit inline cls() {}                                                                       \
+    /** Resets this message to default state (protobuf compat). */                                  \
+    inline void Clear() { this->~cls(); new (this) cls(); }                                                         \
     void CopyFrom(const cls &proto);
 
 /** Macro for beginning a generated proto class without adding a default constructor. */
@@ -103,6 +135,7 @@ public:                                                                         
   FIELD(utils::OptionalString, name, order, doc)                                                   \
   inline void clear_##name() { name##_.reset(); }                                                  \
   inline void set_##name(const char *v) { name##_ = v; }                                           \
+  inline void set_##name(const char *data, size_t len) { name##_ = std::string(data, len); }      \
   inline void set_##name(const std::string &v) { name##_ = v; }                                    \
   inline void set_##name(const utils::RefString &v) { name##_ = v; }
 
@@ -118,20 +151,8 @@ public:                                                                         
   inline const repeated_type &name() const { return name##_; }                                     \
   inline const repeated_type *ptr_##name() const { return &name##_; }                              \
   inline type *add_##name() { return &name##_.add(); }                                             \
-  inline type *add_##name(type &&v) {                                                              \
-    name##_.emplace_back(v);                                                                       \
-    return &name##_.back();                                                                        \
-  }                                                                                                \
   inline type *add_##name(const type &v) {                                                         \
     name##_.push_back(v);                                                                          \
-    return &name##_.back();                                                                        \
-  }                                                                                                \
-  inline type *add_##name(const type *v) {                                                         \
-    if (v == nullptr) {                                                                            \
-      name##_.add();                                                                               \
-    } else {                                                                                       \
-      name##_.push_back(*v);                                                                       \
-    }                                                                                              \
     return &name##_.back();                                                                        \
   }                                                                                                \
   inline void add_##name(const std::vector<type> &v) { name##_.extend(v); }                        \
@@ -209,6 +230,8 @@ public:                                                                         
   inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
   inline const type &name(size_t i) const { return name##_[i]; }                                   \
   inline type *mutable_##name(size_t i) { return &name##_[i]; }                                    \
+  /** Returns a mutable pointer to the repeated field (protobuf compat). */                        \
+  inline utils::RepeatedField<type> *mutable_##name() { return &name##_; }                         \
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return true; }                                               \

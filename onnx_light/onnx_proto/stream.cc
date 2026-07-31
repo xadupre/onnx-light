@@ -718,6 +718,51 @@ bool FdWriteStream::Flush() {
   return true;
 }
 
+////////////////////
+// FdReadStream
+////////////////////
+
+bool FdReadStream::Next(const void **data, int *size) {
+#if !defined(_WIN32)
+  auto n = ::read(fd_, buffer_, static_cast<size_t>(block_size_));
+#else
+  auto n = ::_read(fd_, buffer_, static_cast<unsigned>(block_size_));
+#endif
+  if (n <= 0) {
+    *data = nullptr;
+    *size = 0;
+    return false;
+  }
+  *data = buffer_;
+  *size = static_cast<int>(n);
+  available_ = static_cast<int>(n);
+  position_ = 0;
+  total_read_ += static_cast<int64_t>(n);
+  return true;
+}
+
+void FdReadStream::BackUp(int count) {
+  available_ += count;
+  total_read_ -= static_cast<int64_t>(count);
+#if !defined(_WIN32)
+  ::lseek(fd_, -static_cast<off_t>(count), SEEK_CUR);
+#else
+  ::_lseek(fd_, -static_cast<long>(count), SEEK_CUR);
+#endif
+}
+
+bool FdReadStream::Skip(int count) {
+#if !defined(_WIN32)
+  auto r = ::lseek(fd_, static_cast<off_t>(count), SEEK_CUR);
+#else
+  auto r = ::_lseek(fd_, static_cast<long>(count), SEEK_CUR);
+#endif
+  if (r < 0) return false;
+  total_read_ += static_cast<int64_t>(count);
+  available_ = 0;
+  return true;
+}
+
 //////////////////////
 // BorrowedWriteStream
 //////////////////////

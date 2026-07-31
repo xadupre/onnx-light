@@ -4,6 +4,7 @@
 #include "simple_string.h"
 #include "thread_pool.h"
 #include <cstddef>
+#include <cstring>
 #include <fstream>
 #include <istream>
 #include <iterator>
@@ -961,6 +962,9 @@ class FdWriteStream : public BinaryWriteStream {
 public:
   /** Initializes a write stream over the open file descriptor *fd*. */
   explicit inline FdWriteStream(int fd) : BinaryWriteStream(), fd_(fd), used_(0), written_(0) {}
+  /** Initializes a write stream over *fd* with an ignored block-size hint
+   *  (kept for protobuf API compatibility with FileOutputStream). */
+  inline FdWriteStream(int fd, int /*block_size*/) : FdWriteStream(fd) {}
   inline ~FdWriteStream() override { Flush(); }
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
   /** Returns the number of bytes produced so far (written plus pending). */
@@ -985,6 +989,8 @@ public:
   bool Flush();
   /** Flushes and returns true; the descriptor itself is not closed. */
   inline bool Close() { return Flush(); }
+  /** No-op for protobuf FileOutputStream compatibility. */
+  inline void SetCloseOnDelete(bool) {}
 
 protected:
   /** File descriptor the bytes are written to (not owned). */
@@ -997,22 +1003,145 @@ protected:
   int64_t written_;
 };
 
+/** Read stream that reads bytes from a raw file descriptor.
+ *  Provides the ZeroCopyInputStream-compatible interface so it can back
+ *  google::protobuf::io::FileInputStream as a pure alias. */
+class FdReadStream {
+public:
+  /** Initializes a read stream over the open file descriptor *fd*.
+   *  \p block_size is the internal buffer size used for reads. */
+  explicit inline FdReadStream(int fd, int block_size = 4096)
+      : fd_(fd), block_size_(block_size > 0 ? block_size : 4096),
+        buffer_(new char[static_cast<size_t>(block_size_)]),
+        available_(0), position_(0), total_read_(0) {}
+  inline ~FdReadStream() { delete[] buffer_; }
+
+  /** Hands out a pointer into the next chunk of unread data.
+   *  Returns false when EOF or an error is reached. */
+  bool Next(const void **data, int *size);
+  /** Returns the last *count* bytes handed out by Next() that were not consumed. */
+  void BackUp(int count);
+  /** Returns the total number of bytes consumed (handed out minus backed-up). */
+  inline int64_t ByteCount() const { return total_read_ - static_cast<int64_t>(available_); }
+  /** Skips forward by *count* bytes. Returns false if EOF is reached before that. */
+  bool Skip(int count);
+
+  // protobuf compat: SetCloseOnDelete / Close (the fd is NOT actually closed).
+  inline void SetCloseOnDelete(bool) {}
+  inline bool Close() { return true; }
+
+protected:
+  int fd_;
+  int block_size_;
+  char *buffer_;
+  int available_;
+  int position_;
+  int64_t total_read_;
+};
+
 /** Minimal coded input stream wrapping a StringStream, providing the protobuf
  *  total-bytes-limit accessors so it can back google::protobuf::io::CodedInputStream. */
 class CodedInputStream {
 public:
+  /** Opaque type returned by PushLimit / consumed by PopLimit. */
+  using Limit = int;
+
   /** Wraps *input* with a default total-bytes limit of INT32_MAX. */
-  explicit inline CodedInputStream(StringStream *input) : input_(input), limit_(0x7FFFFFFF) {}
+  explicit inline CodedInputStream(StringStream *input)
+      : input_(input), fd_input_(nullptr), limit_(0x7FFFFFFF), position_(0) {}
+  /** Wraps a FdReadStream with a default total-bytes limit of INT32_MAX. */
+  explicit inline CodedInputStream(FdReadStream *input)
+      : input_(nullptr), fd_input_(input), limit_(0x7FFFFFFF), position_(0) {}
   /** Sets the maximum number of bytes that may be read. */
   inline void SetTotalBytesLimit(int total_bytes_limit) { limit_ = total_bytes_limit; }
   /** Returns the configured total-bytes limit. */
   inline int TotalBytesLimit() const { return limit_; }
+  /** Returns the current read position (bytes consumed so far). */
+  inline int CurrentPosition() const { return position_; }
+
+  /** Reads a varint32 from the underlying stream.  Returns true on success. */
+  inline bool ReadVarint32(uint32_t *value) {
+    uint32_t result = 0;
+    int shift = 0;
+    for (;;) {
+      uint8_t byte = 0;
+      if (!ReadRaw(&byte, 1)) return false;
+      result |= static_cast<uint32_t>(byte & 0x7F) << shift;
+      if ((byte & 0x80) == 0) break;
+      shift += 7;
+      if (shift >= 35) return false;
+    }
+    *value = result;
+    return true;
+  }
+
+  /** Reads exactly *size* bytes into *buffer*.  Returns true on success. */
+  inline bool ReadRaw(void *buffer, int size) {
+    if (size <= 0) return size == 0;
+    if (input_) {
+      const uint8_t *p = input_->read_bytes(static_cast<offset_t>(size),
+                                             static_cast<uint8_t *>(buffer));
+      if (!p) return false;
+      position_ += size;
+      return true;
+    }
+    if (fd_input_) {
+      // Read from the FdReadStream
+      auto *dst = static_cast<char *>(buffer);
+      int remaining = size;
+      while (remaining > 0) {
+        const void *data = nullptr;
+        int avail = 0;
+        if (!fd_input_->Next(&data, &avail)) return false;
+        int to_copy = (avail < remaining) ? avail : remaining;
+        std::memcpy(dst, data, static_cast<size_t>(to_copy));
+        dst += to_copy;
+        remaining -= to_copy;
+        if (to_copy < avail) fd_input_->BackUp(avail - to_copy);
+      }
+      position_ += size;
+      return true;
+    }
+    return false;
+  }
+
+  /** Skips *size* bytes.  Returns true on success. */
+  inline bool Skip(int size) {
+    if (size <= 0) return size == 0;
+    if (input_) {
+      input_->skip_bytes(static_cast<offset_t>(size));
+      position_ += size;
+      return true;
+    }
+    if (fd_input_) {
+      return fd_input_->Skip(size) ? (position_ += size, true) : false;
+    }
+    return false;
+  }
+
+  /** Saves the current limit and installs a new one.
+   *  The new limit is CurrentPosition() + *byte_limit*.  Returns the previous limit. */
+  inline Limit PushLimit(int byte_limit) {
+    int old = limit_;
+    limit_ = position_ + byte_limit;
+    return old;
+  }
+
+  /** Restores a previous limit saved by PushLimit(). */
+  inline void PopLimit(Limit old_limit) { limit_ = old_limit; }
+
+  /** Returns true if the entire stream has been consumed (stub: always true). */
+  inline bool ConsumedEntireMessage() const { return true; }
 
 protected:
-  /** Non-owning pointer to the wrapped input stream. */
+  /** Non-owning pointer to the wrapped input stream (may be null). */
   StringStream *input_;
+  /** Non-owning pointer to a file-descriptor input stream (may be null). */
+  FdReadStream *fd_input_;
   /** Configured maximum number of readable bytes. */
   int limit_;
+  /** Current read position (bytes consumed). */
+  int position_;
 };
 
 } // namespace utils

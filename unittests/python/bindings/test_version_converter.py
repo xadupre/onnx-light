@@ -1220,6 +1220,63 @@ class TestVersionConverter(ExtTestCase):
 
         self.assertRaises(RuntimeError, test)
 
+    def test_scan_8_9_preserves_unshaped_input(self) -> None:
+        """Scan 8 -> 9 removes the batch axis from each input.
+
+        An input whose shape is unknown must still be kept, and will be
+        unedited (the shape is unknown with or without batch axis). Only the
+        sequence_lens input should be removed.
+        """
+        data_type = onnxl.TensorProto.FLOAT
+        body = oh.make_graph(
+            [
+                oh.make_node("Add", ["sum_in", "next_in"], ["sum_out"]),
+                oh.make_node("Identity", ["sum_out"], ["scan_out"]),
+            ],
+            "scan_body",
+            [
+                oh.make_tensor_value_info("sum_in", data_type, [2]),
+                oh.make_tensor_value_info("next_in", data_type, [2]),
+            ],
+            [
+                oh.make_tensor_value_info("sum_out", data_type, [2]),
+                oh.make_tensor_value_info("scan_out", data_type, [2]),
+            ],
+        )
+        # A custom op produces `x` with no inferable shape, so it reaches the
+        # Scan 8 -> 9 with no shape.
+        my_op = oh.make_node("MyOp", ["raw"], ["x"], domain="my.domain")
+        scan = oh.make_node(
+            "Scan", ["", "initial", "x"], ["y", "z"], body=body, num_scan_inputs=1
+        )
+        graph = oh.make_graph(
+            [my_op, scan],
+            "test_scan_8_9_unshaped_input",
+            [
+                oh.make_tensor_value_info("initial", data_type, [1, 2]),
+                oh.make_tensor_value_info("raw", data_type, [1, 3, 2]),
+            ],
+            [
+                oh.make_tensor_value_info("y", data_type, [1, 2]),
+                oh.make_tensor_value_info("z", data_type, [1, 3, 2]),
+            ],
+        )
+        model = oh.make_model(
+            graph,
+            opset_imports=[
+                oh.make_operatorsetid("", 8),
+                oh.make_operatorsetid("my.domain", 1),
+            ],
+        )
+        checker.check_model(model)
+
+        converted = version_converter.convert_version(model, 9)
+        checker.check_model(converted, full_check=True)
+
+        scan_node = next(n for n in converted.graph.node if n.op_type == "Scan")
+        # The empty sequence_lens is removed, but the unshaped scan input is kept.
+        assert list(scan_node.input) == ["initial", "x"]
+
     def test_scan_9_8_with_valid_node(self) -> None:
         data_type = onnxl.TensorProto.FLOAT
         node1 = oh.make_node("Add", inputs=["sum_in", "next"], outputs=["sum_out"])

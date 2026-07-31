@@ -44,6 +44,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "onnx_core/compute/compute_context.h"
@@ -320,18 +321,25 @@ public:
   /// once every call site has been inlined are dropped, so a fully inlined
   /// model carries no leftover function.
   ///
-  /// The set of functions to inline is selected by name. When both
-  /// ``include`` and ``exclude`` are empty (the default) every local function
-  /// is inlined. When ``include`` is non-empty only the functions it names are
-  /// inlined. When ``exclude`` is non-empty every local function except those
-  /// it names is inlined. Passing a non-empty ``include`` together with a
-  /// non-empty ``exclude`` throws a ``BuilderError``.
+  /// The set of functions to inline is selected by ``(domain, name)`` pairs.
+  /// A pair matches a local function when both its domain and name match; an
+  /// empty domain matches every domain (all functions sharing the name) and an
+  /// empty name matches every name (all functions in the domain), so an
+  /// empty-empty pair matches every function. When both ``include`` and
+  /// ``exclude`` are empty (the default) every local function is inlined. When
+  /// ``include`` is non-empty only the functions matched by one of its pairs
+  /// are inlined. When ``exclude`` is non-empty every local function except
+  /// those matched by one of its pairs is inlined. Passing a non-empty
+  /// ``include`` together with a non-empty ``exclude`` throws a ``BuilderError``.
   ///
-  /// @param include Names of the only local functions to inline; empty for all.
-  /// @param exclude Names of the local functions to leave untouched.
+  /// @param include ``(domain, name)`` pairs of the only functions to inline;
+  ///                empty for all.
+  /// @param exclude ``(domain, name)`` pairs of the functions to leave
+  ///                untouched.
   /// @return The total number of call nodes that were inlined.
-  std::size_t InlineLocalFunctions(const std::vector<std::string> &include = {},
-                                   const std::vector<std::string> &exclude = {});
+  std::size_t
+  InlineLocalFunctions(const std::vector<std::pair<std::string, std::string>> &include = {},
+                       const std::vector<std::pair<std::string, std::string>> &exclude = {});
 
   // ── Local functions / subgraphs ──────────────────────────────────────
 

@@ -596,7 +596,7 @@ TEST(GraphBuilder, InlineLocalFunctionsIncludeSelectsFunctions) {
   builder.MakeOutput(drop_call[0]);
 
   // Only "Drop" is inlined; the "Keep" call and its definition are untouched.
-  EXPECT_EQ(builder.InlineLocalFunctions({"Drop"}), 1u);
+  EXPECT_EQ(builder.InlineLocalFunctions({{"custom", "Drop"}}), 1u);
   EXPECT_TRUE(builder.HasLocalFunction("Keep"));
   EXPECT_FALSE(builder.HasLocalFunction("Drop"));
   bool has_keep_call = false;
@@ -627,14 +627,62 @@ TEST(GraphBuilder, InlineLocalFunctionsExcludeSkipsFunctions) {
   builder.MakeOutput(drop_call[0]);
 
   // Everything except "Keep" is inlined.
-  EXPECT_EQ(builder.InlineLocalFunctions({}, {"Keep"}), 1u);
+  EXPECT_EQ(builder.InlineLocalFunctions({}, {{"custom", "Keep"}}), 1u);
   EXPECT_TRUE(builder.HasLocalFunction("Keep"));
   EXPECT_FALSE(builder.HasLocalFunction("Drop"));
 }
 
+TEST(GraphBuilder, InlineLocalFunctionsIncludeWildcardsDomainByName) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+
+  core::builder::GraphBuilder &keep = builder.MakeLocalFunction("Keep", "custom");
+  keep.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> keep_out = keep.MakeNode("Neg", {"a"});
+  keep.MakeOutput(keep_out[0]);
+
+  core::builder::GraphBuilder &drop = builder.MakeLocalFunction("Drop", "custom");
+  drop.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> drop_out = drop.MakeNode("Neg", {"a"});
+  drop.MakeOutput(drop_out[0]);
+
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> keep_call = builder.MakeNode("Keep", {"x"}, {}, "custom");
+  const std::vector<std::string> drop_call = builder.MakeNode("Drop", {keep_call[0]}, {}, "custom");
+  builder.MakeOutput(drop_call[0]);
+
+  // An empty domain matches the function by name regardless of its domain.
+  EXPECT_EQ(builder.InlineLocalFunctions({{"", "Drop"}}), 1u);
+  EXPECT_TRUE(builder.HasLocalFunction("Keep"));
+  EXPECT_FALSE(builder.HasLocalFunction("Drop"));
+}
+
+TEST(GraphBuilder, InlineLocalFunctionsIncludeWildcardsNameByDomain) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+
+  core::builder::GraphBuilder &fa = builder.MakeLocalFunction("First", "custom");
+  fa.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> fa_out = fa.MakeNode("Neg", {"a"});
+  fa.MakeOutput(fa_out[0]);
+
+  core::builder::GraphBuilder &fb = builder.MakeLocalFunction("Second", "other");
+  fb.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> fb_out = fb.MakeNode("Neg", {"a"});
+  fb.MakeOutput(fb_out[0]);
+
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> ca = builder.MakeNode("First", {"x"}, {}, "custom");
+  const std::vector<std::string> cb = builder.MakeNode("Second", {ca[0]}, {}, "other");
+  builder.MakeOutput(cb[0]);
+
+  // An empty name matches every function in the given domain only.
+  EXPECT_EQ(builder.InlineLocalFunctions({{"custom", ""}}), 1u);
+  EXPECT_FALSE(builder.HasLocalFunction("First"));
+  EXPECT_TRUE(builder.HasLocalFunction("Second"));
+}
+
 TEST(GraphBuilder, InlineLocalFunctionsRejectsIncludeAndExclude) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
-  EXPECT_THROW(builder.InlineLocalFunctions({"A"}, {"B"}), core::builder::BuilderError);
+  EXPECT_THROW(builder.InlineLocalFunctions({{"", "A"}}, {{"", "B"}}), core::builder::BuilderError);
 }
 
 } // namespace Test

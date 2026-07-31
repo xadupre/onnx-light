@@ -979,25 +979,36 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
   return inlined;
 }
 
-std::size_t GraphBuilder::InlineLocalFunctions(const std::vector<std::string> &include,
-                                               const std::vector<std::string> &exclude) {
+std::size_t GraphBuilder::InlineLocalFunctions(
+    const std::vector<std::pair<std::string, std::string>> &include,
+    const std::vector<std::pair<std::string, std::string>> &exclude) {
   if (!include.empty() && !exclude.empty()) {
     throw BuilderError("GraphBuilder: InlineLocalFunctions accepts an include list or an exclude "
                        "list, not both.");
   }
-  const std::unordered_set<std::string> include_set(include.begin(), include.end());
-  const std::unordered_set<std::string> exclude_set(exclude.begin(), exclude.end());
-  const auto selected = [&](const std::string &name) {
-    if (!include_set.empty()) {
-      return include_set.find(name) != include_set.end();
+  // A ``(domain, name)`` pair matches a function when both components match,
+  // where an empty domain matches every domain and an empty name every name.
+  const auto matches = [](const std::vector<std::pair<std::string, std::string>> &entries,
+                          const std::string &domain, const std::string &name) {
+    for (const auto &entry : entries) {
+      if ((entry.first.empty() || entry.first == domain) &&
+          (entry.second.empty() || entry.second == name)) {
+        return true;
+      }
     }
-    return exclude_set.find(name) == exclude_set.end();
+    return false;
+  };
+  const auto selected = [&](const std::string &domain, const std::string &name) {
+    if (!include.empty()) {
+      return matches(include, domain, name);
+    }
+    return !matches(exclude, domain, name);
   };
 
   std::vector<GraphBuilder *> functions;
   functions.reserve(local_functions_.size());
   for (const auto &function : local_functions_) {
-    if (selected(function->name())) {
+    if (selected(function->function_domain_, function->name())) {
       functions.push_back(function.get());
     }
   }

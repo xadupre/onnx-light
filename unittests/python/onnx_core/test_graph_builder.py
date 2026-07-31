@@ -341,22 +341,36 @@ class TestGraphBuilder(ExtTestCase):
             builder.make_output(dc)
             return builder
 
-        # include: only "Drop" is inlined.
+        # include: only "Drop" is inlined; a (domain, name) tuple selects it.
         builder = build()
-        self.assertEqual(builder.inline_local_functions(include=["Drop"]), 1)
+        self.assertEqual(builder.inline_local_functions(include=[("custom", "Drop")]), 1)
         self.assertTrue(builder.has_local_function("Keep"))
         self.assertFalse(builder.has_local_function("Drop"))
 
         # exclude: everything except "Keep" is inlined.
         builder = build()
-        self.assertEqual(builder.inline_local_functions(exclude=["Keep"]), 1)
+        self.assertEqual(builder.inline_local_functions(exclude=[("custom", "Keep")]), 1)
         self.assertTrue(builder.has_local_function("Keep"))
+        self.assertFalse(builder.has_local_function("Drop"))
+
+        # An empty domain matches every function sharing the name.
+        builder = build()
+        self.assertEqual(builder.inline_local_functions(include=[("", "Drop")]), 1)
+        self.assertTrue(builder.has_local_function("Keep"))
+        self.assertFalse(builder.has_local_function("Drop"))
+
+        # An empty name matches every function in the domain (here both).
+        builder = build()
+        self.assertEqual(builder.inline_local_functions(include=[("custom", "")]), 2)
+        self.assertFalse(builder.has_local_function("Keep"))
         self.assertFalse(builder.has_local_function("Drop"))
 
         # Passing both include and exclude is rejected.
         builder = build()
         with self.assertRaises(ValueError):
-            builder.inline_local_functions(include=["Keep"], exclude=["Drop"])
+            builder.inline_local_functions(
+                include=[("custom", "Keep")], exclude=[("custom", "Drop")]
+            )
 
 
 if __name__ == "__main__":

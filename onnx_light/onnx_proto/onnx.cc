@@ -1831,6 +1831,26 @@ StringStringEntryProto &NodeProto::add_metadata(const std::string &key, const st
   return SetOrAddMetadataEntry(metadata_props_, key, value);
 }
 
+std::string NodeProto::Signature(const std::vector<std::string> &resolved_inputs) const {
+  std::ostringstream signature;
+  signature << op_type().value() << '\x1f'
+            << NormaliseDomain(domain().empty() ? std::string() : domain().value()) << '\x1f';
+  for (const std::string &input : resolved_inputs) {
+    signature << input << '\x1e';
+  }
+  signature << '\x1f';
+  std::vector<std::string> attributes;
+  attributes.reserve(static_cast<std::size_t>(attribute().size()));
+  for (const auto &attr : attribute()) {
+    attributes.push_back(attr.SerializeAsString());
+  }
+  std::sort(attributes.begin(), attributes.end());
+  for (const std::string &attr : attributes) {
+    signature << attr << '\x1d';
+  }
+  return signature.str();
+}
+
 NodeProto &GraphProto::add_node(const std::string &op_type, const std::vector<std::string> &inputs,
                                 const std::vector<std::string> &outputs, const std::string &domain,
                                 const std::string &name) {

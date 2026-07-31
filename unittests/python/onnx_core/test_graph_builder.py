@@ -277,6 +277,86 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(body_graph.node[0].op_type, "Neg")
         self.assertEqual(body_graph.node[0].input[0], "a")
 
+    def test_remove_duplicate_nodes(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 3])
+        # Two Neg nodes computing the same value feed a shared consumer.
+        (a,) = builder.make_node("Neg", ["x"])
+        (b,) = builder.make_node("Neg", ["x"])
+        (s,) = builder.make_node("Add", [a, b])
+        builder.make_output(s)
+
+        self.assertEqual(builder.remove_duplicate_nodes(), 1)
+        graph = builder.build_graph()
+        self.assertEqual(len(graph.node), 2)
+        self.assertEqual(graph.node[0].op_type, "Neg")
+        self.assertEqual(graph.node[1].op_type, "Add")
+        # Both Add inputs now read from the surviving Neg.
+        self.assertEqual(graph.node[1].input[0], a)
+        self.assertEqual(graph.node[1].input[1], a)
+        # A second pass has nothing left to collapse.
+        self.assertEqual(builder.remove_duplicate_nodes(), 0)
+
+    def test_remove_duplicate_nodes_collapses_branches(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 3])
+        # Two identical branches collapse level by level in a single pass.
+        (a1,) = builder.make_node("Mul", ["x", "x"])
+        (b1,) = builder.make_node("Mul", ["x", "x"])
+        (a2,) = builder.make_node("Relu", [a1])
+        (b2,) = builder.make_node("Relu", [b1])
+        (s,) = builder.make_node("Add", [a2, b2])
+        builder.make_output(s)
+
+        self.assertEqual(builder.remove_duplicate_nodes(), 2)
+        graph = builder.build_graph()
+        self.assertEqual([n.op_type for n in graph.node], ["Mul", "Relu", "Add"])
+        self.assertEqual(graph.node[2].input[0], a2)
+        self.assertEqual(graph.node[2].input[1], a2)
+
+    def test_remove_duplicate_nodes_keeps_distinct_attributes(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 3])
+        (a,) = builder.make_node("LeakyRelu", ["x"], attributes={"alpha": 0.1})
+        (b,) = builder.make_node("LeakyRelu", ["x"], attributes={"alpha": 0.2})
+        (s,) = builder.make_node("Add", [a, b])
+        builder.make_output(s)
+
+        self.assertEqual(builder.remove_duplicate_nodes(), 0)
+        self.assertEqual(len(builder.build_graph().node), 3)
+
+    def test_remove_duplicate_nodes_keeps_graph_outputs(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 3])
+        # Both duplicates are declared graph outputs, so neither can be dropped.
+        (a,) = builder.make_node("Neg", ["x"])
+        (b,) = builder.make_node("Neg", ["x"])
+        builder.make_output(a)
+        builder.make_output(b)
+
+        self.assertEqual(builder.remove_duplicate_nodes(), 0)
+        self.assertEqual(len(builder.build_graph().node), 2)
+
+    def test_remove_duplicate_nodes_recurses_into_subgraphs(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 3])
+        (top,) = builder.make_node("Neg", ["x"])
+        builder.make_output(top)
+
+        body = builder.make_subgraph("body")
+        body.make_input("a", FLOAT, [2, 3])
+        (n1,) = body.make_node("Neg", ["a"])
+        (n2,) = body.make_node("Neg", ["a"])
+        (s,) = body.make_node("Add", [n1, n2])
+        body.make_output(s)
+
+        self.assertEqual(builder.remove_duplicate_nodes(), 1)
+        body_graph = body.build_graph()
+        self.assertEqual(len(body_graph.node), 2)
+        self.assertEqual(body_graph.node[1].op_type, "Add")
+        self.assertEqual(body_graph.node[1].input[0], n1)
+        self.assertEqual(body_graph.node[1].input[1], n1)
+
     def test_inline_local_functions(self):
         builder = GraphBuilder("g")
         # A local function computing Neg(Add(a, b)).

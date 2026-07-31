@@ -802,6 +802,18 @@ AttributeProto &set_attribute(const AttributeProto &attr);
  * the same key in place, and returns a reference to the stored entry.
  */
 StringStringEntryProto &add_metadata(const std::string &key, const std::string &value);
+/**
+ * Builds a canonical signature that identifies the computation performed by
+ * this node: its operator type, normalised domain, resolved inputs and
+ * attributes. ``resolved_inputs`` lets callers substitute the node's declared
+ * inputs (for example to account for earlier-dropped duplicates), so two nodes
+ * computing the same value share the same signature. Attributes are serialised
+ * individually and sorted so their declaration order does not affect the
+ * signature; non-printable separators keep the fields unambiguous.
+ *
+ * Returns the signature string.
+ */
+std::string Signature(const std::vector<std::string> &resolved_inputs) const;
 END_PROTO()
 
 // GraphProto

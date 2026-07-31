@@ -756,6 +756,23 @@ bool IsForwardingIdentity(const NodeProto &node) {
   return !std::string(node.input(0)).empty() && !std::string(node.output(0)).empty();
 }
 
+// Returns true when ``node`` can be dropped in favour of a survivor whose
+// outputs are ``survivor_outputs``. The survivor must expose at least as many
+// outputs, and every position where ``node`` names a non-empty output must be
+// backed by a non-empty survivor output so the consumer can be rewired.
+bool CanReuseOutputs(const NodeProto &node, const std::vector<std::string> &survivor_outputs) {
+  if (static_cast<std::size_t>(node.output().size()) > survivor_outputs.size()) {
+    return false;
+  }
+  for (int i = 0; i < node.output().size(); ++i) {
+    if (!std::string(node.output(static_cast<std::size_t>(i))).empty() &&
+        survivor_outputs[static_cast<std::size_t>(i)].empty()) {
+      return false;
+    }
+  }
+  return true;
+}
+
 } // namespace
 
 std::size_t GraphBuilder::RemoveIdentityNodes() {
@@ -812,6 +829,99 @@ std::size_t GraphBuilder::RemoveIdentityNodes() {
   }
 
   // Rewrite every consumer of a dropped identity output, descending into
+  // subgraphs whose bodies capture values from this enclosing scope.
+  RewriteInitializerReferences(rename);
+
+  return removed + local_removed;
+}
+
+std::size_t GraphBuilder::RemoveDuplicateNodes() {
+  // Prune nested builders first so each scope collapses its own duplicates.
+  std::size_t removed = 0;
+  for (const auto &function : local_functions_) {
+    removed += function->RemoveDuplicateNodes();
+  }
+  for (const auto &subgraph : subgraphs_) {
+    removed += subgraph->RemoveDuplicateNodes();
+  }
+
+  const std::size_t num_nodes = nodes_.size();
+  if (num_nodes == 0) {
+    return removed;
+  }
+
+  // A node whose output is a declared graph output is never dropped, because
+  // the graph must keep producing a value under that name (it can still act as
+  // the survivor for a later duplicate).
+  std::unordered_set<std::string> output_names;
+  for (const ValueInfoProto &output : outputs_) {
+    output_names.insert(output.name().value());
+  }
+
+  // Maps a node signature to the outputs of the first node that carried it (the
+  // survivor). Nodes are visited in insertion order, which is topological, so a
+  // duplicate is always seen after its survivor.
+  std::unordered_map<std::string, std::vector<std::string>> seen;
+  // Maps a dropped node output to the surviving output that replaces it. A
+  // survivor is never itself dropped, so this mapping has no chains.
+  std::unordered_map<std::string, std::string> rename;
+  const auto resolve = [&](const std::string &name) -> std::string {
+    auto it = rename.find(name);
+    return it != rename.end() ? it->second : name;
+  };
+
+  utils::RepeatedProtoField<NodeProto> kept;
+  kept.reserve(num_nodes);
+  std::size_t local_removed = 0;
+  for (NodeProto &node : nodes_) {
+    // Resolve inputs against earlier-dropped duplicates so a chain of identical
+    // sub-computations collapses in a single forward pass.
+    std::vector<std::string> resolved_inputs;
+    resolved_inputs.reserve(static_cast<std::size_t>(node.input().size()));
+    for (int i = 0; i < node.input().size(); ++i) {
+      resolved_inputs.push_back(resolve(std::string(node.input(static_cast<std::size_t>(i)))));
+    }
+
+    bool produces_output = false;
+    for (int i = 0; i < node.output().size(); ++i) {
+      if (output_names.find(std::string(node.output(static_cast<std::size_t>(i)))) !=
+          output_names.end()) {
+        produces_output = true;
+        break;
+      }
+    }
+
+    // Nodes referencing subgraphs carry per-node-unique ``*_ref`` attribute
+    // names, so their signatures never collide and control flow is never merged.
+    const std::string signature = node.Signature(resolved_inputs);
+    auto it = seen.find(signature);
+    if (it != seen.end() && !produces_output && CanReuseOutputs(node, it->second)) {
+      // Drop the duplicate and rewire each of its outputs onto the survivor.
+      for (int i = 0; i < node.output().size(); ++i) {
+        std::string out(node.output(static_cast<std::size_t>(i)));
+        if (!out.empty()) {
+          rename.emplace(std::move(out), it->second[static_cast<std::size_t>(i)]);
+        }
+      }
+      ++local_removed;
+      continue;
+    }
+
+    // Keep the node; register it as the survivor for its signature only when it
+    // is the first one, so later duplicates collapse onto the earliest copy.
+    if (it == seen.end()) {
+      std::vector<std::string> outputs;
+      outputs.reserve(static_cast<std::size_t>(node.output().size()));
+      for (int i = 0; i < node.output().size(); ++i) {
+        outputs.push_back(std::string(node.output(static_cast<std::size_t>(i))));
+      }
+      seen.emplace(signature, std::move(outputs));
+    }
+    kept.push_back(std::move(node));
+  }
+  nodes_ = std::move(kept);
+
+  // Rewrite every consumer of a dropped node's output, descending into
   // subgraphs whose bodies capture values from this enclosing scope.
   RewriteInitializerReferences(rename);
 

@@ -439,6 +439,106 @@ TEST(GraphBuilder, RemoveIdentityNodesRecursesIntoSubgraphs) {
   EXPECT_EQ(builder.Subgraph("body").Nodes()[0].input(0), "a");
 }
 
+TEST(GraphBuilder, RemoveDuplicateNodesCollapsesEqual) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  // Two Neg nodes computing the same value feed a shared consumer.
+  const std::vector<std::string> a = builder.MakeNode("Neg", {"x"});
+  const std::vector<std::string> b = builder.MakeNode("Neg", {"x"});
+  const std::vector<std::string> sum = builder.MakeNode("Add", {a[0], b[0]});
+  builder.MakeOutput(sum[0]);
+
+  EXPECT_EQ(builder.RemoveDuplicateNodes(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Neg");
+  EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Add");
+  // Both Add inputs now read from the surviving Neg.
+  EXPECT_EQ(builder.Nodes()[1].input(0), a[0]);
+  EXPECT_EQ(builder.Nodes()[1].input(1), a[0]);
+  // A second pass has nothing left to collapse.
+  EXPECT_EQ(builder.RemoveDuplicateNodes(), 0u);
+}
+
+TEST(GraphBuilder, RemoveDuplicateNodesCollapsesBranches) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  // Two identical branches: once the first level collapses, the second level
+  // becomes duplicated too and collapses in the same pass.
+  const std::vector<std::string> a1 = builder.MakeNode("Mul", {"x", "x"});
+  const std::vector<std::string> b1 = builder.MakeNode("Mul", {"x", "x"});
+  const std::vector<std::string> a2 = builder.MakeNode("Relu", {a1[0]});
+  const std::vector<std::string> b2 = builder.MakeNode("Relu", {b1[0]});
+  const std::vector<std::string> sum = builder.MakeNode("Add", {a2[0], b2[0]});
+  builder.MakeOutput(sum[0]);
+
+  EXPECT_EQ(builder.RemoveDuplicateNodes(), 2u);
+  ASSERT_EQ(builder.Nodes().size(), 3u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Mul");
+  EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Relu");
+  EXPECT_EQ(builder.Nodes()[2].op_type().value(), "Add");
+  EXPECT_EQ(builder.Nodes()[2].input(0), a2[0]);
+  EXPECT_EQ(builder.Nodes()[2].input(1), a2[0]);
+}
+
+TEST(GraphBuilder, RemoveDuplicateNodesKeepsDistinctAttributes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  const auto leaky = [&](float alpha) {
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    AttributeProto &attr = attributes.add();
+    attr.set_name("alpha");
+    attr.set_type(AttributeProto::AttributeType::FLOAT);
+    attr.set_f(alpha);
+    return builder.MakeNode("LeakyRelu", {"x"}, {}, "", "", attributes);
+  };
+  const std::vector<std::string> a = leaky(0.1f);
+  const std::vector<std::string> b = leaky(0.2f);
+  const std::vector<std::string> sum = builder.MakeNode("Add", {a[0], b[0]});
+  builder.MakeOutput(sum[0]);
+
+  // Different attribute values mean different computations: nothing collapses.
+  EXPECT_EQ(builder.RemoveDuplicateNodes(), 0u);
+  ASSERT_EQ(builder.Nodes().size(), 3u);
+}
+
+TEST(GraphBuilder, RemoveDuplicateNodesKeepsGraphOutputs) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  // Both duplicates are declared graph outputs, so neither can be dropped.
+  const std::vector<std::string> a = builder.MakeNode("Neg", {"x"});
+  const std::vector<std::string> b = builder.MakeNode("Neg", {"x"});
+  builder.MakeOutput(a[0]);
+  builder.MakeOutput(b[0]);
+
+  EXPECT_EQ(builder.RemoveDuplicateNodes(), 0u);
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+}
+
+TEST(GraphBuilder, RemoveDuplicateNodesRecursesIntoSubgraphs) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  core::builder::GraphBuilder &body = builder.MakeSubgraph("body");
+  body.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> n1 = body.MakeNode("Neg", {"a"});
+  const std::vector<std::string> n2 = body.MakeNode("Neg", {"a"});
+  const std::vector<std::string> s = body.MakeNode("Add", {n1[0], n2[0]});
+  body.MakeOutput(s[0]);
+
+  const std::vector<std::string> top = builder.MakeNode("Neg", {"x"});
+  builder.MakeOutput(top[0]);
+
+  EXPECT_EQ(builder.RemoveDuplicateNodes(), 1u);
+  ASSERT_EQ(builder.Subgraph("body").Nodes().size(), 2u);
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[1].op_type().value(), "Add");
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[1].input(0), n1[0]);
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[1].input(1), n1[0]);
+}
+
 TEST(GraphBuilder, InlineLocalFunctionsExpandsCallSite) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
 

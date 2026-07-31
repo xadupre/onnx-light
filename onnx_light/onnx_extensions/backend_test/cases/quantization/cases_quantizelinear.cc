@@ -58,6 +58,8 @@ namespace {
 //     per-axis cases (``QuantizeLinear.export_uint2`` / ``.export_int2``).
 //   * ``test_quantizelinear_float4e2m1`` — FLOAT4E2M1 per-axis case
 //     (``QuantizeLinear.export_float4e2m1``).
+//   * ``test_quantizelinear_float4e2m1_signed_zero`` — FLOAT4E2M1 output with
+//     no ``y_zero_point`` preserves signed zero (onnx#8230).
 //
 // Upstream cases that exercise blocked quantization (``block_size`` attribute)
 // — ``test_quantizelinear_blocked_symmetric`` and
@@ -329,6 +331,25 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
       return IoData{{std::move(x), std::move(sub_byte_scale), std::move(y_zero_point)},
                     {std::move(y)}};
     });
+  }
+
+  // From QuantizeLinear signed-zero handling (onnx#8230). With no
+  // ``y_zero_point`` input, FLOAT4E2M1 output must preserve signed zero:
+  // ``-0.0`` maps to the negative-zero nibble (0x8) and ``0.0`` to 0x0.
+  {
+    NodeProto node;
+    node.set_op_type("QuantizeLinear");
+    node.add_input("x");
+    node.add_input("y_scale");
+    node.add_output("y");
+    AddAttribute<int64_t>(node, "output_dtype", static_cast<int64_t>(DataType::FLOAT4E2M1));
+    Expect(registry, std::move(node), "test_quantizelinear_float4e2m1_signed_zero", {opset_v23},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromFloat("", {2}, {-0.0f, 0.0f});
+             Tensor y_scale = Tensor::FromFloat("", {}, {1.0f});
+             Tensor y = MakeFloat4E2M1Tensor({2}, {-0.0f, 0.0f});
+             return IoData{{std::move(x), std::move(y_scale)}, {std::move(y)}};
+           });
   }
 
   // --- Blocked quantization (opset 21+) ---

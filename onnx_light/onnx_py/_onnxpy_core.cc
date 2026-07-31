@@ -2032,6 +2032,15 @@ void AddOnnxPyBuilder(nb::module_ &m) {
            "single pass. An Identity whose output is a declared graph output is kept. The removal "
            "descends into nested subgraphs and local functions, and returns the total number of "
            "Identity nodes removed.")
+      .def("remove_duplicate_nodes", &GraphBuilder::RemoveDuplicateNodes,
+           "Recursively removes duplicated nodes (common subexpressions): nodes sharing the same "
+           "operator type, domain, inputs and attributes compute the same value, so every later "
+           "duplicate is dropped and each reference to its output is rewritten to the surviving "
+           "node's matching output. Inputs are resolved against earlier-dropped duplicates in a "
+           "single topological pass, so a whole duplicated branch collapses at once. A node whose "
+           "output is a declared graph output is kept, and nodes referencing control-flow "
+           "subgraphs are never merged. The removal descends into nested subgraphs and local "
+           "functions, and returns the total number of nodes removed.")
       .def("inline_local_functions", &GraphBuilder::InlineLocalFunctions,
            nb::arg("include") = std::vector<std::pair<std::string, std::string>>{},
            nb::arg("exclude") = std::vector<std::pair<std::string, std::string>>{},

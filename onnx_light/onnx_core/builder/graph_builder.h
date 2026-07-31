@@ -301,6 +301,31 @@ public:
   ///         pruned from nested subgraphs and local functions.
   std::size_t RemoveIdentityNodes();
 
+  /// Removes duplicated nodes (common subexpressions) from the builder.
+  ///
+  /// Two nodes are duplicates when they share the same operator type, domain,
+  /// inputs and attributes and therefore compute the same value. The first
+  /// occurrence is kept and every later duplicate is dropped; each reference to
+  /// a dropped node's output -- in this builder's node inputs and in the node
+  /// inputs of nested subgraphs, which capture values from the enclosing scope
+  /// -- is rewritten to the surviving node's matching output. Inputs are
+  /// resolved against earlier-dropped duplicates while nodes are scanned in
+  /// insertion (topological) order, so a whole duplicated branch collapses in a
+  /// single pass: once a node's producers point at the survivors, the node
+  /// itself becomes a duplicate of the corresponding surviving node.
+  ///
+  /// A node whose output is a declared graph output is kept, because the graph
+  /// must still produce a value under that name (it can still act as the
+  /// survivor for a later duplicate). Nodes referencing control-flow subgraphs
+  /// carry a per-node unique subgraph name and are never merged.
+  ///
+  /// The removal is recursive: it descends into nested subgraphs and local
+  /// functions to collapse their own duplicates as well.
+  ///
+  /// @return The total number of duplicated nodes removed, including those
+  ///         pruned from nested subgraphs and local functions.
+  std::size_t RemoveDuplicateNodes();
+
   /// Inlines calls to local functions into the calling graph.
   ///
   /// A node calls a local function when its operator type and domain match a

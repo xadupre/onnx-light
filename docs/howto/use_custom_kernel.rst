@@ -101,7 +101,7 @@ Registrations are stored on the evaluator's persistent
 :class:`RuntimeContext`, so the same evaluator can be reused across runs.
 Registering or unregistering a kernel invalidates the evaluator's cached
 runtime sessions; the next
-:py:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run` rebuilds them
+:py:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run` recreates them
 and picks up the updated dispatch.
 
 Override a built-in kernel

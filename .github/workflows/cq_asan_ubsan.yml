@@ -57,10 +57,7 @@ jobs:
         env:
           # Python itself is not built with sanitizers, so leak detection
           # produces large amounts of false positives from CPython internals.
-          # Container overflow detection is likewise disabled because it yields
-          # false positives when instrumented .so files are loaded from a
-          # non-instrumented (partially instrumented) interpreter.
-          ASAN_OPTIONS: detect_leaks=0:strict_init_order=1:check_initialization_order=1:detect_container_overflow=0
+          ASAN_OPTIONS: detect_leaks=0:strict_init_order=1:check_initialization_order=1:detect_container_overflow=1
           UBSAN_OPTIONS: print_stacktrace=1
         run: |
           # When loading sanitizer-instrumented .so files from a non-instrumented

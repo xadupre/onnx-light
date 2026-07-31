@@ -766,16 +766,14 @@ bool IsForwardingIdentity(const NodeProto &node) {
 // carry a per-node unique builder name) get a unique signature, so they are
 // never treated as duplicates.
 std::string NodeSignature(const NodeProto &node, const std::vector<std::string> &resolved_inputs) {
-  std::string signature;
-  signature += node.op_type().value();
-  signature.push_back('\x1f');
-  signature += NormaliseDomain(node.domain().empty() ? std::string() : node.domain().value());
-  signature.push_back('\x1f');
+  std::ostringstream signature;
+  signature << node.op_type().value() << '\x1f'
+            << NormaliseDomain(node.domain().empty() ? std::string() : node.domain().value())
+            << '\x1f';
   for (const std::string &input : resolved_inputs) {
-    signature += input;
-    signature.push_back('\x1e');
+    signature << input << '\x1e';
   }
-  signature.push_back('\x1f');
+  signature << '\x1f';
   std::vector<std::string> attributes;
   attributes.reserve(static_cast<std::size_t>(node.attribute().size()));
   for (const auto &attribute : node.attribute()) {
@@ -783,10 +781,9 @@ std::string NodeSignature(const NodeProto &node, const std::vector<std::string> 
   }
   std::sort(attributes.begin(), attributes.end());
   for (const std::string &attribute : attributes) {
-    signature += attribute;
-    signature.push_back('\x1d');
+    signature << attribute << '\x1d';
   }
-  return signature;
+  return signature.str();
 }
 
 // Returns true when ``node`` can be dropped in favour of a survivor whose

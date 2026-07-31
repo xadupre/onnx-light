@@ -21,26 +21,11 @@
   bool ParseFromString(const std::string &raw, ParseOptions &opts);                                \
   /** Parses from a raw byte buffer (protobuf compat). */                                          \
   inline bool ParseFromArray(const void *data, int size) {                                         \
-    return ParseFromString(std::string(static_cast<const char *>(data), static_cast<size_t>(size)));\
+    return ParseFromString(                                                                        \
+        std::string(static_cast<const char *>(data), static_cast<size_t>(size)));                  \
   }                                                                                                \
   bool ParseFromZeroCopyStream(utils::BinaryStream *stream);                                       \
   bool ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts);                   \
-  /** Parses from a FdReadStream (protobuf FileInputStream compat). */                             \
-  inline bool ParseFromZeroCopyStream(utils::FdReadStream *input) {                                \
-    std::string buf;                                                                               \
-    const void *data; int size;                                                                    \
-    while (input->Next(&data, &size))                                                              \
-      buf.append(static_cast<const char *>(data), static_cast<size_t>(size));                      \
-    return ParseFromString(buf);                                                                   \
-  }                                                                                                \
-  /** Parses from a FdReadStream with options (protobuf FileInputStream compat). */                \
-  inline bool ParseFromZeroCopyStream(utils::FdReadStream *input, ParseOptions &opts) {            \
-    std::string buf;                                                                               \
-    const void *data; int size;                                                                    \
-    while (input->Next(&data, &size))                                                              \
-      buf.append(static_cast<const char *>(data), static_cast<size_t>(size));                      \
-    return ParseFromString(buf, opts);                                                             \
-  }                                                                                                \
   bool ParseFromIstream(std::istream *input);                                                      \
   std::string SerializeAsString() const;                                                           \
   bool SerializeToArray(void *data, int size) const;                                               \
@@ -49,7 +34,8 @@
   /** Serializes to a zero-copy output stream (protobuf compat). */                                \
   inline bool SerializeToZeroCopyStream(utils::BinaryWriteStream *output) const {                  \
     std::string buf;                                                                               \
-    if (!SerializeToString(buf)) return false;                                                     \
+    if (!SerializeToString(buf))                                                                   \
+      return false;                                                                                \
     output->write_raw_bytes(reinterpret_cast<const uint8_t *>(buf.data()), buf.size());            \
     return true;                                                                                   \
   }                                                                                                \
@@ -74,8 +60,11 @@
   public:                                                                                          \
     static inline constexpr const char *DOC = doc;                                                 \
     explicit inline cls() {}                                                                       \
-    /** Resets this message to default state (protobuf compat). */                                  \
-    inline void Clear() { this->~cls(); new (this) cls(); }                                                         \
+    /** Resets this message to default state (protobuf compat). */                                 \
+    inline void Clear() {                                                                          \
+      this->~cls();                                                                                \
+      new (this) cls();                                                                            \
+    }                                                                                              \
     void CopyFrom(const cls &proto);
 
 /** Macro for beginning a generated proto class without adding a default constructor. */
@@ -135,7 +124,7 @@ public:                                                                         
   FIELD(utils::OptionalString, name, order, doc)                                                   \
   inline void clear_##name() { name##_.reset(); }                                                  \
   inline void set_##name(const char *v) { name##_ = v; }                                           \
-  inline void set_##name(const char *data, size_t len) { name##_ = std::string(data, len); }      \
+  inline void set_##name(const char *data, size_t len) { name##_ = std::string(data, len); }       \
   inline void set_##name(const std::string &v) { name##_ = v; }                                    \
   inline void set_##name(const utils::RefString &v) { name##_ = v; }
 

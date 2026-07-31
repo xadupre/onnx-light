@@ -65,7 +65,7 @@ namespace io {
  *  ZeroCopyInputStream interface and accepts a (const void*, int) buffer. */
 using ArrayInputStream = ONNX_LIGHT_NAMESPACE::utils::StringStream;
 
-/** Minimal coded input stream wrapping an ArrayInputStream. */
+/** Minimal coded input stream wrapping a BinaryStream (ArrayInputStream, FileInputStream, etc.). */
 using CodedInputStream = ONNX_LIGHT_NAMESPACE::utils::CodedInputStream;
 
 /** Zero-copy output stream that appends to a std::string. */
@@ -89,22 +89,18 @@ namespace internal {
 
 /** Alias for the iterator of a RepeatedPtrField (protobuf compat).
  *  Maps const T to the const_iterator and non-const T to the mutable iterator. */
-template <typename T, bool IsConst = std::is_const_v<T>>
-struct RepeatedPtrIteratorHelper;
+template <typename T, bool IsConst = std::is_const_v<T>> struct RepeatedPtrIteratorHelper;
 
-template <typename T>
-struct RepeatedPtrIteratorHelper<T, true> {
+template <typename T> struct RepeatedPtrIteratorHelper<T, true> {
   using type = typename ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField<
       std::remove_const_t<T>>::const_iterator;
 };
 
-template <typename T>
-struct RepeatedPtrIteratorHelper<T, false> {
+template <typename T> struct RepeatedPtrIteratorHelper<T, false> {
   using type = typename ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField<T>::iterator;
 };
 
-template <typename T>
-using RepeatedPtrIterator = typename RepeatedPtrIteratorHelper<T>::type;
+template <typename T> using RepeatedPtrIterator = typename RepeatedPtrIteratorHelper<T>::type;
 
 } // namespace internal
 } // namespace protobuf

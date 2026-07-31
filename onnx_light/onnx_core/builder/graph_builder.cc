@@ -818,6 +818,247 @@ std::size_t GraphBuilder::RemoveIdentityNodes() {
   return removed + local_removed;
 }
 
+GraphBuilder *GraphBuilder::FindCalledFunction(const std::vector<GraphBuilder *> &functions,
+                                               const NodeProto &node) {
+  const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
+  const std::string normalised = NormaliseDomain(node_domain);
+  for (GraphBuilder *function : functions) {
+    if (function->name() == node.op_type().value() &&
+        NormaliseDomain(function->function_domain_) == normalised) {
+      return function;
+    }
+  }
+  return nullptr;
+}
+
+std::size_t GraphBuilder::CountFunctionCalls(const std::string &name,
+                                             const std::string &domain) const {
+  const std::string normalised = NormaliseDomain(domain);
+  std::size_t count = 0;
+  for (const NodeProto &node : nodes_) {
+    const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
+    if (node.op_type().value() == name && NormaliseDomain(node_domain) == normalised) {
+      ++count;
+    }
+  }
+  for (const auto &subgraph : subgraphs_) {
+    count += subgraph->CountFunctionCalls(name, domain);
+  }
+  return count;
+}
+
+void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &call,
+                                     utils::RepeatedProtoField<NodeProto> &out) {
+  // Build the value rename map: formal inputs/outputs are rewired to the call
+  // inputs/outputs, everything else the body defines gets a fresh, unused name.
+  std::unordered_map<std::string, std::string> rename;
+  const std::size_t num_inputs =
+      std::min<std::size_t>(function.inputs_.size(), call.input().size());
+  for (std::size_t i = 0; i < num_inputs; ++i) {
+    rename[function.inputs_[i].name().value()] = std::string(call.input(i));
+  }
+  const std::size_t num_outputs =
+      std::min<std::size_t>(function.outputs_.size(), call.output().size());
+  for (std::size_t j = 0; j < num_outputs; ++j) {
+    rename[function.outputs_[j].name().value()] = std::string(call.output(j));
+  }
+
+  // Clone any function initializers under a fresh name (functions rarely carry
+  // initializers, but the builder allows them before finalization).
+  for (const TensorProto &initializer : function.initializers_) {
+    const std::string &old_name = initializer.name().value();
+    if (rename.find(old_name) != rename.end()) {
+      continue;
+    }
+    std::string new_name = function.name() + "_" + old_name;
+    int suffix = 0;
+    while (HasName(new_name)) {
+      new_name = function.name() + "_" + old_name + "_" + std::to_string(suffix++);
+    }
+    TensorProto clone = initializer;
+    clone.set_name(new_name);
+    MakeInitializer(clone);
+    rename.emplace(old_name, new_name);
+  }
+
+  // Fresh names for every remaining body value (node outputs not yet mapped).
+  for (const NodeProto &node : function.nodes_) {
+    for (int j = 0; j < node.output().size(); ++j) {
+      std::string produced(node.output(static_cast<std::size_t>(j)));
+      if (produced.empty() || rename.find(produced) != rename.end()) {
+        continue;
+      }
+      const std::string fresh = UniqueName(function.name() + "_" + produced);
+      rename.emplace(std::move(produced), fresh);
+    }
+  }
+
+  const auto remap = [&](const std::string &value) -> std::string {
+    if (value.empty()) {
+      return value;
+    }
+    auto it = rename.find(value);
+    return it != rename.end() ? it->second : value;
+  };
+
+  for (const NodeProto &body : function.nodes_) {
+    NodeProto node;
+    node.set_op_type(body.op_type().value());
+    if (!body.domain().empty()) {
+      node.set_domain(body.domain().value());
+    }
+    if (!body.name().empty()) {
+      node.set_name(body.name().value());
+    }
+    for (int i = 0; i < body.input().size(); ++i) {
+      node.add_input(remap(std::string(body.input(static_cast<std::size_t>(i)))));
+    }
+    for (int i = 0; i < body.output().size(); ++i) {
+      node.add_output(remap(std::string(body.output(static_cast<std::size_t>(i)))));
+    }
+    for (const AttributeProto &attribute : body.attribute()) {
+      if (!attribute.ref_attr_name().empty()) {
+        // The body attribute references a function attribute; resolve it against
+        // the value carried by the call node, or drop it (operator default).
+        const std::string reference = attribute.ref_attr_name().value();
+        const AttributeProto *actual = nullptr;
+        for (const AttributeProto &call_attribute : call.attribute()) {
+          if (call_attribute.name().value() == reference) {
+            actual = &call_attribute;
+            break;
+          }
+        }
+        if (actual != nullptr) {
+          AttributeProto resolved = *actual;
+          resolved.set_name(attribute.name().value());
+          node.add_attribute(std::move(resolved));
+        }
+        continue;
+      }
+      if (HasGraphReferenceSuffix(attribute.name().value())) {
+        throw BuilderError("GraphBuilder: cannot inline local function '" + function.name() +
+                           "'; inlining a function whose body contains control-flow subgraphs is "
+                           "not supported.");
+      }
+      node.add_attribute(attribute);
+    }
+    out.push_back(std::move(node));
+  }
+}
+
+std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> &functions) {
+  std::size_t inlined = 0;
+  // Subgraph bodies live in their own scope but may call the enclosing local
+  // functions, so inline them too using the same function table.
+  for (const auto &subgraph : subgraphs_) {
+    inlined += subgraph->InlineFunctionCalls(functions);
+  }
+  if (functions.empty() || nodes_.size() == 0) {
+    return inlined;
+  }
+
+  // Rebuild the node list, expanding every call. Repeat to a fixed point: a
+  // pasted body may itself call another local function.
+  bool changed = true;
+  while (changed) {
+    changed = false;
+    utils::RepeatedProtoField<NodeProto> kept;
+    kept.reserve(nodes_.size());
+    for (NodeProto &node : nodes_) {
+      GraphBuilder *function = FindCalledFunction(functions, node);
+      if (function != nullptr) {
+        AppendInlinedBody(*function, node, kept);
+        ++inlined;
+        changed = true;
+      } else {
+        kept.push_back(std::move(node));
+      }
+    }
+    nodes_ = std::move(kept);
+  }
+  return inlined;
+}
+
+std::size_t GraphBuilder::InlineLocalFunctions(
+    const std::vector<std::pair<std::string, std::string>> &include,
+    const std::vector<std::pair<std::string, std::string>> &exclude) {
+  if (!include.empty() && !exclude.empty()) {
+    throw BuilderError("GraphBuilder: InlineLocalFunctions accepts an include list or an exclude "
+                       "list, not both.");
+  }
+  // A ``(domain, name)`` pair matches a function when both components match,
+  // where an empty domain matches every domain and an empty name every name.
+  const auto matches = [](const std::vector<std::pair<std::string, std::string>> &entries,
+                          const std::string &domain, const std::string &name) {
+    for (const auto &entry : entries) {
+      if ((entry.first.empty() || entry.first == domain) &&
+          (entry.second.empty() || entry.second == name)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  const auto selected = [&](const std::string &domain, const std::string &name) {
+    if (!include.empty()) {
+      return matches(include, domain, name);
+    }
+    return !matches(exclude, domain, name);
+  };
+
+  std::vector<GraphBuilder *> functions;
+  functions.reserve(local_functions_.size());
+  for (const auto &function : local_functions_) {
+    if (selected(function->function_domain_, function->name())) {
+      functions.push_back(function.get());
+    }
+  }
+
+  // Record which functions are called anywhere (the calling graph, its
+  // subgraphs and the other function bodies) before expanding: only these are
+  // eligible for removal once fully inlined, so a function that is never called
+  // (e.g. exported for external use) is left in place.
+  std::unordered_set<std::string> called_before;
+  for (GraphBuilder *function : functions) {
+    std::size_t callers = CountFunctionCalls(function->name(), function->function_domain_);
+    for (GraphBuilder *other : functions) {
+      if (other != function) {
+        callers += other->CountFunctionCalls(function->name(), function->function_domain_);
+      }
+    }
+    if (callers != 0) {
+      called_before.insert(function->name());
+    }
+  }
+
+  const std::size_t inlined = InlineFunctionCalls(functions);
+
+  // Drop the definitions of functions that were called but no longer have any
+  // caller. Removing one can drop the last reference to another (a function
+  // called only from a now-removed function body), so iterate until stable.
+  bool changed = true;
+  while (changed) {
+    changed = false;
+    for (std::size_t i = 0; i < local_functions_.size(); ++i) {
+      GraphBuilder *function = local_functions_[i].get();
+      if (called_before.find(function->name()) == called_before.end()) {
+        continue;
+      }
+      std::size_t callers = CountFunctionCalls(function->name(), function->function_domain_);
+      for (const auto &other : local_functions_) {
+        if (other.get() != function) {
+          callers += other->CountFunctionCalls(function->name(), function->function_domain_);
+        }
+      }
+      if (callers == 0) {
+        local_functions_.erase(local_functions_.begin() + static_cast<std::ptrdiff_t>(i));
+        changed = true;
+        break;
+      }
+    }
+  }
+  return inlined;
+}
+
 std::size_t GraphBuilder::RemoveDuplicateInitializers() {
   return DeduplicateInitializers(InitializerContentIndex{});
 }

@@ -4,6 +4,7 @@
 #include "simple_string.h"
 #include "thread_pool.h"
 #include <cstddef>
+#include <cstring>
 #include <fstream>
 #include <istream>
 #include <iterator>
@@ -961,6 +962,9 @@ class FdWriteStream : public BinaryWriteStream {
 public:
   /** Initializes a write stream over the open file descriptor *fd*. */
   explicit inline FdWriteStream(int fd) : BinaryWriteStream(), fd_(fd), used_(0), written_(0) {}
+  /** Initializes a write stream over *fd* with an ignored block-size hint
+   *  (kept for protobuf API compatibility with FileOutputStream). */
+  inline FdWriteStream(int fd, int /*block_size*/) : FdWriteStream(fd) {}
   inline ~FdWriteStream() override { Flush(); }
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
   /** Returns the number of bytes produced so far (written plus pending). */
@@ -985,6 +989,8 @@ public:
   bool Flush();
   /** Flushes and returns true; the descriptor itself is not closed. */
   inline bool Close() { return Flush(); }
+  /** No-op for protobuf FileOutputStream compatibility. */
+  inline void SetCloseOnDelete(bool) {}
 
 protected:
   /** File descriptor the bytes are written to (not owned). */
@@ -997,22 +1003,192 @@ protected:
   int64_t written_;
 };
 
-/** Minimal coded input stream wrapping a StringStream, providing the protobuf
- *  total-bytes-limit accessors so it can back google::protobuf::io::CodedInputStream. */
+/** Read stream that reads bytes from a raw file descriptor.
+ *  Provides the ZeroCopyInputStream-compatible interface so it can back
+ *  google::protobuf::io::FileInputStream as a pure alias. */
+/** Zero-copy input stream over a seekable file descriptor that also implements
+ *  the full BinaryStream interface.  This allows it to be passed directly to
+ *  ParseFromZeroCopyStream(BinaryStream*) without loading the entire file into
+ *  memory first.  The file descriptor must support lseek (regular files);
+ *  non-seekable descriptors fall back to an INT64_MAX limit and rely on the
+ *  eof_ flag for end-of-stream detection. */
+class FdReadStream : public BinaryStream {
+public:
+  /** Initializes a read stream over the open file descriptor *fd*.
+   *  \p block_size is the internal buffer size used for reads. */
+  explicit FdReadStream(int fd, int block_size = 4096);
+  ~FdReadStream() override;
+
+  // --- BinaryStream pure virtual overrides ---
+
+  /** Decodes the next base-128 varint as an unsigned 64-bit integer. */
+  virtual uint64_t next_uint64() override;
+  /** Raises an exception if fewer than *len* bytes remain before the current limit. */
+  virtual void CanRead(uint64_t len, const char *msg) override;
+  /** Returns true while the logical read position is before the active limit. */
+  virtual bool NotEnd() const override { return !eof_ && pos_ < limit_; }
+  /** Returns the current byte offset from stream construction (bytes consumed). */
+  virtual offset_t tell() const override { return pos_; }
+  /** Returns the effective end of the stream (file size or active sub-limit). */
+  virtual int64_t size() const override { return limit_; }
+  /** Returns a short human-readable excerpt around the current position. */
+  virtual std::string tell_around() const override;
+  /** Reads *n_bytes* into *pre_allocated_buffer*.
+   *  Zero-copy mode (pre_allocated_buffer == nullptr) is not supported for fd streams;
+   *  always provide a destination buffer. */
+  virtual const uint8_t *read_bytes(offset_t n_bytes, uint8_t *pre_allocated_buffer) override;
+  /** Advances the read position by *n_bytes* using lseek. */
+  virtual void skip_bytes(offset_t n_bytes) override;
+  /** Returns false: fd streams do not support zero-copy pointer-into-buffer mode. */
+  virtual bool CanNoCopy() const override { return false; }
+  /** Returns the number of bytes consumed up to the start of the current block. */
+  virtual int64_t ByteCount() const override {
+    return total_read_ - static_cast<int64_t>(available_);
+  }
+
+  // --- ZeroCopyInputStream (override BinaryStream::Next / BackUp) ---
+
+  /** Hands out a pointer into the next chunk of unread data.
+   *  Returns false when EOF or an error is reached. */
+  virtual bool Next(const void **data, int *size) override;
+  /** Returns the last *count* bytes handed out by Next() that were not consumed. */
+  virtual void BackUp(int count) override;
+
+  // --- protobuf compat helpers ---
+
+  /** Skips forward by *count* bytes.  Returns false if EOF is reached first. */
+  bool Skip(int count);
+  /** No-op: onnx-light does not close the fd on delete. */
+  inline void SetCloseOnDelete(bool) {}
+  /** No-op placeholder; the fd is managed by the caller. */
+  inline bool Close() { return true; }
+
+protected:
+  virtual void LimitTo(uint64_t len) override { limit_ = static_cast<int64_t>(len); }
+
+  /** Computes the remaining byte count from the current fd position to the end
+   *  of the file via lseek.  Returns INT64_MAX when lseek is unavailable
+   *  (non-regular files such as pipes or sockets). */
+  static int64_t _InitLimit(int fd) noexcept;
+
+  int fd_;
+  int block_size_;
+  char *buffer_;
+  int available_;
+  int position_;
+  int64_t total_read_;
+  /** Logical read position for the BinaryStream interface (updated by read_bytes/skip_bytes). */
+  int64_t pos_;
+  /** Effective end position: file-remaining-bytes at construction, or an active sub-limit. */
+  int64_t limit_;
+  /** Set to true by Next() when ::read() returns ≤ 0 (end-of-file or error). */
+  bool eof_;
+};
+
+/** Minimal coded input stream wrapping a BinaryStream, providing the protobuf
+ *  total-bytes-limit accessors so it can back google::protobuf::io::CodedInputStream.
+ *  Accepts any BinaryStream subclass (StringStream, FdReadStream, etc.). */
 class CodedInputStream {
 public:
+  /** Opaque type returned by PushLimit / consumed by PopLimit. */
+  using Limit = int;
+
   /** Wraps *input* with a default total-bytes limit of INT32_MAX. */
-  explicit inline CodedInputStream(StringStream *input) : input_(input), limit_(0x7FFFFFFF) {}
+  explicit inline CodedInputStream(BinaryStream *input)
+      : input_(input), limit_(0x7FFFFFFF), position_(0) {}
   /** Sets the maximum number of bytes that may be read. */
   inline void SetTotalBytesLimit(int total_bytes_limit) { limit_ = total_bytes_limit; }
   /** Returns the configured total-bytes limit. */
   inline int TotalBytesLimit() const { return limit_; }
+  /** Returns the current read position (bytes consumed so far). */
+  inline int CurrentPosition() const { return position_; }
+
+  /** Reads a varint32 from the underlying stream.  Returns true on success. */
+  inline bool ReadVarint32(uint32_t *value) {
+    uint32_t result = 0;
+    int shift = 0;
+    for (;;) {
+      uint8_t byte = 0;
+      if (!ReadRaw(&byte, 1))
+        return false;
+      result |= static_cast<uint32_t>(byte & 0x7F) << shift;
+      if ((byte & 0x80) == 0)
+        break;
+      shift += 7;
+      if (shift >= 35)
+        return false;
+    }
+    *value = result;
+    return true;
+  }
+
+  /** Reads exactly *size* bytes into *buffer*.  Returns true on success. */
+  inline bool ReadRaw(void *buffer, int size) {
+    if (size <= 0)
+      return size == 0;
+    if (!input_)
+      return false;
+    const void *data = nullptr;
+    int avail = 0;
+    auto *dst = static_cast<char *>(buffer);
+    int remaining = size;
+    while (remaining > 0) {
+      if (!input_->Next(&data, &avail))
+        return false;
+      int to_copy = (avail < remaining) ? avail : remaining;
+      std::memcpy(dst, data, static_cast<size_t>(to_copy));
+      dst += to_copy;
+      remaining -= to_copy;
+      if (to_copy < avail)
+        input_->BackUp(avail - to_copy);
+    }
+    position_ += size;
+    return true;
+  }
+
+  /** Skips *size* bytes.  Returns true on success. */
+  inline bool Skip(int size) {
+    if (size <= 0)
+      return size == 0;
+    if (!input_)
+      return false;
+    // Consume via Next/BackUp to stay compatible with all BinaryStream subclasses.
+    int remaining = size;
+    while (remaining > 0) {
+      const void *data = nullptr;
+      int avail = 0;
+      if (!input_->Next(&data, &avail))
+        return false;
+      int consumed = (avail < remaining) ? avail : remaining;
+      remaining -= consumed;
+      if (consumed < avail)
+        input_->BackUp(avail - consumed);
+    }
+    position_ += size;
+    return true;
+  }
+
+  /** Saves the current limit and installs a new one.
+   *  The new limit is CurrentPosition() + *byte_limit*.  Returns the previous limit. */
+  inline Limit PushLimit(int byte_limit) {
+    int old = limit_;
+    limit_ = position_ + byte_limit;
+    return old;
+  }
+
+  /** Restores a previous limit saved by PushLimit(). */
+  inline void PopLimit(Limit old_limit) { limit_ = old_limit; }
+
+  /** Returns true if the entire stream has been consumed (stub: always true). */
+  inline bool ConsumedEntireMessage() const { return true; }
 
 protected:
   /** Non-owning pointer to the wrapped input stream. */
-  StringStream *input_;
+  BinaryStream *input_;
   /** Configured maximum number of readable bytes. */
   int limit_;
+  /** Current read position (bytes consumed). */
+  int position_;
 };
 
 } // namespace utils

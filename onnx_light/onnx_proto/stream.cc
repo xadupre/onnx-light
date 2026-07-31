@@ -667,6 +667,147 @@ bool FdWriteStream::Flush() {
   return true;
 }
 
+////////////////////
+// FdReadStream
+////////////////////
+
+int64_t FdReadStream::_InitLimit(int fd) noexcept {
+#if !defined(_WIN32)
+  auto cur = ::lseek(fd, 0, SEEK_CUR);
+  if (cur < 0)
+    return INT64_MAX; // non-seekable fd (pipe, socket, etc.)
+  auto end = ::lseek(fd, 0, SEEK_END);
+  if (end < 0) {
+    ::lseek(fd, cur, SEEK_SET);
+    return INT64_MAX;
+  }
+  ::lseek(fd, cur, SEEK_SET);
+  return static_cast<int64_t>(end - cur); // remaining bytes
+#else
+  auto cur = ::_lseeki64(fd, 0, SEEK_CUR);
+  if (cur < 0)
+    return INT64_MAX;
+  auto end = ::_lseeki64(fd, 0, SEEK_END);
+  if (end < 0) {
+    ::_lseeki64(fd, cur, SEEK_SET);
+    return INT64_MAX;
+  }
+  ::_lseeki64(fd, cur, SEEK_SET);
+  return static_cast<int64_t>(end - cur);
+#endif
+}
+
+FdReadStream::FdReadStream(int fd, int block_size)
+    : BinaryStream(), fd_(fd), block_size_(block_size > 0 ? block_size : 4096),
+      buffer_(new char[static_cast<size_t>(block_size_)]), available_(0), position_(0),
+      total_read_(0), pos_(0), eof_(false) {
+  limit_ = _InitLimit(fd_);
+}
+
+FdReadStream::~FdReadStream() { delete[] buffer_; }
+
+bool FdReadStream::Next(const void **data, int *size) {
+#if !defined(_WIN32)
+  auto n = ::read(fd_, buffer_, static_cast<size_t>(block_size_));
+#else
+  auto n = ::_read(fd_, buffer_, static_cast<unsigned>(block_size_));
+#endif
+  if (n <= 0) {
+    *data = nullptr;
+    *size = 0;
+    eof_ = true;
+    return false;
+  }
+  *data = buffer_;
+  *size = static_cast<int>(n);
+  available_ = static_cast<int>(n);
+  position_ = 0;
+  total_read_ += static_cast<int64_t>(n);
+  return true;
+}
+
+void FdReadStream::BackUp(int count) {
+  available_ += count;
+  total_read_ -= static_cast<int64_t>(count);
+#if !defined(_WIN32)
+  ::lseek(fd_, -static_cast<off_t>(count), SEEK_CUR);
+#else
+  ::_lseek(fd_, -static_cast<long>(count), SEEK_CUR);
+#endif
+}
+
+bool FdReadStream::Skip(int count) {
+#if !defined(_WIN32)
+  auto r = ::lseek(fd_, static_cast<off_t>(count), SEEK_CUR);
+#else
+  auto r = ::_lseek(fd_, static_cast<long>(count), SEEK_CUR);
+#endif
+  if (r < 0)
+    return false;
+  total_read_ += static_cast<int64_t>(count);
+  available_ = 0;
+  return true;
+}
+
+uint64_t FdReadStream::next_uint64() {
+  uint64_t result = 0;
+  int shift = 0;
+  for (int i = 0; i < 10; ++i) {
+    uint8_t byte = 0;
+    read_bytes(1, &byte);
+    result |= static_cast<uint64_t>(byte & 0x7F) << shift;
+    if ((byte & 0x80) == 0)
+      return result;
+    shift += 7;
+  }
+  EXT_THROW("[FdReadStream::next_uint64] invalid varint at pos=", pos_);
+}
+
+void FdReadStream::CanRead(uint64_t len, const char *msg) {
+  auto remaining = limit_ - pos_;
+  EXT_ENFORCE(remaining >= 0 && static_cast<uint64_t>(remaining) >= len, msg, " unable to read ",
+              len, " bytes; pos=", pos_, ", limit=", limit_);
+}
+
+std::string FdReadStream::tell_around() const {
+  return std::string("[fd stream at pos=") + std::to_string(pos_) + "]";
+}
+
+const uint8_t *FdReadStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_buffer) {
+  EXT_ENFORCE(pre_allocated_buffer != nullptr,
+              "[FdReadStream::read_bytes] zero-copy mode is not supported for file-backed "
+              "streams; use MmapFileStream or StringStream for no-copy parsing.");
+  auto *dst = pre_allocated_buffer;
+  offset_t remaining = n_bytes;
+  while (remaining > 0) {
+    const void *data = nullptr;
+    int avail = 0;
+    if (!Next(&data, &avail))
+      EXT_THROW("[FdReadStream::read_bytes] EOF reached with ", remaining,
+                " bytes still needed at pos=", pos_);
+    auto to_copy = static_cast<int64_t>(avail) < remaining ? avail : static_cast<int>(remaining);
+    std::memcpy(dst, data, static_cast<size_t>(to_copy));
+    dst += to_copy;
+    remaining -= static_cast<offset_t>(to_copy);
+    if (to_copy < avail)
+      BackUp(avail - to_copy);
+  }
+  pos_ += n_bytes;
+  return pre_allocated_buffer;
+}
+
+void FdReadStream::skip_bytes(offset_t n_bytes) {
+#if !defined(_WIN32)
+  auto r = ::lseek(fd_, static_cast<off_t>(n_bytes), SEEK_CUR);
+#else
+  auto r = ::_lseek(fd_, static_cast<long>(n_bytes), SEEK_CUR);
+#endif
+  EXT_ENFORCE(r >= 0, "[FdReadStream::skip_bytes] lseek failed at pos=", pos_, " skip=", n_bytes);
+  total_read_ += n_bytes;
+  available_ = 0;
+  pos_ += n_bytes;
+}
+
 //////////////////////
 // BorrowedWriteStream
 //////////////////////

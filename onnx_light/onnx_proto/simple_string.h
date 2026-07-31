@@ -198,8 +198,50 @@ public:
   inline char operator[](size_t i) const { return value()[i]; }
   /** Parses the content as a signed 64-bit integer. */
   inline int64_t toint64() const { return RefString(data(), size()).toint64(); }
-  /** Implicit conversion to a standard string (empty when unset). */
-  inline operator std::string() const { return value_or(std::string()); }
+  /** Implicit conversion to const std::string& (static empty when unset).
+   *  Allows binding to const std::string& in call sites that expect protobuf semantics. */
+  inline operator const std::string &() const {
+    static const std::string empty;
+    return has_value() ? value() : empty;
+  }
+  /** Implicit conversion to string_view (empty when unset). */
+  inline operator std::string_view() const {
+    return has_value() ? std::string_view(value()) : std::string_view();
+  }
+  /** Assigns content from a character range, matching protobuf's assign(ptr, len) API. */
+  inline void assign(const char *s, size_t len) { emplace(s, len); }
+  /** Assigns content from a standard string. */
+  inline void assign(const std::string &s) { emplace(s); }
+  /** Returns a mutable reference to the underlying string, creating it if absent. */
+  inline std::string &mutable_ref() {
+    if (!has_value())
+      emplace();
+    return value();
+  }
+  /** Returns a mutable pointer to the underlying string, creating it if absent. */
+  inline std::string *mutable_ptr() { return &mutable_ref(); }
+  /** Delegates std::string::find to the underlying value (npos if absent). */
+  inline size_t find(const char *s, size_t pos = 0) const {
+    return has_value() ? value().find(s, pos) : std::string::npos;
+  }
+  inline size_t find(const std::string &s, size_t pos = 0) const {
+    return has_value() ? value().find(s, pos) : std::string::npos;
+  }
+  inline size_t find(char c, size_t pos = 0) const {
+    return has_value() ? value().find(c, pos) : std::string::npos;
+  }
+  inline int compare(const std::string &other) const {
+    const std::string &s = *this;
+    return s.compare(other);
+  }
+  inline int compare(const char *other) const {
+    const std::string &s = *this;
+    return s.compare(other);
+  }
+  /** Delegates std::string::substr. Returns empty string if absent. */
+  inline std::string substr(size_t pos = 0, size_t len = std::string::npos) const {
+    return has_value() ? value().substr(pos, len) : std::string();
+  }
   /** Compares two OptionalString values for equality (disambiguation for C++20 heterogeneous
    * optional overloads). */
   inline bool operator==(const OptionalString &other) const {
@@ -216,6 +258,23 @@ public:
   /** Compares against a standard string (unset never equals any std::string). */
   inline bool operator==(const std::string &other) const { return has_value() && value() == other; }
   inline bool operator!=(const std::string &other) const { return !(*this == other); }
+
+  /** String concatenation with standard strings and C strings. */
+  friend inline std::string operator+(const OptionalString &lhs, const char *rhs) {
+    return std::string(lhs) + rhs;
+  }
+  friend inline std::string operator+(const char *lhs, const OptionalString &rhs) {
+    return lhs + std::string(rhs);
+  }
+  friend inline std::string operator+(const OptionalString &lhs, const std::string &rhs) {
+    return std::string(lhs) + rhs;
+  }
+  friend inline std::string operator+(const std::string &lhs, const OptionalString &rhs) {
+    return lhs + std::string(rhs);
+  }
+  friend inline std::string operator+(const OptionalString &lhs, const OptionalString &rhs) {
+    return std::string(lhs) + std::string(rhs);
+  }
 };
 
 /** Assigns a non-owning view from an owning string. */
@@ -257,3 +316,16 @@ inline std::ostream &operator<<(std::ostream &os, const OptionalString &s) {
 
 } // namespace utils
 } // namespace ONNX_LIGHT_NAMESPACE
+
+/** Specializes std::hash for OptionalString and String so they can be used as
+ * keys in unordered containers (and with absl hashing). */
+template <> struct std::hash<ONNX_LIGHT_NAMESPACE::utils::OptionalString> {
+  size_t operator()(const ONNX_LIGHT_NAMESPACE::utils::OptionalString &s) const noexcept {
+    return s.has_value() ? std::hash<std::string>{}(s.value()) : 0;
+  }
+};
+template <> struct std::hash<ONNX_LIGHT_NAMESPACE::utils::String> {
+  size_t operator()(const ONNX_LIGHT_NAMESPACE::utils::String &s) const noexcept {
+    return std::hash<std::string>{}(static_cast<const std::string &>(s));
+  }
+};

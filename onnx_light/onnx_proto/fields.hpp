@@ -151,12 +151,7 @@ template <typename T> OptionalField<T> &OptionalField<T>::operator=(const Option
   reset();
   if (v.has_value()) {
     set_empty_value();
-    StringWriteStream stream;
-    SerializeOptions opts;
-    (*v).SerializeToStream(stream, opts);
-    StringStream rstream(stream.data(), stream.size());
-    ParseOptions ropts;
-    value_->ParseFromStream(rstream, ropts);
+    value_->CopyFrom(*v);
   }
   return *this;
 }

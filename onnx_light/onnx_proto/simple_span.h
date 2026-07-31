@@ -327,6 +327,17 @@ public:
   /** Returns true when the ByteSpans differ in size or content. */
   inline bool operator!=(const ByteSpan &other) const { return !(*this == other); }
 
+  /** Compare with std::string (byte-level comparison). */
+  inline bool operator==(const std::string &other) const {
+    return size() == other.size() &&
+           (size() == 0 || std::memcmp(data(), other.data(), size()) == 0);
+  }
+  inline bool operator!=(const std::string &other) const { return !(*this == other); }
+
+  /** Allow std::string == ByteSpan. */
+  friend inline bool operator==(const std::string &lhs, const ByteSpan &rhs) { return rhs == lhs; }
+  friend inline bool operator!=(const std::string &lhs, const ByteSpan &rhs) { return rhs != lhs; }
+
   // --- Mutable operations ---
 
   /** Returns a mutable pointer to the owned data.
@@ -352,6 +363,18 @@ public:
     align_ = 0;
     owner_.reset();
     owned_.resize(n);
+  }
+
+  inline void assign(const char *data, size_t len) {
+    resize(len);
+    if (len > 0)
+      std::memcpy(this->data(), data, len);
+  }
+
+  inline void assign(const void *data, size_t len) {
+    resize(len);
+    if (len > 0)
+      std::memcpy(this->data(), data, len);
   }
 
   /** Resizes the owned buffer ensuring data() is aligned to align bytes.

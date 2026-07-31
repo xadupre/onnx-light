@@ -2032,6 +2032,21 @@ void AddOnnxPyBuilder(nb::module_ &m) {
            "single pass. An Identity whose output is a declared graph output is kept. The removal "
            "descends into nested subgraphs and local functions, and returns the total number of "
            "Identity nodes removed.")
+      .def("inline_local_functions", &GraphBuilder::InlineLocalFunctions,
+           nb::arg("include") = std::vector<std::pair<std::string, std::string>>{},
+           nb::arg("exclude") = std::vector<std::pair<std::string, std::string>>{},
+           "Inlines every call to a local function into the calling graph: the call node is "
+           "replaced by a renamed copy of the function body (formal inputs/outputs rewired to the "
+           "call inputs/outputs, every other body value given a fresh name, and ``ref_attr_name`` "
+           "attributes resolved against the call attributes). The expansion runs to a fixed point "
+           "and descends into nested subgraphs; local function definitions left without any caller "
+           "are dropped. ``include`` and ``exclude`` are lists of ``(domain, name)`` tuples: a "
+           "tuple matches a function when both components match, where an empty domain matches "
+           "every domain (all functions sharing the name) and an empty name matches every name "
+           "(all functions in the domain). When ``include`` is non-empty only the matched "
+           "functions are inlined; when ``exclude`` is non-empty every function except the matched "
+           "ones is inlined; passing both raises an error. Returns the total number of call nodes "
+           "inlined.")
       .def(
           "build_graph", [](const GraphBuilder &self) { return self.BuildGraph(); },
           "Assembles the accumulated inputs, initializers, nodes and outputs into a "
@@ -2043,6 +2058,8 @@ void AddOnnxPyBuilder(nb::module_ &m) {
           nb::arg("name"), nb::arg("domain") = "", nb::rv_policy::reference_internal,
           "Creates and returns a nested builder for a local function; local functions are "
           "emitted into the produced ModelProto.")
+      .def("has_local_function", &GraphBuilder::HasLocalFunction, nb::arg("name"),
+           "Returns True when a local function named ``name`` exists.")
       .def(
           "make_subgraph",
           [](GraphBuilder &self, const std::string &name) -> GraphBuilder & {

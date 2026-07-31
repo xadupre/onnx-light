@@ -60,6 +60,14 @@ _DTYPE_TO_NP: dict[int, Any] = {
     int(TensorProto.FLOAT16): np.float16,
 }
 
+# ``TensorProto.DataType`` values backed by a stock NumPy dtype, which
+# therefore round-trip through the DLPack exchange protocol
+# (``Tensor.__dlpack__`` / :func:`numpy.from_dlpack`). Captured before the
+# ml_dtypes entries are added below: bfloat16/float8 have no stock NumPy dtype
+# and, like the sub-byte packed and string types, use the raw-reinterpret or
+# proto fallbacks instead.
+_DLPACK_DTYPES: frozenset[int] = frozenset(_DTYPE_TO_NP)
+
 if _ml_dtypes is not None:
     _DTYPE_TO_NP.update(
         {
@@ -81,17 +89,25 @@ def _cpp_tensor_to_numpy(t: Any) -> np.ndarray:
     """Converts a runtime ``Tensor`` to a :class:`numpy.ndarray`.
 
     For standard fixed-width dtypes (float32, int64, etc.) the array is a
-    zero-copy view over the tensor's raw byte buffer obtained from
-    :func:`_runtime.tensor_to_numpy`; the source tensor is kept alive for the
-    lifetime of the returned array so the borrowed view never dangles.
-    Sub-byte packed types and STRING tensors fall back to the full
-    :func:`numpy_helper.to_array` path.
+    zero-copy view imported through the DLPack exchange protocol
+    (``Tensor.__dlpack__`` / :func:`numpy.from_dlpack`); the DLPack capsule
+    keeps the source tensor alive for the lifetime of the returned array so the
+    borrowed view never dangles. bfloat16/float8 tensors are reinterpreted from
+    the raw byte view returned by :func:`_runtime.tensor_to_numpy` (DLPack has
+    no stock NumPy dtype for them), and sub-byte packed types and STRING
+    tensors fall back to the full :func:`numpy_helper.to_array` path.
     """
     dt = int(t.data_type)
+    if not _IS_BIG_ENDIAN and dt in _DLPACK_DTYPES:
+        # Zero-copy import via the DLPack protocol; ``from_dlpack`` yields a
+        # correctly shaped, native-dtype array sharing the tensor's buffer.
+        return np.from_dlpack(t)
     np_dtype = _DTYPE_TO_NP.get(dt)
     if np_dtype is not None:
         # ``tensor_to_numpy`` returns a 1-D uint8 view borrowing the tensor's
-        # bytes (no copy); reinterpret it as ``np_dtype`` and reshape.
+        # bytes (no copy); reinterpret it as ``np_dtype`` and reshape. Also
+        # used on big-endian hosts, where the little-endian buffer must be
+        # byte-swapped after reinterpretation.
         raw = _runtime.tensor_to_numpy(t)
         arr = raw.view(np_dtype)
         if _IS_BIG_ENDIAN:  # pragma: no cover

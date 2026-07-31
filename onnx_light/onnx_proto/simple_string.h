@@ -216,7 +216,7 @@ public:
   inline std::string &mutable_ref() {
     if (!has_value())
       emplace();
-    return value();
+    return base::value();
   }
   /** Returns a mutable pointer to the underlying string, creating it if absent. */
   inline std::string *mutable_ptr() { return &mutable_ref(); }

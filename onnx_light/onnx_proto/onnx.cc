@@ -931,7 +931,7 @@ int64_t TensorProto::ContentHash(bool include_content) const {
     // size of every payload field. Two tensors sharing this hash are candidates
     // for an exact byte comparison, nothing more.
     uint64_t seed = static_cast<uint64_t>(std::hash<int>()(static_cast<int>(data_type())));
-    for (uint64_t dim : dims().values()) {
+    for (int64_t dim : dims().values()) {
       HashCombine(seed, dim);
     }
     const int location = has_data_location() ? static_cast<int>(data_location()) : 0;
@@ -955,7 +955,7 @@ int64_t TensorProto::ContentHash(bool include_content) const {
   auto absorb_size = [&hasher](uint64_t value) { hasher.Update(&value, sizeof(value)); };
 
   absorb_size(static_cast<uint64_t>(data_type()));
-  for (uint64_t dim : dims().values()) {
+  for (int64_t dim : dims().values()) {
     absorb_size(dim);
   }
   absorb_size(static_cast<uint64_t>(has_data_location() ? static_cast<int>(data_location()) : 0));

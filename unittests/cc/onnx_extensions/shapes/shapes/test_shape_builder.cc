@@ -53,7 +53,7 @@ void AddInt64Initializer(GraphProto &graph, const std::string &name,
   TensorProto *init = graph.add_initializer();
   init->set_name(name);
   init->set_data_type(static_cast<int>(TensorProto::DataType::INT64));
-  init->add_dims(std::vector<uint64_t>{values.size()});
+  init->add_dims(std::vector<int64_t>{static_cast<int64_t>(values.size())});
   init->add_int64_data(values);
 }
 
@@ -362,7 +362,7 @@ TEST(OnnxOptimShapeBuilder, ReshapeReshapePreservesRankAndPartialDims) {
     TensorProto *one_init = graph->add_initializer();
     one_init->set_name("one");
     one_init->set_data_type(static_cast<int>(TensorProto::DataType::FLOAT));
-    one_init->add_dims(std::vector<uint64_t>{1});
+    one_init->add_dims(std::vector<int64_t>{1});
     one_init->add_float_data(std::vector<float>{1.0f});
   }
 

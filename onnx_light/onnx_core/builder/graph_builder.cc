@@ -959,7 +959,7 @@ std::size_t GraphBuilder::RemoveDuplicateNodes() {
   return removed + local_removed;
 }
 
-
+GraphBuilder *GraphBuilder::FindCalledFunction(const std::vector<GraphBuilder *> &functions,
                                                const NodeProto &node) {
   const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
   const std::string normalised = NormaliseDomain(node_domain);

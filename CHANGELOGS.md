@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Improvements
 
 - Made the C++ `RunNode` / `RuntimeSession` dispatch device-aware: a `RuntimeContext` pinned to a non-CPU device now resolves the device-qualified kernel and fails with a diagnostic naming the device when none is registered, instead of silently dispatching to the CPU kernel.
+- Routed `Tensor::elem_num()` and `Tensor::size_from_dim()` through the new `safe_dim_product` helper so tensor dimension overflow and negative dimensions raise `tensor_error` (propagated from onnx/onnx#8220).
 
 ### Documentation & CI
 

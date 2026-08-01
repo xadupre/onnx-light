@@ -474,6 +474,7 @@ TEST(onnx_defs, ParseData_Int64_FromRawData) {
   EXPECT_EQ(data[1], 99LL);
 }
 
+#ifndef ONNX_NO_EXCEPTIONS
 TEST(onnx_defs, ParseData_Float_FromRawData_InvalidAlignment_Tensor) {
   float raw_val = 1.5f;
   std::string raw_str(reinterpret_cast<const char *>(&raw_val), sizeof(float));
@@ -495,6 +496,7 @@ TEST(onnx_defs, ParseData_Float_FromRawData_InvalidAlignment_TensorProto) {
 
   EXPECT_THROW(ParseData<float>(&tensor), std::runtime_error);
 }
+#endif // ONNX_NO_EXCEPTIONS
 
 TEST(onnx_defs, ParseData_Float_FromEmptyRawData_Tensor) {
   Tensor tensor;

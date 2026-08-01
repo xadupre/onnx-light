@@ -34,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Fixed the macOS C++ release build by raising the deployment target to 13.3.
 - Dropped the Python 3.10 wheels and fixed the Windows release wheel repair.
 - Enabled ASan container-overflow detection in CI (propagated from onnx/onnx#8213).
+- Hardened the ASan CI options with `alloc_dealloc_mismatch=1` and `abort_on_error=1` (propagated from onnx/onnx#7471).
 - Disabled precompiled headers when an sccache/ccache launcher is active.
 - Fixed the C++ documentation namespace (`onnx::` → `onnx_light::`).
 - Refreshed the custom-kernel how-to for the current `ReferenceEvaluator` runtime APIs.

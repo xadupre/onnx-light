@@ -67,6 +67,10 @@ jobs:
           # Test-only dependencies (mirrors noxfile.py COMMON_TEST_DEPENDENCIES).
           pip install expecttest hypothesis packaging parameterized \
             pytest-subtests "pytest>7.1.0" pyyaml onnxruntime safetensors
+          # torch is required to import ir-py test modules such as
+          # src/onnx_ir/_core_test.py and src/onnx_ir/tensor_adapters_test.py
+          # (mirrors noxfile.py PYTORCH). Use the CPU wheels to keep the job light.
+          pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
           # Install ir-py itself without dependencies so onnx is not installed.
           pip install -e .
 

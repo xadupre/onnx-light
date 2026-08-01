@@ -254,6 +254,77 @@ copies these builtins into the shared ``core::shapes`` peak-memory dispatch tabl
 via :cpp:func:`onnx_light::core::shapes::RegisterComputePeakMemoryFn`, and the
 result is exposed in Python through ``compute_peak_memory``.
 
+From Python
+-----------
+
+There is **no separate Python registration step**. Every piece above lives in a
+C++ static table, and the Python extension exposes generic entry points that
+consult those same tables at call time. Once you have rebuilt the C++ libraries
+(``pip install -e .`` or the CMake build), the new operator is reachable from
+Python automatically — each component below simply works with the new
+``op_type``:
+
+* **Kernel** — run a model containing the operator with
+  :class:`onnx_light.reference.ReferenceEvaluator`, which drives the C++
+  ``RuntimeSession`` and resolves kernels through ``BuiltinKernelFunctions``:
+
+  .. code-block:: python
+
+      import numpy as np
+      from onnx_light.onnx_lib import parser
+      from onnx_light.reference import ReferenceEvaluator
+
+      model = parser.parse_model(
+          '<ir_version: 10, opset_import: ["" : 18]>'
+          'agraph (float[3] x) => (float[3] y) { y = Abs(x) }'
+      )
+      sess = ReferenceEvaluator(model)
+      (y,) = sess.run(None, {"x": np.array([-1.0, 2.0, -3.5], dtype=np.float32)})
+
+* **Backend test case** — enumerate the C++ cases with
+  :func:`onnx_light.onnx.backend.collect_test_cases`; passing the op type
+  returns just its cases (see :ref:`l-howto-collect-backend-test-cases`):
+
+  .. code-block:: python
+
+      import onnx_light.onnx.backend as bt
+
+      abs_cases = bt.collect_test_cases("Abs")
+
+* **Shape inference** — run the pipeline with
+  :func:`onnx_light.onnx_core.shape_inference.infer_shapes_model`, which reads
+  the shared ``core::shapes`` dispatch table populated by
+  ``RegisterShapeFunctions``:
+
+  .. code-block:: python
+
+      from onnx_light.onnx_core.shape_inference import infer_shapes_model
+
+      infer_shapes_model(model)  # fills model.graph.value_info / output types
+
+* **Light op schema** — the new schema shows up in
+  :mod:`onnx_light.onnx.defs` (``get_schema``, ``get_all_schemas_with_history``)
+  and in ``onnx_light.onnx_op.get_all_schemas_with_history``:
+
+  .. code-block:: python
+
+      import onnx_light.onnx.defs as defs
+
+      schema = defs.get_schema("Abs")
+
+* **Peak memory** — query the estimate through
+  :func:`onnx_light.onnx_core.shape_inference.compute_peak_memory`, backed by
+  ``RegisterPeakMemoryFunctions``:
+
+  .. code-block:: python
+
+      from onnx_light.onnx_core.shape_inference import compute_peak_memory, Device, SymShape
+
+      peak = compute_peak_memory(
+          "ai.onnx", "Attention", Device.kCPU,
+          [SymShape([2, 4, 8, 16]), SymShape([2, 4, 8, 16])],
+      )
+
 See also
 --------
 

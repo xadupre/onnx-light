@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "onnx_lib/common/assertions.h"
+#include "onnx_lib/common/narrow.h"
 #include "onnx_lib/defs/doc_strings.h"
 #include "onnx_lib/defs/function.h"
 #include "onnx_lib/defs/math/utils.h"
@@ -1989,7 +1990,11 @@ static void einsumShapeInference(ONNX_LIGHT_NAMESPACE::InferenceContext &ctx,
       }
 
       if (is_letter(right_equation[index])) {
-        *output_shape.add_dim() = dims_value.dim(label_maps[right_equation[index]]);
+        auto it = label_maps.find(right_equation[index]);
+        if (it == label_maps.end()) {
+          fail_shape_inference("Equation output contains a label missing from the inputs");
+        }
+        *output_shape.add_dim() = dims_value.dim(it->second);
       }
     }
   } else { // Infer the dimension for right-hand side
@@ -2484,7 +2489,7 @@ Generates a {name} window as described in the paper https://ieeexplore.ieee.org/
       // Update the output data type to the output_datatype
       auto output_datatype =
           getAttribute(ctx, "output_datatype", static_cast<int64_t>(TensorProto_DataType_FLOAT));
-      updateOutputElemType(ctx, 0, output_datatype);
+      updateOutputElemType(ctx, 0, narrow<int32_t>(output_datatype));
 
       if (!hasInputShape(ctx, 0)) {
         // If no shape is available for the input, skip shape inference.
@@ -2680,7 +2685,7 @@ ONNX_OPERATOR_SET_SCHEMA(
         .TypeAndShapeInferenceFunction([](ONNX_LIGHT_NAMESPACE::InferenceContext &ctx) {
           auto output_datatype = getAttribute(ctx, "output_datatype",
                                               static_cast<int64_t>(TensorProto_DataType_FLOAT));
-          updateOutputElemType(ctx, 0, output_datatype);
+          updateOutputElemType(ctx, 0, narrow<int32_t>(output_datatype));
 
           if (!hasInputShape(ctx, 0) || !hasInputShape(ctx, 1)) {
             return;

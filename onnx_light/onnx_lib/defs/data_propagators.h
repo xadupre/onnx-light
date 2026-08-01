@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "onnx_lib/common/narrow.h"
 #include "onnx_lib/defs/shape_inference.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -74,7 +75,7 @@ inline void GatherOp13DataPropagator(DataPropagationContext &ctx) {
   for (size_t i = 0; i < input_indices->ref_dim().size(); ++i) {
     if (input_indices->ref_dim()[i].has_dim_value()) {
       appendDimToTensorShapeProto(tsp, input_data,
-                                  static_cast<int>(input_indices->ref_dim()[i].ref_dim_value()));
+                                  narrow<int>(input_indices->ref_dim()[i].ref_dim_value()));
     } else {
       return;
     }

@@ -256,11 +256,12 @@ static void convPoolShapeInference_opset19(InferenceContext &ctx, bool use_dilat
     // on the stride
     int64_t strided_kernel_positions = 0;
 
+    const int64_t stride_gap = effective_input_size - effective_kernel_shape[i];
     if (ceil_mode == 1)
-      strided_kernel_positions = static_cast<int64_t>(std::ceil(
-          (effective_input_size - effective_kernel_shape[i]) / static_cast<float>(strides[i])));
+      // exact ceil division; (a + b - 1) / b would be wrong for negative a
+      strided_kernel_positions = stride_gap / strides[i] + (stride_gap % strides[i] > 0 ? 1 : 0);
     else
-      strided_kernel_positions = (effective_input_size - effective_kernel_shape[i]) / strides[i];
+      strided_kernel_positions = stride_gap / strides[i];
 
     int64_t output_size = 1 + strided_kernel_positions;
     if (ceil_mode == 1 &&
@@ -1824,11 +1825,12 @@ static void convPoolShapeInference_opset1_to_11(InferenceContext &ctx, bool use_
     // on the stride
     int64_t strided_kernel_positions = 0;
 
+    const int64_t stride_gap = effective_input_size - effective_kernel_shape[i];
     if (ceil_mode == 1)
-      strided_kernel_positions = static_cast<int64_t>(std::ceil(
-          (effective_input_size - effective_kernel_shape[i]) / static_cast<float>(strides[i])));
+      // exact ceil division; (a + b - 1) / b would be wrong for negative a
+      strided_kernel_positions = stride_gap / strides[i] + (stride_gap % strides[i] > 0 ? 1 : 0);
     else
-      strided_kernel_positions = (effective_input_size - effective_kernel_shape[i]) / strides[i];
+      strided_kernel_positions = stride_gap / strides[i];
 
     // add in the initial position
     newdim->set_dim_value(1 + strided_kernel_positions);

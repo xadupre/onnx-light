@@ -612,12 +612,11 @@ LightOpSchema MakeRangeSchema(int since_version) {
           {"T", RangeT(since_version), "Constrain input types to common numeric type tensors."},
       },
       attrs);
-  // The opset-11 ``Range`` schema is implemented as a function body that expands
-  // to a ``Loop``, which makes it non-deterministic; the opset-27 schema drops
-  // that function body and is deterministic.
-  if (since_version < 27) {
-    schema.set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
-  }
+  // Range's output is fully determined by its inputs; both schema versions are
+  // explicitly marked deterministic (mirrors onnx/onnx#8232), even though the
+  // opset-11 function body expands to a ``Loop`` that the auto-detection would
+  // otherwise classify as non-deterministic.
+  schema.set_node_determinism(LightOpSchema::NodeDeterminism::Deterministic);
   return schema;
 }
 

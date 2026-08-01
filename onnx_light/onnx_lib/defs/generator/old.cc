@@ -796,6 +796,7 @@ ONNX_OPERATOR_SET_SCHEMA(
                         {"tensor(float)", "tensor(double)", "tensor(int16)", "tensor(int32)",
                          "tensor(int64)"},
                         "Constrain input types to common numeric type tensors.")
+        .SetNodeDeterminism(OpSchema::NodeDeterminism::Deterministic)
         .FunctionBody(R"ONNX(
           {
             sub_result = Sub (limit, start)

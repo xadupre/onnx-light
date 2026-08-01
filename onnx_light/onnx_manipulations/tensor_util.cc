@@ -53,7 +53,10 @@ namespace ONNX_LIGHT_NAMESPACE {
                  sizeof(type), ")");                                                               \
     }                                                                                              \
     res.resize(raw_data_size / sizeof(type));                                                      \
-    memcpy(reinterpret_cast<char *>(res.data()), bytes, raw_data_size);                            \
+    /* memcpy requires a non-null destination even for a zero-length copy */                       \
+    if (raw_data_size != 0) {                                                                      \
+      memcpy(reinterpret_cast<char *>(res.data()), bytes, raw_data_size);                          \
+    }                                                                                              \
     return res;                                                                                    \
   }
 
@@ -105,7 +108,10 @@ DEFINE_PARSE_DATA(uint64_t, ref_uint64_data)
                  sizeof(type), ")");                                                               \
     }                                                                                              \
     res.resize(raw_data_size / sizeof(type));                                                      \
-    memcpy(reinterpret_cast<char *>(res.data()), bytes, raw_data_size);                            \
+    /* memcpy requires a non-null destination even for a zero-length copy */                       \
+    if (raw_data_size != 0) {                                                                      \
+      memcpy(reinterpret_cast<char *>(res.data()), bytes, raw_data_size);                          \
+    }                                                                                              \
     return res;                                                                                    \
   }
 

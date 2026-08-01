@@ -16,9 +16,11 @@ hook makes it possible to plug a Python callable into the runtime without
 touching the C++ dispatch table. The callable is invoked as
 ``fn(node, *numpy_inputs)`` and must return either a single
 :class:`numpy.ndarray` or a tuple/list of arrays for multi-output ops.
-Registrations are reapplied to the fresh ``RuntimeContext`` built on
-every :meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run` call, so
-the same evaluator can be reused safely across runs.
+Registrations are stored on the evaluator's persistent ``RuntimeContext``.
+Registering or unregistering
+a kernel invalidates cached runtime sessions, and the next
+:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run` call recreates
+them, so the same evaluator can be reused safely across runs.
 
 This example:
 
@@ -72,8 +74,9 @@ def scale(node, x):
 #
 # :meth:`register_custom_kernel` is a wrapper around the low-level
 # :py:meth:`RuntimeContext.register_custom_kernel` binding. The
-# registration is stored on the evaluator and reapplied to every
-# fresh :class:`RuntimeContext` it builds, so the same evaluator can
+# registration is stored on the evaluator. Registering or unregistering
+# invalidates cached runtime sessions, and the next
+# :meth:`ReferenceEvaluator.run` recreates them, so the same evaluator can
 # run multiple inputs without re-registering.
 
 sess = ReferenceEvaluator(model)

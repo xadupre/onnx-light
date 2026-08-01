@@ -320,8 +320,8 @@ jobs:
     # sccache: it uses the Visual Studio generator (-A Win32), which ignores
     # CMAKE_CXX_COMPILER_LAUNCHER, so every run is a full cold build (~16-17
     # min) with no cache to fall back on. 22 minutes left almost no headroom on
-    # slower runners; bump to 30 to keep the job from timing out.
-    timeout-minutes: 30
+    # slower runners; bump to 32 to keep the job from timing out.
+    timeout-minutes: 32
     permissions:
       contents: read
     steps:

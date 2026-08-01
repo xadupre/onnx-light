@@ -290,8 +290,8 @@ public:                                                                         
   }                                                                                                \
   /** Compatibility accessor - equivalent to ref_##name(). */                                      \
   inline type &name() { return ref_##name(); }                                                     \
-  /** Compatibility accessor - equivalent to ref_##name() const. */                                \
-  inline const type &name() const { return ref_##name(); }                                         \
+  /** Compatibility accessor — returns default enum value when unset (protobuf compat). */         \
+  inline type name() const { return has_##name() ? *name##_ : type(0); }                           \
   inline const type *ptr_##name() const {                                                          \
     return has_##name() ? &(*name##_) : static_cast<type *>(nullptr);                              \
   }                                                                                                \

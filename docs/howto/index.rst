@@ -18,4 +18,5 @@ How-to Python / C++
     collect_backend_test_cases
     use_custom_kernel
     use_custom_shape_inference
+    register_builtin_operators
     onnx_graph_manipulations

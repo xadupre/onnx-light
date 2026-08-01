@@ -2015,8 +2015,8 @@ static void col2imShapeInference(InferenceContext &ctx) {
   }
   unifyInputDim(ctx, 2, 0, n_input_dims);
 
-  int block_shape_size = 0;
-  if (static_cast<int>(block_shape.size()) > 0) {
+  int64_t block_shape_size = 0;
+  if (!block_shape.empty()) {
     block_shape_size = 1;
     for (const auto &dim : block_shape) {
       block_shape_size *= dim;

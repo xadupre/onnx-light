@@ -121,7 +121,7 @@ std::function<void(OpSchema &)> TopKOpGenerator(std::vector<std::string> allowed
   };
 }
 
-int MathOpTwoIntegers(const std::string &op_type, int a, int b) {
+int64_t MathOpTwoIntegers(const std::string &op_type, int64_t a, int64_t b) {
   if (op_type == "Add") {
     return a + b;
   } else if (op_type == "Sub") {

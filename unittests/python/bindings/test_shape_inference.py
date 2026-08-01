@@ -899,6 +899,37 @@ class TestShapeInference(ExtTestCase):
         self.assertFalse(first_dim.HasField("dim_value") and first_dim.dim_value == 5)
         self.assertEqual(loop_output.type.tensor_type.shape.dim[1].dim_value, 3)
 
+    def test_einsum_output_label_missing_from_inputs(self) -> None:
+        """Einsum output labels absent from the inputs must raise InferenceError.
+
+        Mirrors the fix from https://github.com/onnx/onnx/pull/8147: the missing
+        label previously default-inserted index 0 instead of failing inference.
+        """
+        model = parser.parse_model("""
+            <ir_version: 10, opset_import: ["" : 20]>
+            agraph (float[2, 3] x) => (out) {
+                out = Einsum <equation = "ij->k"> (x)
+            }
+            """)
+        with self.assertRaisesRegex(shape_inference.InferenceError, "missing from the inputs"):
+            shape_inference.infer_shapes(model, strict_mode=True)
+
+    def test_hann_window_output_datatype_out_of_range(self) -> None:
+        """Window ops must reject an output_datatype that does not fit in int32.
+
+        Mirrors the fix from https://github.com/onnx/onnx/pull/8147: the attribute
+        is now converted with the checked ``narrow`` helper so wrapped values fail
+        inference instead of silently truncating.
+        """
+        model = parser.parse_model("""
+            <ir_version: 10, opset_import: ["" : 20]>
+            agraph (int32[1] size) => (out) {
+                out = HannWindow <output_datatype = 999999999999> (size)
+            }
+            """)
+        with self.assertRaisesRegex(shape_inference.InferenceError, "narrow"):
+            shape_inference.infer_shapes(model, strict_mode=True)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

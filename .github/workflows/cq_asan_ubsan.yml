@@ -49,7 +49,10 @@ jobs:
 
       - name: Run C++ unit tests
         env:
-          ASAN_OPTIONS: detect_leaks=1:strict_init_order=1:check_initialization_order=1:detect_container_overflow=1:alloc_dealloc_mismatch=1:abort_on_error=1
+          # detect_container_overflow is off: protobuf and googletest are built
+          # without instrumentation, so their containers lack the annotations ASan
+          # expects and the check reports false positives.
+          ASAN_OPTIONS: detect_leaks=1:strict_init_order=1:check_initialization_order=1:detect_container_overflow=0:alloc_dealloc_mismatch=1:abort_on_error=1
           UBSAN_OPTIONS: print_stacktrace=1
         run: ctest --test-dir build --output-on-failure
 
@@ -57,7 +60,10 @@ jobs:
         env:
           # Python itself is not built with sanitizers, so leak detection
           # produces large amounts of false positives from CPython internals.
-          ASAN_OPTIONS: detect_leaks=0:strict_init_order=1:check_initialization_order=1:detect_container_overflow=1:alloc_dealloc_mismatch=1:abort_on_error=1
+          # detect_container_overflow is off: CPython, protobuf and googletest are
+          # built without instrumentation, so their containers lack the annotations
+          # ASan expects and the check reports false positives.
+          ASAN_OPTIONS: detect_leaks=0:strict_init_order=1:check_initialization_order=1:detect_container_overflow=0:alloc_dealloc_mismatch=1:abort_on_error=1
           UBSAN_OPTIONS: print_stacktrace=1
         run: |
           # When loading sanitizer-instrumented .so files from a non-instrumented

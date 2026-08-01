@@ -498,6 +498,14 @@ TEST(onnx_defs, ParseData_Float_FromRawData_InvalidAlignment_TensorProto) {
 }
 #endif // ONNX_NO_EXCEPTIONS
 
+TEST(onnx_defs, ParseData_Float_FromEmptyRawData_Tensor) {
+  Tensor tensor;
+  tensor.set_raw_data(std::string());
+
+  auto data = ParseData<float>(&tensor);
+  EXPECT_TRUE(data.empty());
+}
+
 // ===========================================================================
 // doc_strings.cc tests
 // ===========================================================================

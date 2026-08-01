@@ -746,10 +746,10 @@ Common::Status OnnxParser::ParseSingleAttributeValue(AttributeProto &attr,
         attr.set_type(AttributeProto::AttributeType::FLOAT);
         attr.set_f(IsNegativeZeroIntegerLiteral(literal.value)
                        ? LocaleIndependentStof(literal.value)
-                       : static_cast<float>(std::stol(literal.value)));
+                       : static_cast<float>(std::stoll(literal.value)));
       } else {
         attr.set_type(AttributeProto::AttributeType::INT);
-        attr.set_i(std::stol(literal.value));
+        attr.set_i(std::stoll(literal.value));
       }
       break;
     case LiteralType::FLOAT_LITERAL:

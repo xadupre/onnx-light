@@ -70,6 +70,71 @@ ONNX graphs (``GradientOfNodes`` / ``GradientOfFunction``); it depends on
 extended build variant and is only built when
 ``ONNX_LIGHT_BUILD_KERNELS=ON``.
 
+Core/extension registration pattern (examples)
+----------------------------------------------
+
+The same design pattern is reused across shape inference, peak-memory
+estimation, kernels, backend tests, and operator schemas:
+``onnx_core`` defines the generic types / registries / dispatch APIs, while
+the concrete ONNX operator implementations live in sibling libraries
+(``onnx_extensions`` and ``onnx_op``) and are wired in explicitly.
+
+.. list-table::
+    :header-rows: 1
+    :widths: 20 40 40
+
+    * - Feature
+      - Core side (mechanism only)
+      - Extension side (concrete implementations)
+    * - Shape inference
+      - ``onnx_core/shapes/dispatch_table.h`` defines
+        ``ComputeShapeFn`` + ``RegisterComputeShapeFn`` /
+        ``DispatchTable``.
+      - ``onnx_extensions/shapes/dispatch_table.cc`` builds
+        ``BuiltinShapeFunctions()`` and registers them through
+        ``RegisterShapeFunctions()``.
+    * - Peak memory
+      - ``onnx_core/shapes/dispatch_table.h`` defines
+        ``ComputePeakMemoryFn`` + ``RegisterComputePeakMemoryFn`` /
+        ``ComputePeakMemory``.
+      - ``onnx_extensions/shapes/dispatch_table.cc`` builds
+        ``BuiltinPeakMemoryFunctions()`` and registers them through
+        ``RegisterPeakMemoryFunctions()``.
+    * - Runtime kernels
+      - ``onnx_core/runtime/kernel_dispatch_table.h`` defines
+        ``NodeKernelFn`` + ``RegisterKernelFn`` / ``KernelDispatchTable``.
+      - ``onnx_extensions/kernels/kernel_dispatch_table.cc`` builds
+        ``BuiltinKernelFunctions()`` and registers them through
+        ``RegisterKernelFunctions()``.
+    * - Backend tests
+      - ``onnx_core/backend_test/test_case_registry.h/.cc`` defines
+        ``TestCasesCollectorFn`` + ``RegisterTestCasesCollector`` /
+        ``GetRegisteredCollectors``.
+      - ``onnx_extensions/backend_test/collect_test_cases.cc`` registers
+        every category collector and implements ``CollectTestCases``.
+    * - Light operator schema
+      - ``onnx_core/light_op_schema/light_op_schema.h`` defines
+        ``LightOpSchema`` and related schema data structures.
+      - ``onnx_op/operator_sets*.cc`` implements per-domain schema history,
+        and ``onnx_op/operator_sets.cc`` aggregates them through
+        ``GetAllOnnxOpSchemasWithHistory``.
+
+For the first three rows above, explicit registration keeps ``onnx_core``
+independent from the extension libraries:
+
+.. code-block:: cpp
+
+    // shape inference + peak memory
+    onnx_shapes::RegisterShapeFunctions();
+    onnx_shapes::RegisterPeakMemoryFunctions();
+
+    // runtime kernels
+    onnx_kernels::RegisterKernelFunctions();
+
+This means a downstream binary can keep linking minimal. If it never calls
+shape inference, peak-memory estimation, runtime execution, or backend-test
+collection, it does not need to link the corresponding extension library.
+
 When installed (``cmake --install``) all libraries are exported under the
 ``onnx_light::`` namespace and can be consumed individually through
 ``find_package(onnx_light)``.

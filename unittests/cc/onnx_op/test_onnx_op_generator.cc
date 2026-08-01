@@ -383,6 +383,11 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsRangeSchemas) {
     EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T");
     EXPECT_EQ(schema->type_constraints()[0].description,
               "Constrain input types to common numeric type tensors.");
+
+    // Range's output is fully determined by its inputs (mirrors onnx/onnx#8232).
+    EXPECT_EQ(schema->node_determinism(),
+              core::schema::LightOpSchema::NodeDeterminism::Deterministic);
+    EXPECT_FALSE(schema->non_deterministic());
   }
 
   EXPECT_EQ(range_v11->type_constraints()[0].allowed_type_strs,

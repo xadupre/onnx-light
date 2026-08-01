@@ -423,6 +423,7 @@ ONNX_OPERATOR_SET_SCHEMA(
                         {"tensor(float)", "tensor(double)", "tensor(int16)", "tensor(int32)",
                          "tensor(int64)", "tensor(float16)", "tensor(bfloat16)"},
                         "Constrain input types to common numeric type tensors.")
+        .SetNodeDeterminism(OpSchema::NodeDeterminism::Deterministic)
         .SetContextDependentFunctionBodyBuilder(BuildFunctionBodyRange27)
         .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
           // Type inference

@@ -91,6 +91,15 @@ class TestDefsLookup(ExtTestCase):
     def test_onnx_ir_version(self):
         self.assertEqual(defs.onnx_ir_version(), defs.IR_VERSION)
 
+    def test_range_is_deterministic(self):
+        # Range is defined via a function body but its output is fully determined
+        # by its inputs, so both schema versions are explicitly marked as
+        # Deterministic (mirrors onnx/onnx#8232).
+        for version in (11, 27):
+            with self.subTest(version=version):
+                schema = defs.get_schema("Range", version)
+                self.assertFalse(schema.non_deterministic)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

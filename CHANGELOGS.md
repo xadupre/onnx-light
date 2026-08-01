@@ -5,15 +5,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.11] – Unreleased
 
+### New Features
+
+- Added recursive `RemoveUnusedNodes`, `RemoveIdentityNodes`, and `RemoveDuplicateInitializers` passes to `GraphBuilder`.
+- Added recursive duplicate-node removal (common subexpression elimination) to `GraphBuilder`.
+- Added local-function inlining to `GraphBuilder`.
+
 ### Improvements
 
 - Made `ReferenceEvaluator` import standard-dtype runtime `Tensor` outputs into NumPy through the DLPack exchange protocol (`Tensor.__dlpack__` / `numpy.from_dlpack`), keeping the zero-copy conversion while relying on the standard protocol; bfloat16/float8 and sub-byte/STRING tensors keep their existing fallbacks.
 - Made the C++ `RunNode` / `RuntimeSession` dispatch device-aware: a `RuntimeContext` pinned to a non-CPU device now resolves the device-qualified kernel and fails with a diagnostic naming the device when none is registered, instead of silently dispatching to the CPU kernel.
 - Routed `Tensor::elem_num()` and `Tensor::size_from_dim()` through the new `safe_dim_product` helper so tensor dimension overflow and negative dimensions raise `tensor_error` (propagated from onnx/onnx#8220).
+- Turned the `TensorProto` `dims` into `int64_t`.
+- Made `OptionalString::value()` return a `const std::string&`.
+- Improved compatibility with ONNX Runtime.
+- Preserved unshaped `Scan` inputs in the `Scan` 8 → 9 version-converter adapter.
+- Validated `int32_data` payload sizes in `VerifyTensor` (propagated from onnx/onnx#8211).
+- Preserved signed zero for zero-point-less `FLOAT4E2M1` `QuantizeLinear`.
+- Removed the remaining C++ compiler warnings under `-Wall` / `ONNX_HARDENING`.
+
+### Testing
+
+- Fixed the `-Wmissing-field-initializers` warning in the backend-test `IoData` initializers.
 
 ### Documentation & CI
 
 - Bumped the release version to `0.1.11`.
+- Fixed the macOS C++ release build by raising the deployment target to 13.3.
+- Dropped the Python 3.10 wheels and fixed the Windows release wheel repair.
+- Enabled ASan container-overflow detection in CI (propagated from onnx/onnx#8213).
+- Disabled precompiled headers when an sccache/ccache launcher is active.
+- Fixed the C++ documentation namespace (`onnx::` → `onnx_light::`).
+- Refreshed the custom-kernel how-to for the current `ReferenceEvaluator` runtime APIs.
+- Documented the core/extension registration design for shape, peak-memory, kernels, backend tests, and `LightOpSchema`.
 
 ## [0.1.10] – 2026-07-30
 

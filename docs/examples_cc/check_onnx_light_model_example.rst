@@ -7,7 +7,7 @@ This page documents ``examples/check_onnx_light_model``
 (`view on GitHub <https://github.com/xadupre/onnx-light/tree/main/examples/check_onnx_light_model>`_),
 a self-contained
 CMake project that demonstrates linking with *onnx-light* and running
-:cpp:func:`onnx::checker::check_model` from C++. The same program also
+:cpp:func:`onnx_light::checker::check_model` from C++. The same program also
 demonstrates calling :cpp:func:`core::shapes::InferShapesModel` —
 the onnx_shapes shape-inference entry point — on the loaded model.
 
@@ -54,8 +54,8 @@ Step 3 – Run the example
 The optional ``full_check`` argument accepts ``0`` (default) or ``1``.
 When ``full_check=1``, checker runs additional shape-inference validation.
 
-The optional :func:`~onnx_light.onnx_lib.shape_inference.infer_shapes` argument accepts ``0`` (default) or ``1``.
-When ``infer_shapes=1``, the example loads the model into a :class:`~onnx_light.onnx_lib.ModelProto`
+The optional ``infer_shapes`` argument accepts ``0`` (default) or ``1``.
+When ``infer_shapes=1``, the example loads the model into a :cpp:class:`onnx_light::ModelProto`
 and calls :cpp:func:`core::shapes::InferShapesModel` to populate
 ``graph.value_info`` and refine ``graph.output`` shapes in place, then
 reports how many entries each list contains.
@@ -95,7 +95,7 @@ main.cc
 --------
 
 The program calls the path-based checker API and handles validation failures
-using :cpp:class:`onnx::checker::ValidationError`. When ``infer_shapes=1`` it
+using :cpp:class:`onnx_light::checker::ValidationError`. When ``infer_shapes=1`` it
 also loads the model with :cpp:func:`LoadProtoFromPath`, calls
 :cpp:func:`onnx_light::onnx_shapes::RegisterShapeFunctions` to populate
 ``core::shapes``'s dispatch table with the built-in ``onnx_shapes`` shape

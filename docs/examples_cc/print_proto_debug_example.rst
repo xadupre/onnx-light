@@ -103,6 +103,6 @@ Example output:
 See also
 --------
 
-* ``onnx::ProtoDebugString`` (from ``proto_utils.h``) is a convenience helper
+* ``onnx_light::ProtoDebugString`` (from ``proto_utils.h``) is a convenience helper
   that internally calls ``PrintToStringStream`` and returns a single
   ``std::string``.

@@ -6,7 +6,7 @@ Standalone C++ example: build, save and load an ONNX model with only ``lib_onnx_
 This page documents ``examples/build_save_load_onnx_proto``
 (`view on GitHub <https://github.com/xadupre/onnx-light/tree/main/examples/build_save_load_onnx_proto>`_),
 a self-contained
-CMake project that builds a tiny ONNX :cpp:class:`onnx::ModelProto` entirely
+CMake project that builds a tiny ONNX :cpp:class:`onnx_light::ModelProto` entirely
 in C++, serializes it to disk, parses it back, and checks the round-trip.
 
 The example purposely links against ``onnx_light::lib_onnx_proto`` **only**:
@@ -92,22 +92,22 @@ only:
 Key API types
 -------------
 
-:cpp:class:`onnx::ModelProto`, :cpp:class:`onnx::GraphProto`, :cpp:class:`onnx::NodeProto`, :cpp:class:`onnx::TensorProto`, :cpp:class:`onnx::ValueInfoProto`
+:cpp:class:`onnx_light::ModelProto`, :cpp:class:`onnx_light::GraphProto`, :cpp:class:`onnx_light::NodeProto`, :cpp:class:`onnx_light::TensorProto`, :cpp:class:`onnx_light::ValueInfoProto`
     Plain proto-message classes used to assemble the model in memory.
 
-:cpp:class:`onnx::utils::FileWriteStream`
+:cpp:class:`onnx_light::utils::FileWriteStream`
     Buffered binary output stream used to write the serialized model.
 
-:cpp:class:`onnx::utils::FileStream`
+:cpp:class:`onnx_light::utils::FileStream`
     Buffered binary input stream used to read the model back from disk.
 
-:cpp:func:`onnx::SerializeModelProtoToStream`
-    Writes a :cpp:class:`onnx::ModelProto` to a binary stream using the
-    configured :cpp:class:`onnx::SerializeOptions`.
+:cpp:func:`onnx_light::SerializeModelProtoToStream`
+    Writes a :cpp:class:`onnx_light::ModelProto` to a binary stream using the
+    configured :cpp:class:`onnx_light::SerializeOptions`.
 
-:cpp:func:`onnx::ParseModelProtoFromStream`
-    Parses a binary protobuf stream into a :cpp:class:`onnx::ModelProto`,
-    optionally honouring :cpp:class:`onnx::ParseOptions` (threading, no-copy,
+:cpp:func:`onnx_light::ParseModelProtoFromStream`
+    Parses a binary protobuf stream into a :cpp:class:`onnx_light::ModelProto`,
+    optionally honouring :cpp:class:`onnx_light::ParseOptions` (threading, no-copy,
     etc.).
 
 See also

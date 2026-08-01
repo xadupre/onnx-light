@@ -13,11 +13,11 @@ does not recognise and raises :class:`ValueError`.
 *onnx-light* lets you plug in a callback that handles the shape
 inference for any ``(domain, op_type)`` pair, in Python and in C++. Once
 registered, the callback is invoked transparently by
-:func:`~onnx_light.onnx_core.shape_inference.compute_shape_node` and
+:cpp:func:`~onnx_light.onnx_core.shape_inference.compute_shape_node` and
 :func:`~onnx_light.onnx_core.shape_inference.compute_shape_model` in
 Python, and by
-:cpp:func:`onnx::core::shapes::ShapesContext::ComputeShapeNode` and
-:cpp:func:`onnx::core::shapes::ShapesContext::ComputeShapeModel` in
+:cpp:func:`onnx_light::core::shapes::ShapesContext::ComputeShapeNode` and
+:cpp:func:`onnx_light::core::shapes::ShapesContext::ComputeShapeModel` in
 C++.
 
 Import the shape-inference module
@@ -241,10 +241,10 @@ callback on the context **before** calling it:
           }
 
 :func:`~onnx_light.onnx_core.shape_inference.infer_shapes_model`
-(C++ :cpp:func:`onnx::core::shapes::InferShapesModel`) creates its own
+(C++ :cpp:func:`onnx_light::core::shapes::InferShapesModel`) creates its own
 internal context and does **not** accept a pre-configured context. Use
 :func:`~onnx_light.onnx_core.shape_inference.compute_shape_model`
-(C++ :cpp:func:`~onnx::core::shapes::ShapesContext::ComputeShapeModel`)
+(C++ :cpp:func:`onnx_light::core::shapes::ShapesContext::ComputeShapeModel`)
 instead when your model contains custom operators, then apply the inferred
 shapes back manually if needed:
 

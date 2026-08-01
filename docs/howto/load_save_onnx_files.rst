@@ -313,8 +313,8 @@ Notes
 -----
 
 * Python switches from one-file to two-file save when ``location=...`` is
-  provided.  C++ uses :cpp:class:`onnx::utils::FileWriteStream` for one file
-  and :cpp:class:`onnx::utils::TwoFilesWriteStream` for two files.
+  provided.  C++ uses :cpp:class:`onnx_light::utils::FileWriteStream` for one file
+  and :cpp:class:`onnx_light::utils::TwoFilesWriteStream` for two files.
 * Python loads external tensor data with ``load_external_data=True``.  When
   the weights file lives next to the ``.onnx`` file and the stored location is
   still valid, the explicit ``location=...`` override can be omitted.
@@ -325,13 +325,13 @@ Notes
   C++ follow the per-tensor ``external_data.location`` entries stored in the
   model.
 * Alignment lives on :py:class:`onnx_light.onnx.SerializeOptions`,
-  :py:class:`onnx_light.onnx.ParseOptions`, :cpp:class:`onnx::SerializeOptions`,
-  and :cpp:class:`onnx::ParseOptions` rather than the high-level
+  :py:class:`onnx_light.onnx.ParseOptions`, :cpp:class:`onnx_light::SerializeOptions`,
+  and :cpp:class:`onnx_light::ParseOptions` rather than the high-level
   :func:`~onnx_light.onnx.save` / :func:`~onnx_light.onnx.load` helper keywords.  Use a power of two such as
   ``4096`` when you want page-aligned external-data offsets.
 * The same parallel options apply to one-file and two-file I/O.  In C++, set
-  ``num_threads`` on :cpp:class:`onnx::ParseOptions` or
-  :cpp:class:`onnx::SerializeOptions` before calling the helper functions.
+  ``num_threads`` on :cpp:class:`onnx_light::ParseOptions` or
+  :cpp:class:`onnx_light::SerializeOptions` before calling the helper functions.
 
 See also
 --------

@@ -41,6 +41,7 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
   const TestCase *uint2_case = nullptr;
   const TestCase *int2_case = nullptr;
   const TestCase *float4e2m1_case = nullptr;
+  const TestCase *float4e2m1_signed_zero_case = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_quantizelinear") {
       uint8_case = &c;
@@ -68,6 +69,8 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
       int2_case = &c;
     } else if (c.name == "test_quantizelinear_float4e2m1") {
       float4e2m1_case = &c;
+    } else if (c.name == "test_quantizelinear_float4e2m1_signed_zero") {
+      float4e2m1_signed_zero_case = &c;
     }
   }
   ASSERT_NE(uint8_case, nullptr);
@@ -83,6 +86,7 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
   ASSERT_NE(uint2_case, nullptr);
   ASSERT_NE(int2_case, nullptr);
   ASSERT_NE(float4e2m1_case, nullptr);
+  ASSERT_NE(float4e2m1_signed_zero_case, nullptr);
 
   // Default UINT8 case: two inputs (x, y_scale), single UINT8 output.
   {
@@ -240,6 +244,25 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
     // Expected nibbles: 1,2,3,5,-8,-6,3,4,4,5,5,7 →
     // bytes: 0x21, 0x53, 0xA8, 0x43, 0x54, 0x75.
     const std::vector<uint8_t> expected = {0x21, 0x53, 0xA8, 0x43, 0x54, 0x75};
+    EXPECT_EQ(ds.outputs[0].data, expected);
+  }
+
+  // Signed-zero case (onnx#8230): FLOAT4E2M1 output with no ``y_zero_point``
+  // (two inputs only) must preserve signed zero. x = {-0.0, 0.0} packs to a
+  // single byte with the negative-zero nibble (0x8) in the low position and
+  // the positive-zero nibble (0x0) in the high position, i.e. 0x08.
+  {
+    const GraphProto &graph = float4e2m1_signed_zero_case->model().ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    EXPECT_EQ(graph.ref_input().size(), 2u);
+    ASSERT_EQ(float4e2m1_signed_zero_case->data_sets().size(), 1u);
+    const auto &ds = float4e2m1_signed_zero_case->data_sets()[0];
+    ASSERT_EQ(ds.inputs.size(), 2u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT4E2M1));
+    const std::vector<int64_t> shape = {2};
+    EXPECT_EQ(ds.outputs[0].shape, shape);
+    const std::vector<uint8_t> expected = {0x08};
     EXPECT_EQ(ds.outputs[0].data, expected);
   }
 }

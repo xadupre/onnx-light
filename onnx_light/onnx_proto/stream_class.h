@@ -51,7 +51,17 @@
   SerializeSizeResult SerializeSize(utils::BinaryWriteStream &stream, SerializeOptions &opts)      \
       const;                                                                                       \
   bool ParseFromStream(utils::BinaryStream &stream, ParseOptions &options);                        \
+  /** Parses from a BinaryStream with default options. */                                          \
+  inline bool ParseFromStream(utils::BinaryStream &stream) {                                       \
+    ParseOptions opts;                                                                             \
+    return ParseFromStream(stream, opts);                                                          \
+  }                                                                                                \
   void SerializeToStream(utils::BinaryWriteStream &stream, SerializeOptions &options) const;       \
+  /** Serializes to a BinaryWriteStream with default options. */                                   \
+  inline void SerializeToStream(utils::BinaryWriteStream &stream) const {                          \
+    SerializeOptions opts;                                                                         \
+    SerializeToStream(stream, opts);                                                               \
+  }                                                                                                \
   void PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const;
 
 /** Macro for beginning a generated proto class with a default constructor. */
@@ -102,6 +112,28 @@ public:                                                                         
   static inline constexpr const char *DOC_##name = doc;                                            \
   type name##_;                                                                                    \
   using name##_t = type;
+
+/** Like FIELD but for ByteSpan (protobuf ``bytes``) fields.                                       \
+ *  ``mutable_##name()`` returns ``std::string*`` (via ByteSpan::mutable_value()) and              \
+ *  the const accessor returns ``const std::string&`` (via ByteSpan::value()) so that              \
+ *  consuming code written against protobuf ``bytes`` fields compiles unchanged. */
+#define FIELD_BYTES(name, order, doc)                                                              \
+public:                                                                                            \
+  inline utils::ByteSpan &ref_##name() { return name##_; }                                         \
+  inline const utils::ByteSpan &ref_##name() const { return name##_; }                             \
+  /** Returns a const std::string reference (protobuf bytes-field compat). */                      \
+  inline const std::string &name() const { return name##_.value(); }                               \
+  inline const utils::ByteSpan *ptr_##name() const { return &name##_; }                            \
+  inline bool has_##name() const { return _has_field_(name##_); }                                  \
+  inline void set_##name(const utils::ByteSpan &v) { name##_ = v; }                                \
+  /** Returns a mutable std::string pointer (protobuf bytes-field compat).                         \
+   *  After mutation, call sync_from_cache() on the ByteSpan to write back. */                     \
+  inline std::string *mutable_##name() { return name##_.mutable_value(); }                         \
+  inline int order_##name() const { return order; }                                                \
+  static inline constexpr const char *_name_##name = #name;                                        \
+  static inline constexpr const char *DOC_##name = doc;                                            \
+  utils::ByteSpan name##_;                                                                         \
+  using name##_t = utils::ByteSpan;
 
 #define FIELD_DEFAULT(type, name, order, default_value, doc)                                       \
 public:                                                                                            \
@@ -290,7 +322,7 @@ public:                                                                         
   }                                                                                                \
   /** Compatibility accessor - equivalent to ref_##name(). */                                      \
   inline type &name() { return ref_##name(); }                                                     \
-  /** Compatibility accessor — returns default enum value when unset (protobuf compat). */       \
+  /** Compatibility accessor - returns default enum value when unset (protobuf compat). */         \
   inline type name() const { return has_##name() ? *name##_ : type(0); }                           \
   inline const type *ptr_##name() const {                                                          \
     return has_##name() ? &(*name##_) : static_cast<type *>(nullptr);                              \

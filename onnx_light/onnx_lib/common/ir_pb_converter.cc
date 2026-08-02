@@ -102,7 +102,7 @@ static Tensor tensorProtoToTensor(const TensorProto &tp) {
   // <type>_data is to look at which of them is size zero.
   if (tp.has_raw_data()) {
     {
-      const utils::ByteSpan &_rd = tp.raw_data();
+      const utils::ByteSpan &_rd = tp.ref_raw_data();
       ret.set_raw_data(std::string(reinterpret_cast<const char *>(_rd.data()), _rd.size()));
     }
   }

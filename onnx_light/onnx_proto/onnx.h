@@ -374,20 +374,21 @@ FIELD_REPEATED(utils::String, string_data, 6,
 FIELD_REPEATED_PACKED(int64_t, int64_data, 7,
                       "For int64. When this field is present, the data_type field MUST be INT64")
 FIELD_STR(name, 8, "Optionally, a name for the tensor.")
-FIELD(utils::ByteSpan, raw_data, 9,
-      "Serializations can either use one of the fields above, or use this raw bytes field. The "
-      "only exception is the string case, where one is required to store the content in the "
-      "repeated bytes string_data field. When this raw_data field is used to store tensor "
-      "value, elements MUST be stored in as fixed-width, little-endian order. Floating-point "
-      "data types MUST be stored in IEEE 754 format. Complex64 elements must be written as two "
-      "consecutive FLOAT values, real component first. Complex128 elements must be written as "
-      "two consecutive DOUBLE values, real component first. Boolean type MUST be written one "
-      "byte per tensor element (00000001 for true, 00000000 for false). uint4 and int4 values "
-      "must be packed to 4bitx2, the first element is stored in the 4 LSB and the second "
-      "element is stored in the 4 MSB. Note: the advantage of specific field rather than the "
-      "raw_data field is that in some cases (e.g. int data), protobuf does a better packing "
-      "via variable length storage, and may lead to smaller binary footprint. When this field "
-      "is present, the data_type field MUST NOT be STRING or UNDEFINED.")
+FIELD_BYTES(
+    raw_data, 9,
+    "Serializations can either use one of the fields above, or use this raw bytes field. The "
+    "only exception is the string case, where one is required to store the content in the "
+    "repeated bytes string_data field. When this raw_data field is used to store tensor "
+    "value, elements MUST be stored in as fixed-width, little-endian order. Floating-point "
+    "data types MUST be stored in IEEE 754 format. Complex64 elements must be written as two "
+    "consecutive FLOAT values, real component first. Complex128 elements must be written as "
+    "two consecutive DOUBLE values, real component first. Boolean type MUST be written one "
+    "byte per tensor element (00000001 for true, 00000000 for false). uint4 and int4 values "
+    "must be packed to 4bitx2, the first element is stored in the 4 LSB and the second "
+    "element is stored in the 4 MSB. Note: the advantage of specific field rather than the "
+    "raw_data field is that in some cases (e.g. int data), protobuf does a better packing "
+    "via variable length storage, and may lead to smaller binary footprint. When this field "
+    "is present, the data_type field MUST NOT be STRING or UNDEFINED.")
 FIELD_REPEATED_PACKED(
     double, double_data, 10,
     "For double Complex128 tensors are encoded as a single array of doubles, with the real "
@@ -1122,7 +1123,14 @@ enum DataType : int32_t {
   SPARSE_TENSOR = 2,
   SEQUENCE = 3,
   MAP = 4,
-  OPTIONAL = 5
+  OPTIONAL = 5,
+  // Flat protobuf-style enumerator aliases (drop-in compatibility).
+  OptionalProto_DataType_UNDEFINED = 0,
+  OptionalProto_DataType_TENSOR = 1,
+  OptionalProto_DataType_SPARSE_TENSOR = 2,
+  OptionalProto_DataType_SEQUENCE = 3,
+  OptionalProto_DataType_MAP = 4,
+  OptionalProto_DataType_OPTIONAL = 5
 };
 FIELD_STR(name, 1, "An optional identifier for this optional.");
 FIELD(DataType, elem_type, 2,

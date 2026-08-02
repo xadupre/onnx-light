@@ -103,5 +103,30 @@ template <typename T> struct RepeatedPtrIteratorHelper<T, false> {
 template <typename T> using RepeatedPtrIterator = typename RepeatedPtrIteratorHelper<T>::type;
 
 } // namespace internal
+
+/** Parses a length-delimited message from a CodedInputStream.
+ *  Reads a varint32 size prefix, then exactly that many bytes, and
+ *  parses them into *message* via ParseFromArray.
+ *  Sets *clean_eof to true if the stream was at EOF before any bytes were read. */
+template <typename Msg>
+inline bool ParseDelimitedFromCodedStream(Msg *message, io::CodedInputStream *input,
+                                          bool *clean_eof) {
+  if (clean_eof != nullptr)
+    *clean_eof = false;
+  int start = input->CurrentPosition();
+
+  uint32_t size;
+  if (!input->ReadVarint32(&size)) {
+    if (clean_eof != nullptr)
+      *clean_eof = input->CurrentPosition() == start;
+    return false;
+  }
+
+  std::string buf(static_cast<size_t>(size), '\0');
+  if (!input->ReadRaw(buf.data(), static_cast<int>(size)))
+    return false;
+  return message->ParseFromArray(buf.data(), static_cast<int>(size));
+}
+
 } // namespace protobuf
 } // namespace google

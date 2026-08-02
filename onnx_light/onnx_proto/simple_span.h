@@ -316,6 +316,8 @@ public:
   }
   /** Returns a const reference to the byte at index i (no bounds check). */
   inline const uint8_t &operator[](size_t i) const { return data()[i]; }
+  /** Returns a const char pointer to the data (std::string compatibility). */
+  inline const char *c_str() const { return reinterpret_cast<const char *>(data()); }
 
   /** Returns true when both ByteSpans have the same size and byte content. */
   inline bool operator==(const ByteSpan &other) const {
@@ -349,6 +351,9 @@ public:
       return const_cast<uint8_t *>(ptr_);
     return owned_.data();
   }
+
+  /** Returns a mutable char pointer to the data (std::string compatibility). */
+  inline char *data_as_char() { return reinterpret_cast<char *>(data()); }
 
   /** Returns a mutable reference to the byte at index i; valid only in owned mode.
    *  No bounds check is performed; behaviour is undefined for i >= size(). */
@@ -477,6 +482,36 @@ public:
     owned_.push_back(v);
   }
 
+  /** Returns a const reference to the data as a std::string.
+   *  Lazily materializes an internal string cache for compatibility with APIs
+   *  that require `const std::string&` (e.g. protobuf bridge functions). */
+  inline const std::string &value() const {
+    const uint8_t *p = data();
+    const size_t sz = size();
+    if (str_cache_.size() != sz || (sz > 0 && std::memcmp(str_cache_.data(), p, sz) != 0)) {
+      str_cache_.assign(reinterpret_cast<const char *>(p), sz);
+    }
+    return str_cache_;
+  }
+
+  /** Returns a mutable pointer to a std::string that, on destruction or next access,
+   *  syncs back into the owned buffer. Callers must call sync_from_cache() after mutation.
+   *  Throws if the ByteSpan is in borrowed mode. */
+  inline std::string *mutable_value() {
+    EXT_ENFORCE(!borrowed_, "ByteSpan: mutable_value() called on a borrowed (zero-copy) buffer.");
+    const uint8_t *p = data();
+    str_cache_.assign(reinterpret_cast<const char *>(p), size());
+    return &str_cache_;
+  }
+
+  /** Copies the string cache back into the owned byte buffer.
+   *  Must be called after mutating via mutable_value(). */
+  inline void sync_from_cache() {
+    resize(str_cache_.size());
+    if (!str_cache_.empty())
+      std::memcpy(data(), str_cache_.data(), str_cache_.size());
+  }
+
 private:
   OwnedByteBuffer owned_;
   bool borrowed_ = false;
@@ -485,6 +520,8 @@ private:
   size_t align_ = 0;
   /** Keeps borrowed backing storage alive when the model owns the shared buffer. */
   std::shared_ptr<void> owner_;
+  /** Lazily-populated string cache for value()/mutable_value(). */
+  mutable std::string str_cache_;
 };
 
 } // namespace utils

@@ -351,7 +351,7 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
   // Return a borrowed (zero-copy) view directly into the TensorProto buffer.
   // The TensorProto must outlive the returned Tensor.
   if (tp.is_raw_data()) {
-    const auto &rd = tp.raw_data();
+    const auto &rd = tp.ref_raw_data();
     return Tensor::Borrow(name, dtype, shape, rd.data(), rd.size());
   }
 

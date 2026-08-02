@@ -97,6 +97,10 @@ public:
     }
     return *this;
   }
+  /** Returns a const reference to the underlying std::string (protobuf compatibility). */
+  inline const std::string &value() const { return *this; }
+  /** Returns a mutable pointer to the underlying std::string (protobuf compatibility). */
+  inline std::string *mutable_ptr() { return this; }
   /** Returns a string_view over the content. */
   inline std::string_view sv() const { return std::string_view(data(), size()); }
   /** Parses the content as a signed 64-bit integer. */

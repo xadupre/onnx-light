@@ -991,6 +991,8 @@ public:
   inline bool Close() { return Flush(); }
   /** No-op for protobuf FileOutputStream compatibility. */
   inline void SetCloseOnDelete(bool) {}
+  /** Returns 0; onnx-light throws on I/O errors rather than setting errno. */
+  inline int GetErrno() const { return 0; }
 
 protected:
   /** File descriptor the bytes are written to (not owned). */
@@ -1062,6 +1064,8 @@ public:
   inline void SetCloseOnDelete(bool) {}
   /** No-op placeholder; the fd is managed by the caller. */
   inline bool Close() { return true; }
+  /** Returns 0; onnx-light throws on I/O errors rather than setting errno. */
+  inline int GetErrno() const { return 0; }
 
 protected:
   virtual void LimitTo(uint64_t len) override { limit_ = static_cast<int64_t>(len); }

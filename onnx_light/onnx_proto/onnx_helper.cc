@@ -1196,7 +1196,7 @@ bool ReadIntegerValues(const TensorProto &tensor_proto, std::vector<int64_t> &ou
   if (!tensor_proto.is_raw_data()) {
     return false;
   }
-  const utils::ByteSpan &raw = tensor_proto.raw_data();
+  const utils::ByteSpan &raw = tensor_proto.ref_raw_data();
   const uint8_t *bytes = raw.data();
   const size_t nbytes = raw.size();
   auto read_le = [&](size_t element_bytes, bool is_signed, size_t count) {
@@ -1289,7 +1289,7 @@ bool ReadFloatingValues(const TensorProto &tensor_proto, std::vector<double> &ou
   if (!tensor_proto.is_raw_data()) {
     return false;
   }
-  const utils::ByteSpan &raw = tensor_proto.raw_data();
+  const utils::ByteSpan &raw = tensor_proto.ref_raw_data();
   const uint8_t *bytes = raw.data();
   const size_t nbytes = raw.size();
   switch (dtype) {

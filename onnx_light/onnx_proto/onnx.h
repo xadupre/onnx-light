@@ -1122,7 +1122,14 @@ enum DataType : int32_t {
   SPARSE_TENSOR = 2,
   SEQUENCE = 3,
   MAP = 4,
-  OPTIONAL = 5
+  OPTIONAL = 5,
+  // Flat protobuf-style enumerator aliases (drop-in compatibility).
+  OptionalProto_DataType_UNDEFINED = 0,
+  OptionalProto_DataType_TENSOR = 1,
+  OptionalProto_DataType_SPARSE_TENSOR = 2,
+  OptionalProto_DataType_SEQUENCE = 3,
+  OptionalProto_DataType_MAP = 4,
+  OptionalProto_DataType_OPTIONAL = 5
 };
 FIELD_STR(name, 1, "An optional identifier for this optional.");
 FIELD(DataType, elem_type, 2,

@@ -122,6 +122,18 @@ inline constexpr AttributeProto::AttributeType AttributeProto_AttributeType_SPAR
 inline constexpr AttributeProto::AttributeType AttributeProto_AttributeType_TYPE_PROTOS =
     AttributeProto::TYPE_PROTOS;
 
+using OptionalProto_DataType = OptionalProto::DataType;
+
+// OptionalProto_DataType flat enumerator constants.
+inline constexpr OptionalProto::DataType OptionalProto_DataType_UNDEFINED =
+    OptionalProto::UNDEFINED;
+inline constexpr OptionalProto::DataType OptionalProto_DataType_TENSOR = OptionalProto::TENSOR;
+inline constexpr OptionalProto::DataType OptionalProto_DataType_SPARSE_TENSOR =
+    OptionalProto::SPARSE_TENSOR;
+inline constexpr OptionalProto::DataType OptionalProto_DataType_SEQUENCE = OptionalProto::SEQUENCE;
+inline constexpr OptionalProto::DataType OptionalProto_DataType_MAP = OptionalProto::MAP;
+inline constexpr OptionalProto::DataType OptionalProto_DataType_OPTIONAL = OptionalProto::OPTIONAL;
+
 // ONNX IR version enum.  The protobuf-generated headers expose this at
 // namespace scope (via onnx-data.pb.h); mirror it here so that consumers that
 // only include <onnx/onnx_pb.h> (e.g. onnxruntime) can reference

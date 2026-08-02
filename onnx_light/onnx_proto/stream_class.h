@@ -126,8 +126,8 @@ public:                                                                         
   inline const utils::ByteSpan *ptr_##name() const { return &name##_; }                            \
   inline bool has_##name() const { return _has_field_(name##_); }                                  \
   inline void set_##name(const utils::ByteSpan &v) { name##_ = v; }                                \
-  /** Returns a mutable std::string pointer (protobuf bytes-field compat).                         \
-   *  After mutation, call sync_from_cache() on the ByteSpan to write back. */                     \
+  /** Returns a mutable std::string pointer to the owned data (protobuf bytes-field compat).       \
+   *  Mutations are written directly into the ByteSpan's owned storage. */                         \
   inline std::string *mutable_##name() { return name##_.mutable_value(); }                         \
   inline int order_##name() const { return order; }                                                \
   static inline constexpr const char *_name_##name = #name;                                        \

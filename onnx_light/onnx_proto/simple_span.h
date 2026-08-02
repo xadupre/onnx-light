@@ -47,121 +47,14 @@ public:
 };
 
 /**
- * Owns a contiguous byte buffer without value-initializing newly allocated bytes.
- * It preserves the existing prefix on resize and grows geometrically for append-heavy use.
- */
-class OwnedByteBuffer {
-public:
-  /** Initializes an empty buffer. */
-  OwnedByteBuffer() = default;
-
-  /** Creates a deep copy of the stored bytes. */
-  inline OwnedByteBuffer(const OwnedByteBuffer &other) { assign(other.data(), other.size()); }
-
-  /** Replaces the buffer with a deep copy of the stored bytes. */
-  inline OwnedByteBuffer &operator=(const OwnedByteBuffer &other) {
-    if (this != &other)
-      assign(other.data(), other.size());
-    return *this;
-  }
-
-  /** Transfers ownership of the stored bytes and empties the source buffer. */
-  inline OwnedByteBuffer(OwnedByteBuffer &&other) noexcept
-      : storage_(std::move(other.storage_)), size_(other.size_), capacity_(other.capacity_) {
-    other.size_ = 0;
-    other.capacity_ = 0;
-  }
-
-  /** Transfers ownership of the stored bytes and empties the source buffer. */
-  inline OwnedByteBuffer &operator=(OwnedByteBuffer &&other) noexcept {
-    if (this != &other) {
-      storage_ = std::move(other.storage_);
-      size_ = other.size_;
-      capacity_ = other.capacity_;
-      other.size_ = 0;
-      other.capacity_ = 0;
-    }
-    return *this;
-  }
-
-  /** Creates a buffer by copying bytes from a vector. */
-  inline OwnedByteBuffer(const std::vector<uint8_t> &v) { assign(v.data(), v.size()); }
-
-  /** Replaces the buffer content by copying bytes from a vector. */
-  inline OwnedByteBuffer &operator=(const std::vector<uint8_t> &v) {
-    assign(v.data(), v.size());
-    return *this;
-  }
-
-  /** Returns the number of stored bytes. */
-  inline size_t size() const { return size_; }
-
-  /** Returns a mutable pointer to the stored bytes. */
-  inline uint8_t *data() { return storage_.get(); }
-
-  /** Returns a const pointer to the stored bytes. */
-  inline const uint8_t *data() const { return storage_.get(); }
-
-  /** Clears the logical content while preserving capacity. */
-  inline void clear() { size_ = 0; }
-
-  /** Resizes the buffer without value-initializing newly exposed bytes. */
-  inline void resize(size_t n) {
-    if (n <= capacity_) {
-      size_ = n;
-      return;
-    }
-    reserve(n);
-    size_ = n;
-  }
-
-  /** Replaces the content by copying raw bytes. */
-  inline void assign(const uint8_t *src, size_t n) {
-    if (n == 0) {
-      clear();
-      return;
-    }
-    std::unique_ptr<uint8_t[]> next(new uint8_t[n]);
-    std::memcpy(next.get(), src, n);
-    storage_ = std::move(next);
-    size_ = n;
-    capacity_ = n;
-  }
-
-  /** Replaces the content by copying a byte range. */
-  inline void assign(const uint8_t *begin, const uint8_t *end) { assign(begin, end - begin); }
-
-  /** Appends one byte, growing geometrically when needed. */
-  inline void push_back(uint8_t v) {
-    if (size_ == capacity_) {
-      size_t next =
-          capacity_ == 0 ? 1 : (capacity_ < 4096 ? capacity_ * 2 : capacity_ + capacity_ / 2);
-      reserve(next);
-    }
-    storage_[size_++] = v;
-  }
-
-private:
-  /** Ensures the buffer can store at least n bytes. */
-  inline void reserve(size_t n) {
-    if (n <= capacity_)
-      return;
-    std::unique_ptr<uint8_t[]> next(new uint8_t[n]);
-    if (size_ > 0)
-      std::memcpy(next.get(), storage_.get(), size_);
-    storage_ = std::move(next);
-    capacity_ = n;
-  }
-
-  std::unique_ptr<uint8_t[]> storage_;
-  size_t size_ = 0;
-  size_t capacity_ = 0;
-};
-
-/**
  * A byte buffer that can either own its data or borrow a non-owning view into
  * an external buffer.  Inherits the non-owning-view interface from Span and
  * overrides all read accessors so they always return correct data in both modes.
+ *
+ * Owned bytes are stored in a std::string, which is the primary container for the
+ * data the ByteSpan owns.  This makes value() a zero-copy accessor and lets
+ * consuming code treat the field like a protobuf ``bytes`` field (which is a
+ * std::string) without materializing an extra copy.
  *
  * The borrowed mode is used for zero-copy parsing: when ParseOptions::no_copy
  * is true and the stream supports it, tensor raw data is not copied — instead
@@ -169,10 +62,12 @@ private:
  * source bytes buffer.  The caller MUST keep that buffer alive for as long as
  * the ByteSpan is in borrowed mode.
  *
- * The aligned-owned mode is used when ParseOptions::alignment > 0: the buffer
- * is over-allocated by (alignment - 1) bytes and ptr_/size_ are set to the
+ * The aligned-owned mode is used when ParseOptions::alignment > 0: the std::string
+ * buffer is over-allocated by (alignment - 1) bytes and ptr_/size_ are set to the
  * aligned region within owned_.  In this mode mutable data() returns the
- * aligned pointer and size() returns the logical (not allocated) size.
+ * aligned pointer and size() returns the logical (not allocated) size.  Because a
+ * std::string may relocate its bytes when moved (small-string optimization), the
+ * aligned pointer is recomputed after every copy/move.
  *
  * An explicit borrowed_ flag is used to unambiguously track the storage mode,
  * including degenerate edge cases such as a zero-length borrowed span.
@@ -187,7 +82,10 @@ public:
   ByteSpan() = default;
 
   /** Constructs an owned buffer by copying from a std::vector<uint8_t>. */
-  inline ByteSpan(const std::vector<uint8_t> &v) : owned_(v) {}
+  inline ByteSpan(const std::vector<uint8_t> &v) {
+    if (!v.empty())
+      owned_.assign(reinterpret_cast<const char *>(v.data()), v.size());
+  }
 
   /** Copy constructor: handles aligned-owned mode by recomputing the internal pointer. */
   inline ByteSpan(const ByteSpan &other)
@@ -240,11 +138,19 @@ public:
     return *this;
   }
 
-  /** Move constructor: for aligned-owned mode the pointer remains valid after the move. */
+  /** Move constructor: recomputes the aligned pointer because moving a std::string may relocate
+   *  its bytes (small-string optimization). */
   inline ByteSpan(ByteSpan &&other) noexcept
-      : Span(other.ptr_, other.size_), owned_(std::move(other.owned_)), borrowed_(other.borrowed_),
+      : Span(nullptr, 0), owned_(std::move(other.owned_)), borrowed_(other.borrowed_),
         aligned_owned_(other.aligned_owned_), align_(other.align_),
         owner_(std::move(other.owner_)) {
+    if (aligned_owned_) {
+      ptr_ = realign_after_move(other.size_);
+      size_ = other.size_;
+    } else {
+      ptr_ = other.ptr_;
+      size_ = other.size_;
+    }
     other.ptr_ = nullptr;
     other.size_ = 0;
     other.borrowed_ = false;
@@ -253,7 +159,8 @@ public:
     other.owner_.reset();
   }
 
-  /** Move assignment: for aligned-owned mode the pointer remains valid after the move. */
+  /** Move assignment: recomputes the aligned pointer because moving a std::string may relocate
+   *  its bytes (small-string optimization). */
   inline ByteSpan &operator=(ByteSpan &&other) noexcept {
     if (this != &other) {
       owned_ = std::move(other.owned_);
@@ -261,8 +168,13 @@ public:
       aligned_owned_ = other.aligned_owned_;
       align_ = other.align_;
       owner_ = std::move(other.owner_);
-      ptr_ = other.ptr_;
-      size_ = other.size_;
+      if (aligned_owned_) {
+        ptr_ = realign_after_move(other.size_);
+        size_ = other.size_;
+      } else {
+        ptr_ = other.ptr_;
+        size_ = other.size_;
+      }
       other.ptr_ = nullptr;
       other.size_ = 0;
       other.borrowed_ = false;
@@ -275,7 +187,10 @@ public:
 
   /** Assigns owned data by copying from a std::vector<uint8_t>; clears all special modes. */
   inline ByteSpan &operator=(const std::vector<uint8_t> &v) {
-    owned_ = v;
+    if (v.empty())
+      owned_.clear();
+    else
+      owned_.assign(reinterpret_cast<const char *>(v.data()), v.size());
     ptr_ = nullptr;
     size_ = 0;
     borrowed_ = false;
@@ -312,7 +227,7 @@ public:
   inline const uint8_t *data() const {
     if (aligned_owned_)
       return ptr_;
-    return borrowed_ ? ptr_ : owned_.data();
+    return borrowed_ ? ptr_ : reinterpret_cast<const uint8_t *>(owned_.data());
   }
   /** Returns a const reference to the byte at index i (no bounds check). */
   inline const uint8_t &operator[](size_t i) const { return data()[i]; }
@@ -349,7 +264,7 @@ public:
                             "use const data() or assign owned data first.");
     if (aligned_owned_)
       return const_cast<uint8_t *>(ptr_);
-    return owned_.data();
+    return reinterpret_cast<uint8_t *>(owned_.data());
   }
 
   /** Returns a mutable char pointer to the data (std::string compatibility). */
@@ -482,10 +397,13 @@ public:
     owned_.push_back(v);
   }
 
-  /** Returns a const reference to the data as a std::string.
-   *  Lazily materializes an internal string cache for compatibility with APIs
-   *  that require `const std::string&` (e.g. protobuf bridge functions). */
+  /** Returns a const reference to the owned data as a std::string.
+   *  In plain owned mode this returns the underlying std::string directly, so no
+   *  copy is made.  In borrowed or aligned-owned mode (where the bytes are not held
+   *  as a plain std::string) it lazily materializes an internal string cache. */
   inline const std::string &value() const {
+    if (!borrowed_ && !aligned_owned_)
+      return owned_;
     const uint8_t *p = data();
     const size_t sz = size();
     if (str_cache_.size() != sz || (sz > 0 && std::memcmp(str_cache_.data(), p, sz) != 0)) {
@@ -494,33 +412,46 @@ public:
     return str_cache_;
   }
 
-  /** Returns a mutable pointer to a std::string that, on destruction or next access,
-   *  syncs back into the owned buffer. Callers must call sync_from_cache() after mutation.
-   *  Throws if the ByteSpan is in borrowed mode. */
+  /** Returns a mutable pointer to the owned std::string that backs this ByteSpan.
+   *  Does not raise when the data is owned: in aligned-owned mode the bytes are first
+   *  materialized into the plain owned string (dropping the alignment).  It still raises
+   *  in borrowed mode, where the ByteSpan does not own the bytes.
+   *
+   *  UNSAFE: the returned pointer refers to the ByteSpan's own storage.  Any other ByteSpan
+   *  that borrows this data (e.g. a copy sharing the same buffer) will be broken if the
+   *  string's size changes, because resizing the std::string may reallocate its buffer and
+   *  invalidate previously handed-out pointers. */
   inline std::string *mutable_value() {
     EXT_ENFORCE(!borrowed_, "ByteSpan: mutable_value() called on a borrowed (zero-copy) buffer.");
-    const uint8_t *p = data();
-    str_cache_.assign(reinterpret_cast<const char *>(p), size());
-    return &str_cache_;
-  }
-
-  /** Copies the string cache back into the owned byte buffer.
-   *  Must be called after mutating via mutable_value(). */
-  inline void sync_from_cache() {
-    resize(str_cache_.size());
-    if (!str_cache_.empty())
-      std::memcpy(data(), str_cache_.data(), str_cache_.size());
+    if (aligned_owned_) {
+      std::string materialized(reinterpret_cast<const char *>(ptr_), size_);
+      owned_ = std::move(materialized);
+      ptr_ = nullptr;
+      size_ = 0;
+      aligned_owned_ = false;
+      align_ = 0;
+      owner_.reset();
+    }
+    return &owned_;
   }
 
 private:
-  OwnedByteBuffer owned_;
+  /** Recomputes the aligned pointer inside owned_ after the backing std::string has been moved. */
+  inline uint8_t *realign_after_move(size_t n) noexcept {
+    void *vptr = static_cast<void *>(owned_.data());
+    size_t space = owned_.size();
+    void *aligned = std::align(align_, n, vptr, space);
+    return static_cast<uint8_t *>(aligned);
+  }
+
+  std::string owned_;
   bool borrowed_ = false;
   bool aligned_owned_ = false;
-  /** Stored alignment for aligned-owned mode; used to re-align on copy. */
+  /** Stored alignment for aligned-owned mode; used to re-align on copy/move. */
   size_t align_ = 0;
   /** Keeps borrowed backing storage alive when the model owns the shared buffer. */
   std::shared_ptr<void> owner_;
-  /** Lazily-populated string cache for value()/mutable_value(). */
+  /** Lazily-populated string cache for value() in borrowed / aligned-owned mode. */
   mutable std::string str_cache_;
 };
 

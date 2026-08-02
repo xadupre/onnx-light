@@ -985,6 +985,18 @@ class TestReferenceEvaluatorTensorConversion(ExtTestCase):
                 self.assertEqual(out.dtype, array.dtype)
                 np.testing.assert_array_equal(out, array)
 
+    def test_numpy_to_cpp_tensor_calls_ascontiguousarray_only_when_needed(self):
+        contiguous = np.arange(6, dtype=np.float32).reshape(2, 3)
+        non_contiguous = contiguous.T
+
+        with unittest.mock.patch.object(
+            self._evaluator.np, "ascontiguousarray", wraps=self._evaluator.np.ascontiguousarray
+        ) as mocked:
+            self._evaluator._numpy_to_cpp_tensor("x", contiguous)
+            self.assertEqual(mocked.call_count, 0)
+            self._evaluator._numpy_to_cpp_tensor("x", non_contiguous)
+            self.assertEqual(mocked.call_count, 1)
+
     def test_bfloat16_uses_ml_dtypes_fallback(self):
         # bfloat16 has no stock NumPy dtype, so it bypasses the DLPack path and
         # is reinterpreted as ``ml_dtypes.bfloat16``.

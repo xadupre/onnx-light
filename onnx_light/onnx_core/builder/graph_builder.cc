@@ -69,7 +69,7 @@ bool SameInitializerContent(const TensorProto &lhs, const TensorProto &rhs) {
   if (lhs_location != rhs_location) {
     return false;
   }
-  if (lhs.ref_raw_data() != rhs.ref_raw_data()) {
+  if (lhs.raw_data() != rhs.raw_data()) {
     return false;
   }
   if (!SamePackedData(lhs.float_data(), rhs.float_data()) ||

@@ -114,19 +114,26 @@ public:                                                                         
   using name##_t = type;
 
 /** Like FIELD but for ByteSpan (protobuf ``bytes``) fields.                                       \
- *  Bytes are exposed only through ``ref_##name()`` as a ``utils::ByteSpan`` (breaking change).    \
- *  The old protobuf-style ``name()``/``mutable_##name()`` accessors that returned                 \
- *  ``const std::string&``/``std::string*`` are intentionally removed: a ByteSpan may hold         \
- *  borrowed (zero-copy) or aligned-owned bytes that are not backed by a std::string, so exposing  \
- *  them as a std::string would require a hidden copy and could not preserve alignment or borrowed \
- *  semantics.  Use ref_##name() and the ByteSpan API (data()/size()/assign()/...) instead. */
+ *  Bytes are exposed as a ``utils::ByteSpan`` (breaking change).  The old protobuf-style          \
+ *  ``name()``/``mutable_##name()`` accessors returned ``const std::string&``/``std::string*``,    \
+ *  which is unsafe here: a ByteSpan may hold borrowed (zero-copy) or aligned-owned bytes that     \
+ *  are not backed by a std::string, so exposing them as a std::string would require a hidden copy \
+ *  and could not preserve alignment or borrowed semantics.  ``name()``/``mutable_##name()`` are   \
+ *  kept but now return ``utils::ByteSpan``, equivalent to ref_##name(); use the ByteSpan API      \
+ *  (data()/size()/assign()/...) to read or mutate bytes. */
 #define FIELD_BYTES(name, order, doc)                                                              \
 public:                                                                                            \
   inline utils::ByteSpan &ref_##name() { return name##_; }                                         \
   inline const utils::ByteSpan &ref_##name() const { return name##_; }                             \
+  /** Compatibility accessor - equivalent to ref_##name(); returns a ByteSpan. */                  \
+  inline utils::ByteSpan &name() { return name##_; }                                               \
+  /** Compatibility accessor - equivalent to ref_##name() const; returns a ByteSpan. */            \
+  inline const utils::ByteSpan &name() const { return name##_; }                                   \
   inline const utils::ByteSpan *ptr_##name() const { return &name##_; }                            \
   inline bool has_##name() const { return _has_field_(name##_); }                                  \
   inline void set_##name(const utils::ByteSpan &v) { name##_ = v; }                                \
+  /** Compatibility accessor returning a mutable pointer to the ByteSpan field. */                 \
+  inline utils::ByteSpan *mutable_##name() { return &name##_; }                                    \
   inline int order_##name() const { return order; }                                                \
   static inline constexpr const char *_name_##name = #name;                                        \
   static inline constexpr const char *DOC_##name = doc;                                            \

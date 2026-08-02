@@ -137,13 +137,7 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
   check_data_field(int32_data);
   check_data_field(string_data);
   check_data_field(int64_data);
-  // raw_data is a ByteSpan, not a repeated field; read it through ref_raw_data()
-  // because the std::string bridge accessor raw_data() intentionally raises.
-  bool has_raw_data = !tensor.ref_raw_data().empty();
-  if (has_raw_data) {
-    ++num_value_fields;
-    value_field = "raw_data";
-  }
+  check_data_field(raw_data);
   check_data_field(double_data);
   check_data_field(uint64_data);
 
@@ -202,9 +196,9 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
     default:
       break;
     }
-    if (expected_bytes > 0 && static_cast<int64_t>(tensor.ref_raw_data().size()) < expected_bytes) {
+    if (expected_bytes > 0 && static_cast<int64_t>(tensor.raw_data().size()) < expected_bytes) {
       fail_check("TensorProto (tensor name: ", tensor.name(), ") raw_data size (",
-                 tensor.ref_raw_data().size(),
+                 tensor.raw_data().size(),
                  " bytes) is too small for the declared shape and packed type (", expected_bytes,
                  " bytes required).");
     }

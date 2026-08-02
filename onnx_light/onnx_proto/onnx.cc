@@ -936,7 +936,7 @@ int64_t TensorProto::ContentHash(bool include_content) const {
     }
     const int location = has_data_location() ? static_cast<int>(data_location()) : 0;
     HashCombine(seed, static_cast<uint64_t>(location));
-    HashCombine(seed, static_cast<uint64_t>(raw_data().size()));
+    HashCombine(seed, static_cast<uint64_t>(ref_raw_data().size()));
     HashCombine(seed, static_cast<uint64_t>(float_data().size()));
     HashCombine(seed, static_cast<uint64_t>(int32_data().size()));
     HashCombine(seed, static_cast<uint64_t>(int64_data().size()));
@@ -967,8 +967,8 @@ int64_t TensorProto::ContentHash(bool include_content) const {
     hasher.Update(field.data(), field.size() * sizeof(*field.data()));
   };
 
-  absorb_size(static_cast<uint64_t>(raw_data().size()));
-  hasher.Update(raw_data().data(), raw_data().size());
+  absorb_size(static_cast<uint64_t>(ref_raw_data().size()));
+  hasher.Update(ref_raw_data().data(), ref_raw_data().size());
   absorb_packed(float_data());
   absorb_packed(int32_data());
   absorb_packed(int64_data());

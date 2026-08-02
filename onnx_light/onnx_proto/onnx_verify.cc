@@ -79,7 +79,7 @@ void VerifyTensor(const TensorProto &tensor) {
   const bool has_int32 = !tensor.int32_data().empty();
   const bool has_string = !tensor.string_data().empty();
   const bool has_int64 = !tensor.int64_data().empty();
-  const bool has_raw = !tensor.raw_data().empty();
+  const bool has_raw = !tensor.ref_raw_data().empty();
   const bool has_double = !tensor.double_data().empty();
   const bool has_uint64 = !tensor.uint64_data().empty();
   const int num_value_fields = static_cast<int>(has_float) + static_cast<int>(has_int32) +
@@ -138,8 +138,8 @@ void VerifyTensor(const TensorProto &tensor) {
       break;
     }
     EXT_ENFORCE_INVALID(
-        expected_bytes == 0 || static_cast<int64_t>(tensor.raw_data().size()) >= expected_bytes,
-        "TensorProto '", tensor.name(), "' raw_data size (", tensor.raw_data().size(),
+        expected_bytes == 0 || static_cast<int64_t>(tensor.ref_raw_data().size()) >= expected_bytes,
+        "TensorProto '", tensor.name(), "' raw_data size (", tensor.ref_raw_data().size(),
         " bytes) is too small for the declared shape and packed type (", expected_bytes,
         " bytes required).");
     return;

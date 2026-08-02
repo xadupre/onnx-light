@@ -374,7 +374,7 @@ NNEFTensor TensorProtoToNNEFTensor(const TensorProto &tensor) {
   if (t.shape.empty())
     nelem = 1;
 
-  const auto &raw = tensor.raw_data();
+  const auto &raw = tensor.ref_raw_data();
   if (!raw.empty()) {
     t.data.assign(raw.data(), raw.data() + raw.size());
     return t;

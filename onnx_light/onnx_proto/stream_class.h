@@ -114,20 +114,22 @@ public:                                                                         
   using name##_t = type;
 
 /** Like FIELD but for ByteSpan (protobuf ``bytes``) fields.                                       \
- *  ``mutable_##name()`` returns ``std::string*`` (via ByteSpan::mutable_value()) and              \
- *  the const accessor returns ``const std::string&`` (via ByteSpan::value()) so that              \
- *  consuming code written against protobuf ``bytes`` fields compiles unchanged. */
+ *  ``name()`` and ``mutable_##name()`` forward to ByteSpan::value()/mutable_value(), which now    \
+ *  raise (breaking change): a ByteSpan may hold borrowed or aligned-owned bytes that are not      \
+ *  backed by a std::string.  Use ref_##name() and the ByteSpan API (data()/size()/assign()/...)   \
+ *  to read or mutate the bytes instead. */
 #define FIELD_BYTES(name, order, doc)                                                              \
 public:                                                                                            \
   inline utils::ByteSpan &ref_##name() { return name##_; }                                         \
   inline const utils::ByteSpan &ref_##name() const { return name##_; }                             \
-  /** Returns a const std::string reference (protobuf bytes-field compat). */                      \
+  /** Deprecated bytes-field bridge: forwards to ByteSpan::value(), which raises.                  \
+   *  Use ref_##name() and the ByteSpan API instead. */                                            \
   inline const std::string &name() const { return name##_.value(); }                               \
   inline const utils::ByteSpan *ptr_##name() const { return &name##_; }                            \
   inline bool has_##name() const { return _has_field_(name##_); }                                  \
   inline void set_##name(const utils::ByteSpan &v) { name##_ = v; }                                \
-  /** Returns a mutable std::string pointer (protobuf bytes-field compat).                         \
-   *  After mutation, call sync_from_cache() on the ByteSpan to write back. */                     \
+  /** Deprecated bytes-field bridge: forwards to ByteSpan::mutable_value(), which raises.          \
+   *  Use ref_##name() and the ByteSpan API instead. */                                            \
   inline std::string *mutable_##name() { return name##_.mutable_value(); }                         \
   inline int order_##name() const { return order; }                                                \
   static inline constexpr const char *_name_##name = #name;                                        \

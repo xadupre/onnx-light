@@ -495,9 +495,10 @@ public:
   }
 
   /** Returns a mutable pointer to a std::string that, on destruction or next access,
-   *  syncs back into the owned buffer. Callers must call sync_from_cache() after mutation. */
+   *  syncs back into the owned buffer. Callers must call sync_from_cache() after mutation.
+   *  Throws if the ByteSpan is in borrowed mode. */
   inline std::string *mutable_value() {
-    // Populate the cache from current data.
+    EXT_ENFORCE(!borrowed_, "ByteSpan: mutable_value() called on a borrowed (zero-copy) buffer.");
     const uint8_t *p = data();
     str_cache_.assign(reinterpret_cast<const char *>(p), size());
     return &str_cache_;

@@ -1031,21 +1031,25 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   rt_mod.def(
       "tensor_from_numpy",
       [](const std::string &name, int32_t data_type, std::vector<int64_t> shape,
-         nb::ndarray<const uint8_t, nb::ndim<1>, nb::c_contig> raw) {
-        // Constructs an owned ``Tensor`` by copying the raw element bytes
-        // directly from a contiguous NumPy uint8 buffer. This avoids the
-        // triple-copy path of ``tobytes`` → ``TensorProto.raw_data`` →
-        // ``tensor_from_proto``: the caller reinterprets the source array
-        // as a flat uint8 view (``arr.view(np.uint8).ravel()``) and we
-        // copy those bytes into the tensor's owned storage in a single
-        // ``memcpy``.
+         nb::ndarray<const uint8_t, nb::ndim<1>, nb::c_contig> raw, bool copy) {
+        // Converts a contiguous NumPy uint8 buffer into a runtime tensor.
+        // ``copy=True`` preserves the existing behaviour: bytes are copied
+        // into owned tensor storage. ``copy=False`` builds a borrowed tensor
+        // view over the NumPy memory (zero-copy); ``keep_alive<0, 4>`` below
+        // guarantees the source array outlives the returned tensor.
         const uint8_t *ptr = raw.data();
         size_t n = raw.shape(0);
+        if (!copy) {
+          return Tensor::Borrow(std::string(name), data_type, std::move(shape), ptr, n);
+        }
         std::vector<uint8_t> owned(ptr, ptr + n);
         return Tensor(std::string(name), data_type, std::move(shape), std::move(owned));
       },
-      nb::arg("name"), nb::arg("data_type"), nb::arg("shape"), nb::arg("raw"),
-      "Constructs an owned :class:`Tensor` by copying raw element bytes from a "
-      "contiguous 1-D ``uint8`` NumPy array with an explicit ONNX data type. "
-      "Use this overload for bfloat16, float8, and sub-byte packed types.");
+      nb::keep_alive<0, 4>(), nb::arg("name"), nb::arg("data_type"), nb::arg("shape"),
+      nb::arg("raw"), nb::arg("copy") = true,
+      "Constructs a :class:`Tensor` from raw element bytes in a contiguous 1-D "
+      "``uint8`` NumPy array with an explicit ONNX data type. When ``copy=True`` "
+      "(default), bytes are copied into owned tensor storage. When ``copy=False``, "
+      "the tensor borrows the NumPy buffer (zero-copy). Use this overload for "
+      "bfloat16, float8, and sub-byte packed types.");
 }

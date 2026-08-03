@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 import numpy as np
 
@@ -984,6 +985,43 @@ class TestReferenceEvaluatorTensorConversion(ExtTestCase):
                 out = self._evaluator._cpp_tensor_to_numpy(self._make_tensor(dtype_enum, array))
                 self.assertEqual(out.dtype, array.dtype)
                 np.testing.assert_array_equal(out, array)
+
+    def test_numpy_to_cpp_tensor_calls_ascontiguousarray_only_when_needed(self):
+        contiguous = np.arange(6, dtype=np.float32).reshape(2, 3)
+        non_contiguous = contiguous.T
+
+        with (
+            unittest.mock.patch.object(
+                self._evaluator.np,
+                "ascontiguousarray",
+                wraps=self._evaluator.np.ascontiguousarray,
+            ) as mocked_contiguous,
+            unittest.mock.patch.object(
+                self._evaluator._runtime,
+                "tensor_from_numpy",
+                wraps=self._evaluator._runtime.tensor_from_numpy,
+            ) as mocked_from_numpy,
+        ):
+            self._evaluator._numpy_to_cpp_tensor("x", contiguous, copy=False)
+            self.assertEqual(mocked_contiguous.call_count, 0)
+            self.assertEqual(mocked_from_numpy.call_args.kwargs.get("copy"), False)
+            self._evaluator._numpy_to_cpp_tensor("x", non_contiguous, copy=False)
+            self.assertEqual(mocked_contiguous.call_count, 1)
+            self.assertEqual(mocked_from_numpy.call_args.kwargs.get("copy"), True)
+
+    def test_numpy_to_cpp_tensor_scalar_input(self):
+        scalar = np.array(2, dtype=np.int64)
+        with unittest.mock.patch.object(
+            self._evaluator._runtime,
+            "tensor_from_numpy",
+            wraps=self._evaluator._runtime.tensor_from_numpy,
+        ) as mocked_from_numpy:
+            tensor = self._evaluator._numpy_to_cpp_tensor("x", scalar, copy=False)
+        self.assertEqual(mocked_from_numpy.call_args.kwargs.get("copy"), True)
+        out = self._evaluator._cpp_tensor_to_numpy(tensor)
+        self.assertEqual(out.shape, ())
+        self.assertEqual(out.dtype, np.int64)
+        self.assertEqual(out.item(), 2)
 
     def test_bfloat16_uses_ml_dtypes_fallback(self):
         # bfloat16 has no stock NumPy dtype, so it bypasses the DLPack path and

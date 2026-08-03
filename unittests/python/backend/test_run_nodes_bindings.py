@@ -699,6 +699,24 @@ class TestTensorToNumpy(ExtTestCase):
             rt.tensor_to_numpy(t)
 
 
+class TestTensorFromNumpy(ExtTestCase):
+    def test_tensor_from_numpy_copies_by_default(self):
+        src = np.array([1, 2, 3], dtype=np.int32)
+        raw = src.view(np.uint8).ravel()
+        t = rt.tensor_from_numpy("x", int(TensorProto.INT32), [3], raw)
+        src[0] = 99
+        out = rt.tensor_to_numpy(t).view(np.int32)
+        np.testing.assert_array_equal(out, np.array([1, 2, 3], dtype=np.int32))
+
+    def test_tensor_from_numpy_borrows_when_copy_false(self):
+        src = np.array([1, 2, 3], dtype=np.int32)
+        raw = src.view(np.uint8).ravel()
+        t = rt.tensor_from_numpy("x", int(TensorProto.INT32), [3], raw, copy=False)
+        src[0] = 99
+        out = rt.tensor_to_numpy(t).view(np.int32)
+        np.testing.assert_array_equal(out, np.array([99, 2, 3], dtype=np.int32))
+
+
 class TestTensorDLPack(ExtTestCase):
     def _make_tensor(self, dtype_enum, array: np.ndarray):
         tp = TensorProto()

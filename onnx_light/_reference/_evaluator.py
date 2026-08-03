@@ -132,7 +132,7 @@ def _numpy_to_cpp_tensor(name: str, arr: np.ndarray) -> Any:
         if not arr.flags.c_contiguous:
             arr = np.ascontiguousarray(arr)
         raw = arr.view(np.uint8).ravel()
-        return _runtime.tensor_from_numpy(name, onnx_dtype, list(arr.shape), raw)
+        return _runtime.tensor_from_numpy(name, onnx_dtype, list(arr.shape), raw, copy=False)
     # Fallback for strings, sub-byte types, and exotic dtypes.
     tp = numpy_helper.from_array(arr, name=name)
     return _runtime.tensor_from_proto(tp)

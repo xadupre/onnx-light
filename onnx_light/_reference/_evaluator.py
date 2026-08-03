@@ -135,6 +135,9 @@ def _numpy_to_cpp_tensor(name: str, arr: np.ndarray, copy: bool = True) -> Any:
             arr = np.ascontiguousarray(arr)
             needs_copy = True
         if arr.ndim == 0:
+            # Some kernels read scalar bytes from owned tensor storage directly.
+            # Keep scalar inputs on the owned-copy path to preserve that contract.
+            needs_copy = True
             raw = arr.reshape((1,)).view(np.uint8)
         else:
             raw = arr.view(np.uint8).ravel()

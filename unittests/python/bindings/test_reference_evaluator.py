@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 import numpy as np
 
@@ -1010,7 +1011,13 @@ class TestReferenceEvaluatorTensorConversion(ExtTestCase):
 
     def test_numpy_to_cpp_tensor_scalar_input(self):
         scalar = np.array(2, dtype=np.int64)
-        tensor = self._evaluator._numpy_to_cpp_tensor("x", scalar)
+        with unittest.mock.patch.object(
+            self._evaluator._runtime,
+            "tensor_from_numpy",
+            wraps=self._evaluator._runtime.tensor_from_numpy,
+        ) as mocked_from_numpy:
+            tensor = self._evaluator._numpy_to_cpp_tensor("x", scalar, copy=False)
+        self.assertEqual(mocked_from_numpy.call_args.kwargs.get("copy"), True)
         out = self._evaluator._cpp_tensor_to_numpy(tensor)
         self.assertEqual(out.shape, ())
         self.assertEqual(out.dtype, np.int64)

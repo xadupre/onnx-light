@@ -17,7 +17,8 @@ void RegisterSeluCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Selu selu_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Selu", selu_kernel, "test_cc_selu_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat("Selu", selu_kernel, "test_cc_selu_benchmark", opset, registry,
+                              false);
     return;
   }
 

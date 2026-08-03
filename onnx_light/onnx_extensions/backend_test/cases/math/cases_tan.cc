@@ -24,7 +24,7 @@ void RegisterTanCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Tan tan_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Tan", tan_kernel, "test_cc_tan_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat("Tan", tan_kernel, "test_cc_tan_benchmark", opset, registry, false);
     return;
   }
 

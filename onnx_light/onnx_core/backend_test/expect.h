@@ -6,6 +6,7 @@
 
 #include "onnx_core/backend_test/io_data.h"
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_core/runtime/random.h"
 
 #include <cstdint>
@@ -138,17 +139,21 @@ inline void Expect(std::vector<TestCase> &registry, NodeProto node, std::string 
 inline constexpr int64_t kBenchmarkElementwiseSize = 1 << 22;
 
 /**
- * Appends a single benchmark :ref:`TestCase` for a unary element-wise float
- * operator. ``kernel`` is any callable mapping the input ``Tensor`` to the
- * output ``Tensor`` (typically the operator's kernel functor); the expected
- * output is computed by invoking it. The generated node carries no attributes,
- * so operators whose behaviour depends on attributes should build their own
+ * Appends benchmark :ref:`TestCase`s for a unary element-wise float operator.
+ * ``kernel`` is any callable mapping the input ``Tensor`` to the output
+ * ``Tensor`` (typically the operator's kernel functor); the expected output is
+ * computed by invoking it. The generated node carries no attributes, so
+ * operators whose behaviour depends on attributes should build their own
  * benchmark case instead.
+ *
+ * When ``with_float16`` is true (the default) a second FLOAT16 benchmark case
+ * named ``name + "_float16"`` is registered alongside the FLOAT one. Operators
+ * whose kernel does not support FLOAT16 must pass ``with_float16 = false``.
  */
 template <typename Kernel>
 void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
                                const std::string &name, const OpsetId &opset,
-                               std::vector<TestCase> &registry,
+                               std::vector<TestCase> &registry, bool with_float16 = true,
                                int64_t size = kBenchmarkElementwiseSize,
                                uint64_t seed = 987654321ULL, const std::string &input_name = "x",
                                const std::string &output_name = "y") {
@@ -162,20 +167,37 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
     Tensor y = k(x);
     return IoData{{std::move(x)}, {std::move(y)}};
   });
+  if (with_float16) {
+    NodeProto node16;
+    node16.set_op_type(op_type);
+    node16.add_input(input_name);
+    node16.add_output(output_name);
+    Kernel k16 = kernel;
+    Expect(registry, std::move(node16), name + "_float16", {opset}, {size}, {size},
+           [k16, size, seed]() -> IoData {
+             Tensor x = MakeFloat16Tensor("", {size}, Randn<float>({size}, seed));
+             Tensor y = k16(x);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
+  }
 }
 
 /**
- * Appends a single benchmark :ref:`TestCase` for a binary element-wise float
- * operator with two equally-shaped 1-D inputs. ``kernel`` is any callable
- * mapping the two input ``Tensor``s to the output ``Tensor``; the expected
- * output is computed by invoking it. The generated node carries no attributes.
- * The inputs and expected output are produced lazily (see the ``make_io``
- * overload of :func:`Expect`).
+ * Appends benchmark :ref:`TestCase`s for a binary element-wise float operator
+ * with two equally-shaped 1-D inputs. ``kernel`` is any callable mapping the
+ * two input ``Tensor``s to the output ``Tensor``; the expected output is
+ * computed by invoking it. The generated node carries no attributes. The inputs
+ * and expected output are produced lazily (see the ``make_io`` overload of
+ * :func:`Expect`).
+ *
+ * When ``with_float16`` is true (the default) a second FLOAT16 benchmark case
+ * named ``name + "_float16"`` is registered alongside the FLOAT one. Operators
+ * whose kernel does not support FLOAT16 must pass ``with_float16 = false``.
  */
 template <typename Kernel>
 void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel,
                                 const std::string &name, const OpsetId &opset,
-                                std::vector<TestCase> &registry,
+                                std::vector<TestCase> &registry, bool with_float16 = true,
                                 int64_t size = kBenchmarkElementwiseSize,
                                 uint64_t seed = 987654321ULL) {
   NodeProto node;
@@ -191,6 +213,21 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel
            Tensor z = k(x, y);
            return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
          });
+  if (with_float16) {
+    NodeProto node16;
+    node16.set_op_type(op_type);
+    node16.add_input("x");
+    node16.add_input("y");
+    node16.add_output("z");
+    Kernel k16 = kernel;
+    Expect(registry, std::move(node16), name + "_float16", {opset}, {size, size}, {size},
+           [k16, size, seed]() -> IoData {
+             Tensor x = MakeFloat16Tensor("", {size}, Randn<float>({size}, seed));
+             Tensor y = MakeFloat16Tensor("", {size}, Randn<float>({size}, seed + 1));
+             Tensor z = k16(x, y);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
+  }
 }
 
 } // namespace backend_test

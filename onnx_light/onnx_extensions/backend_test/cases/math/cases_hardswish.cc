@@ -18,7 +18,7 @@ void RegisterHardSwishCases(std::vector<TestCase> &registry, TestMode mode) {
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("HardSwish", hard_swish_kernel, "test_cc_hardswish_benchmark", opset,
-                              registry);
+                              registry, false);
     return;
   }
 

@@ -17,7 +17,8 @@ void RegisterSwishCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Swish swish_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Swish", swish_kernel, "test_cc_swish_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat("Swish", swish_kernel, "test_cc_swish_benchmark", opset, registry,
+                              false);
     return;
   }
 

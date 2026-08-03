@@ -38,7 +38,8 @@ void RegisterAsinhCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Asinh asinh_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Asinh", asinh_kernel, "test_cc_asinh_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat("Asinh", asinh_kernel, "test_cc_asinh_benchmark", opset, registry,
+                              false);
     return;
   }
 

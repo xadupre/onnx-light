@@ -24,7 +24,8 @@ void RegisterSinhCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Sinh sinh_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Sinh", sinh_kernel, "test_cc_sinh_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat("Sinh", sinh_kernel, "test_cc_sinh_benchmark", opset, registry,
+                              false);
     return;
   }
 

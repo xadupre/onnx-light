@@ -37,7 +37,8 @@ void RegisterCoshCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Cosh cosh_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Cosh", cosh_kernel, "test_cc_cosh_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat("Cosh", cosh_kernel, "test_cc_cosh_benchmark", opset, registry,
+                              false);
     return;
   }
 

@@ -37,7 +37,8 @@ void RegisterAtanCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Atan atan_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Atan", atan_kernel, "test_cc_atan_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat("Atan", atan_kernel, "test_cc_atan_benchmark", opset, registry,
+                              false);
     return;
   }
 

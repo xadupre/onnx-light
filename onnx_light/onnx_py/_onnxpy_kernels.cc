@@ -1008,25 +1008,51 @@ void AddOnnxPyRuntime(nb::module_ &m) {
 
   rt_mod.def(
       "tensor_to_numpy",
-      [](nb::handle t_obj) {
-        // Zero-copy 1-D ``uint8`` view over the tensor's raw byte buffer. The
-        // tensor's Python wrapper (``t_obj``) is passed as the array's owner so
-        // NumPy borrows the bytes (no copy) while keeping the source tensor
-        // alive for as long as the view (or any array derived from it) lives.
-        const Tensor &t = nb::cast<const Tensor &>(t_obj);
+      [](nb::handle t_obj, bool steal) {
+        // Builds a 1-D ``uint8`` NumPy array over the tensor's raw byte buffer.
+        //
+        // By default (``steal=False``) the array borrows the bytes (no copy)
+        // and keeps the source tensor (``t_obj``) alive for as long as the view
+        // lives, so the borrowed span never dangles.
+        //
+        // When ``steal=True`` *and* the tensor owns its bytes inline (an
+        // ordinary ``std::vector`` buffer that is neither allocator-backed nor a
+        // borrowed span) the buffer's ownership is transferred to NumPy: the
+        // byte vector is moved into a capsule that frees it when the array (and
+        // any array derived from it) is garbage-collected. This DLPack-style
+        // hand-off lets a runtime graph producing owned outputs be released
+        // while the arrays live on, at the cost of emptying the source tensor.
+        // Stealing is skipped for allocator-backed tensors (their bytes belong
+        // to the allocator pool and must be returned to it) and for borrowed
+        // views (they reference external memory), which fall back to borrowing.
+        Tensor &t = nb::cast<Tensor &>(t_obj);
         EXT_ENFORCE_INVALID(
             !(static_cast<TensorProto::DataType>(t.data_type) == TensorProto::DataType::STRING),
             "tensor_to_numpy: STRING tensors have no raw byte buffer; use "
             "tensor_to_proto instead.");
         const size_t n = t.size_bytes();
+        // Inline-owned when there is no allocator backing and ``bytes()``
+        // resolves to the inline ``data`` buffer (borrowed tensors keep
+        // ``data`` empty and read from an external span instead).
+        if (steal && !t.has_allocation() && n > 0 && t.bytes() == t.data.data()) {
+          auto *owned = new std::vector<uint8_t>(t.data.release());
+          nb::capsule owner(
+              owned, [](void *p) noexcept { delete static_cast<std::vector<uint8_t> *>(p); });
+          return nb::ndarray<nb::numpy, const uint8_t, nb::ndim<1>>(owned->data(), {n}, owner);
+        }
         return nb::ndarray<nb::numpy, const uint8_t, nb::ndim<1>>(t.bytes(), {n}, t_obj);
       },
-      nb::arg("t"),
-      "Returns a zero-copy 1-D ``uint8`` NumPy view over the runtime tensor's raw "
-      "little-endian byte buffer. The source tensor is kept alive for the lifetime "
-      "of the returned array (it is the array's ``base``) so the borrowed view never "
-      "dangles. Callers reinterpret the bytes via ``ndarray.view(dtype).reshape(shape)``. "
-      "``STRING`` tensors have no raw buffer and must go through :func:`tensor_to_proto`.");
+      nb::arg("t"), nb::arg("steal") = false,
+      "Returns a 1-D ``uint8`` NumPy array over the runtime tensor's raw "
+      "little-endian byte buffer. By default the array is a zero-copy view whose "
+      "source tensor is kept alive for the lifetime of the returned array (it is "
+      "the array's ``base``) so the borrowed view never dangles. When ``steal`` is "
+      "``True`` and the tensor owns its bytes inline (not allocator-backed and not "
+      "a borrowed view), the buffer's ownership is transferred to NumPy "
+      "(DLPack-style) — the array owns the bytes through a capsule, the source "
+      "tensor is emptied, and it is no longer kept alive. Callers reinterpret the "
+      "bytes via ``ndarray.view(dtype).reshape(shape)``. ``STRING`` tensors have no "
+      "raw buffer and must go through :func:`tensor_to_proto`.");
 
   rt_mod.def(
       "tensor_from_numpy",

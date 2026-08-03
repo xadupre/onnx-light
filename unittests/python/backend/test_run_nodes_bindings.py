@@ -698,6 +698,32 @@ class TestTensorToNumpy(ExtTestCase):
         with self.assertRaises(ValueError):
             rt.tensor_to_numpy(t)
 
+    def test_tensor_to_numpy_steal_transfers_ownership(self):
+        # ``steal=True`` transfers ownership of an inline-owned buffer to the
+        # NumPy array: the array owns the bytes (``base`` is a capsule, not the
+        # source tensor) and the source tensor is emptied.
+        t = _make_int32_tensor("v", [7, 8, 9])
+        raw = rt.tensor_to_numpy(t, steal=True)
+        self.assertIsNotNone(raw.base)
+        # The source tensor no longer holds the bytes (they were moved out).
+        self.assertEqual(t.raw_data(), b"")
+        # The array remains valid even though the source was emptied/dropped.
+        np.testing.assert_array_equal(raw.view(np.int32), np.array([7, 8, 9], np.int32))
+
+    def test_tensor_to_numpy_steal_survives_source_drop(self):
+        # After an ownership transfer the array keeps its data through the
+        # capsule, so dropping the source tensor must not invalidate it.
+        arr = rt.tensor_to_numpy(_make_int32_tensor("v", [1, 2, 3]), steal=True).view(np.int32)
+        np.testing.assert_array_equal(arr, np.array([1, 2, 3], np.int32))
+
+    def test_tensor_to_numpy_default_does_not_steal(self):
+        # The default (``steal=False``) borrows the bytes and leaves the source
+        # tensor's buffer intact.
+        t = _make_int32_tensor("v", [7, 8, 9])
+        raw = rt.tensor_to_numpy(t)
+        self.assertEqual(len(t.raw_data()), 12)
+        np.testing.assert_array_equal(raw.view(np.int32), np.array([7, 8, 9], np.int32))
+
 
 class TestTensorFromNumpy(ExtTestCase):
     def test_tensor_from_numpy_copies_by_default(self):

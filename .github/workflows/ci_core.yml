@@ -210,11 +210,10 @@ jobs:
     needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
-    # windows-latest gets +15 minutes over macOS. This amd64 Windows path is
-    # not comparable to the x86 helper build below: it does the full
-    # pip-install C++ build plus ctest and pytest, while x86 only compiles.
-    # MSVC build speed and occasional cold-cache runs make this path much
-    # longer, so keep generous timeout headroom.
+    # windows-latest gets +15 minutes over macOS. The amd64 Windows duration is
+    # highly sensitive to sccache hit rate: when hits are high it can be close
+    # to x86, but low-hit runs become much longer. Keep generous headroom for
+    # that variance.
     timeout-minutes: ${{ matrix.os == 'windows-latest' && 45 || 30 }}
     permissions:
       contents: read
@@ -322,8 +321,8 @@ jobs:
     # Unlike the core (windows-latest, py3.13) job, this 32-bit build cannot use
     # sccache: it uses the Visual Studio generator (-A Win32), which ignores
     # CMAKE_CXX_COMPILER_LAUNCHER, so every run is a full cold build (~16-17
-    # min) with no cache to fall back on. Keep 45 minutes here as well to avoid
-    # runner-variance timeouts.
+    # min) with no cache to fall back on. Keep 45 minutes here as well to align
+    # timeout policy across Windows jobs and absorb runner variance.
     timeout-minutes: 45
     permissions:
       contents: read

@@ -18,7 +18,7 @@ void RegisterLeakyReluCases(std::vector<TestCase> &registry, TestMode mode) {
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat("LeakyRelu", leakyrelu_kernel, "test_cc_leakyrelu_benchmark", opset,
-                              registry, false);
+                              registry);
     return;
   }
 

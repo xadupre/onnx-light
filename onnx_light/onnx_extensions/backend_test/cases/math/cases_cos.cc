@@ -37,7 +37,7 @@ void RegisterCosCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Cos cos_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Cos", cos_kernel, "test_cc_cos_benchmark", opset, registry, false);
+    ExpectBenchmarkUnaryFloat("Cos", cos_kernel, "test_cc_cos_benchmark", opset, registry);
     return;
   }
 

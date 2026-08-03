@@ -35,8 +35,7 @@ void RegisterPReluCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::PRelu prelu_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkBinaryFloat("PRelu", prelu_kernel, "test_cc_prelu_benchmark", opset, registry,
-                               false);
+    ExpectBenchmarkBinaryFloat("PRelu", prelu_kernel, "test_cc_prelu_benchmark", opset, registry);
     return;
   }
 

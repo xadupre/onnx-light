@@ -17,8 +17,7 @@ void RegisterMishCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Mish mish_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Mish", mish_kernel, "test_cc_mish_benchmark", opset, registry,
-                              false);
+    ExpectBenchmarkUnaryFloat("Mish", mish_kernel, "test_cc_mish_benchmark", opset, registry);
     return;
   }
 

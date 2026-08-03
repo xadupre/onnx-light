@@ -42,8 +42,7 @@ void RegisterAcoshCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Acosh acosh_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Acosh", acosh_kernel, "test_cc_acosh_benchmark", opset, registry,
-                              false);
+    ExpectBenchmarkUnaryFloat("Acosh", acosh_kernel, "test_cc_acosh_benchmark", opset, registry);
     return;
   }
 

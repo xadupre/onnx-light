@@ -23,8 +23,7 @@ void RegisterRoundCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Round round_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Round", round_kernel, "test_cc_round_benchmark", opset, registry,
-                              false);
+    ExpectBenchmarkUnaryFloat("Round", round_kernel, "test_cc_round_benchmark", opset, registry);
     return;
   }
 

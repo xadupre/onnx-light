@@ -26,8 +26,7 @@ void RegisterAtanhCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Atanh atanh_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Atanh", atanh_kernel, "test_cc_atanh_benchmark", opset, registry,
-                              false);
+    ExpectBenchmarkUnaryFloat("Atanh", atanh_kernel, "test_cc_atanh_benchmark", opset, registry);
     return;
   }
 

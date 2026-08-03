@@ -4,6 +4,8 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/cast_helper.h"
+
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cmath>
@@ -29,6 +31,20 @@ template <typename T> void ComputeInPlace(const Tensor &x, T alpha, T gamma, Ten
   }
 }
 
+using DecodeFunc = float (*)(uint16_t);
+using EncodeFunc = uint16_t (*)(float);
+
+void ComputeHalf(const Tensor &x, float alpha, float gamma, Tensor &output, DecodeFunc decode,
+                 EncodeFunc encode) {
+  const int64_t n = x.element_count();
+  const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+  uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
+  for (int64_t i = 0; i < n; ++i) {
+    const float v = decode(px[i]);
+    py[i] = encode(v > 0.0f ? gamma * v : gamma * (alpha * std::exp(v) - alpha));
+  }
+}
+
 void Dispatch(const Tensor &x, float alpha, float gamma, Tensor &output) {
   switch (static_cast<DataType>(x.data_type)) {
   case DataType::FLOAT:
@@ -37,9 +53,15 @@ void Dispatch(const Tensor &x, float alpha, float gamma, Tensor &output) {
   case DataType::DOUBLE:
     ComputeInPlace<double>(x, static_cast<double>(alpha), static_cast<double>(gamma), output);
     return;
+  case DataType::FLOAT16:
+    ComputeHalf(x, alpha, gamma, output, Float16BitsToFloat, FloatToFloat16Bits);
+    return;
+  case DataType::BFLOAT16:
+    ComputeHalf(x, alpha, gamma, output, Bfloat16BitsToFloat, FloatToBfloat16Bits);
+    return;
   default:
     EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,
-                      ", only supports FLOAT and DOUBLE tensors.");
+                      ", only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
   }
 }
 

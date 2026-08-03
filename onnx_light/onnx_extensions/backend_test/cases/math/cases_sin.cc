@@ -24,7 +24,7 @@ void RegisterSinCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Sin sin_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Sin", sin_kernel, "test_cc_sin_benchmark", opset, registry, false);
+    ExpectBenchmarkUnaryFloat("Sin", sin_kernel, "test_cc_sin_benchmark", opset, registry);
     return;
   }
 

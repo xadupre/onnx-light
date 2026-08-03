@@ -25,8 +25,7 @@ void RegisterAsinCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Asin asin_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Asin", asin_kernel, "test_cc_asin_benchmark", opset, registry,
-                              false);
+    ExpectBenchmarkUnaryFloat("Asin", asin_kernel, "test_cc_asin_benchmark", opset, registry);
     return;
   }
 

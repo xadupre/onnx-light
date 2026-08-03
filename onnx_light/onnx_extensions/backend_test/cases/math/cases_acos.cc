@@ -25,8 +25,7 @@ void RegisterAcosCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Acos acos_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Acos", acos_kernel, "test_cc_acos_benchmark", opset, registry,
-                              false);
+    ExpectBenchmarkUnaryFloat("Acos", acos_kernel, "test_cc_acos_benchmark", opset, registry);
     return;
   }
 

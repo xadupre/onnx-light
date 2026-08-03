@@ -607,8 +607,10 @@ if(ONNX_LIGHT_PROVIDE_ONNX_TARGETS)
     add_library(onnx_light_protobuf_compat INTERFACE)
     target_link_libraries(onnx_light_protobuf_compat INTERFACE lib_onnx_proto)
     target_include_directories(onnx_light_protobuf_compat INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_compat_include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_compat_include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_proto>)
     add_library(protobuf::libprotobuf ALIAS onnx_light_protobuf_compat)

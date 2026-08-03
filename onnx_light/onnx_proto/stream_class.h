@@ -153,7 +153,23 @@ public:                                                                         
   using name##_t = type;
 
 #define FIELD_STR(name, order, doc)                                                                \
-  FIELD(utils::OptionalString, name, order, doc)                                                   \
+public:                                                                                            \
+  inline utils::OptionalString &ref_##name() { return name##_; }                                   \
+  inline const utils::OptionalString &ref_##name() const { return name##_; }                       \
+  /** Compatibility accessor - equivalent to ref_##name(). */                                      \
+  inline utils::OptionalString &name() { return name##_; }                                         \
+  /** Compatibility accessor - equivalent to ref_##name() const. */                                \
+  inline const utils::OptionalString &name() const { return name##_; }                             \
+  inline const utils::OptionalString *ptr_##name() const { return &name##_; }                      \
+  inline bool has_##name() const { return _has_field_(name##_); }                                  \
+  inline void set_##name(const utils::OptionalString &v) { name##_ = v; }                          \
+  /** Returns a mutable std::string pointer (protobuf compat). */                                  \
+  inline std::string *mutable_##name() { return name##_.mutable_ptr(); }                           \
+  inline int order_##name() const { return order; }                                                \
+  static inline constexpr const char *_name_##name = #name;                                        \
+  static inline constexpr const char *DOC_##name = doc;                                            \
+  utils::OptionalString name##_;                                                                   \
+  using name##_t = utils::OptionalString;                                                          \
   inline void clear_##name() { name##_.reset(); }                                                  \
   inline void set_##name(const char *v) { name##_ = v; }                                           \
   inline void set_##name(const char *data, size_t len) { name##_ = std::string(data, len); }       \

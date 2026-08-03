@@ -1001,12 +1001,12 @@ class TestReferenceEvaluatorTensorConversion(ExtTestCase):
                 wraps=self._evaluator._runtime.tensor_from_numpy,
             ) as mocked_from_numpy,
         ):
-            self._evaluator._numpy_to_cpp_tensor("x", contiguous)
+            self._evaluator._numpy_to_cpp_tensor("x", contiguous, copy=False)
             self.assertEqual(mocked_contiguous.call_count, 0)
             self.assertEqual(mocked_from_numpy.call_args.kwargs.get("copy"), False)
-            self._evaluator._numpy_to_cpp_tensor("x", non_contiguous)
+            self._evaluator._numpy_to_cpp_tensor("x", non_contiguous, copy=False)
             self.assertEqual(mocked_contiguous.call_count, 1)
-            self.assertEqual(mocked_from_numpy.call_args.kwargs.get("copy"), False)
+            self.assertEqual(mocked_from_numpy.call_args.kwargs.get("copy"), True)
 
     def test_numpy_to_cpp_tensor_scalar_input(self):
         scalar = np.array(2, dtype=np.int64)

@@ -117,7 +117,7 @@ def _cpp_tensor_to_numpy(t: Any) -> np.ndarray:
     return numpy_helper.to_array(_runtime.tensor_to_proto(t))
 
 
-def _numpy_to_cpp_tensor(name: str, arr: np.ndarray) -> Any:
+def _numpy_to_cpp_tensor(name: str, arr: np.ndarray, copy: bool = True) -> Any:
     """Converts a :class:`numpy.ndarray` to a runtime ``Tensor``.
 
     For standard fixed-width dtypes, copies the array's raw bytes directly
@@ -125,14 +125,20 @@ def _numpy_to_cpp_tensor(name: str, arr: np.ndarray) -> Any:
     the triple-copy overhead of serializing through a ``TensorProto``
     intermediate.
     """
-    if not isinstance(arr, np.ndarray):
+    is_ndarray = isinstance(arr, np.ndarray)
+    if not is_ndarray:
         arr = np.asarray(arr)
     onnx_dtype = _NP_TO_DTYPE.get(arr.dtype.type)
     if onnx_dtype is not None:
+        needs_copy = copy or not is_ndarray
         if not arr.flags.c_contiguous:
             arr = np.ascontiguousarray(arr)
-        raw = arr.ravel().view(np.uint8)
-        return _runtime.tensor_from_numpy(name, onnx_dtype, list(arr.shape), raw, copy=False)
+            needs_copy = True
+        if arr.ndim == 0:
+            raw = arr.reshape((1,)).view(np.uint8)
+        else:
+            raw = arr.view(np.uint8).ravel()
+        return _runtime.tensor_from_numpy(name, onnx_dtype, list(arr.shape), raw, copy=needs_copy)
     # Fallback for strings, sub-byte types, and exotic dtypes.
     tp = numpy_helper.from_array(arr, name=name)
     return _runtime.tensor_from_proto(tp)
@@ -640,7 +646,7 @@ class ReferenceEvaluator:
                 ]
                 ctx.put_sequence(name, elements)
             else:
-                ctx.set(name, _numpy_to_cpp_tensor(name, value))
+                ctx.set(name, _numpy_to_cpp_tensor(name, value, copy=False))
 
         if self._model is not None:
             _runtime.register_model_functions(self._model, ctx)

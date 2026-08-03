@@ -500,6 +500,15 @@ struct Tensor {
   }
 
   bool has_allocation() const noexcept { return allocation_ != nullptr; }
+
+  /// Returns whether the tensor is a non-owning (borrowed) view over external
+  /// memory (created via :cpp:func:`Borrow` / :cpp:func:`BorrowStrings`, e.g. a
+  /// zero-copy view into a ``TensorProto``'s ``raw_data``). Borrowed tensors do
+  /// not own their bytes: the backing storage must outlive the tensor.
+  bool is_borrowed() const noexcept {
+    return borrow_ptr_ != nullptr || borrow_string_data_ != nullptr;
+  }
+
   RawBuffer *allocation() const {
     EXT_ENFORCE(allocation_ != nullptr, "Tensor::allocation: tensor is not allocator-backed.");
     return allocation_;

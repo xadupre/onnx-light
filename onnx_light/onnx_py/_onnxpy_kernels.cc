@@ -1015,27 +1015,32 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         // and keeps the source tensor (``t_obj``) alive for as long as the view
         // lives, so the borrowed span never dangles.
         //
-        // When ``steal=True`` *and* the tensor owns its bytes inline (an
-        // ordinary ``std::vector`` buffer that is neither allocator-backed nor a
-        // borrowed span) the buffer's ownership is transferred to NumPy: the
-        // byte vector is moved into a capsule that frees it when the array (and
-        // any array derived from it) is garbage-collected. This DLPack-style
-        // hand-off lets a runtime graph producing owned outputs be released
-        // while the arrays live on, at the cost of emptying the source tensor.
-        // Stealing is skipped for allocator-backed tensors (their bytes belong
-        // to the allocator pool and must be returned to it) and for borrowed
-        // views (they reference external memory), which fall back to borrowing.
+        // When ``steal=True`` and the tensor is not allocator-backed, its bytes
+        // are transferred onto the regular heap and handed to NumPy through a
+        // capsule that frees them when the array (and any array derived from it)
+        // is garbage-collected. Inline-owned buffers (an ordinary
+        // ``std::vector``) are moved out — a zero-copy hand-off that empties the
+        // source tensor. Borrowed views (which reference external memory such as
+        // a model proto's ``raw_data``) are instead copied, so the resulting
+        // array owns its bytes and no longer depends on the source tensor — or
+        // the proto it borrows from — staying alive. This DLPack-style hand-off
+        // lets a runtime graph (and the model proto its outputs may borrow from)
+        // be released while the arrays live on. Stealing is skipped for
+        // allocator-backed tensors (their bytes belong to the allocator pool and
+        // must be returned to it), which fall back to borrowing.
         Tensor &t = nb::cast<Tensor &>(t_obj);
         EXT_ENFORCE_INVALID(
             !(static_cast<TensorProto::DataType>(t.data_type) == TensorProto::DataType::STRING),
             "tensor_to_numpy: STRING tensors have no raw byte buffer; use "
             "tensor_to_proto instead.");
         const size_t n = t.size_bytes();
-        // Inline-owned when there is no allocator backing and ``bytes()``
-        // resolves to the inline ``data`` buffer (borrowed tensors keep
-        // ``data`` empty and read from an external span instead).
-        if (steal && !t.has_allocation() && n > 0 && t.bytes() == t.data.data()) {
-          auto *owned = new std::vector<uint8_t>(t.data.release());
+        if (steal && !t.has_allocation() && n > 0) {
+          // Inline-owned when ``bytes()`` resolves to the inline ``data`` buffer
+          // (borrowed tensors keep ``data`` empty and read from an external span
+          // instead). Move the owned buffer out; copy a borrowed one.
+          auto *owned = (t.bytes() == t.data.data())
+                            ? new std::vector<uint8_t>(t.data.release())
+                            : new std::vector<uint8_t>(t.bytes(), t.bytes() + n);
           nb::capsule owner(
               owned, [](void *p) noexcept { delete static_cast<std::vector<uint8_t> *>(p); });
           return nb::ndarray<nb::numpy, const uint8_t, nb::ndim<1>>(owned->data(), {n}, owner);
@@ -1047,10 +1052,12 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "little-endian byte buffer. By default the array is a zero-copy view whose "
       "source tensor is kept alive for the lifetime of the returned array (it is "
       "the array's ``base``) so the borrowed view never dangles. When ``steal`` is "
-      "``True`` and the tensor owns its bytes inline (not allocator-backed and not "
-      "a borrowed view), the buffer's ownership is transferred to NumPy "
-      "(DLPack-style) — the array owns the bytes through a capsule, the source "
-      "tensor is emptied, and it is no longer kept alive. Callers reinterpret the "
+      "``True`` and the tensor is not allocator-backed, its bytes are transferred "
+      "onto the regular heap and owned by the array through a capsule (DLPack-style): "
+      "an inline-owned buffer is moved out (the source tensor is emptied), while a "
+      "borrowed view (e.g. into a model proto's ``raw_data``) is copied so the array "
+      "no longer depends on the source tensor — or that proto — staying alive. "
+      "Allocator-backed tensors fall back to borrowing. Callers reinterpret the "
       "bytes via ``ndarray.view(dtype).reshape(shape)``. ``STRING`` tensors have no "
       "raw buffer and must go through :func:`tensor_to_proto`.");
 

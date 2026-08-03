@@ -2576,6 +2576,34 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
           << "value_tags metadata mismatch on case " << tc.name;
     }
 
+    // Verify per-value shape/weight tags: the ``onnx_light.value_tag`` metadata
+    // that the pass writes onto each ValueInfoProto (inputs, value_info,
+    // outputs) and initializer TensorProto. A case that pre-embeds these golden
+    // per-value tags (e.g. cases_qwen3_4_layers_like.cc / cases_tiny_llm.cc) has
+    // them recomputed and asserted here, so the tags live on each value and not
+    // only in the graph-level JSON.
+    const auto per_value_tags = [](const GraphProto &g) {
+      std::unordered_map<std::string, std::string> tags;
+      const auto collect = [&](const auto &entries) {
+        for (const auto &e : entries) {
+          const MetadataMap meta = MetadataOf(e);
+          auto it = meta.find(core::compute::kValueTagMetadataKey);
+          if (it != meta.end()) {
+            tags[e.name()] = it->second;
+          }
+        }
+      };
+      collect(g.ref_input());
+      collect(g.ref_value_info());
+      collect(g.ref_output());
+      collect(g.ref_initializer());
+      return tags;
+    };
+    const auto expected_per_value = per_value_tags(expected_graph);
+    if (!expected_per_value.empty()) {
+      EXPECT_EQ(per_value_tags(*graph), expected_per_value)
+          << "per-value value_tag metadata mismatch on case " << tc.name;
+    }
     const auto &result_nodes = graph->ref_node();
     ASSERT_EQ(result_nodes.size(), expected_node_meta.size());
     for (size_t i = 0; i < result_nodes.size(); ++i) {

@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -1124,6 +1125,83 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
     AppendValueInfo(*graph->add_output(), "present_key_values_value_" + li, DataType::FLOAT16,
                     {DimSpec("batch_size"), DimSpec(INT64_C(8)),
                      DimSpec("past_sequence_length+sequence_length"), DimSpec(INT64_C(128))});
+  }
+
+  // ---- Per-value value-tag metadata (onnx_light.value_tag) ---------------
+  // Encode each tensor's shape/weight/axes/ambiguous classification directly on
+  // its ValueInfoProto (graph inputs, value_info, outputs) and on initializer
+  // TensorProtos, mirroring the runtime WriteValueAndNodeTagsToMetadata output
+  // and the cases_tiny_llm.cc convention. The shape/weight/axes/ambiguous tag
+  // lives on each value's ValueInfoProto (no graph-level value_tags JSON is
+  // embedded). Every tensor here is tagged
+  // "weight" except the 24 "shape", 10 "axes" and 1 "ambiguous" entries listed
+  // below (the exact output of the value-tag inference pass for this model).
+  {
+    const std::unordered_map<std::string, const char *> non_weight_tags = {
+        // value_info tagged "shape"
+        {"A::Sq__2", "shape"},
+        {"A::Sq__3", "shape"},
+        {"B::Sq__2", "shape"},
+        {"B::Sq__3", "shape"},
+        {"SqueezeAddPattern_SwapRangeAddScalarPattern--sym_size_int_25", "shape"},
+        {"_onx_add_unsqueeze_12::Shape:", "shape"},
+        {"_onx_range_A::Sq::UnSq0x1x3__2", "shape"},
+        {"_onx_range_A::Sq__2", "shape"},
+        {"_onx_range_dim1::Sq::UnSq0x1::C1::RSh0x-1x1__1", "shape"},
+        {"_onx_range_dim1::Sq::UnSq0x1::C1__1", "shape"},
+        {"_onx_range_dim1::Sq::UnSq0x1__1", "shape"},
+        {"_onx_range_dim1::Sq__1", "shape"},
+        {"dim1::Sq__1", "shape"},
+        {"dim2::Sq__1", "shape"},
+        {"input_ids::Shape1:2", "shape"},
+        {"past_key_values_key_0::Shape2:3", "shape"},
+        {"past_key_values_value_2::Shape:1", "shape"},
+        {"to::Shape-1:", "shape"},
+        // initializers tagged "shape"
+        {"init7_s3_0_-1_1__1", "shape"},
+        {"init7_s3_0_0_2048", "shape"},
+        {"init7_s4_0_0_16_128", "shape"},
+        {"init7_s4_0_0_8_128", "shape"},
+        {"init7_s4_0_16_-1_128", "shape"},
+        {"init7_s5_1_1_2_1_1", "shape"},
+        // initializers tagged "axes"
+        {"init7_s1_1", "axes"},
+        {"init7_s1_2__layer_0", "axes"},
+        {"init7_s1_2__layer_1", "axes"},
+        {"init7_s1_2__layer_2", "axes"},
+        {"init7_s1_2__layer_3", "axes"},
+        {"init7_s2_0_1__1", "axes"},
+        {"init7_s3_0_1_2__2", "axes"},
+        {"init7_s3_0_1_2__3", "axes"},
+        {"init7_s3_0_1_3__2", "axes"},
+        {"init7_s3_1_2_3__3", "axes"},
+        // initializer tagged "ambiguous"
+        {"init7_s1_-1", "ambiguous"},
+    };
+    const auto tag_for = [&non_weight_tags](const std::string &name) -> const char * {
+      auto it = non_weight_tags.find(name);
+      return it == non_weight_tags.end() ? "weight" : it->second;
+    };
+    const auto set_value_tag = [&](StringStringEntryProto *entry, const std::string &name) {
+      entry->set_key(core::compute::kValueTagMetadataKey);
+      entry->set_value(tag_for(name));
+    };
+    for (int i = 0; i < graph->input().size(); ++i) {
+      ValueInfoProto *vi = graph->mutable_input(static_cast<std::size_t>(i));
+      set_value_tag(vi->add_metadata_props(), vi->name());
+    }
+    for (int i = 0; i < graph->value_info().size(); ++i) {
+      ValueInfoProto *vi = graph->mutable_value_info(static_cast<std::size_t>(i));
+      set_value_tag(vi->add_metadata_props(), vi->name());
+    }
+    for (int i = 0; i < graph->output().size(); ++i) {
+      ValueInfoProto *vi = graph->mutable_output(static_cast<std::size_t>(i));
+      set_value_tag(vi->add_metadata_props(), vi->name());
+    }
+    for (int i = 0; i < graph->initializer().size(); ++i) {
+      TensorProto *init = graph->mutable_initializer(static_cast<std::size_t>(i));
+      set_value_tag(init->add_metadata_props(), init->name());
+    }
   }
 
   registry.emplace_back(std::move(tc));

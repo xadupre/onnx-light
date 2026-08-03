@@ -210,11 +210,12 @@ jobs:
     needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
-    # windows-latest gets +6 minutes over macOS because this job is consistently
-    # slower on Windows: MSVC compilation is slower for this codebase, the full
-    # pip+ctest+pytest sequence runs close to the limit, and cold-cache runs
-    # still happen when cache hits are low.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 36 || 30 }}
+    # windows-latest gets +15 minutes over macOS. This amd64 Windows path is
+    # not comparable to the x86 helper build below: it does the full
+    # pip-install C++ build plus ctest and pytest, while x86 only compiles.
+    # MSVC build speed and occasional cold-cache runs make this path much
+    # longer, so keep generous timeout headroom.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 45 || 30 }}
     permissions:
       contents: read
       id-token: write
@@ -321,9 +322,9 @@ jobs:
     # Unlike the core (windows-latest, py3.13) job, this 32-bit build cannot use
     # sccache: it uses the Visual Studio generator (-A Win32), which ignores
     # CMAKE_CXX_COMPILER_LAUNCHER, so every run is a full cold build (~16-17
-    # min) with no cache to fall back on. 32 minutes still leaves too little
-    # headroom on slower runners, so increase to 36.
-    timeout-minutes: 36
+    # min) with no cache to fall back on. Keep 45 minutes here as well to avoid
+    # runner-variance timeouts.
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:

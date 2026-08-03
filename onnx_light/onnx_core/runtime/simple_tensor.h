@@ -334,6 +334,14 @@ struct RawBuffer {
   auto begin() const noexcept { return storage_.begin(); }
   auto end() const noexcept { return storage_.end(); }
 
+  /// Moves the underlying byte storage out of the buffer, leaving it empty.
+  ///
+  /// Returns the owned ``std::vector<uint8_t>`` by move so callers can take
+  /// ownership of the bytes (for example to hand them to NumPy through a
+  /// DLPack-style capsule) without copying. After the call the buffer is
+  /// empty (``size() == 0``).
+  std::vector<uint8_t> release() noexcept { return std::move(storage_); }
+
   /// Fills the buffer with ``count`` copies of ``value``, resizing as needed.
   void assign(size_t count, uint8_t value) { storage_.assign(count, value); }
 

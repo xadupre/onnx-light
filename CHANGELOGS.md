@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Improvements
 
+- Added an opt-in `steal` parameter to the `tensor_to_numpy` runtime binding: when set and the tensor owns its bytes inline (not allocator-backed and not a borrowed view), the buffer's ownership is transferred to NumPy through a DLPack-style capsule instead of borrowing it, so the source tensor can be released while the array lives on. `ReferenceEvaluator` uses it when converting terminal graph outputs.
 - Made `ReferenceEvaluator` import standard-dtype runtime `Tensor` outputs into NumPy through the DLPack exchange protocol (`Tensor.__dlpack__` / `numpy.from_dlpack`), keeping the zero-copy conversion while relying on the standard protocol; bfloat16/float8 and sub-byte/STRING tensors keep their existing fallbacks.
 - Made the C++ `RunNode` / `RuntimeSession` dispatch device-aware: a `RuntimeContext` pinned to a non-CPU device now resolves the device-qualified kernel and fails with a diagnostic naming the device when none is registered, instead of silently dispatching to the CPU kernel.
 - Routed `Tensor::elem_num()` and `Tensor::size_from_dim()` through the new `safe_dim_product` helper so tensor dimension overflow and negative dimensions raise `tensor_error` (propagated from onnx/onnx#8220).

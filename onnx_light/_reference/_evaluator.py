@@ -85,7 +85,7 @@ _NP_TO_DTYPE: dict[Any, int] = {v: k for k, v in _DTYPE_TO_NP.items()}
 _IS_BIG_ENDIAN = sys.byteorder == "big"
 
 
-def _cpp_tensor_to_numpy(t: Any) -> np.ndarray:
+def _cpp_tensor_to_numpy(t: Any, steal: bool = False) -> np.ndarray:
     """Converts a runtime ``Tensor`` to a :class:`numpy.ndarray`.
 
     For standard fixed-width dtypes (float32, int64, etc.) the array is a
@@ -96,6 +96,12 @@ def _cpp_tensor_to_numpy(t: Any) -> np.ndarray:
     the raw byte view returned by :func:`_runtime.tensor_to_numpy` (DLPack has
     no stock NumPy dtype for them), and sub-byte packed types and STRING
     tensors fall back to the full :func:`numpy_helper.to_array` path.
+
+    When ``steal`` is ``True`` and ``t`` owns its bytes inline (the case for a
+    graph output produced without an allocator), the raw-byte path transfers
+    the buffer's ownership to NumPy instead of borrowing it, so the source
+    tensor can be released while the array lives on. ``steal`` must only be set
+    for terminal tensors that are not consumed elsewhere.
     """
     dt = int(t.data_type)
     if not _IS_BIG_ENDIAN and dt in _DLPACK_DTYPES:
@@ -104,15 +110,17 @@ def _cpp_tensor_to_numpy(t: Any) -> np.ndarray:
         return np.from_dlpack(t)
     np_dtype = _DTYPE_TO_NP.get(dt)
     if np_dtype is not None:
-        # ``tensor_to_numpy`` returns a 1-D uint8 view borrowing the tensor's
-        # bytes (no copy); reinterpret it as ``np_dtype`` and reshape. Also
-        # used on big-endian hosts, where the little-endian buffer must be
-        # byte-swapped after reinterpretation.
-        raw = _runtime.tensor_to_numpy(t)
+        # ``tensor_to_numpy`` returns a 1-D uint8 array over the tensor's bytes;
+        # reinterpret it as ``np_dtype`` and reshape. With ``steal`` the array
+        # owns the (moved-out) bytes; otherwise it borrows them. Also used on
+        # big-endian hosts, where the little-endian buffer must be byte-swapped
+        # after reinterpretation.
+        shape = t.shape
+        raw = _runtime.tensor_to_numpy(t, steal)
         arr = raw.view(np_dtype)
         if _IS_BIG_ENDIAN:  # pragma: no cover
             arr = arr.byteswap()
-        return arr.reshape(t.shape)
+        return arr.reshape(shape)
     # Fallback for sub-byte types (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) and STRING.
     return numpy_helper.to_array(_runtime.tensor_to_proto(t))
 
@@ -653,9 +661,14 @@ class ReferenceEvaluator:
         results: list[np.ndarray | list[np.ndarray]] = []
         for name in output_names:
             if ctx.has(name):
-                results.append(_cpp_tensor_to_numpy(ctx.get(name)))
+                # ``name`` is a terminal graph output: steal the buffer (when
+                # owned inline) so the array owns the bytes and the runtime
+                # tensor can be released.
+                results.append(_cpp_tensor_to_numpy(ctx.get(name), steal=True))
             elif ctx.has_sequence(name):
-                results.append([_cpp_tensor_to_numpy(t) for t in ctx.get_sequence(name)])
+                results.append(
+                    [_cpp_tensor_to_numpy(t, steal=True) for t in ctx.get_sequence(name)]
+                )
             else:
                 all_names = sorted(ctx.names() + ctx.sequence_names())
                 raise RuntimeError(

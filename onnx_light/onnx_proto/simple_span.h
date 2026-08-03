@@ -482,34 +482,42 @@ public:
     owned_.push_back(v);
   }
 
-  /** Returns a const reference to the data as a std::string.
-   *  Lazily materializes an internal string cache for compatibility with APIs
-   *  that require `const std::string&` (e.g. protobuf bridge functions). */
+  /** BREAKING CHANGE: value() is no longer supported and always raises.
+   *
+   *  It used to return a `const std::string&` by lazily materializing an internal
+   *  cache.  That is fundamentally incompatible with the ByteSpan storage model:
+   *  a ByteSpan may hold data in borrowed (zero-copy) or aligned-owned mode, where
+   *  the bytes are NOT stored as a std::string.  Returning them as a std::string
+   *  therefore required a hidden full copy on every call (defeating the zero-copy
+   *  and alignment guarantees), and the returned reference could dangle as soon as
+   *  the underlying buffer was mutated or reassigned.
+   *
+   *  Access the bytes through the ByteSpan API instead: data()/size(), operator[],
+   *  the explicit `operator std::string()` conversion (when a real copy is wanted),
+   *  or the field's ref_<name>() accessor. */
   inline const std::string &value() const {
-    const uint8_t *p = data();
-    const size_t sz = size();
-    if (str_cache_.size() != sz || (sz > 0 && std::memcmp(str_cache_.data(), p, sz) != 0)) {
-      str_cache_.assign(reinterpret_cast<const char *>(p), sz);
-    }
-    return str_cache_;
+    EXT_THROW("ByteSpan::value() is a removed API (breaking change): a ByteSpan may store borrowed "
+              "or aligned-owned bytes that are not backed by a std::string, so exposing them as a "
+              "`const std::string&` requires a hidden copy and can dangle. Use data()/size(), the "
+              "explicit std::string conversion, or ref_<field>() instead.");
   }
 
-  /** Returns a mutable pointer to a std::string that, on destruction or next access,
-   *  syncs back into the owned buffer. Callers must call sync_from_cache() after mutation.
-   *  Throws if the ByteSpan is in borrowed mode. */
+  /** BREAKING CHANGE: mutable_value() is no longer supported and always raises.
+   *
+   *  It used to return a `std::string*` into an internal cache that had to be
+   *  written back with sync_from_cache() after mutation — an error-prone step that
+   *  was easy to forget — and it could not preserve the buffer's alignment or its
+   *  borrowed semantics.  Because a ByteSpan does not own its bytes as a std::string
+   *  in borrowed/aligned-owned mode, there is no std::string to hand out safely.
+   *
+   *  Mutate the bytes through the ByteSpan API instead: data()/data_as_char() and
+   *  operator[] for in-place edits, or assign()/resize()/resize_aligned() to replace
+   *  the contents. */
   inline std::string *mutable_value() {
-    EXT_ENFORCE(!borrowed_, "ByteSpan: mutable_value() called on a borrowed (zero-copy) buffer.");
-    const uint8_t *p = data();
-    str_cache_.assign(reinterpret_cast<const char *>(p), size());
-    return &str_cache_;
-  }
-
-  /** Copies the string cache back into the owned byte buffer.
-   *  Must be called after mutating via mutable_value(). */
-  inline void sync_from_cache() {
-    resize(str_cache_.size());
-    if (!str_cache_.empty())
-      std::memcpy(data(), str_cache_.data(), str_cache_.size());
+    EXT_THROW("ByteSpan::mutable_value() is a removed API (breaking change): it returned a pointer "
+              "into a cache that required an explicit sync_from_cache() write-back and could not "
+              "preserve alignment or borrowed semantics. Mutate via data()/data_as_char() or "
+              "replace via assign()/resize()/resize_aligned() instead.");
   }
 
 private:
@@ -520,8 +528,6 @@ private:
   size_t align_ = 0;
   /** Keeps borrowed backing storage alive when the model owns the shared buffer. */
   std::shared_ptr<void> owner_;
-  /** Lazily-populated string cache for value()/mutable_value(). */
-  mutable std::string str_cache_;
 };
 
 } // namespace utils

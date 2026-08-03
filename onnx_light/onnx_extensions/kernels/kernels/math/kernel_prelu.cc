@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_core/runtime/elementwise_helpers.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
@@ -44,7 +45,7 @@ void PReluInPlace(const char *dtype_name, int32_t dtype, const Tensor &x, const 
 }
 
 constexpr const char *kSupportedPReluTypesMsg =
-    " only supports FLOAT, DOUBLE, INT32, INT64, UINT32 and UINT64 inputs.";
+    " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT32, INT64, UINT32 and UINT64 inputs.";
 } // namespace
 
 Tensor PRelu::operator()(const Tensor &x, const Tensor &slope, RuntimeContext *rt) const {
@@ -63,6 +64,15 @@ Tensor PRelu::operator()(const Tensor &x, const Tensor &slope, RuntimeContext *r
   case DataType::UINT64:
     return PReluAlloc<uint64_t>("UINT64", DataType::UINT64, x, slope,
                                 rt ? rt->allocator() : nullptr);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfElementwiseAlloc(
+        kPReluName, "FLOAT16", DataType::FLOAT16, x, slope, Float16BitsToFloat, FloatToFloat16Bits,
+        [](float a, float b) { return PReluOp<float>(a, b); }, rt ? rt->allocator() : nullptr);
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfElementwiseAlloc(
+        kPReluName, "BFLOAT16", DataType::BFLOAT16, x, slope, Bfloat16BitsToFloat,
+        FloatToBfloat16Bits, [](float a, float b) { return PReluOp<float>(a, b); },
+        rt ? rt->allocator() : nullptr);
   default:
     EXT_THROW_INVALID(kPReluName, ": unsupported data type ", x.data_type, kSupportedPReluTypesMsg);
   }
@@ -82,6 +92,14 @@ void PRelu::operator()(const Tensor &x, const Tensor &slope, Tensor &output) con
     return PReluInPlace<uint32_t>("UINT32", DataType::UINT32, x, slope, output);
   case DataType::UINT64:
     return PReluInPlace<uint64_t>("UINT64", DataType::UINT64, x, slope, output);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfElementwise(kPReluName, "FLOAT16", DataType::FLOAT16, x, slope, output,
+                                         Float16BitsToFloat, FloatToFloat16Bits,
+                                         [](float a, float b) { return PReluOp<float>(a, b); });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfElementwise(kPReluName, "BFLOAT16", DataType::BFLOAT16, x, slope,
+                                         output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
+                                         [](float a, float b) { return PReluOp<float>(a, b); });
   default:
     EXT_THROW_INVALID(kPReluName, ": unsupported data type ", x.data_type, kSupportedPReluTypesMsg);
   }

@@ -184,6 +184,7 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
           "rather than owning its bytes inline. Borrowed tensors keep no ownership of "
           "their backing storage, which must outlive the tensor.")
       .def("__repr__", [](const Tensor &t) {
+        std::string r = "Tensor(name='";
         r += t.name;
         r += "', data_type=";
         r += TensorProto::DataType_Name(static_cast<TensorProto::DataType>(t.data_type));

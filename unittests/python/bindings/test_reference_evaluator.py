@@ -12,6 +12,7 @@ and the ``run`` calling convention.
 
 from __future__ import annotations
 
+import gc
 import os
 import subprocess
 import sys
@@ -25,7 +26,7 @@ import numpy as np
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx as onnxl
 from onnx_light.onnx import numpy_helper
-from onnx_light.onnx_lib import parser
+from onnx_light.onnx_lib import TensorProto, helper, parser
 
 # The reference runtime is only available in the full build; skip this module on
 # a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
@@ -45,6 +46,21 @@ _INITIALIZER_MODEL_SRC = (
     "agraph (float[3] x) => (float[3] y) <float[3] b = {1.0, 2.0, 3.0}>\n"
     "{ y = Add(x, b) }\n"
 )
+
+
+# A ``Constant`` graph output borrows its bytes directly from the model proto's
+# attribute when the value tensor stores ``raw_data`` (see
+# ``test_constant_output_survives_model_release``).
+def _make_raw_data_constant_model():
+    value = numpy_helper.from_array(np.array([1.0, 2.0, 3.0], dtype=np.float32), name="c")
+    assert value.raw_data, "Constant value must use raw_data to exercise the borrowed path."
+    node = helper.make_node("Constant", [], ["y"], value=value)
+    graph = helper.make_graph(
+        [node], "g", [], [helper.make_tensor_value_info("y", TensorProto.FLOAT, [3])]
+    )
+    model = helper.make_model(graph, opset_imports=[helper.make_operatorsetid("", 18)])
+    model.ir_version = 10
+    return model
 
 
 class TestReferenceEvaluator(ExtTestCase):
@@ -89,6 +105,28 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(sess.input_names, ["x"])
         (y,) = sess.run(None, {"x": np.array([10.0, 20.0, 30.0], dtype=np.float32)})
         np.testing.assert_array_equal(y, np.array([11.0, 22.0, 33.0], dtype=np.float32))
+
+    def test_constant_output_survives_model_release(self):
+        # A ``Constant`` graph output whose value tensor stores ``raw_data``
+        # borrows its bytes directly from the model proto (a borrowed runtime
+        # tensor). The returned array must own a heap copy so it remains valid
+        # after the evaluator -- and the model proto it borrowed from -- are
+        # released.
+        model = _make_raw_data_constant_model()
+        sess = ReferenceEvaluator(model)
+        (y,) = sess.run(None, {})
+        expected = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        np.testing.assert_array_equal(y, expected)
+        # The runtime tensor for ``y`` is a borrowed view over the proto: this
+        # is the case the heap copy must protect against.
+        self.assertTrue(sess._last_ctx.get("y").has_borrowed_data())
+        # Drop the evaluator and the model proto, then force collection.
+        del sess
+        del model
+        gc.collect()
+        # The array kept its own heap copy, so it is still valid and unchanged.
+        self.assertTrue(y.flags.owndata or y.base is not None)
+        np.testing.assert_array_equal(y, expected)
 
     def test_construct_from_bytes(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)

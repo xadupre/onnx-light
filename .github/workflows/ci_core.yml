@@ -210,9 +210,11 @@ jobs:
     needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
-    # windows-latest gets +2 minutes over the other matrix OSes because its
-    # C++ build is the slowest and was running close to the limit.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 32 || 30 }}
+    # windows-latest gets +15 minutes over macOS. The amd64 Windows duration is
+    # highly sensitive to sccache hit rate: when hits are high it can be close
+    # to x86, but low-hit runs become much longer. Keep generous headroom for
+    # that variance.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 45 || 30 }}
     permissions:
       contents: read
       id-token: write
@@ -319,9 +321,9 @@ jobs:
     # Unlike the core (windows-latest, py3.13) job, this 32-bit build cannot use
     # sccache: it uses the Visual Studio generator (-A Win32), which ignores
     # CMAKE_CXX_COMPILER_LAUNCHER, so every run is a full cold build (~16-17
-    # min) with no cache to fall back on. 22 minutes left almost no headroom on
-    # slower runners; bump to 32 to keep the job from timing out.
-    timeout-minutes: 32
+    # min) with no cache to fall back on. Keep 45 minutes here as well to align
+    # timeout policy across Windows jobs and absorb runner variance.
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:

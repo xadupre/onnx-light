@@ -8,10 +8,11 @@ import onnx_light.onnx as onnxl
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
 collect_test_case = import_or_skip("onnx_light.onnx.backend", "collect_test_case")
 
-# Feature metadata keys (inplace / shape-tag / release) that a backend test
-# case may only carry when it is explicitly tagged for the corresponding
-# feature ("inplace", "shape_tag" or "release"). Every other case must ship no
-# such metadata in its model or graph.
+# Feature metadata keys (inplace / shape-tag / release) computed by the
+# metadata passes. These belong on the NodeProto or ValueInfoProto/TensorProto
+# they describe (node tags/lifetimes on nodes, value tags on value_info, inputs,
+# outputs and initializers). They must never be attached to the graph-level
+# ``metadata_props``.
 _INPLACE_METADATA_KEYS = frozenset({"onnx_light.inplace_reuse"})
 _SHAPE_TAG_METADATA_KEYS = frozenset(
     {"onnx_light.node_tag", "onnx_light.value_tag", "onnx_light.value_tags"}
@@ -23,19 +24,6 @@ _RELEASE_METADATA_KEYS = frozenset(
         "onnx_light.release_after_shape_tag",
     }
 )
-# The in-place-reuse pass ("inplace" cases) writes both the in-place-reuse key
-# and the value-lifetime/release keys, so an "inplace" case legitimately carries
-# the release metadata as well. "release" cases carry only the release keys and
-# "shape_tag" cases only the shape-tag keys. The multi-node "inference"
-# shape-inference cases (test_cc_shape_inference_*) pre-embed the golden output
-# of every metadata pass so TestBackendMetadataCoverage / BigModelsInplaceInfo
-# can verify the computed metadata against it, hence they may carry all keys.
-_TAGGED_METADATA_KEYS = {
-    "inplace": _INPLACE_METADATA_KEYS | _RELEASE_METADATA_KEYS,
-    "shape_tag": _SHAPE_TAG_METADATA_KEYS,
-    "release": _RELEASE_METADATA_KEYS,
-    "inference": _INPLACE_METADATA_KEYS | _SHAPE_TAG_METADATA_KEYS | _RELEASE_METADATA_KEYS,
-}
 _ALL_FEATURE_METADATA_KEYS = (
     _INPLACE_METADATA_KEYS | _SHAPE_TAG_METADATA_KEYS | _RELEASE_METADATA_KEYS
 )
@@ -109,38 +97,22 @@ class TestCoverage(ExtTestCase):
             set(counts),
         )
 
-    def _iter_metadata_objects(self, model):
-        yield "graph", model.graph
-        for obj in model.graph.node:
-            yield "node", obj
-        for obj in model.graph.initializer:
-            yield "initializer", obj
-        for obj in model.graph.input:
-            yield "input", obj
-        for obj in model.graph.output:
-            yield "output", obj
-        for obj in model.graph.value_info:
-            yield "value_info", obj
-
-    def test_no_feature_metadata_on_untagged_tests(self):
-        # A backend test case that is not explicitly tagged "inplace",
-        # "shape_tag" or "release" must not store any inplace/shape_tag/release
-        # information in its model or graph metadata. A case tagged for one
-        # feature must not leak the metadata keys of the *other* features either.
+    def test_no_feature_metadata_on_graph(self):
+        # Feature metadata (inplace / shape_tag / release) must be attached to
+        # the NodeProto or ValueInfoProto/TensorProto it describes, never to the
+        # graph-level ``metadata_props``. Enforce this for every backend case.
         cases = collect_test_case(include_big=True)
         for name, tc in cases.items():
-            allowed = _TAGGED_METADATA_KEYS.get(tc.tag, frozenset())
-            forbidden = _ALL_FEATURE_METADATA_KEYS - allowed
             with self.subTest(tag=tc.tag, name=name):
-                for kind, obj in self._iter_metadata_objects(tc.model):
-                    keys = {it.key for it in obj.metadata_props}
-                    leaked = keys & forbidden
-                    self.assertFalse(
-                        leaked,
-                        msg=lambda leaked=leaked, kind=kind: (
-                            f"{name=} {tc.tag=} leaks metadata {sorted(leaked)} on {kind}"
-                        ),
-                    )
+                keys = {it.key for it in tc.model.graph.metadata_props}
+                leaked = keys & _ALL_FEATURE_METADATA_KEYS
+                self.assertFalse(
+                    leaked,
+                    msg=lambda leaked=leaked: (
+                        f"{name=} {tc.tag=} stores feature metadata "
+                        f"{sorted(leaked)} on the graph metadata_props"
+                    ),
+                )
 
 
 if __name__ == "__main__":

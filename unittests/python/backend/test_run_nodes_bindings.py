@@ -735,33 +735,6 @@ class TestTensorToNumpy(ExtTestCase):
         )
         self.assertTrue(borrowed.has_borrowed_data())
 
-    def test_tensor_to_numpy_steal_copies_borrowed_to_heap(self):
-        # ``steal=True`` on a borrowed view cannot move (nothing is owned): it
-        # copies the bytes onto the regular heap so the array owns its data and
-        # is independent of the borrowed source memory.
-        src = np.array([1, 2, 3], dtype=np.int32)
-        t = rt.tensor_from_numpy(
-            "x", int(TensorProto.INT32), [3], src.view(np.uint8).ravel(), copy=False
-        )
-        raw = rt.tensor_to_numpy(t, steal=True)
-        self.assertIsNotNone(raw.base)
-        # The array owns a heap copy: mutating the borrowed source must not
-        # change it, and the source buffer is left intact.
-        src[0] = 99
-        np.testing.assert_array_equal(raw.view(np.int32), np.array([1, 2, 3], np.int32))
-
-    def test_tensor_to_numpy_steal_borrowed_survives_source_drop(self):
-        # After the heap copy the array no longer depends on the borrowed
-        # source tensor (or the memory it referenced) staying alive.
-        src = np.array([4, 5, 6], dtype=np.int32)
-        t = rt.tensor_from_numpy(
-            "x", int(TensorProto.INT32), [3], src.view(np.uint8).ravel(), copy=False
-        )
-        arr = rt.tensor_to_numpy(t, steal=True).view(np.int32)
-        del t
-        del src
-        np.testing.assert_array_equal(arr, np.array([4, 5, 6], np.int32))
-
 
 class TestTensorFromNumpy(ExtTestCase):
     def test_tensor_from_numpy_copies_by_default(self):

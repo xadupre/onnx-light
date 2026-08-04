@@ -184,15 +184,32 @@ def _run_via_session(
                 ctx.set(init.name, _runtime.tensor_from_proto(init), "initializer")
     plan = ctx.get_execution_plan(graph_or_function)
     if sessions is None:
-        _runtime.RuntimeSession(plan).run(ctx)
+        session = _runtime.RuntimeSession(plan)
+        _record_graph_outputs(session, graph_or_function)
+        session.run(ctx)
         return
     entry = sessions.get(id(plan))
     if entry is None:
         # Cache the plan alongside the session so the plan (and therefore its
         # identity) stays alive for as long as the session that wraps it.
-        entry = (plan, _runtime.RuntimeSession(plan))
+        session = _runtime.RuntimeSession(plan)
+        _record_graph_outputs(session, graph_or_function)
+        entry = (plan, session)
         sessions[id(plan)] = entry
     entry[1].run(ctx)
+
+
+def _record_graph_outputs(session: Any, graph_or_function: Any) -> None:
+    """Records a ``GraphProto``'s declared outputs on a plan-built
+    ``RuntimeSession`` so :cpp:func:`RuntimeSession::Run` can detach any graph
+    output borrowing into the model (e.g. a ``Constant`` reading its value's
+    ``raw_data``) into an owned buffer before returning. A session built from a
+    bare :class:`ExecutionPlan` does not know the graph's output names, so
+    without this it would leave such outputs borrowing into the model.
+    ``FunctionProto`` carries no shaped outputs, so it is skipped.
+    """
+    if isinstance(graph_or_function, GraphProto):
+        session.set_declared_shapes(graph_or_function)
 
 
 # ---------------------------------------------------------------------------

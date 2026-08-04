@@ -1135,6 +1135,12 @@ df = df.sort_index(ascending=False)
 # Bars are colored by library: blue family for ``onnx``, orange family for
 # ``onnx_light``, green family for ``onnxruntime``.  Solid shades represent
 # the average; lighter shades the median.
+#
+# Three graphs are produced: a combined one with every benchmark
+# (``plot_onnx_time.png``), one restricted to the Python API
+# (``plot_onnx_time_python.png``) and one restricted to the C++ API
+# (``plot_onnx_time_cpp.png``). C++ API rows are those whose library part ends
+# with ``-cpp`` (for example ``onnxlight-cpp`` or ``onnxlight-cpp-nocopy``).
 import matplotlib.patches as mpatches
 
 _onnx_avg = "steelblue"
@@ -1162,76 +1168,127 @@ if physical_cores is not None:
 cpu_parts.append(f"{logical_cpus} logical processor{'s' if logical_cpus != 1 else ''}")
 cpu_topology_str = ", ".join(cpu_parts)
 
-ax = df[["avg", "median"]].plot.barh(
-    title=(
-        f"onnx vs onnx_light vs ort load/save (s), size={file_size / 2 ** 20:.2f} MB "
-        f"(lower is better)\n"
-        f"CPU: {processor_name} ({cpu_topology_str}), RAM: {memory_str}\n"
-        f"benchmark key: <op>/<files>x<threads>/<lib>\n"
-        f"op=load|save|parse|serialize, files=1|2, threads=1|4, "
-        f"lib=onnx|onnx-cpp|onnxlight|onnxlight-cpp|onnxlight-cpp-nocopy|"
-        f"onnxlight-nocopy|ir-py|ort"
-    ),
-    xlabel="seconds",
-    legend=False,
-    figsize=(12, 8),
+
+def _is_cpp_api(name: str) -> bool:
+    """Returns True when the benchmark row targets the C++ API.
+
+    The library part of the benchmark key (last ``/`` component) ends with
+    ``-cpp`` or contains ``-cpp-`` for the C++ standalone executables.
+    """
+    lib = name.rsplit("/", 1)[-1]
+    return lib.endswith("-cpp") or "-cpp-" in lib
+
+
+def plot_results(frame, title, png_path):
+    """Plots benchmark ``frame`` into a horizontal bar chart saved to ``png_path``.
+
+    Args:
+        frame: A pandas DataFrame indexed by benchmark name with ``avg``,
+            ``median`` and ``std`` columns.
+        title: The figure title.
+        png_path: The path of the PNG file to write.
+
+    Returns:
+        The matplotlib Axes used for the plot, or None when ``frame`` is empty.
+    """
+    if frame.empty:
+        print(f"No data to plot for {png_path!r}, skipping.")
+        return None
+
+    ax = frame[["avg", "median"]].plot.barh(
+        title=title, xlabel="seconds", legend=False, figsize=(12, 8)
+    )
+
+    # Row names use "onnxlight" / "ort" as recorded during benchmarking.
+    row_names = frame.index.tolist()
+    for container, col in zip(ax.containers, ["avg", "median"]):
+        for bar, name in zip(container, row_names):
+            if "onnxlight" in name:
+                if col == "avg":
+                    bar.set_facecolor(_onnx_light_avg)
+                elif col == "median":
+                    bar.set_facecolor(_onnx_light_med)
+            elif "/ir-py" in name:
+                if col == "avg":
+                    bar.set_facecolor(_ir_py_avg)
+                elif col == "median":
+                    bar.set_facecolor(_ir_py_med)
+            elif "/ort" in name:
+                if col == "avg":
+                    bar.set_facecolor(_ort_avg)
+                elif col == "median":
+                    bar.set_facecolor(_ort_med)
+            else:
+                if col == "avg":
+                    bar.set_facecolor(_onnx_avg)
+                elif col == "median":
+                    bar.set_facecolor(_onnx_med)
+
+    first_container = ax.containers[0]
+    for bar, name in zip(first_container, row_names):
+        avg = frame.loc[name, "avg"]
+        std = frame.loc[name, "std"]
+        if not np.isfinite(avg):
+            continue
+        if np.isfinite(std):
+            ci = 1.96 * std
+            label = f" {avg * 1e3:.1f} ±{ci * 1e3:.1f} ms"
+        else:
+            label = f" {avg * 1e3:.1f} ms"
+        ax.text(
+            bar.get_width(), bar.get_y() + bar.get_height() / 2.0, label, va="center", ha="left"
+        )
+
+    legend_handles = [
+        mpatches.Patch(color=_onnx_avg, label="onnx avg"),
+        mpatches.Patch(color=_onnx_med, label="onnx median"),
+        mpatches.Patch(color=_onnx_light_avg, label="onnx_light avg"),
+        mpatches.Patch(color=_onnx_light_med, label="onnx_light median"),
+        mpatches.Patch(color=_ir_py_avg, label="ir-py avg"),
+        mpatches.Patch(color=_ir_py_med, label="ir-py median"),
+        mpatches.Patch(color=_ort_avg, label="ort avg"),
+        mpatches.Patch(color=_ort_med, label="ort median"),
+    ]
+    ax.legend(handles=legend_handles)
+    ax.grid(axis="x")
+    for label in ax.get_yticklabels():
+        label.set_horizontalalignment("left")
+    ax.tick_params(axis="y", pad=160)
+    ax.figure.tight_layout()
+    ax.figure.savefig(png_path)
+    return ax
+
+
+_common_title = (
+    f"size={file_size / 2 ** 20:.2f} MB (lower is better)\n"
+    f"CPU: {processor_name} ({cpu_topology_str}), RAM: {memory_str}\n"
+    f"benchmark key: <op>/<files>x<threads>/<lib>\n"
+    f"op=load|save|parse|serialize, files=1|2, threads=1|4, "
+    f"lib=onnx|onnx-cpp|onnxlight|onnxlight-cpp|onnxlight-cpp-nocopy|"
+    f"onnxlight-nocopy|ir-py|ort"
 )
 
-# Row names use "onnxlight" / "ort" as recorded during benchmarking.
-row_names = df.index.tolist()
-for container, col in zip(ax.containers, ["avg", "median"]):
-    for bar, name in zip(container, row_names):
-        if "onnxlight" in name:
-            if col == "avg":
-                bar.set_facecolor(_onnx_light_avg)
-            elif col == "median":
-                bar.set_facecolor(_onnx_light_med)
-        elif "/ir-py" in name:
-            if col == "avg":
-                bar.set_facecolor(_ir_py_avg)
-            elif col == "median":
-                bar.set_facecolor(_ir_py_med)
-        elif "/ort" in name:
-            if col == "avg":
-                bar.set_facecolor(_ort_avg)
-            elif col == "median":
-                bar.set_facecolor(_ort_med)
-        else:
-            if col == "avg":
-                bar.set_facecolor(_onnx_avg)
-            elif col == "median":
-                bar.set_facecolor(_onnx_med)
+# Combined plot with every benchmark.
+plot_results(
+    df, f"onnx vs onnx_light vs ort load/save (s), {_common_title}", "plot_onnx_time.png"
+)
 
-first_container = ax.containers[0]
-for bar, name in zip(first_container, row_names):
-    avg = df.loc[name, "avg"]
-    std = df.loc[name, "std"]
-    if not np.isfinite(avg):
-        continue
-    if np.isfinite(std):
-        ci = 1.96 * std
-        label = f" {avg * 1e3:.1f} ±{ci * 1e3:.1f} ms"
-    else:
-        label = f" {avg * 1e3:.1f} ms"
-    ax.text(bar.get_width(), bar.get_y() + bar.get_height() / 2.0, label, va="center", ha="left")
+# Split the results into a Python-API-only plot and a C++-API-only plot.
+cpp_mask = [_is_cpp_api(name) for name in df.index]
+df_cpp = df[cpp_mask]
+df_python = df[[not is_cpp for is_cpp in cpp_mask]]
 
-legend_handles = [
-    mpatches.Patch(color=_onnx_avg, label="onnx avg"),
-    mpatches.Patch(color=_onnx_med, label="onnx median"),
-    mpatches.Patch(color=_onnx_light_avg, label="onnx_light avg"),
-    mpatches.Patch(color=_onnx_light_med, label="onnx_light median"),
-    mpatches.Patch(color=_ir_py_avg, label="ir-py avg"),
-    mpatches.Patch(color=_ir_py_med, label="ir-py median"),
-    mpatches.Patch(color=_ort_avg, label="ort avg"),
-    mpatches.Patch(color=_ort_med, label="ort median"),
-]
-ax.legend(handles=legend_handles)
-ax.grid(axis="x")
-for label in ax.get_yticklabels():
-    label.set_horizontalalignment("left")
-ax.tick_params(axis="y", pad=160)
-ax.figure.tight_layout()
-ax.figure.savefig("plot_onnx_time.png")
+plot_results(
+    df_python,
+    f"onnx vs onnx_light vs ort load/save (s) - Python API, {_common_title}",
+    "plot_onnx_time_python.png",
+)
+
+plot_results(
+    df_cpp,
+    f"onnx vs onnx_light load/save (s) - C++ API, {_common_title}",
+    "plot_onnx_time_cpp.png",
+)
 
 # %%
 # Cleanup

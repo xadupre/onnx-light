@@ -371,11 +371,11 @@ TEST(onnx_alignment_options, TensorBufferOptionsInheritedByParseOptions) {
   EXPECT_EQ(base_opts.alignment, 0);
 
   ParseOptions popts;
-  EXPECT_EQ(popts.raw_data_threshold, 1024);
+  EXPECT_EQ(popts.raw_data_threshold, kSmallTensorDataThresholdBytes);
   EXPECT_EQ(popts.alignment, 0);
   // Verify the base-class fields are accessible through the derived type.
   TensorBufferOptions &base = popts;
-  EXPECT_EQ(base.raw_data_threshold, 1024);
+  EXPECT_EQ(base.raw_data_threshold, kSmallTensorDataThresholdBytes);
 }
 
 TEST(onnx_alignment_options, TensorBufferOptionsInheritedBySerializeOptions) {

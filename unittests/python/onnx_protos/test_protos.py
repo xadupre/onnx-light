@@ -247,6 +247,57 @@ class TestIterator(ExtTestCase):
         with self.assertRaises(RuntimeError):
             model.graph.node[5] = oh.make_node("Relu", ["X"], ["Y"])
 
+    def test_node_setitem_slice(self):
+        def make_model(op_types):
+            return oh.make_model(
+                oh.make_graph(
+                    [oh.make_node(op, ["X"], ["X"], name=op) for op in op_types],
+                    "test_graph",
+                    [oh.make_tensor_value_info("X", m.TensorProto.FLOAT, [3])],
+                    [oh.make_tensor_value_info("X", m.TensorProto.FLOAT, [3])],
+                ),
+                opset_imports=[oh.make_opsetid("", 18)],
+                ir_version=9,
+            )
+
+        def op_types(model):
+            return [n.op_type for n in model.graph.node]
+
+        # Simple slice replacement of equal length.
+        model = make_model(["A", "B", "C"])
+        model.graph.node[1:3] = [oh.make_node("D", ["X"], ["X"]), oh.make_node("E", ["X"], ["X"])]
+        self.assertEqual(op_types(model), ["A", "D", "E"])
+
+        # Simple slice growing the container.
+        model = make_model(["A", "B", "C"])
+        model.graph.node[1:2] = [oh.make_node("D", ["X"], ["X"]), oh.make_node("E", ["X"], ["X"])]
+        self.assertEqual(op_types(model), ["A", "D", "E", "C"])
+
+        # Simple slice shrinking the container.
+        model = make_model(["A", "B", "C", "D"])
+        model.graph.node[1:3] = [oh.make_node("E", ["X"], ["X"])]
+        self.assertEqual(op_types(model), ["A", "E", "D"])
+
+        # Insertion via empty slice.
+        model = make_model(["A", "B"])
+        model.graph.node[1:1] = [oh.make_node("C", ["X"], ["X"])]
+        self.assertEqual(op_types(model), ["A", "C", "B"])
+
+        # Full-slice replacement.
+        model = make_model(["A", "B", "C"])
+        model.graph.node[:] = [oh.make_node("Z", ["X"], ["X"])]
+        self.assertEqual(op_types(model), ["Z"])
+
+        # Extended slice (step != 1) requires matching length.
+        model = make_model(["A", "B", "C", "D"])
+        model.graph.node[::2] = [oh.make_node("E", ["X"], ["X"]), oh.make_node("F", ["X"], ["X"])]
+        self.assertEqual(op_types(model), ["E", "B", "F", "D"])
+
+        # Extended slice with mismatched length raises.
+        model = make_model(["A", "B", "C", "D"])
+        with self.assertRaises(RuntimeError):
+            model.graph.node[::2] = [oh.make_node("E", ["X"], ["X"])]
+
     def test_dict_key_hash(self):
         model = oh.make_model(
             oh.make_graph(

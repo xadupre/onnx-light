@@ -872,6 +872,57 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
           nb::arg("index"), nb::arg("value"),
           "Replaces the element at position index with a copy of value.")
       .def(
+          "__setitem__",
+          [](utils::RepeatedProtoField<T> &self, nb::slice slice, nb::iterable values) {
+            auto [start, stop, step, slice_length] = slice.compute(self.size());
+            // Materialize the replacement elements as shared pointers (copies of
+            // the provided values) so they can be spliced into the container.
+            std::vector<std::shared_ptr<T>> replacement;
+            for (auto it : values) {
+              if (nb::isinstance<const T &>(it)) {
+                replacement.push_back(std::make_shared<T>(nb::cast<const T &>(it)));
+              } else if (nb::isinstance<T>(it)) {
+                replacement.push_back(std::make_shared<T>(nb::cast<T>(it)));
+              } else {
+                EXT_THROW("Unable to cast an element of type into ", typeid(T).name());
+              }
+            }
+            // Extended slices (step != 1) require a replacement of matching length
+            // and perform an element-wise assignment, matching Python list semantics.
+            if (step != 1) {
+              EXT_ENFORCE(replacement.size() == slice_length, "attempt to assign sequence of size ",
+                          static_cast<int>(replacement.size()), " to extended slice of size ",
+                          static_cast<int>(slice_length));
+              Py_ssize_t i = start;
+              for (size_t r = 0; r < slice_length; ++r, i += step) {
+                self.get(static_cast<size_t>(i)) = replacement[r];
+              }
+              return;
+            }
+            // Simple slices (step == 1) may change the container length. Snapshot the
+            // existing owning pointers, splice in the replacement, then rebuild the
+            // container preserving the identity of the untouched elements.
+            std::vector<std::shared_ptr<T>> current;
+            current.reserve(self.size());
+            for (size_t i = 0; i < self.size(); ++i)
+              current.push_back(self.shared_at(i));
+            std::vector<std::shared_ptr<T>> result;
+            result.reserve(current.size() - slice_length + replacement.size());
+            for (Py_ssize_t i = 0; i < start; ++i)
+              result.push_back(current[static_cast<size_t>(i)]);
+            for (auto &ptr : replacement)
+              result.push_back(ptr);
+            for (size_t i = static_cast<size_t>(stop); i < current.size(); ++i)
+              result.push_back(current[i]);
+            self.clear();
+            for (auto &ptr : result) {
+              self.add();
+              self.get(self.size() - 1) = ptr;
+            }
+          },
+          nb::arg("index"), nb::arg("value"),
+          "Replaces the elements selected by a slice with copies of the values.")
+      .def(
           "__delitem__",
           [](utils::RepeatedProtoField<T> &self, nb::slice slice) {
             auto tup = slice.compute(self.size());

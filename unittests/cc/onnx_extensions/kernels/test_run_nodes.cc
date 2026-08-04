@@ -4238,6 +4238,73 @@ TEST(RunNodes, RunNodeUnknownOpWithoutCustomKernelThrows) {
   EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
 }
 
+// A node whose output is allocated from an allocator other than the session's
+// unique allocator is rejected by RuntimeSession::Run's default output
+// allocator check.
+TEST(RunNodes, RuntimeSessionRejectsOutputFromForeignAllocator) {
+  core::runtime::SimpleRawBufferAllocator session_alloc(8);
+  core::runtime::SimpleRawBufferAllocator foreign_alloc(8);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.allocator = &session_alloc});
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}, &session_alloc));
+
+  // Custom kernel produces its output from ``foreign_alloc`` rather than the
+  // session's allocator.
+  rt.RegisterCustomKernel(
+      "my.domain", "Foreign", [&foreign_alloc](const NodeProto &node, RuntimeContext &ctx) {
+        const Tensor &in = ctx.Get(node.input(0));
+        std::vector<float> out(static_cast<size_t>(in.element_count()), 0.0f);
+        ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, out, &foreign_alloc));
+      });
+
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Foreign", {"x"}, {"y"}, "my.domain"));
+  utils::RepeatedProtoField<NodeProto> node_field(nodes);
+  core::runtime::ExecutionPlan plan(node_field, {});
+  core::runtime::RuntimeSession session(plan);
+  EXPECT_THROW(session.Run(rt), std::invalid_argument);
+}
+
+// The same graph runs successfully when the session is built with
+// ``allow_external_output_allocators`` enabled, letting a kernel return an
+// output allocated outside the session's common allocator.
+TEST(RunNodes, RuntimeSessionAllowsOutputFromForeignAllocatorWhenOptionSet) {
+  core::runtime::SimpleRawBufferAllocator session_alloc(8);
+  core::runtime::SimpleRawBufferAllocator foreign_alloc(8);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.allocator = &session_alloc});
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}, &session_alloc));
+
+  rt.RegisterCustomKernel(
+      "my.domain", "Foreign", [&foreign_alloc](const NodeProto &node, RuntimeContext &ctx) {
+        const Tensor &in = ctx.Get(node.input(0));
+        std::vector<float> out(static_cast<size_t>(in.element_count()));
+        const float *src = in.AsFloat();
+        for (size_t i = 0; i < out.size(); ++i) {
+          out[i] = src[i] * 2.0f;
+        }
+        ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, out, &foreign_alloc));
+      });
+
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Foreign", {"x"}, {"y"}, "my.domain"));
+  utils::RepeatedProtoField<NodeProto> node_field(nodes);
+  core::runtime::ExecutionPlan plan(node_field, {});
+  core::runtime::RuntimeSession session(
+      plan, core::runtime::RuntimeSessionOptions{.allow_external_output_allocators = true});
+  EXPECT_TRUE(session.allow_external_output_allocators());
+  session.Run(rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  const Tensor &y = rt.Get("y");
+  ASSERT_EQ(y.element_count(), 3);
+  EXPECT_EQ(y.allocation_owner(), &foreign_alloc);
+  const float *yp = y.AsFloat();
+  EXPECT_FLOAT_EQ(yp[0], 2.0f);
+  EXPECT_FLOAT_EQ(yp[1], 4.0f);
+  EXPECT_FLOAT_EQ(yp[2], 6.0f);
+}
+
 // ---------------------------------------------------------------------------
 // Release-unused-intermediates tests
 // ---------------------------------------------------------------------------

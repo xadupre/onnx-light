@@ -127,6 +127,41 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertEqual(sorted(session.required_inputs), ["x", "y"])
         self.assertEqual(_unpack_floats(ctx.get("z")), (11.0, 18.0))
 
+    def test_runtime_session_allow_external_output_allocators_option(self):
+        # The ``allow_external_output_allocators`` option is exposed on both
+        # constructors and defaults to False; when set, it is reflected by the
+        # read-only property.
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "agraph (float[2] x, float[2] y) => (float[2] z) {\n"
+            "  z = Add(x, y)\n"
+            "}\n"
+        )
+        session = rt.RuntimeSession(model)
+        self.assertFalse(session.allow_external_output_allocators)
+        session = rt.RuntimeSession(model, allow_external_output_allocators=True)
+        self.assertTrue(session.allow_external_output_allocators)
+
+    def test_runtime_session_options(self):
+        # RuntimeSessionOptions bundles the per-session knobs and can be passed
+        # directly to either RuntimeSession constructor.
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "agraph (float[2] x, float[2] y) => (float[2] z) {\n"
+            "  z = Add(x, y)\n"
+            "}\n"
+        )
+        options = rt.RuntimeSessionOptions()
+        self.assertFalse(options.allow_external_output_allocators)
+        self.assertFalse(options.check_shapes)
+        self.assertEqual(options.verbose, 0)
+
+        options = rt.RuntimeSessionOptions(allow_external_output_allocators=True)
+        self.assertTrue(options.allow_external_output_allocators)
+
+        session = rt.RuntimeSession(model, options)
+        self.assertTrue(session.allow_external_output_allocators)
+
     def test_default_opset_and_kernel_context(self):
         opset = rt.default_opset(18)
         self.assertEqual(opset.domain, "")

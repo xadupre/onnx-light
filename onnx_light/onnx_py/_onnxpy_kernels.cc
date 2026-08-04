@@ -37,6 +37,7 @@ using core::runtime::RawBufferAllocator;
 using core::runtime::RuntimeContext;
 using core::runtime::RuntimeParameters;
 using core::runtime::RuntimeSession;
+using core::runtime::RuntimeSessionOptions;
 using core::runtime::Sequence;
 using core::runtime::SimpleRawBufferAllocator;
 using core::runtime::Tensor;
@@ -477,6 +478,44 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "``node``. ``node`` must be one of the nodes the plan was built from "
           "(lookup is by identity); otherwise this is a no-op.");
 
+  // RuntimeSessionOptions — bundled construction knobs for RuntimeSession.
+  nb::class_<RuntimeSessionOptions>(
+      rt_mod, "RuntimeSessionOptions",
+      "Bundled construction options for :class:`RuntimeSession`, grouping the "
+      "per-session knobs (:attr:`parameters`, :attr:`verbose`, :attr:`check_shapes`, "
+      ":attr:`allow_external_output_allocators`) so they can be passed as a single "
+      "``options`` argument instead of individual keyword arguments.")
+      .def(
+          "__init__",
+          [](RuntimeSessionOptions *self, nb::object parameters_obj, int verbose, bool check_shapes,
+             bool allow_external_output_allocators) {
+            RuntimeParameters parameters = parameters_obj.is_none()
+                                               ? RuntimeParameters()
+                                               : nb::cast<RuntimeParameters>(parameters_obj);
+            new (self) RuntimeSessionOptions{
+                .parameters = std::move(parameters),
+                .verbose = verbose,
+                .check_shapes = check_shapes,
+                .allow_external_output_allocators = allow_external_output_allocators,
+            };
+          },
+          nb::kw_only(), nb::arg("parameters").none() = nb::none(), nb::arg("verbose") = 0,
+          nb::arg("check_shapes") = false, nb::arg("allow_external_output_allocators") = false,
+          "Builds the options bundle. All fields are keyword-only and optional; each "
+          "defaults to the same value :class:`RuntimeSession` uses when the field is "
+          "omitted.")
+      .def_rw("parameters", &RuntimeSessionOptions::parameters,
+              "Model-independent execution parameters applied to the nodes the session runs.")
+      .def_rw("verbose", &RuntimeSessionOptions::verbose,
+              "Verbosity level requested for :func:`RuntimeSession.run`.")
+      .def_rw("check_shapes", &RuntimeSessionOptions::check_shapes,
+              "When ``True``, :func:`RuntimeSession.run` validates concrete tensor shapes "
+              "against the declared (possibly symbolic) shapes.")
+      .def_rw("allow_external_output_allocators",
+              &RuntimeSessionOptions::allow_external_output_allocators,
+              "When ``True``, :func:`RuntimeSession.run` does not require a node's "
+              "allocator-backed outputs to be owned by the session's unique allocator.");
+
   // RuntimeSession — reusable execution session binding an ExecutionPlan.
   // Every node list the runtime executes (a graph, a function body, a
   // subgraph, ...) is run through one of these sessions; there is no
@@ -492,18 +531,21 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(
           "__init__",
           [](RuntimeSession *self, const ModelProto &model, nb::object parameters_obj, int verbose,
-             bool check_shapes) {
+             bool check_shapes, bool allow_external_output_allocators) {
             RuntimeParameters parameters = parameters_obj.is_none()
                                                ? RuntimeParameters()
                                                : nb::cast<RuntimeParameters>(parameters_obj);
-            new (self) RuntimeSession(model, core::runtime::RuntimeSessionOptions{
-                                                 .parameters = std::move(parameters),
-                                                 .verbose = verbose,
-                                                 .check_shapes = check_shapes,
-                                             });
+            new (self) RuntimeSession(
+                model, core::runtime::RuntimeSessionOptions{
+                           .parameters = std::move(parameters),
+                           .verbose = verbose,
+                           .check_shapes = check_shapes,
+                           .allow_external_output_allocators = allow_external_output_allocators,
+                       });
           },
           nb::arg("model"), nb::kw_only(), nb::arg("parameters").none() = nb::none(),
-          nb::arg("verbose") = 0, nb::arg("check_shapes") = false, nb::keep_alive<1, 2>(),
+          nb::arg("verbose") = 0, nb::arg("check_shapes") = false,
+          nb::arg("allow_external_output_allocators") = false, nb::keep_alive<1, 2>(),
           "Builds a session over an :class:`ExecutionPlan` the session owns, "
           "built from ``model.graph``. Use this when no precomputed plan is "
           "available: ``model`` (and the graph it owns) must outlive the session; "
@@ -511,21 +553,40 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(
           "__init__",
           [](RuntimeSession *self, const ExecutionPlan &plan, nb::object parameters_obj,
-             int verbose, bool check_shapes) {
+             int verbose, bool check_shapes, bool allow_external_output_allocators) {
             RuntimeParameters parameters = parameters_obj.is_none()
                                                ? RuntimeParameters()
                                                : nb::cast<RuntimeParameters>(parameters_obj);
-            new (self) RuntimeSession(plan, core::runtime::RuntimeSessionOptions{
-                                                .parameters = std::move(parameters),
-                                                .verbose = verbose,
-                                                .check_shapes = check_shapes,
-                                            });
+            new (self) RuntimeSession(
+                plan, core::runtime::RuntimeSessionOptions{
+                          .parameters = std::move(parameters),
+                          .verbose = verbose,
+                          .check_shapes = check_shapes,
+                          .allow_external_output_allocators = allow_external_output_allocators,
+                      });
           },
           nb::arg("plan"), nb::kw_only(), nb::arg("parameters").none() = nb::none(),
-          nb::arg("verbose") = 0, nb::arg("check_shapes") = false, nb::keep_alive<1, 2>(),
+          nb::arg("verbose") = 0, nb::arg("check_shapes") = false,
+          nb::arg("allow_external_output_allocators") = false, nb::keep_alive<1, 2>(),
           "Builds a session over ``plan``. ``plan`` (and the graph / function it "
           "was built from) must outlive the session; this binding keeps ``plan`` "
           "alive for at least as long as the session.")
+      .def(
+          "__init__",
+          [](RuntimeSession *self, const ModelProto &model, const RuntimeSessionOptions &options) {
+            new (self) RuntimeSession(model, options);
+          },
+          nb::arg("model"), nb::arg("options"), nb::keep_alive<1, 2>(),
+          "Builds a session over an :class:`ExecutionPlan` the session owns, built "
+          "from ``model.graph``, using a :class:`RuntimeSessionOptions` bundle. "
+          "``model`` must outlive the session; this binding keeps it alive.")
+      .def(
+          "__init__",
+          [](RuntimeSession *self, const ExecutionPlan &plan,
+             const RuntimeSessionOptions &options) { new (self) RuntimeSession(plan, options); },
+          nb::arg("plan"), nb::arg("options"), nb::keep_alive<1, 2>(),
+          "Builds a session over ``plan`` using a :class:`RuntimeSessionOptions` "
+          "bundle. ``plan`` must outlive the session; this binding keeps it alive.")
       .def("run", &RuntimeSession::Run, nb::arg("rt"),
            "Executes the plan once against ``rt``, resolving, building, and caching "
            "kernel instances on the first call. Safe to call repeatedly on the same session.")
@@ -542,6 +603,12 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                    "the session is built from a model; a session built from an "
                    ":class:`ExecutionPlan` must call :func:`set_declared_shapes` first. "
                    "Disabled by default.")
+      .def_prop_ro("allow_external_output_allocators",
+                   &RuntimeSession::allow_external_output_allocators,
+                   "When ``True``, :func:`run` does not require a node's allocator-backed "
+                   "outputs to be owned by the session's unique allocator, so a kernel may "
+                   "return an output allocated outside the common allocator. When ``False`` "
+                   "(the default), such an output is rejected.")
       .def("set_declared_shapes", &RuntimeSession::SetDeclaredShapes, nb::arg("graph"),
            "Records the declared (possibly symbolic) shapes carried by ``graph``'s "
            "inputs, outputs and ``value_info`` so that, when :attr:`check_shapes` is "

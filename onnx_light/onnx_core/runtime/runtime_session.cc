@@ -27,6 +27,7 @@ RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
 
 RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions options)
     : default_plan_(model.graph()), plan_(default_plan_), check_shapes_(options.check_shapes),
+      allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)), verbose_(options.verbose) {
   SetDeclaredShapes(model.graph());
 }
@@ -44,8 +45,9 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
                            }) {}
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions options)
-    : plan_(plan), check_shapes_(options.check_shapes), parameters_(std::move(options.parameters)),
-      verbose_(options.verbose) {}
+    : plan_(plan), check_shapes_(options.check_shapes),
+      allow_external_output_allocators_(options.allow_external_output_allocators),
+      parameters_(std::move(options.parameters)), verbose_(options.verbose) {}
 
 void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
   // Records the declared shape of every tensor-typed value the graph exposes
@@ -268,7 +270,9 @@ void RuntimeSession::Run(RuntimeContext &rt) {
                                         .count();
         rt.RecordRunNodeEvent(node, domain, op_type, start_time_ns, duration_ns);
       }
-      VerifyOutputAllocators(*nodes[index], rt);
+      if (!allow_external_output_allocators_) {
+        VerifyOutputAllocators(*nodes[index], rt);
+      }
       if (check_shapes) {
         const NodeProto &executed = *nodes[index];
         for (int i = 0; i < executed.output_size(); ++i) {

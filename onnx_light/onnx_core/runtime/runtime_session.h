@@ -53,6 +53,13 @@ struct RuntimeSessionOptions {
   RuntimeParameters parameters;
   int verbose = 0;
   bool check_shapes = false;
+  /// When ``false`` (the default), :cpp:func:`RuntimeSession::Run` verifies
+  /// that every allocator-backed output a node produces is owned by the
+  /// session's unique allocator, rejecting a kernel that allocates its output
+  /// from a different allocator (or from none at all). When ``true``, that
+  /// check is skipped so a kernel may legitimately return an output allocated
+  /// outside the common allocator.
+  bool allow_external_output_allocators = false;
 };
 
 /**
@@ -145,7 +152,10 @@ public:
    * After each scheduled node executes, every tensor it produced that is
    * allocator-backed (:cpp:func:`Tensor::has_allocation`) is verified to be
    * owned by that same allocator, catching kernels that allocate their output
-   * from the wrong allocator (or from none at all).
+   * from the wrong allocator (or from none at all). This verification is
+   * skipped when :cpp:func:`allow_external_output_allocators` is enabled, so a
+   * kernel may legitimately return an output allocated outside the common
+   * allocator.
    *
    * @param rt In/out runtime context used both to resolve the kernels
    *           (function registry / custom kernels) and to exchange tensors.
@@ -186,6 +196,15 @@ public:
   /// session built from an :cpp:class:`ExecutionPlan` alone must call
   /// :cpp:func:`SetDeclaredShapes` for the check to have anything to validate.
   bool check_shapes() const noexcept { return check_shapes_; }
+
+  /// When ``true``, :cpp:func:`Run` does not require a node's allocator-backed
+  /// outputs to be owned by the session's unique allocator, so a kernel may
+  /// return an output allocated outside the common allocator. When ``false``
+  /// (the default), such an output is rejected. See
+  /// :cpp:member:`RuntimeSessionOptions::allow_external_output_allocators`.
+  bool allow_external_output_allocators() const noexcept {
+    return allow_external_output_allocators_;
+  }
 
   /// Records the declared (possibly symbolic) shapes carried by ``graph``'s
   /// inputs, outputs and ``value_info`` so that, when :cpp:func:`check_shapes`
@@ -301,6 +320,10 @@ private:
   /// When ``true``, :cpp:func:`Run` validates concrete tensor shapes against
   /// the declarations in :cpp:member:`declared_shapes_`.
   bool check_shapes_ = false;
+  /// When ``true``, :cpp:func:`Run` skips the per-node output allocator check
+  /// (see :cpp:func:`VerifyOutputAllocators`), allowing outputs allocated
+  /// outside the session's common allocator.
+  bool allow_external_output_allocators_ = false;
   RuntimeParameters parameters_;
   /// Verbosity level used by :cpp:func:`Run` when non-zero.
   int verbose_ = 0;

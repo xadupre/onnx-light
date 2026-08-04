@@ -21,12 +21,6 @@ namespace ONNX_LIGHT_NAMESPACE {
 
 constexpr int64_t kSmallTensorDataThresholdBytes = 8 * static_cast<int64_t>(sizeof(int64_t));
 
-/** Default raw_data_threshold used by ParseOptions: when skip_raw_data is set, tensors whose
- *  raw_data is smaller than this value are still read (rather than skipped). This is
- *  deliberately larger than kSmallTensorDataThresholdBytes because the parse-side semantics
- *  (keeping small tensors when skipping) differ from the consolidation/serialization threshold. */
-constexpr int64_t kParseSmallRawDataThresholdBytes = 1024;
-
 /** Splits serialized bytes between the protobuf payload and separate tensor data. */
 struct SerializeSizeResult {
   /** Stores the number of bytes written to small external tensor data blocks. */

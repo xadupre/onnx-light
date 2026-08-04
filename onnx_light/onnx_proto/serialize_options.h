@@ -51,9 +51,6 @@ enum class SerializeFormat : int32_t {
 
 /** Controls behavior when parsing ONNX protobuf messages from a stream or string. */
 struct ParseOptions : TensorBufferOptions {
-  /** Constructs a ParseOptions instance with the default raw_data_threshold
-   *  (kParseSmallRawDataThresholdBytes). */
-  ParseOptions() { raw_data_threshold = kParseSmallRawDataThresholdBytes; }
   /** Selects the on-disk serialization format expected when parsing.
    *  ``SerializeFormat::kOnnx`` (default) parses the ONNX protobuf wire format;
    *  ``SerializeFormat::kOrtFlatbuffers`` parses the onnxruntime flatbuffer

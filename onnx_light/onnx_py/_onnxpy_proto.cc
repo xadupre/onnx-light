@@ -861,6 +861,17 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
           },
           nb::arg("index"), "Returns the element at position index.")
       .def(
+          "__setitem__",
+          [](utils::RepeatedProtoField<T> &self, int index, const T &value) {
+            if (index < 0)
+              index += static_cast<int>(self.size());
+            EXT_ENFORCE(index >= 0 && index < static_cast<int>(self.size()), "index=", index,
+                        " out of boundary");
+            self.get(static_cast<size_t>(index)) = std::make_shared<T>(value);
+          },
+          nb::arg("index"), nb::arg("value"),
+          "Replaces the element at position index with a copy of value.")
+      .def(
           "__delitem__",
           [](utils::RepeatedProtoField<T> &self, nb::slice slice) {
             auto tup = slice.compute(self.size());

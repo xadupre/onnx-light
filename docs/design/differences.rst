@@ -191,7 +191,9 @@ defined in ``stream_class.h``:
 * ``FIELD_STR(name, order, doc)`` — shorthand for
   :cpp:class:`~onnx_light::utils::OptionalString` fields (a nullable string that
   distinguishes "unset" from "empty"); also accepts ``std::string``,
-  ``const char *``, and :cpp:class:`~onnx_light::utils::RefString`.
+  ``const char *``, and :cpp:class:`~onnx_light::utils::RefString`. The
+  ``str_<name>()`` accessor returns a ``const std::string &`` (a shared empty
+  string when unset, never throwing).
 * ``FIELD_REPEATED_STR(type, name, order, doc)`` — declare a repeated string
   field backed by :cpp:class:`~onnx_light::utils::RepeatedStringField`
   (a list of :cpp:class:`~onnx_light::utils::String` values).

@@ -166,7 +166,7 @@ public:                                                                         
   inline utils::OptionalString &name() { return name##_; }                                         \
   /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const utils::OptionalString &name() const { return name##_; }                             \
-  /** Returns the stored string, or a shared empty string when unset (never throws). */             \
+  /** Returns the stored string, or a shared empty string when unset (never throws). */            \
   inline const std::string &str_##name() const { return name##_.value(); }                         \
   inline const utils::OptionalString *ptr_##name() const { return &name##_; }                      \
   inline bool has_##name() const { return _has_field_(name##_); }                                  \

@@ -5,8 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.12] – Unreleased
 
+### New Features
+
+- Added `__setitem__` (index assignment) to the `RepeatedProtoField` Python bindings, so `model.graph.node[i] = node` works; negative indices and bounds checks match `__getitem__`, and the assigned element is stored as a copy.
+
+### Improvements
+
+- Added an opt-in `allow_external_output_allocators` option to `RuntimeSession` (C++ `RuntimeSessionOptions` and the Python constructors, with a matching read-only accessor/property) that relaxes the per-node output-allocator verification so kernels may legitimately return outputs allocated outside the session's common allocator; the strict check remains the default.
+- Moved `SerializeOptions`, `ParseOptions`, and their supporting types (`TensorBufferOptions`, `FileLoadMode`, `SerializeFormat`) out of `onnx_proto/stream_class.h` into a dedicated `onnx_proto/serialize_options.h` header.
+
 ### Documentation & CI
 
+- Split the `plot_onnx_time` benchmark chart into dedicated Python-API and C++-API graphs alongside the existing combined chart.
 - Bumped the release version to `0.1.12`.
 
 ## [0.1.11] – 2026-08-03

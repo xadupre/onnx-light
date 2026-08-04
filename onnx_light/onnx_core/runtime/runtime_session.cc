@@ -80,6 +80,15 @@ void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
   for (int i = 0; i < graph.output().size(); ++i) {
     record(graph.output()[i]);
   }
+  // Record the graph's declared output names so Run() can detach any borrowed
+  // output from the model before returning (see MaterializeBorrowedOutputs).
+  output_names_.clear();
+  for (int i = 0; i < graph.output().size(); ++i) {
+    const std::string &name = graph.output()[i].name();
+    if (!name.empty()) {
+      output_names_.push_back(name);
+    }
+  }
   for (int i = 0; i < graph.value_info().size(); ++i) {
     record(graph.value_info()[i]);
   }
@@ -315,6 +324,22 @@ void RuntimeSession::Run(RuntimeContext &rt) {
     }
   }
   rt.set_current_node_index(-1);
+  // Detach any graph output that borrows into the model (e.g. a Constant's
+  // raw_data value or a pass-through initializer) so the returned outputs own
+  // their bytes and stay valid once the model is released.
+  MaterializeBorrowedOutputs(rt);
+}
+
+void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
+  for (const std::string &name : output_names_) {
+    if (!rt.Has(name)) {
+      continue;
+    }
+    Tensor &output = rt.Get(name);
+    if (output.is_borrowed()) {
+      output = output.ToOwned();
+    }
+  }
 }
 
 } // namespace runtime

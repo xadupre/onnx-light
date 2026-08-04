@@ -5523,4 +5523,61 @@ TEST(RuntimeSessionCheckShapes, SetDeclaredShapesOnPlanBuiltSession) {
   EXPECT_THROW(session2.Run(rt2), std::invalid_argument);
 }
 
+// A ``Constant`` whose value tensor stores ``raw_data`` yields a borrowed
+// runtime tensor viewing into the model proto's ``raw_data``. When that
+// borrowed tensor is a graph output, ``RuntimeSession`` (built from the model
+// so it knows the declared outputs) must detach it into an owned buffer before
+// ``Run`` returns, so the output survives the model being released.
+TEST(RunNodes, RuntimeSessionMaterializesBorrowedConstantOutput) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_domain("");
+  os->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("main");
+  graph->add_output()->set_name("Y");
+
+  NodeProto *node = graph->add_node();
+  node->set_op_type("Constant");
+  node->add_output("Y");
+  AttributeProto *attr = node->add_attribute();
+  attr->set_name("value");
+  attr->set_type(AttributeProto::AttributeType::TENSOR);
+  TensorProto *t = attr->add_t();
+  t->set_data_type(TensorProto::DataType::FLOAT);
+  t->add_dims(3);
+  // Store the value in ``raw_data`` (not the typed ``float_data`` field) so the
+  // Constant kernel borrows into the proto instead of owning the bytes.
+  const float values[3] = {1.0f, 2.0f, 3.0f};
+  std::vector<uint8_t> raw(sizeof(values));
+  std::memcpy(raw.data(), values, sizeof(values));
+  t->set_raw_data(utils::ByteSpan(raw));
+
+  // Driving the model's own plan directly (no declared outputs) leaves the
+  // output borrowing into the proto: this is the state the session must fix.
+  {
+    RuntimeContext rt(KernelContext(DefaultOpset(18)));
+    const ExecutionPlan &plan = rt.GetExecutionPlan(model.ref_graph());
+    RuntimeSession session(plan);
+    session.Run(rt);
+    ASSERT_TRUE(rt.Has("Y"));
+    EXPECT_TRUE(rt.Get("Y").is_borrowed());
+  }
+
+  // Building the session from the ModelProto records the graph outputs, so Run
+  // detaches the borrowed output into an owned tensor.
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  RuntimeSession session(model);
+  session.Run(rt);
+  ASSERT_TRUE(rt.Has("Y"));
+  const Tensor &y = rt.Get("Y");
+  EXPECT_FALSE(y.is_borrowed());
+  ASSERT_EQ(y.element_count(), 3);
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 1.0f);
+  EXPECT_FLOAT_EQ(got[1], 2.0f);
+  EXPECT_FLOAT_EQ(got[2], 3.0f);
+}
+
 } // namespace Test

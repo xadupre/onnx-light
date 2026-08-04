@@ -509,6 +509,15 @@ struct Tensor {
     return borrow_ptr_ != nullptr || borrow_string_data_ != nullptr;
   }
 
+  /// Returns an owned deep copy of this tensor that references no external
+  /// memory: the bytes (or, for ``STRING`` tensors, the strings) are copied
+  /// into inline storage the returned tensor owns. Use this to detach a
+  /// borrowed view (see :cpp:func:`is_borrowed`) from its backing buffer — for
+  /// example a graph output that borrows into a ``TensorProto``'s ``raw_data``
+  /// — so it stays valid once that buffer is released. Allocator-backed and
+  /// already-owned tensors are copied inline as well.
+  Tensor ToOwned() const;
+
   RawBuffer *allocation() const {
     EXT_ENFORCE(allocation_ != nullptr, "Tensor::allocation: tensor is not allocator-backed.");
     return allocation_;

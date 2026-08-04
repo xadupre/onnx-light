@@ -108,18 +108,18 @@ class TestReferenceEvaluator(ExtTestCase):
 
     def test_constant_output_survives_model_release(self):
         # A ``Constant`` graph output whose value tensor stores ``raw_data``
-        # borrows its bytes directly from the model proto (a borrowed runtime
-        # tensor). The returned array must own a heap copy so it remains valid
-        # after the evaluator -- and the model proto it borrowed from -- are
-        # released.
+        # borrows its bytes directly from the model proto while the graph runs.
+        # ``RuntimeSession`` detaches such borrowed graph outputs into owned
+        # buffers before returning, so the returned array remains valid after
+        # the evaluator -- and the model proto it borrowed from -- are released.
         model = _make_raw_data_constant_model()
         sess = ReferenceEvaluator(model)
         (y,) = sess.run(None, {})
         expected = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         np.testing.assert_array_equal(y, expected)
-        # The runtime tensor for ``y`` is a borrowed view over the proto: this
-        # is the case the heap copy must protect against.
-        self.assertTrue(sess._last_ctx.get("y").has_borrowed_data())
+        # The runtime output for ``y`` no longer borrows from the proto: the
+        # session materialized it into an owned tensor.
+        self.assertFalse(sess._last_ctx.get("y").has_borrowed_data())
         # Drop the evaluator and the model proto, then force collection.
         del sess
         del model

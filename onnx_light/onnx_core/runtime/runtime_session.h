@@ -267,6 +267,18 @@ private:
   void VerifyDeclaredShape(const std::string &name, const RuntimeContext &rt,
                            core::shapes::ShapesContext &bindings) const;
 
+  /// Detaches every graph output present in ``rt`` from any external memory it
+  /// borrows: for each name in :cpp:member:`output_names_` whose tensor is a
+  /// borrowed view (:cpp:func:`Tensor::is_borrowed`), the entry is replaced
+  /// with an owned deep copy (:cpp:func:`Tensor::ToOwned`). A graph output can
+  /// borrow into the model (e.g. a ``Constant`` reading its value's
+  /// ``raw_data`` or an initializer passed straight through), which would
+  /// dangle once the model is released; owning the bytes keeps the output
+  /// valid independently of the model's lifetime. Called at the end of
+  /// :cpp:func:`Run`. Only runs when :cpp:member:`output_names_` is populated
+  /// (sessions built from a :cpp:class:`ModelProto` / :cpp:class:`GraphProto`).
+  void MaterializeBorrowedOutputs(RuntimeContext &rt) const;
+
   /// Plan owned by the session, referenced by :cpp:member:`plan_` when the
   /// session is constructed from a :cpp:class:`ModelProto` (no external plan
   /// supplied). Built from the model's graph. Left empty (and unused) when a
@@ -279,6 +291,12 @@ private:
   /// :cpp:func:`SetDeclaredShapes` and consulted by :cpp:func:`Run` when
   /// :cpp:member:`check_shapes_` is enabled.
   std::unordered_map<std::string, core::symbolic::SymShape> declared_shapes_;
+  /// Names of the graph's declared outputs, populated from the
+  /// :cpp:class:`ModelProto` / :cpp:class:`GraphProto` the session is built
+  /// from (empty for a session built from a bare :cpp:class:`ExecutionPlan`).
+  /// Consulted by :cpp:func:`MaterializeBorrowedOutputs` so borrowed graph
+  /// outputs are detached from the model before :cpp:func:`Run` returns.
+  std::vector<std::string> output_names_;
   bool kernels_initialized_ = false;
   /// When ``true``, :cpp:func:`Run` validates concrete tensor shapes against
   /// the declarations in :cpp:member:`declared_shapes_`.

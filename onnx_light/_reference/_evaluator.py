@@ -100,31 +100,10 @@ def _cpp_tensor_to_numpy(t: Any, steal: bool = False) -> np.ndarray:
     When ``steal`` is ``True`` and ``t`` owns its bytes inline (the case for a
     graph output produced without an allocator), the raw-byte path transfers
     the buffer's ownership to NumPy instead of borrowing it, so the source
-    tensor can be released while the array lives on. When ``steal`` is ``True``
-    and ``t`` is a borrowed view (a graph output that references a model proto's
-    ``raw_data``, e.g. a ``Constant`` output or an initializer used directly as
-    an output), its bytes are copied onto the regular heap so the returned array
-    owns them and remains valid after the model proto is freed. ``steal`` must
-    only be set for terminal tensors that are not consumed elsewhere.
+    tensor can be released while the array lives on. ``steal`` must only be set
+    for terminal tensors that are not consumed elsewhere.
     """
     dt = int(t.data_type)
-    if steal and t.has_borrowed_data():
-        # A borrowed output references external memory (typically a model
-        # proto's ``raw_data``). The DLPack zero-copy import below would keep
-        # only the borrowing ``Tensor`` alive, not the proto, so route it
-        # through the raw-byte ``steal`` path which copies the bytes onto the
-        # regular heap. The returned array then owns its data and survives the
-        # proto being released.
-        np_dtype = _DTYPE_TO_NP.get(dt)
-        if np_dtype is not None:
-            shape = t.shape
-            raw = _runtime.tensor_to_numpy(t, True)
-            arr = raw.view(np_dtype)
-            if _IS_BIG_ENDIAN:  # pragma: no cover
-                arr = arr.byteswap()
-            return arr.reshape(shape)
-        # Sub-byte / STRING borrowed outputs go through the proto fallback
-        # below, which already materializes an independent NumPy array.
     if not _IS_BIG_ENDIAN and dt in _DLPACK_DTYPES:
         # Zero-copy import via the DLPack protocol; ``from_dlpack`` yields a
         # correctly shaped, native-dtype array sharing the tensor's buffer.

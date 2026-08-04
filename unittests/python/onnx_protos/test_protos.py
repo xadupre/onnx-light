@@ -222,6 +222,31 @@ class TestIterator(ExtTestCase):
         for node in model.graph.node:
             self.assertEqual(list(node.input), ["XX"])
 
+    def test_node_setitem(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Relu", ["X"], ["H"]), oh.make_node("Relu", ["H"], ["Y"])],
+                "test_graph",
+                [oh.make_tensor_value_info("X", m.TensorProto.FLOAT, [3])],
+                [oh.make_tensor_value_info("Y", m.TensorProto.FLOAT, [3])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        new_node = oh.make_node("Sigmoid", ["X"], ["H"])
+        model.graph.node[0] = new_node
+        self.assertEqual(model.graph.node[0].op_type, "Sigmoid")
+        self.assertEqual(model.graph.node[1].op_type, "Relu")
+        # Mutating the source node afterwards does not affect the stored copy.
+        new_node.op_type = "Tanh"
+        self.assertEqual(model.graph.node[0].op_type, "Sigmoid")
+        # Negative index.
+        model.graph.node[-1] = oh.make_node("Tanh", ["H"], ["Y"])
+        self.assertEqual(model.graph.node[1].op_type, "Tanh")
+        # Out-of-boundary index raises.
+        with self.assertRaises(RuntimeError):
+            model.graph.node[5] = oh.make_node("Relu", ["X"], ["Y"])
+
     def test_dict_key_hash(self):
         model = oh.make_model(
             oh.make_graph(

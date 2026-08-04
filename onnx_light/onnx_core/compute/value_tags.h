@@ -19,6 +19,9 @@ namespace compute {
 class ComputeContext;
 
 constexpr const char *kValueTagMetadataKey = "onnx_light.value_tag";
+// Historic aggregate key. Value tags are stored per-value under
+// ``kValueTagMetadataKey`` on each ValueInfoProto/TensorProto; this aggregate is
+// no longer written to the graph or function ``metadata_props``.
 constexpr const char *kValueTagsMetadataKey = "onnx_light.value_tags";
 constexpr const char *kNodeTagMetadataKey = "onnx_light.node_tag";
 

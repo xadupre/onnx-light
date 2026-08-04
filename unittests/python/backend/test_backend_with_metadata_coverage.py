@@ -1,4 +1,3 @@
-import json
 import unittest
 
 from onnx_light.ext_test_case import import_or_skip
@@ -17,7 +16,6 @@ _EXPECTED_METADATA_KEYS = {
     shape_inference.RELEASE_AFTER_METADATA_KEY,
     shape_inference.RELEASE_AFTER_SHAPE_TAG_METADATA_KEY,
     shape_inference.VALUE_TAG_METADATA_KEY,
-    shape_inference.VALUE_TAGS_METADATA_KEY,
 }
 
 
@@ -57,11 +55,6 @@ def _assert_metadata_matches(name, location, expected, computed):
     for key, expected_value in expected.items():
         assert key in computed, f"Missing metadata {key!r} on {location} for {name!r}"
         computed_value = computed[key]
-        if key == shape_inference.VALUE_TAGS_METADATA_KEY:
-            assert json.loads(computed_value) == json.loads(
-                expected_value
-            ), f"Unexpected metadata {key!r} on {location} for {name!r}"
-            continue
         assert computed_value == expected_value, (
             f"Unexpected metadata {key!r} on {location} for {name!r}: "
             f"{computed_value!r} != {expected_value!r}"

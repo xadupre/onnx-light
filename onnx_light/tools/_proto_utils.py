@@ -12,7 +12,6 @@ built by :mod:`onnx_light` and with messages built by the upstream
 from __future__ import annotations
 
 import importlib.util
-import json
 import contextlib
 from typing import TYPE_CHECKING, Any
 
@@ -176,7 +175,6 @@ def _node_metadata_value(node: Any, key: str) -> str:
 
 # Metadata keys written by tooling:
 # - per-value tag -> VALUE_TAG_METADATA_KEY
-# - graph/function-level value-tag map -> VALUE_TAGS_METADATA_KEY
 # - per-node tag -> NODE_TAG_METADATA_KEY
 # - per-node in-place reuse map -> INPLACE_REUSE_METADATA_KEY
 # - per-node release-after tensor list -> RELEASE_AFTER_METADATA_KEY
@@ -315,17 +313,6 @@ def _graph_value_tags(graph: Any) -> dict[str, str]:
             tag = _normalise_value_tag(_node_metadata_value(value, VALUE_TAG_METADATA_KEY))
             if tag:
                 tags[name] = tag
-    raw = _node_metadata_value(graph, VALUE_TAGS_METADATA_KEY)
-    if raw:
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            payload = {}
-        if isinstance(payload, dict):
-            for name, tag in payload.items():
-                norm = _normalise_value_tag(_s(tag))
-                if norm:
-                    tags[_s(name)] = norm
     return tags
 
 

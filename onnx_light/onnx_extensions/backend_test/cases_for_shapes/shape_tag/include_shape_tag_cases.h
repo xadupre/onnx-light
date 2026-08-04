@@ -14,7 +14,7 @@ using namespace ::onnx_light::core::backend_test; // NOLINT(google-build-using-n
 
 // ---------------------------------------------------------------------------
 // Backend test cases that exercise the shape-tag annotation metadata stored
-// in ``GraphProto::metadata_props`` (``onnx_light.value_tags``) and in
+// in ``ValueInfoProto::metadata_props`` (``onnx_light.value_tag``) and in
 // ``NodeProto::metadata_props`` (``onnx_light.node_tag``). These live in
 // their own ``cases_for_shapes`` subtree so callers can collect them
 // independently from the broader shape-inference gallery.

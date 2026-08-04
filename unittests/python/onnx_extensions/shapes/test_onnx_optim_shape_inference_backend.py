@@ -1,4 +1,3 @@
-import json
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
@@ -16,6 +15,21 @@ from onnx_light.onnx_py._onnxpycore import shape_inference as si
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
 collect_test_cases = import_or_skip("onnx_light.onnx.backend", "collect_test_cases")
+
+
+def _value_tags(graph) -> dict:
+    """Reconstructs the value-name -> tag map from per-value metadata.
+
+    The value tags live on each ValueInfoProto (inputs, value_info, outputs)
+    and initializer TensorProto, never on the graph-level metadata.
+    """
+    tags: dict = {}
+    for field in ("input", "value_info", "output", "initializer"):
+        for value in getattr(graph, field):
+            meta = {entry.key: entry.value for entry in value.metadata_props}
+            if VALUE_TAG_METADATA_KEY in meta:
+                tags[value.name] = meta[VALUE_TAG_METADATA_KEY]
+    return tags
 
 
 class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
@@ -230,8 +244,8 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
 
         # Verify pre-embedded graph metadata.
         graph_meta = {entry.key: entry.value for entry in test.model.graph.metadata_props}
-        self.assertIn(VALUE_TAGS_METADATA_KEY, graph_meta)
-        value_tags = json.loads(graph_meta[VALUE_TAGS_METADATA_KEY])
+        self.assertNotIn(VALUE_TAGS_METADATA_KEY, graph_meta)
+        value_tags = _value_tags(test.model.graph)
         self.assertEqual(value_tags.get("S"), "shape")
 
         # Verify pre-embedded node metadata on the Shape node (node 0).
@@ -252,8 +266,8 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         computed_graph_meta = {
             entry.key: entry.value for entry in model_copy.graph.metadata_props
         }
-        self.assertIn(VALUE_TAGS_METADATA_KEY, computed_graph_meta)
-        computed_value_tags = json.loads(computed_graph_meta[VALUE_TAGS_METADATA_KEY])
+        self.assertNotIn(VALUE_TAGS_METADATA_KEY, computed_graph_meta)
+        computed_value_tags = _value_tags(model_copy.graph)
         self.assertEqual(computed_value_tags, value_tags)
 
         computed_node_meta = {
@@ -280,8 +294,8 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
 
         # Verify pre-embedded graph metadata.
         graph_meta = {entry.key: entry.value for entry in test.model.graph.metadata_props}
-        self.assertIn(VALUE_TAGS_METADATA_KEY, graph_meta)
-        value_tags = json.loads(graph_meta[VALUE_TAGS_METADATA_KEY])
+        self.assertNotIn(VALUE_TAGS_METADATA_KEY, graph_meta)
+        value_tags = _value_tags(test.model.graph)
         self.assertEqual(value_tags.get("S"), "shape")
 
         # Verify pre-embedded node metadata on the Constant node (node 0).
@@ -308,8 +322,8 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         computed_graph_meta = {
             entry.key: entry.value for entry in model_copy.graph.metadata_props
         }
-        self.assertIn(VALUE_TAGS_METADATA_KEY, computed_graph_meta)
-        computed_value_tags = json.loads(computed_graph_meta[VALUE_TAGS_METADATA_KEY])
+        self.assertNotIn(VALUE_TAGS_METADATA_KEY, computed_graph_meta)
+        computed_value_tags = _value_tags(model_copy.graph)
         self.assertEqual(computed_value_tags, value_tags)
 
         computed_node_meta = {
@@ -339,8 +353,8 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
 
         # Verify pre-embedded graph metadata.
         graph_meta = {entry.key: entry.value for entry in test.model.graph.metadata_props}
-        self.assertIn(VALUE_TAGS_METADATA_KEY, graph_meta)
-        value_tags = json.loads(graph_meta[VALUE_TAGS_METADATA_KEY])
+        self.assertNotIn(VALUE_TAGS_METADATA_KEY, graph_meta)
+        value_tags = _value_tags(test.model.graph)
         self.assertEqual(value_tags.get("S1"), "shape")
         self.assertEqual(value_tags.get("S2"), "shape")
         self.assertEqual(value_tags.get("S_full"), "shape")
@@ -376,8 +390,8 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         computed_graph_meta = {
             entry.key: entry.value for entry in model_copy.graph.metadata_props
         }
-        self.assertIn(VALUE_TAGS_METADATA_KEY, computed_graph_meta)
-        computed_value_tags = json.loads(computed_graph_meta[VALUE_TAGS_METADATA_KEY])
+        self.assertNotIn(VALUE_TAGS_METADATA_KEY, computed_graph_meta)
+        computed_value_tags = _value_tags(model_copy.graph)
         self.assertEqual(computed_value_tags, value_tags)
 
         # Verify onnx_light.value_tag is written on each value_info.
@@ -416,8 +430,8 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         # Verify pre-embedded graph-level value_tags include mask_float, mask_4d, and
         # attention_mask (now tagged via Cast backward propagation).
         graph_meta = {entry.key: entry.value for entry in test.model.graph.metadata_props}
-        self.assertIn(VALUE_TAGS_METADATA_KEY, graph_meta)
-        value_tags = json.loads(graph_meta[VALUE_TAGS_METADATA_KEY])
+        self.assertNotIn(VALUE_TAGS_METADATA_KEY, graph_meta)
+        value_tags = _value_tags(test.model.graph)
         self.assertEqual(value_tags.get("mask_float"), "weight")
         self.assertEqual(value_tags.get("mask_4d"), "weight")
         self.assertEqual(value_tags.get("attention_mask"), "weight")
@@ -438,8 +452,8 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         computed_graph_meta = {
             entry.key: entry.value for entry in model_copy.graph.metadata_props
         }
-        self.assertIn(VALUE_TAGS_METADATA_KEY, computed_graph_meta)
-        computed_value_tags = json.loads(computed_graph_meta[VALUE_TAGS_METADATA_KEY])
+        self.assertNotIn(VALUE_TAGS_METADATA_KEY, computed_graph_meta)
+        computed_value_tags = _value_tags(model_copy.graph)
         self.assertEqual(computed_value_tags.get("mask_float"), "weight")
         self.assertEqual(computed_value_tags.get("mask_4d"), "weight")
         self.assertEqual(computed_value_tags.get("attention_mask"), "weight")

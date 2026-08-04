@@ -35,8 +35,8 @@ fillshape
     ``--shape-tag``
         After shape inference, infer semantic ``shape``/``axes``/``weight``/``ambiguous``
         tags for every value and node in the graph and record them in
-        ``metadata_props`` (keys ``onnx_light.value_tags`` and
-        ``onnx_light.node_tag``).
+        ``metadata_props`` (per-value key ``onnx_light.value_tag`` and
+        per-node key ``onnx_light.node_tag``).
     ``--token NAME=LOW:HIGH``
         Bind a symbolic dimension token to an inclusive integer range before
         running shape inference.  May be specified multiple times.
@@ -773,7 +773,8 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "After shape inference, infer semantic shape/axes/weight/ambiguous tags for "
             "every value and node in the graph and record them in metadata_props "
-            "(keys ``onnx_light.value_tags`` and ``onnx_light.node_tag``)."
+            "(per-value key ``onnx_light.value_tag`` and per-node key "
+            "``onnx_light.node_tag``)."
         ),
     )
     fillshape_parser.add_argument(

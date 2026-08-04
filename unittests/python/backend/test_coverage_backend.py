@@ -23,8 +23,12 @@ _RELEASE_METADATA_KEYS = frozenset(
         "onnx_light.release_after_shape_tag",
     }
 )
+# The in-place-reuse pass ("inplace" cases) writes both the in-place-reuse key
+# and the value-lifetime/release keys, so an "inplace" case legitimately carries
+# the release metadata as well. "release" cases carry only the release keys and
+# "shape_tag" cases only the shape-tag keys.
 _TAGGED_METADATA_KEYS = {
-    "inplace": _INPLACE_METADATA_KEYS,
+    "inplace": _INPLACE_METADATA_KEYS | _RELEASE_METADATA_KEYS,
     "shape_tag": _SHAPE_TAG_METADATA_KEYS,
     "release": _RELEASE_METADATA_KEYS,
 }

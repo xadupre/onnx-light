@@ -31,60 +31,6 @@ template <typename T> void SetMetadataValue(T &obj, const char *key, const std::
   entry->set_value(value);
 }
 
-std::string EscapeJson(std::string_view text) {
-  static constexpr char kHex[] = "0123456789abcdef";
-  std::string out;
-  out.reserve(text.size() + 8);
-  for (unsigned char c : text) {
-    if (c == '\\' || c == '"') {
-      out.push_back('\\');
-      out.push_back(static_cast<char>(c));
-    } else if (c == '\b') {
-      out.append("\\b");
-    } else if (c == '\f') {
-      out.append("\\f");
-    } else if (c == '\n') {
-      out.append("\\n");
-    } else if (c == '\r') {
-      out.append("\\r");
-    } else if (c == '\t') {
-      out.append("\\t");
-    } else if (c < 0x20) {
-      out.append("\\u00");
-      out.push_back(kHex[c >> 4]);
-      out.push_back(kHex[c & 0x0f]);
-    } else {
-      out.push_back(static_cast<char>(c));
-    }
-  }
-  return out;
-}
-
-std::string DumpValueTagsAsJson(const std::unordered_map<std::string, std::string> &value_tags) {
-  std::vector<std::pair<std::string, std::string>> entries;
-  entries.reserve(value_tags.size());
-  for (const auto &kv : value_tags) {
-    entries.push_back(kv);
-  }
-  std::sort(entries.begin(), entries.end(),
-            [](const auto &a, const auto &b) { return a.first < b.first; });
-  std::string out = "{";
-  bool first = true;
-  for (const auto &entry : entries) {
-    if (!first) {
-      out.append(",");
-    }
-    first = false;
-    out.append("\"");
-    out.append(EscapeJson(entry.first));
-    out.append("\":\"");
-    out.append(EscapeJson(entry.second));
-    out.append("\"");
-  }
-  out.append("}");
-  return out;
-}
-
 void RecurseSubgraphs(NodeProto &node) {
   for (int i = 0; i < node.attribute().size(); ++i) {
     AttributeProto *attr = node.mutable_attribute(static_cast<std::size_t>(i));
@@ -451,7 +397,6 @@ void WriteValueAndNodeTagsToMetadata(GraphProto &graph) {
       SetMetadataValue(*graph.mutable_node(i), kValueTagMetadataKey, node_tags[i]);
     }
   }
-  SetMetadataValue(graph, kValueTagsMetadataKey, DumpValueTagsAsJson(value_tags));
   for (int i = 0; i < graph.input().size(); ++i) {
     auto it = value_tags.find(graph.input(i).name());
     if (it != value_tags.end()) {
@@ -498,7 +443,13 @@ void WriteValueAndNodeTagsToMetadata(FunctionProto &function) {
       SetMetadataValue(*function.mutable_node(i), kValueTagMetadataKey, node_tags[i]);
     }
   }
-  SetMetadataValue(function, kValueTagsMetadataKey, DumpValueTagsAsJson(value_tags));
+  for (int i = 0; i < function.value_info().size(); ++i) {
+    auto it = value_tags.find(function.value_info(i).name());
+    if (it != value_tags.end()) {
+      SetMetadataValue(*function.mutable_value_info(static_cast<std::size_t>(i)),
+                       kValueTagMetadataKey, it->second);
+    }
+  }
   for (int i = 0; i < function.node().size(); ++i) {
     RecurseSubgraphs(*function.mutable_node(static_cast<std::size_t>(i)));
   }

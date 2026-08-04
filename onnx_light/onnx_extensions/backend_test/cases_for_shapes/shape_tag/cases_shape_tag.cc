@@ -66,9 +66,6 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry, TestMode mode) {
   // WriteValueAndNodeTagsToMetadata produces identical results.
   // X is a graph input so CollectGraphSeedTags tags it as "weight";
   // Y inherits "weight" from X through Reshape; S is tagged "shape" by Shape.
-  // DumpValueTagsAsJson sorts keys, so the canonical order is S < X < Y.
-  graph->add_metadata(core::compute::kValueTagsMetadataKey,
-                      "{\"S\":\"shape\",\"X\":\"weight\",\"Y\":\"weight\"}");
   (*graph->mutable_node())[0].add_metadata(core::compute::kNodeTagMetadataKey, "shape");
   (*graph->mutable_node())[0].add_metadata(core::compute::kValueTagMetadataKey, "shape");
   // Reshape (node[1]) inherits "weight" from its first input X.
@@ -166,9 +163,6 @@ void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry, TestMode mo
   // but consumed as Reshape's shape input ("shape"): "shape" has higher priority
   // than "weight", so S is tagged "shape". The Constant node picks up "shape" on
   // the second inference pass. Reshape (node[1]) inherits "weight" from X.
-  // DumpValueTagsAsJson sorts keys: S < X < Y.
-  graph->add_metadata(core::compute::kValueTagsMetadataKey,
-                      "{\"S\":\"shape\",\"X\":\"weight\",\"Y\":\"weight\"}");
   (*graph->mutable_node())[0].add_metadata(core::compute::kNodeTagMetadataKey, "shape");
   (*graph->mutable_node())[0].add_metadata(core::compute::kValueTagMetadataKey, "shape");
   // Reshape (node[1]) inherits "weight" from X.
@@ -302,11 +296,6 @@ void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &regist
   // Mul inherits "shape" from S1 (input 0) and S2 is already "shape".
   // "two" stays "weight" (Mul does not backward-propagate through input 1).
   // Reshape (node[4]) inherits "weight" from X (input 0) → Y = "weight".
-  // DumpValueTagsAsJson sorts keys: S1 < S2 < S_full < X < Y < two.
-  graph->add_metadata(
-      core::compute::kValueTagsMetadataKey,
-      "{\"S1\":\"shape\",\"S2\":\"shape\",\"S_full\":\"shape\",\"X\":\"weight\",\"Y\":\"weight\","
-      "\"two\":\"weight\"}");
   (*graph->mutable_node())[0].add_metadata(core::compute::kNodeTagMetadataKey,
                                            "shape"); // Constant → S1
   (*graph->mutable_node())[0].add_metadata(core::compute::kValueTagMetadataKey,
@@ -426,8 +415,6 @@ void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry, TestMod
 
   // Pre-embed the expected shape-tag metadata so tests can verify that
   // WriteValueAndNodeTagsToMetadata produces identical results.
-  // DumpValueTagsAsJson sorts keys, so the canonical order is X < Y.
-  graph->add_metadata(core::compute::kValueTagsMetadataKey, "{\"X\":\"weight\",\"Y\":\"shape\"}");
   (*graph->mutable_node())[0].add_metadata(core::compute::kNodeTagMetadataKey, "shape");
   (*graph->mutable_node())[0].add_metadata(core::compute::kValueTagMetadataKey, "shape");
   // X (input[0]) receives onnx_light.value_tag = "weight".
@@ -502,9 +489,6 @@ void RegisterShapeTagConcatWeightWinsCases(std::vector<TestCase> &registry, Test
   // WriteValueAndNodeTagsToMetadata produces identical results.
   // PAST is "weight" (seeded as graph input). KH is "weight" (initializer seed).
   // Concat forward: weight wins → C="weight".
-  // DumpValueTagsAsJson sorts keys: C < KH < PAST.
-  graph->add_metadata(core::compute::kValueTagsMetadataKey,
-                      "{\"C\":\"weight\",\"KH\":\"weight\",\"PAST\":\"weight\"}");
   (*graph->mutable_node())[0].add_metadata(core::compute::kNodeTagMetadataKey, "weight");
   (*graph->mutable_node())[0].add_metadata(core::compute::kValueTagMetadataKey, "weight");
   // PAST (input[0]) → "weight".
@@ -591,9 +575,6 @@ void RegisterShapeTagCastBackwardCases(std::vector<TestCase> &registry, TestMode
   // Add forward: inherited from W (input[0]) → Z = "weight".
   // Add backward: Z="weight" → Y gets "weight".
   // Cast backward: Y="weight" → X gets "weight".
-  // DumpValueTagsAsJson sorts keys: W < X < Y < Z.
-  graph->add_metadata(core::compute::kValueTagsMetadataKey,
-                      "{\"W\":\"weight\",\"X\":\"weight\",\"Y\":\"weight\",\"Z\":\"weight\"}");
   (*graph->mutable_node())[0].add_metadata(core::compute::kNodeTagMetadataKey, "weight");
   (*graph->mutable_node())[0].add_metadata(core::compute::kValueTagMetadataKey, "weight");
   (*graph->mutable_node())[1].add_metadata(core::compute::kNodeTagMetadataKey, "weight");
@@ -693,10 +674,6 @@ void RegisterShapeTagReshapeBackwardCases(std::vector<TestCase> &registry, TestM
   // Add forward: inherited from W (input[0]) → Z = "weight".
   // Add backward: Z="weight" → Y gets "weight".
   // Reshape backward: Y="weight" → X gets "weight".
-  // DumpValueTagsAsJson sorts keys: S < W < X < Y < Z.
-  graph->add_metadata(
-      core::compute::kValueTagsMetadataKey,
-      "{\"S\":\"shape\",\"W\":\"weight\",\"X\":\"weight\",\"Y\":\"weight\",\"Z\":\"weight\"}");
   (*graph->mutable_node())[0].add_metadata(core::compute::kNodeTagMetadataKey, "weight");
   (*graph->mutable_node())[0].add_metadata(core::compute::kValueTagMetadataKey, "weight");
   (*graph->mutable_node())[1].add_metadata(core::compute::kNodeTagMetadataKey, "weight");

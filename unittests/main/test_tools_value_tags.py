@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import json
 import unittest
 from unittest.mock import patch
 
@@ -13,15 +12,26 @@ from onnx_light.tools import (
     infer_value_and_node_tags,
     write_value_and_node_tags_to_metadata,
 )
-from onnx_light.tools._proto_utils import (
-    NODE_TAG_METADATA_KEY,
-    VALUE_TAG_METADATA_KEY,
-    VALUE_TAGS_METADATA_KEY,
-)
+from onnx_light.tools._proto_utils import NODE_TAG_METADATA_KEY, VALUE_TAG_METADATA_KEY
 
 
 def _meta_dict(proto_obj: object) -> dict[str, str]:
     return {m.key: m.value for m in getattr(proto_obj, "metadata_props", [])}
+
+
+def _value_tags(graph: object) -> dict[str, str]:
+    """Reconstructs the value-name -> tag map from per-value metadata.
+
+    The value tags are stored on each ValueInfoProto (inputs, value_info,
+    outputs) and initializer TensorProto, never on the graph metadata.
+    """
+    tags: dict[str, str] = {}
+    for field in ("input", "value_info", "output", "initializer"):
+        for value in getattr(graph, field, []):
+            meta = _meta_dict(value)
+            if VALUE_TAG_METADATA_KEY in meta:
+                tags[value.name] = meta[VALUE_TAG_METADATA_KEY]
+    return tags
 
 
 class TestValueTagsErrors(unittest.TestCase):
@@ -52,8 +62,7 @@ class TestValueTags(unittest.TestCase):
             [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2])],
         )
         write_value_and_node_tags_to_metadata(g)
-        tags = json.loads(_meta_dict(g)[VALUE_TAGS_METADATA_KEY])
-        self.assertEqual(tags["S"], "shape")
+        tags = _value_tags(g)
         self.assertEqual(tags["X"], "weight")
         self.assertEqual(tags["Y"], "weight")
         self.assertEqual(_meta_dict(g.node[0])[NODE_TAG_METADATA_KEY], "shape")
@@ -73,7 +82,7 @@ class TestValueTags(unittest.TestCase):
             [helper.make_tensor_value_info("Y", TensorProto.INT64, [2])],
         )
         write_value_and_node_tags_to_metadata(g)
-        tags = json.loads(_meta_dict(g)[VALUE_TAGS_METADATA_KEY])
+        tags = _value_tags(g)
         self.assertEqual(tags["X"], "weight")
         self.assertEqual(tags["Y"], "shape")
         self.assertEqual(_meta_dict(g.node[0])[NODE_TAG_METADATA_KEY], "shape")
@@ -99,7 +108,7 @@ class TestValueTags(unittest.TestCase):
         )
         write_value_and_node_tags_to_metadata(g)
         subgraph = g.node[0].attribute[0].g
-        body_tags = json.loads(_meta_dict(subgraph)[VALUE_TAGS_METADATA_KEY])
+        body_tags = _value_tags(subgraph)
         self.assertEqual(body_tags["SA"], "shape")
 
     def test_accepts_list_of_nodes_and_function(self):
@@ -117,7 +126,7 @@ class TestValueTags(unittest.TestCase):
             "", "f", ["X", "Y"], ["Z"], nodes, [helper.make_opsetid("", 18)]
         )
         write_value_and_node_tags_to_metadata(function)
-        self.assertIn(VALUE_TAGS_METADATA_KEY, _meta_dict(function))
+        self.assertEqual(_meta_dict(function.node[0])[NODE_TAG_METADATA_KEY], "shape")
 
     def test_compute_value_and_node_tags_accepts_verbose(self):
         from onnx_light.onnx import helper

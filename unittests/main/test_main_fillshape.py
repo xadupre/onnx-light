@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 import unittest
@@ -254,9 +253,9 @@ class TestMainFillshape(ExtTestCase):
             dims = list(result.graph.output[0].type.tensor_type.shape.dim)
             self.assertEqual(len(dims), 2)
 
-            # The graph should carry value_tags metadata.
+            # No feature metadata must be stored on the graph metadata.
             graph_meta = {entry.key: entry.value for entry in result.graph.metadata_props}
-            self.assertIn(VALUE_TAGS_METADATA_KEY, graph_meta)
+            self.assertNotIn(VALUE_TAGS_METADATA_KEY, graph_meta)
 
             # Shape node (node 0) should carry the "shape" node tag.
             node0_meta = {entry.key: entry.value for entry in result.graph.node[0].metadata_props}
@@ -296,12 +295,9 @@ class TestMainFillshape(ExtTestCase):
             dims = list(result.graph.output[0].type.tensor_type.shape.dim)
             self.assertEqual(len(dims), 1)
 
-            # The graph should carry value_tags metadata.
+            # No feature metadata must be stored on the graph metadata.
             graph_meta = {entry.key: entry.value for entry in result.graph.metadata_props}
-            self.assertIn(VALUE_TAGS_METADATA_KEY, graph_meta)
-
-            tags = json.loads(graph_meta[VALUE_TAGS_METADATA_KEY])
-            self.assertEqual(tags.get("Y"), "shape")
+            self.assertNotIn(VALUE_TAGS_METADATA_KEY, graph_meta)
 
             # The Shape node should carry the "shape" node tag.
             node0_meta = {entry.key: entry.value for entry in result.graph.node[0].metadata_props}
@@ -448,7 +444,7 @@ class TestMainFillshape(ExtTestCase):
         Regression test for issue #3004: when both flags are used, neither set
         of metadata should be overwritten by the other.  The saved model must
         carry node-level inplace-reuse/release metadata (from --inplace-info)
-        AND graph-level value_tags + per-node node_tag metadata (from
+        AND per-value value_tag + per-node node_tag metadata (from
         --shape-tag).
         """
         from onnx_light.__main__ import main
@@ -482,9 +478,9 @@ class TestMainFillshape(ExtTestCase):
             dims = list(result.graph.output[0].type.tensor_type.shape.dim)
             self.assertEqual(len(dims), 2)
 
-            # --shape-tag: graph must carry value_tags metadata.
+            # --shape-tag: no feature metadata must be on the graph metadata.
             graph_meta = {entry.key: entry.value for entry in result.graph.metadata_props}
-            self.assertIn(VALUE_TAGS_METADATA_KEY, graph_meta)
+            self.assertNotIn(VALUE_TAGS_METADATA_KEY, graph_meta)
 
             # --shape-tag: Shape node (node 0) must carry the "shape" node tag.
             node0_meta = {entry.key: entry.value for entry in result.graph.node[0].metadata_props}

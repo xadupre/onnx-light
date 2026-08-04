@@ -8,6 +8,26 @@ import onnx_light.onnx as onnxl
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
 collect_test_case = import_or_skip("onnx_light.onnx.backend", "collect_test_case")
 
+# Feature metadata keys (inplace / shape-tag / release) computed by the
+# metadata passes. These belong on the NodeProto or ValueInfoProto/TensorProto
+# they describe (node tags/lifetimes on nodes, value tags on value_info, inputs,
+# outputs and initializers). They must never be attached to the graph-level
+# ``metadata_props``.
+_INPLACE_METADATA_KEYS = frozenset({"onnx_light.inplace_reuse"})
+_SHAPE_TAG_METADATA_KEYS = frozenset(
+    {"onnx_light.node_tag", "onnx_light.value_tag", "onnx_light.value_tags"}
+)
+_RELEASE_METADATA_KEYS = frozenset(
+    {
+        "onnx_light.release_after",
+        "onnx_light.not_used_after",
+        "onnx_light.release_after_shape_tag",
+    }
+)
+_ALL_FEATURE_METADATA_KEYS = (
+    _INPLACE_METADATA_KEYS | _SHAPE_TAG_METADATA_KEYS | _RELEASE_METADATA_KEYS
+)
+
 
 class TestCoverage(ExtTestCase):
     def _count_detadata(self, tag, kind, obj):
@@ -76,6 +96,23 @@ class TestCoverage(ExtTestCase):
             },
             set(counts),
         )
+
+    def test_no_feature_metadata_on_graph(self):
+        # Feature metadata (inplace / shape_tag / release) must be attached to
+        # the NodeProto or ValueInfoProto/TensorProto it describes, never to the
+        # graph-level ``metadata_props``. Enforce this for every backend case.
+        cases = collect_test_case(include_big=True)
+        for name, tc in cases.items():
+            with self.subTest(tag=tc.tag, name=name):
+                keys = {it.key for it in tc.model.graph.metadata_props}
+                leaked = keys & _ALL_FEATURE_METADATA_KEYS
+                self.assertFalse(
+                    leaked,
+                    msg=lambda leaked=leaked: (
+                        f"{name=} {tc.tag=} stores feature metadata "
+                        f"{sorted(leaked)} on the graph metadata_props"
+                    ),
+                )
 
 
 if __name__ == "__main__":

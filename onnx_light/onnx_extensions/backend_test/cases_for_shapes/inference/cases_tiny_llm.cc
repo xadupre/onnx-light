@@ -227,33 +227,6 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry, TestMod
   {
     namespace ann = core::compute;
 
-    // Graph-level value-tags JSON (all tagged tensors sorted alphabetically;
-    // DumpValueTagsAsJson uses strict ASCII order).
-    graph->add_metadata(ann::kValueTagsMetadataKey,
-                        "{\"attention_mask\":\"weight\","
-                        "\"attn_bias\":\"weight\",\"attn_out\":\"weight\",\"attn_proj\":\"weight\","
-                        "\"down_proj.weight\":\"weight\",\"embed_tokens.weight\":\"weight\","
-                        "\"gate\":\"weight\",\"gate_proj.weight\":\"weight\","
-                        "\"gate_sigmoid\":\"weight\",\"gate_silu\":\"weight\","
-                        "\"hidden\":\"weight\",\"hidden2\":\"weight\",\"hidden3\":\"weight\","
-                        "\"input_ids\":\"weight\","
-                        "\"input_layernorm.weight\":\"weight\","
-                        "\"k_proj.weight\":\"weight\",\"key\":\"weight\","
-                        "\"lm_head.weight\":\"weight\",\"logits\":\"weight\","
-                        "\"mask_4d\":\"weight\",\"mask_axes\":\"axes\","
-                        "\"mask_float\":\"weight\",\"mask_inv\":\"weight\","
-                        "\"mask_neg\":\"weight\",\"mask_one\":\"weight\","
-                        "\"mlp_hidden\":\"weight\",\"mlp_out\":\"weight\","
-                        "\"norm.weight\":\"weight\","
-                        "\"normed1\":\"weight\",\"normed2\":\"weight\",\"normed_final\":\"weight\","
-                        "\"o_proj.weight\":\"weight\","
-                        "\"past_key\":\"weight\",\"past_value\":\"weight\","
-                        "\"post_attention_layernorm.weight\":\"weight\","
-                        "\"present_key\":\"weight\",\"present_value\":\"weight\","
-                        "\"q_proj.weight\":\"weight\",\"query\":\"weight\","
-                        "\"up\":\"weight\",\"up_proj.weight\":\"weight\","
-                        "\"v_proj.weight\":\"weight\",\"value\":\"weight\"}");
-
     // Helper: add a metadata entry to the i-th node.
     const auto node_meta = [&](int i, const char *key, const std::string &value) {
       (*graph->mutable_node())[static_cast<std::size_t>(i)].add_metadata(key, value);
@@ -803,7 +776,6 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry, 
   {
     namespace ann = core::compute;
 
-    // Graph-level value-tags JSON (all tagged tensors sorted alphabetically).
     // Notes:
     //   attn_scale, rms_eps, rms_axes, head_shape, merge_shape, mask_* are
     //   initializers that get seed "weight" (or upgraded to "axes"/"shape").
@@ -814,50 +786,6 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry, 
     //   value_heads are "weight" → Concat output "weight" → backward).
     //   key_heads_t gets "weight" via Transpose of present_key (which is
     //   "weight").
-    graph->add_metadata(ann::kValueTagsMetadataKey,
-                        "{\"attention_mask\":\"weight\","
-                        "\"attn_bias\":\"weight\",\"attn_out\":\"weight\","
-                        "\"attn_proj\":\"weight\",\"attn_scale\":\"weight\","
-                        "\"attn_weights\":\"weight\","
-                        "\"context\":\"weight\",\"context_t\":\"weight\","
-                        "\"down_proj.weight\":\"weight\","
-                        "\"embed_tokens.weight\":\"weight\","
-                        "\"gate\":\"weight\",\"gate_proj.weight\":\"weight\","
-                        "\"gate_sigmoid\":\"weight\",\"gate_silu\":\"weight\","
-                        "\"head_shape\":\"shape\","
-                        "\"hidden\":\"weight\",\"hidden2\":\"weight\",\"hidden3\":\"weight\","
-                        "\"input_ids\":\"weight\","
-                        "\"input_layernorm.weight\":\"weight\","
-                        "\"k_proj.weight\":\"weight\",\"key\":\"weight\","
-                        "\"key_4d\":\"weight\",\"key_heads\":\"weight\","
-                        "\"key_heads_t\":\"weight\","
-                        "\"lm_head.weight\":\"weight\","
-                        "\"ln1_mean\":\"weight\",\"ln1_meaneps\":\"weight\","
-                        "\"ln1_norm\":\"weight\",\"ln1_rms\":\"weight\",\"ln1_sq\":\"weight\","
-                        "\"ln2_mean\":\"weight\",\"ln2_meaneps\":\"weight\","
-                        "\"ln2_norm\":\"weight\",\"ln2_rms\":\"weight\",\"ln2_sq\":\"weight\","
-                        "\"lnf_mean\":\"weight\",\"lnf_meaneps\":\"weight\","
-                        "\"lnf_norm\":\"weight\",\"lnf_rms\":\"weight\",\"lnf_sq\":\"weight\","
-                        "\"logits\":\"weight\","
-                        "\"mask_4d\":\"weight\",\"mask_axes\":\"axes\","
-                        "\"mask_float\":\"weight\",\"mask_inv\":\"weight\","
-                        "\"mask_neg\":\"weight\",\"mask_one\":\"weight\","
-                        "\"merge_shape\":\"shape\","
-                        "\"mlp_hidden\":\"weight\",\"mlp_out\":\"weight\","
-                        "\"norm.weight\":\"weight\","
-                        "\"normed1\":\"weight\",\"normed2\":\"weight\",\"normed_final\":\"weight\","
-                        "\"o_proj.weight\":\"weight\","
-                        "\"past_key\":\"weight\",\"past_value\":\"weight\","
-                        "\"post_attention_layernorm.weight\":\"weight\","
-                        "\"present_key\":\"weight\",\"present_value\":\"weight\","
-                        "\"q_proj.weight\":\"weight\",\"query\":\"weight\","
-                        "\"query_4d\":\"weight\",\"query_heads\":\"weight\","
-                        "\"rms_axes\":\"axes\",\"rms_eps\":\"weight\","
-                        "\"scores\":\"weight\",\"scores_biased\":\"weight\","
-                        "\"scores_scaled\":\"weight\","
-                        "\"up\":\"weight\",\"up_proj.weight\":\"weight\","
-                        "\"v_proj.weight\":\"weight\","
-                        "\"value\":\"weight\",\"value_4d\":\"weight\",\"value_heads\":\"weight\"}");
 
     // Helper: add a metadata entry to the i-th node.
     const auto node_meta = [&](int i, const char *key, const std::string &value) {

@@ -1743,7 +1743,8 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase
 
     // Collect the expected graph-level metadata pre-embedded in the case model.
     const MetadataMap expected_graph_meta = MetadataOf(tc.model().ref_graph());
-    ASSERT_FALSE(expected_graph_meta.empty()) << "no graph metadata pre-embedded in case";
+    ASSERT_EQ(expected_graph_meta.count(core::compute::kValueTagsMetadataKey), 0u)
+        << "feature metadata must not be stored on the graph in case";
 
     // Collect per-node expected metadata from the pre-embedded model.
     const auto &src_nodes = tc.model().ref_graph().ref_node();
@@ -1963,7 +1964,8 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnConstantRes
 
     // Collect the expected graph-level metadata pre-embedded in the case model.
     const MetadataMap expected_graph_meta = MetadataOf(tc.model().ref_graph());
-    ASSERT_FALSE(expected_graph_meta.empty()) << "no graph metadata pre-embedded in case";
+    ASSERT_EQ(expected_graph_meta.count(core::compute::kValueTagsMetadataKey), 0u)
+        << "feature metadata must not be stored on the graph in case";
 
     // Collect per-node expected metadata from the pre-embedded model.
     const auto &src_nodes = tc.model().ref_graph().ref_node();
@@ -2071,7 +2073,8 @@ TEST(BackendTestCaseShapeInference,
 
     // Collect the expected graph-level metadata pre-embedded in the case model.
     const MetadataMap expected_graph_meta = MetadataOf(tc.model().ref_graph());
-    ASSERT_FALSE(expected_graph_meta.empty()) << "no graph metadata pre-embedded in case";
+    ASSERT_EQ(expected_graph_meta.count(core::compute::kValueTagsMetadataKey), 0u)
+        << "feature metadata must not be stored on the graph in case";
 
     // Collect per-node expected metadata from the pre-embedded model.
     const auto &src_nodes = tc.model().ref_graph().ref_node();
@@ -2175,7 +2178,8 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagToOutputWhenOutputIsS
 
     // Collect the expected metadata from the pre-embedded model.
     const MetadataMap expected_graph_meta = MetadataOf(tc.model().ref_graph());
-    ASSERT_FALSE(expected_graph_meta.empty()) << "no graph metadata pre-embedded in case";
+    ASSERT_EQ(expected_graph_meta.count(core::compute::kValueTagsMetadataKey), 0u)
+        << "feature metadata must not be stored on the graph in case";
 
     const auto &src_nodes = tc.model().ref_graph().ref_node();
     std::vector<MetadataMap> expected_node_meta;
@@ -2524,11 +2528,11 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
         << "case: " << tc.name;
 
     // Capture the golden metadata embedded in the case (if any). A case that
-    // pre-embeds the expected value-tags JSON and per-node in-place-reuse
+    // pre-embeds the expected per-value/per-node tags and in-place-reuse
     // metadata is verified against a fresh recomputation below.
     const GraphProto &expected_graph = tc.model().ref_graph();
     const MetadataMap expected_graph_meta = MetadataOf(expected_graph);
-    bool has_expected = expected_graph_meta.count(core::compute::kValueTagsMetadataKey) != 0;
+    bool has_expected = false;
     std::vector<MetadataMap> expected_node_meta;
     for (const auto &node : expected_graph.ref_node()) {
       MetadataMap subset = checked_subset(MetadataOf(node));
@@ -2536,6 +2540,14 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
         has_expected = true;
       }
       expected_node_meta.push_back(std::move(subset));
+    }
+    // A case may embed only per-value tags (onnx_light.value_tag) without any
+    // in-place-reuse node metadata; treat those as golden too.
+    for (const auto &vi : expected_graph.ref_value_info()) {
+      if (MetadataOf(vi).count(core::compute::kValueTagMetadataKey) != 0) {
+        has_expected = true;
+        break;
+      }
     }
     if (!has_expected) {
       continue;
@@ -2566,15 +2578,8 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
         << "case: " << tc.name;
 
     const MetadataMap computed_graph_meta = MetadataOf(*graph);
-    const auto expected_value_tags = expected_graph_meta.find(core::compute::kValueTagsMetadataKey);
-    if (expected_value_tags != expected_graph_meta.end()) {
-      const auto computed_value_tags =
-          computed_graph_meta.find(core::compute::kValueTagsMetadataKey);
-      ASSERT_NE(computed_value_tags, computed_graph_meta.end())
-          << "missing value_tags metadata on case " << tc.name;
-      EXPECT_EQ(computed_value_tags->second, expected_value_tags->second)
-          << "value_tags metadata mismatch on case " << tc.name;
-    }
+    EXPECT_EQ(computed_graph_meta.count(core::compute::kValueTagsMetadataKey), 0u)
+        << "value_tags aggregate must not be written on the graph metadata for case " << tc.name;
 
     // Verify per-value shape/weight tags: the ``onnx_light.value_tag`` metadata
     // that the pass writes onto each ValueInfoProto (inputs, value_info,

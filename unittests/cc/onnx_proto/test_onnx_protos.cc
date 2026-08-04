@@ -539,6 +539,19 @@ TEST(onnx_proto, NodeProtoDomainKeepsExplicitEmptyString) {
   EXPECT_FALSE(parsed.ref_domain().null());
 }
 
+TEST(onnx_proto, StrAccessorReturnsConstStringRef) {
+  NodeProto node;
+  node.set_op_type("Constant");
+  // str_op_type() returns a const std::string& bound to the underlying value.
+  const std::string &op_type = node.str_op_type();
+  EXPECT_TRUE((std::is_same<decltype(node.str_op_type()), const std::string &>::value));
+  EXPECT_EQ(op_type, "Constant");
+
+  // An unset field returns a shared empty string without throwing.
+  EXPECT_FALSE(node.has_domain());
+  EXPECT_TRUE(node.str_domain().empty());
+}
+
 TEST(onnx_string, RefString_AsStringEdgeCases) {
   utils::RefString rs1("regular strings", 14);
   std::string s1 = rs1;

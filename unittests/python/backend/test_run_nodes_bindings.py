@@ -724,6 +724,17 @@ class TestTensorToNumpy(ExtTestCase):
         self.assertEqual(len(t.raw_data()), 12)
         np.testing.assert_array_equal(raw.view(np.int32), np.array([7, 8, 9], np.int32))
 
+    def test_has_borrowed_data(self):
+        # ``tensor_from_proto`` materializes an owned tensor, while
+        # ``tensor_from_numpy(copy=False)`` builds a borrowed (non-owning) view.
+        owned = _make_int32_tensor("v", [1, 2, 3])
+        self.assertFalse(owned.has_borrowed_data())
+        src = np.array([1, 2, 3], dtype=np.int32)
+        borrowed = rt.tensor_from_numpy(
+            "x", int(TensorProto.INT32), [3], src.view(np.uint8).ravel(), copy=False
+        )
+        self.assertTrue(borrowed.has_borrowed_data())
+
 
 class TestTensorFromNumpy(ExtTestCase):
     def test_tensor_from_numpy_copies_by_default(self):

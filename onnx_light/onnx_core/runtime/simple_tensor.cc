@@ -324,6 +324,17 @@ Tensor Tensor::BorrowStrings(std::string name, Shape shape,
   return t;
 }
 
+Tensor Tensor::ToOwned() const {
+  if (static_cast<DataType>(data_type) == DataType::STRING) {
+    return Tensor::MakeString(name, shape, AsStrings());
+  }
+  std::vector<uint8_t> owned(size_bytes());
+  if (size_bytes() > 0) {
+    std::memcpy(owned.data(), bytes(), size_bytes());
+  }
+  return Tensor(name, data_type, shape, std::move(owned));
+}
+
 Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
   // Tensor name (borrowed from the proto; the Tensor makes its own copy).
   const std::string &name = tp.name();

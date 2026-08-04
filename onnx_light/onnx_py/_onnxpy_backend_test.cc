@@ -177,6 +177,12 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
           },
           "Returns the ``(device_type, device_id)`` pair for the DLPack protocol. "
           "The tensor always resides on the CPU device (``kDLCPU``).")
+      .def(
+          "has_borrowed_data", [](const Tensor &t) { return t.is_borrowed(); },
+          "Returns whether the tensor is a non-owning (borrowed) view over external "
+          "memory (for example a zero-copy view into a ``TensorProto``'s ``raw_data``) "
+          "rather than owning its bytes inline. Borrowed tensors keep no ownership of "
+          "their backing storage, which must outlive the tensor.")
       .def("__repr__", [](const Tensor &t) {
         std::string r = "Tensor(name='";
         r += t.name;

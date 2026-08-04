@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/compute/inplace_reuse.h"
+#include "onnx_core/compute/value_tags.h"
 #include "onnx_extensions/backend_test/cases_for_shapes/inference/include_inference_cases.h"
 #include "onnx_extensions/backend_test/cases_for_shapes/inference/inference_random_weights.h"
 #include "onnx_proto/onnx_helper.h"
@@ -210,6 +212,351 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry, TestMod
                   {"batch", DimSpec(kNumHeads), "total_seq", DimSpec(kHeadSize)});
   AppendValueInfo(*graph->add_output(), "present_value", kFloat,
                   {"batch", DimSpec(kNumHeads), "total_seq", DimSpec(kHeadSize)});
+
+  // ---- Pre-embedded metadata (shape-tag, inplace-reuse, release-after) ----
+  // These are the expected outputs of WriteValueAndNodeTagsToMetadata and
+  // WriteInPlaceReuseToMetadata for this model. They allow
+  // TestBackendMetadataCoverage to verify that the computed metadata matches.
+  //
+  // Value-tag seeds: all graph inputs and initializers → "weight"; mask_axes
+  // upgraded to "axes" by Unsqueeze's input[1] rule.
+  // mask_float and mask_4d are tagged "weight" via Sub backward propagation:
+  // Sub(mask_one, mask_4d)→mask_inv tags mask_4d "weight", then Unsqueeze
+  // backward tags mask_float "weight".  Cast backward (Cast propagates from its
+  // first input) then tags attention_mask "weight".
+  {
+    namespace ann = core::compute;
+
+    // Graph-level value-tags JSON (all tagged tensors sorted alphabetically;
+    // DumpValueTagsAsJson uses strict ASCII order).
+    graph->add_metadata(ann::kValueTagsMetadataKey,
+                        "{\"attention_mask\":\"weight\","
+                        "\"attn_bias\":\"weight\",\"attn_out\":\"weight\",\"attn_proj\":\"weight\","
+                        "\"down_proj.weight\":\"weight\",\"embed_tokens.weight\":\"weight\","
+                        "\"gate\":\"weight\",\"gate_proj.weight\":\"weight\","
+                        "\"gate_sigmoid\":\"weight\",\"gate_silu\":\"weight\","
+                        "\"hidden\":\"weight\",\"hidden2\":\"weight\",\"hidden3\":\"weight\","
+                        "\"input_ids\":\"weight\","
+                        "\"input_layernorm.weight\":\"weight\","
+                        "\"k_proj.weight\":\"weight\",\"key\":\"weight\","
+                        "\"lm_head.weight\":\"weight\",\"logits\":\"weight\","
+                        "\"mask_4d\":\"weight\",\"mask_axes\":\"axes\","
+                        "\"mask_float\":\"weight\",\"mask_inv\":\"weight\","
+                        "\"mask_neg\":\"weight\",\"mask_one\":\"weight\","
+                        "\"mlp_hidden\":\"weight\",\"mlp_out\":\"weight\","
+                        "\"norm.weight\":\"weight\","
+                        "\"normed1\":\"weight\",\"normed2\":\"weight\",\"normed_final\":\"weight\","
+                        "\"o_proj.weight\":\"weight\","
+                        "\"past_key\":\"weight\",\"past_value\":\"weight\","
+                        "\"post_attention_layernorm.weight\":\"weight\","
+                        "\"present_key\":\"weight\",\"present_value\":\"weight\","
+                        "\"q_proj.weight\":\"weight\",\"query\":\"weight\","
+                        "\"up\":\"weight\",\"up_proj.weight\":\"weight\","
+                        "\"v_proj.weight\":\"weight\",\"value\":\"weight\"}");
+
+    // Helper: add a metadata entry to the i-th node.
+    const auto node_meta = [&](int i, const char *key, const std::string &value) {
+      (*graph->mutable_node())[static_cast<std::size_t>(i)].add_metadata(key, value);
+    };
+
+    // node[0]  Gather(embed_tokens.weight, input_ids) → hidden
+    node_meta(0, ann::kNodeTagMetadataKey, "weight");
+    // node[1]  RMSNormalization(hidden, input_layernorm.weight) → normed1
+    node_meta(1, ann::kNodeTagMetadataKey, "weight");
+    // node[2]  MatMul(normed1, q_proj.weight) → query
+    node_meta(2, ann::kNodeTagMetadataKey, "weight");
+    // node[3]  MatMul(normed1, k_proj.weight) → key
+    node_meta(3, ann::kNodeTagMetadataKey, "weight");
+    // node[4]  MatMul(normed1, v_proj.weight) → value
+    //   normed1 last used here → released; value reuses normed1's buffer.
+    node_meta(4, ann::kNodeTagMetadataKey, "weight");
+    node_meta(4, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(4, ann::kReleaseAfterMetadataKey, "normed1");
+    // node[5]  Cast(attention_mask) → mask_float
+    //   attention_mask is tagged "weight" via Cast backward propagation
+    //   (mask_float→"weight"→Cast backward→attention_mask="weight").
+    node_meta(5, ann::kNodeTagMetadataKey, "weight");
+    // node[6]  Unsqueeze(mask_float, mask_axes) → mask_4d
+    //   mask_float inherits "weight" via Sub backward propagation; mask_float
+    //   last used here → released; same total byte size → inplace.
+    node_meta(6, ann::kNodeTagMetadataKey, "weight");
+    node_meta(6, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(6, ann::kReleaseAfterMetadataKey, "mask_float");
+    // node[7]  Sub(mask_one, mask_4d) → mask_inv
+    //   mask_4d last used here (output 0 = mask_inv reuses mask_4d buffer).
+    node_meta(7, ann::kNodeTagMetadataKey, "weight");
+    node_meta(7, ann::kInPlaceReuseMetadataKey, "0:1:equal");
+    node_meta(7, ann::kReleaseAfterMetadataKey, "mask_4d");
+    // node[8]  Mul(mask_inv, mask_neg) → attn_bias
+    node_meta(8, ann::kNodeTagMetadataKey, "weight");
+    node_meta(8, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(8, ann::kReleaseAfterMetadataKey, "mask_inv");
+    // node[9]  Attention(query, key, value, attn_bias, past_key, past_value)
+    //           → {attn_out, present_key, present_value}
+    //   query, key, value, attn_bias all last used here → released.
+    //   attn_out (output 0) reuses query's buffer (same [batch,seq,hidden]).
+    node_meta(9, ann::kNodeTagMetadataKey, "weight");
+    node_meta(9, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(9, ann::kReleaseAfterMetadataKey, "query;key;value;attn_bias");
+    // node[10] MatMul(attn_out, o_proj.weight) → attn_proj
+    node_meta(10, ann::kNodeTagMetadataKey, "weight");
+    node_meta(10, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(10, ann::kReleaseAfterMetadataKey, "attn_out");
+    // node[11] Add(hidden, attn_proj) → hidden2
+    node_meta(11, ann::kNodeTagMetadataKey, "weight");
+    node_meta(11, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(11, ann::kReleaseAfterMetadataKey, "hidden;attn_proj");
+    // node[12] RMSNormalization(hidden2, post_attention_layernorm.weight) → normed2
+    //   hidden2 last_use=19 (used again at Add below) → not released here.
+    node_meta(12, ann::kNodeTagMetadataKey, "weight");
+    // node[13] MatMul(normed2, gate_proj.weight) → gate
+    //   normed2 last_use=16 → not released here.
+    node_meta(13, ann::kNodeTagMetadataKey, "weight");
+    // node[14] Sigmoid(gate) → gate_sigmoid
+    //   gate last_use=15 → not released here.
+    node_meta(14, ann::kNodeTagMetadataKey, "weight");
+    // node[15] Mul(gate, gate_sigmoid) → gate_silu
+    node_meta(15, ann::kNodeTagMetadataKey, "weight");
+    node_meta(15, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(15, ann::kReleaseAfterMetadataKey, "gate;gate_sigmoid");
+    // node[16] MatMul(normed2, up_proj.weight) → up
+    //   normed2 last used here → released; up=[batch,seq,32] ≠ normed2=[batch,seq,16] → no inplace.
+    node_meta(16, ann::kNodeTagMetadataKey, "weight");
+    node_meta(16, ann::kReleaseAfterMetadataKey, "normed2");
+    // node[17] Mul(gate_silu, up) → mlp_hidden
+    node_meta(17, ann::kNodeTagMetadataKey, "weight");
+    node_meta(17, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(17, ann::kReleaseAfterMetadataKey, "gate_silu;up");
+    // node[18] MatMul(mlp_hidden, down_proj.weight) → mlp_out
+    //   mlp_hidden=[batch,seq,32] ≠ mlp_out=[batch,seq,16] → no inplace.
+    node_meta(18, ann::kNodeTagMetadataKey, "weight");
+    node_meta(18, ann::kReleaseAfterMetadataKey, "mlp_hidden");
+    // node[19] Add(hidden2, mlp_out) → hidden3
+    node_meta(19, ann::kNodeTagMetadataKey, "weight");
+    node_meta(19, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(19, ann::kReleaseAfterMetadataKey, "hidden2;mlp_out");
+    // node[20] RMSNormalization(hidden3, norm.weight) → normed_final
+    node_meta(20, ann::kNodeTagMetadataKey, "weight");
+    node_meta(20, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(20, ann::kReleaseAfterMetadataKey, "hidden3");
+    // node[21] MatMul(normed_final, lm_head.weight) → logits
+    //   normed_final=[batch,seq,16] ≠ logits=[batch,seq,32] → no inplace.
+    node_meta(21, ann::kNodeTagMetadataKey, "weight");
+    node_meta(21, ann::kReleaseAfterMetadataKey, "normed_final");
+
+    // Per-value kValueTagMetadataKey on value_info (alphabetical order, matching
+    // the AppendValueInfo calls above).
+    // value_info[0]  attn_bias
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[1]  attn_out
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(1)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[2]  attn_proj
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(2)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[3]  gate
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(3)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[4]  gate_silu
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(4)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[5]  gate_sigmoid
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(5)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[6]  hidden
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(6)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[7]  hidden2
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(7)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[8]  hidden3
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(8)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[9]  key
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(9)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[10] mask_4d → "weight" (backward-tagged via Sub)
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(10)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[11] mask_float → "weight" (backward-tagged via Unsqueeze → Sub)
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(11)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[12] mask_inv
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(12)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[13] mlp_hidden
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(13)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[14] mlp_out
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(14)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[15] normed1
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(15)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[16] normed2
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(16)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[17] normed_final
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(17)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[18] query
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(18)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[19] up
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(19)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[20] value
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(20)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+
+    // Per-value kValueTagMetadataKey on graph outputs.
+    // output[0] logits → "weight"
+    {
+      StringStringEntryProto *entry = graph->mutable_output(0)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // output[1] present_key → "weight"
+    {
+      StringStringEntryProto *entry = graph->mutable_output(1)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // output[2] present_value → "weight"
+    {
+      StringStringEntryProto *entry = graph->mutable_output(2)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+
+    // Per-value kValueTagMetadataKey on graph inputs.
+    // input[0] input_ids → "weight" (direct graph input seed)
+    {
+      StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // input[1] attention_mask → "weight" (Cast backward propagation)
+    {
+      StringStringEntryProto *entry = graph->mutable_input(1)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // input[2] past_key → "weight" (direct graph input seed)
+    {
+      StringStringEntryProto *entry = graph->mutable_input(2)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // input[3] past_value → "weight" (direct graph input seed)
+    {
+      StringStringEntryProto *entry = graph->mutable_input(3)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+
+    // Per-value kValueTagMetadataKey on initializers (insertion order, see
+    // AddInitializer calls above).
+    const auto init_meta = [&](std::size_t i, const char *tag) {
+      auto *entry = graph->mutable_initializer(i)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value(tag);
+    };
+    // initializer[0]  embed_tokens.weight → "weight"
+    init_meta(0, "weight");
+    // initializer[1]  input_layernorm.weight → "weight"
+    init_meta(1, "weight");
+    // initializer[2]  q_proj.weight → "weight"
+    init_meta(2, "weight");
+    // initializer[3]  k_proj.weight → "weight"
+    init_meta(3, "weight");
+    // initializer[4]  v_proj.weight → "weight"
+    init_meta(4, "weight");
+    // initializer[5]  o_proj.weight → "weight"
+    init_meta(5, "weight");
+    // initializer[6]  post_attention_layernorm.weight → "weight"
+    init_meta(6, "weight");
+    // initializer[7]  gate_proj.weight → "weight"
+    init_meta(7, "weight");
+    // initializer[8]  up_proj.weight → "weight"
+    init_meta(8, "weight");
+    // initializer[9]  down_proj.weight → "weight"
+    init_meta(9, "weight");
+    // initializer[10] norm.weight → "weight"
+    init_meta(10, "weight");
+    // initializer[11] lm_head.weight → "weight"
+    init_meta(11, "weight");
+    // initializer[12] mask_axes → "axes"
+    init_meta(12, "axes");
+    // initializer[13] mask_one → "weight"
+    init_meta(13, "weight");
+    // initializer[14] mask_neg → "weight"
+    init_meta(14, "weight");
+  }
 
   registry.emplace_back(std::move(tc));
 }
@@ -448,6 +795,690 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry, 
                   {"batch", DimSpec(kNumHeads), "total_seq", DimSpec(kHeadSize)});
   AppendValueInfo(*graph->add_output(), "present_value", kFloat,
                   {"batch", DimSpec(kNumHeads), "total_seq", DimSpec(kHeadSize)});
+
+  // ---- Pre-embedded metadata (shape-tag, inplace-reuse, release-after) ----
+  // present_key/present_value are now tagged "weight" because Concat gains
+  // "weight" tag when at least one input is "weight" (key_heads/value_heads).
+  // The 52 nodes are indexed 0-51 in AddNode insertion order.
+  {
+    namespace ann = core::compute;
+
+    // Graph-level value-tags JSON (all tagged tensors sorted alphabetically).
+    // Notes:
+    //   attn_scale, rms_eps, rms_axes, head_shape, merge_shape, mask_* are
+    //   initializers that get seed "weight" (or upgraded to "axes"/"shape").
+    //   mask_float and mask_4d are now tagged "weight" via Sub backward
+    //   propagation (Sub(mask_one, mask_4d)→mask_inv with mask_one="weight").
+    //   attention_mask gets "weight" via Cast backward propagation.
+    //   past_key/past_value get "weight" via Concat backward (key_heads/
+    //   value_heads are "weight" → Concat output "weight" → backward).
+    //   key_heads_t gets "weight" via Transpose of present_key (which is
+    //   "weight").
+    graph->add_metadata(ann::kValueTagsMetadataKey,
+                        "{\"attention_mask\":\"weight\","
+                        "\"attn_bias\":\"weight\",\"attn_out\":\"weight\","
+                        "\"attn_proj\":\"weight\",\"attn_scale\":\"weight\","
+                        "\"attn_weights\":\"weight\","
+                        "\"context\":\"weight\",\"context_t\":\"weight\","
+                        "\"down_proj.weight\":\"weight\","
+                        "\"embed_tokens.weight\":\"weight\","
+                        "\"gate\":\"weight\",\"gate_proj.weight\":\"weight\","
+                        "\"gate_sigmoid\":\"weight\",\"gate_silu\":\"weight\","
+                        "\"head_shape\":\"shape\","
+                        "\"hidden\":\"weight\",\"hidden2\":\"weight\",\"hidden3\":\"weight\","
+                        "\"input_ids\":\"weight\","
+                        "\"input_layernorm.weight\":\"weight\","
+                        "\"k_proj.weight\":\"weight\",\"key\":\"weight\","
+                        "\"key_4d\":\"weight\",\"key_heads\":\"weight\","
+                        "\"key_heads_t\":\"weight\","
+                        "\"lm_head.weight\":\"weight\","
+                        "\"ln1_mean\":\"weight\",\"ln1_meaneps\":\"weight\","
+                        "\"ln1_norm\":\"weight\",\"ln1_rms\":\"weight\",\"ln1_sq\":\"weight\","
+                        "\"ln2_mean\":\"weight\",\"ln2_meaneps\":\"weight\","
+                        "\"ln2_norm\":\"weight\",\"ln2_rms\":\"weight\",\"ln2_sq\":\"weight\","
+                        "\"lnf_mean\":\"weight\",\"lnf_meaneps\":\"weight\","
+                        "\"lnf_norm\":\"weight\",\"lnf_rms\":\"weight\",\"lnf_sq\":\"weight\","
+                        "\"logits\":\"weight\","
+                        "\"mask_4d\":\"weight\",\"mask_axes\":\"axes\","
+                        "\"mask_float\":\"weight\",\"mask_inv\":\"weight\","
+                        "\"mask_neg\":\"weight\",\"mask_one\":\"weight\","
+                        "\"merge_shape\":\"shape\","
+                        "\"mlp_hidden\":\"weight\",\"mlp_out\":\"weight\","
+                        "\"norm.weight\":\"weight\","
+                        "\"normed1\":\"weight\",\"normed2\":\"weight\",\"normed_final\":\"weight\","
+                        "\"o_proj.weight\":\"weight\","
+                        "\"past_key\":\"weight\",\"past_value\":\"weight\","
+                        "\"post_attention_layernorm.weight\":\"weight\","
+                        "\"present_key\":\"weight\",\"present_value\":\"weight\","
+                        "\"q_proj.weight\":\"weight\",\"query\":\"weight\","
+                        "\"query_4d\":\"weight\",\"query_heads\":\"weight\","
+                        "\"rms_axes\":\"axes\",\"rms_eps\":\"weight\","
+                        "\"scores\":\"weight\",\"scores_biased\":\"weight\","
+                        "\"scores_scaled\":\"weight\","
+                        "\"up\":\"weight\",\"up_proj.weight\":\"weight\","
+                        "\"v_proj.weight\":\"weight\","
+                        "\"value\":\"weight\",\"value_4d\":\"weight\",\"value_heads\":\"weight\"}");
+
+    // Helper: add a metadata entry to the i-th node.
+    const auto node_meta = [&](int i, const char *key, const std::string &value) {
+      (*graph->mutable_node())[static_cast<std::size_t>(i)].add_metadata(key, value);
+    };
+
+    // Node index / operation / inputs → outputs
+    // node[0]  Gather(embed_tokens.weight, input_ids) → hidden
+    node_meta(0, ann::kNodeTagMetadataKey, "weight");
+    // ---- First RMSNorm (inlined): nodes 1-6 --------------------------------
+    // node[1]  Mul(hidden, hidden) → ln1_sq
+    node_meta(1, ann::kNodeTagMetadataKey, "weight");
+    // node[2]  ReduceMean(ln1_sq, rms_axes) → ln1_mean
+    //   ln1_sq last used here → released; shapes differ → no inplace.
+    node_meta(2, ann::kNodeTagMetadataKey, "weight");
+    node_meta(2, ann::kReleaseAfterMetadataKey, "ln1_sq");
+    // node[3]  Add(ln1_mean, rms_eps) → ln1_meaneps
+    //   ln1_mean last used here → released; same [batch,seq,1] → inplace.
+    node_meta(3, ann::kNodeTagMetadataKey, "weight");
+    node_meta(3, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(3, ann::kReleaseAfterMetadataKey, "ln1_mean");
+    // node[4]  Sqrt(ln1_meaneps) → ln1_rms
+    node_meta(4, ann::kNodeTagMetadataKey, "weight");
+    node_meta(4, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(4, ann::kReleaseAfterMetadataKey, "ln1_meaneps");
+    // node[5]  Div(hidden, ln1_rms) → ln1_norm
+    //   hidden last_use=31 (residual Add below) → no inplace on hidden.
+    //   ln1_rms last used here → released; shapes differ → no inplace.
+    node_meta(5, ann::kNodeTagMetadataKey, "weight");
+    node_meta(5, ann::kReleaseAfterMetadataKey, "ln1_rms");
+    // node[6]  Mul(ln1_norm, input_layernorm.weight) → normed1
+    node_meta(6, ann::kNodeTagMetadataKey, "weight");
+    node_meta(6, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(6, ann::kReleaseAfterMetadataKey, "ln1_norm");
+    // ---- QKV projections ---------------------------------------------------
+    // node[7]  MatMul(normed1, q_proj.weight) → query
+    //   normed1 last_use=9 → not released here.
+    node_meta(7, ann::kNodeTagMetadataKey, "weight");
+    // node[8]  MatMul(normed1, k_proj.weight) → key
+    node_meta(8, ann::kNodeTagMetadataKey, "weight");
+    // node[9]  MatMul(normed1, v_proj.weight) → value
+    //   normed1 last used here → released; same [batch,seq,hidden] → inplace.
+    node_meta(9, ann::kNodeTagMetadataKey, "weight");
+    node_meta(9, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(9, ann::kReleaseAfterMetadataKey, "normed1");
+    // ---- Attention mask ----------------------------------------------------
+    // node[10] Cast(attention_mask) → mask_float
+    //   attention_mask is tagged "weight" via Cast backward propagation.
+    node_meta(10, ann::kNodeTagMetadataKey, "weight");
+    // node[11] Unsqueeze(mask_float, mask_axes) → mask_4d
+    //   mask_float inherits "weight" via Sub backward propagation; mask_float
+    //   released here; same total byte size → inplace.
+    node_meta(11, ann::kNodeTagMetadataKey, "weight");
+    node_meta(11, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(11, ann::kReleaseAfterMetadataKey, "mask_float");
+    // node[12] Sub(mask_one, mask_4d) → mask_inv
+    //   mask_4d last used here; mask_inv reuses mask_4d (input index=1).
+    node_meta(12, ann::kNodeTagMetadataKey, "weight");
+    node_meta(12, ann::kInPlaceReuseMetadataKey, "0:1:equal");
+    node_meta(12, ann::kReleaseAfterMetadataKey, "mask_4d");
+    // node[13] Mul(mask_inv, mask_neg) → attn_bias
+    node_meta(13, ann::kNodeTagMetadataKey, "weight");
+    node_meta(13, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(13, ann::kReleaseAfterMetadataKey, "mask_inv");
+    // ---- Split projections into heads ----------------------------------------
+    // node[14] Reshape(query, head_shape) → query_4d
+    //   [b,s,h]→[b,s,nh,hs]: same total byte size → kEqual.
+    node_meta(14, ann::kNodeTagMetadataKey, "weight");
+    node_meta(14, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(14, ann::kReleaseAfterMetadataKey, "query");
+    // node[15] Transpose(query_4d) → query_heads
+    //   [b,s,nh,hs]→[b,nh,s,hs]: same total byte size → kEqual.
+    node_meta(15, ann::kNodeTagMetadataKey, "weight");
+    node_meta(15, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(15, ann::kReleaseAfterMetadataKey, "query_4d");
+    // node[16] Reshape(key, head_shape) → key_4d
+    node_meta(16, ann::kNodeTagMetadataKey, "weight");
+    node_meta(16, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(16, ann::kReleaseAfterMetadataKey, "key");
+    // node[17] Transpose(key_4d) → key_heads
+    node_meta(17, ann::kNodeTagMetadataKey, "weight");
+    node_meta(17, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(17, ann::kReleaseAfterMetadataKey, "key_4d");
+    // node[18] Reshape(value, head_shape) → value_4d
+    node_meta(18, ann::kNodeTagMetadataKey, "weight");
+    node_meta(18, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(18, ann::kReleaseAfterMetadataKey, "value");
+    // node[19] Transpose(value_4d) → value_heads
+    node_meta(19, ann::kNodeTagMetadataKey, "weight");
+    node_meta(19, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(19, ann::kReleaseAfterMetadataKey, "value_4d");
+    // ---- Concat KV cache -------------------------------------------------
+    // node[20] Concat(past_key, key_heads) → present_key
+    //   key_heads has "weight" → Concat output = "weight"; backward tags
+    //   past_key "weight".
+    //   key_heads released here ([b,nh,s,hs] ≠ [b,nh,total,hs] → no inplace).
+    node_meta(20, ann::kNodeTagMetadataKey, "weight");
+    node_meta(20, ann::kReleaseAfterMetadataKey, "key_heads");
+    // node[21] Concat(past_value, value_heads) → present_value
+    //   value_heads has "weight" → Concat output = "weight"; backward tags
+    //   past_value "weight".
+    node_meta(21, ann::kNodeTagMetadataKey, "weight");
+    node_meta(21, ann::kReleaseAfterMetadataKey, "value_heads");
+    // node[22] Transpose(present_key) → key_heads_t
+    //   present_key has "weight" → key_heads_t = "weight".
+    //   present_key is a graph output (keep) → not released.
+    node_meta(22, ann::kNodeTagMetadataKey, "weight");
+    // ---- Scaled dot-product attention ------------------------------------
+    // node[23] MatMul(query_heads, key_heads_t) → scores
+    node_meta(23, ann::kNodeTagMetadataKey, "weight");
+    node_meta(23, ann::kReleaseAfterMetadataKey, "query_heads;key_heads_t");
+    // node[24] Mul(scores, attn_scale) → scores_scaled
+    node_meta(24, ann::kNodeTagMetadataKey, "weight");
+    node_meta(24, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(24, ann::kReleaseAfterMetadataKey, "scores");
+    // node[25] Add(scores_scaled, attn_bias) → scores_biased
+    //   Both inputs last used here; scores_scaled reused (inplace).
+    //   Release order: scores_scaled (input[0]), attn_bias (input[1]).
+    node_meta(25, ann::kNodeTagMetadataKey, "weight");
+    node_meta(25, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(25, ann::kReleaseAfterMetadataKey, "scores_scaled;attn_bias");
+    // node[26] Softmax(scores_biased) → attn_weights
+    node_meta(26, ann::kNodeTagMetadataKey, "weight");
+    node_meta(26, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(26, ann::kReleaseAfterMetadataKey, "scores_biased");
+    // node[27] MatMul(attn_weights, present_value) → context
+    //   [b,nh,s,total] × [b,nh,total,hs] → [b,nh,s,hs]: shapes differ → no inplace.
+    //   present_value is a graph output (keep) → not released.
+    node_meta(27, ann::kNodeTagMetadataKey, "weight");
+    node_meta(27, ann::kReleaseAfterMetadataKey, "attn_weights");
+    // node[28] Transpose(context) → context_t
+    //   [b,nh,s,hs]→[b,s,nh,hs]: same total byte size → kEqual.
+    node_meta(28, ann::kNodeTagMetadataKey, "weight");
+    node_meta(28, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(28, ann::kReleaseAfterMetadataKey, "context");
+    // node[29] Reshape(context_t, merge_shape) → attn_out
+    //   [b,s,nh,hs]→[b,s,h]: same total byte size → kEqual.
+    node_meta(29, ann::kNodeTagMetadataKey, "weight");
+    node_meta(29, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(29, ann::kReleaseAfterMetadataKey, "context_t");
+    // ---- Output projection + first residual --------------------------------
+    // node[30] MatMul(attn_out, o_proj.weight) → attn_proj
+    node_meta(30, ann::kNodeTagMetadataKey, "weight");
+    node_meta(30, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(30, ann::kReleaseAfterMetadataKey, "attn_out");
+    // node[31] Add(hidden, attn_proj) → hidden2
+    //   hidden last used here (last_use=31); same shape → inplace.
+    node_meta(31, ann::kNodeTagMetadataKey, "weight");
+    node_meta(31, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(31, ann::kReleaseAfterMetadataKey, "hidden;attn_proj");
+    // ---- Second RMSNorm (inlined): nodes 32-37 --------------------------------
+    // node[32] Mul(hidden2, hidden2) → ln2_sq
+    //   hidden2 last_use=44 (Add below) → no inplace here.
+    node_meta(32, ann::kNodeTagMetadataKey, "weight");
+    // node[33] ReduceMean(ln2_sq, rms_axes) → ln2_mean
+    node_meta(33, ann::kNodeTagMetadataKey, "weight");
+    node_meta(33, ann::kReleaseAfterMetadataKey, "ln2_sq");
+    // node[34] Add(ln2_mean, rms_eps) → ln2_meaneps
+    node_meta(34, ann::kNodeTagMetadataKey, "weight");
+    node_meta(34, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(34, ann::kReleaseAfterMetadataKey, "ln2_mean");
+    // node[35] Sqrt(ln2_meaneps) → ln2_rms
+    node_meta(35, ann::kNodeTagMetadataKey, "weight");
+    node_meta(35, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(35, ann::kReleaseAfterMetadataKey, "ln2_meaneps");
+    // node[36] Div(hidden2, ln2_rms) → ln2_norm
+    //   hidden2 last_use=44 → no inplace; ln2_rms released.
+    node_meta(36, ann::kNodeTagMetadataKey, "weight");
+    node_meta(36, ann::kReleaseAfterMetadataKey, "ln2_rms");
+    // node[37] Mul(ln2_norm, post_attention_layernorm.weight) → normed2
+    node_meta(37, ann::kNodeTagMetadataKey, "weight");
+    node_meta(37, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(37, ann::kReleaseAfterMetadataKey, "ln2_norm");
+    // ---- SwiGLU MLP -------------------------------------------------------
+    // node[38] MatMul(normed2, gate_proj.weight) → gate
+    //   normed2 last_use=41 → not released here.
+    node_meta(38, ann::kNodeTagMetadataKey, "weight");
+    // node[39] Sigmoid(gate) → gate_sigmoid
+    //   gate last_use=40 → not released here.
+    node_meta(39, ann::kNodeTagMetadataKey, "weight");
+    // node[40] Mul(gate, gate_sigmoid) → gate_silu
+    node_meta(40, ann::kNodeTagMetadataKey, "weight");
+    node_meta(40, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(40, ann::kReleaseAfterMetadataKey, "gate;gate_sigmoid");
+    // node[41] MatMul(normed2, up_proj.weight) → up
+    //   normed2 last used here → released; [b,s,h] ≠ [b,s,i] → no inplace.
+    node_meta(41, ann::kNodeTagMetadataKey, "weight");
+    node_meta(41, ann::kReleaseAfterMetadataKey, "normed2");
+    // node[42] Mul(gate_silu, up) → mlp_hidden
+    node_meta(42, ann::kNodeTagMetadataKey, "weight");
+    node_meta(42, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(42, ann::kReleaseAfterMetadataKey, "gate_silu;up");
+    // node[43] MatMul(mlp_hidden, down_proj.weight) → mlp_out
+    //   [b,s,i] ≠ [b,s,h] → no inplace.
+    node_meta(43, ann::kNodeTagMetadataKey, "weight");
+    node_meta(43, ann::kReleaseAfterMetadataKey, "mlp_hidden");
+    // node[44] Add(hidden2, mlp_out) → hidden3
+    node_meta(44, ann::kNodeTagMetadataKey, "weight");
+    node_meta(44, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(44, ann::kReleaseAfterMetadataKey, "hidden2;mlp_out");
+    // ---- Final RMSNorm (inlined): nodes 45-50 --------------------------------
+    // node[45] Mul(hidden3, hidden3) → lnf_sq
+    //   hidden3 last_use=49 (Div below) → no inplace here.
+    node_meta(45, ann::kNodeTagMetadataKey, "weight");
+    // node[46] ReduceMean(lnf_sq, rms_axes) → lnf_mean
+    node_meta(46, ann::kNodeTagMetadataKey, "weight");
+    node_meta(46, ann::kReleaseAfterMetadataKey, "lnf_sq");
+    // node[47] Add(lnf_mean, rms_eps) → lnf_meaneps
+    node_meta(47, ann::kNodeTagMetadataKey, "weight");
+    node_meta(47, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(47, ann::kReleaseAfterMetadataKey, "lnf_mean");
+    // node[48] Sqrt(lnf_meaneps) → lnf_rms
+    node_meta(48, ann::kNodeTagMetadataKey, "weight");
+    node_meta(48, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(48, ann::kReleaseAfterMetadataKey, "lnf_meaneps");
+    // node[49] Div(hidden3, lnf_rms) → lnf_norm
+    //   hidden3 and lnf_rms both last used here; hidden3 reused (inplace).
+    //   Release order: hidden3 (input[0]), lnf_rms (input[1]).
+    node_meta(49, ann::kNodeTagMetadataKey, "weight");
+    node_meta(49, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(49, ann::kReleaseAfterMetadataKey, "hidden3;lnf_rms");
+    // node[50] Mul(lnf_norm, norm.weight) → normed_final
+    node_meta(50, ann::kNodeTagMetadataKey, "weight");
+    node_meta(50, ann::kInPlaceReuseMetadataKey, "0:0:equal");
+    node_meta(50, ann::kReleaseAfterMetadataKey, "lnf_norm");
+    // node[51] MatMul(normed_final, lm_head.weight) → logits
+    //   [b,s,h] ≠ [b,s,vocab] → no inplace.
+    node_meta(51, ann::kNodeTagMetadataKey, "weight");
+    node_meta(51, ann::kReleaseAfterMetadataKey, "normed_final");
+
+    // Per-value kValueTagMetadataKey on value_info (alphabetical order,
+    // matching the AppendValueInfo calls above).
+    // value_info[0]  attn_bias
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[1]  attn_out
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(1)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[2]  attn_proj
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(2)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[3]  attn_weights
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(3)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[4]  context
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(4)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[5]  context_t
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(5)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[6]  gate
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(6)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[7]  gate_silu
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(7)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[8]  gate_sigmoid
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(8)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[9]  hidden
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(9)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[10] hidden2
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(10)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[11] hidden3
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(11)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[12] key
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(12)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[13] key_4d
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(13)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[14] key_heads
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(14)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[15] key_heads_t → "weight" (Transpose of present_key which is "weight")
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(15)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[16] ln1_mean
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(16)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[17] ln1_meaneps
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(17)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[18] ln1_norm
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(18)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[19] ln1_rms
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(19)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[20] ln1_sq
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(20)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[21] ln2_mean
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(21)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[22] ln2_meaneps
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(22)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[23] ln2_norm
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(23)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[24] ln2_rms
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(24)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[25] ln2_sq
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(25)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[26] lnf_mean
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(26)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[27] lnf_meaneps
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(27)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[28] lnf_norm
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(28)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[29] lnf_rms
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(29)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[30] lnf_sq
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(30)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[31] mask_4d → "weight" (backward-tagged via Sub)
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(31)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[32] mask_float → "weight" (backward-tagged via Unsqueeze → Sub)
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(32)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[33] mask_inv
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(33)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[34] mlp_hidden
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(34)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[35] mlp_out
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(35)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[36] normed1
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(36)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[37] normed2
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(37)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[38] normed_final
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(38)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[39] query
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(39)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[40] query_4d
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(40)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[41] query_heads
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(41)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[42] scores
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(42)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[43] scores_biased
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(43)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[44] scores_scaled
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(44)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[45] up
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(45)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[46] value
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(46)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[47] value_4d
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(47)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[48] value_heads
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(48)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+
+    // Per-value kValueTagMetadataKey on graph outputs.
+    // output[0] logits → "weight"
+    {
+      StringStringEntryProto *entry = graph->mutable_output(0)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // output[1] present_key → "weight" (Concat with key_heads which is "weight")
+    {
+      StringStringEntryProto *entry = graph->mutable_output(1)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // output[2] present_value → "weight" (Concat with value_heads which is "weight")
+    {
+      StringStringEntryProto *entry = graph->mutable_output(2)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+
+    // Per-value kValueTagMetadataKey on graph inputs.
+    // input[0] input_ids → "weight" (direct graph input seed)
+    {
+      StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // input[1] attention_mask → "weight" (Cast backward propagation)
+    {
+      StringStringEntryProto *entry = graph->mutable_input(1)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // input[2] past_key → "weight" (Concat backward from present_key="weight")
+    {
+      StringStringEntryProto *entry = graph->mutable_input(2)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // input[3] past_value → "weight" (Concat backward from present_value="weight")
+    {
+      StringStringEntryProto *entry = graph->mutable_input(3)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+
+    // Per-value kValueTagMetadataKey on initializers (insertion order, see
+    // AddInitializer calls above).
+    const auto init_meta = [&](std::size_t i, const char *tag) {
+      auto *entry = graph->mutable_initializer(i)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value(tag);
+    };
+    // initializer[0]  embed_tokens.weight → "weight"
+    init_meta(0, "weight");
+    // initializer[1]  input_layernorm.weight → "weight"
+    init_meta(1, "weight");
+    // initializer[2]  q_proj.weight → "weight"
+    init_meta(2, "weight");
+    // initializer[3]  k_proj.weight → "weight"
+    init_meta(3, "weight");
+    // initializer[4]  v_proj.weight → "weight"
+    init_meta(4, "weight");
+    // initializer[5]  o_proj.weight → "weight"
+    init_meta(5, "weight");
+    // initializer[6]  post_attention_layernorm.weight → "weight"
+    init_meta(6, "weight");
+    // initializer[7]  gate_proj.weight → "weight"
+    init_meta(7, "weight");
+    // initializer[8]  up_proj.weight → "weight"
+    init_meta(8, "weight");
+    // initializer[9]  down_proj.weight → "weight"
+    init_meta(9, "weight");
+    // initializer[10] norm.weight → "weight"
+    init_meta(10, "weight");
+    // initializer[11] lm_head.weight → "weight"
+    init_meta(11, "weight");
+    // initializer[12] rms_axes → "axes"
+    init_meta(12, "axes");
+    // initializer[13] rms_eps → "weight"
+    init_meta(13, "weight");
+    // initializer[14] head_shape → "shape"
+    init_meta(14, "shape");
+    // initializer[15] merge_shape → "shape"
+    init_meta(15, "shape");
+    // initializer[16] attn_scale → "weight"
+    init_meta(16, "weight");
+    // initializer[17] mask_axes → "axes"
+    init_meta(17, "axes");
+    // initializer[18] mask_one → "weight"
+    init_meta(18, "weight");
+    // initializer[19] mask_neg → "weight"
+    init_meta(19, "weight");
+  }
 
   registry.emplace_back(std::move(tc));
 }

@@ -26,11 +26,15 @@ _RELEASE_METADATA_KEYS = frozenset(
 # The in-place-reuse pass ("inplace" cases) writes both the in-place-reuse key
 # and the value-lifetime/release keys, so an "inplace" case legitimately carries
 # the release metadata as well. "release" cases carry only the release keys and
-# "shape_tag" cases only the shape-tag keys.
+# "shape_tag" cases only the shape-tag keys. The multi-node "inference"
+# shape-inference cases (test_cc_shape_inference_*) pre-embed the golden output
+# of every metadata pass so TestBackendMetadataCoverage / BigModelsInplaceInfo
+# can verify the computed metadata against it, hence they may carry all keys.
 _TAGGED_METADATA_KEYS = {
     "inplace": _INPLACE_METADATA_KEYS | _RELEASE_METADATA_KEYS,
     "shape_tag": _SHAPE_TAG_METADATA_KEYS,
     "release": _RELEASE_METADATA_KEYS,
+    "inference": _INPLACE_METADATA_KEYS | _SHAPE_TAG_METADATA_KEYS | _RELEASE_METADATA_KEYS,
 }
 _ALL_FEATURE_METADATA_KEYS = (
     _INPLACE_METADATA_KEYS | _SHAPE_TAG_METADATA_KEYS | _RELEASE_METADATA_KEYS

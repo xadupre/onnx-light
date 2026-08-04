@@ -5,10 +5,13 @@
 #include "onnx_extensions/backend_test/cases_for_shapes/inference/include_inference_cases.h"
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/compute/inplace_reuse.h"
+#include "onnx_core/compute/value_tags.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -162,106 +165,172 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
   AddInitializer<uint16_t>(*graph, "model.norm.weight", {INT64_C(1024)}, {});
   AddInitializer<uint16_t>(*graph, "lm_head.weight", {INT64_C(32000), INT64_C(1024)}, {});
 
+  // Golden shape-inference / in-place-reuse metadata, attached to each node as
+  // it is created and verified by BigModelsInplaceInfo.
+  const auto tag = [](NodeProto &n, const char *node_tag, const std::string &inplace,
+                      const std::string &release_after,
+                      const std::string &release_after_shape_tag) {
+    n.add_metadata(core::compute::kNodeTagMetadataKey, node_tag);
+    if (!inplace.empty()) {
+      n.add_metadata(core::compute::kInPlaceReuseMetadataKey, inplace);
+    }
+    if (!release_after.empty()) {
+      n.add_metadata(core::compute::kReleaseAfterMetadataKey, release_after);
+    }
+    if (!release_after_shape_tag.empty()) {
+      n.add_metadata(core::compute::kReleaseAfterShapeTagMetadataKey, release_after_shape_tag);
+    }
+  };
+
   // ---- Nodes --------------------------------------------------------------
   // Constant nodes have been promoted to initializers above.
   {
     NodeProto &n = AddNode(*graph, "Shape", {"input_ids"}, {"input_ids::Shape1:2"});
+    tag(n, "shape", "", "", "");
     AddAttribute<int64_t>(n, "end", INT64_C(2));
     AddAttribute<int64_t>(n, "start", INT64_C(1));
   }
   {
     NodeProto &n =
         AddNode(*graph, "Shape", {"past_key_values_key_0"}, {"past_key_values_key_0::Shape2:3"});
+    tag(n, "shape", "", "", "");
     AddAttribute<int64_t>(n, "end", INT64_C(3));
     AddAttribute<int64_t>(n, "start", INT64_C(2));
   }
   {
     NodeProto &n =
         AddNode(*graph, "Shape", {"past_key_values_value_2"}, {"past_key_values_value_2::Shape:1"});
+    tag(n, "shape", "", "", "");
     AddAttribute<int64_t>(n, "end", INT64_C(1));
     AddAttribute<int64_t>(n, "start", INT64_C(0));
   }
-  AddNode(*graph, "Add", {"input_ids::Shape1:2", "past_key_values_key_0::Shape2:3"},
-          {"SqueezeAddPattern_SwapRangeAddScalarPattern--sym_size_int_25"});
-  AddNode(*graph, "Squeeze", {"past_key_values_key_0::Shape2:3"}, {"dim1::Sq__1"});
-  AddNode(*graph, "Squeeze", {"SqueezeAddPattern_SwapRangeAddScalarPattern--sym_size_int_25"},
-          {"dim2::Sq__1"});
-  AddNode(*graph, "Range", {"dim1::Sq__1", "dim2::Sq__1", "init7_s_1__1"},
-          {"_onx_range_dim1::Sq__1"});
-  AddNode(*graph, "Unsqueeze", {"_onx_range_dim1::Sq__1", "init7_s2_0_1__1"},
-          {"_onx_range_dim1::Sq::UnSq0x1__1"});
+  tag(AddNode(*graph, "Add", {"input_ids::Shape1:2", "past_key_values_key_0::Shape2:3"},
+              {"SqueezeAddPattern_SwapRangeAddScalarPattern--sym_size_int_25"}),
+      "shape", "0:0:equal", "input_ids::Shape1:2", "input_ids::Shape1:2");
+  tag(AddNode(*graph, "Squeeze", {"past_key_values_key_0::Shape2:3"}, {"dim1::Sq__1"}), "shape", "",
+      "", "");
+  tag(AddNode(*graph, "Squeeze", {"SqueezeAddPattern_SwapRangeAddScalarPattern--sym_size_int_25"},
+              {"dim2::Sq__1"}),
+      "shape", "", "", "");
+  tag(AddNode(*graph, "Range", {"dim1::Sq__1", "dim2::Sq__1", "init7_s_1__1"},
+              {"_onx_range_dim1::Sq__1"}),
+      "shape", "", "dim1::Sq__1;dim2::Sq__1", "dim1::Sq__1;dim2::Sq__1");
+  tag(AddNode(*graph, "Unsqueeze", {"_onx_range_dim1::Sq__1", "init7_s2_0_1__1"},
+              {"_onx_range_dim1::Sq::UnSq0x1__1"}),
+      "shape", "0:0:equal", "_onx_range_dim1::Sq__1", "_onx_range_dim1::Sq__1");
   {
     NodeProto &n = AddNode(*graph, "Cast", {"_onx_range_dim1::Sq::UnSq0x1__1"},
                            {"_onx_range_dim1::Sq::UnSq0x1::C1__1"});
+    tag(n, "shape", "", "_onx_range_dim1::Sq::UnSq0x1__1", "_onx_range_dim1::Sq::UnSq0x1__1");
     AddAttribute<int64_t>(n, "to", INT64_C(1));
   }
-  AddNode(*graph, "Reshape", {"_onx_range_dim1::Sq::UnSq0x1::C1__1", "init7_s3_0_-1_1__1"},
-          {"_onx_range_dim1::Sq::UnSq0x1::C1::RSh0x-1x1__1"});
-  AddNode(*graph, "Mul", {"to_322", "_onx_range_dim1::Sq::UnSq0x1::C1::RSh0x-1x1__1"},
-          {"_onx_mul_weights__1"});
-  AddNode(*graph, "Cos", {"_onx_mul_weights__1"}, {"_onx_cos_mul_weights__1"});
-  AddNode(*graph, "Sin", {"_onx_mul_weights__1"}, {"_onx_sin_mul_weights__1"});
+  tag(AddNode(*graph, "Reshape", {"_onx_range_dim1::Sq::UnSq0x1::C1__1", "init7_s3_0_-1_1__1"},
+              {"_onx_range_dim1::Sq::UnSq0x1::C1::RSh0x-1x1__1"}),
+      "shape", "0:0:equal", "_onx_range_dim1::Sq::UnSq0x1::C1__1",
+      "_onx_range_dim1::Sq::UnSq0x1::C1__1");
+  tag(AddNode(*graph, "Mul", {"to_322", "_onx_range_dim1::Sq::UnSq0x1::C1::RSh0x-1x1__1"},
+              {"_onx_mul_weights__1"}),
+      "weight", "", "_onx_range_dim1::Sq::UnSq0x1::C1::RSh0x-1x1__1",
+      "_onx_range_dim1::Sq::UnSq0x1::C1::RSh0x-1x1__1");
+  tag(AddNode(*graph, "Cos", {"_onx_mul_weights__1"}, {"_onx_cos_mul_weights__1"}), "weight", "",
+      "", "");
+  tag(AddNode(*graph, "Sin", {"_onx_mul_weights__1"}, {"_onx_sin_mul_weights__1"}), "weight",
+      "0:0:equal", "_onx_mul_weights__1", "");
   {
     NodeProto &n = AddNode(*graph, "Cast", {"_onx_cos_mul_weights__1"}, {"uoutput_0"});
+    tag(n, "weight", "", "_onx_cos_mul_weights__1", "");
     AddAttribute<int64_t>(n, "to", INT64_C(10));
   }
   {
     NodeProto &n = AddNode(*graph, "Cast", {"_onx_sin_mul_weights__1"}, {"uoutput_1"});
+    tag(n, "weight", "", "_onx_sin_mul_weights__1", "");
     AddAttribute<int64_t>(n, "to", INT64_C(10));
   }
-  AddNode(*graph, "Squeeze", {"past_key_values_key_0::Shape2:3"}, {"A::Sq__2"});
-  AddNode(*graph, "Squeeze", {"SqueezeAddPattern_SwapRangeAddScalarPattern--sym_size_int_25"},
-          {"B::Sq__2"});
-  AddNode(*graph, "Range", {"init7_s_0__2", "B::Sq__2", "init7_s_1__2"},
-          {"_onx_range_init7_s_0__2"});
-  AddNode(*graph, "Range", {"A::Sq__2", "B::Sq__2", "init7_s_1__2"}, {"_onx_range_A::Sq__2"});
-  AddNode(*graph, "Unsqueeze", {"_onx_range_init7_s_0__2", "init7_s3_0_1_2__2"},
-          {"_onx_range_init7_s_0::UnSq0x1x2__2"});
-  AddNode(*graph, "Unsqueeze", {"_onx_range_A::Sq__2", "init7_s3_0_1_3__2"},
-          {"_onx_range_A::Sq::UnSq0x1x3__2"});
-  AddNode(*graph, "LessOrEqual",
-          {"_onx_range_init7_s_0::UnSq0x1x2__2", "_onx_range_A::Sq::UnSq0x1x3__2"}, {"le_3"});
-  AddNode(*graph, "Gather", {"lm_head.weight", "input_ids"}, {"embedding"});
+  tag(AddNode(*graph, "Squeeze", {"past_key_values_key_0::Shape2:3"}, {"A::Sq__2"}), "shape",
+      "0:0:equal", "past_key_values_key_0::Shape2:3", "past_key_values_key_0::Shape2:3");
+  tag(AddNode(*graph, "Squeeze", {"SqueezeAddPattern_SwapRangeAddScalarPattern--sym_size_int_25"},
+              {"B::Sq__2"}),
+      "shape", "", "", "");
+  tag(AddNode(*graph, "Range", {"init7_s_0__2", "B::Sq__2", "init7_s_1__2"},
+              {"_onx_range_init7_s_0__2"}),
+      "weight", "", "", "");
+  tag(AddNode(*graph, "Range", {"A::Sq__2", "B::Sq__2", "init7_s_1__2"}, {"_onx_range_A::Sq__2"}),
+      "shape", "", "A::Sq__2;B::Sq__2", "A::Sq__2;B::Sq__2");
+  tag(AddNode(*graph, "Unsqueeze", {"_onx_range_init7_s_0__2", "init7_s3_0_1_2__2"},
+              {"_onx_range_init7_s_0::UnSq0x1x2__2"}),
+      "weight", "0:0:equal", "_onx_range_init7_s_0__2", "");
+  tag(AddNode(*graph, "Unsqueeze", {"_onx_range_A::Sq__2", "init7_s3_0_1_3__2"},
+              {"_onx_range_A::Sq::UnSq0x1x3__2"}),
+      "shape", "0:0:equal", "_onx_range_A::Sq__2", "_onx_range_A::Sq__2");
+  tag(AddNode(*graph, "LessOrEqual",
+              {"_onx_range_init7_s_0::UnSq0x1x2__2", "_onx_range_A::Sq::UnSq0x1x3__2"}, {"le_3"}),
+      "weight", "", "_onx_range_init7_s_0::UnSq0x1x2__2;_onx_range_A::Sq::UnSq0x1x3__2",
+      "_onx_range_A::Sq::UnSq0x1x3__2");
+  tag(AddNode(*graph, "Gather", {"lm_head.weight", "input_ids"}, {"embedding"}), "weight", "", "",
+      "");
   {
     NodeProto &n = AddNode(*graph, "Cast", {"attention_mask"}, {"to"});
+    tag(n, "weight", "", "", "");
     AddAttribute<int64_t>(n, "to", INT64_C(9));
   }
   {
     NodeProto &n = AddNode(*graph, "Shape", {"to"}, {"to::Shape-1:"});
+    tag(n, "shape", "", "", "");
     AddAttribute<int64_t>(n, "start", INT64_C(-1));
   }
-  AddNode(*graph, "Squeeze", {"SqueezeAddPattern_SwapRangeAddScalarPattern--sym_size_int_25"},
-          {"A::Sq__3"});
-  AddNode(*graph, "Squeeze", {"past_key_values_value_2::Shape:1"}, {"B::Sq__3"});
-  AddNode(*graph, "Range", {"init7_s_0__3", "A::Sq__3", "init7_s_1__3"},
-          {"_onx_range_init7_s_0__3"});
-  AddNode(*graph, "Range", {"init7_s_0__3", "B::Sq__3", "init7_s_1__3"},
-          {"_onx_range_init7_s_02__3"});
-  AddNode(*graph, "Unsqueeze", {"_onx_range_init7_s_0__3", "init7_s3_0_1_2__3"},
-          {"_onx_range_init7_s_0::UnSq0x1x2__3"});
-  AddNode(*graph, "Unsqueeze", {"_onx_range_init7_s_02__3", "init7_s3_1_2_3__3"},
-          {"_onx_range_init7_s_02::UnSq1x2x3__3"});
-  AddNode(*graph, "Mul", {"_onx_range_init7_s_02::UnSq1x2x3__3", "to::Shape-1:"},
-          {"_onx_mul_range_init7_s_02::UnSq1x2x3__3"});
-  AddNode(*graph, "Add",
-          {"_onx_mul_range_init7_s_02::UnSq1x2x3__3", "_onx_range_init7_s_0::UnSq0x1x2__3"},
-          {"_onx_add_unsqueeze_12"});
-  AddNode(*graph, "Shape", {"_onx_add_unsqueeze_12"}, {"_onx_add_unsqueeze_12::Shape:"});
-  AddNode(*graph, "Reshape", {"to", "init7_s1_-1"}, {"to::RSh-1"});
-  AddNode(*graph, "Reshape", {"_onx_add_unsqueeze_12", "init7_s1_-1"},
-          {"_onx_add_unsqueeze_12::RSh-1"});
-  AddNode(*graph, "Gather", {"to::RSh-1", "_onx_add_unsqueeze_12::RSh-1"},
-          {"_onx_gather_to::RSh-1"});
-  AddNode(*graph, "Reshape", {"_onx_gather_to::RSh-1", "_onx_add_unsqueeze_12::Shape:"}, {"index"});
-  AddNode(*graph, "And", {"le_3", "index"}, {"and_2"});
-  AddNode(*graph, "Unsqueeze", {"uoutput_0", "init7_s1_1"}, {"uunsqueeze_16"});
+  tag(AddNode(*graph, "Squeeze", {"SqueezeAddPattern_SwapRangeAddScalarPattern--sym_size_int_25"},
+              {"A::Sq__3"}),
+      "shape", "0:0:equal", "SqueezeAddPattern_SwapRangeAddScalarPattern--sym_size_int_25",
+      "SqueezeAddPattern_SwapRangeAddScalarPattern--sym_size_int_25");
+  tag(AddNode(*graph, "Squeeze", {"past_key_values_value_2::Shape:1"}, {"B::Sq__3"}), "shape",
+      "0:0:equal", "past_key_values_value_2::Shape:1", "past_key_values_value_2::Shape:1");
+  tag(AddNode(*graph, "Range", {"init7_s_0__3", "A::Sq__3", "init7_s_1__3"},
+              {"_onx_range_init7_s_0__3"}),
+      "weight", "", "A::Sq__3", "A::Sq__3");
+  tag(AddNode(*graph, "Range", {"init7_s_0__3", "B::Sq__3", "init7_s_1__3"},
+              {"_onx_range_init7_s_02__3"}),
+      "weight", "", "B::Sq__3", "B::Sq__3");
+  tag(AddNode(*graph, "Unsqueeze", {"_onx_range_init7_s_0__3", "init7_s3_0_1_2__3"},
+              {"_onx_range_init7_s_0::UnSq0x1x2__3"}),
+      "weight", "0:0:equal", "_onx_range_init7_s_0__3", "");
+  tag(AddNode(*graph, "Unsqueeze", {"_onx_range_init7_s_02__3", "init7_s3_1_2_3__3"},
+              {"_onx_range_init7_s_02::UnSq1x2x3__3"}),
+      "weight", "0:0:equal", "_onx_range_init7_s_02__3", "");
+  tag(AddNode(*graph, "Mul", {"_onx_range_init7_s_02::UnSq1x2x3__3", "to::Shape-1:"},
+              {"_onx_mul_range_init7_s_02::UnSq1x2x3__3"}),
+      "weight", "0:0:equal", "_onx_range_init7_s_02::UnSq1x2x3__3;to::Shape-1:", "to::Shape-1:");
+  tag(AddNode(*graph, "Add",
+              {"_onx_mul_range_init7_s_02::UnSq1x2x3__3", "_onx_range_init7_s_0::UnSq0x1x2__3"},
+              {"_onx_add_unsqueeze_12"}),
+      "weight", "", "_onx_mul_range_init7_s_02::UnSq1x2x3__3;_onx_range_init7_s_0::UnSq0x1x2__3",
+      "");
+  tag(AddNode(*graph, "Shape", {"_onx_add_unsqueeze_12"}, {"_onx_add_unsqueeze_12::Shape:"}),
+      "shape", "", "", "");
+  tag(AddNode(*graph, "Reshape", {"to", "init7_s1_-1"}, {"to::RSh-1"}), "weight", "0:0:equal", "to",
+      "");
+  tag(AddNode(*graph, "Reshape", {"_onx_add_unsqueeze_12", "init7_s1_-1"},
+              {"_onx_add_unsqueeze_12::RSh-1"}),
+      "weight", "0:0:equal", "_onx_add_unsqueeze_12", "");
+  tag(AddNode(*graph, "Gather", {"to::RSh-1", "_onx_add_unsqueeze_12::RSh-1"},
+              {"_onx_gather_to::RSh-1"}),
+      "weight", "", "to::RSh-1;_onx_add_unsqueeze_12::RSh-1", "");
+  tag(AddNode(*graph, "Reshape", {"_onx_gather_to::RSh-1", "_onx_add_unsqueeze_12::Shape:"},
+              {"index"}),
+      "weight", "0:0:equal",
+      "_onx_gather_to::RSh-1;_onx_add_unsqueeze_12::Shape:", "_onx_add_unsqueeze_12::Shape:");
+  tag(AddNode(*graph, "And", {"le_3", "index"}, {"and_2"}), "weight", "", "le_3;index", "");
+  tag(AddNode(*graph, "Unsqueeze", {"uoutput_0", "init7_s1_1"}, {"uunsqueeze_16"}), "weight",
+      "0:0:equal", "uoutput_0", "");
   {
     NodeProto &n = AddNode(*graph, "Concat", {"uunsqueeze_16", "uunsqueeze_16"}, {"unsqueeze_16"});
+    tag(n, "weight", "", "uunsqueeze_16", "");
     AddAttribute<int64_t>(n, "axis", INT64_C(-1));
   }
-  AddNode(*graph, "Unsqueeze", {"uoutput_1", "init7_s1_1"}, {"uunsqueeze_17"});
+  tag(AddNode(*graph, "Unsqueeze", {"uoutput_1", "init7_s1_1"}, {"uunsqueeze_17"}), "weight",
+      "0:0:equal", "uoutput_1", "");
   {
     NodeProto &n = AddNode(*graph, "Concat", {"uunsqueeze_17", "uunsqueeze_17"}, {"unsqueeze_17"});
+    tag(n, "weight", "", "uunsqueeze_17", "");
     AddAttribute<int64_t>(n, "axis", INT64_C(-1));
   }
 
@@ -282,112 +351,149 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
     // Pre-attention RMSNorm (input_layernorm).
     {
       NodeProto &n = AddNode(*graph, "Cast", {layer_input}, {make_layer_name("f32")});
+      tag(n, "weight", "", "", "");
       AddAttribute<int64_t>(n, "to", INT64_C(1));
     }
-    AddNode(*graph, "Pow", {make_layer_name("f32"), "init1_s_"}, {make_layer_name("pow_pre")});
+    tag(AddNode(*graph, "Pow", {make_layer_name("f32"), "init1_s_"}, {make_layer_name("pow_pre")}),
+        "weight", "", "", "");
     {
       NodeProto &n = AddNode(*graph, "ReduceMean", {make_layer_name("pow_pre"), "init7_s1_-1"},
                              {make_layer_name("mean_pre")});
+      tag(n, "weight", "", "layer_" + li + "_pow_pre", "");
       AddAttribute<int64_t>(n, "keepdims", INT64_C(1));
     }
-    AddNode(*graph, "Add", {make_layer_name("mean_pre"), "init1_s_2::RSh1"},
-            {make_layer_name("add_pre")});
-    AddNode(*graph, "Sqrt", {make_layer_name("add_pre")}, {make_layer_name("sqrt_pre")});
-    AddNode(*graph, "Reciprocal", {make_layer_name("sqrt_pre")}, {make_layer_name("rsqrt_pre")});
-    AddNode(*graph, "Mul", {make_layer_name("f32"), make_layer_name("rsqrt_pre")},
-            {make_layer_name("mul_pre")});
+    tag(AddNode(*graph, "Add", {make_layer_name("mean_pre"), "init1_s_2::RSh1"},
+                {make_layer_name("add_pre")}),
+        "weight", "0:0:equal", "layer_" + li + "_mean_pre", "");
+    tag(AddNode(*graph, "Sqrt", {make_layer_name("add_pre")}, {make_layer_name("sqrt_pre")}),
+        "weight", "0:0:equal", "layer_" + li + "_add_pre", "");
+    tag(AddNode(*graph, "Reciprocal", {make_layer_name("sqrt_pre")},
+                {make_layer_name("rsqrt_pre")}),
+        "weight", "0:0:equal", "layer_" + li + "_sqrt_pre", "");
+    tag(AddNode(*graph, "Mul", {make_layer_name("f32"), make_layer_name("rsqrt_pre")},
+                {make_layer_name("mul_pre")}),
+        "weight", "0:0:equal", "layer_" + li + "_f32;layer_" + li + "_rsqrt_pre", "");
     {
       NodeProto &n =
           AddNode(*graph, "Cast", {make_layer_name("mul_pre")}, {make_layer_name("normed_half")});
+      tag(n, "weight", "", "layer_" + li + "_mul_pre", "");
       AddAttribute<int64_t>(n, "to", INT64_C(10));
     }
-    AddNode(*graph, "Mul",
-            {norm_prefix + ".input_layernorm.weight", make_layer_name("normed_half")},
-            {make_layer_name("normed")});
+    tag(AddNode(*graph, "Mul",
+                {norm_prefix + ".input_layernorm.weight", make_layer_name("normed_half")},
+                {make_layer_name("normed")}),
+        "weight", "0:1:equal", "layer_" + li + "_normed_half", "");
 
     // Q projection + q_norm + transpose.
-    AddNode(*graph, "MatMul",
-            {make_layer_name("normed"), weight_prefix + "_self_attn_q_proj_weight::T10"},
-            {make_layer_name("q_mm")});
+    tag(AddNode(*graph, "MatMul",
+                {make_layer_name("normed"), weight_prefix + "_self_attn_q_proj_weight::T10"},
+                {make_layer_name("q_mm")}),
+        "weight", "", "", "");
     {
       NodeProto &n = AddNode(*graph, "Cast", {make_layer_name("q_mm")}, {make_layer_name("q_f32")});
+      tag(n, "weight", "", "layer_" + li + "_q_mm", "");
       AddAttribute<int64_t>(n, "to", INT64_C(1));
     }
-    AddNode(*graph, "Reshape", {make_layer_name("q_f32"), "init7_s4_0_0_16_128"},
-            {make_layer_name("q_4d")});
-    AddNode(*graph, "Pow", {make_layer_name("q_4d"), "init1_s_"}, {make_layer_name("pow_q")});
+    tag(AddNode(*graph, "Reshape", {make_layer_name("q_f32"), "init7_s4_0_0_16_128"},
+                {make_layer_name("q_4d")}),
+        "weight", "0:0:equal", "layer_" + li + "_q_f32", "");
+    tag(AddNode(*graph, "Pow", {make_layer_name("q_4d"), "init1_s_"}, {make_layer_name("pow_q")}),
+        "weight", "", "", "");
     {
       NodeProto &n = AddNode(*graph, "ReduceMean", {make_layer_name("pow_q"), "init7_s1_-1"},
                              {make_layer_name("mean_q")});
+      tag(n, "weight", "", "layer_" + li + "_pow_q", "");
       AddAttribute<int64_t>(n, "keepdims", INT64_C(1));
     }
-    AddNode(*graph, "Add", {make_layer_name("mean_q"), "init1_s_2::RSh1"},
-            {make_layer_name("add_q")});
-    AddNode(*graph, "Sqrt", {make_layer_name("add_q")}, {make_layer_name("sqrt_q")});
-    AddNode(*graph, "Reciprocal", {make_layer_name("sqrt_q")}, {make_layer_name("rsqrt_q")});
-    AddNode(*graph, "Mul", {make_layer_name("q_4d"), make_layer_name("rsqrt_q")},
-            {make_layer_name("mul_q")});
+    tag(AddNode(*graph, "Add", {make_layer_name("mean_q"), "init1_s_2::RSh1"},
+                {make_layer_name("add_q")}),
+        "weight", "0:0:equal", "layer_" + li + "_mean_q", "");
+    tag(AddNode(*graph, "Sqrt", {make_layer_name("add_q")}, {make_layer_name("sqrt_q")}), "weight",
+        "0:0:equal", "layer_" + li + "_add_q", "");
+    tag(AddNode(*graph, "Reciprocal", {make_layer_name("sqrt_q")}, {make_layer_name("rsqrt_q")}),
+        "weight", "0:0:equal", "layer_" + li + "_sqrt_q", "");
+    tag(AddNode(*graph, "Mul", {make_layer_name("q_4d"), make_layer_name("rsqrt_q")},
+                {make_layer_name("mul_q")}),
+        "weight", "0:0:equal", "layer_" + li + "_q_4d;layer_" + li + "_rsqrt_q", "");
     {
       NodeProto &n =
           AddNode(*graph, "Cast", {make_layer_name("mul_q")}, {make_layer_name("q_normed_half")});
+      tag(n, "weight", "", "layer_" + li + "_mul_q", "");
       AddAttribute<int64_t>(n, "to", INT64_C(10));
     }
-    AddNode(*graph, "Mul",
-            {norm_prefix + ".self_attn.q_norm.weight", make_layer_name("q_normed_half")},
-            {make_layer_name("q_normed")});
+    tag(AddNode(*graph, "Mul",
+                {norm_prefix + ".self_attn.q_norm.weight", make_layer_name("q_normed_half")},
+                {make_layer_name("q_normed")}),
+        "weight", "0:1:equal", "layer_" + li + "_q_normed_half", "");
     {
       NodeProto &n =
           AddNode(*graph, "Transpose", {make_layer_name("q_normed")}, {make_layer_name("q_T")});
+      tag(n, "weight", "0:0:equal", "layer_" + li + "_q_normed", "");
       AddAttribute<std::vector<int64_t>>(n, "perm",
                                          {INT64_C(0), INT64_C(2), INT64_C(1), INT64_C(3)});
     }
 
     // K projection + k_norm + transpose.
-    AddNode(*graph, "MatMul",
-            {make_layer_name("normed"), weight_prefix + "_self_attn_k_proj_weight::T10"},
-            {make_layer_name("k_mm")});
+    tag(AddNode(*graph, "MatMul",
+                {make_layer_name("normed"), weight_prefix + "_self_attn_k_proj_weight::T10"},
+                {make_layer_name("k_mm")}),
+        "weight", "", "", "");
     {
       NodeProto &n = AddNode(*graph, "Cast", {make_layer_name("k_mm")}, {make_layer_name("k_f32")});
+      tag(n, "weight", "", "layer_" + li + "_k_mm", "");
       AddAttribute<int64_t>(n, "to", INT64_C(1));
     }
-    AddNode(*graph, "Reshape", {make_layer_name("k_f32"), "init7_s4_0_0_8_128"},
-            {make_layer_name("k_4d")});
-    AddNode(*graph, "Pow", {make_layer_name("k_4d"), "init1_s_"}, {make_layer_name("pow_k")});
+    tag(AddNode(*graph, "Reshape", {make_layer_name("k_f32"), "init7_s4_0_0_8_128"},
+                {make_layer_name("k_4d")}),
+        "weight", "0:0:equal", "layer_" + li + "_k_f32", "");
+    tag(AddNode(*graph, "Pow", {make_layer_name("k_4d"), "init1_s_"}, {make_layer_name("pow_k")}),
+        "weight", "", "", "");
     {
       NodeProto &n = AddNode(*graph, "ReduceMean", {make_layer_name("pow_k"), "init7_s1_-1"},
                              {make_layer_name("mean_k")});
+      tag(n, "weight", "", "layer_" + li + "_pow_k", "");
       AddAttribute<int64_t>(n, "keepdims", INT64_C(1));
     }
-    AddNode(*graph, "Add", {make_layer_name("mean_k"), "init1_s_2::RSh1"},
-            {make_layer_name("add_k")});
-    AddNode(*graph, "Sqrt", {make_layer_name("add_k")}, {make_layer_name("sqrt_k")});
-    AddNode(*graph, "Reciprocal", {make_layer_name("sqrt_k")}, {make_layer_name("rsqrt_k")});
-    AddNode(*graph, "Mul", {make_layer_name("k_4d"), make_layer_name("rsqrt_k")},
-            {make_layer_name("mul_k")});
+    tag(AddNode(*graph, "Add", {make_layer_name("mean_k"), "init1_s_2::RSh1"},
+                {make_layer_name("add_k")}),
+        "weight", "0:0:equal", "layer_" + li + "_mean_k", "");
+    tag(AddNode(*graph, "Sqrt", {make_layer_name("add_k")}, {make_layer_name("sqrt_k")}), "weight",
+        "0:0:equal", "layer_" + li + "_add_k", "");
+    tag(AddNode(*graph, "Reciprocal", {make_layer_name("sqrt_k")}, {make_layer_name("rsqrt_k")}),
+        "weight", "0:0:equal", "layer_" + li + "_sqrt_k", "");
+    tag(AddNode(*graph, "Mul", {make_layer_name("k_4d"), make_layer_name("rsqrt_k")},
+                {make_layer_name("mul_k")}),
+        "weight", "0:0:equal", "layer_" + li + "_k_4d;layer_" + li + "_rsqrt_k", "");
     {
       NodeProto &n =
           AddNode(*graph, "Cast", {make_layer_name("mul_k")}, {make_layer_name("k_normed_half")});
+      tag(n, "weight", "", "layer_" + li + "_mul_k", "");
       AddAttribute<int64_t>(n, "to", INT64_C(10));
     }
-    AddNode(*graph, "Mul",
-            {norm_prefix + ".self_attn.k_norm.weight", make_layer_name("k_normed_half")},
-            {make_layer_name("k_normed")});
+    tag(AddNode(*graph, "Mul",
+                {norm_prefix + ".self_attn.k_norm.weight", make_layer_name("k_normed_half")},
+                {make_layer_name("k_normed")}),
+        "weight", "0:1:equal", "layer_" + li + "_k_normed_half", "");
     {
       NodeProto &n =
           AddNode(*graph, "Transpose", {make_layer_name("k_normed")}, {make_layer_name("k_T")});
+      tag(n, "weight", "0:0:equal", "layer_" + li + "_k_normed", "");
       AddAttribute<std::vector<int64_t>>(n, "perm",
                                          {INT64_C(0), INT64_C(2), INT64_C(1), INT64_C(3)});
     }
 
     // V projection + transpose.
-    AddNode(*graph, "MatMul",
-            {make_layer_name("normed"), weight_prefix + "_self_attn_v_proj_weight::T10"},
-            {make_layer_name("v_mm")});
-    AddNode(*graph, "Reshape", {make_layer_name("v_mm"), "init7_s4_0_0_8_128"},
-            {make_layer_name("v_4d")});
+    tag(AddNode(*graph, "MatMul",
+                {make_layer_name("normed"), weight_prefix + "_self_attn_v_proj_weight::T10"},
+                {make_layer_name("v_mm")}),
+        "weight", "0:0:equal", "layer_" + li + "_normed", "");
+    tag(AddNode(*graph, "Reshape", {make_layer_name("v_mm"), "init7_s4_0_0_8_128"},
+                {make_layer_name("v_4d")}),
+        "weight", "0:0:equal", "layer_" + li + "_v_mm", "");
     {
       NodeProto &n =
           AddNode(*graph, "Transpose", {make_layer_name("v_4d")}, {make_layer_name("v_T")});
+      tag(n, "weight", "0:0:equal", "layer_" + li + "_v_4d", "");
       AddAttribute<std::vector<int64_t>>(n, "perm",
                                          {INT64_C(0), INT64_C(2), INT64_C(1), INT64_C(3)});
     }
@@ -396,156 +502,213 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
     {
       NodeProto &n = AddNode(*graph, "Split", {make_layer_name("q_T")},
                              {make_layer_name("q_half0"), make_layer_name("q_half1")});
+      tag(n, "weight", "", "", "");
       AddAttribute<int64_t>(n, "axis", INT64_C(-1));
       AddAttribute<int64_t>(n, "num_outputs", INT64_C(2));
     }
-    AddNode(*graph, "Neg", {make_layer_name("q_half1")}, {make_layer_name("neg_q")});
+    tag(AddNode(*graph, "Neg", {make_layer_name("q_half1")}, {make_layer_name("neg_q")}), "weight",
+        "0:0:equal", "layer_" + li + "_q_half1", "");
     {
       NodeProto &n =
           AddNode(*graph, "Concat", {make_layer_name("neg_q"), make_layer_name("q_half0")},
                   {make_layer_name("q_rot")});
+      tag(n, "weight", "", "layer_" + li + "_neg_q;layer_" + li + "_q_half0", "");
       AddAttribute<int64_t>(n, "axis", INT64_C(-1));
     }
-    AddNode(*graph, "Mul", {make_layer_name("q_T"), "unsqueeze_16"}, {make_layer_name("q_cos")});
-    AddNode(*graph, "Mul", {make_layer_name("q_rot"), "unsqueeze_17"}, {make_layer_name("q_sin")});
-    AddNode(*graph, "Add", {make_layer_name("q_cos"), make_layer_name("q_sin")},
-            {make_layer_name("q_rope")});
+    tag(AddNode(*graph, "Mul", {make_layer_name("q_T"), "unsqueeze_16"},
+                {make_layer_name("q_cos")}),
+        "weight", "0:0:equal", "layer_" + li + "_q_T", "");
+    tag(AddNode(*graph, "Mul", {make_layer_name("q_rot"), "unsqueeze_17"},
+                {make_layer_name("q_sin")}),
+        "weight", "0:0:equal", "layer_" + li + "_q_rot", "");
+    tag(AddNode(*graph, "Add", {make_layer_name("q_cos"), make_layer_name("q_sin")},
+                {make_layer_name("q_rope")}),
+        "weight", "0:0:equal", "layer_" + li + "_q_cos;layer_" + li + "_q_sin", "");
 
     // RoPE for K.
     {
       NodeProto &n = AddNode(*graph, "Split", {make_layer_name("k_T")},
                              {make_layer_name("k_half0"), make_layer_name("k_half1")});
+      tag(n, "weight", "", "", "");
       AddAttribute<int64_t>(n, "axis", INT64_C(-1));
       AddAttribute<int64_t>(n, "num_outputs", INT64_C(2));
     }
-    AddNode(*graph, "Neg", {make_layer_name("k_half1")}, {make_layer_name("neg_k")});
+    tag(AddNode(*graph, "Neg", {make_layer_name("k_half1")}, {make_layer_name("neg_k")}), "weight",
+        "0:0:equal", "layer_" + li + "_k_half1", "");
     {
       NodeProto &n =
           AddNode(*graph, "Concat", {make_layer_name("neg_k"), make_layer_name("k_half0")},
                   {make_layer_name("k_rot")});
+      tag(n, "weight", "", "layer_" + li + "_neg_k;layer_" + li + "_k_half0", "");
       AddAttribute<int64_t>(n, "axis", INT64_C(-1));
     }
     // In the last layer the shared RoPE cos/sin tables (unsqueeze_16/17) reach
     // their last use here, so they are additionally released after these nodes.
-    AddNode(*graph, "Mul", {make_layer_name("k_T"), "unsqueeze_16"}, {make_layer_name("k_cos")});
-    AddNode(*graph, "Mul", {make_layer_name("k_rot"), "unsqueeze_17"}, {make_layer_name("k_sin")});
-    AddNode(*graph, "Add", {make_layer_name("k_cos"), make_layer_name("k_sin")},
-            {make_layer_name("k_rope")});
+    tag(AddNode(*graph, "Mul", {make_layer_name("k_T"), "unsqueeze_16"},
+                {make_layer_name("k_cos")}),
+        "weight", "0:0:equal", "layer_" + li + "_k_T" + (layer == 3 ? ";unsqueeze_16" : ""), "");
+    tag(AddNode(*graph, "Mul", {make_layer_name("k_rot"), "unsqueeze_17"},
+                {make_layer_name("k_sin")}),
+        "weight", "0:0:equal", "layer_" + li + "_k_rot" + (layer == 3 ? ";unsqueeze_17" : ""), "");
+    tag(AddNode(*graph, "Add", {make_layer_name("k_cos"), make_layer_name("k_sin")},
+                {make_layer_name("k_rope")}),
+        "weight", "0:0:equal", "layer_" + li + "_k_cos;layer_" + li + "_k_sin", "");
 
     // KV-cache concatenation (produces the layer's present key/value outputs).
     {
       NodeProto &n =
           AddNode(*graph, "Concat", {"past_key_values_key_" + li, make_layer_name("k_rope")},
                   {"present_key_values_key_" + li});
+      tag(n, "weight", "", "layer_" + li + "_k_rope", "");
       AddAttribute<int64_t>(n, "axis", INT64_C(-2));
     }
     {
       NodeProto &n =
           AddNode(*graph, "Concat", {"past_key_values_value_" + li, make_layer_name("v_T")},
                   {"present_key_values_value_" + li});
+      tag(n, "weight", "", "layer_" + li + "_v_T", "");
       AddAttribute<int64_t>(n, "axis", INT64_C(-2));
     }
 
     // GQA: expand KV to Q-head count, then compute scaled dot-product attention.
-    AddNode(*graph, "Mul", {"present_key_values_key_" + li, "init10_s1_"},
-            {make_layer_name("scaled_k")});
-    AddNode(*graph, "Unsqueeze", {make_layer_name("scaled_k"), "init7_s1_2__" + layer_suffix},
-            {make_layer_name("scaled_k_unsq")});
-    AddNode(*graph, "Unsqueeze", {"present_key_values_value_" + li, "init7_s1_2__" + layer_suffix},
-            {make_layer_name("v_unsq")});
-    AddNode(*graph, "Expand", {make_layer_name("scaled_k_unsq"), "init7_s5_1_1_2_1_1"},
-            {make_layer_name("scaled_k_exp")});
-    AddNode(*graph, "Expand", {make_layer_name("v_unsq"), "init7_s5_1_1_2_1_1"},
-            {make_layer_name("v_exp")});
-    AddNode(*graph, "Reshape", {make_layer_name("scaled_k_exp"), "init7_s4_0_16_-1_128"},
-            {make_layer_name("k_gqa")});
-    AddNode(*graph, "Reshape", {make_layer_name("v_exp"), "init7_s4_0_16_-1_128"},
-            {make_layer_name("v_gqa")});
-    AddNode(*graph, "Mul", {make_layer_name("q_rope"), "init10_s1_"},
-            {make_layer_name("scaled_q")});
+    tag(AddNode(*graph, "Mul", {"present_key_values_key_" + li, "init10_s1_"},
+                {make_layer_name("scaled_k")}),
+        "weight", "", "", "");
+    tag(AddNode(*graph, "Unsqueeze", {make_layer_name("scaled_k"), "init7_s1_2__" + layer_suffix},
+                {make_layer_name("scaled_k_unsq")}),
+        "weight", "0:0:equal", "layer_" + li + "_scaled_k", "");
+    tag(AddNode(*graph, "Unsqueeze",
+                {"present_key_values_value_" + li, "init7_s1_2__" + layer_suffix},
+                {make_layer_name("v_unsq")}),
+        "weight", "", "", "");
+    tag(AddNode(*graph, "Expand", {make_layer_name("scaled_k_unsq"), "init7_s5_1_1_2_1_1"},
+                {make_layer_name("scaled_k_exp")}),
+        "weight", "", "layer_" + li + "_scaled_k_unsq", "");
+    tag(AddNode(*graph, "Expand", {make_layer_name("v_unsq"), "init7_s5_1_1_2_1_1"},
+                {make_layer_name("v_exp")}),
+        "weight", "", "layer_" + li + "_v_unsq", "");
+    tag(AddNode(*graph, "Reshape", {make_layer_name("scaled_k_exp"), "init7_s4_0_16_-1_128"},
+                {make_layer_name("k_gqa")}),
+        "weight", "0:0:equal", "layer_" + li + "_scaled_k_exp", "");
+    tag(AddNode(*graph, "Reshape", {make_layer_name("v_exp"), "init7_s4_0_16_-1_128"},
+                {make_layer_name("v_gqa")}),
+        "weight", "0:0:equal", "layer_" + li + "_v_exp", "");
+    tag(AddNode(*graph, "Mul", {make_layer_name("q_rope"), "init10_s1_"},
+                {make_layer_name("scaled_q")}),
+        "weight", "0:0:equal", "layer_" + li + "_q_rope", "");
     {
       NodeProto &n =
           AddNode(*graph, "Transpose", {make_layer_name("k_gqa")}, {make_layer_name("k_gqa_T")});
+      tag(n, "weight", "0:0:equal", "layer_" + li + "_k_gqa", "");
       AddAttribute<std::vector<int64_t>>(n, "perm",
                                          {INT64_C(0), INT64_C(1), INT64_C(3), INT64_C(2)});
     }
-    AddNode(*graph, "MatMul", {make_layer_name("scaled_q"), make_layer_name("k_gqa_T")},
-            {make_layer_name("attn_scores")});
+    tag(AddNode(*graph, "MatMul", {make_layer_name("scaled_q"), make_layer_name("k_gqa_T")},
+                {make_layer_name("attn_scores")}),
+        "weight", "", "layer_" + li + "_scaled_q;layer_" + li + "_k_gqa_T", "");
     // In the last layer the shared causal mask (and_2) reaches its last use
     // here, so it is additionally released after this node.
-    AddNode(*graph, "Where",
-            {"and_2", make_layer_name("attn_scores"), "init10_s1___" + layer_suffix},
-            {make_layer_name("masked")});
+    tag(AddNode(*graph, "Where",
+                {"and_2", make_layer_name("attn_scores"), "init10_s1___" + layer_suffix},
+                {make_layer_name("masked")}),
+        "weight", "0:1:equal",
+        std::string(layer == 3 ? "and_2;" : "") + "layer_" + li + "_attn_scores", "");
     {
       NodeProto &n =
           AddNode(*graph, "Softmax", {make_layer_name("masked")}, {make_layer_name("softmax")});
+      tag(n, "weight", "0:0:equal", "layer_" + li + "_masked", "");
       AddAttribute<int64_t>(n, "axis", INT64_C(-1));
     }
-    AddNode(*graph, "IsNaN", {make_layer_name("softmax")}, {make_layer_name("is_nan")});
-    AddNode(*graph, "Where",
+    tag(AddNode(*graph, "IsNaN", {make_layer_name("softmax")}, {make_layer_name("is_nan")}),
+        "weight", "", "", "");
+    tag(AddNode(
+            *graph, "Where",
             {make_layer_name("is_nan"), "init10_s1_2__" + layer_suffix, make_layer_name("softmax")},
-            {make_layer_name("attn_w")});
-    AddNode(*graph, "MatMul", {make_layer_name("attn_w"), make_layer_name("v_gqa")},
-            {make_layer_name("attn_out")});
+            {make_layer_name("attn_w")}),
+        "weight", "0:2:equal", "layer_" + li + "_is_nan;layer_" + li + "_softmax", "");
+    tag(AddNode(*graph, "MatMul", {make_layer_name("attn_w"), make_layer_name("v_gqa")},
+                {make_layer_name("attn_out")}),
+        "weight", "", "layer_" + li + "_attn_w;layer_" + li + "_v_gqa", "");
     {
       NodeProto &n = AddNode(*graph, "Transpose", {make_layer_name("attn_out")},
                              {make_layer_name("attn_out_T")});
+      tag(n, "weight", "0:0:equal", "layer_" + li + "_attn_out", "");
       AddAttribute<std::vector<int64_t>>(n, "perm",
                                          {INT64_C(0), INT64_C(2), INT64_C(1), INT64_C(3)});
     }
-    AddNode(*graph, "Reshape", {make_layer_name("attn_out_T"), "init7_s3_0_0_2048"},
-            {make_layer_name("attn_2d")});
-    AddNode(*graph, "MatMul",
-            {make_layer_name("attn_2d"), weight_prefix + "_self_attn_o_proj_weight::T10"},
-            {make_layer_name("attn_proj")});
-    AddNode(*graph, "Add", {layer_input, make_layer_name("attn_proj")},
-            {make_layer_name("resid_attn")});
+    tag(AddNode(*graph, "Reshape", {make_layer_name("attn_out_T"), "init7_s3_0_0_2048"},
+                {make_layer_name("attn_2d")}),
+        "weight", "0:0:equal", "layer_" + li + "_attn_out_T", "");
+    tag(AddNode(*graph, "MatMul",
+                {make_layer_name("attn_2d"), weight_prefix + "_self_attn_o_proj_weight::T10"},
+                {make_layer_name("attn_proj")}),
+        "weight", "", "layer_" + li + "_attn_2d", "");
+    tag(AddNode(*graph, "Add", {layer_input, make_layer_name("attn_proj")},
+                {make_layer_name("resid_attn")}),
+        "weight", "0:0:equal", layer_input + ";" + "layer_" + li + "_attn_proj", "");
 
     // Post-attention RMSNorm (post_attention_layernorm).
     {
       NodeProto &n =
           AddNode(*graph, "Cast", {make_layer_name("resid_attn")}, {make_layer_name("post_f32")});
+      tag(n, "weight", "", "", "");
       AddAttribute<int64_t>(n, "to", INT64_C(1));
     }
-    AddNode(*graph, "Pow", {make_layer_name("post_f32"), "init1_s_"},
-            {make_layer_name("pow_post")});
+    tag(AddNode(*graph, "Pow", {make_layer_name("post_f32"), "init1_s_"},
+                {make_layer_name("pow_post")}),
+        "weight", "", "", "");
     {
       NodeProto &n = AddNode(*graph, "ReduceMean", {make_layer_name("pow_post"), "init7_s1_-1"},
                              {make_layer_name("mean_post")});
+      tag(n, "weight", "", "layer_" + li + "_pow_post", "");
       AddAttribute<int64_t>(n, "keepdims", INT64_C(1));
     }
-    AddNode(*graph, "Add", {make_layer_name("mean_post"), "init1_s_2::RSh1"},
-            {make_layer_name("add_post")});
-    AddNode(*graph, "Sqrt", {make_layer_name("add_post")}, {make_layer_name("sqrt_post")});
-    AddNode(*graph, "Reciprocal", {make_layer_name("sqrt_post")}, {make_layer_name("rsqrt_post")});
-    AddNode(*graph, "Mul", {make_layer_name("post_f32"), make_layer_name("rsqrt_post")},
-            {make_layer_name("mul_post")});
+    tag(AddNode(*graph, "Add", {make_layer_name("mean_post"), "init1_s_2::RSh1"},
+                {make_layer_name("add_post")}),
+        "weight", "0:0:equal", "layer_" + li + "_mean_post", "");
+    tag(AddNode(*graph, "Sqrt", {make_layer_name("add_post")}, {make_layer_name("sqrt_post")}),
+        "weight", "0:0:equal", "layer_" + li + "_add_post", "");
+    tag(AddNode(*graph, "Reciprocal", {make_layer_name("sqrt_post")},
+                {make_layer_name("rsqrt_post")}),
+        "weight", "0:0:equal", "layer_" + li + "_sqrt_post", "");
+    tag(AddNode(*graph, "Mul", {make_layer_name("post_f32"), make_layer_name("rsqrt_post")},
+                {make_layer_name("mul_post")}),
+        "weight", "0:0:equal", "layer_" + li + "_post_f32;layer_" + li + "_rsqrt_post", "");
     {
       NodeProto &n =
           AddNode(*graph, "Cast", {make_layer_name("mul_post")}, {make_layer_name("post_half")});
+      tag(n, "weight", "", "layer_" + li + "_mul_post", "");
       AddAttribute<int64_t>(n, "to", INT64_C(10));
     }
-    AddNode(*graph, "Mul",
-            {norm_prefix + ".post_attention_layernorm.weight", make_layer_name("post_half")},
-            {make_layer_name("mlp_in")});
+    tag(AddNode(*graph, "Mul",
+                {norm_prefix + ".post_attention_layernorm.weight", make_layer_name("post_half")},
+                {make_layer_name("mlp_in")}),
+        "weight", "0:1:equal", "layer_" + li + "_post_half", "");
 
     // SwiGLU MLP.
-    AddNode(*graph, "MatMul",
-            {make_layer_name("mlp_in"), weight_prefix + "_mlp_gate_proj_weight::T10"},
-            {make_layer_name("gate")});
-    AddNode(*graph, "Sigmoid", {make_layer_name("gate")}, {make_layer_name("gate_act")});
-    AddNode(*graph, "Mul", {make_layer_name("gate"), make_layer_name("gate_act")},
-            {make_layer_name("silu")});
-    AddNode(*graph, "MatMul",
-            {make_layer_name("mlp_in"), weight_prefix + "_mlp_up_proj_weight::T10"},
-            {make_layer_name("up")});
-    AddNode(*graph, "Mul", {make_layer_name("silu"), make_layer_name("up")},
-            {make_layer_name("swiglu")});
-    AddNode(*graph, "MatMul",
-            {make_layer_name("swiglu"), weight_prefix + "_mlp_down_proj_weight::T10"},
-            {make_layer_name("down")});
-    AddNode(*graph, "Add", {make_layer_name("resid_attn"), make_layer_name("down")},
-            {make_layer_name("out")});
+    tag(AddNode(*graph, "MatMul",
+                {make_layer_name("mlp_in"), weight_prefix + "_mlp_gate_proj_weight::T10"},
+                {make_layer_name("gate")}),
+        "weight", "", "", "");
+    tag(AddNode(*graph, "Sigmoid", {make_layer_name("gate")}, {make_layer_name("gate_act")}),
+        "weight", "", "", "");
+    tag(AddNode(*graph, "Mul", {make_layer_name("gate"), make_layer_name("gate_act")},
+                {make_layer_name("silu")}),
+        "weight", "0:0:equal", "layer_" + li + "_gate;layer_" + li + "_gate_act", "");
+    tag(AddNode(*graph, "MatMul",
+                {make_layer_name("mlp_in"), weight_prefix + "_mlp_up_proj_weight::T10"},
+                {make_layer_name("up")}),
+        "weight", "", "layer_" + li + "_mlp_in", "");
+    tag(AddNode(*graph, "Mul", {make_layer_name("silu"), make_layer_name("up")},
+                {make_layer_name("swiglu")}),
+        "weight", "0:0:equal", "layer_" + li + "_silu;layer_" + li + "_up", "");
+    tag(AddNode(*graph, "MatMul",
+                {make_layer_name("swiglu"), weight_prefix + "_mlp_down_proj_weight::T10"},
+                {make_layer_name("down")}),
+        "weight", "", "layer_" + li + "_swiglu", "");
+    tag(AddNode(*graph, "Add", {make_layer_name("resid_attn"), make_layer_name("down")},
+                {make_layer_name("out")}),
+        "weight", "0:0:equal", "layer_" + li + "_resid_attn;layer_" + li + "_down", "");
 
     layer_input = make_layer_name("out");
   }
@@ -553,23 +716,32 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
   // ---- Final RMSNorm (model.norm) + language-model head -------------------
   {
     NodeProto &n = AddNode(*graph, "Cast", {layer_input}, {"final_f32"});
+    tag(n, "weight", "", "layer_3_out", "");
     AddAttribute<int64_t>(n, "to", INT64_C(1));
   }
-  AddNode(*graph, "Pow", {"final_f32", "init1_s_"}, {"final_pow"});
+  tag(AddNode(*graph, "Pow", {"final_f32", "init1_s_"}, {"final_pow"}), "weight", "", "", "");
   {
     NodeProto &n = AddNode(*graph, "ReduceMean", {"final_pow", "init7_s1_-1"}, {"final_mean"});
+    tag(n, "weight", "", "final_pow", "");
     AddAttribute<int64_t>(n, "keepdims", INT64_C(1));
   }
-  AddNode(*graph, "Add", {"final_mean", "init1_s_2::RSh1"}, {"final_add"});
-  AddNode(*graph, "Sqrt", {"final_add"}, {"final_sqrt"});
-  AddNode(*graph, "Reciprocal", {"final_sqrt"}, {"final_rsqrt"});
-  AddNode(*graph, "Mul", {"final_f32", "final_rsqrt"}, {"final_mul"});
+  tag(AddNode(*graph, "Add", {"final_mean", "init1_s_2::RSh1"}, {"final_add"}), "weight",
+      "0:0:equal", "final_mean", "");
+  tag(AddNode(*graph, "Sqrt", {"final_add"}, {"final_sqrt"}), "weight", "0:0:equal", "final_add",
+      "");
+  tag(AddNode(*graph, "Reciprocal", {"final_sqrt"}, {"final_rsqrt"}), "weight", "0:0:equal",
+      "final_sqrt", "");
+  tag(AddNode(*graph, "Mul", {"final_f32", "final_rsqrt"}, {"final_mul"}), "weight", "0:0:equal",
+      "final_f32;final_rsqrt", "");
   {
     NodeProto &n = AddNode(*graph, "Cast", {"final_mul"}, {"final_half"});
+    tag(n, "weight", "", "final_mul", "");
     AddAttribute<int64_t>(n, "to", INT64_C(10));
   }
-  AddNode(*graph, "Mul", {"model.norm.weight", "final_half"}, {"final_normed"});
-  AddNode(*graph, "MatMul", {"final_normed", "p_lm_head_weight::T10"}, {"output_0"});
+  tag(AddNode(*graph, "Mul", {"model.norm.weight", "final_half"}, {"final_normed"}), "weight",
+      "0:1:equal", "final_half", "");
+  tag(AddNode(*graph, "MatMul", {"final_normed", "p_lm_head_weight::T10"}, {"output_0"}), "weight",
+      "", "final_normed", "");
 
   // ---- Intermediate value_info shapes -------------------------------------
   // Every intermediate result produced by the graph records its expected
@@ -953,6 +1125,83 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
     AppendValueInfo(*graph->add_output(), "present_key_values_value_" + li, DataType::FLOAT16,
                     {DimSpec("batch_size"), DimSpec(INT64_C(8)),
                      DimSpec("past_sequence_length+sequence_length"), DimSpec(INT64_C(128))});
+  }
+
+  // ---- Per-value value-tag metadata (onnx_light.value_tag) ---------------
+  // Encode each tensor's shape/weight/axes/ambiguous classification directly on
+  // its ValueInfoProto (graph inputs, value_info, outputs) and on initializer
+  // TensorProtos, mirroring the runtime WriteValueAndNodeTagsToMetadata output
+  // and the cases_tiny_llm.cc convention. The shape/weight/axes/ambiguous tag
+  // lives on each value's ValueInfoProto (no graph-level value_tags JSON is
+  // embedded). Every tensor here is tagged
+  // "weight" except the 24 "shape", 10 "axes" and 1 "ambiguous" entries listed
+  // below (the exact output of the value-tag inference pass for this model).
+  {
+    const std::unordered_map<std::string, const char *> non_weight_tags = {
+        // value_info tagged "shape"
+        {"A::Sq__2", "shape"},
+        {"A::Sq__3", "shape"},
+        {"B::Sq__2", "shape"},
+        {"B::Sq__3", "shape"},
+        {"SqueezeAddPattern_SwapRangeAddScalarPattern--sym_size_int_25", "shape"},
+        {"_onx_add_unsqueeze_12::Shape:", "shape"},
+        {"_onx_range_A::Sq::UnSq0x1x3__2", "shape"},
+        {"_onx_range_A::Sq__2", "shape"},
+        {"_onx_range_dim1::Sq::UnSq0x1::C1::RSh0x-1x1__1", "shape"},
+        {"_onx_range_dim1::Sq::UnSq0x1::C1__1", "shape"},
+        {"_onx_range_dim1::Sq::UnSq0x1__1", "shape"},
+        {"_onx_range_dim1::Sq__1", "shape"},
+        {"dim1::Sq__1", "shape"},
+        {"dim2::Sq__1", "shape"},
+        {"input_ids::Shape1:2", "shape"},
+        {"past_key_values_key_0::Shape2:3", "shape"},
+        {"past_key_values_value_2::Shape:1", "shape"},
+        {"to::Shape-1:", "shape"},
+        // initializers tagged "shape"
+        {"init7_s3_0_-1_1__1", "shape"},
+        {"init7_s3_0_0_2048", "shape"},
+        {"init7_s4_0_0_16_128", "shape"},
+        {"init7_s4_0_0_8_128", "shape"},
+        {"init7_s4_0_16_-1_128", "shape"},
+        {"init7_s5_1_1_2_1_1", "shape"},
+        // initializers tagged "axes"
+        {"init7_s1_1", "axes"},
+        {"init7_s1_2__layer_0", "axes"},
+        {"init7_s1_2__layer_1", "axes"},
+        {"init7_s1_2__layer_2", "axes"},
+        {"init7_s1_2__layer_3", "axes"},
+        {"init7_s2_0_1__1", "axes"},
+        {"init7_s3_0_1_2__2", "axes"},
+        {"init7_s3_0_1_2__3", "axes"},
+        {"init7_s3_0_1_3__2", "axes"},
+        {"init7_s3_1_2_3__3", "axes"},
+        // initializer tagged "ambiguous"
+        {"init7_s1_-1", "ambiguous"},
+    };
+    const auto tag_for = [&non_weight_tags](const std::string &name) -> const char * {
+      auto it = non_weight_tags.find(name);
+      return it == non_weight_tags.end() ? "weight" : it->second;
+    };
+    const auto set_value_tag = [&](StringStringEntryProto *entry, const std::string &name) {
+      entry->set_key(core::compute::kValueTagMetadataKey);
+      entry->set_value(tag_for(name));
+    };
+    for (int i = 0; i < graph->input().size(); ++i) {
+      ValueInfoProto *vi = graph->mutable_input(static_cast<std::size_t>(i));
+      set_value_tag(vi->add_metadata_props(), vi->name());
+    }
+    for (int i = 0; i < graph->value_info().size(); ++i) {
+      ValueInfoProto *vi = graph->mutable_value_info(static_cast<std::size_t>(i));
+      set_value_tag(vi->add_metadata_props(), vi->name());
+    }
+    for (int i = 0; i < graph->output().size(); ++i) {
+      ValueInfoProto *vi = graph->mutable_output(static_cast<std::size_t>(i));
+      set_value_tag(vi->add_metadata_props(), vi->name());
+    }
+    for (int i = 0; i < graph->initializer().size(); ++i) {
+      TensorProto *init = graph->mutable_initializer(static_cast<std::size_t>(i));
+      set_value_tag(init->add_metadata_props(), init->name());
+    }
   }
 
   registry.emplace_back(std::move(tc));

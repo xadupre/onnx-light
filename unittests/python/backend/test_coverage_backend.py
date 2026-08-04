@@ -9,26 +9,28 @@ import onnx_light.onnx as onnxl
 collect_test_case = import_or_skip("onnx_light.onnx.backend", "collect_test_case")
 
 # Feature metadata keys (inplace / shape-tag / release) that a backend test
-# case may only carry when it is one of the cases specifically designed to
-# pre-embed such metadata for the coverage checks (see
-# ``test_backend_with_metadata_coverage.py``). Every other case must ship no
+# case may only carry when it is explicitly tagged for the corresponding
+# feature ("inplace", "shape_tag" or "release"). Every other case must ship no
 # such metadata in its model or graph.
-_FEATURE_METADATA_KEYS = frozenset(
+_INPLACE_METADATA_KEYS = frozenset({"onnx_light.inplace_reuse"})
+_SHAPE_TAG_METADATA_KEYS = frozenset(
+    {"onnx_light.node_tag", "onnx_light.value_tag", "onnx_light.value_tags"}
+)
+_RELEASE_METADATA_KEYS = frozenset(
     {
-        "onnx_light.inplace_reuse",
-        "onnx_light.node_tag",
-        "onnx_light.value_tag",
-        "onnx_light.value_tags",
         "onnx_light.release_after",
         "onnx_light.not_used_after",
         "onnx_light.release_after_shape_tag",
     }
 )
-
-# Name prefixes of the backend test cases that intentionally pre-embed the
-# feature metadata above. These mirror the include patterns consumed by
-# ``TestBackendMetadataCoverage``.
-_METADATA_CASE_PREFIXES = ("test_cc_shape_inference_", "test_cc_release_", "test_cc_shape_tag_")
+_TAGGED_METADATA_KEYS = {
+    "inplace": _INPLACE_METADATA_KEYS,
+    "shape_tag": _SHAPE_TAG_METADATA_KEYS,
+    "release": _RELEASE_METADATA_KEYS,
+}
+_ALL_FEATURE_METADATA_KEYS = (
+    _INPLACE_METADATA_KEYS | _SHAPE_TAG_METADATA_KEYS | _RELEASE_METADATA_KEYS
+)
 
 
 class TestCoverage(ExtTestCase):
@@ -113,17 +115,18 @@ class TestCoverage(ExtTestCase):
             yield "value_info", obj
 
     def test_no_feature_metadata_on_untagged_tests(self):
-        # A backend test case that is not one of the cases specifically built to
-        # pre-embed metadata (see ``_METADATA_CASE_PREFIXES``) must not store any
-        # inplace/shape_tag/release information in its model or graph metadata.
+        # A backend test case that is not explicitly tagged "inplace",
+        # "shape_tag" or "release" must not store any inplace/shape_tag/release
+        # information in its model or graph metadata. A case tagged for one
+        # feature must not leak the metadata keys of the *other* features either.
         cases = collect_test_case(include_big=True)
         for name, tc in cases.items():
-            if name.startswith(_METADATA_CASE_PREFIXES):
-                continue
+            allowed = _TAGGED_METADATA_KEYS.get(tc.tag, frozenset())
+            forbidden = _ALL_FEATURE_METADATA_KEYS - allowed
             with self.subTest(tag=tc.tag, name=name):
                 for kind, obj in self._iter_metadata_objects(tc.model):
                     keys = {it.key for it in obj.metadata_props}
-                    leaked = keys & _FEATURE_METADATA_KEYS
+                    leaked = keys & forbidden
                     self.assertFalse(
                         leaked,
                         msg=lambda leaked=leaked, kind=kind: (

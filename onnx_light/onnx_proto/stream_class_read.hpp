@@ -503,8 +503,22 @@ template <typename T>
 void read_repeated_field_numerical(utils::BinaryStream &stream, int wire_type,
                                    std::vector<T> &field, const char *name, bool is_packed,
                                    ParseOptions &options) {
-  if (is_packed) {
-    read_repeated_field_packed_numerical(stream, wire_type, field, name, is_packed, options);
+  // The protobuf spec requires a decoder to accept both the packed and the
+  // unpacked wire format for any repeated numeric field, regardless of what
+  // the schema declares. For integer fields the encoding is unambiguous: a
+  // length-delimited wire type (FIELD_FIXED_SIZE) always denotes a packed
+  // block, while a varint (wire type 0) denotes a single unpacked value, so we
+  // can safely decode either (see gh_issue_24203, which packs
+  // TensorProto.dims). Floating-point fields are handled by the branch below:
+  // for them wire type 2 is ambiguous because a legacy writer emitted a single
+  // element as raw fixed-size bytes without a length prefix, so we keep relying
+  // on the schema's is_packed flag and the unpacked reader's legacy handling.
+  bool packed = is_packed;
+  if constexpr (std::is_integral_v<T>) {
+    packed = packed || wire_type == FIELD_FIXED_SIZE;
+  }
+  if (packed) {
+    read_repeated_field_packed_numerical(stream, wire_type, field, name, packed, options);
   } else {
     DEBUG_PRINT2("    read unpacked", name);
     field.push_back(read_unpacked_number<T>(stream, wire_type));

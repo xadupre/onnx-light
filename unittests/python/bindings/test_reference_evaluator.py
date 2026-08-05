@@ -157,6 +157,35 @@ class TestReferenceEvaluator(ExtTestCase):
             )
             np.testing.assert_array_equal(y, np.ones(3, dtype=np.float32))
 
+    def test_serialized_input_initializes_kernels_eagerly(self):
+        # A model supplied as bytes (or a file path) is parsed at construction
+        # time, so the evaluator resolves every node's kernel up front instead
+        # of deferring the per-node dispatch to the first run(): the session
+        # cache is already populated before run() is ever called.
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+
+        eager = ReferenceEvaluator(model.SerializeToString())
+        self.assertEqual(len(eager._sessions), 1)
+
+        # An in-memory proto keeps the lazy resolution: no session is built
+        # until the first run().
+        lazy = ReferenceEvaluator(model)
+        self.assertEqual(len(lazy._sessions), 0)
+
+        # The eagerly built session is reused (not rebuilt) on the first run,
+        # and both paths produce identical results.
+        cached = next(iter(eager._sessions.values()))
+        feeds = {
+            "x": np.array([-1.0, 2.0, -3.5], dtype=np.float32),
+            "z": np.array([10.0, 20.0, 30.0], dtype=np.float32),
+        }
+        (y_eager,) = eager.run(None, feeds)
+        self.assertEqual(len(eager._sessions), 1)
+        self.assertIs(next(iter(eager._sessions.values())), cached)
+        (y_lazy,) = lazy.run(None, feeds)
+        np.testing.assert_array_equal(y_eager, y_lazy)
+        np.testing.assert_array_equal(y_eager, np.array([11.0, 22.0, 33.5], dtype=np.float32))
+
     def test_construct_from_graph(self):
         model = parser.parse_model(_INITIALIZER_MODEL_SRC)
         sess = ReferenceEvaluator(model.graph)

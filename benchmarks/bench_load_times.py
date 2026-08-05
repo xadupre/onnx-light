@@ -17,6 +17,8 @@ The following load configurations are timed:
   ``file_load_mode="IFSTREAM"`` and ``num_threads`` = 1, 2, 4.
 * ``onnx_light memmap`` — :func:`onnx_light.onnx.load` with
   ``file_load_mode="MMAP"`` and ``num_threads`` = 1, 2, 4.
+* ``onnx_light reference`` — :class:`onnx_light.onnx.reference.ReferenceEvaluator`
+  built from a model loaded with ``num_threads`` = 1, 2, 4, 8.
 
 Usage::
 
@@ -38,6 +40,7 @@ import pandas
 
 import onnx_light.onnx as onnxl
 from onnx_light.doc import get_processor_name
+from onnx_light.onnx.reference import ReferenceEvaluator
 
 try:
     import onnxruntime as ort
@@ -96,6 +99,16 @@ def _build_cases(model_path: str) -> list[tuple[str, object]]:
                     ),
                 )
             )
+
+    for n_threads in (1, 2, 4, 8):
+        cases.append(
+            (
+                f"onnx_light reference {n_threads} thread(s)",
+                lambda threads=n_threads: ReferenceEvaluator(
+                    onnxl.load(model_path, num_threads=threads, load_external_data=True)
+                ),
+            )
+        )
 
     return cases
 

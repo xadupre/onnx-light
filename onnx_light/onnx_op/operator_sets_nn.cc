@@ -727,7 +727,13 @@ const char *const kLSTMInitialCDescription =
     "Optional initial value of the cell. If not specified - assumed "
     "to be 0. It has shape `[num_directions, batch_size, hidden_size]`.";
 
-const char *const kLSTMPDescription =
+const char *const kLSTMPDescriptionVer1 =
+    "The weight tensor for peepholes. Concatenation of `P[iof]` and "
+    "`PB[iof]` (if bidirectional) along dimension 0. It has shape "
+    "`[num_directions, 3*hidde_size]`. Optional: If not specified - "
+    "assumed to be 0.";
+
+const char *const kLSTMPDescriptionVer22 =
     "The weight tensor for peepholes. Concatenation of `P[iof]` and "
     "`PB[iof]` (if bidirectional) along dimension 0. It has shape "
     "`[num_directions, 3*hidden_size]`. Optional: If not specified - "
@@ -755,6 +761,12 @@ const char *RecurrentYDescription(int since_version) {
   // deprecated `output_sequence` attribute. The opset1_to_6 RNN doc generator
   // is shared across both, so all versions <= 6 receive the v1 description.
   return since_version <= 6 ? kRecurrentYDescriptionVer1 : kRecurrentYDescriptionVer7;
+}
+
+const char *LSTMPDescription(int since_version) {
+  // ONNX fixed the `3*hidde_size` typo in the peephole `P` input description
+  // starting with LSTM opset 22; older opset versions keep the typo.
+  return since_version >= 22 ? kLSTMPDescriptionVer22 : kLSTMPDescriptionVer1;
 }
 
 LightOpSchema MakeRNNSchema(int since_version) {
@@ -801,7 +813,7 @@ LightOpSchema MakeLSTMSchema(int since_version) {
                            {"sequence_lens", kRecurrentSequenceLensDescription, "T1"},
                            {"initial_h", kRecurrentInitialHDescription, "T"},
                            {"initial_c", kLSTMInitialCDescription, "T"},
-                           {"P", kLSTMPDescription, "T"},
+                           {"P", LSTMPDescription(since_version), "T"},
                        },
                        {
                            {"Y", RecurrentYDescription(since_version), "T"},

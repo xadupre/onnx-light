@@ -433,9 +433,15 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             const FileLoadMode mode =
                 has_opts ? nb::cast<ParseOptions &>(options).file_load_mode : FileLoadMode::kAuto;
             if (!external_data_file.empty()) {
-              EXT_ENFORCE(mode == FileLoadMode::kAuto,
-                          "ParseFromFile: file_load_mode is not supported when an "
-                          "external_data_file is provided (TwoFilesStream is always used).");
+              // TwoFilesStream derives from FileStream (buffered std::ifstream) for the
+              // main model file, so kAuto and kFileStream are both honoured by using it.
+              // kMmap is not supported because TwoFilesStream cannot memory-map the main
+              // file, so reject it explicitly rather than silently ignoring the request.
+              EXT_ENFORCE(mode != FileLoadMode::kMmap,
+                          "ParseFromFile: file_load_mode=MMAP is not supported when an "
+                          "external_data_file is provided (TwoFilesStream is always used and "
+                          "cannot memory-map the main file). Use file_load_mode=AUTO or "
+                          "IFSTREAM instead.");
               stream.reset(new utils::TwoFilesStream(file_path, external_data_file));
             } else if (mode == FileLoadMode::kMmap) {
               EXT_ENFORCE(!wants_no_copy,

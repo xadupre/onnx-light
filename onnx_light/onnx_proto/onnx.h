@@ -431,14 +431,10 @@ inline void set_raw_data(const void *data, size_t size) {
   raw_data_.resize(size);
   if (size > 0)
     std::memcpy(raw_data_.data(), data, size);
-  raw_data_was_set_ = true;
 }
 /** Sets raw_data from a std::string (protobuf bytes-field compat). */
 inline void set_raw_data(const std::string &data) { set_raw_data(data.data(), data.size()); }
-inline void clear_raw_data() {
-  raw_data_.clear();
-  raw_data_was_set_ = false;
-}
+inline void clear_raw_data() { raw_data_.clear(); }
 inline void set_data_type(int v) { data_type_ = static_cast<DataType>(v); }
 inline bool is_raw_data() const { return !raw_data_.empty(); }
 /**
@@ -461,7 +457,6 @@ inline bool is_raw_data() const { return !raw_data_.empty(); }
 template <typename Deleter>
 inline void set_raw_data_with_deleter(const uint8_t *ptr, size_t sz, Deleter &&deleter) {
   raw_data_.assign_with_deleter(ptr, sz, std::forward<Deleter>(deleter));
-  raw_data_was_set_ = true;
 }
 /**
  * Attaches a custom deleter to this tensor's ``raw_data`` without changing the stored bytes.

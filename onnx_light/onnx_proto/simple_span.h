@@ -105,6 +105,13 @@ public:
   /** Clears the logical content while preserving capacity. */
   inline void clear() { size_ = 0; }
 
+  /** Releases all storage. */
+  inline void reset() {
+    storage_.reset();
+    size_ = 0;
+    capacity_ = 0;
+  }
+
   /** Resizes the buffer without value-initializing newly exposed bytes. */
   inline void resize(size_t n) {
     if (n <= capacity_) {
@@ -187,7 +194,7 @@ public:
   ByteSpan() = default;
 
   /** Constructs an owned buffer by copying from a std::vector<uint8_t>. */
-  inline ByteSpan(const std::vector<uint8_t> &v) : owned_(v) {}
+  inline ByteSpan(const std::vector<uint8_t> &v) { *this = v; }
 
   /** Copy constructor: handles aligned-owned mode by recomputing the internal pointer. */
   inline ByteSpan(const ByteSpan &other)
@@ -276,6 +283,10 @@ public:
   /** Assigns owned data by copying from a std::vector<uint8_t>; clears all special modes. */
   inline ByteSpan &operator=(const std::vector<uint8_t> &v) {
     owned_ = v;
+    if (v.empty()) {
+      owned_.resize(1);
+      owned_.clear();
+    }
     ptr_ = nullptr;
     size_ = 0;
     borrowed_ = false;
@@ -367,7 +378,18 @@ public:
     aligned_owned_ = false;
     align_ = 0;
     owner_.reset();
-    owned_.resize(n);
+    if (n == 0) {
+      owned_.resize(1);
+      owned_.clear();
+    } else {
+      owned_.resize(n);
+    }
+  }
+
+  /** Represents an explicitly present empty byte sequence. */
+  inline void set_empty() {
+    if (empty() && data() == nullptr)
+      resize(0);
   }
 
   inline void assign(const char *data, size_t len) {
@@ -394,7 +416,7 @@ public:
     align_ = 0;
     owner_.reset();
     if (align <= 1 || n == 0) {
-      owned_.resize(n);
+      resize(n);
       return;
     }
     // Over-allocate so std::align always finds a suitable start.
@@ -413,6 +435,10 @@ public:
   /** Sets borrowed mode: stores ptr/size in the base-class Span fields without any copy.
    *  The pointed-to buffer MUST outlive this ByteSpan. */
   inline void assign_borrowed(const uint8_t *ptr, size_t sz, std::shared_ptr<void> owner = {}) {
+    if (ptr == nullptr && sz == 0) {
+      resize(0);
+      return;
+    }
     owned_.clear();
     ptr_ = ptr;
     size_ = sz;
@@ -454,7 +480,7 @@ public:
 
   /** Clears all data and resets to the empty owned state. */
   inline void clear() {
-    owned_.clear();
+    owned_.reset();
     ptr_ = nullptr;
     size_ = 0;
     borrowed_ = false;

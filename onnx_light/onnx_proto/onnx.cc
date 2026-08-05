@@ -686,7 +686,6 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
   else if (static_cast<int>(field_number.field_number) == order_raw_data()) {
     read_field_limit_parallel_nc(stream, static_cast<int>(field_number.wire_type), raw_data_,
                                  "raw_data", options);
-    raw_data_was_set_ = true;
   } //
   READ_REPEATED_FIELD(options, stream, external_data)  //
   READ_REPEATED_FIELD(options, stream, metadata_props) //

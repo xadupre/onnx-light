@@ -112,17 +112,10 @@ import pandas
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 
-try:
-    import onnxruntime as ort
-except ImportError:
-    ort = None
+import onnxruntime as ort
 
-if ort is not None:
-    _ort_sess_opts = ort.SessionOptions()
-    _ort_sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
-else:
-    _ort_sess_opts = None
-    print("WARNING: onnxruntime is not installed, skipping onnxruntime benchmarks.")
+_ort_sess_opts = ort.SessionOptions()
+_ort_sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as onnxlh
@@ -698,14 +691,13 @@ if _run_scenario("load"):
     # ``InferenceSession`` is created with ``ORT_DISABLE_ALL`` so the
     # measurement captures only model loading overhead, not graph optimization.
 
-    if ort is not None:
-        data.append(
-            measure(
-                "load/1filex1/ort",
-                lambda: ort.InferenceSession(onnx_path, sess_options=_ort_sess_opts),
-            )
+    data.append(
+        measure(
+            "load/1filex1/ort",
+            lambda: ort.InferenceSession(onnx_path, sess_options=_ort_sess_opts),
         )
-        print_stats("load/1filex1/ort", data[-1])
+    )
+    print_stats("load/1filex1/ort", data[-1])
 
 # %%
 # Serialize and Parse benchmarks
@@ -1120,14 +1112,13 @@ if _run_scenario("load"):
     # Reload the external-data model with ``onnxruntime``, keeping
     # ``ORT_DISABLE_ALL`` so only loading overhead is measured.
 
-    if ort is not None:
-        data.append(
-            measure(
-                "load/2filex1/ort",
-                lambda: ort.InferenceSession(ext_load_onnx, sess_options=_ort_sess_opts),
-            )
+    data.append(
+        measure(
+            "load/2filex1/ort",
+            lambda: ort.InferenceSession(ext_load_onnx, sess_options=_ort_sess_opts),
         )
-        print_stats("load/2filex1/ort", data[-1])
+    )
+    print_stats("load/2filex1/ort", data[-1])
 
 # %%
 # Results

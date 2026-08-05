@@ -153,6 +153,37 @@ TEST(onnx_field_serialization, ReadFieldLimitParallel_RawData_WrongWireType_Thro
 }
 
 // ---------------------------------------------------------------------------
+// Repeated numeric fields must be accepted in both the packed and the unpacked
+// wire format, regardless of how onnx-light itself would emit them. Some
+// producers pack TensorProto.dims (field 1) as a length-delimited block; the
+// reader has to decode it (see gh_issue_24203).
+// ---------------------------------------------------------------------------
+
+TEST(onnx_field_serialization, ReadRepeatedInt64_PackedWireFormat) {
+  // TensorProto.dims (field 1) emitted packed: wire type 2, one varint payload.
+  std::string payload = EncodeVarint(3) + EncodeVarint(5) + EncodeVarint(7);
+  std::string bytes = FieldTag(1, 2) + EncodeVarint(payload.size()) + payload;
+  TensorProto parsed;
+  parsed.ParseFromString(bytes);
+  ASSERT_EQ(parsed.ref_dims().size(), 3u);
+  EXPECT_EQ(parsed.ref_dims()[0], 3);
+  EXPECT_EQ(parsed.ref_dims()[1], 5);
+  EXPECT_EQ(parsed.ref_dims()[2], 7);
+}
+
+TEST(onnx_field_serialization, ReadRepeatedInt64_UnpackedWireFormat) {
+  // The same field emitted unpacked: repeated varint entries (wire type 0).
+  std::string bytes = FieldTag(1, 0) + EncodeVarint(3) + FieldTag(1, 0) + EncodeVarint(5) +
+                      FieldTag(1, 0) + EncodeVarint(7);
+  TensorProto parsed;
+  parsed.ParseFromString(bytes);
+  ASSERT_EQ(parsed.ref_dims().size(), 3u);
+  EXPECT_EQ(parsed.ref_dims()[0], 3);
+  EXPECT_EQ(parsed.ref_dims()[1], 5);
+  EXPECT_EQ(parsed.ref_dims()[2], 7);
+}
+
+// ---------------------------------------------------------------------------
 // write_field_limit / size_field_limit / read_field_limit_parallel: raw_data
 // behavior under the default, skip_raw_data and parse-skip configurations.
 // ---------------------------------------------------------------------------

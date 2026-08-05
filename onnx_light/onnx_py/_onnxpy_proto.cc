@@ -1154,11 +1154,11 @@ void AddOnnxPyProto(nb::module_ &m) {
               "an error when used.")
       .def_rw("max_recursion_depth", &ParseOptions::max_recursion_depth,
               "Maximum nesting depth of protobuf sub-messages accepted while parsing "
-              "(default 50). Protects against stack overflow / out-of-memory from deeply "
+              "(default 100). Protects against stack overflow / out-of-memory from deeply "
               "nested messages; parsing raises an error when a message nests deeper than "
-              "this value. The default is more conservative than protobuf's limit of 100 "
-              "because the parser uses large per-message stack frames (especially in debug "
-              "builds), while still allowing far deeper nesting than any realistic model.")
+              "this value. The default matches protobuf's own limit of 100 so that any "
+              "model protobuf accepts is also accepted here, including deeply nested "
+              "control-flow models with dozens of nested Loop/If subgraphs.")
       .def_rw("max_tensor_size_bytes", &ParseOptions::max_tensor_size_bytes,
               "Maximum number of bytes that may be allocated for a single tensor's raw "
               "data (or packed repeated-field payload) during parsing (default 0 = no limit). "

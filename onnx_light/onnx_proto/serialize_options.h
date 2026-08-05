@@ -101,13 +101,12 @@ struct ParseOptions : TensorBufferOptions {
   /** Maximum nesting depth of protobuf sub-messages accepted while parsing.
    *  Protects the parser against stack overflow / out-of-memory caused by
    *  maliciously or accidentally deeply nested messages. Parsing raises an error
-   *  when a message nests deeper than this value. The default is deliberately
-   *  more conservative than protobuf's limit of 100: the recursive-descent
-   *  parser uses large per-message stack frames (especially in debug builds), so
-   *  a lower limit guarantees the guard rejects the message before the recursion
-   *  exhausts the platform's default thread stack (e.g. 1 MB on Windows). It is
-   *  still far above any realistic ONNX message nesting. */
-  int32_t max_recursion_depth = 50;
+   *  when a message nests deeper than this value. The default matches protobuf's
+   *  own limit of 100 so that any model protobuf accepts is also accepted here:
+   *  deeply nested control-flow models (e.g. dozens of nested ``Loop``/``If``
+   *  subgraphs) reach a protobuf message nesting of roughly three per graph
+   *  level (Node -> Attribute -> Graph), which a lower limit would reject. */
+  int32_t max_recursion_depth = 100;
   /** Internal counter tracking the current sub-message nesting depth while
    *  parsing. Managed automatically by the parser through a scoped guard; it is
    *  not a user-facing setting and is reset to 0 once a top-level parse

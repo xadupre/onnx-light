@@ -49,7 +49,7 @@ def _measure(fn, n_iters: int) -> float:
 
 def _build_cases(model_path: str) -> list[tuple[str, object]]:
     """Returns the list of ``(label, callable)`` load cases for *model_path*."""
-    cases: list[tuple[str, object]] = [("onnx", lambda: onnx.load(model_path))]
+    cases: list[tuple[str, object]] = []  # ("onnx", lambda: onnx.load(model_path))]
 
     if ort is not None:
         opt_off = ort.SessionOptions()
@@ -73,11 +73,13 @@ def _build_cases(model_path: str) -> list[tuple[str, object]]:
             )
         )
 
-    for n_threads in (1, 2, 4):
+    for n_threads in (1, 2, 4, 8):
         cases.append(
             (
                 f"onnx_light {n_threads} thread(s)",
-                lambda threads=n_threads: onnxl.load(model_path, num_threads=threads),
+                lambda threads=n_threads: onnxl.load(
+                    model_path, num_threads=threads, load_external_data=True
+                ),
             )
         )
 

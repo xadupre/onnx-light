@@ -198,11 +198,6 @@ public:
   }
   /** Returns the stored string, or a shared empty string when unset (never throws). */
   inline const std::string &value() const { return has_value() ? base::value() : empty_value(); }
-  /** Returns a copy of the stored string, or an empty string when unset (never throws).
-   *  Preferred over ``std::string(*this)`` in comparison/concatenation helpers because an explicit
-   *  ``std::string`` conversion forces overload resolution over std::optional's heterogeneous
-   *  ``operator<=>`` templates, which recurses for this optional-derived type. */
-  inline std::string str() const { return has_value() ? value() : std::string(); }
   /** Returns the character at the specified index (requires a value). */
   inline char operator[](size_t i) const { return value()[i]; }
   /** Parses the content as a signed 64-bit integer. */
@@ -335,19 +330,19 @@ public:
 
   /** String concatenation with standard strings and C strings. */
   friend inline std::string operator+(const OptionalString &lhs, const char *rhs) {
-    return lhs.str() + rhs;
+    return std::string(lhs) + rhs;
   }
   friend inline std::string operator+(const char *lhs, const OptionalString &rhs) {
-    return lhs + rhs.str();
+    return lhs + std::string(rhs);
   }
   friend inline std::string operator+(const OptionalString &lhs, const std::string &rhs) {
-    return lhs.str() + rhs;
+    return std::string(lhs) + rhs;
   }
   friend inline std::string operator+(const std::string &lhs, const OptionalString &rhs) {
-    return lhs + rhs.str();
+    return lhs + std::string(rhs);
   }
   friend inline std::string operator+(const OptionalString &lhs, const OptionalString &rhs) {
-    return lhs.str() + rhs.str();
+    return std::string(lhs) + std::string(rhs);
   }
 };
 

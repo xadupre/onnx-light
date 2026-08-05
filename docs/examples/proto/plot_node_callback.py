@@ -44,11 +44,6 @@ serialized = onnx_model.SerializeToString()
 # --------------------------------
 #
 # ``node_callback`` fires once per node.  The parent graph is passed as the
-# %%
-# Inspect every node while parsing
-# --------------------------------
-#
-# ``node_callback`` fires once per node.  The parent graph is passed as the
 # second argument, so we can record which graph each node belongs to.  The
 # subgraph node is visited while the parser reads the enclosing ``If`` node,
 # before the rest of the main graph.

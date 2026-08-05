@@ -1461,6 +1461,10 @@ void GraphProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
 }
 bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  // Track the graph currently being parsed so raw_data_callback and node_callback can locate the
+  // parent graph of the tensors and nodes they receive. Restored on exit to support subgraphs.
+  GraphProto *const previous_graph = options.current_graph;
+  options.current_graph = this;
   READ_BEGIN(options, stream, GraphProto)                       //
   READ_REPEATED_FIELD(options, stream, node)                    //
   READ_FIELD(options, stream, name)                             //
@@ -1473,6 +1477,12 @@ bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
   READ_REPEATED_FIELD(options, stream, quantization_annotation) //
   READ_REPEATED_FIELD(options, stream, metadata_props)          //
   READ_END(options, stream, GraphProto)                         //  // NOLINT
+  if (options.node_callback) {
+    for (int i = 0; i < static_cast<int>(ref_node().size()); ++i) {
+      options.node_callback(ref_node()[i]);
+    }
+  }
+  options.current_graph = previous_graph;
   return true;
 }
 void GraphProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
@@ -1549,12 +1559,13 @@ void FunctionProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptio
 IMPLEMENT_PROTO(ModelProto)
 SerializeSizeResult ModelProto::SerializeSize(utils::BinaryWriteStream &stream,
                                               SerializeOptions &options) const {
-  if (options.raw_data_callback) {
+  if (options.raw_data_callback || options.node_callback) {
     ModelProto copy;
     copy.CopyFrom(*this);
     ApplySerializeRawDataCallback(copy, options);
     SerializeOptions local_opts = options;
     local_opts.raw_data_callback = {};
+    local_opts.node_callback = {};
     return copy.SerializeSize(stream, local_opts);
   }
   SerializeSizeResult size;
@@ -1629,9 +1640,10 @@ bool ModelProto::SerializeToString(std::string &out,
   ModelProto copy;
   copy.CopyFrom(*this);
   SerializeOptions local_opts = opts;
-  if (local_opts.raw_data_callback) {
+  if (local_opts.raw_data_callback || local_opts.node_callback) {
     ApplySerializeRawDataCallback(copy, local_opts);
     local_opts.raw_data_callback = {};
+    local_opts.node_callback = {};
   }
   local_opts.num_threads = 1;
   local_opts.use_external_data_location = true;

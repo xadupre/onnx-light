@@ -299,47 +299,96 @@ template <typename Nodes, typename F> void ForEachAttributeTensorInNodes(Nodes &
 
 } // namespace
 
-void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options) {
-  if (!options.raw_data_callback || !model.has_graph()) {
+namespace {
+
+// Applies SerializeOptions::raw_data_callback to a single tensor carrying raw_data, rewriting
+// its bytes in place. ``options.current_graph`` must already point at the tensor's parent graph.
+void ApplySerializeRawDataCallbackToTensor(TensorProto &tensor, const SerializeOptions &options) {
+  if (!tensor.has_raw_data()) {
     return;
   }
-  IteratorTensorProto it(&model.ref_graph());
-  while (it.next()) {
-    if (!it->has_raw_data()) {
-      continue;
-    }
-    const bool reset_external_data =
-        it->has_data_location() && it->ref_data_location() == TensorProto::DataLocation::EXTERNAL;
-    const int64_t rewritten_size = options.raw_data_callback(*it, nullptr, 0, true);
-    EXT_ENFORCE(rewritten_size >= 0,
-                "raw_data_callback returned a negative size. Value=", rewritten_size,
-                ", tensor=", it->ref_name(), ".");
-    if (rewritten_size > 0) {
-      utils::ByteSpan rewritten_raw_data;
-      if (options.alignment > 1) {
-        rewritten_raw_data.resize_aligned(static_cast<size_t>(rewritten_size),
-                                          static_cast<size_t>(options.alignment));
-      } else {
-        rewritten_raw_data.resize(static_cast<size_t>(rewritten_size));
-      }
-      const int64_t filled_size = options.raw_data_callback(*it, rewritten_raw_data.data(),
-                                                            rewritten_raw_data.size(), false);
-      EXT_ENFORCE(filled_size == rewritten_size, "raw_data_callback returned ", filled_size,
-                  " bytes in the fill pass for tensor ", it->ref_name(), " after reporting ",
-                  rewritten_size, " bytes in the size pass.");
-      it->ref_raw_data() = std::move(rewritten_raw_data);
+  const bool reset_external_data = tensor.has_data_location() &&
+                                   tensor.ref_data_location() == TensorProto::DataLocation::EXTERNAL;
+  const int64_t rewritten_size = options.raw_data_callback(tensor, nullptr, 0, true);
+  EXT_ENFORCE(rewritten_size >= 0, "raw_data_callback returned a negative size. Value=",
+              rewritten_size, ", tensor=", tensor.ref_name(), ".");
+  if (rewritten_size > 0) {
+    utils::ByteSpan rewritten_raw_data;
+    if (options.alignment > 1) {
+      rewritten_raw_data.resize_aligned(static_cast<size_t>(rewritten_size),
+                                        static_cast<size_t>(options.alignment));
     } else {
-      const int64_t filled_size = options.raw_data_callback(*it, nullptr, 0, false);
-      EXT_ENFORCE(filled_size == 0, "raw_data_callback returned ", filled_size,
-                  " bytes in the fill pass for tensor ", it->ref_name(),
-                  " after reporting 0 bytes in the size pass.");
-      it->ref_raw_data().clear();
+      rewritten_raw_data.resize(static_cast<size_t>(rewritten_size));
     }
-    if (reset_external_data) {
-      it->clr_external_data();
-      it->reset_data_location();
+    const int64_t filled_size = options.raw_data_callback(tensor, rewritten_raw_data.data(),
+                                                          rewritten_raw_data.size(), false);
+    EXT_ENFORCE(filled_size == rewritten_size, "raw_data_callback returned ", filled_size,
+                " bytes in the fill pass for tensor ", tensor.ref_name(), " after reporting ",
+                rewritten_size, " bytes in the size pass.");
+    tensor.ref_raw_data() = std::move(rewritten_raw_data);
+  } else {
+    const int64_t filled_size = options.raw_data_callback(tensor, nullptr, 0, false);
+    EXT_ENFORCE(filled_size == 0, "raw_data_callback returned ", filled_size,
+                " bytes in the fill pass for tensor ", tensor.ref_name(),
+                " after reporting 0 bytes in the size pass.");
+    tensor.ref_raw_data().clear();
+  }
+  if (reset_external_data) {
+    tensor.clr_external_data();
+    tensor.reset_data_location();
+  }
+}
+
+// Recursively applies the serialize node_callback and raw_data_callback to a graph and every
+// subgraph nested in its node attributes. ``options.current_graph`` is set to the graph being
+// visited for the duration of its callbacks and restored afterwards, so callbacks can locate the
+// parent graph of the NodeProto or TensorProto they receive.
+void ApplySerializeCallbacksToGraph(GraphProto &graph, SerializeOptions &options) {
+  GraphProto *const previous_graph = options.current_graph;
+  options.current_graph = &graph;
+  if (options.raw_data_callback) {
+    for (int i = 0; i < static_cast<int>(graph.ref_initializer().size()); ++i) {
+      ApplySerializeRawDataCallbackToTensor(graph.ref_initializer()[i], options);
     }
   }
+  for (int i = 0; i < static_cast<int>(graph.ref_node().size()); ++i) {
+    NodeProto &node = graph.ref_node()[i];
+    if (options.node_callback) {
+      options.node_callback(node);
+    }
+    for (int j = 0; j < static_cast<int>(node.ref_attribute().size()); ++j) {
+      AttributeProto &attr = node.ref_attribute()[j];
+      if (options.raw_data_callback && attr.has_t()) {
+        ApplySerializeRawDataCallbackToTensor(attr.ref_t(), options);
+      }
+      if (options.raw_data_callback && attr.has_tensors()) {
+        for (int k = 0; k < static_cast<int>(attr.ref_tensors().size()); ++k) {
+          ApplySerializeRawDataCallbackToTensor(attr.ref_tensors()[k], options);
+        }
+      }
+      if (attr.has_g()) {
+        ApplySerializeCallbacksToGraph(attr.ref_g(), options);
+      }
+      if (attr.has_graphs()) {
+        for (int k = 0; k < static_cast<int>(attr.ref_graphs().size()); ++k) {
+          ApplySerializeCallbacksToGraph(attr.ref_graphs()[k], options);
+        }
+      }
+    }
+  }
+  options.current_graph = previous_graph;
+}
+
+} // namespace
+
+void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options) {
+  if ((!options.raw_data_callback && !options.node_callback) || !model.has_graph()) {
+    return;
+  }
+  // Work on a local mutable copy so ``current_graph`` can be threaded through the traversal
+  // without mutating the caller's options.
+  SerializeOptions local_options = options;
+  ApplySerializeCallbacksToGraph(model.ref_graph(), local_options);
 }
 
 void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file,
@@ -1005,12 +1054,13 @@ std::shared_ptr<uint8_t[]> ConsolidateTensorsToBuffer(ModelProto &model,
 
 bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
                                  SerializeOptions &options, bool clear_external_data) {
-  if (options.raw_data_callback) {
+  if (options.raw_data_callback || options.node_callback) {
     ModelProto copy;
     copy.CopyFrom(model);
     ApplySerializeRawDataCallback(copy, options);
     SerializeOptions local_options = options;
     local_options.raw_data_callback = {};
+    local_options.node_callback = {};
     return SerializeModelProtoToStream(copy, stream, local_options, clear_external_data);
   }
   EXT_ENFORCE(options.format == SerializeFormat::kOnnx,

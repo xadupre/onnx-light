@@ -389,12 +389,13 @@ template <typename cls> bool _SerializeToString(cls &self, std::string &out) {
 template <typename cls>
 bool _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   if constexpr (std::is_same_v<std::remove_cv_t<cls>, ModelProto>) {
-    if (opts.raw_data_callback) {
+    if (opts.raw_data_callback || opts.node_callback) {
       ModelProto copy;
       copy.CopyFrom(self);
       ApplySerializeRawDataCallback(copy, opts);
       SerializeOptions local_opts = opts;
       local_opts.raw_data_callback = {};
+      local_opts.node_callback = {};
       return _SerializeToString(copy, out, local_opts);
     }
   }
@@ -434,12 +435,13 @@ template <typename cls> bool _SerializeToFileDescriptor(cls &self, int fd) {
 
 template <typename cls> bool _SerializeToFileDescriptor(cls &self, int fd, SerializeOptions &opts) {
   if constexpr (std::is_same_v<std::remove_cv_t<cls>, ModelProto>) {
-    if (opts.raw_data_callback) {
+    if (opts.raw_data_callback || opts.node_callback) {
       ModelProto copy;
       copy.CopyFrom(self);
       ApplySerializeRawDataCallback(copy, opts);
       SerializeOptions local_opts = opts;
       local_opts.raw_data_callback = {};
+      local_opts.node_callback = {};
       return _SerializeToFileDescriptor(copy, fd, local_opts);
     }
   }

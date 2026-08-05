@@ -406,12 +406,12 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
         for (int64_t j = 0; j < total_kv_seq_len; ++j) {
           scores[static_cast<size_t>(j)] *= inv_denom;
         }
-        // qk_matmul_output_mode 3: after softmax.
-        if (attrs.qk_matmul_output_mode == 3) {
-          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-            QKbh[i * total_kv_seq_len + j] = static_cast<float>(scores[static_cast<size_t>(j)]);
-          }
-        }
+        // A fully-masked row (every key masked out) has no attendable key: by
+        // convention it softmaxes to all-zero probabilities. Detect it on the
+        // additive bias (not the possibly-NaN logits) and zero the row BEFORE
+        // capturing the mode-3 output so the exposed ``qk_matmul_output`` row is
+        // also zeroed, consistent with the primary output ``Y`` (both 0). This
+        // mirrors upstream's guard, which runs before the mode-3 capture.
         bool row_fully_masked = true;
         for (int64_t j = 0; j < total_kv_seq_len; ++j) {
           const double b = bias[static_cast<size_t>(j)];
@@ -422,6 +422,13 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
         }
         if (row_fully_masked) {
           std::fill(scores, scores + total_kv_seq_len, 0.0);
+        }
+        // qk_matmul_output_mode 3: after softmax (with the fully-masked-row
+        // guard applied above).
+        if (attrs.qk_matmul_output_mode == 3) {
+          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+            QKbh[i * total_kv_seq_len + j] = static_cast<float>(scores[static_cast<size_t>(j)]);
+          }
         }
         // Y[i, dv] = sum_j probs[j] * V[j, dv]
         for (int64_t dv = 0; dv < v_head_size; ++dv) {

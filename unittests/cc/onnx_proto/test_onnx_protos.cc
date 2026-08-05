@@ -1444,6 +1444,11 @@ TEST(onnx_proto, TensorProto_DataTypes) {
   EXPECT_EQ(tensor.ref_string_data()[0], "hello");
   EXPECT_EQ(tensor.ref_string_data()[1], "world");
 
+  utils::OptionalString opt_str("optional");
+  tensor.add_string_data(opt_str);
+  EXPECT_EQ(tensor.ref_string_data().size(), 3);
+  EXPECT_EQ(tensor.ref_string_data()[2], "optional");
+
   tensor.set_data_type(TensorProto::DataType::INT64);
   tensor.ref_int64_data().push_back(100);
   tensor.ref_int64_data().push_back(200);

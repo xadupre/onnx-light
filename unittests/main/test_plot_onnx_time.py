@@ -55,8 +55,12 @@ class TestPlotOnnxTime(unittest.TestCase):
             self.assertTrue(helpers["_model_has_external_data"](reloaded))
 
             loaded = onnxl.load(onnx_path, load_external_data=True)
-            self.assertFalse(helpers["_model_has_external_data"](loaded))
-            self.assertGreater(loaded.ByteSize(), 0)
+            # With the weights loaded in memory the serialized size grows and
+            # ``ByteSize`` reflects the actual model size (unlike a model whose
+            # weights are still stored externally).
+            self.assertGreater(loaded.ByteSize(), reloaded.ByteSize())
+            for init in loaded.graph.initializer:
+                self.assertTrue(bool(init.raw_data))
 
     def test_save_default_model_single_file(self):
         """Verifies the default synthetic model has no external weights by default."""

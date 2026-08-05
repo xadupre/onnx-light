@@ -429,8 +429,11 @@ onxl = onnxl.load(onnx_path, load_external_data=_has_external_data)
 onxl_x4 = onnxl.load(onnx_path, num_threads=4, load_external_data=_has_external_data)
 
 # ``onnx.ModelProto.ByteSize`` does not account for external weights, so the
-# in-memory model size is measured on the ``onnx_light`` model loaded with
-# ``load_external_data=True`` (which pulls the external tensors into memory).
+# in-memory model size is measured on the ``onnx_light`` model ``onxl``. When
+# the model stores its weights externally, ``onxl`` is loaded with
+# ``load_external_data=True`` (see above), which pulls the external tensors into
+# memory so ``ByteSize`` reflects the real size; single-file models already have
+# their weights inline.
 size_bytes = onxl.ByteSize()
 print(f"Model size: {size_bytes / 2 ** 20:.3f} MB")
 

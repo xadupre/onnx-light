@@ -63,6 +63,7 @@ disabled (``ORT_DISABLE_ALL``) so that the measurement reflects only the
 model loading overhead rather than compilation or fusion costs.
 
 * ``onnx``, ``onnxlight``, ``ort``: use ``onnx``, ``onnx-light``, or ``onnxruntime``
+* ``reference``: builds an ``onnx_light.onnx.reference.ReferenceEvaluator`` from the model
 * ``1filex1``: saves in a single file with 1 thread
 * ``1filex4``: saves in a single file with 4 threads
 * ``2filex1``: saves in a file and another for external data with 1 thread
@@ -126,6 +127,7 @@ else:
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as onnxlh
+from onnx_light.onnx.reference import ReferenceEvaluator
 from onnx_light.doc import (
     find_standalone_executable,
     get_cpu_topology,
@@ -684,6 +686,29 @@ if _run_scenario("load"):
         print("onnx_ir is not installed, skipping ir-py single-file load benchmark.")
 
     # %%
+    # Load with ``onnx_light.onnx.reference.ReferenceEvaluator``.  This measures
+    # the time to build a Python reference runtime from the model, which
+    # includes loading the model and preparing the operators for evaluation.
+
+    data.append(
+        measure("load/1filex1/reference", lambda: ReferenceEvaluator(onnxl.load(onnx_path)))
+    )
+    print_stats("load/1filex1/reference", data[-1])
+
+    # %%
+    # Load with ``onnx_light.onnx.reference.ReferenceEvaluator`` using parallel
+    # tensor loading.  The model is loaded with ``num_threads > 1`` before
+    # building the reference runtime.
+
+    data.append(
+        measure(
+            "load/1filex4/reference",
+            lambda: ReferenceEvaluator(onnxl.load(onnx_path, num_threads=4)),
+        )
+    )
+    print_stats("load/1filex4/reference", data[-1])
+
+    # %%
     # Load with ``onnxruntime`` (all optimizations disabled).
     # ``InferenceSession`` is created with ``ORT_DISABLE_ALL`` so the
     # measurement captures only model loading overhead, not graph optimization.
@@ -1119,6 +1144,34 @@ if _run_scenario("load"):
         )
         print_stats("load/2filex1/ort", data[-1])
 
+    # %%
+    # Load with ``onnx_light.onnx.reference.ReferenceEvaluator`` using external
+    # data.  The model (with its external weights) is loaded and turned into a
+    # reference runtime.
+
+    data.append(
+        measure(
+            "load/2filex1/reference",
+            lambda: ReferenceEvaluator(onnxl.load(ext_load_onnx, location=ext_load_data)),
+        )
+    )
+    print_stats("load/2filex1/reference", data[-1])
+
+    # %%
+    # Load with ``onnx_light.onnx.reference.ReferenceEvaluator`` using external
+    # data and parallel tensor loading.  Combine external-data loading with
+    # ``num_threads > 1`` before building the reference runtime.
+
+    data.append(
+        measure(
+            "load/2filex4/reference",
+            lambda: ReferenceEvaluator(
+                onnxl.load(ext_load_onnx, location=ext_load_data, num_threads=4)
+            ),
+        )
+    )
+    print_stats("load/2filex4/reference", data[-1])
+
 # %%
 # Results
 # --------
@@ -1265,7 +1318,7 @@ _common_title = (
     f"benchmark key: <op>/<files>x<threads>/<lib>\n"
     f"op=load|save|parse|serialize, files=1|2, threads=1|4, "
     f"lib=onnx|onnx-cpp|onnxlight|onnxlight-cpp|onnxlight-cpp-nocopy|"
-    f"onnxlight-nocopy|ir-py|ort"
+    f"onnxlight-nocopy|ir-py|ort|reference"
 )
 
 # Produce one graph with everything, then split the results into a

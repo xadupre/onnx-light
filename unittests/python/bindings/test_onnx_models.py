@@ -324,6 +324,9 @@ class TestOnnxLightHelper(ExtTestCase):
 
         self.assertEqual(parsed.graph.node[0].doc_string, "visited")
         self.assertEqual(parsed.graph.node[1].doc_string, "visited")
+        # The subgraph node inside the If's then_branch was visited too.
+        sub = parsed.graph.node[1].attribute[0].g
+        self.assertEqual(sub.node[0].doc_string, "visited")
 
     def test_serialize_options_node_callback(self):
         opts = onnxl.SerializeOptions()

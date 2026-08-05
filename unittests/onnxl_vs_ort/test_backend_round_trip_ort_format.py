@@ -35,10 +35,14 @@ import os
 import tempfile
 import unittest
 
-import onnxruntime as ort
 from onnx_light.ext_test_case import import_or_skip
 
 import onnx_light.onnx as onnxl
+
+# ``onnxruntime`` ships no wheel for some platforms (e.g. certain macOS
+# architectures), so importing it may fail. Skip the whole module cleanly in
+# that case instead of reporting a collection error.
+ort = import_or_skip("onnxruntime")
 
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).

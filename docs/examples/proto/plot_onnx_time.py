@@ -92,6 +92,10 @@ file to download inside the repository can be selected with
 fails (for example due to a connectivity issue) the script prints a
 warning and falls back to the default synthetic model so the example
 can still run in offline environments.
+
+The ``--external`` flag makes the default synthetic model store its weights
+in a companion external data file, which is useful to exercise the
+external-weights loading path.
 """
 
 import argparse
@@ -200,6 +204,15 @@ def _parse_args(args=None) -> argparse.Namespace:
             "download when --model-id is provided. Defaults to onnx/model.onnx."
         ),
     )
+    parser.add_argument(
+        "--external",
+        dest="external",
+        action="store_true",
+        help=(
+            "When building the default synthetic model, store its weights in an "
+            "external data file (produces a model with external weights)."
+        ),
+    )
     parsed, _ = parser.parse_known_args(args=args)
     values = parsed.scenarios or ["all"]
     if "all" in values:
@@ -253,6 +266,7 @@ SELECTED_SCENARIOS = _CLI_ARGS.scenarios
 _CLI_MODEL_PATH = _CLI_ARGS.model_path
 _CLI_MODEL_ID = _CLI_ARGS.model_id
 _CLI_MODEL_FILE = _CLI_ARGS.model_file
+_CLI_EXTERNAL = _CLI_ARGS.external
 
 
 def _run_scenario(name: str) -> bool:
@@ -354,6 +368,29 @@ def _model_has_external_data(model: onnxl.ModelProto) -> bool:
     )
 
 
+def _save_default_model(model: onnxl.ModelProto, tmp_dir: str, external: bool) -> str:
+    """Saves the synthetic *model* to *tmp_dir* and returns its file path.
+
+    When *external* is True the weights are written to a companion external
+    data file so the produced model has external weights.
+
+    Returns:
+        The path of the saved ONNX model file.
+    """
+    onnx_path = os.path.join(tmp_dir, "bench.onnx")
+    if external:
+        onnxl.save(
+            model,
+            onnx_path,
+            save_as_external_data=True,
+            location="bench.onnx.data",
+            size_threshold=0,
+        )
+    else:
+        onnxl.save(model, onnx_path)
+    return onnx_path
+
+
 def onnx_save(model, onnx_path):
     import onnx
 
@@ -381,23 +418,25 @@ elif _CLI_MODEL_ID is not None:
         print(f"Using model from Hugging Face id {_CLI_MODEL_ID!r}: {onnx_path}")
     else:
         model = make_model()
-        onnx_path = os.path.join(tmp_dir, "bench.onnx")
-        onnxl.save(model, onnx_path)
+        onnx_path = _save_default_model(model, tmp_dir, _CLI_EXTERNAL)
 else:
     model = make_model()
-    onnx_path = os.path.join(tmp_dir, "bench.onnx")
-    onnxl.save(model, onnx_path)
-
-size_bytes = model.ByteSize()
-print(f"Model size: {size_bytes / 2 ** 20:.3f} MB")
-
-file_size = os.path.getsize(onnx_path)
-print(f"File size : {file_size / 2 ** 20:.3f} MB")
+    onnx_path = _save_default_model(model, tmp_dir, _CLI_EXTERNAL)
 
 onx = onnx_load(onnx_path)
 _has_external_data = _model_has_external_data(onx)
 onxl = onnxl.load(onnx_path, load_external_data=_has_external_data)
 onxl_x4 = onnxl.load(onnx_path, num_threads=4, load_external_data=_has_external_data)
+
+# ``onnx.ModelProto.ByteSize`` does not account for external weights, so the
+# in-memory model size is measured on the ``onnx_light`` model loaded with
+# ``load_external_data=True`` (which pulls the external tensors into memory).
+size_bytes = onxl.ByteSize()
+print(f"Model size: {size_bytes / 2 ** 20:.3f} MB")
+
+file_size = os.path.getsize(onnx_path)
+print(f"File size : {file_size / 2 ** 20:.3f} MB")
+
 onnx_ir_module = _maybe_import_onnx_ir()
 onx_ir = (
     onnx_ir_module.load(onnx_path)
@@ -416,7 +455,7 @@ onnxl.save(onxl, ext_load_onnx, location=ext_load_data)
 # Print a summary of the model: number of nodes, initializers (tensors),
 # total weight size, file size, and serialized size.
 
-print_model_stats(model, onnx_path)
+print_model_stats(onxl, onnx_path)
 
 # %%
 # Benchmark helper.

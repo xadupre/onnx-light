@@ -117,7 +117,7 @@ void NormalizeGraph(GraphProto &graph) {
     SortMetadata(node.metadata_props());
     for (AttributeProto &attr : node.attribute()) {
       if (attr.has_g()) {
-        NormalizeGraph(attr.g());
+        NormalizeGraph(*attr.mutable_g());
       }
       for (GraphProto &sub : attr.graphs()) {
         NormalizeGraph(sub);
@@ -152,7 +152,7 @@ void Normalize(ModelProto &model) {
     model.add_opset(domain, version);
   }
   SortMetadata(model.metadata_props());
-  NormalizeGraph(model.graph());
+  NormalizeGraph(*model.mutable_graph());
 }
 
 std::string NormalizedSerialization(ModelProto model) {

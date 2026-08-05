@@ -75,7 +75,7 @@ void BindNodeAttributes(NodeProto &node, const AttributeMap &attr_map) {
     } else {
       // Regular attributes: recurse into any graph-valued sub-graphs.
       if (attr.has_g()) {
-        for (auto &sub_node : attr.g().node()) {
+        for (auto &sub_node : attr.mutable_g()->node()) {
           BindNodeAttributes(sub_node, attr_map);
         }
       }

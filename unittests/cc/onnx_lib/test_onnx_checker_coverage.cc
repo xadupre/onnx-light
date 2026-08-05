@@ -247,6 +247,47 @@ TEST(CHECKER_COVERAGE, TensorExternalInvalidLocationRejected) {
   EXPECT_THROW(checker::check_tensor(t, ctx), ValidationError);
 }
 
+TEST(CHECKER_COVERAGE, TensorExternalInvalidLocationBypassed) {
+  TensorProto t;
+  t.set_name("ext_bad_loc");
+  t.set_data_type(TensorProto::FLOAT);
+  t.add_dims(1);
+  t.set_data_location(TensorProto::EXTERNAL);
+  auto *e = t.add_external_data();
+  e->set_key("location");
+  e->set_value(".."); // would be rejected by resolve_external_data_location
+  CheckerContext ctx = MakeCtx();
+  ctx.set_model_dir("localfolder");
+  ctx.set_skip_external_data_location_check(true);
+  EXPECT_NO_THROW(checker::check_tensor(t, ctx));
+}
+
+TEST(CHECKER_COVERAGE, TensorExternalEmptyLocationBypassed) {
+  TensorProto t;
+  t.set_name("ext_empty_loc");
+  t.set_data_type(TensorProto::FLOAT);
+  t.add_dims(1);
+  t.set_data_location(TensorProto::EXTERNAL);
+  auto *e = t.add_external_data();
+  e->set_key("location");
+  e->set_value(""); // would be rejected: location should not be empty
+  CheckerContext ctx = MakeCtx();
+  ctx.set_skip_external_data_location_check(true);
+  EXPECT_NO_THROW(checker::check_tensor(t, ctx));
+}
+
+TEST(CHECKER_COVERAGE, TensorExternalMissingLocationBypassed) {
+  TensorProto t;
+  t.set_name("ext_no_loc");
+  t.set_data_type(TensorProto::FLOAT);
+  t.add_dims(1);
+  t.set_data_location(TensorProto::EXTERNAL);
+  // No "location" entry in external_data.
+  CheckerContext ctx = MakeCtx();
+  ctx.set_skip_external_data_location_check(true);
+  EXPECT_NO_THROW(checker::check_tensor(t, ctx));
+}
+
 TEST(CHECKER_COVERAGE, TensorUnrecognizedDataTypeRejected) {
   TensorProto t;
   t.set_name("bogus");

@@ -17,11 +17,17 @@ def check_model(
     full_check: bool = False,
     skip_opset_compatibility_check: bool = False,
     check_custom_domain: bool = False,
+    skip_external_data_location_check: bool = False,
 ) -> None:
     """Checks a model and raises checker.ValidationError on invalid content.
 
     Validates the model's IR structure, including topological ordering of nodes,
     SSA form, schema compliance, and metadata consistency.
+
+    When ``skip_external_data_location_check`` is True, the validation of
+    external tensor data locations is skipped, bypassing errors such as an empty
+    or unsafe location. This is not recommended and must never be the default:
+    it disables safety checks that guard against unsafe external data paths.
 
     Raises:
         ValidationError: If the model fails validation.
@@ -31,6 +37,7 @@ def check_model(
         full_check=full_check,
         skip_opset_compatibility_check=skip_opset_compatibility_check,
         check_custom_domain=check_custom_domain,
+        skip_external_data_location_check=skip_external_data_location_check,
     )
 
 

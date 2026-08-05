@@ -6196,13 +6196,13 @@ std::string BuildNestedTypeProto(int levels) {
 
 TEST(onnx_proto, ParserRecursionLimitRejectsDeeplyNestedMessages) {
   // Each level adds two sub-message parses; 200 levels reaches depth 400, well
-  // beyond the default recursion limit of 50, and must be rejected rather than
+  // beyond the default recursion limit of 100, and must be rejected rather than
   // overflowing the stack / exhausting memory. The guard fires at depth
   // limit + 1, so the parser never recurses past the default limit.
   std::string deep = BuildNestedTypeProto(200);
   TypeProto parsed;
   ParseOptions popts;
-  EXPECT_EQ(popts.max_recursion_depth, 50);
+  EXPECT_EQ(popts.max_recursion_depth, 100);
   EXPECT_THROW(parsed.ParseFromString(deep, popts), std::exception);
   // The recursion counter must be fully unwound even after a rejected parse so
   // the options object can be safely reused.
@@ -6210,13 +6210,29 @@ TEST(onnx_proto, ParserRecursionLimitRejectsDeeplyNestedMessages) {
 }
 
 TEST(onnx_proto, ParserRecursionLimitAcceptsShallowNesting) {
-  // 10 levels reaches depth 20, comfortably within the default limit of 50.
+  // 10 levels reaches depth 20, comfortably within the default limit of 100.
   std::string shallow = BuildNestedTypeProto(10);
   TypeProto parsed;
   ParseOptions popts;
   EXPECT_NO_THROW(parsed.ParseFromString(shallow, popts));
   EXPECT_TRUE(parsed.has_sequence_type());
   // The recursion counter must return to 0 once parsing completes.
+  EXPECT_EQ(popts._recursion_depth, 0);
+}
+
+TEST(onnx_proto, ParserRecursionLimitAcceptsDeeplyNestedControlFlow) {
+  // Regression for issue #4244: models with dozens of nested Loop/If subgraphs
+  // reach a protobuf message nesting of roughly three per graph level
+  // (Node -> Attribute -> Graph), e.g. ~96 for 30 nested Loops. The former
+  // default limit of 50 rejected such models. This uses a nested TypeProto to
+  // exercise the same depth guard: 40 levels reaches depth 80, which the former
+  // default of 50 rejected but the current default of 100 accepts, matching
+  // protobuf's own limit.
+  std::string deep = BuildNestedTypeProto(40); // depth 80
+  TypeProto parsed;
+  ParseOptions popts;
+  EXPECT_NO_THROW(parsed.ParseFromString(deep, popts));
+  EXPECT_TRUE(parsed.has_sequence_type());
   EXPECT_EQ(popts._recursion_depth, 0);
 }
 
@@ -7540,4 +7556,26 @@ TEST(RepeatedProtoField, MoveConstructFromTemporaryVector) {
   utils::RepeatedProtoField<NodeProto> field(make());
   ASSERT_EQ(field.size(), 1u);
   EXPECT_EQ(field[0].ref_op_type(), "Relu");
+}
+
+// Reading an unset optional message sub-field on a non-const message must not
+// mark the field as present. This mirrors google::protobuf, where the accessor
+// returns a const reference and only mutable_<field>() creates the sub-message.
+TEST(onnx_compatibility, OptionalMessageReadDoesNotCreate) {
+  TypeProto type_proto;
+  ASSERT_FALSE(type_proto.has_tensor_type());
+
+  // The non-const accessor must return a const reference like protobuf, so it
+  // cannot be used to mutate and does not auto-create the sub-message.
+  static_assert(std::is_same<decltype(std::declval<TypeProto &>().tensor_type()),
+                             const TypeProto::Tensor &>::value,
+                "Non-const optional message accessor must return a const reference like protobuf.");
+
+  // has_type() only inspects presence via has_*; it must not trigger creation.
+  EXPECT_FALSE(type_proto.has_type());
+  EXPECT_FALSE(type_proto.has_tensor_type());
+
+  // Only mutable_tensor_type() marks the field as present.
+  type_proto.mutable_tensor_type();
+  EXPECT_TRUE(type_proto.has_tensor_type());
 }

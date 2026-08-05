@@ -105,6 +105,29 @@ class TestChecker(ExtTestCase):
         with self.assertRaises(checker.ValidationError):
             checker.check_model(model_def)
 
+    def test_check_model_external_data_empty_location_bypass(self) -> None:
+        """Checks that an empty external data location can be bypassed on request."""
+        tensor = onnxl.TensorProto()
+        tensor.name = "W"
+        tensor.data_type = onnxl.TensorProto.FLOAT
+        tensor.dims.append(1)
+        tensor.data_location = onnxl.TensorProto.EXTERNAL
+        entry = tensor.external_data.add()
+        entry.key = "location"
+        entry.value = ""  # empty location is normally rejected
+        graph = oh.make_graph(
+            [oh.make_node("Relu", ["W"], ["Y"])],
+            "test",
+            [],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [1])],
+            initializer=[tensor],
+        )
+        model_def = oh.make_model(graph, producer_name="test")
+        with self.assertRaises(checker.ValidationError):
+            checker.check_model(model_def)
+        # Not recommended, but explicitly requested: the check is bypassed.
+        checker.check_model(model_def, skip_external_data_location_check=True)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

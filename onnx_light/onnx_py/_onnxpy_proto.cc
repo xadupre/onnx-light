@@ -452,10 +452,17 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             const FileLoadMode mode =
                 has_opts ? nb::cast<ParseOptions &>(options).file_load_mode : FileLoadMode::kAuto;
             if (!external_data_file.empty()) {
-              EXT_ENFORCE(mode == FileLoadMode::kAuto,
-                          "ParseFromFile: file_load_mode is not supported when an "
-                          "external_data_file is provided (TwoFilesStream is always used).");
-              stream.reset(new utils::TwoFilesStream(file_path, external_data_file));
+              // TwoFilesStream reads the main model file through a buffered std::ifstream
+              // (it derives from FileStream), while the separate weights file is the large
+              // payload. On the no_copy=True path the weights file is memory-mapped once and
+              // every tensor borrows a zero-copy view of it (see
+              // TwoFilesStream::borrow_weights_bytes). file_load_mode=MMAP requests the same
+              // model-owned mmap + zero-copy borrow for the weights file even when no_copy is
+              // not set; the borrowed views keep the mapping alive, so this is safe here even
+              // though it is not for a single-file model.
+              auto two_stream = std::make_unique<utils::TwoFilesStream>(
+                  file_path, external_data_file, mode == FileLoadMode::kMmap && !wants_no_copy);
+              stream.reset(two_stream.release());
             } else if (mode == FileLoadMode::kMmap) {
               EXT_ENFORCE(!wants_no_copy,
                           "ParseFromFile: file_load_mode=MMAP with no_copy=True on a "
@@ -1176,11 +1183,11 @@ void AddOnnxPyProto(nb::module_ &m) {
               "an error when used.")
       .def_rw("max_recursion_depth", &ParseOptions::max_recursion_depth,
               "Maximum nesting depth of protobuf sub-messages accepted while parsing "
-              "(default 50). Protects against stack overflow / out-of-memory from deeply "
+              "(default 100). Protects against stack overflow / out-of-memory from deeply "
               "nested messages; parsing raises an error when a message nests deeper than "
-              "this value. The default is more conservative than protobuf's limit of 100 "
-              "because the parser uses large per-message stack frames (especially in debug "
-              "builds), while still allowing far deeper nesting than any realistic model.")
+              "this value. The default matches protobuf's own limit of 100 so that any "
+              "model protobuf accepts is also accepted here, including deeply nested "
+              "control-flow models with dozens of nested Loop/If subgraphs.")
       .def_rw("max_tensor_size_bytes", &ParseOptions::max_tensor_size_bytes,
               "Maximum number of bytes that may be allocated for a single tensor's raw "
               "data (or packed repeated-field payload) during parsing (default 0 = no limit). "

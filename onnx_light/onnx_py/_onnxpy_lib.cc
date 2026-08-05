@@ -535,12 +535,13 @@ void AddOnnxPyLib(nb::module_ &m) {
   checker_mod.def(
       "check_model",
       [](const ModelProto &model, bool full_check, bool skip_opset_compatibility_check,
-         bool check_custom_domain) {
-        checker::check_model(model, full_check, skip_opset_compatibility_check,
-                             check_custom_domain);
+         bool check_custom_domain, bool skip_external_data_location_check) {
+        checker::check_model(model, full_check, skip_opset_compatibility_check, check_custom_domain,
+                             skip_external_data_location_check);
       },
       nb::arg("model"), nb::arg("full_check") = false,
       nb::arg("skip_opset_compatibility_check") = false, nb::arg("check_custom_domain") = false,
+      nb::arg("skip_external_data_location_check") = false,
       "Validates the model for structural correctness, topological ordering of nodes, "
       "and schema compliance, raising ValidationError on failures.");
 

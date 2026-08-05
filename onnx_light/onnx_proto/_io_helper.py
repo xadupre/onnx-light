@@ -345,7 +345,11 @@ def load(
         :class:`FileStream` is used so borrowed pointers do not outlive the stream).
         ``FileLoadMode.MMAP`` forces memory-mapped I/O and ``FileLoadMode.IFSTREAM`` forces
         the buffered ``std::ifstream``-based reader. Ignored when *f* is a :class:`bytes`
-        object or when an external weights file is provided via ``location``.
+        object. When an external weights file is provided via ``location``, the main model
+        file is always read through the buffered reader (``TwoFilesStream``); ``MMAP`` then
+        applies to the separate weights file, which is memory-mapped once and shared by the
+        model so that every tensor borrows a zero-copy view of it (as on the ``no_copy=True``
+        path), so all modes are honoured.
     :param format: The serialization format, either ``"protobuf"`` (binary ONNX)
         or ``"textproto"`` (protobuf text format). When it is not specified, it is
         inferred from the file extension (``.textproto`` selects ``"textproto"``,

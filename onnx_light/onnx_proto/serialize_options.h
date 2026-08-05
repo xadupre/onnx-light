@@ -139,8 +139,16 @@ struct ParseOptions : TensorBufferOptions {
    *  existing storage without moving the bytes.  Return an empty ``std::function`` to leave the
    *  tensor's ownership unchanged.
    *
+   *  The callback also receives the parent GraphProto (the graph the tensor belongs to) as a
+   *  pointer, or ``nullptr`` when the tensor is parsed on its own (for example
+   *  ``TensorProto::ParseFromString``) rather than as part of a graph.
+   *
    *  By default it is empty (no callback) and parsing behaves exactly as before. */
-  std::function<std::function<void()>(TensorProto &)> raw_data_callback = {};
+  std::function<std::function<void()>(TensorProto &, GraphProto *)> raw_data_callback = {};
+  /** Internal transient pointer to the GraphProto currently being parsed, used only to pass the
+   *  parent graph to ``raw_data_callback``. It is set and restored automatically while parsing a
+   *  GraphProto, is never serialized, and is not exposed in the Python bindings. */
+  GraphProto *_current_graph = nullptr;
   /** Holds an optional callback invoked for each NodeProto once it has been fully parsed.
    *
    *  The callback receives the freshly parsed NodeProto and its parent GraphProto (the graph the
@@ -195,14 +203,18 @@ struct SerializeOptions : TensorBufferOptions {
   /** Holds an optional callback invoked for each TensorProto carrying ``raw_data`` immediately
    *  before serialization.
    *
+   *  The callback also receives the parent GraphProto (the graph the tensor belongs to) by
+   *  pointer, taken from a working copy of the model, so the parent graph lets the callback locate
+   *  the tensor's surrounding graph.
+   *
    *  Serialization calls the callback twice per tensor:
    *
-   *  - size pass: ``fn(tensor, nullptr, 0, true)`` must return the number of bytes that the
-   *    callback will serialize for that tensor.
+   *  - size pass: ``fn(tensor, graph, nullptr, 0, true)`` must return the number of bytes that
+   *    the callback will serialize for that tensor.
    *  - fill pass: onnx-light allocates a buffer of that size, then calls
-   *    ``fn(tensor, buffer, buffer_size, false)``. The callback may update the tensor metadata
-   *    in place (for example dims or data_type), must fill ``buffer`` with exactly that many
-   *    bytes, and must return the same size again.
+   *    ``fn(tensor, graph, buffer, buffer_size, false)``. The callback may update the tensor
+   *    metadata in place (for example dims or data_type), must fill ``buffer`` with exactly that
+   *    many bytes, and must return the same size again.
    *
    *  When the tensor was previously marked with ``data_location=EXTERNAL`` and still carries
    *  ``raw_data`` (for example after ``load_external_data``), serialization regenerates the
@@ -210,7 +222,8 @@ struct SerializeOptions : TensorBufferOptions {
    *  the rewritten bytes.
    *
    *  By default it is empty (no callback) and serialization behaves exactly as before. */
-  std::function<int64_t(TensorProto &, uint8_t *, size_t, bool)> raw_data_callback = {};
+  std::function<int64_t(TensorProto &, GraphProto *, uint8_t *, size_t, bool)> raw_data_callback =
+      {};
   /** Holds an optional callback invoked for each NodeProto immediately before it is serialized.
    *
    *  The callback receives the NodeProto and its parent GraphProto (both from a working copy of

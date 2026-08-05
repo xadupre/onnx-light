@@ -169,7 +169,7 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertIsNone(opts.raw_data_callback)
 
         # Round-trips the exact Python callable that was assigned.
-        def callback(tensor):
+        def callback(tensor, graph):
             return None
 
         opts.raw_data_callback = callback
@@ -188,16 +188,17 @@ class TestOnnxLightHelper(ExtTestCase):
         seen = []
         deleted = []
 
-        def callback(parsed_tensor):
-            seen.append(parsed_tensor.name)
+        def callback(parsed_tensor, graph):
+            seen.append((parsed_tensor.name, None if graph is None else graph.name))
             return lambda: deleted.append(parsed_tensor.name)
 
         opts = onnxl.ParseOptions()
         opts.raw_data_callback = callback
         parsed = onnxl.ModelProto()
         parsed.ParseFromString(serialized, opts)
-        # The callback fires once for the only tensor carrying raw_data.
-        self.assertEqual(seen, ["W"])
+        # The callback fires once for the only tensor carrying raw_data and receives the parent
+        # graph.
+        self.assertEqual(seen, [("W", "g")])
         # Data is still readable: attaching a deleter does not move the bytes.
         np.testing.assert_array_equal(onh.to_array(parsed.graph.initializer[0]), arr)
         # The deleter runs once the tensor's raw_data is released.
@@ -257,7 +258,7 @@ class TestOnnxLightHelper(ExtTestCase):
         serialized = model.SerializeToString()
 
         opts = onnxl.ParseOptions()
-        opts.raw_data_callback = lambda parsed_tensor: None
+        opts.raw_data_callback = lambda parsed_tensor, graph: None
         parsed = onnxl.ModelProto()
         parsed.ParseFromString(serialized, opts)
         # Returning None leaves the tensor ownership and data unchanged.
@@ -374,7 +375,7 @@ class TestOnnxLightHelper(ExtTestCase):
         opts = onnxl.SerializeOptions()
         self.assertIsNone(opts.raw_data_callback)
 
-        def callback(tensor, buffer, size_only):
+        def callback(tensor, graph, buffer, size_only):
             return 0
 
         opts.raw_data_callback = callback
@@ -495,7 +496,7 @@ class TestOnnxLightHelper(ExtTestCase):
             oh.make_graph([], "g", [], [], [onh.from_array(original, name="W")])
         )
 
-        def callback(tensor, buffer, size_only):
+        def callback(tensor, graph, buffer, size_only):
             expected_size = replacement.nbytes if tensor.name == "W" else len(tensor.raw_data)
             if size_only:
                 return expected_size
@@ -542,7 +543,7 @@ class TestOnnxLightHelper(ExtTestCase):
             holder = onnxl.load_encrypted_string(blob, key)
             return onh.to_array(holder.graph.initializer[0]).tobytes()
 
-        def serialize_callback(tensor: onnxl.TensorProto, buffer, size_only: bool) -> int:
+        def serialize_callback(tensor: onnxl.TensorProto, graph, buffer, size_only: bool) -> int:
             """Encrypts tensor bytes and writes them into the provided serialization buffer."""
             encrypted = encrypted_by_name.get(tensor.name)
             if encrypted is None:
@@ -563,7 +564,7 @@ class TestOnnxLightHelper(ExtTestCase):
         sopts.raw_data_callback = serialize_callback
         serialized = model.SerializeToString(sopts)
 
-        def parse_callback(tensor: onnxl.TensorProto) -> None:
+        def parse_callback(tensor: onnxl.TensorProto, graph) -> None:
             """Decrypts callback-encrypted tensor bytes and restores original metadata."""
             if not tensor.doc_string.startswith("chacha20:"):
                 return None
@@ -736,7 +737,7 @@ class TestOnnxLightHelper(ExtTestCase):
         seen = []
         replacement_bytes = np.frombuffer(replacement.tobytes(), dtype=np.uint8)
 
-        def callback(serialized_tensor, buffer, size_only):
+        def callback(serialized_tensor, graph, buffer, size_only):
             seen.append(
                 (serialized_tensor.name, size_only, None if buffer is None else len(buffer))
             )
@@ -798,7 +799,7 @@ class TestOnnxLightHelper(ExtTestCase):
         replacement_bytes = np.frombuffer(replacement.tobytes(), dtype=np.uint8)
         saved = self.get_dump_file("test_save_raw_data_callback.onnx")
 
-        def callback(serialized_tensor, buffer, size_only):
+        def callback(serialized_tensor, graph, buffer, size_only):
             seen.append(
                 (serialized_tensor.name, size_only, None if buffer is None else len(buffer))
             )

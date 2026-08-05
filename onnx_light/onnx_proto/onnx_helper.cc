@@ -302,15 +302,17 @@ template <typename Nodes, typename F> void ForEachAttributeTensorInNodes(Nodes &
 namespace {
 
 // Applies SerializeOptions::raw_data_callback to a single tensor carrying raw_data, rewriting
-// its bytes in place.
-void ApplySerializeRawDataCallbackToTensor(TensorProto &tensor, const SerializeOptions &options) {
+// its bytes in place. ``graph`` is the tensor's parent GraphProto, forwarded to the callback so
+// it can locate the tensor's surrounding graph.
+void ApplySerializeRawDataCallbackToTensor(TensorProto &tensor, GraphProto &graph,
+                                           const SerializeOptions &options) {
   if (!tensor.has_raw_data()) {
     return;
   }
   const bool reset_external_data =
       tensor.has_data_location() &&
       tensor.ref_data_location() == TensorProto::DataLocation::EXTERNAL;
-  const int64_t rewritten_size = options.raw_data_callback(tensor, nullptr, 0, true);
+  const int64_t rewritten_size = options.raw_data_callback(tensor, &graph, nullptr, 0, true);
   EXT_ENFORCE(rewritten_size >= 0,
               "raw_data_callback returned a negative size. Value=", rewritten_size,
               ", tensor=", tensor.ref_name(), ".");
@@ -322,14 +324,14 @@ void ApplySerializeRawDataCallbackToTensor(TensorProto &tensor, const SerializeO
     } else {
       rewritten_raw_data.resize(static_cast<size_t>(rewritten_size));
     }
-    const int64_t filled_size = options.raw_data_callback(tensor, rewritten_raw_data.data(),
+    const int64_t filled_size = options.raw_data_callback(tensor, &graph, rewritten_raw_data.data(),
                                                           rewritten_raw_data.size(), false);
     EXT_ENFORCE(filled_size == rewritten_size, "raw_data_callback returned ", filled_size,
                 " bytes in the fill pass for tensor ", tensor.ref_name(), " after reporting ",
                 rewritten_size, " bytes in the size pass.");
     tensor.ref_raw_data() = std::move(rewritten_raw_data);
   } else {
-    const int64_t filled_size = options.raw_data_callback(tensor, nullptr, 0, false);
+    const int64_t filled_size = options.raw_data_callback(tensor, &graph, nullptr, 0, false);
     EXT_ENFORCE(filled_size == 0, "raw_data_callback returned ", filled_size,
                 " bytes in the fill pass for tensor ", tensor.ref_name(),
                 " after reporting 0 bytes in the size pass.");
@@ -342,12 +344,13 @@ void ApplySerializeRawDataCallbackToTensor(TensorProto &tensor, const SerializeO
 }
 
 // Recursively applies the serialize node_callback and raw_data_callback to a graph and every
-// subgraph nested in its node attributes. Each node_callback receives the node together with the
-// graph it belongs to, so callbacks can locate the parent graph of the NodeProto they receive.
+// subgraph nested in its node attributes. Each node_callback and raw_data_callback receives the
+// node/tensor together with the graph it belongs to, so callbacks can locate the parent graph of
+// the NodeProto/TensorProto they receive.
 void ApplySerializeCallbacksToGraph(GraphProto &graph, const SerializeOptions &options) {
   if (options.raw_data_callback) {
     for (int i = 0; i < static_cast<int>(graph.ref_initializer().size()); ++i) {
-      ApplySerializeRawDataCallbackToTensor(graph.ref_initializer()[i], options);
+      ApplySerializeRawDataCallbackToTensor(graph.ref_initializer()[i], graph, options);
     }
   }
   for (int i = 0; i < static_cast<int>(graph.ref_node().size()); ++i) {
@@ -358,11 +361,11 @@ void ApplySerializeCallbacksToGraph(GraphProto &graph, const SerializeOptions &o
     for (int j = 0; j < static_cast<int>(node.ref_attribute().size()); ++j) {
       AttributeProto &attr = node.ref_attribute()[j];
       if (options.raw_data_callback && attr.has_t()) {
-        ApplySerializeRawDataCallbackToTensor(attr.ref_t(), options);
+        ApplySerializeRawDataCallbackToTensor(attr.ref_t(), graph, options);
       }
       if (options.raw_data_callback && attr.has_tensors()) {
         for (int k = 0; k < static_cast<int>(attr.ref_tensors().size()); ++k) {
-          ApplySerializeRawDataCallbackToTensor(attr.ref_tensors()[k], options);
+          ApplySerializeRawDataCallbackToTensor(attr.ref_tensors()[k], graph, options);
         }
       }
       if (attr.has_g()) {

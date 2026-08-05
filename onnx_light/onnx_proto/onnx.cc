@@ -803,7 +803,7 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
   // After raw_data (inline or external) has been resolved, gives the caller a chance to take
   // custom ownership of the tensor data and register a matching deleter.
   if (options.raw_data_callback && has_raw_data()) {
-    std::function<void()> deleter = options.raw_data_callback(*this);
+    std::function<void()> deleter = options.raw_data_callback(*this, options._current_graph);
     if (deleter) {
       ref_raw_data().attach_deleter(std::move(deleter));
     }
@@ -1461,6 +1461,11 @@ void GraphProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
 }
 bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  // Expose this graph to raw_data_callback while its tensors are being parsed. Save and restore
+  // the previous value so subgraphs (parsed recursively via node attributes) correctly restore
+  // the enclosing graph pointer on the way out.
+  GraphProto *previous_graph = options._current_graph;
+  options._current_graph = this;
   READ_BEGIN(options, stream, GraphProto)                       //
   READ_REPEATED_FIELD(options, stream, node)                    //
   READ_FIELD(options, stream, name)                             //
@@ -1473,6 +1478,7 @@ bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
   READ_REPEATED_FIELD(options, stream, quantization_annotation) //
   READ_REPEATED_FIELD(options, stream, metadata_props)          //
   READ_END(options, stream, GraphProto)                         //  // NOLINT
+  options._current_graph = previous_graph;
   if (options.node_callback) {
     for (int i = 0; i < static_cast<int>(ref_node().size()); ++i) {
       options.node_callback(ref_node()[i], *this);

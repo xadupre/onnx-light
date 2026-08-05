@@ -4,16 +4,17 @@ on:
   workflow_run:
     workflows: ["ci-1-core"]
     types: [completed]
+  workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch || github.ref }}
   cancel-in-progress: true
 
 jobs:
   docs:
-    # Only run if the required ci-1-core workflow (which itself gates on
-    # no-onnx) completed successfully.
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Only run if triggered manually, or if the required ci-1-core workflow
+    # (which itself gates on no-onnx) completed successfully.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 22
     env:
@@ -23,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Set up Python
         uses: actions/setup-python@v7
         with:

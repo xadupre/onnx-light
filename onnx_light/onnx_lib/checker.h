@@ -127,6 +127,21 @@ public:
   /** Enables or disables checks on operators from custom domains. */
   void set_check_custom_domain(bool value) { check_custom_domain_ = value; }
 
+  /** Returns true when external data location validation is skipped. */
+  bool skip_external_data_location_check() const { return skip_external_data_location_check_; }
+
+  /**
+   * Enables or disables validation of external tensor data locations.
+   *
+   * When enabled, the checker no longer resolves or validates the "location"
+   * entry of externally stored tensors, bypassing errors such as an empty or
+   * unsafe location. This is not recommended and must never be the default:
+   * it disables safety checks that guard against unsafe external data paths.
+   */
+  void set_skip_external_data_location_check(bool value) {
+    skip_external_data_location_check_ = value;
+  }
+
   /** Constructs a CheckerContext with default validation options. */
   explicit CheckerContext() = default;
 
@@ -138,6 +153,7 @@ private:
   std::string model_dir_;
   bool skip_opset_compatibility_check_ = false;
   bool check_custom_domain_ = false;
+  bool skip_external_data_location_check_ = false;
 };
 
 /**
@@ -356,12 +372,15 @@ ONNX_API void check_function_call_cycles(const ModelProto &model);
  * @param skip_opset_compatibility_check When true, skips schema compatibility
  * checks.
  * @param check_custom_domain When true, enables checks on custom op domains.
+ * @param skip_external_data_location_check When true, skips validation of
+ * external tensor data locations. Not recommended; disables safety checks.
  *
  * @throws ValidationError Thrown when validation fails.
  */
 ONNX_API void check_model(const ModelProto &model, bool full_check = false,
                           bool skip_opset_compatibility_check = false,
-                          bool check_custom_domain = false);
+                          bool check_custom_domain = false,
+                          bool skip_external_data_location_check = false);
 /**
  * Validates a serialized model located at a filesystem path.
  *
@@ -371,12 +390,15 @@ ONNX_API void check_model(const ModelProto &model, bool full_check = false,
  * @param skip_opset_compatibility_check When true, skips schema compatibility
  * checks.
  * @param check_custom_domain When true, enables checks on custom op domains.
+ * @param skip_external_data_location_check When true, skips validation of
+ * external tensor data locations. Not recommended; disables safety checks.
  *
  * @throws ValidationError Thrown when validation fails.
  */
 ONNX_API void check_model(const std::string &model_path, bool full_check = false,
                           bool skip_opset_compatibility_check = false,
-                          bool check_custom_domain = false);
+                          bool check_custom_domain = false,
+                          bool skip_external_data_location_check = false);
 
 /**
  * Resolves and validates an external tensor data location relative to a model.

@@ -159,7 +159,7 @@ struct MutableVisitor {
   virtual void VisitAttribute(AttributeProto &attr) {
     if (ProcessAttribute(attr)) {
       if (attr.has_g()) {
-        VisitGraph(attr.g());
+        VisitGraph(*attr.mutable_g());
       }
       for (auto &graph : attr.graphs())
         VisitGraph(graph);

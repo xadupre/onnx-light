@@ -298,9 +298,8 @@ public:                                                                         
     EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value in " #type ".");   \
     return *name##_;                                                                               \
   }                                                                                                \
-  /** Compatibility accessor - equivalent to ref_##name(). */                                      \
-  inline type &name() { return ref_##name(); }                                                     \
-  /** Compatibility accessor - equivalent to ref_##name() const. */                                \
+  /** Compatibility accessor - returns a const reference like protobuf, so read access on a       \
+   *  non-const message never auto-creates the sub-message; use mutable_##name() to create it. */  \
   inline const type &name() const { return ref_##name(); }                                         \
   inline type *mutable_##name() { return &ref_##name(); }                                          \
   inline const type *ptr_##name() const {                                                          \

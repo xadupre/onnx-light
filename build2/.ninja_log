@@ -1,0 +1,11 @@
+# ninja log v7
+11	56	1785934021427294333	/home/runner/work/onnx-light/onnx-light/build2/CMakeFiles/cmake.verify_globs	c3ec58351a58d3d9
+67	1753	1785934021483182220	CMakeFiles/lib_onnx_proto.dir/onnx_light/onnx_proto/simple_string.cc.o	7f1d1cc7bfbf4629
+1754	4064	1785934023170191644	CMakeFiles/lib_onnx_proto.dir/onnx_light/onnx_proto/thread_pool.cc.o	3f24294bca369c78
+65	4985	1785934021481914086	CMakeFiles/lib_onnx_proto.dir/onnx_light/onnx_proto/onnx_crypt.cc.o	5c41fbd5e1ee8fe5
+4064	5287	1785934025480204584	CMakeFiles/lib_onnx_proto.dir/onnx_light/onnx_proto/blake3/blake3.c.o	5a33f0a824766355
+5287	5726	1785934026703211435	CMakeFiles/lib_onnx_proto.dir/onnx_light/onnx_proto/blake3/blake3_portable.c.o	4bae3cd882ee3fb2
+4985	5817	1785934026401209743	CMakeFiles/lib_onnx_proto.dir/onnx_light/onnx_proto/blake3/blake3_dispatch.c.o	4d40891e43ce4f0d
+66	6614	1785934021482664263	CMakeFiles/lib_onnx_proto.dir/onnx_light/onnx_proto/onnx_verify.cc.o	18d091ea0f2b801f
+5817	7231	1785934027233214404	CMakeFiles/lib_onnx_proto.dir/onnx_light/onnx_proto/blake3/blake3_hash.cc.o	357413c5ba0bed87
+5726	8092	1785934027142213894	CMakeFiles/lib_onnx_proto.dir/onnx_light/onnx_proto/blake3/blake3_join.cc.o	821b383a4375b5d

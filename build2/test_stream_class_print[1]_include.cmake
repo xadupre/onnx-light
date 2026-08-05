@@ -1,0 +1,5 @@
+if(EXISTS "/home/runner/work/onnx-light/onnx-light/build2/test_stream_class_print[1]_tests.cmake")
+  include("/home/runner/work/onnx-light/onnx-light/build2/test_stream_class_print[1]_tests.cmake")
+else()
+  add_test(test_stream_class_print_NOT_BUILT test_stream_class_print_NOT_BUILT)
+endif()

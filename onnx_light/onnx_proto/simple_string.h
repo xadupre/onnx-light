@@ -263,6 +263,47 @@ public:
   inline bool operator==(const std::string &other) const { return has_value() && value() == other; }
   inline bool operator!=(const std::string &other) const { return !(*this == other); }
 
+  /** Orders two OptionalString values (absent sorts before any present value; disambiguation for
+   * C++20 heterogeneous optional overloads). */
+  inline bool operator<(const OptionalString &other) const {
+    return static_cast<const base &>(*this) < static_cast<const base &>(other);
+  }
+  inline bool operator<=(const OptionalString &other) const { return !(other < *this); }
+  inline bool operator>(const OptionalString &other) const { return other < *this; }
+  inline bool operator>=(const OptionalString &other) const { return !(*this < other); }
+
+  /** Orders against a standard string (unset sorts before any std::string). */
+  inline bool operator<(const std::string &other) const {
+    return !has_value() || value() < other;
+  }
+  inline bool operator<=(const std::string &other) const {
+    return !has_value() || value() <= other;
+  }
+  inline bool operator>(const std::string &other) const { return has_value() && value() > other; }
+  inline bool operator>=(const std::string &other) const { return has_value() && value() >= other; }
+
+  /** Orders against a null-terminated string (nullptr and unset sort before present values). */
+  inline bool operator<(const char *other) const {
+    if (other == nullptr)
+      return false;
+    return !has_value() || value() < other;
+  }
+  inline bool operator<=(const char *other) const {
+    if (other == nullptr)
+      return !has_value();
+    return !has_value() || value() <= other;
+  }
+  inline bool operator>(const char *other) const {
+    if (other == nullptr)
+      return has_value();
+    return has_value() && value() > other;
+  }
+  inline bool operator>=(const char *other) const {
+    if (other == nullptr)
+      return true;
+    return has_value() && value() >= other;
+  }
+
   /** String concatenation with standard strings and C strings. */
   friend inline std::string operator+(const OptionalString &lhs, const char *rhs) {
     return std::string(lhs) + rhs;

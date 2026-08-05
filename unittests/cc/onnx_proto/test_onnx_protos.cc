@@ -6520,6 +6520,71 @@ TEST(onnx_string, String_GreaterThanEdgeCases) {
   EXPECT_TRUE(a > "");
 }
 
+TEST(onnx_string, OptionalString_Ordering) {
+  utils::OptionalString unset;
+  utils::OptionalString abc("abc");
+  utils::OptionalString abd("abd");
+
+  // absent sorts before any present value
+  EXPECT_TRUE(unset < abc);
+  EXPECT_FALSE(abc < unset);
+  EXPECT_TRUE(unset <= abc);
+  EXPECT_TRUE(unset <= unset);
+  EXPECT_TRUE(abc > unset);
+  EXPECT_FALSE(unset > abc);
+  EXPECT_TRUE(abc >= unset);
+  EXPECT_TRUE(unset >= unset);
+
+  // present vs present
+  EXPECT_TRUE(abc < abd);
+  EXPECT_FALSE(abd < abc);
+  EXPECT_TRUE(abc <= abd);
+  EXPECT_TRUE(abc <= abc);
+  EXPECT_TRUE(abd > abc);
+  EXPECT_TRUE(abd >= abc);
+  EXPECT_TRUE(abc >= abc);
+
+  // != coverage
+  EXPECT_TRUE(abc != abd);
+  EXPECT_TRUE(abc != unset);
+  EXPECT_FALSE(abc != abc);
+
+  // against std::string
+  std::string abd_std("abd");
+  std::string abc_std("abc");
+  EXPECT_TRUE(abc < abd_std);
+  EXPECT_FALSE(abc < abc_std);
+  EXPECT_TRUE(abc <= abc_std);
+  EXPECT_TRUE(abd > abc_std);
+  EXPECT_TRUE(abd >= abc_std);
+  EXPECT_TRUE(unset < abc_std); // unset before any std::string
+  EXPECT_TRUE(unset <= abc_std);
+  EXPECT_FALSE(unset > abc_std);
+  EXPECT_FALSE(unset >= abc_std);
+
+  // against const char *
+  EXPECT_TRUE(abc < "abd");
+  EXPECT_FALSE(abc < "abc");
+  EXPECT_TRUE(abc <= "abc");
+  EXPECT_TRUE(abd > "abc");
+  EXPECT_TRUE(abd >= "abc");
+  EXPECT_TRUE(unset < "abc");
+  EXPECT_FALSE(unset > "abc");
+  // nullptr behaves like absent
+  EXPECT_FALSE(unset < static_cast<const char *>(nullptr));
+  EXPECT_TRUE(unset <= static_cast<const char *>(nullptr));
+  EXPECT_FALSE(unset > static_cast<const char *>(nullptr));
+  EXPECT_TRUE(unset >= static_cast<const char *>(nullptr));
+  EXPECT_TRUE(abc > static_cast<const char *>(nullptr));
+  EXPECT_TRUE(abc >= static_cast<const char *>(nullptr));
+  EXPECT_FALSE(abc < static_cast<const char *>(nullptr));
+
+  // concatenation (operator+)
+  EXPECT_EQ(abc + "d", "abcd");
+  EXPECT_EQ("x" + abc, "xabc");
+  EXPECT_EQ(abc + abd, "abcabd");
+}
+
 TEST(onnx_stream, TwoFilesWriteStream_WriteRawBytesInSecondStream) {
   const std::string model_path = "test_write_second_stream.onnx";
   const std::string weights_path = "test_write_second_stream.onnx.data";

@@ -727,6 +727,8 @@ const char *const kLSTMInitialCDescription =
     "Optional initial value of the cell. If not specified - assumed "
     "to be 0. It has shape `[num_directions, batch_size, hidden_size]`.";
 
+// kLSTMPDescriptionVer1 intentionally preserves the historical `hidde_size`
+// typo; onnx keeps it for LSTM opsets < 22, so onnx-light must match for parity.
 const char *const kLSTMPDescriptionVer1 =
     "The weight tensor for peepholes. Concatenation of `P[iof]` and "
     "`PB[iof]` (if bidirectional) along dimension 0. It has shape "

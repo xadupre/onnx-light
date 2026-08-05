@@ -186,14 +186,10 @@ void DataTypeUtils::FromString(const std::string &type_str, TypeProto &type_prot
     s.ParensWhitespaceStrip();
     int32_t e = FromDataTypeString(std::string(s.Data(), s.Size()));
     type_proto.ref_tensor_type().set_elem_type(e);
-    // Create shape with zero dimensions for scalar
-    type_proto.ref_tensor_type().ref_shape();
   } else {
     // Scalar
     int32_t e = FromDataTypeString(std::string(s.Data(), s.Size()));
     type_proto.ref_tensor_type().set_elem_type(e);
-    // Create shape with zero dimensions for scalar
-    type_proto.ref_tensor_type().ref_shape();
   }
 }
 

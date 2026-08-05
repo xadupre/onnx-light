@@ -518,7 +518,7 @@ void read_repeated_field_numerical(utils::BinaryStream &stream, int wire_type,
     packed = packed || wire_type == FIELD_FIXED_SIZE;
   }
   if (packed) {
-    read_repeated_field_packed_numerical(stream, wire_type, field, name, is_packed, options);
+    read_repeated_field_packed_numerical(stream, wire_type, field, name, packed, options);
   } else {
     DEBUG_PRINT2("    read unpacked", name);
     field.push_back(read_unpacked_number<T>(stream, wire_type));

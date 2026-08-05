@@ -531,6 +531,8 @@ class TestOnnxLightHelper(ExtTestCase):
         proto3 = onnxl.ModelProto()
         with self.assertRaises(RuntimeError):
             proto3.ParseFromFile(name, opts, external_data_file=weights)
+
+    def test_writing_external_weights_read_from_onnx(self):
         model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
         expected = [onh.to_array(i) for i in model.graph.initializer]
         name = self.get_dump_file("test_writing_external_weights_read_from_onnx.onnx")

@@ -220,7 +220,10 @@ public:                                                                         
   FIELD_REPEATED_BASE(type, utils::RepeatedStringField, name, order, doc)                          \
   inline void add_##name(const char *v) { name##_.push_back(utils::String(v)); }                   \
   inline void add_##name(const std::string &v) { name##_.push_back(utils::String(v)); }            \
-  inline void add_##name(const utils::RefString &v) { name##_.push_back(utils::String(v)); }
+  inline void add_##name(const utils::RefString &v) { name##_.push_back(utils::String(v)); }       \
+  inline void add_##name(const utils::OptionalString &v) {                                         \
+    name##_.push_back(utils::String(v.value()));                                                   \
+  }
 
 #define FIELD_REPEATED_PROTO(type, name, order, doc)                                               \
 public:                                                                                            \

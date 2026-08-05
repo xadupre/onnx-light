@@ -366,11 +366,11 @@ FIELD_REPEATED_PACKED(
     "field MUST be INT32, INT16, INT8, INT4, UINT16, UINT8, UINT4, BOOL, FLOAT16, BFLOAT16, "
     "FLOAT8E4M3FN, FLOAT8E4M3FNUZ, FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, "
     "UINT2, INT2")
-FIELD_REPEATED(utils::String, string_data, 6,
-               "For strings. Each element of string_data is a UTF-8 encoded Unicode string. No "
-               "trailing null, no leading BOM. The 'string' scalar type is not used to match "
-               "ML community conventions. When this field is "
-               "present, the data_type field MUST be STRING")
+FIELD_REPEATED_STR(utils::String, string_data, 6,
+                   "For strings. Each element of string_data is a UTF-8 encoded Unicode string. No "
+                   "trailing null, no leading BOM. The 'string' scalar type is not used to match "
+                   "ML community conventions. When this field is "
+                   "present, the data_type field MUST be STRING")
 FIELD_REPEATED_PACKED(int64_t, int64_data, 7,
                       "For int64. When this field is present, the data_type field MUST be INT64")
 FIELD_STR(name, 8, "Optionally, a name for the tensor.")

@@ -58,6 +58,23 @@ void AddUint8Tensor(NodeProto &node, const char *name, const std::vector<uint8_t
   tp->set_raw_data(utils::ByteSpan(vals));
 }
 
+/// Adds a UINT8 TENSOR attribute whose elements live in ``int32_data`` (one
+/// element per ``int32``) rather than ``raw_data``. This mirrors how
+/// onnxruntime's ``OpTester`` serialises ``nodes_modes`` for its
+/// ``TreeEnsembleLeafLike`` model, exercising the non-raw ``TensorFromProto``
+/// path for 8-bit tensor-valued attributes.
+void AddUint8TensorInt32Data(NodeProto &node, const char *name, const std::vector<uint8_t> &vals) {
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name(name);
+  attr->set_type(AttributeProto::AttributeType::TENSOR);
+  TensorProto *tp = attr->add_t();
+  tp->set_data_type(TensorProto::UINT8);
+  tp->add_dims(static_cast<uint64_t>(vals.size()));
+  for (uint8_t v : vals) {
+    tp->add_int32_data(static_cast<int32_t>(v));
+  }
+}
+
 } // namespace
 
 void RegisterTreeEnsembleCases(std::vector<TestCase> &registry, TestMode mode) {
@@ -258,6 +275,60 @@ void RegisterTreeEnsembleCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor x = Tensor::FromFloat("", {6, 1}, {1.2f, 3.4f, -0.12f, kNaN, 12.0f, 7.0f});
              Tensor y = tree_ens.operator()<float>(x, /*n_targets=*/4, /*aggregate_function=*/1,
                                                    /*post_transform=*/0);
+
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mirrors the onnxruntime unit test ``MLOpTest.TreeEnsembleLeafLike`` (see
+  // ``onnxruntime/test/providers/cpu/ml/tree_ensembler_test.cc``): two trees
+  // packed into a single flat node array (``tree_roots={0,2}``), single target,
+  // ``double`` input. ``nodes_modes`` is a UINT8 tensor whose elements are
+  // stored in ``int32_data`` (as onnxruntime's ``OpTester`` serialises it),
+  // exercising the non-raw ``TensorFromProto`` path for 8-bit tensor
+  // attributes. For x = [7, 7, 4] the two trees contribute 25.0 and -9.0,
+  // summing to 16.0.
+  // ---------------------------------------------------------------------------
+  {
+    NodeProto node;
+    node.set_op_type("TreeEnsemble");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("X");
+    node.add_output("Y");
+    AddInt(node, "n_targets", 1);
+    AddInt(node, "aggregate_function", 1);
+    AddInt(node, "post_transform", 0);
+    AddInts(node, "tree_roots", {0, 2});
+    AddUint8TensorInt32Data(node, "nodes_modes", {0x00, 0x00, 0x00, 0x00, 0x00});
+    AddInts(node, "nodes_featureids", {0, 1, 0, 1, 2});
+    AddTypedTensor<double>(node, "nodes_splits", TensorProto::DOUBLE, {2.0, 2.0, 3.0, 2.0, 1.0});
+    AddInts(node, "nodes_truenodeids", {1, 0, 3, 4, 5});
+    AddInts(node, "nodes_trueleafs", {0, 1, 1, 1, 1});
+    AddInts(node, "nodes_falsenodeids", {2, 1, 3, 4, 6});
+    AddInts(node, "nodes_falseleafs", {1, 1, 0, 0, 1});
+    AddInts(node, "leaf_targetids", {0, 0, 0, 0, 0, 0, 0});
+    AddTypedTensor<double>(node, "leaf_weights", TensorProto::DOUBLE,
+                           {100.0, 0.0, 25.0, 0.5, -0.5, -5.0, -9.0});
+    const onnx_kernels::kernel::TreeEnsemble tree_ens{
+        ctx,
+        /*tree_roots=*/{0, 2},
+        /*nodes_featureids=*/{0, 1, 0, 1, 2},
+        /*nodes_splits=*/{2.0, 2.0, 3.0, 2.0, 1.0},
+        /*nodes_modes=*/{0, 0, 0, 0, 0},
+        /*nodes_truenodeids=*/{1, 0, 3, 4, 5},
+        /*nodes_falsenodeids=*/{2, 1, 3, 4, 6},
+        /*nodes_trueleafs=*/{0, 1, 1, 1, 1},
+        /*nodes_falseleafs=*/{1, 1, 0, 0, 1},
+        /*nodes_missing=*/{},
+        /*leaf_targetids=*/{0, 0, 0, 0, 0, 0, 0},
+        /*leaf_weights=*/{100.0, 0.0, 25.0, 0.5, -0.5, -5.0, -9.0},
+        /*membership_values=*/{}};
+    Expect(registry, std::move(node), "test_ai_onnx_ml_tree_ensemble_leaf_like",
+           {default_opset, opset}, [=]() -> IoData {
+             Tensor x = Tensor::FromDouble("", {1, 3}, {7.0, 7.0, 4.0});
+             Tensor y = tree_ens.operator()<double>(x, /*n_targets=*/1, /*aggregate_function=*/1,
+                                                    /*post_transform=*/0);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });

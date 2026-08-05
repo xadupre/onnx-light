@@ -1136,12 +1136,9 @@ df = df.sort_index(ascending=False)
 # ``onnx_light``, green family for ``onnxruntime``.  Solid shades represent
 # the average; lighter shades the median.
 #
-# Three graphs are produced, one per tool family so the benchmarks are not
-# grouped together: ``onnx`` (``plot_onnx_time_onnx.png``), ``onnx_light``
-# (``plot_onnx_time_onnx_light.png``) and ``ort`` (``plot_onnx_time_ort.png``,
-# which also includes the ``ir-py`` rows).
-# In addition, two API-focused graphs are produced: one restricted to the
-# Python API (``plot_onnx_time_python.png``) and one restricted to the C++ API
+# Three graphs are produced: one with everything
+# (``plot_onnx_time.png``), one restricted to the Python API
+# (``plot_onnx_time_python.png``) and one restricted to the C++ API
 # (``plot_onnx_time_cpp.png``). C++ API rows are those whose library part ends
 # with ``-cpp`` (for example ``onnxlight-cpp`` or ``onnxlight-cpp-nocopy``).
 import matplotlib.patches as mpatches
@@ -1180,20 +1177,6 @@ def _is_cpp_api(name: str) -> bool:
     """
     lib = name.rsplit("/", 1)[-1]
     return lib.endswith("-cpp") or "-cpp-" in lib
-
-
-def _tool_family(name: str) -> str:
-    """Returns the tool family a benchmark row belongs to.
-
-    The family is one of ``onnx_light`` (any ``onnxlight`` variant),
-    ``ort`` (``onnxruntime`` and ``ir-py`` rows) or ``onnx`` (everything else).
-    This mirrors the per-bar coloring used in :func:`plot_results`.
-    """
-    if "onnxlight" in name:
-        return "onnx_light"
-    if "/ir-py" in name or "/ort" in name:
-        return "ort"
-    return "onnx"
 
 
 def plot_results(frame, title, png_path):
@@ -1285,21 +1268,14 @@ _common_title = (
     f"onnxlight-nocopy|ir-py|ort"
 )
 
-# Split the final graph into three separate graphs, one per tool family, so the
-# benchmarks are not grouped together in a single chart.
-df_onnx = df[[_tool_family(name) == "onnx" for name in df.index]]
-df_onnx_light = df[[_tool_family(name) == "onnx_light" for name in df.index]]
-df_ort = df[[_tool_family(name) == "ort" for name in df.index]]
-
-plot_results(df_onnx, f"onnx load/save (s), {_common_title}", "plot_onnx_time_onnx.png")
-
+# Produce one graph with everything, then split the results into a
+# Python-API-only plot and a C++-API-only plot.
 plot_results(
-    df_onnx_light, f"onnx_light load/save (s), {_common_title}", "plot_onnx_time_onnx_light.png"
+    df,
+    f"onnx vs onnx_light vs ort load/save (s) - all APIs, {_common_title}",
+    "plot_onnx_time.png",
 )
 
-plot_results(df_ort, f"ort load/save (s), {_common_title}", "plot_onnx_time_ort.png")
-
-# Split the results into a Python-API-only plot and a C++-API-only plot.
 cpp_mask = [_is_cpp_api(name) for name in df.index]
 df_cpp = df[cpp_mask]
 df_python = df[[not is_cpp for is_cpp in cpp_mask]]

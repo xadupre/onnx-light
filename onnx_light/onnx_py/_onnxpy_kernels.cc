@@ -21,6 +21,7 @@
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/unique_ptr.h>
 #include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/vector.h>
 #include <stdexcept>
@@ -1026,6 +1027,20 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "once before building ``model.graph``'s :class:`ExecutionPlan` and driving "
       "it through a :class:`RuntimeSession`. Keeps ``model`` alive for at least "
       "as long as ``rt``, since ``rt`` stores non-owning pointers into it.");
+
+  rt_mod.def(
+      "prepare_model_session",
+      [](const ModelProto &model, const ExecutionPlan &plan, RuntimeContext &rt) {
+        return core::runtime::PrepareModelSession(model, plan, rt);
+      },
+      nb::arg("model"), nb::arg("plan"), nb::arg("rt"), nb::keep_alive<0, 2>(),
+      "Builds a fully kernel-initialized :class:`RuntimeSession` for ``model`` in a "
+      "single C++ step: registers ``model``'s model-local functions on ``rt``, "
+      "constructs a session over ``plan`` (which must be built from ``model.graph``), "
+      "records the graph's declared shapes, and resolves every scheduled node's kernel "
+      "up front. A later :func:`RuntimeSession.run` reuses those cached kernels instead "
+      "of dispatching lazily on the first run. Keeps ``model`` and ``plan`` alive for at "
+      "least as long as the returned session.");
 
   rt_mod.def(
       "tensor_from_proto",

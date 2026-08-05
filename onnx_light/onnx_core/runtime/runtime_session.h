@@ -342,6 +342,33 @@ private:
   bool session_allocator_captured_ = false;
 };
 
+/**
+ * Builds a fully kernel-initialized :cpp:class:`RuntimeSession` for a
+ * :cpp:class:`ModelProto` in a single C++ step, so a caller that parsed the
+ * model from serialized bytes / a file can prepare it for execution without
+ * driving the multi-step orchestration (register model functions, build the
+ * session, resolve every kernel) itself.
+ *
+ * It registers ``model``'s model-local functions on ``rt`` (via
+ * :cpp:func:`RegisterModelFunctions`) so referring nodes dispatch correctly,
+ * constructs a session over ``plan`` (which must have been built from
+ * ``model``'s graph), records the graph's declared shapes so borrowed graph
+ * outputs are detached on :cpp:func:`RuntimeSession::Run`, and resolves every
+ * node's kernel up front (via :cpp:func:`RuntimeSession::InitializeKernels`).
+ * The returned session shares ``plan``, so a subsequent :cpp:func:`Run` reuses
+ * the already-resolved kernels rather than re-dispatching on the first run.
+ *
+ * @param model The model whose functions are registered and whose graph
+ *              declares the shapes recorded on the session.
+ * @param plan  Precomputed execution plan built from ``model``'s graph; it
+ *              (and the graph it was built from) must outlive the session.
+ * @param rt    In/out runtime context the kernels are resolved against and
+ *              whose function registry is updated.
+ * @return An owning session over ``plan`` with every scheduled node's kernel
+ *         already resolved.
+ */
+std::unique_ptr<RuntimeSession> PrepareModelSession(const ModelProto &model,
+                                                    const ExecutionPlan &plan, RuntimeContext &rt);
 } // namespace runtime
 } // namespace core
 } // namespace ONNX_LIGHT_NAMESPACE

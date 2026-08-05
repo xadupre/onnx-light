@@ -419,26 +419,23 @@ class ReferenceEvaluator:
 
     def _initialize_kernels(self) -> None:
         """Eagerly builds (and caches) the ``RuntimeSession`` for the wrapped
-        graph / function and resolves every node's kernel up front, against the
-        persistent :class:`RuntimeContext`, so the first :meth:`run` does not
-        have to do the per-node dispatch.
+        model and resolves every node's kernel up front, against the persistent
+        :class:`RuntimeContext`, so the first :meth:`run` does not have to do the
+        per-node dispatch.
 
-        The session is stored in :attr:`_sessions` under its plan identity, the
-        same cache :meth:`run` consults, so the eagerly built session is reused
-        (and not rebuilt) on the first run.
+        The whole preparation — registering model-local functions, building the
+        session over the graph's cached :class:`ExecutionPlan`, recording the
+        declared shapes and resolving every kernel — happens in a single C++
+        call (:func:`_runtime.prepare_model_session`). The session is stored in
+        :attr:`_sessions` under its plan identity, the same cache :meth:`run`
+        consults, so the eagerly built session is reused (and not rebuilt) on the
+        first run.
         """
+        # The eager path is only taken for a model parsed from serialised bytes
+        # or loaded from a file, so ``self._model`` is always set here.
         ctx = self._ctx
-        if self._model is not None:
-            _runtime.register_model_functions(self._model, ctx)
-            graph_or_function: Any = self._model.graph
-        elif self._function is not None:
-            graph_or_function = self._function
-        else:
-            graph_or_function = self._graph
-        plan = ctx.get_execution_plan(graph_or_function)
-        session = _runtime.RuntimeSession(plan)
-        _record_graph_outputs(session, graph_or_function)
-        session.initialize_kernels(ctx)
+        plan = ctx.get_execution_plan(self._model.graph)
+        session = _runtime.prepare_model_session(self._model, plan, ctx)
         # Cache the plan alongside the session so both stay alive and the first
         # :meth:`run` reuses this eagerly built (already-resolved) session.
         self._sessions[id(plan)] = (plan, session)

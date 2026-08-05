@@ -7,9 +7,11 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 
 #include "onnx_core/graph/graph_manipulations.h"
+#include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/run_nodes_internal.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx_helper.h"
@@ -350,6 +352,22 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
       output = output.ToOwned();
     }
   }
+}
+
+std::unique_ptr<RuntimeSession> PrepareModelSession(const ModelProto &model,
+                                                    const ExecutionPlan &plan, RuntimeContext &rt) {
+  // Register the model's local functions first so nodes referring to them
+  // dispatch correctly when the kernels are resolved below.
+  RegisterModelFunctions(model, rt);
+  auto session = std::make_unique<RuntimeSession>(plan);
+  // The session is built over a bare plan, so record the graph's declared
+  // outputs / shapes on it (as the ModelProto constructor would) so borrowed
+  // graph outputs are detached on Run.
+  session->SetDeclaredShapes(model.graph());
+  // Resolve every scheduled node's kernel up front; a later Run then reuses
+  // the cached kernels instead of re-dispatching on the first run.
+  session->InitializeKernels(rt);
+  return session;
 }
 
 } // namespace runtime

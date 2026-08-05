@@ -433,9 +433,12 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             const FileLoadMode mode =
                 has_opts ? nb::cast<ParseOptions &>(options).file_load_mode : FileLoadMode::kAuto;
             if (!external_data_file.empty()) {
-              EXT_ENFORCE(mode == FileLoadMode::kAuto,
-                          "ParseFromFile: file_load_mode is not supported when an "
-                          "external_data_file is provided (TwoFilesStream is always used).");
+              // TwoFilesStream reads the main model file through a buffered std::ifstream
+              // (it derives from FileStream), while the separate weights file is the large
+              // payload. All modes are honoured: the small main file always uses the buffered
+              // stream, and the weights file is memory-mapped when no_copy=True (see
+              // TwoFilesStream::borrow_weights_bytes, which mmaps the weights file). kMmap is
+              // therefore accepted -- it applies to the weights file rather than the main file.
               stream.reset(new utils::TwoFilesStream(file_path, external_data_file));
             } else if (mode == FileLoadMode::kMmap) {
               EXT_ENFORCE(!wants_no_copy,

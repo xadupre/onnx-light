@@ -146,8 +146,9 @@ struct ParseOptions : TensorBufferOptions {
    *  By default it is empty (no callback) and parsing behaves exactly as before. */
   std::function<std::function<void()>(TensorProto &, GraphProto *)> raw_data_callback = {};
   /** Internal transient pointer to the GraphProto currently being parsed, used only to pass the
-   *  parent graph to ``raw_data_callback``. It is set and restored automatically while parsing a
-   *  GraphProto, is never serialized, and is not exposed in the Python bindings. */
+   *  parent graph to ``raw_data_callback``. It is set and restored automatically by
+   *  ``CurrentGraphGuard`` while parsing a GraphProto, is never serialized, and is not exposed in
+   *  the Python bindings. */
   GraphProto *_current_graph = nullptr;
   /** Holds an optional callback invoked for each NodeProto once it has been fully parsed.
    *

@@ -58,6 +58,28 @@ private:
 };
 
 /**
+ * @brief Scoped guard that sets ParseOptions::_current_graph while a GraphProto is being parsed.
+ *
+ * Stores the graph on construction so the parse raw_data_callback can locate the parent graph of
+ * each tensor, and restores the previous value on destruction — even when an exception unwinds
+ * through the parser — so nested subgraphs correctly restore the enclosing graph pointer.
+ */
+class CurrentGraphGuard {
+public:
+  CurrentGraphGuard(ParseOptions &options, GraphProto *graph)
+      : options_(options), previous_graph_(options._current_graph) {
+    options_._current_graph = graph;
+  }
+  ~CurrentGraphGuard() { options_._current_graph = previous_graph_; }
+  CurrentGraphGuard(const CurrentGraphGuard &) = delete;
+  CurrentGraphGuard &operator=(const CurrentGraphGuard &) = delete;
+
+private:
+  ParseOptions &options_;
+  GraphProto *previous_graph_;
+};
+
+/**
  * @brief Raises an error when the requested byte count exceeds the configured
  *        per-tensor allocation limit.
  *

@@ -145,10 +145,7 @@ public:                                                                         
   inline const utils::ByteSpan &name() const { return name##_; }                                   \
   inline const utils::ByteSpan *ptr_##name() const { return &name##_; }                            \
   inline bool has_##name() const { return name##_.data() != nullptr; }                             \
-  inline void set_##name(const utils::ByteSpan &v) {                                               \
-    name##_ = v;                                                                                   \
-    name##_.set_empty();                                                                           \
-  }                                                                                                \
+  inline void set_##name(const utils::ByteSpan &v) { name##_ = v; }                                \
   /** Compatibility accessor returning a mutable pointer to the ByteSpan field. */                 \
   inline utils::ByteSpan *mutable_##name() {                                                       \
     name##_.set_empty();                                                                           \

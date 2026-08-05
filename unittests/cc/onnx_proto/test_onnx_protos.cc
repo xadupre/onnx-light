@@ -7387,4 +7387,12 @@ TEST(onnx_compatibility, EmptyRawDataPresence) {
   parsed.clear_raw_data();
   EXPECT_FALSE(parsed.has_raw_data());
   EXPECT_EQ(parsed.ref_raw_data().data(), nullptr);
+
+  parsed.mutable_raw_data();
+  EXPECT_TRUE(parsed.has_raw_data());
+  parsed.set_raw_data(utils::ByteSpan());
+  EXPECT_FALSE(parsed.has_raw_data());
+
+  parsed.ref_raw_data().assign_borrowed(nullptr, 0);
+  EXPECT_FALSE(parsed.has_raw_data());
 }

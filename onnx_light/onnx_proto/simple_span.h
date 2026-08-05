@@ -223,6 +223,10 @@ public:
   /** Copy assignment: handles aligned-owned mode by recomputing the internal pointer. */
   inline ByteSpan &operator=(const ByteSpan &other) {
     if (this != &other) {
+      if (other.empty() && other.data() == nullptr) {
+        clear();
+        return *this;
+      }
       borrowed_ = other.borrowed_;
       aligned_owned_ = other.aligned_owned_;
       align_ = other.align_;
@@ -436,7 +440,7 @@ public:
    *  The pointed-to buffer MUST outlive this ByteSpan. */
   inline void assign_borrowed(const uint8_t *ptr, size_t sz, std::shared_ptr<void> owner = {}) {
     if (ptr == nullptr && sz == 0) {
-      resize(0);
+      clear();
       return;
     }
     owned_.clear();

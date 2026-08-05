@@ -311,24 +311,24 @@ public:
       return true;
     return has_value() && value() >= rhs;
   }
-
-  /** String concatenation with standard strings and C strings. */
-  friend inline std::string operator+(const OptionalString &lhs, const char *rhs) {
-    return std::string(lhs) + rhs;
-  }
-  friend inline std::string operator+(const char *lhs, const OptionalString &rhs) {
-    return lhs + std::string(rhs);
-  }
-  friend inline std::string operator+(const OptionalString &lhs, const std::string &rhs) {
-    return std::string(lhs) + rhs;
-  }
-  friend inline std::string operator+(const std::string &lhs, const OptionalString &rhs) {
-    return lhs + std::string(rhs);
-  }
-  friend inline std::string operator+(const OptionalString &lhs, const OptionalString &rhs) {
-    return std::string(lhs) + std::string(rhs);
-  }
 };
+
+/** String concatenation with standard strings and C strings. */
+inline std::string operator+(const OptionalString &lhs, const char *rhs) {
+  return std::string(lhs) + rhs;
+}
+inline std::string operator+(const char *lhs, const OptionalString &rhs) {
+  return lhs + std::string(rhs);
+}
+inline std::string operator+(const OptionalString &lhs, const std::string &rhs) {
+  return std::string(lhs) + rhs;
+}
+inline std::string operator+(const std::string &lhs, const OptionalString &rhs) {
+  return lhs + std::string(rhs);
+}
+inline std::string operator+(const OptionalString &lhs, const OptionalString &rhs) {
+  return std::string(lhs) + std::string(rhs);
+}
 
 /** Assigns a non-owning view from an owning string. */
 inline RefString &RefString::operator=(const String &v) {

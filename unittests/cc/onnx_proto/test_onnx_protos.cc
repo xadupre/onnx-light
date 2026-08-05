@@ -7328,3 +7328,25 @@ TEST(RepeatedProtoField, MoveConstructFromTemporaryVector) {
   ASSERT_EQ(field.size(), 1u);
   EXPECT_EQ(field[0].ref_op_type(), "Relu");
 }
+
+// Reading an unset optional message sub-field on a non-const message must not
+// mark the field as present. This mirrors google::protobuf, where the accessor
+// returns a const reference and only mutable_<field>() creates the sub-message.
+TEST(onnx_compatibility, OptionalMessageReadDoesNotCreate) {
+  TypeProto type_proto;
+  ASSERT_FALSE(type_proto.has_tensor_type());
+
+  // The non-const accessor must return a const reference like protobuf, so it
+  // cannot be used to mutate and does not auto-create the sub-message.
+  static_assert(std::is_same<decltype(std::declval<TypeProto &>().tensor_type()),
+                             const TypeProto::Tensor &>::value,
+                "Non-const optional message accessor must return a const reference like protobuf.");
+
+  // has_type() only inspects presence via has_*; it must not trigger creation.
+  EXPECT_FALSE(type_proto.has_type());
+  EXPECT_FALSE(type_proto.has_tensor_type());
+
+  // Only mutable_tensor_type() marks the field as present.
+  type_proto.mutable_tensor_type();
+  EXPECT_TRUE(type_proto.has_tensor_type());
+}

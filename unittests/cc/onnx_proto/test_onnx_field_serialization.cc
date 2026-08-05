@@ -183,6 +183,36 @@ TEST(onnx_field_serialization, ReadRepeatedInt64_UnpackedWireFormat) {
   EXPECT_EQ(parsed.ref_dims()[2], 7);
 }
 
+// AttributeProto.ints (field 8) is declared unpacked in the ONNX schema, but
+// producers such as protobuf/onnxruntime emit it packed. TreeEnsemble stores
+// its tree topology (nodes_featureids, tree_roots, ...) in ``ints`` attributes,
+// so the packed wire format must be accepted to load such models (see the
+// onnxruntime ``TreeEnsembleLeafLike`` test).
+TEST(onnx_field_serialization, ReadAttributeInts_PackedWireFormat) {
+  std::string payload =
+      EncodeVarint(0) + EncodeVarint(1) + EncodeVarint(0) + EncodeVarint(1) + EncodeVarint(2);
+  std::string bytes = FieldTag(8, 2) + EncodeVarint(payload.size()) + payload;
+  AttributeProto parsed;
+  parsed.ParseFromString(bytes);
+  ASSERT_EQ(parsed.ref_ints().size(), 5u);
+  EXPECT_EQ(parsed.ref_ints()[0], 0);
+  EXPECT_EQ(parsed.ref_ints()[1], 1);
+  EXPECT_EQ(parsed.ref_ints()[2], 0);
+  EXPECT_EQ(parsed.ref_ints()[3], 1);
+  EXPECT_EQ(parsed.ref_ints()[4], 2);
+}
+
+TEST(onnx_field_serialization, ReadAttributeInts_UnpackedWireFormat) {
+  std::string bytes = FieldTag(8, 0) + EncodeVarint(0) + FieldTag(8, 0) + EncodeVarint(1) +
+                      FieldTag(8, 0) + EncodeVarint(2);
+  AttributeProto parsed;
+  parsed.ParseFromString(bytes);
+  ASSERT_EQ(parsed.ref_ints().size(), 3u);
+  EXPECT_EQ(parsed.ref_ints()[0], 0);
+  EXPECT_EQ(parsed.ref_ints()[1], 1);
+  EXPECT_EQ(parsed.ref_ints()[2], 2);
+}
+
 // ---------------------------------------------------------------------------
 // write_field_limit / size_field_limit / read_field_limit_parallel: raw_data
 // behavior under the default, skip_raw_data and parse-skip configurations.

@@ -262,6 +262,63 @@ void RegisterTreeEnsembleCases(std::vector<TestCase> &registry, TestMode mode) {
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
+
+  // ---------------------------------------------------------------------------
+  // Mirrors the onnxruntime ``MLOpTest.TreeEnsembleLeafLike`` unit test
+  // (``onnxruntime/test/providers/cpu/ml/tree_ensembler_test.cc``): two trees
+  // sharing the same ``nodes_*`` arrays via ``tree_roots={0,2}``, a single
+  // three-feature ``double`` sample, ``n_targets=1`` and SUM aggregation. This
+  // is the first ``TreeEnsemble`` case exercising multiple ``tree_roots``.
+  //
+  //   Tree at root 0: node0 feature[0]<=2.0? 7.0>2.0 -> false leaf 2 (weight 25)
+  //   Tree at root 2: node2 feature[0]<=3.0? 7.0>3.0 -> node3
+  //                   node3 feature[1]<=2.0? 7.0>2.0 -> node4
+  //                   node4 feature[2]<=1.0? 4.0>1.0 -> false leaf 6 (weight -9)
+  //   SUM => 25.0 + (-9.0) = 16.0
+  // ---------------------------------------------------------------------------
+  {
+    NodeProto node;
+    node.set_op_type("TreeEnsemble");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("X");
+    node.add_output("Y");
+    AddInt(node, "n_targets", 1);
+    AddInt(node, "aggregate_function", 1);
+    AddInt(node, "post_transform", 0);
+    AddInts(node, "tree_roots", {0, 2});
+    AddUint8Tensor(node, "nodes_modes", {0x00, 0x00, 0x00, 0x00, 0x00});
+    AddInts(node, "nodes_featureids", {0, 1, 0, 1, 2});
+    AddTypedTensor<double>(node, "nodes_splits", TensorProto::DOUBLE, {2.0, 2.0, 3.0, 2.0, 1.0});
+    AddInts(node, "nodes_truenodeids", {1, 0, 3, 4, 5});
+    AddInts(node, "nodes_trueleafs", {0, 1, 1, 1, 1});
+    AddInts(node, "nodes_falsenodeids", {2, 1, 3, 4, 6});
+    AddInts(node, "nodes_falseleafs", {1, 1, 0, 0, 1});
+    AddInts(node, "leaf_targetids", {0, 0, 0, 0, 0, 0, 0});
+    AddTypedTensor<double>(node, "leaf_weights", TensorProto::DOUBLE,
+                           {100.0, 0.0, 25.0, 0.5, -0.5, -5.0, -9.0});
+    const onnx_kernels::kernel::TreeEnsemble tree_ens{
+        ctx,
+        /*tree_roots=*/{0, 2},
+        /*nodes_featureids=*/{0, 1, 0, 1, 2},
+        /*nodes_splits=*/{2.0, 2.0, 3.0, 2.0, 1.0},
+        /*nodes_modes=*/{0, 0, 0, 0, 0},
+        /*nodes_truenodeids=*/{1, 0, 3, 4, 5},
+        /*nodes_falsenodeids=*/{2, 1, 3, 4, 6},
+        /*nodes_trueleafs=*/{0, 1, 1, 1, 1},
+        /*nodes_falseleafs=*/{1, 1, 0, 0, 1},
+        /*nodes_missing=*/{},
+        /*leaf_targetids=*/{0, 0, 0, 0, 0, 0, 0},
+        /*leaf_weights=*/{100.0, 0.0, 25.0, 0.5, -0.5, -5.0, -9.0},
+        /*membership_values=*/{}};
+    Expect(registry, std::move(node), "test_cc_tree_ensemble_leaf_like", {default_opset, opset},
+           [=]() -> IoData {
+             Tensor x = Tensor::FromDouble("", {1, 3}, {7.0, 7.0, 4.0});
+             Tensor y = tree_ens.operator()<double>(x, /*n_targets=*/1, /*aggregate_function=*/1,
+                                                    /*post_transform=*/0);
+
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
+  }
 }
 
 } // namespace onnx_backend_test

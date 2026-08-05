@@ -13,7 +13,7 @@ class NodeProto;
 class GraphProto;
 class ModelProto;
 struct SerializeOptions;
-void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options);
+void ApplySerializeRawDataCallback(ModelProto &model, SerializeOptions &options);
 
 /**
  * Common options shared by tensor buffer operations: in-place consolidation

@@ -7226,6 +7226,159 @@ TEST(onnx_proto, ParseOptions_RawDataCallback_NotInvokedWithoutRawData) {
   EXPECT_EQ(callback_calls, 0);
 }
 
+// ---------------------------------------------------------------------------
+// ParseOptions / SerializeOptions node_callback and current_graph
+// ---------------------------------------------------------------------------
+
+namespace {
+// Builds a small model: main graph with an Add node whose second input is an
+// initializer, plus an If node carrying a then-subgraph with its own node.
+ModelProto MakeModelWithSubgraph() {
+  ModelProto model;
+  model.set_ir_version(9);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("main");
+
+  NodeProto *add = graph->add_node();
+  add->set_op_type("Add");
+  add->set_name("add0");
+  add->add_input("X");
+  add->add_input("W");
+  add->add_output("Y");
+
+  TensorProto *init = graph->add_initializer();
+  init->set_name("W");
+  init->set_data_type(TensorProto::DataType::FLOAT);
+  init->ref_dims().push_back(2);
+  init->ref_raw_data().resize(2 * sizeof(float));
+
+  NodeProto *if_node = graph->add_node();
+  if_node->set_op_type("If");
+  if_node->set_name("if0");
+  if_node->add_input("cond");
+  if_node->add_output("Z");
+  AttributeProto *then_attr = if_node->add_attribute();
+  then_attr->set_name("then_branch");
+  then_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *sub = then_attr->add_g();
+  sub->set_name("then_graph");
+  NodeProto *sub_node = sub->add_node();
+  sub_node->set_op_type("Identity");
+  sub_node->set_name("id0");
+  sub_node->add_input("cond");
+  sub_node->add_output("Z");
+  return model;
+}
+} // namespace
+
+TEST(onnx_proto, ParseOptions_NodeCallback_InvokedPerNodeWithParentGraph) {
+  ModelProto model = MakeModelWithSubgraph();
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  std::vector<std::pair<std::string, std::string>> seen; // (node op_type, parent graph name)
+  ParseOptions options;
+  options.node_callback = [&](NodeProto &node) {
+    const GraphProto *parent = options.current_graph;
+    seen.emplace_back(node.ref_op_type(),
+                      parent ? std::string(parent->ref_name()) : std::string("<null>"));
+  };
+
+  ModelProto parsed;
+  parsed.ParseFromString(serialized, options);
+  // current_graph is reset once parsing completes.
+  EXPECT_EQ(options.current_graph, nullptr);
+
+  ASSERT_EQ(seen.size(), 3u);
+  // Subgraph node fires while parsing the If node (before the main graph's callbacks).
+  EXPECT_EQ(seen[0].first, "Identity");
+  EXPECT_EQ(seen[0].second, "then_graph");
+  EXPECT_EQ(seen[1].first, "Add");
+  EXPECT_EQ(seen[1].second, "main");
+  EXPECT_EQ(seen[2].first, "If");
+  EXPECT_EQ(seen[2].second, "main");
+}
+
+TEST(onnx_proto, ParseOptions_RawDataCallback_KnowsParentGraph) {
+  ModelProto model = MakeModelWithSubgraph();
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  std::string seen_graph_name;
+  ParseOptions options;
+  options.raw_data_callback = [&](TensorProto &t) -> std::function<void()> {
+    if (t.ref_name() == "W" && options.current_graph != nullptr) {
+      seen_graph_name = options.current_graph->ref_name();
+    }
+    return {};
+  };
+
+  ModelProto parsed;
+  parsed.ParseFromString(serialized, options);
+  EXPECT_EQ(seen_graph_name, "main");
+}
+
+TEST(onnx_proto, ParseOptions_NodeCallback_CanEditNodeInPlace) {
+  ModelProto model = MakeModelWithSubgraph();
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  ParseOptions options;
+  options.node_callback = [&](NodeProto &node) { node.set_doc_string("visited"); };
+
+  ModelProto parsed;
+  parsed.ParseFromString(serialized, options);
+  ASSERT_EQ(parsed.ref_graph().ref_node().size(), 2);
+  EXPECT_EQ(parsed.ref_graph().ref_node()[0].ref_doc_string(), "visited");
+  EXPECT_EQ(parsed.ref_graph().ref_node()[1].ref_doc_string(), "visited");
+}
+
+TEST(onnx_proto, SerializeOptions_NodeCallback_InvokedPerNodeWithParentGraph) {
+  ModelProto model = MakeModelWithSubgraph();
+
+  std::vector<std::pair<std::string, std::string>> seen;
+  SerializeOptions options;
+  options.node_callback = [&](NodeProto &node) {
+    const GraphProto *parent = options.current_graph;
+    seen.emplace_back(node.ref_op_type(),
+                      parent ? std::string(parent->ref_name()) : std::string("<null>"));
+  };
+
+  std::string serialized;
+  model.SerializeToString(serialized, options);
+
+  ASSERT_EQ(seen.size(), 3u);
+  EXPECT_EQ(seen[0].first, "Add");
+  EXPECT_EQ(seen[0].second, "main");
+  EXPECT_EQ(seen[1].first, "If");
+  EXPECT_EQ(seen[1].second, "main");
+  EXPECT_EQ(seen[2].first, "Identity");
+  EXPECT_EQ(seen[2].second, "then_graph");
+
+  // The callback runs on a working copy, so the caller's model is unchanged.
+  EXPECT_EQ(model.ref_graph().ref_node()[0].has_doc_string(), false);
+}
+
+TEST(onnx_proto, SerializeOptions_NodeCallback_EditsRoundTrip) {
+  ModelProto model = MakeModelWithSubgraph();
+
+  SerializeOptions options;
+  options.node_callback = [&](NodeProto &node) { node.set_doc_string("stamped"); };
+
+  std::string serialized;
+  model.SerializeToString(serialized, options);
+
+  ModelProto parsed;
+  parsed.ParseFromString(serialized);
+  EXPECT_EQ(parsed.ref_graph().ref_node()[0].ref_doc_string(), "stamped");
+  EXPECT_EQ(parsed.ref_graph().ref_node()[1].ref_doc_string(), "stamped");
+  // The subgraph node was stamped too.
+  const AttributeProto &then_attr = parsed.ref_graph().ref_node()[1].ref_attribute()[0];
+  EXPECT_EQ(then_attr.ref_g().ref_node()[0].ref_doc_string(), "stamped");
+  // Caller's model remains untouched.
+  EXPECT_FALSE(model.ref_graph().ref_node()[0].has_doc_string());
+}
+
 TEST(onnx_proto, ParseFromIstream_ModelProto) {
   // Build a minimal model and serialize it to a string buffer.
   ModelProto model;

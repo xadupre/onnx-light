@@ -78,6 +78,20 @@ struct PySerializeRawDataCallback {
   }
 };
 
+// Adapts a Python callable to ParseOptions/SerializeOptions::node_callback. The callable is
+// invoked as ``fn(node)`` for every NodeProto once it has been parsed (or right before it is
+// serialized) and receives the NodeProto by reference so it may inspect or edit it in place. The
+// parent GraphProto is available to the callback via ``options.current_graph`` on the options
+// object it was assigned to. The Python object is held by value so the std::function target keeps
+// the callable alive, and the GIL is reacquired around every call.
+struct PyNodeCallback {
+  nb::object fn;
+  void operator()(NodeProto &node) const {
+    nb::gil_scoped_acquire gil;
+    fn(nb::cast(&node, nb::rv_policy::reference));
+  }
+};
+
 // Reusable ``raw_data_callback`` that keeps the default C++ allocation (tensor ownership
 // unchanged) while letting users observe parsing progress. When called it optionally forwards
 // the freshly parsed TensorProto to a user callable invoked as ``on_tensor(tensor)`` (for
@@ -1074,7 +1088,19 @@ void AddOnnxPyProto(nb::module_ &m) {
               "Default: 64 (kSmallTensorDataThresholdBytes).")
       .def_rw("alignment", &TensorBufferOptions::alignment,
               "If > 0, each tensor's offset within the buffer is padded to a multiple of this many "
-              "bytes. 0 disables alignment. Use 4096 for mmap-friendly page-aligned offsets.");
+              "bytes. 0 disables alignment. Use 4096 for mmap-friendly page-aligned offsets.")
+      .def_prop_ro(
+          "current_graph",
+          [](TensorBufferOptions &options) -> nb::object {
+            if (options.current_graph == nullptr) {
+              return nb::none();
+            }
+            return nb::cast(options.current_graph, nb::rv_policy::reference);
+          },
+          "Read-only :class:`GraphProto` currently being parsed or serialized while a "
+          "``raw_data_callback`` or ``node_callback`` runs. It lets a callback locate the "
+          "parent graph of the tensor or node it receives (for example ``options.current_graph``"
+          " from inside the callback). It is ``None`` outside of any callback invocation.");
 
   nb::class_<RawDataCallback>(
       m, "RawDataCallback",
@@ -1194,6 +1220,29 @@ void AddOnnxPyProto(nb::module_ &m) {
           "released. Setting it to ``None`` (the default) disables the callback. See "
           ":class:`RawDataCallback` for a ready-made object that only reports progress while "
           "keeping the default allocation.",
+          nb::for_setter(nb::arg("value").none()))
+      .def_prop_rw(
+          "node_callback",
+          [](ParseOptions &options) -> nb::object {
+            if (!options.node_callback) {
+              return nb::none();
+            }
+            if (const PyNodeCallback *cb = options.node_callback.target<PyNodeCallback>()) {
+              return cb->fn;
+            }
+            return nb::none();
+          },
+          [](ParseOptions &options, nb::object fn) {
+            if (fn.is_none()) {
+              options.node_callback = {};
+            } else {
+              options.node_callback = PyNodeCallback{fn};
+            }
+          },
+          "Optional callable invoked as ``fn(node)`` for every :class:`NodeProto` once it has "
+          "been fully parsed. The node is passed by reference and may be inspected or edited in "
+          "place. The parent graph is available as ``options.current_graph`` from inside the "
+          "callback. Setting it to ``None`` (the default) disables the callback.",
           nb::for_setter(nb::arg("value").none()));
 
   nb::class_<SerializeOptions, TensorBufferOptions>(m, "SerializeOptions",
@@ -1262,6 +1311,30 @@ void AddOnnxPyProto(nb::module_ &m) {
           "metadata after the callback so the written ``length`` and ``offset`` match "
           "the rewritten bytes. Setting it to ``None`` (the default) disables the "
           "callback.",
+          nb::for_setter(nb::arg("value").none()))
+      .def_prop_rw(
+          "node_callback",
+          [](SerializeOptions &options) -> nb::object {
+            if (!options.node_callback) {
+              return nb::none();
+            }
+            if (const PyNodeCallback *cb = options.node_callback.target<PyNodeCallback>()) {
+              return cb->fn;
+            }
+            return nb::none();
+          },
+          [](SerializeOptions &options, nb::object fn) {
+            if (fn.is_none()) {
+              options.node_callback = {};
+            } else {
+              options.node_callback = PyNodeCallback{fn};
+            }
+          },
+          "Optional callable invoked as ``fn(node)`` for every :class:`NodeProto` immediately "
+          "before it is serialized. The node is passed by reference (from a working copy of the "
+          "model, so edits never alter the caller's model) and may be inspected or edited in "
+          "place. The parent graph is available as ``options.current_graph`` from inside the "
+          "callback. Setting it to ``None`` (the default) disables the callback.",
           nb::for_setter(nb::arg("value").none()));
 
   nb::class_<SerializeSizeResult>(m, "SerializeSizeResult",

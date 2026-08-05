@@ -307,11 +307,13 @@ void ApplySerializeRawDataCallbackToTensor(TensorProto &tensor, const SerializeO
   if (!tensor.has_raw_data()) {
     return;
   }
-  const bool reset_external_data = tensor.has_data_location() &&
-                                   tensor.ref_data_location() == TensorProto::DataLocation::EXTERNAL;
+  const bool reset_external_data =
+      tensor.has_data_location() &&
+      tensor.ref_data_location() == TensorProto::DataLocation::EXTERNAL;
   const int64_t rewritten_size = options.raw_data_callback(tensor, nullptr, 0, true);
-  EXT_ENFORCE(rewritten_size >= 0, "raw_data_callback returned a negative size. Value=",
-              rewritten_size, ", tensor=", tensor.ref_name(), ".");
+  EXT_ENFORCE(rewritten_size >= 0,
+              "raw_data_callback returned a negative size. Value=", rewritten_size,
+              ", tensor=", tensor.ref_name(), ".");
   if (rewritten_size > 0) {
     utils::ByteSpan rewritten_raw_data;
     if (options.alignment > 1) {
@@ -381,14 +383,15 @@ void ApplySerializeCallbacksToGraph(GraphProto &graph, SerializeOptions &options
 
 } // namespace
 
-void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options) {
+void ApplySerializeRawDataCallback(ModelProto &model, SerializeOptions &options) {
   if ((!options.raw_data_callback && !options.node_callback) || !model.has_graph()) {
     return;
   }
-  // Work on a local mutable copy so ``current_graph`` can be threaded through the traversal
-  // without mutating the caller's options.
-  SerializeOptions local_options = options;
-  ApplySerializeCallbacksToGraph(model.ref_graph(), local_options);
+  // Thread ``current_graph`` through the traversal on the caller's options object so that
+  // callbacks (which read ``options.current_graph``) observe the correct parent graph.
+  GraphProto *const previous_graph = options.current_graph;
+  ApplySerializeCallbacksToGraph(model.ref_graph(), options);
+  options.current_graph = previous_graph;
 }
 
 void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file,

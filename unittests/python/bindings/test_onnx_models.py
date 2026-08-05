@@ -263,6 +263,114 @@ class TestOnnxLightHelper(ExtTestCase):
         # Returning None leaves the tensor ownership and data unchanged.
         np.testing.assert_array_equal(onh.to_array(parsed.graph.initializer[0]), arr)
 
+    @staticmethod
+    def _make_model_with_subgraph():
+        # Main graph with an Add node (its second input is an initializer) plus
+        # an If node carrying a then-subgraph with its own Identity node.
+        arr = np.array([1.0, 2.0], dtype=np.float32)
+        add = oh.make_node("Add", ["X", "W"], ["Y"], name="add0")
+        sub_node = oh.make_node("Identity", ["cond"], ["Z"], name="id0")
+        sub = oh.make_graph([sub_node], "then_graph", [], [])
+        if_node = oh.make_node("If", ["cond"], ["Z"], name="if0", then_branch=sub)
+        graph = oh.make_graph(
+            [add, if_node], "main", [], [], initializer=[onh.from_array(arr, name="W")]
+        )
+        return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
+
+    def test_parse_options_node_callback(self):
+        # Default is None (no callback).
+        opts = onnxl.ParseOptions()
+        self.assertIsNone(opts.node_callback)
+
+        # Round-trips the exact Python callable that was assigned.
+        def callback(node):
+            return None
+
+        opts.node_callback = callback
+        self.assertIs(opts.node_callback, callback)
+
+        # Assigning None disables the callback again.
+        opts.node_callback = None
+        self.assertIsNone(opts.node_callback)
+
+    def test_parse_options_node_callback_invoked_with_parent_graph(self):
+        model = self._make_model_with_subgraph()
+        serialized = model.SerializeToString()
+
+        seen = []
+        opts = onnxl.ParseOptions()
+
+        def callback(node):
+            parent = opts.current_graph
+            seen.append((node.op_type, parent.name if parent is not None else None))
+
+        opts.node_callback = callback
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(serialized, opts)
+
+        # current_graph is reset once parsing completes.
+        self.assertIsNone(opts.current_graph)
+        # The subgraph node fires while parsing the If node, before the main graph.
+        self.assertEqual(seen, [("Identity", "then_graph"), ("Add", "main"), ("If", "main")])
+
+    def test_parse_options_node_callback_edits_node_in_place(self):
+        model = self._make_model_with_subgraph()
+        serialized = model.SerializeToString()
+
+        opts = onnxl.ParseOptions()
+        opts.node_callback = lambda node: setattr(node, "doc_string", "visited")
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(serialized, opts)
+
+        self.assertEqual(parsed.graph.node[0].doc_string, "visited")
+        self.assertEqual(parsed.graph.node[1].doc_string, "visited")
+
+    def test_serialize_options_node_callback(self):
+        opts = onnxl.SerializeOptions()
+        self.assertIsNone(opts.node_callback)
+
+        def callback(node):
+            return None
+
+        opts.node_callback = callback
+        self.assertIs(opts.node_callback, callback)
+        opts.node_callback = None
+        self.assertIsNone(opts.node_callback)
+
+    def test_serialize_options_node_callback_invoked_with_parent_graph(self):
+        model = self._make_model_with_subgraph()
+
+        seen = []
+        opts = onnxl.SerializeOptions()
+
+        def callback(node):
+            parent = opts.current_graph
+            seen.append((node.op_type, parent.name if parent is not None else None))
+
+        opts.node_callback = callback
+        model.SerializeToString(opts)
+
+        self.assertEqual(seen, [("Add", "main"), ("If", "main"), ("Identity", "then_graph")])
+        # The callback runs on a working copy: the caller's model is unchanged.
+        self.assertEqual(model.graph.node[0].doc_string, "")
+
+    def test_serialize_options_node_callback_edits_round_trip(self):
+        model = self._make_model_with_subgraph()
+
+        opts = onnxl.SerializeOptions()
+        opts.node_callback = lambda node: setattr(node, "doc_string", "stamped")
+        serialized = model.SerializeToString(opts)
+
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(serialized)
+        self.assertEqual(parsed.graph.node[0].doc_string, "stamped")
+        self.assertEqual(parsed.graph.node[1].doc_string, "stamped")
+        # The subgraph node was stamped too.
+        sub = parsed.graph.node[1].attribute[0].g
+        self.assertEqual(sub.node[0].doc_string, "stamped")
+        # The caller's model remains untouched.
+        self.assertEqual(model.graph.node[0].doc_string, "")
+
     def test_serialize_options_raw_data_callback(self):
         opts = onnxl.SerializeOptions()
         self.assertIsNone(opts.raw_data_callback)

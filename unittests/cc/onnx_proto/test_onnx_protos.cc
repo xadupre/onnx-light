@@ -1444,6 +1444,11 @@ TEST(onnx_proto, TensorProto_DataTypes) {
   EXPECT_EQ(tensor.ref_string_data()[0], "hello");
   EXPECT_EQ(tensor.ref_string_data()[1], "world");
 
+  utils::OptionalString opt_str("optional");
+  tensor.add_string_data(opt_str);
+  EXPECT_EQ(tensor.ref_string_data().size(), 3);
+  EXPECT_EQ(tensor.ref_string_data()[2], "optional");
+
   tensor.set_data_type(TensorProto::DataType::INT64);
   tensor.ref_int64_data().push_back(100);
   tensor.ref_int64_data().push_back(200);
@@ -2563,13 +2568,16 @@ TEST(onnx_proto, AttributeProto_StringsAttribute) {
   *attribute.add_strings() = "tag1";
   *attribute.add_strings() = "tag2";
   *attribute.add_strings() = "tag3";
+  utils::OptionalString opt_str("tag4");
+  attribute.add_strings(opt_str);
 
   EXPECT_EQ(attribute.ref_name(), "tags");
   EXPECT_EQ(attribute.ref_type(), AttributeProto::AttributeType::STRINGS);
-  EXPECT_EQ(attribute.ref_strings().size(), 3);
+  EXPECT_EQ(attribute.ref_strings().size(), 4);
   EXPECT_EQ(attribute.ref_strings()[0], "tag1");
   EXPECT_EQ(attribute.ref_strings()[1], "tag2");
   EXPECT_EQ(attribute.ref_strings()[2], "tag3");
+  EXPECT_EQ(attribute.ref_strings()[3], "tag4");
 }
 
 TEST(onnx_proto, AttributeProto_TensorAttribute) {

@@ -366,11 +366,11 @@ FIELD_REPEATED_PACKED(
     "field MUST be INT32, INT16, INT8, INT4, UINT16, UINT8, UINT4, BOOL, FLOAT16, BFLOAT16, "
     "FLOAT8E4M3FN, FLOAT8E4M3FNUZ, FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, "
     "UINT2, INT2")
-FIELD_REPEATED(utils::String, string_data, 6,
-               "For strings. Each element of string_data is a UTF-8 encoded Unicode string. No "
-               "trailing null, no leading BOM. The 'string' scalar type is not used to match "
-               "ML community conventions. When this field is "
-               "present, the data_type field MUST be STRING")
+FIELD_REPEATED_STR(utils::String, string_data, 6,
+                   "For strings. Each element of string_data is a UTF-8 encoded Unicode string. No "
+                   "trailing null, no leading BOM. The 'string' scalar type is not used to match "
+                   "ML community conventions. When this field is "
+                   "present, the data_type field MUST be STRING")
 FIELD_REPEATED_PACKED(int64_t, int64_data, 7,
                       "For int64. When this field is present, the data_type field MUST be INT64")
 FIELD_STR(name, 8, "Optionally, a name for the tensor.")
@@ -758,7 +758,7 @@ FIELD_OPTIONAL(GraphProto, g, 6, "Optional graph attribute.")
 FIELD_OPTIONAL(SparseTensorProto, sparse_tensor, 22, "Optional sparse tensor attribute.")
 FIELD_REPEATED(float, floats, 7, "Optional repeated float attribute.")
 FIELD_REPEATED(int64_t, ints, 8, "Optional repeated int64 attribute.")
-FIELD_REPEATED(utils::String, strings, 9, "Optional repeated string attribute.")
+FIELD_REPEATED_STR(utils::String, strings, 9, "Optional repeated string attribute.")
 FIELD_REPEATED_PROTO(TensorProto, tensors, 10, "Optional repeated tensor attribute.")
 FIELD_REPEATED_PROTO(SparseTensorProto, sparse_tensors, 23, "Optional repeated tensor attribute.")
 FIELD_REPEATED_PROTO(GraphProto, graphs, 11, "Optional repeated graph attribute.")

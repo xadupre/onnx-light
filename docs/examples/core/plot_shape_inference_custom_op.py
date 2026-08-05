@@ -225,18 +225,3 @@ assert list(ctx2.get("Y").shape) == ["N", 3]
 # * Validate input ranks and dimension compatibility inside the callback to
 #   catch malformed graphs early and to keep symbolic dims working when
 #   concrete sizes are not yet known.
-
-
-#####################################
-# Save the model to disk
-# ++++++++++++++++++++++
-#
-# The model is written to disk with :func:`onnx_light.onnx.save` so it can be
-# inspected or reloaded later.
-
-import os  # noqa: E402
-
-os.makedirs("temp_plot_shape_inference_custom_op", exist_ok=True)
-onnx_path = os.path.join("temp_plot_shape_inference_custom_op", "custom_op_demo.onnx")
-onnxl.save(model, onnx_path)
-print(f"\nModel saved to {onnx_path}")

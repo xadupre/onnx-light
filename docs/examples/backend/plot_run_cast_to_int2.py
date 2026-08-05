@@ -60,22 +60,6 @@ print(f"kind      : {tc.kind}")
 print(pretty_onnx(tc.model))
 
 #####################################
-# Save the model to disk
-# ++++++++++++++++++++++
-#
-# The test-case model is written to disk with :func:`onnx_light.onnx.save`
-# so it can be inspected or reloaded later.
-
-import os  # noqa: E402
-
-import onnx_light.onnx as onnxl  # noqa: E402
-
-os.makedirs("temp_plot_run_cast_to_int2", exist_ok=True)
-onnx_path = os.path.join("temp_plot_run_cast_to_int2", f"{tc.model_name}.onnx")
-onnxl.save(tc.model, onnx_path)
-print(f"Model saved to {onnx_path}")
-
-#####################################
 # Run the model with the reference runtime
 # ++++++++++++++++++++++++++++++++++++++++
 #
@@ -163,3 +147,4 @@ fig, ax = plt.subplots(figsize=(4, 3))
 ax.text(0.5, 0.5, "float\n\u2192\nint2", ha="center", va="center", fontsize=28)
 ax.set_axis_off()
 fig.tight_layout()
+fig.savefig("plot_run_cast_to_int2.png")

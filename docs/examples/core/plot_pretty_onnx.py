@@ -175,18 +175,3 @@ print(pretty_onnx(model, include_release=True))
 
 print("\n=== all annotations combined ===")
 print(pretty_onnx(model, include_node_tags=True, include_inplace=True, include_release=True))
-
-
-#####################################
-# Save the model to disk
-# ++++++++++++++++++++++
-#
-# The annotated model is written to disk with :func:`onnx_light.onnx.save`
-# so it can be inspected or reloaded later.
-
-import os  # noqa: E402
-
-os.makedirs("temp_plot_pretty_onnx", exist_ok=True)
-onnx_path = os.path.join("temp_plot_pretty_onnx", "pretty_onnx_demo.onnx")
-onnxl.save(model, onnx_path)
-print(f"\nModel saved to {onnx_path}")

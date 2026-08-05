@@ -132,6 +132,7 @@ ax.set_title(f"ONNX vs ORT flatbuffer file size ratio (DIM={DIM})")
 ax.grid(True, alpha=0.3)
 ax.legend()
 fig.tight_layout()
+fig.savefig("plot_save_ort_flatbuffers.png")
 
 # %%
 # Cleanup

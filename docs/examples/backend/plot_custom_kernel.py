@@ -112,23 +112,6 @@ sess2.register_custom_kernel("", "Abs", fake_abs)
 print(f"Abs replaced by negation: y = {y2}")
 
 #####################################
-# Save the models to disk
-# +++++++++++++++++++++++
-#
-# Both parsed models are written to disk with :func:`onnx_light.onnx.save`
-# so they can be inspected or reloaded later.
-
-import os  # noqa: E402
-
-import onnx_light.onnx as onnxl  # noqa: E402
-
-os.makedirs("temp_plot_custom_kernel", exist_ok=True)
-for name, proto in [("scale_model", model), ("override_model", override_model)]:
-    onnx_path = os.path.join("temp_plot_custom_kernel", f"{name}.onnx")
-    onnxl.save(proto, onnx_path)
-    print(f"Model saved to {onnx_path}")
-
-#####################################
 # See also
 # ++++++++
 #

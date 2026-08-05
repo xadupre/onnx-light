@@ -245,18 +245,4 @@ ax.set_title("Evaluated ComputeContext.total_bytes")
 ax.grid(True, alpha=0.3)
 ax.legend()
 fig.tight_layout()
-
-
-#####################################
-# Save the model to disk
-# ++++++++++++++++++++++
-#
-# The model, annotated with the computed memory profile, is written to disk
-# with :func:`onnx_light.onnx.save` so it can be inspected or reloaded later.
-
-import os  # noqa: E402
-
-os.makedirs("temp_plot_compute_context_memory", exist_ok=True)
-onnx_path = os.path.join("temp_plot_compute_context_memory", "compute_context_memory_demo.onnx")
-onnxl.save(model, onnx_path)
-print(f"\nModel saved to {onnx_path}")
+fig.savefig("plot_compute_context_memory.png")

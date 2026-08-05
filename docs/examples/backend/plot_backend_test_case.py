@@ -113,22 +113,6 @@ print(f"Names matching '^test_abs$' exactly  : {[c.name for c in exact_abs]}")
 print(pretty_onnx(tc.model))
 
 #####################################
-# Save the model to disk
-# ++++++++++++++++++++++
-#
-# The test-case model is written to disk with :func:`onnx_light.onnx.save`
-# so it can be inspected or reloaded later.
-
-import os  # noqa: E402
-
-import onnx_light.onnx as onnxl  # noqa: E402
-
-os.makedirs("temp_plot_backend_test_case", exist_ok=True)
-onnx_path = os.path.join("temp_plot_backend_test_case", f"{tc.model_name}.onnx")
-onnxl.save(tc.model, onnx_path)
-print(f"Model saved to {onnx_path}")
-
-#####################################
 # Display the inputs and outputs
 # ++++++++++++++++++++++++++++++
 #
@@ -272,3 +256,4 @@ fig, ax = plt.subplots(figsize=(4, 3))
 ax.text(0.5, 0.5, "Python\nBackend", ha="center", va="center", fontsize=28)
 ax.set_axis_off()
 fig.tight_layout()
+fig.savefig("plot_backend_test_case.png")

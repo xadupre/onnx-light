@@ -6221,9 +6221,11 @@ TEST(onnx_proto, ParserRecursionLimitAcceptsShallowNesting) {
 }
 
 TEST(onnx_proto, ParserRecursionLimitAcceptsDeeplyNestedControlFlow) {
-  // Regression test for models with dozens of nested Loop/If subgraphs. Such a
-  // model reaches a protobuf message nesting of roughly three per graph level
-  // (Node -> Attribute -> Graph). 40 levels reaches depth 80, which the former
+  // Regression for issue #4244: models with dozens of nested Loop/If subgraphs
+  // reach a protobuf message nesting of roughly three per graph level
+  // (Node -> Attribute -> Graph), e.g. ~96 for 30 nested Loops. The former
+  // default limit of 50 rejected such models. This uses a nested TypeProto to
+  // exercise the same depth guard: 40 levels reaches depth 80, which the former
   // default of 50 rejected but the current default of 100 accepts, matching
   // protobuf's own limit.
   std::string deep = BuildNestedTypeProto(40); // depth 80

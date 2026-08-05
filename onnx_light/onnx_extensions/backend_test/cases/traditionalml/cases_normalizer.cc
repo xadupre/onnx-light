@@ -45,7 +45,7 @@ void RegisterNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
     AddStringAttr(node, "norm", "L2");
 
     Expect(registry, std::move(node), "test_cc_normalizer_l2_float_benchmark",
-           {default_opset, opset}, {24576}, {24576}, [normalizer]() -> IoData {
+           {default_opset, opset}, {524288}, {524288}, [normalizer]() -> IoData {
              Tensor x = Tensor::FromFloat("", {8192, 64}, Randn<float>({8192, 64}, 2621));
              Tensor y = normalizer.operator()<float>(x, "L2");
              return IoData{{std::move(x)}, {std::move(y)}};

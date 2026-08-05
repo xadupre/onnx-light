@@ -706,6 +706,19 @@ if _run_scenario("load"):
     print_stats("load/1filex1/reference", data[-1])
 
     # %%
+    # Load with ``onnx_light.onnx.reference.ReferenceEvaluator`` using parallel
+    # tensor loading.  The model is loaded with ``num_threads > 1`` before
+    # building the reference runtime.
+
+    data.append(
+        measure(
+            "load/1filex4/reference",
+            lambda: ReferenceEvaluator(onnxl.load(onnx_path, num_threads=4)),
+        )
+    )
+    print_stats("load/1filex4/reference", data[-1])
+
+    # %%
     # Load with ``onnxruntime`` (all optimizations disabled).
     # ``InferenceSession`` is created with ``ORT_DISABLE_ALL`` so the
     # measurement captures only model loading overhead, not graph optimization.

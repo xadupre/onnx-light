@@ -13,6 +13,15 @@
 #include <stdexcept>
 #include <vector>
 
+// ChaCha20-Poly1305 is only available when OpenSSL is built with ChaCha support.
+// Some OpenSSL builds define OPENSSL_NO_CHACHA, in which case EVP_chacha20_poly1305()
+// is not declared. Gate the ChaCha20-Poly1305 code paths on its availability.
+#ifndef OPENSSL_NO_CHACHA
+#define ONNX_LIGHT_HAS_CHACHA20 1
+#else
+#define ONNX_LIGHT_HAS_CHACHA20 0
+#endif
+
 namespace ONNX_LIGHT_NAMESPACE {
 
 namespace {
@@ -96,6 +105,12 @@ std::string encrypt_to_blob_aes(const std::string &plain, const std::string &key
 
 // Encrypts *plain* bytes using ChaCha20-Poly1305 and returns the ONNXCRY2 blob.
 std::string encrypt_to_blob_chacha20(const std::string &plain, const std::string &key) {
+#if !ONNX_LIGHT_HAS_CHACHA20
+  (void)plain;
+  (void)key;
+  throw std::runtime_error(
+      "ChaCha20-Poly1305 is not supported by this OpenSSL build (OPENSSL_NO_CHACHA).");
+#else
   uint8_t salt[SALT_LEN];
   uint8_t nonce[NONCE_LEN];
   if (RAND_bytes(salt, SALT_LEN) != 1 || RAND_bytes(nonce, NONCE_LEN) != 1) {
@@ -154,6 +169,7 @@ std::string encrypt_to_blob_chacha20(const std::string &plain, const std::string
   blob.append(reinterpret_cast<const char *>(tag), TAG_LEN);
   blob.append(reinterpret_cast<const char *>(ciphertext.data()), cipher_len);
   return blob;
+#endif
 }
 
 std::string encrypt_to_blob(const std::string &plain, const std::string &key,
@@ -214,6 +230,13 @@ std::vector<uint8_t> decrypt_from_blob_aes(const uint8_t *data, size_t data_len,
 
 std::vector<uint8_t> decrypt_from_blob_chacha20(const uint8_t *data, size_t data_len,
                                                 const std::string &key) {
+#if !ONNX_LIGHT_HAS_CHACHA20
+  (void)data;
+  (void)data_len;
+  (void)key;
+  throw std::runtime_error(
+      "ChaCha20-Poly1305 is not supported by this OpenSSL build (OPENSSL_NO_CHACHA).");
+#else
   const size_t header_size = MAGIC_CHACHA20.size() + SALT_LEN + NONCE_LEN + TAG_LEN;
   if (data_len < header_size)
     throw std::runtime_error("Buffer too small to be a valid ONNXCRY2 payload.");
@@ -271,6 +294,7 @@ std::vector<uint8_t> decrypt_from_blob_chacha20(const uint8_t *data, size_t data
 
   plaintext.resize(static_cast<size_t>(out_len + final_len));
   return plaintext;
+#endif
 }
 
 // Decrypts an ONNXCRY1 or ONNXCRY2 *blob* and returns the plaintext bytes.

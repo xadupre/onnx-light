@@ -112,10 +112,17 @@ import pandas
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 
-import onnxruntime as ort
+try:
+    import onnxruntime as ort
+except ImportError:
+    ort = None
 
-_ort_sess_opts = ort.SessionOptions()
-_ort_sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+if ort is not None:
+    _ort_sess_opts = ort.SessionOptions()
+    _ort_sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+else:
+    _ort_sess_opts = None
+    print("WARNING: onnxruntime is not installed, skipping onnxruntime benchmarks.")
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as onnxlh
@@ -367,6 +374,7 @@ def _maybe_import_onnx_ir():
 
 if _CLI_MODEL_PATH is not None:
     onnx_path = os.path.abspath(_CLI_MODEL_PATH)
+    model = onnx_load(onnx_path)
     print(f"Using provided model: {onnx_path}")
 elif _CLI_MODEL_ID is not None:
     downloaded = _download_hf_model(_CLI_MODEL_ID, _CLI_MODEL_FILE, tmp_dir)
@@ -690,13 +698,14 @@ if _run_scenario("load"):
     # ``InferenceSession`` is created with ``ORT_DISABLE_ALL`` so the
     # measurement captures only model loading overhead, not graph optimization.
 
-    data.append(
-        measure(
-            "load/1filex1/ort",
-            lambda: ort.InferenceSession(onnx_path, sess_options=_ort_sess_opts),
+    if ort is not None:
+        data.append(
+            measure(
+                "load/1filex1/ort",
+                lambda: ort.InferenceSession(onnx_path, sess_options=_ort_sess_opts),
+            )
         )
-    )
-    print_stats("load/1filex1/ort", data[-1])
+        print_stats("load/1filex1/ort", data[-1])
 
 # %%
 # Serialize and Parse benchmarks
@@ -1111,13 +1120,14 @@ if _run_scenario("load"):
     # Reload the external-data model with ``onnxruntime``, keeping
     # ``ORT_DISABLE_ALL`` so only loading overhead is measured.
 
-    data.append(
-        measure(
-            "load/2filex1/ort",
-            lambda: ort.InferenceSession(ext_load_onnx, sess_options=_ort_sess_opts),
+    if ort is not None:
+        data.append(
+            measure(
+                "load/2filex1/ort",
+                lambda: ort.InferenceSession(ext_load_onnx, sess_options=_ort_sess_opts),
+            )
         )
-    )
-    print_stats("load/2filex1/ort", data[-1])
+        print_stats("load/2filex1/ort", data[-1])
 
 # %%
 # Results

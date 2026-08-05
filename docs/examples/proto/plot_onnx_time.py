@@ -1154,6 +1154,21 @@ if _run_scenario("load"):
     )
     print_stats("load/2filex1/reference", data[-1])
 
+    # %%
+    # Load with ``onnx_light.onnx.reference.ReferenceEvaluator`` using external
+    # data and parallel tensor loading.  Combine external-data loading with
+    # ``num_threads > 1`` before building the reference runtime.
+
+    data.append(
+        measure(
+            "load/2filex4/reference",
+            lambda: ReferenceEvaluator(
+                onnxl.load(ext_load_onnx, location=ext_load_data, num_threads=4)
+            ),
+        )
+    )
+    print_stats("load/2filex4/reference", data[-1])
+
 # %%
 # Results
 # --------

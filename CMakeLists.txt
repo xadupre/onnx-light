@@ -308,6 +308,39 @@ if(OpenSSL_FOUND)
   target_link_libraries(lib_onnx_proto PUBLIC OpenSSL::Crypto)
 endif()
 
+# Reduce the binary size of lib_onnx_proto. The proto message classes are
+# macro-generated (SERIALIZATION_METHOD / FIELD in stream_class.h), which emits
+# a large number of small out-of-line forwarders and inline accessors per class
+# and per field. Many of these are never referenced by a given consumer.
+# Compiling each function/data symbol into its own section and letting the
+# linker garbage-collect unreferenced sections (and fold identical ones) drops
+# that dead weight from the final binary without changing behavior.
+if(MSVC)
+  # cl.exe: /Gy (function-level linking) + /Gw (data COMDAT) enable the linker
+  # to discard unused functions/data. link.exe: /OPT:REF removes unreferenced
+  # symbols, /OPT:ICF folds identical COMDATs.
+  target_compile_options(lib_onnx_proto PRIVATE
+      $<$<COMPILE_LANGUAGE:C,CXX>:/Gy>
+      $<$<COMPILE_LANGUAGE:C,CXX>:/Gw>)
+  if(_lib_onnx_proto_type STREQUAL "SHARED")
+    target_link_options(lib_onnx_proto PRIVATE /OPT:REF /OPT:ICF)
+  endif()
+else()
+  target_compile_options(lib_onnx_proto PRIVATE
+      $<$<COMPILE_LANGUAGE:C,CXX>:-ffunction-sections>
+      $<$<COMPILE_LANGUAGE:C,CXX>:-fdata-sections>)
+  # Only the SHARED variant is linked here; the STATIC archive is garbage
+  # collected when the final consumer links it. --gc-sections (GNU/LLVM ld) and
+  # -dead_strip (Apple ld) drop the unreferenced sections at link time.
+  if(_lib_onnx_proto_type STREQUAL "SHARED")
+    if(APPLE)
+      target_link_options(lib_onnx_proto PRIVATE -Wl,-dead_strip)
+    else()
+      target_link_options(lib_onnx_proto PRIVATE -Wl,--gc-sections)
+    endif()
+  endif()
+endif()
+
 # Builds onnx_core library.
 # This intermediate library sits between lib_onnx_proto and the higher-level
 # manipulation / operator / kernel libraries. It owns the TensorType

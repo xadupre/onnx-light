@@ -13,7 +13,7 @@ class NodeProto;
 class GraphProto;
 class ModelProto;
 struct SerializeOptions;
-void ApplySerializeRawDataCallback(ModelProto &model, SerializeOptions &options);
+void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options);
 
 /**
  * Common options shared by tensor buffer operations: in-place consolidation
@@ -27,13 +27,6 @@ struct TensorBufferOptions {
    *  If > 0, each tensor's offset is padded to a multiple of this many bytes.
    *  0 disables alignment.  Use 4096 for mmap-friendly page-aligned offsets. */
   int64_t alignment = 0;
-  /** Points to the GraphProto currently being parsed or serialized while a
-   *  ``raw_data_callback`` or ``node_callback`` runs.  It is managed automatically
-   *  by the parser/serializer (set before visiting a graph's nodes and tensors,
-   *  restored afterwards) and lets callbacks locate the parent graph of the
-   *  TensorProto or NodeProto they receive.  It is ``nullptr`` outside of any
-   *  callback invocation and for tensors that are not reached through a graph. */
-  GraphProto *current_graph = nullptr;
 };
 
 /** Selects which file-backed BinaryStream implementation is used when parsing
@@ -150,13 +143,12 @@ struct ParseOptions : TensorBufferOptions {
   std::function<std::function<void()>(TensorProto &)> raw_data_callback = {};
   /** Holds an optional callback invoked for each NodeProto once it has been fully parsed.
    *
-   *  The callback receives the freshly parsed NodeProto by reference and may inspect or
-   *  modify it in place.  While the callback runs, ``current_graph`` points to the GraphProto
-   *  the node belongs to, so the callback can locate the node's parent graph (for example to
-   *  read graph-level metadata or the surrounding nodes).
+   *  The callback receives the freshly parsed NodeProto and its parent GraphProto (the graph the
+   *  node belongs to) by reference and may inspect or modify the node in place.  The parent graph
+   *  lets the callback read graph-level metadata or the surrounding nodes.
    *
    *  By default it is empty (no callback) and parsing behaves exactly as before. */
-  std::function<void(NodeProto &)> node_callback = {};
+  std::function<void(NodeProto &, GraphProto &)> node_callback = {};
 };
 
 /** Controls behavior when serializing ONNX protobuf messages to a stream or string. */
@@ -221,13 +213,12 @@ struct SerializeOptions : TensorBufferOptions {
   std::function<int64_t(TensorProto &, uint8_t *, size_t, bool)> raw_data_callback = {};
   /** Holds an optional callback invoked for each NodeProto immediately before it is serialized.
    *
-   *  The callback receives the NodeProto by reference (from a working copy of the model, so
-   *  edits never alter the caller's model) and may inspect or modify it in place.  While the
-   *  callback runs, ``current_graph`` points to the GraphProto the node belongs to, so the
-   *  callback can locate the node's parent graph.
+   *  The callback receives the NodeProto and its parent GraphProto (both from a working copy of
+   *  the model, so edits never alter the caller's model) by reference and may inspect or modify
+   *  the node in place.  The parent graph lets the callback locate the node's surrounding graph.
    *
    *  By default it is empty (no callback) and serialization behaves exactly as before. */
-  std::function<void(NodeProto &)> node_callback = {};
+  std::function<void(NodeProto &, GraphProto &)> node_callback = {};
 };
 
 /** Enforces ``SerializeOptions::max_serialized_size_bytes`` for a computed serialized size. */

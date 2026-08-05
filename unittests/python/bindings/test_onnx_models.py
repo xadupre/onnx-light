@@ -283,7 +283,7 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertIsNone(opts.node_callback)
 
         # Round-trips the exact Python callable that was assigned.
-        def callback(node):
+        def callback(node, graph):
             return None
 
         opts.node_callback = callback
@@ -300,16 +300,13 @@ class TestOnnxLightHelper(ExtTestCase):
         seen = []
         opts = onnxl.ParseOptions()
 
-        def callback(node):
-            parent = opts.current_graph
-            seen.append((node.op_type, parent.name if parent is not None else None))
+        def callback(node, graph):
+            seen.append((node.op_type, graph.name))
 
         opts.node_callback = callback
         parsed = onnxl.ModelProto()
         parsed.ParseFromString(serialized, opts)
 
-        # current_graph is reset once parsing completes.
-        self.assertIsNone(opts.current_graph)
         # The subgraph node fires while parsing the If node, before the main graph.
         self.assertEqual(seen, [("Identity", "then_graph"), ("Add", "main"), ("If", "main")])
 
@@ -318,7 +315,7 @@ class TestOnnxLightHelper(ExtTestCase):
         serialized = model.SerializeToString()
 
         opts = onnxl.ParseOptions()
-        opts.node_callback = lambda node: setattr(node, "doc_string", "visited")
+        opts.node_callback = lambda node, graph: setattr(node, "doc_string", "visited")
         parsed = onnxl.ModelProto()
         parsed.ParseFromString(serialized, opts)
 
@@ -332,7 +329,7 @@ class TestOnnxLightHelper(ExtTestCase):
         opts = onnxl.SerializeOptions()
         self.assertIsNone(opts.node_callback)
 
-        def callback(node):
+        def callback(node, graph):
             return None
 
         opts.node_callback = callback
@@ -346,9 +343,8 @@ class TestOnnxLightHelper(ExtTestCase):
         seen = []
         opts = onnxl.SerializeOptions()
 
-        def callback(node):
-            parent = opts.current_graph
-            seen.append((node.op_type, parent.name if parent is not None else None))
+        def callback(node, graph):
+            seen.append((node.op_type, graph.name))
 
         opts.node_callback = callback
         model.SerializeToString(opts)
@@ -361,7 +357,7 @@ class TestOnnxLightHelper(ExtTestCase):
         model = self._make_model_with_subgraph()
 
         opts = onnxl.SerializeOptions()
-        opts.node_callback = lambda node: setattr(node, "doc_string", "stamped")
+        opts.node_callback = lambda node, graph: setattr(node, "doc_string", "stamped")
         serialized = model.SerializeToString(opts)
 
         parsed = onnxl.ModelProto()

@@ -7227,7 +7227,7 @@ TEST(onnx_proto, ParseOptions_RawDataCallback_NotInvokedWithoutRawData) {
 }
 
 // ---------------------------------------------------------------------------
-// ParseOptions / SerializeOptions node_callback and current_graph
+// ParseOptions / SerializeOptions node_callback and parent-graph argument
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -7278,16 +7278,12 @@ TEST(onnx_proto, ParseOptions_NodeCallback_InvokedPerNodeWithParentGraph) {
 
   std::vector<std::pair<std::string, std::string>> seen; // (node op_type, parent graph name)
   ParseOptions options;
-  options.node_callback = [&](NodeProto &node) {
-    const GraphProto *parent = options.current_graph;
-    seen.emplace_back(node.ref_op_type(),
-                      parent ? std::string(parent->ref_name()) : std::string("<null>"));
+  options.node_callback = [&](NodeProto &node, GraphProto &parent) {
+    seen.emplace_back(node.ref_op_type(), std::string(parent.ref_name()));
   };
 
   ModelProto parsed;
   parsed.ParseFromString(serialized, options);
-  // current_graph is reset once parsing completes.
-  EXPECT_EQ(options.current_graph, nullptr);
 
   ASSERT_EQ(seen.size(), 3u);
   // Subgraph node fires while parsing the If node (before the main graph's callbacks).
@@ -7299,32 +7295,13 @@ TEST(onnx_proto, ParseOptions_NodeCallback_InvokedPerNodeWithParentGraph) {
   EXPECT_EQ(seen[2].second, "main");
 }
 
-TEST(onnx_proto, ParseOptions_RawDataCallback_KnowsParentGraph) {
-  ModelProto model = MakeModelWithSubgraph();
-  std::string serialized;
-  model.SerializeToString(serialized);
-
-  std::string seen_graph_name;
-  ParseOptions options;
-  options.raw_data_callback = [&](TensorProto &t) -> std::function<void()> {
-    if (t.ref_name() == "W" && options.current_graph != nullptr) {
-      seen_graph_name = options.current_graph->ref_name();
-    }
-    return {};
-  };
-
-  ModelProto parsed;
-  parsed.ParseFromString(serialized, options);
-  EXPECT_EQ(seen_graph_name, "main");
-}
-
 TEST(onnx_proto, ParseOptions_NodeCallback_CanEditNodeInPlace) {
   ModelProto model = MakeModelWithSubgraph();
   std::string serialized;
   model.SerializeToString(serialized);
 
   ParseOptions options;
-  options.node_callback = [&](NodeProto &node) { node.set_doc_string("visited"); };
+  options.node_callback = [&](NodeProto &node, GraphProto &) { node.set_doc_string("visited"); };
 
   ModelProto parsed;
   parsed.ParseFromString(serialized, options);
@@ -7338,10 +7315,8 @@ TEST(onnx_proto, SerializeOptions_NodeCallback_InvokedPerNodeWithParentGraph) {
 
   std::vector<std::pair<std::string, std::string>> seen;
   SerializeOptions options;
-  options.node_callback = [&](NodeProto &node) {
-    const GraphProto *parent = options.current_graph;
-    seen.emplace_back(node.ref_op_type(),
-                      parent ? std::string(parent->ref_name()) : std::string("<null>"));
+  options.node_callback = [&](NodeProto &node, GraphProto &parent) {
+    seen.emplace_back(node.ref_op_type(), std::string(parent.ref_name()));
   };
 
   std::string serialized;
@@ -7363,7 +7338,7 @@ TEST(onnx_proto, SerializeOptions_NodeCallback_EditsRoundTrip) {
   ModelProto model = MakeModelWithSubgraph();
 
   SerializeOptions options;
-  options.node_callback = [&](NodeProto &node) { node.set_doc_string("stamped"); };
+  options.node_callback = [&](NodeProto &node, GraphProto &) { node.set_doc_string("stamped"); };
 
   std::string serialized;
   model.SerializeToString(serialized, options);

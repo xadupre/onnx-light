@@ -8,12 +8,11 @@ This example shows how to use :attr:`onnx_light.onnx.ParseOptions.node_callback`
 and :attr:`onnx_light.onnx.SerializeOptions.node_callback` to hook into every
 :class:`onnx_light.onnx.NodeProto` of a model.
 
-The callback receives each node by reference and may inspect or modify it in
-place.  While it runs, :attr:`onnx_light.onnx.ParseOptions.current_graph`
-(respectively :attr:`onnx_light.onnx.SerializeOptions.current_graph`) points to
-the :class:`onnx_light.onnx.GraphProto` the node belongs to, so the callback can
-locate the node's parent graph — including the subgraphs nested inside control
-flow operators such as ``If``, ``Loop`` and ``Scan``.
+The callback receives each node by reference along with its parent
+:class:`onnx_light.onnx.GraphProto` and may inspect or modify the node in place.
+The parent graph lets the callback locate the node's surrounding graph —
+including the subgraphs nested inside control flow operators such as ``If``,
+``Loop`` and ``Scan``.
 """
 
 import numpy as np
@@ -44,18 +43,23 @@ serialized = onnx_model.SerializeToString()
 # Inspect every node while parsing
 # --------------------------------
 #
-# ``node_callback`` fires once per node.  ``current_graph`` lets us record which
-# graph each node belongs to.  The subgraph node is visited while the parser
-# reads the enclosing ``If`` node, before the rest of the main graph.
+# ``node_callback`` fires once per node.  The parent graph is passed as the
+# %%
+# Inspect every node while parsing
+# --------------------------------
+#
+# ``node_callback`` fires once per node.  The parent graph is passed as the
+# second argument, so we can record which graph each node belongs to.  The
+# subgraph node is visited while the parser reads the enclosing ``If`` node,
+# before the rest of the main graph.
 
 parse_options = onnxl.ParseOptions()
 visited = []
 
 
-def on_node(node: onnxl.NodeProto):
+def on_node(node: onnxl.NodeProto, graph: onnxl.GraphProto):
     """Records the node op_type and the name of its parent graph."""
-    parent = parse_options.current_graph
-    visited.append((node.op_type, parent.name if parent is not None else None))
+    visited.append((node.op_type, graph.name))
 
 
 parse_options.node_callback = on_node
@@ -67,11 +71,6 @@ for op_type, graph_name in visited:
     print(f"parsed node {op_type!r} in graph {graph_name!r}")
 
 # %%
-# Outside of any callback invocation ``current_graph`` is ``None``.
-
-print(f"current_graph after parsing: {parse_options.current_graph}")
-
-# %%
 # Edit nodes in place while parsing
 # ---------------------------------
 #
@@ -79,7 +78,7 @@ print(f"current_graph after parsing: {parse_options.current_graph}")
 # Here we stamp a ``doc_string`` on every node as it is parsed.
 
 edit_options = onnxl.ParseOptions()
-edit_options.node_callback = lambda node: setattr(node, "doc_string", "parsed")
+edit_options.node_callback = lambda node, graph: setattr(node, "doc_string", "parsed")
 
 edited = onnxl.ModelProto()
 edited.ParseFromString(serialized, edit_options)
@@ -95,7 +94,7 @@ print(f"if0 doc_string:  {edited.graph.node[1].doc_string!r}")
 # The stamped ``doc_string`` therefore appears only in the serialized bytes.
 
 serialize_options = onnxl.SerializeOptions()
-serialize_options.node_callback = lambda node: setattr(node, "doc_string", "serialized")
+serialize_options.node_callback = lambda node, graph: setattr(node, "doc_string", "serialized")
 
 stamped_bytes = onnx_model.SerializeToString(serialize_options)
 

@@ -302,7 +302,7 @@ template <typename Nodes, typename F> void ForEachAttributeTensorInNodes(Nodes &
 namespace {
 
 // Applies SerializeOptions::raw_data_callback to a single tensor carrying raw_data, rewriting
-// its bytes in place. ``options.current_graph`` must already point at the tensor's parent graph.
+// its bytes in place.
 void ApplySerializeRawDataCallbackToTensor(TensorProto &tensor, const SerializeOptions &options) {
   if (!tensor.has_raw_data()) {
     return;
@@ -342,12 +342,9 @@ void ApplySerializeRawDataCallbackToTensor(TensorProto &tensor, const SerializeO
 }
 
 // Recursively applies the serialize node_callback and raw_data_callback to a graph and every
-// subgraph nested in its node attributes. ``options.current_graph`` is set to the graph being
-// visited for the duration of its callbacks and restored afterwards, so callbacks can locate the
-// parent graph of the NodeProto or TensorProto they receive.
-void ApplySerializeCallbacksToGraph(GraphProto &graph, SerializeOptions &options) {
-  GraphProto *const previous_graph = options.current_graph;
-  options.current_graph = &graph;
+// subgraph nested in its node attributes. Each node_callback receives the node together with the
+// graph it belongs to, so callbacks can locate the parent graph of the NodeProto they receive.
+void ApplySerializeCallbacksToGraph(GraphProto &graph, const SerializeOptions &options) {
   if (options.raw_data_callback) {
     for (int i = 0; i < static_cast<int>(graph.ref_initializer().size()); ++i) {
       ApplySerializeRawDataCallbackToTensor(graph.ref_initializer()[i], options);
@@ -356,7 +353,7 @@ void ApplySerializeCallbacksToGraph(GraphProto &graph, SerializeOptions &options
   for (int i = 0; i < static_cast<int>(graph.ref_node().size()); ++i) {
     NodeProto &node = graph.ref_node()[i];
     if (options.node_callback) {
-      options.node_callback(node);
+      options.node_callback(node, graph);
     }
     for (int j = 0; j < static_cast<int>(node.ref_attribute().size()); ++j) {
       AttributeProto &attr = node.ref_attribute()[j];
@@ -378,20 +375,15 @@ void ApplySerializeCallbacksToGraph(GraphProto &graph, SerializeOptions &options
       }
     }
   }
-  options.current_graph = previous_graph;
 }
 
 } // namespace
 
-void ApplySerializeRawDataCallback(ModelProto &model, SerializeOptions &options) {
+void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options) {
   if ((!options.raw_data_callback && !options.node_callback) || !model.has_graph()) {
     return;
   }
-  // Thread ``current_graph`` through the traversal on the caller's options object so that
-  // callbacks (which read ``options.current_graph``) observe the correct parent graph.
-  GraphProto *const previous_graph = options.current_graph;
   ApplySerializeCallbacksToGraph(model.ref_graph(), options);
-  options.current_graph = previous_graph;
 }
 
 void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file,

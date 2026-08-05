@@ -279,53 +279,37 @@ public:
 
   /** Orders two OptionalString values (absent sorts before any present value; disambiguation for
    * C++20 heterogeneous optional overloads). */
-  friend inline bool operator<(const OptionalString &lhs, const OptionalString &rhs) {
-    return compare_opt(lhs, rhs) < 0;
-  }
-  friend inline bool operator<=(const OptionalString &lhs, const OptionalString &rhs) {
-    return compare_opt(lhs, rhs) <= 0;
-  }
-  friend inline bool operator>(const OptionalString &lhs, const OptionalString &rhs) {
-    return compare_opt(lhs, rhs) > 0;
-  }
-  friend inline bool operator>=(const OptionalString &lhs, const OptionalString &rhs) {
-    return compare_opt(lhs, rhs) >= 0;
-  }
+  inline bool operator<(const OptionalString &rhs) const { return compare_opt(*this, rhs) < 0; }
+  inline bool operator<=(const OptionalString &rhs) const { return compare_opt(*this, rhs) <= 0; }
+  inline bool operator>(const OptionalString &rhs) const { return compare_opt(*this, rhs) > 0; }
+  inline bool operator>=(const OptionalString &rhs) const { return compare_opt(*this, rhs) >= 0; }
 
   /** Orders against a standard string (unset sorts before any std::string). */
-  friend inline bool operator<(const OptionalString &lhs, const std::string &rhs) {
-    return !lhs.has_value() || lhs.value() < rhs;
-  }
-  friend inline bool operator<=(const OptionalString &lhs, const std::string &rhs) {
-    return !lhs.has_value() || lhs.value() <= rhs;
-  }
-  friend inline bool operator>(const OptionalString &lhs, const std::string &rhs) {
-    return lhs.has_value() && lhs.value() > rhs;
-  }
-  friend inline bool operator>=(const OptionalString &lhs, const std::string &rhs) {
-    return lhs.has_value() && lhs.value() >= rhs;
-  }
+  inline bool operator<(const std::string &rhs) const { return !has_value() || value() < rhs; }
+  inline bool operator<=(const std::string &rhs) const { return !has_value() || value() <= rhs; }
+  inline bool operator>(const std::string &rhs) const { return has_value() && value() > rhs; }
+  inline bool operator>=(const std::string &rhs) const { return has_value() && value() >= rhs; }
 
   /** Orders against a null-terminated string (nullptr and unset sort before present values). */
-  friend inline bool operator<(const OptionalString &lhs, const char *rhs) {
+  inline bool operator<(const char *rhs) const {
     if (rhs == nullptr)
       return false;
-    return !lhs.has_value() || lhs.value() < rhs;
+    return !has_value() || value() < rhs;
   }
-  friend inline bool operator<=(const OptionalString &lhs, const char *rhs) {
+  inline bool operator<=(const char *rhs) const {
     if (rhs == nullptr)
-      return !lhs.has_value();
-    return !lhs.has_value() || lhs.value() <= rhs;
+      return !has_value();
+    return !has_value() || value() <= rhs;
   }
-  friend inline bool operator>(const OptionalString &lhs, const char *rhs) {
+  inline bool operator>(const char *rhs) const {
     if (rhs == nullptr)
-      return lhs.has_value();
-    return lhs.has_value() && lhs.value() > rhs;
+      return has_value();
+    return has_value() && value() > rhs;
   }
-  friend inline bool operator>=(const OptionalString &lhs, const char *rhs) {
+  inline bool operator>=(const char *rhs) const {
     if (rhs == nullptr)
       return true;
-    return lhs.has_value() && lhs.value() >= rhs;
+    return has_value() && value() >= rhs;
   }
 
   /** String concatenation with standard strings and C strings. */

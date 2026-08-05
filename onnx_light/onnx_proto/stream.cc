@@ -1384,6 +1384,21 @@ TwoFilesStream::ensure_shared_weights_buffer(const std::string &location, size_t
 
 void TwoFilesStream::read_bytes_from_weights_stream(offset_t n_bytes, uint8_t *pre_allocated_buffer,
                                                     offset_t offset) {
+  if (use_mmap_weights_ && offset >= 0) {
+    // file_load_mode=MMAP: source the bytes from a memory-mapped view of the weights file and
+    // copy them into the caller-owned buffer, instead of reading through the buffered ifstream.
+    SharedWeightsBuffer &buffer = ensure_shared_weights_buffer(active_weights_location_, 0);
+    EXT_ENFORCE(offset + n_bytes <= buffer.size,
+                "External weights slice is out of bounds for file ",
+                active_weights_stream().file_path(), ": offset=", offset, ", size=", n_bytes,
+                ", file_size=", buffer.size);
+    if (n_bytes > 0) {
+      EXT_ENFORCE(pre_allocated_buffer != nullptr,
+                  "read_bytes_from_weights_stream: pre_allocated_buffer must not be null.");
+      std::memcpy(pre_allocated_buffer, buffer.data.get() + offset, static_cast<size_t>(n_bytes));
+    }
+    return;
+  }
   FileStream &wstream = active_weights_stream();
   if (offset >= 0) {
     // Discard any pre-fetched bytes before seeking so that the read-ahead buffer

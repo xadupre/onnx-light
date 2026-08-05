@@ -436,10 +436,16 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
               // TwoFilesStream reads the main model file through a buffered std::ifstream
               // (it derives from FileStream), while the separate weights file is the large
               // payload. All modes are honoured: the small main file always uses the buffered
-              // stream, and the weights file is memory-mapped when no_copy=True (see
-              // TwoFilesStream::borrow_weights_bytes, which mmaps the weights file). kMmap is
-              // therefore accepted -- it applies to the weights file rather than the main file.
-              stream.reset(new utils::TwoFilesStream(file_path, external_data_file));
+              // stream. On the no_copy=True path the weights file is always memory-mapped (see
+              // TwoFilesStream::borrow_weights_bytes). On the copying path (no_copy=False),
+              // file_load_mode selects how the weights bytes are read: kMmap memory-maps the
+              // weights file and copies from the mapping, while kAuto/kFileStream use the
+              // buffered std::ifstream. kMmap is therefore honoured for the weights file.
+              auto two_stream = std::make_unique<utils::TwoFilesStream>(file_path, external_data_file);
+              if (mode == FileLoadMode::kMmap && !wants_no_copy) {
+                two_stream->set_use_mmap_weights(true);
+              }
+              stream.reset(two_stream.release());
             } else if (mode == FileLoadMode::kMmap) {
               EXT_ENFORCE(!wants_no_copy,
                           "ParseFromFile: file_load_mode=MMAP with no_copy=True on a "

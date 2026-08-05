@@ -232,6 +232,37 @@ def _load_data_set(
     return inputs, outputs
 
 
+def _normalize_in_memory_value(value):
+    """Normalises one in-memory backend input/output value.
+
+    Recent ``onnx`` releases expose backend node test data in memory. Tensor
+    values may be provided either as a :class:`numpy.ndarray` or a
+    ``TensorProto``; ``seq(tensor)`` values as a ``list`` and an empty optional
+    as ``None``. This converts ``TensorProto`` values (including sequence
+    elements) to arrays so they match the values decoded from the on-disk
+    ``.pb`` files, and leaves the other representations untouched.
+    """
+    if isinstance(value, onnx.TensorProto):
+        return numpy_helper.to_array(value)
+    if isinstance(value, list):
+        return [_normalize_in_memory_value(v) for v in value]
+    return value
+
+
+def _model_file_for_test(test) -> str | None:
+    """Returns the on-disk ``model.onnx`` path for a backend test, or ``None``.
+
+    Older ``onnx`` releases materialise each backend test on disk (``model_dir``
+    points at the directory holding ``model.onnx``); recent releases only build
+    the model in memory (``model_dir`` is ``None``). Returns ``None`` in the
+    latter case so callers fall back to the in-memory ``TestCase`` data.
+    """
+    if test.model_dir is None:
+        return None
+    model_file = os.path.join(test.model_dir, "model.onnx")
+    return model_file if os.path.exists(model_file) else None
+
+
 def _comparison_tolerances(name: str) -> tuple[float, float]:
     """Returns the comparison tolerances for one backend runtime test."""
     return _CUSTOM_FLOAT_TOLERANCES.get(name, (1e-3, 1e-7))
@@ -367,22 +398,75 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         self.assertEqual(_model_op_types(model), {"If", "Relu", "Neg"})
 
     def test_run_one_loop16_seq_none(self):
-        model_file = None
+        target = None
         for test in load_model_tests(kind="node"):
-            if test.model_dir is None:
-                continue
-            if os.path.basename(test.model_dir) == "test_loop16_seq_none":
-                model_file = os.path.join(test.model_dir, "model.onnx")
+            if test.name == "test_loop16_seq_none":
+                target = test
                 break
-        self.assertIsNotNone(
-            model_file, "ONNX backend case 'test_loop16_seq_none' was not found."
-        )
-        self.assertTrue(os.path.exists(model_file))
-        outcome, detail = self._run_one(model_file)
+        self.assertIsNotNone(target, "ONNX backend case 'test_loop16_seq_none' was not found.")
+        outcome, detail = self._run_one(target)
         self.assertEqual(outcome, "pass")
         self.assertIsNone(detail)
 
-    def _run_one(self, model_file: str) -> tuple[str, str | None]:
+    def _model_for_test(self, test) -> "onnxl.ModelProto | None":
+        """Loads the ``onnx_light`` model for one backend test.
+
+        Uses the on-disk ``model.onnx`` when the backend test ships one (older
+        ``onnx`` releases) so the model is exercised through the ``onnx_light``
+        file loader; otherwise parses the in-memory ``ModelProto`` provided by
+        recent ``onnx`` releases. Returns ``None`` when ``onnx_light`` cannot
+        parse the model (the case is then skipped by the caller).
+        """
+        model_file = _model_file_for_test(test)
+        try:
+            if model_file is not None:
+                return onnxl.load(model_file)
+            model = onnxl.ModelProto()
+            model.ParseFromString(test.model.SerializeToString())
+            return model
+        except RuntimeError:
+            return None
+
+    def _data_sets_for_test(self, test, model) -> "list[tuple[list, list, str]] | None":
+        """Returns the ``(inputs, expected, label)`` data sets for one backend test.
+
+        Loads them from the on-disk ``test_data_set*`` directories when the test
+        ships them (older ``onnx`` releases) or from the in-memory
+        ``test.data_sets`` provided by recent ``onnx`` releases. Returns ``None``
+        when the test provides no data set at all (the case is then skipped).
+        """
+        model_file = _model_file_for_test(test)
+        if model_file is not None:
+            data_dirs = sorted(
+                glob.glob(os.path.join(os.path.dirname(model_file), "test_data_set*"))
+            )
+            if not data_dirs:
+                return None
+            input_kinds = [_value_info_kind(vi) for vi in model.graph.input]
+            output_kinds = [_value_info_kind(vi) for vi in model.graph.output]
+            assert all(kind is not None for kind in input_kinds + output_kinds)
+            data_sets = []
+            for data_dir in data_dirs:
+                inputs, expected = _load_data_set(data_dir, input_kinds, output_kinds)
+                data_sets.append((inputs, expected, os.path.basename(data_dir)))
+            return data_sets
+        if not test.data_sets:
+            return None
+        # The in-memory ``data_sets`` carry the Python values for the
+        # ``ReferenceEvaluator`` boundary: tensors as arrays and ``seq(tensor)``
+        # as lists of arrays. Individual tensors may be provided as
+        # ``TensorProto``; normalise those to arrays so they match the values
+        # decoded from the on-disk ``.pb`` files.
+        return [
+            (
+                [_normalize_in_memory_value(v) for v in inputs],
+                [_normalize_in_memory_value(v) for v in expected],
+                f"data_set_{i}",
+            )
+            for i, (inputs, expected) in enumerate(test.data_sets)
+        ]
+
+    def _run_one(self, test) -> tuple[str, str | None]:
         """Executes one backend test and returns its outcome and a detail.
 
         Returns ``("pass", None)`` when the runtime reproduces the reference
@@ -392,9 +476,8 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         the first differing value, or the unexpected error raised) so a failure
         is actionable without re-running the case by hand.
         """
-        try:
-            model = onnxl.load(model_file)
-        except RuntimeError:
+        model = self._model_for_test(test)
+        if model is None:
             return "skip", None
 
         if not _has_supported_io(model):
@@ -404,20 +487,13 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         if _model_op_types(model) & _IMPLEMENTATION_DEFINED_OPS:
             return "skip", None
 
-        model_dir = os.path.dirname(model_file)
-        test_name = os.path.basename(model_dir)
-        rtol, atol = _comparison_tolerances(test_name)
-        data_dirs = sorted(glob.glob(os.path.join(model_dir, "test_data_set*")))
-        if not data_dirs:
+        rtol, atol = _comparison_tolerances(test.name)
+        data_sets = self._data_sets_for_test(test, model)
+        if not data_sets:
             return "skip", None
 
-        input_kinds = [_value_info_kind(vi) for vi in model.graph.input]
-        output_kinds = [_value_info_kind(vi) for vi in model.graph.output]
-        assert all(kind is not None for kind in input_kinds + output_kinds)
-
         session = ReferenceEvaluator(model)
-        for data_dir in data_dirs:
-            inputs, expected = _load_data_set(data_dir, input_kinds, output_kinds)
+        for inputs, expected, label in data_sets:
             if any(value is None for value in inputs + expected):
                 return "skip", None
             feeds = dict(zip(session.input_names, inputs))
@@ -439,21 +515,21 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
             for i, (got, ref) in enumerate(zip(outputs, expected)):
                 detail = _describe_output_mismatch(got, ref, rtol=rtol, atol=atol)
                 if detail is not None:
-                    return "fail", f"output {i} ({os.path.basename(data_dir)}): {detail}"
+                    return "fail", f"output {i} ({label}): {detail}"
         return "pass", None
 
-    def _run_model_test(self, model_file: str, name: str) -> None:
+    def _run_model_test(self, test, name: str) -> None:
         """Runs one backend node test and checks it against the snapshot.
 
-        ``name`` is the test's directory basename (e.g. ``test_abs``). When it
-        appears in ``_backend_runtime_known_discrepancies.txt`` the runtime is
-        expected *not* to reproduce the reference outputs; any other outcome
-        (the case now passes or can no longer be executed) means the snapshot
-        entry is stale and must be removed. Otherwise the case is skipped when
-        the runtime cannot execute it and must pass when it can.
+        ``name`` is the test's name (e.g. ``test_abs``). When it appears in
+        ``_backend_runtime_known_discrepancies.txt`` the runtime is expected
+        *not* to reproduce the reference outputs; any other outcome (the case
+        now passes or can no longer be executed) means the snapshot entry is
+        stale and must be removed. Otherwise the case is skipped when the
+        runtime cannot execute it and must pass when it can.
         """
         known = _load_known_discrepancies()
-        outcome, detail = self._run_one(model_file)
+        outcome, detail = self._run_one(test)
         snapshot = os.path.basename(_KNOWN_DISCREPANCIES_FILE)
         if name in known:
             if outcome != "fail":
@@ -476,10 +552,9 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         # backend node test is a stale entry that must be removed.
         known = _load_known_discrepancies()
         names = {
-            os.path.basename(test.model_dir)
+            test.name
             for test in load_model_tests(kind="node")
-            if test.model_dir is not None
-            and os.path.exists(os.path.join(test.model_dir, "model.onnx"))
+            if test.model is not None or _model_file_for_test(test) is not None
         }
         # Guard against a misconfigured environment where nothing is discovered.
         self.assertGreater(len(names), 0, "No ONNX backend node test could be found.")
@@ -497,17 +572,14 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
     @classmethod
     def add_test_methods(cls):
         for test in load_model_tests(kind="node"):
-            if test.model_dir is None:
+            if test.model is None and _model_file_for_test(test) is None:
                 continue
-            model_file = os.path.join(test.model_dir, "model.onnx")
-            if not os.path.exists(model_file):
-                continue
-            name = os.path.basename(test.model_dir)
+            name = test.name
             if _should_exclude_runtime_test_name(name):
                 continue
 
-            def _test_(self, model_file=model_file, name=name):
-                self._run_model_test(model_file, name)
+            def _test_(self, test=test, name=name):
+                self._run_model_test(test, name)
 
             short_name = name.replace("test_", "", 1)
             setattr(cls, f"test_vs_{short_name}", _test_)

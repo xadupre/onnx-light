@@ -1,6 +1,5 @@
 import os
 import re
-import shutil
 import unittest
 import onnx
 import onnx_light.onnx as onnxl
@@ -25,26 +24,35 @@ class TestOnnxVsOnnxLight(ExtTestCase):
     def add_test_methods(cls):
         tests = load_model_tests(kind="node")
         for test in tests:
-            model = os.path.join(test.model_dir, "model.onnx")
-            if not os.path.exists(model):
+            model_file = None
+            if test.model_dir is not None:
+                candidate = os.path.join(test.model_dir, "model.onnx")
+                if os.path.exists(candidate):
+                    model_file = candidate
+            # Recent onnx releases ship the model only in memory (model_dir is
+            # None); older releases ship it on disk. Skip an entry only when it
+            # provides neither.
+            if model_file is None and test.model is None:
                 continue
-            reason = cls.filter_out(model)
+            short_name = test.name.replace("test_", "", 1)
+            reason = cls.filter_out(test.name)
+
+            def _make(model_file, model, short_name):
+                def _test_(self):
+                    if model_file is not None:
+                        onx = onnx.load(model_file)
+                    else:
+                        onx = model
+                    self.run_test(onx, short_name, model_file=model_file)
+
+                return _test_
+
+            _test_ = _make(model_file, test.model, short_name)
             if reason:
-
-                @unittest.skip(reason)
-                def _test_(self, name=model):
-                    self.run_test(name)
-
-            else:
-
-                def _test_(self, name=model):
-                    self.run_test(name)
-
-            short_name = os.path.split(test.model_dir)[-1].replace("test_", "")
+                _test_ = unittest.skip(reason)(_test_)
             setattr(cls, f"test_vs_{short_name}", _test_)
 
-    def break_into_pieces(self, model_name):
-        onx = onnx.load(model_name)
+    def break_into_pieces(self, onx, short_name):
         pieces = [onx, onx.graph, *onx.graph.node]
         for p in pieces:
             s = p.SerializeToString()
@@ -56,13 +64,13 @@ class TestOnnxVsOnnxLight(ExtTestCase):
                 o2.ParseFromString(s)
             except Exception as e:
                 print(f"-- {st}: FAIL due to {e} ({name!r})")
-                filename = model_name + f".{name}.onnx"
+                filename = self.get_dump_file(f"{short_name}.{name}.onnx")
                 with open(filename, "wb") as f:
                     f.write(s)
                 with open(filename + ".txt", "w") as f:
                     f.write(f"{e}\n----\n{str(p)}")
 
-    def look_into_pieces(self, model2: onnxl.ModelProto, model_name: str):
+    def look_into_pieces(self, model2: onnxl.ModelProto, short_name: str):
         assert isinstance(model2, onnxl.ModelProto), f"unexpected type ({type(model2)})"
         pieces = [model2, model2.graph, *model2.graph.node]
         for p in pieces:
@@ -75,13 +83,13 @@ class TestOnnxVsOnnxLight(ExtTestCase):
                 o2.ParseFromString(s)
             except Exception as e:
                 print(f"-- {st}: FAIL due to {e} ({name!r})")
-                filename = model_name + f".{name}.onnx"
+                filename = self.get_dump_file(f"{short_name}.{name}.onnx")
                 with open(filename, "wb") as f:
                     f.write(s)
                 with open(filename + ".txt", "w") as f:
                     f.write(f"{e}\n----\n{str(p)}")
 
-    def compare_pieces(self, model: onnx.ModelProto, model_name: str):
+    def compare_pieces(self, model: onnx.ModelProto, short_name: str):
         assert isinstance(model, onnx.ModelProto), f"unexpected type ({type(model)})"
         pieces = [*model.graph.node, model.graph, model]
         for p in pieces:
@@ -98,35 +106,46 @@ class TestOnnxVsOnnxLight(ExtTestCase):
             o3.ParseFromString(s2)
             s3 = o3.SerializeToString()
             if s != s3:
-                filename = model_name + f".{name}.1.onnx"
+                filename = self.get_dump_file(f"{short_name}.{name}.1.onnx")
                 with open(filename, "wb") as f:
                     f.write(s)
                 with open(filename + ".txt", "w") as f:
                     f.write(str(p))
-                filename = model_name + f".{name}.2.onnx"
+                filename = self.get_dump_file(f"{short_name}.{name}.2.onnx")
                 with open(filename + ".txt", "w") as f:
                     f.write(str(o2))
-                filename = model_name + f".{name}.3.onnx"
+                filename = self.get_dump_file(f"{short_name}.{name}.3.onnx")
                 with open(filename + ".txt", "w") as f:
                     f.write(str(o3))
             self.assertEqual(s, s3)
 
-    def run_test(self, model_name):
-        onx = onnx.load(model_name)
+    def run_test(self, onx, short_name, model_file=None):
+        """Compares the ``onnx`` and ``onnx_light`` serialization of one model.
+
+        ``onx`` is the reference :class:`onnx.ModelProto`. ``model_file`` is the
+        on-disk ``model.onnx`` path when the ONNX backend test ships one (older
+        ``onnx`` releases) so ``onnx_light`` is exercised through its file loader;
+        it is ``None`` when the backend test only provides the model in memory
+        (recent ``onnx`` releases), in which case ``onnx_light`` parses the
+        serialized bytes instead.
+        """
         if onx.ir_version <= 3:
             raise unittest.SkipTest("ir_version={ir_version} too old")
+        model_bytes = onx.SerializeToString()
         try:
-            onx2 = onnxl.load(model_name)
+            if model_file is not None:
+                onx2 = onnxl.load(model_file)
+            else:
+                onx2 = onnxl.ModelProto()
+                onx2.ParseFromString(model_bytes)
         except RuntimeError as e:
-            name = self.get_dump_file(
-                f"{os.path.split(os.path.split(model_name)[0])[-1]}.cannotload.onnx"
-            )
-            shutil.copy(model_name, name)
-            self.break_into_pieces(name)
+            name = self.get_dump_file(f"{short_name}.cannotload.onnx")
+            with open(name, "wb") as f:
+                f.write(model_bytes)
+            self.break_into_pieces(onx, short_name)
             with open(name + ".txt", "w") as f:
                 f.write(str(onx))
-            with open(model_name, "rb") as f:
-                content = f.read()
+            content = model_bytes
             rows = []
             for i in range(0, len(content), 20):
                 rows.append(f"{i:03d}: {content[i:min(i + 10, len(content))]}")
@@ -135,19 +154,18 @@ class TestOnnxVsOnnxLight(ExtTestCase):
                 del rows[21:-10]
             msg = "\n".join(rows)
             raise AssertionError(
-                f"Unable to load {model_name!r} with onnxlight.\n---\n{msg}"
+                f"Unable to load {short_name!r} with onnxlight.\n---\n{msg}"
             ) from e
         self.assertEqual(len(onx.graph.node), len(onx2.graph.node))
 
         # compare the serialized string with onnxlight format
         with self.subTest(fmt="onnxlight"):
-            s = onx.SerializeToString()
+            s = model_bytes
             onx_onnxl = onnxl.ModelProto()
             onx_onnxl.ParseFromString(s)
             b = onx_onnxl.SerializeToString()
             a = onx2.SerializeToString()
             if a != b:
-                short_name = os.path.splitext(os.path.split(os.path.split(model_name)[0])[-1])[0]
                 f1 = self.get_dump_file(short_name + ".original2.onnx")
                 with open(f1, "wb") as f:
                     f.write(a)
@@ -168,22 +186,17 @@ class TestOnnxVsOnnxLight(ExtTestCase):
             try:
                 onx2_onnx.ParseFromString(s2)
             except Exception:
-                rname = self.get_dump_file(
-                    f"{os.path.split(os.path.split(model_name)[0])[-1]}.onnx"
-                )
-                shutil.copy(model_name, rname)
+                rname = self.get_dump_file(f"{short_name}.onnx")
+                with open(rname, "wb") as f:
+                    f.write(model_bytes)
                 with open(rname + ".txt", "w") as f:
                     f.write(str(onx))
-                name = self.get_dump_file(
-                    f"{os.path.split(os.path.split(model_name)[0])[-1]}.cannotparse.onnx"
-                )
-                self.look_into_pieces(onx2, name)
+                self.look_into_pieces(onx2, short_name + ".cannotparse")
                 raise
-            a = onx.SerializeToString()
+            a = model_bytes
             b = onx2_onnx.SerializeToString()
             if a != b:
-                short_name = os.path.splitext(os.path.split(os.path.split(model_name)[0])[-1])[0]
-                self.compare_pieces(onx, self.get_dump_file(short_name))
+                self.compare_pieces(onx, short_name)
                 f1 = self.get_dump_file(short_name + ".original.onnx")
                 with open(f1, "wb") as f:
                     f.write(a)

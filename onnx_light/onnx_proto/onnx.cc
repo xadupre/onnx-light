@@ -761,19 +761,26 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
                 options.max_tensor_size_bytes,
                 ". Increase max_tensor_size_bytes or set it to 0 to disable the limit.");
     }
+    // For a separate weights file, file_load_mode=MMAP keeps a single model-owned memory map of
+    // the weights file and lets every TensorProto borrow a view into it without copying, exactly
+    // like the no_copy path. This is safe here (unlike a single-file model) because each borrowed
+    // view retains a shared_ptr to the mapping, so the map outlives the stream.
+    const bool borrow_weights = options.no_copy || two_stream.use_mmap_weights();
     onnx_light_helpers::ValidateAlignmentOption(options.alignment, "ParseOptions.alignment");
     if (options.alignment > 1 && offset % options.alignment != 0) {
       std::ostringstream oss;
       oss << "Serialized external-data offset " << offset << " for tensor '" << ref_name()
           << "' (location '" << location
           << "') is incompatible with ParseOptions.alignment=" << options.alignment << ".";
-      if (options.no_copy) {
-        EXT_THROW(oss.str(), " no_copy=true forbids automatic realignment.");
+      if (borrow_weights) {
+        EXT_THROW(oss.str(), options.no_copy
+                                 ? " no_copy=true forbids automatic realignment."
+                                 : " file_load_mode=MMAP forbids automatic realignment.");
       }
       std::cerr << "Warning: " << oss.str() << " Realigning tensor bytes into an aligned buffer."
                 << std::endl;
     }
-    if (options.no_copy) {
+    if (borrow_weights) {
       std::shared_ptr<void> owner;
       const uint8_t *ptr = two_stream.borrow_weights_bytes(
           location, offset, size, static_cast<size_t>(std::max<int64_t>(options.alignment, 0)),

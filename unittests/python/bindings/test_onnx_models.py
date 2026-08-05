@@ -509,8 +509,8 @@ class TestOnnxLightHelper(ExtTestCase):
     def test_writing_external_weights_read_with_file_load_mode(self):
         # Parsing a two-file model must honour every file_load_mode. The small main
         # file always uses the buffered std::ifstream via TwoFilesStream; MMAP applies
-        # to the (large) weights file, which is memory-mapped both on the no_copy path
-        # (borrowed views) and on the copying path (bytes copied out of the mapping).
+        # to the (large) weights file, which is memory-mapped once and shared so each
+        # tensor borrows a zero-copy view of it.
         nameo = self.get_dump_file("test_writing_external_weights_flm.original.onnx")
         name = self.get_dump_file("test_writing_external_weights_flm.onnx")
         weights = self.get_dump_file("test_writing_external_weights_flm.data")
@@ -572,8 +572,9 @@ class TestOnnxLightHelper(ExtTestCase):
         model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
         onnxl.save(model, name, location=os.path.split(weights)[-1], save_as_external_data=True)
         expected = [onh.to_array(i) for i in model.graph.initializer]
-        # num_threads=1 forces the sequential weights read (which honours MMAP by
-        # memory-mapping the weights file); num_threads=-1 exercises the parallel path.
+        # num_threads=1 forces the sequential path; num_threads=-1 exercises the parallel
+        # path. MMAP loads the weights via a single model-owned mmap that each tensor
+        # borrows without copying.
         for mode in ("AUTO", "IFSTREAM", "MMAP"):
             for num_threads in (1, -1):
                 with self.subTest(mode=mode, num_threads=num_threads):

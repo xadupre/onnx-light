@@ -786,18 +786,18 @@ public:
   };
 
   /** Opens *file_path* for protobuf data and *weights_file* for weight data.
-   *  When *use_mmap_weights* is true, copying reads of the weights file (the ``no_copy=false``
-   *  path) source their bytes from a memory-mapped view of each weights file instead of a
-   *  buffered ``std::ifstream``. This lets ``file_load_mode=MMAP`` memory-map the weights file
-   *  even when ``no_copy`` is not set, in which case the mapped bytes are copied into owned
-   *  per-tensor buffers. The flag is fixed at construction and not meant to change afterwards. */
+   *  When *use_mmap_weights* is true, ``file_load_mode=MMAP`` keeps a single model-owned
+   *  memory map of each weights file and every ``TensorProto`` borrows a zero-copy view into
+   *  it (as if ``no_copy`` were set for the weights), instead of copying the bytes through a
+   *  buffered ``std::ifstream``. The borrowed views retain a shared_ptr to the mapping, so it
+   *  outlives the stream. The flag is fixed at construction and not meant to change afterwards. */
   explicit TwoFilesStream(const std::string &file_path, const std::string &weights_file,
                           bool use_mmap_weights = false);
   /** Returns the path of the separate weights file. */
   inline const std::string &weights_file_path() const { return weights_stream_.file_path(); }
   /** Selects the active external weights location for subsequent reads. */
   void set_active_weights_location(const std::string &location);
-  /** Returns true when copying reads source their bytes from a memory-mapped weights view. */
+  /** Returns true when tensors borrow a zero-copy view of a memory-mapped weights file. */
   inline bool use_mmap_weights() const { return use_mmap_weights_; }
   /** Returns true when the active location is the default weights file. */
   bool using_default_weights_location() const;
@@ -836,9 +836,9 @@ protected:
   std::string default_weights_location_;
   /** Maps object pointers to their byte offsets in the weights file. */
   std::unordered_map<const void *, uint64_t> position_cache_;
-  /** When true, copying reads of the weights file source their bytes from a memory-mapped
-   *  view (see the constructor). Set once during construction; not meant to change
-   *  after reading has started. */
+  /** When true, ``file_load_mode=MMAP`` makes each weights-file tensor borrow a zero-copy
+   *  view of a model-owned memory map (see the constructor). Set once during construction;
+   *  not meant to change after reading has started. */
   bool use_mmap_weights_;
 };
 

@@ -347,6 +347,13 @@ def onnx_load(onnx_path):
     return onnx.load(onnx_path)
 
 
+def _model_has_external_data(model: onnxl.ModelProto) -> bool:
+    """Returns True when any initializer of *model* stores its data externally."""
+    return any(
+        init.data_location == onnxl.TensorProto.EXTERNAL for init in model.graph.initializer
+    )
+
+
 def onnx_save(model, onnx_path):
     import onnx
 
@@ -388,8 +395,9 @@ file_size = os.path.getsize(onnx_path)
 print(f"File size : {file_size / 2 ** 20:.3f} MB")
 
 onx = onnx_load(onnx_path)
-onxl = onnxl.load(onnx_path)
-onxl_x4 = onnxl.load(onnx_path, num_threads=4)
+_has_external_data = _model_has_external_data(onx)
+onxl = onnxl.load(onnx_path, load_external_data=_has_external_data)
+onxl_x4 = onnxl.load(onnx_path, num_threads=4, load_external_data=_has_external_data)
 onnx_ir_module = _maybe_import_onnx_ir()
 onx_ir = (
     onnx_ir_module.load(onnx_path)

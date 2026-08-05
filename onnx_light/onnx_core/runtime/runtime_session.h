@@ -168,6 +168,19 @@ public:
    */
   void Run(RuntimeContext &rt);
 
+  /// Resolves and caches the kernel instance for every scheduled node up front,
+  /// resolving against ``rt`` (its function registry / custom kernels), so the
+  /// per-node dispatch does not have to happen lazily on the first
+  /// :cpp:func:`Run`. Safe to call before any input is seeded into ``rt``: only
+  /// the plan's node list and ``rt``'s registries are consulted, not the input
+  /// tensors. A no-op once the kernels have already been initialized (by an
+  /// earlier call or by a previous :cpp:func:`Run`), so calling it and then
+  /// running the session does not resolve the kernels twice. When the model
+  /// declares model-local functions, register them on ``rt`` (e.g. via
+  /// :cpp:func:`RegisterModelFunctions`) before calling this so the referring
+  /// nodes resolve.
+  void InitializeKernels(RuntimeContext &rt);
+
   /// Model-independent execution parameters (e.g. the requested degree of
   /// parallelism, :cpp:var:`RuntimeParameters::num_threads`) applied to the
   /// nodes this session runs.
@@ -262,11 +275,6 @@ private:
     std::string key;
     std::unique_ptr<KernelBase> instance;
   };
-
-  /// Resolves and builds the kernel instance for every node the plan executes,
-  /// resolving against ``rt``, and records the external inputs those nodes
-  /// read in :cpp:member:`required_inputs_`.
-  void InitializeKernels(RuntimeContext &rt);
 
   /// Verifies that every tensor output of ``node`` that is allocator-backed
   /// is owned by :cpp:member:`session_allocator_`. Called after a node's

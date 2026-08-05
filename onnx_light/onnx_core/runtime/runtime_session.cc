@@ -113,6 +113,12 @@ std::unique_ptr<KernelBase> RuntimeSession::ResolveNodeKernel(const NodeProto &n
 }
 
 void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
+  // Idempotent: once the kernels have been resolved (by a previous call or by
+  // the first Run), re-initialising them would redo the per-node dispatch and
+  // is unnecessary, so return early.
+  if (kernels_initialized_) {
+    return;
+  }
   // Resolve and build the kernel instance for every node the plan will
   // execute, once and up front. Node indices come from the plan's
   // kExecuteNode actions so nodes the plan never runs (if any) are not

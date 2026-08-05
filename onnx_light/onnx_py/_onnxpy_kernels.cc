@@ -590,6 +590,14 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def("run", &RuntimeSession::Run, nb::arg("rt"),
            "Executes the plan once against ``rt``, resolving, building, and caching "
            "kernel instances on the first call. Safe to call repeatedly on the same session.")
+      .def("initialize_kernels", &RuntimeSession::InitializeKernels, nb::arg("rt"),
+           "Resolves and caches the kernel instance for every scheduled node up front, "
+           "resolving against ``rt`` (its function registry / custom kernels), so the "
+           "per-node dispatch does not happen lazily on the first :func:`run`. Safe to "
+           "call before any input is seeded into ``rt``; only the plan's node list and "
+           "``rt``'s registries are consulted. A no-op once the kernels have already been "
+           "initialized. Register any model-local functions on ``rt`` first so the "
+           "referring nodes resolve.")
       .def_prop_ro("parameters", &RuntimeSession::parameters,
                    "Model-independent execution parameters applied to the nodes this "
                    "session runs.")

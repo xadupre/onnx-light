@@ -277,6 +277,14 @@ class ReferenceEvaluator:
         release_intermediates: bool = True,
         allocator: Any = None,
     ) -> None:
+        # When the model is supplied as a serialised ``ModelProto`` (bytes) or
+        # as a file path / text, it has to be parsed / loaded here. In that case
+        # the evaluator eagerly resolves every node's kernel at construction
+        # time (right after parsing) instead of deferring the per-node dispatch
+        # to the first :meth:`run`, so the kernel building overlaps with the
+        # up-front parsing cost. A model already given as an in-memory proto
+        # keeps the lazy (first-run) resolution.
+        parsed_from_serialized = isinstance(proto, (bytes, bytearray, str, os.PathLike))
         proto = self._load_proto(proto)
         if not isinstance(verbose, int):
             raise TypeError(f"verbose must be an integer, not {type(verbose).__name__}.")
@@ -401,6 +409,39 @@ class ReferenceEvaluator:
         # call. Registering a custom kernel clears the cache so the next run
         # rebuilds the sessions and picks the new kernel up.
         self._sessions: dict[int, Any] = {}
+
+        # When the model was parsed / loaded from a serialised proto or a file,
+        # start building the kernels right away (see the note where
+        # ``parsed_from_serialized`` is computed) so the per-node dispatch is
+        # done at construction time instead of on the first :meth:`run`.
+        if parsed_from_serialized:
+            self._initialize_kernels()
+
+    def _initialize_kernels(self) -> None:
+        """Eagerly builds (and caches) the ``RuntimeSession`` for the wrapped
+        graph / function and resolves every node's kernel up front, against the
+        persistent :class:`RuntimeContext`, so the first :meth:`run` does not
+        have to do the per-node dispatch.
+
+        The session is stored in :attr:`_sessions` under its plan identity, the
+        same cache :meth:`run` consults, so the eagerly built session is reused
+        (and not rebuilt) on the first run.
+        """
+        ctx = self._ctx
+        if self._model is not None:
+            _runtime.register_model_functions(self._model, ctx)
+            graph_or_function: Any = self._model.graph
+        elif self._function is not None:
+            graph_or_function = self._function
+        else:
+            graph_or_function = self._graph
+        plan = ctx.get_execution_plan(graph_or_function)
+        session = _runtime.RuntimeSession(plan)
+        _record_graph_outputs(session, graph_or_function)
+        session.initialize_kernels(ctx)
+        # Cache the plan alongside the session so both stay alive and the first
+        # :meth:`run` reuses this eagerly built (already-resolved) session.
+        self._sessions[id(plan)] = (plan, session)
 
     # -- custom kernels -----------------------------------------------------
 

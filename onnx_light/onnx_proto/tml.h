@@ -238,11 +238,11 @@ public:
   bool ParseFromArray(const void *data, int size) {
     ol::utils::StringStream stream(data, static_cast<int64_t>(size));
     ol::ParseOptions opts;
-    ParseFromStream(stream, opts);
-    return true;
+    return ParseFromStream(stream, opts);
   }
 
-  void ParseFromStream(ol::utils::BinaryStream &s, ol::ParseOptions &opts) {
+  bool ParseFromStream(ol::utils::BinaryStream &s, ol::ParseOptions &opts) {
+    bool ok = true;
     while (s.NotEnd()) {
       const ol::utils::FieldNumber f = s.next_field();
       switch (f.field_number) {
@@ -292,7 +292,7 @@ public:
         }
         const uint64_t len = s.next_uint64();
         s.LimitToNext(len);
-        tensor_.ParseFromStream(s, opts);
+        ok = tensor_.ParseFromStream(s, opts) && ok;
         s.Restore();
         values_case_ = kTensor;
         break;
@@ -308,6 +308,7 @@ public:
         break;
       }
     }
+    return ok;
   }
 
 private:

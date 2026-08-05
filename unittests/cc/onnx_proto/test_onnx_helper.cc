@@ -673,34 +673,34 @@ TEST(onnx_helper, SerializeModelProtoToStream_DoesNotMutateModel) {
 }
 
 TEST(onnx_external_ressource, SaveWithExternalData) {
-  namespace fs = std::filesystem;
-  fs::path source_path = __FILE__;
-  fs::path source_dir = source_path.parent_path();
-  fs::path file_path = source_dir / "data" / "test_writing_external_weights.original.onnx";
-  if (!std::filesystem::exists(file_path)) {
-    GTEST_SKIP() << "File not found: " << file_path.string();
-  }
-
+  // Build a model with a large weight in-memory, then serialize it to two files
+  // (model + external weights) and verify the external weights land in the
+  // separate data file.
   ModelProto model;
-  utils::FileStream stream(file_path.string());
-  ONNX_LIGHT_NAMESPACE::ParseOptions opts;
-  EXPECT_TRUE(model.ParseFromStream(stream, opts));
+  GraphProto *graph = model.add_graph();
+  graph->set_name("graph");
 
-  auto serialized = source_dir / "test_onnx_file_save_with_external_data.onnx";
-  auto weights = source_dir / "test_onnx_file_save_with_external_data.data";
+  TensorProto *weights = graph->add_initializer();
+  weights->set_name("big_weights");
+  weights->set_data_type(TensorProto::DataType::FLOAT);
+  weights->ref_dims().push_back(256);
+  weights->ref_raw_data() = std::vector<uint8_t>(256 * sizeof(float), 7);
+
+  auto serialized = std::string("test_onnx_file_save_with_external_data.onnx");
+  auto weights_file = std::string("test_onnx_file_save_with_external_data.data");
   {
-    utils::TwoFilesWriteStream wstream(serialized.string(), weights.string());
+    utils::TwoFilesWriteStream wstream(serialized, weights_file);
     SerializeOptions wopts;
     wopts.raw_data_threshold = 2;
     SerializeProtoToStream(model, wstream, wopts);
   }
   auto size = std::filesystem::file_size(serialized);
-  auto weights_size = std::filesystem::file_size(weights);
+  auto weights_size = std::filesystem::file_size(weights_file);
   EXPECT_GT(weights_size, 1000);
   EXPECT_GT(size, 10);
 
-  std::remove(serialized.string().c_str());
-  std::remove(weights.string().c_str());
+  std::remove(serialized.c_str());
+  std::remove(weights_file.c_str());
 }
 
 TEST(onnx_external_ressource, SaveWithExternalDataMaxFileSize) {
@@ -1265,21 +1265,46 @@ TEST(onnx_file, FileStream_ModelProto_WriteRead) {
 }
 
 TEST(onnx_external_ressource, LoadWithExternalData) {
-  namespace fs = std::filesystem;
-  fs::path source_path = __FILE__;
-  fs::path source_dir = source_path.parent_path();
-  fs::path file_path = source_dir / "data" / "test_writing_external_weights_read_from_onnx.onnx";
-  fs::path weights_path = source_dir / "data" / "test_writing_external_weights_read_from_onnx.data";
-  if (!std::filesystem::exists(file_path) || !std::filesystem::exists(weights_path)) {
-    GTEST_SKIP() << "File not found: " << file_path.string() << " or " << weights_path.string();
+  // Build a model with 7 initializers (2 of them large and multi-dimensional),
+  // write it out with external data, then read it back through TwoFilesStream and
+  // verify the large initializers round-trip via the external weights file.
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("graph");
+
+  for (int i = 0; i < 7; ++i) {
+    TensorProto *weights = graph->add_initializer();
+    weights->set_name("weights" + std::to_string(i));
+    weights->set_data_type(TensorProto::DataType::FLOAT);
+    if (i < 2) {
+      // Two large, multi-dimensional initializers with more than 1024 raw bytes.
+      weights->ref_dims().push_back(16);
+      weights->ref_dims().push_back(32);
+      weights->ref_raw_data() =
+          std::vector<uint8_t>(16 * 32 * sizeof(float), static_cast<uint8_t>(1 + i));
+    } else {
+      weights->ref_dims().push_back(1);
+      weights->ref_raw_data() = std::vector<uint8_t>{1, 2, static_cast<uint8_t>(3 + i), 4};
+    }
   }
 
-  ModelProto model;
-  utils::TwoFilesStream stream(file_path.string(), weights_path.string());
-  ONNX_LIGHT_NAMESPACE::ParseOptions opts;
-  EXPECT_TRUE(model.ParseFromStream(stream, opts));
-  EXPECT_EQ(model.ref_graph().ref_initializer().size(), 7);
-  IteratorTensorProto it(&model.ref_graph());
+  std::string onnx_file = "test_writing_external_weights_read_from_onnx.onnx";
+  std::string weights_file = "test_writing_external_weights_read_from_onnx.data";
+  {
+    utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+    SerializeOptions wopts;
+    wopts.raw_data_threshold = 2;
+    SerializeProtoToStream(model, wstream, wopts);
+  }
+
+  ModelProto model2;
+  {
+    utils::TwoFilesStream stream(onnx_file, weights_file);
+    ONNX_LIGHT_NAMESPACE::ParseOptions opts;
+    EXPECT_TRUE(model2.ParseFromStream(stream, opts));
+  }
+  EXPECT_EQ(model2.ref_graph().ref_initializer().size(), 7);
+  IteratorTensorProto it(&model2.ref_graph());
   int big = 0;
   while (it.next()) {
     if (it->ref_dims().size() > 1) {
@@ -1288,6 +1313,9 @@ TEST(onnx_external_ressource, LoadWithExternalData) {
     }
   }
   EXPECT_EQ(big, 2);
+
+  std::remove(onnx_file.c_str());
+  std::remove(weights_file.c_str());
 }
 
 // -----------------------------------------------------------------------

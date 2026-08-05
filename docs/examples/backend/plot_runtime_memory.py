@@ -126,11 +126,11 @@ print(f"Allocator peak footprint: {allocator.peak_allocated_size} bytes")
 
 import os  # noqa: E402
 
-from onnx_light.onnx import save as save_model  # noqa: E402
+import onnx_light.onnx as onnxl  # noqa: E402
 
 os.makedirs("temp_plot_runtime_memory", exist_ok=True)
 onnx_path = os.path.join("temp_plot_runtime_memory", "runtime_memory_demo.onnx")
-save_model(model, onnx_path)
+onnxl.save(model, onnx_path)
 print(f"Model saved to {onnx_path}")
 
 #####################################

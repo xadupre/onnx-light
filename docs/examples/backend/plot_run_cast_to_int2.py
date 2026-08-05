@@ -68,11 +68,11 @@ print(pretty_onnx(tc.model))
 
 import os  # noqa: E402
 
-from onnx_light.onnx import save as save_model  # noqa: E402
+import onnx_light.onnx as onnxl  # noqa: E402
 
 os.makedirs("temp_plot_run_cast_to_int2", exist_ok=True)
 onnx_path = os.path.join("temp_plot_run_cast_to_int2", f"{tc.model_name}.onnx")
-save_model(tc.model, onnx_path)
+onnxl.save(tc.model, onnx_path)
 print(f"Model saved to {onnx_path}")
 
 #####################################

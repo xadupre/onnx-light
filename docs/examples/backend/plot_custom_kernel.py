@@ -120,12 +120,12 @@ print(f"Abs replaced by negation: y = {y2}")
 
 import os  # noqa: E402
 
-from onnx_light.onnx import save as save_model  # noqa: E402
+import onnx_light.onnx as onnxl  # noqa: E402
 
 os.makedirs("temp_plot_custom_kernel", exist_ok=True)
 for name, proto in [("scale_model", model), ("override_model", override_model)]:
     onnx_path = os.path.join("temp_plot_custom_kernel", f"{name}.onnx")
-    save_model(proto, onnx_path)
+    onnxl.save(proto, onnx_path)
     print(f"Model saved to {onnx_path}")
 
 #####################################

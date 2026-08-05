@@ -239,11 +239,11 @@ for ev in events:
 
 import os  # noqa: E402
 
-from onnx_light.onnx import save as save_model  # noqa: E402
+import onnx_light.onnx as onnxl  # noqa: E402
 
 os.makedirs("temp_plot_runtime_events", exist_ok=True)
 onnx_path = os.path.join("temp_plot_runtime_events", "runtime_events_demo.onnx")
-save_model(model, onnx_path)
+onnxl.save(model, onnx_path)
 print(f"Model saved to {onnx_path}")
 
 #####################################

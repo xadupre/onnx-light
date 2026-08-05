@@ -12,11 +12,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Improvements
 
 - Added an opt-in `allow_external_output_allocators` option to `RuntimeSession` (C++ `RuntimeSessionOptions` and the Python constructors, with a matching read-only accessor/property) that relaxes the per-node output-allocator verification so kernels may legitimately return outputs allocated outside the session's common allocator; the strict check remains the default.
+- Added a `str_<name>()` accessor to the `FIELD_STR` proto macro that returns the stored string as a `const std::string&` (or a shared empty string when unset), avoiding the `OptionalString` wrapper.
 - Moved `SerializeOptions`, `ParseOptions`, and their supporting types (`TensorBufferOptions`, `FileLoadMode`, `SerializeFormat`) out of `onnx_proto/stream_class.h` into a dedicated `onnx_proto/serialize_options.h` header.
+
+### Testing
+
+- Asserted that untagged backend test cases carry no in-place-reuse, `shape_tag`, or release metadata, checking every case strictly by tag.
 
 ### Documentation & CI
 
 - Split the `plot_onnx_time` benchmark chart into dedicated Python-API and C++-API graphs alongside the existing combined chart.
+- Raised the Windows CI build timeout to 60 minutes.
 - Bumped the release version to `0.1.12`.
 
 ## [0.1.11] – 2026-08-03

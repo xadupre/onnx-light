@@ -84,9 +84,10 @@ print(f"if0 doc_string:  {edited.graph.node[1].doc_string!r}")
 # Edit nodes while serializing
 # ----------------------------
 #
-# ``SerializeOptions.node_callback`` works the same way, but the callback runs on
-# a working copy of the model, so edits never alter the model held by the caller.
-# The stamped ``doc_string`` therefore appears only in the serialized bytes.
+# ``SerializeOptions.node_callback`` works the same way. The callback edits the
+# nodes in place while the serialized bytes are produced, then onnx-light restores
+# the original state, so edits never alter the model held by the caller. The
+# stamped ``doc_string`` therefore appears only in the serialized bytes.
 
 serialize_options = onnxl.SerializeOptions()
 serialize_options.node_callback = lambda node, graph: setattr(node, "doc_string", "serialized")
@@ -100,6 +101,7 @@ sub = reparsed.graph.node[1].attribute[0].g
 print(f"serialized subgraph doc_string:  {sub.node[0].doc_string!r}")
 
 # %%
-# The caller's model is untouched: the callback only saw a working copy.
+# The caller's model is untouched: onnx-light restored every node the callback
+# edited once the serialized bytes were produced.
 
 print(f"original add0 doc_string still empty: {onnx_model.graph.node[0].doc_string!r}")

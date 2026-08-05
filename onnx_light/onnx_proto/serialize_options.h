@@ -3,6 +3,7 @@
 #include "stream.h"
 #include <cstdint>
 #include <functional>
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 
@@ -13,7 +14,41 @@ class NodeProto;
 class GraphProto;
 class ModelProto;
 struct SerializeOptions;
-void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options);
+
+/**
+ * Restores the tensors/nodes a serialize callback mutated in place.
+ *
+ * :cpp:func:`ApplySerializeRawDataCallback` applies the callbacks directly to the model (so no
+ * full ``ModelProto`` copy is needed) and records one undo action per visited tensor/node in the
+ * returned restorer. Calling :cpp:func:`Restore` (also done automatically on destruction) puts the
+ * original state back, keeping the caller's model untouched once the serialized bytes are produced.
+ */
+class SerializeCallbackRestorer {
+public:
+  SerializeCallbackRestorer() = default;
+  SerializeCallbackRestorer(SerializeCallbackRestorer &&) = default;
+  SerializeCallbackRestorer &operator=(SerializeCallbackRestorer &&) = default;
+  SerializeCallbackRestorer(const SerializeCallbackRestorer &) = delete;
+  SerializeCallbackRestorer &operator=(const SerializeCallbackRestorer &) = delete;
+  ~SerializeCallbackRestorer() { Restore(); }
+
+  /** Registers an action putting a proto back to its pre-callback state. */
+  void AddUndo(std::function<void()> undo) { undo_.emplace_back(std::move(undo)); }
+
+  /** Runs every registered undo action in reverse order, then clears them. */
+  void Restore() {
+    for (auto it = undo_.rbegin(); it != undo_.rend(); ++it) {
+      (*it)();
+    }
+    undo_.clear();
+  }
+
+private:
+  std::vector<std::function<void()>> undo_;
+};
+
+SerializeCallbackRestorer ApplySerializeRawDataCallback(ModelProto &model,
+                                                        const SerializeOptions &options);
 
 /**
  * Common options shared by tensor buffer operations: in-place consolidation

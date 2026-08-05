@@ -347,33 +347,61 @@ void ApplySerializeRawDataCallbackToTensor(TensorProto &tensor, GraphProto &grap
 // subgraph nested in its node attributes. Each node_callback and raw_data_callback receives the
 // node/tensor together with the graph it belongs to, so callbacks can locate the parent graph of
 // the NodeProto/TensorProto they receive.
-void ApplySerializeCallbacksToGraph(GraphProto &graph, const SerializeOptions &options) {
+//
+// Callbacks mutate the model in place. To honour the "the caller's model is left untouched"
+// contract without deep-copying the whole ModelProto, every tensor/node a callback is about to
+// mutate is first snapshotted and an undo action is registered on ``restorer`` so the original
+// state can be put back once the (transient) serialized bytes have been produced. Only the
+// nodes/tensors actually visited are copied, instead of the entire model with its inputs, outputs,
+// value_info, opset_imports, etc.
+void ApplySerializeCallbacksToGraph(GraphProto &graph, const SerializeOptions &options,
+                                    SerializeCallbackRestorer &restorer) {
+  auto snapshot_tensor = [&restorer](TensorProto &tensor) {
+    auto saved = std::make_shared<TensorProto>();
+    saved->CopyFrom(tensor);
+    restorer.AddUndo([target = &tensor, saved]() {
+      target->Clear();
+      target->CopyFrom(*saved);
+    });
+  };
+  auto snapshot_node = [&restorer](NodeProto &node) {
+    auto saved = std::make_shared<NodeProto>();
+    saved->CopyFrom(node);
+    restorer.AddUndo([target = &node, saved]() {
+      target->Clear();
+      target->CopyFrom(*saved);
+    });
+  };
   if (options.raw_data_callback) {
     for (int i = 0; i < static_cast<int>(graph.ref_initializer().size()); ++i) {
+      snapshot_tensor(graph.ref_initializer()[i]);
       ApplySerializeRawDataCallbackToTensor(graph.ref_initializer()[i], graph, options);
     }
   }
   for (int i = 0; i < static_cast<int>(graph.ref_node().size()); ++i) {
     NodeProto &node = graph.ref_node()[i];
     if (options.node_callback) {
+      snapshot_node(node);
       options.node_callback(node, graph);
     }
     for (int j = 0; j < static_cast<int>(node.ref_attribute().size()); ++j) {
       AttributeProto &attr = node.ref_attribute()[j];
       if (options.raw_data_callback && attr.has_t()) {
+        snapshot_tensor(attr.ref_t());
         ApplySerializeRawDataCallbackToTensor(attr.ref_t(), graph, options);
       }
       if (options.raw_data_callback && attr.has_tensors()) {
         for (int k = 0; k < static_cast<int>(attr.ref_tensors().size()); ++k) {
+          snapshot_tensor(attr.ref_tensors()[k]);
           ApplySerializeRawDataCallbackToTensor(attr.ref_tensors()[k], graph, options);
         }
       }
       if (attr.has_g()) {
-        ApplySerializeCallbacksToGraph(attr.ref_g(), options);
+        ApplySerializeCallbacksToGraph(attr.ref_g(), options, restorer);
       }
       if (attr.has_graphs()) {
         for (int k = 0; k < static_cast<int>(attr.ref_graphs().size()); ++k) {
-          ApplySerializeCallbacksToGraph(attr.ref_graphs()[k], options);
+          ApplySerializeCallbacksToGraph(attr.ref_graphs()[k], options, restorer);
         }
       }
     }
@@ -382,11 +410,14 @@ void ApplySerializeCallbacksToGraph(GraphProto &graph, const SerializeOptions &o
 
 } // namespace
 
-void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options) {
+SerializeCallbackRestorer ApplySerializeRawDataCallback(ModelProto &model,
+                                                        const SerializeOptions &options) {
+  SerializeCallbackRestorer restorer;
   if ((!options.raw_data_callback && !options.node_callback) || !model.has_graph()) {
-    return;
+    return restorer;
   }
-  ApplySerializeCallbacksToGraph(model.ref_graph(), options);
+  ApplySerializeCallbacksToGraph(model.ref_graph(), options, restorer);
+  return restorer;
 }
 
 void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file,
@@ -1053,13 +1084,11 @@ std::shared_ptr<uint8_t[]> ConsolidateTensorsToBuffer(ModelProto &model,
 bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
                                  SerializeOptions &options, bool clear_external_data) {
   if (options.raw_data_callback || options.node_callback) {
-    ModelProto copy;
-    copy.CopyFrom(model);
-    ApplySerializeRawDataCallback(copy, options);
+    SerializeCallbackRestorer restorer = ApplySerializeRawDataCallback(model, options);
     SerializeOptions local_options = options;
     local_options.raw_data_callback = {};
     local_options.node_callback = {};
-    return SerializeModelProtoToStream(copy, stream, local_options, clear_external_data);
+    return SerializeModelProtoToStream(model, stream, local_options, clear_external_data);
   }
   EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
               "SerializeModelProtoToStream: SerializeFormat::kOrtFlatbuffers is not "

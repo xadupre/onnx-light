@@ -7333,7 +7333,8 @@ TEST(onnx_proto, SerializeOptions_NodeCallback_InvokedPerNodeWithParentGraph) {
   EXPECT_EQ(seen[2].first, "Identity");
   EXPECT_EQ(seen[2].second, "then_graph");
 
-  // The callback runs on a working copy, so the caller's model is unchanged.
+  // The callback edits the nodes in place, but onnx-light restores them afterwards, so the
+  // caller's model is unchanged.
   EXPECT_EQ(model.ref_graph().ref_node()[0].has_doc_string(), false);
 }
 
@@ -7405,6 +7406,37 @@ TEST(onnx_proto, SerializeOptions_RawDataCallback_ReceivesParentGraph) {
   ASSERT_EQ(seen.size(), 1u);
   EXPECT_EQ(seen[0].first, "W");
   EXPECT_EQ(seen[0].second, "main");
+}
+
+TEST(onnx_proto, SerializeOptions_RawDataCallback_LeavesCallerModelUntouched) {
+  // The serialize raw_data_callback rewrites raw_data in place while producing the bytes, but the
+  // caller's model must be restored to its original raw_data afterwards.
+  ModelProto model = MakeModelWithSubgraph();
+  const auto &original_raw = model.ref_graph().ref_initializer()[0].ref_raw_data();
+  std::string original(reinterpret_cast<const char *>(original_raw.data()), original_raw.size());
+
+  SerializeOptions options;
+  options.raw_data_callback = [&](TensorProto &tensor, GraphProto *, uint8_t *buffer,
+                                  size_t buffer_size, bool size_only) -> int64_t {
+    if (size_only) {
+      // Rewrite to a single sentinel byte, changing the tensor from its original bytes.
+      return 1;
+    }
+    if (buffer_size > 0) {
+      buffer[0] = 0x7F;
+    }
+    return static_cast<int64_t>(buffer_size);
+  };
+
+  std::string serialized;
+  model.SerializeToString(serialized, options);
+
+  // The caller's initializer keeps its original raw_data despite the in-place rewrite.
+  const TensorProto &initializer = model.ref_graph().ref_initializer()[0];
+  ASSERT_EQ(initializer.ref_raw_data().size(), original.size());
+  EXPECT_EQ(std::string(reinterpret_cast<const char *>(initializer.ref_raw_data().data()),
+                        initializer.ref_raw_data().size()),
+            original);
 }
 
 TEST(onnx_proto, ParseFromIstream_ModelProto) {

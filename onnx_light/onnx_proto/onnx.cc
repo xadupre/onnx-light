@@ -1559,13 +1559,15 @@ IMPLEMENT_PROTO(ModelProto)
 SerializeSizeResult ModelProto::SerializeSize(utils::BinaryWriteStream &stream,
                                               SerializeOptions &options) const {
   if (options.raw_data_callback || options.node_callback) {
-    ModelProto copy;
-    copy.CopyFrom(*this);
-    ApplySerializeRawDataCallback(copy, options);
+    // Apply the callbacks in place and restore afterwards instead of copying the whole model.
+    // Serialization is logically const: the restorer reverts every touched tensor/node before
+    // returning, so the model is observably unchanged.
+    ModelProto &mutable_self = const_cast<ModelProto &>(*this);
+    SerializeCallbackRestorer restorer = ApplySerializeRawDataCallback(mutable_self, options);
     SerializeOptions local_opts = options;
     local_opts.raw_data_callback = {};
     local_opts.node_callback = {};
-    return copy.SerializeSize(stream, local_opts);
+    return SerializeSize(stream, local_opts);
   }
   SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, ir_version)
@@ -1639,8 +1641,12 @@ bool ModelProto::SerializeToString(std::string &out,
   ModelProto copy;
   copy.CopyFrom(*this);
   SerializeOptions local_opts = opts;
+  // The restorer is kept alive until the end of the function so the callbacks' in-place edits
+  // remain visible while ``copy`` is serialized. ``copy`` is a throw-away local, so the restore
+  // it performs on destruction is harmless.
+  SerializeCallbackRestorer restorer;
   if (local_opts.raw_data_callback || local_opts.node_callback) {
-    ApplySerializeRawDataCallback(copy, local_opts);
+    restorer = ApplySerializeRawDataCallback(copy, local_opts);
     local_opts.raw_data_callback = {};
     local_opts.node_callback = {};
   }

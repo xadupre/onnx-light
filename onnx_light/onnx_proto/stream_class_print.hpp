@@ -202,6 +202,12 @@ inline std::string write_as_string(utils::PrintOptions &options,
   return write_as_repeated_field(options, field);
 }
 
+inline std::string write_as_string(utils::PrintOptions &options,
+                                   const utils::RepeatedStringField &field) {
+  return write_as_repeated_field(options,
+                                 static_cast<const utils::RepeatedField<utils::String> &>(field));
+}
+
 template <typename... Args>
 std::string write_as_string(utils::PrintOptions &options, const Args &...args) {
   std::string result;

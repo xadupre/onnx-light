@@ -509,9 +509,7 @@ class TestOnnxLightHelper(ExtTestCase):
     def test_writing_external_weights_read_with_file_load_mode(self):
         # Parsing a two-file model must honour AUTO/IFSTREAM file_load_mode
         # (both backed by std::ifstream via TwoFilesStream) and reject MMAP.
-        nameo = self.get_dump_file(
-            "test_writing_external_weights_flm.original.onnx"
-        )
+        nameo = self.get_dump_file("test_writing_external_weights_flm.original.onnx")
         name = self.get_dump_file("test_writing_external_weights_flm.onnx")
         weights = self.get_dump_file("test_writing_external_weights_flm.data")
         model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
@@ -527,9 +525,7 @@ class TestOnnxLightHelper(ExtTestCase):
                 opts.file_load_mode = mode
                 proto2 = onnxl.ModelProto()
                 proto2.ParseFromFile(name, opts, external_data_file=weights)
-                self.assertEqual(
-                    len(proto2.graph.initializer), len(model.graph.initializer)
-                )
+                self.assertEqual(len(proto2.graph.initializer), len(model.graph.initializer))
         opts = onnxl.ParseOptions()
         opts.file_load_mode = onnxl.FileLoadMode.MMAP
         proto3 = onnxl.ModelProto()

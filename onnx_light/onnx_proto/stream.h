@@ -838,6 +838,7 @@ protected:
   /** When true, copying reads of the weights file source their bytes from a memory-mapped
    *  view (see set_use_mmap_weights). */
   bool use_mmap_weights_ = false;
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 // protobuf ZeroCopy adapter streams

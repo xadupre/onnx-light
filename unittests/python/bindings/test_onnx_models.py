@@ -509,11 +509,13 @@ class TestOnnxLightHelper(ExtTestCase):
     def test_writing_external_weights_read_with_file_load_mode(self):
         # Parsing a two-file model must honour every file_load_mode. The small main
         # file always uses the buffered std::ifstream via TwoFilesStream; MMAP applies
-        # to the (large) weights file, which is memory-mapped on the no_copy path.
+        # to the (large) weights file, which is memory-mapped both on the no_copy path
+        # (borrowed views) and on the copying path (bytes copied out of the mapping).
         nameo = self.get_dump_file("test_writing_external_weights_flm.original.onnx")
         name = self.get_dump_file("test_writing_external_weights_flm.onnx")
         weights = self.get_dump_file("test_writing_external_weights_flm.data")
         model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        expected = [onh.to_array(i) for i in model.graph.initializer]
         proto = onnxl.ModelProto()
         s = model.SerializeToString()
         with open(nameo, "wb") as f:
@@ -531,6 +533,10 @@ class TestOnnxLightHelper(ExtTestCase):
                 proto2 = onnxl.ModelProto()
                 proto2.ParseFromFile(name, opts, external_data_file=weights)
                 self.assertEqual(len(proto2.graph.initializer), len(model.graph.initializer))
+                got = [onh.to_array(i) for i in proto2.graph.initializer]
+                self.assertEqual(len(expected), len(got))
+                for a, b in zip(expected, got):
+                    self.assertEqualArray(a, b)
 
     def test_writing_external_weights_read_from_onnx(self):
         model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
@@ -557,6 +563,28 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(len(expected), len(got))
         for a, b in zip(expected, got):
             self.assertEqualArray(a, b)
+
+    def test_loading_external_weights_file_load_mode_mmap(self):
+        # Regression test: onnxl.load(file_load_mode="MMAP") with an external data
+        # file must load the weights correctly (via a memory-mapped weights file).
+        name = self.get_dump_file("test_loading_external_weights_flm_mmap.onnx")
+        weights = self.get_dump_file("test_loading_external_weights_flm_mmap.data")
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name, location=os.path.split(weights)[-1], save_as_external_data=True)
+        expected = [onh.to_array(i) for i in model.graph.initializer]
+        # num_threads=1 forces the sequential weights read (which honours MMAP by
+        # memory-mapping the weights file); num_threads=-1 exercises the parallel path.
+        for mode in ("AUTO", "IFSTREAM", "MMAP"):
+            for num_threads in (1, -1):
+                with self.subTest(mode=mode, num_threads=num_threads):
+                    proto = onnxl.load(
+                        name, location=weights, file_load_mode=mode, num_threads=num_threads
+                    )
+                    self.assertEqual(len(proto.graph.initializer), len(model.graph.initializer))
+                    got = [onh.to_array(i) for i in proto.graph.initializer]
+                    self.assertEqual(len(expected), len(got))
+                    for a, b in zip(expected, got):
+                        self.assertEqualArray(a, b)
 
     def test_loading_external_weights(self):
         name = self.get_dump_file("test_loading_external_weights.onnx")

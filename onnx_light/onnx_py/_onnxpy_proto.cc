@@ -441,7 +441,8 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
               // file_load_mode selects how the weights bytes are read: kMmap memory-maps the
               // weights file and copies from the mapping, while kAuto/kFileStream use the
               // buffered std::ifstream. kMmap is therefore honoured for the weights file.
-              auto two_stream = std::make_unique<utils::TwoFilesStream>(file_path, external_data_file);
+              auto two_stream =
+                  std::make_unique<utils::TwoFilesStream>(file_path, external_data_file);
               if (mode == FileLoadMode::kMmap && !wants_no_copy) {
                 two_stream->set_use_mmap_weights(true);
               }

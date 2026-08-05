@@ -63,7 +63,7 @@ disabled (``ORT_DISABLE_ALL``) so that the measurement reflects only the
 model loading overhead rather than compilation or fusion costs.
 
 * ``onnx``, ``onnxlight``, ``ort``: use ``onnx``, ``onnx-light``, or ``onnxruntime``
-* ``reference``: builds an ``onnx.reference.ReferenceEvaluator`` from the model
+* ``reference``: builds an ``onnx_light.onnx.reference.ReferenceEvaluator`` from the model
 * ``1filex1``: saves in a single file with 1 thread
 * ``1filex4``: saves in a single file with 4 threads
 * ``2filex1``: saves in a file and another for external data with 1 thread
@@ -695,17 +695,15 @@ if _run_scenario("load"):
         print("onnx_ir is not installed, skipping ir-py single-file load benchmark.")
 
     # %%
-    # Load with ``onnx.reference.ReferenceEvaluator``.  This measures the
-    # time to build a Python reference runtime from the model, which includes
-    # loading the model and preparing the operators for evaluation.
+    # Load with ``onnx_light.onnx.reference.ReferenceEvaluator``.  This measures
+    # the time to build a Python reference runtime from the model, which
+    # includes loading the model and preparing the operators for evaluation.
 
-    def _load_reference_evaluator():
-        import onnx
-        from onnx.reference import ReferenceEvaluator
+    from onnx_light.onnx.reference import ReferenceEvaluator
 
-        return ReferenceEvaluator(onnx.load(onnx_path))
-
-    data.append(measure("load/1filex1/reference", _load_reference_evaluator))
+    data.append(
+        measure("load/1filex1/reference", lambda: ReferenceEvaluator(onnxl.load(onnx_path)))
+    )
     print_stats("load/1filex1/reference", data[-1])
 
     # %%

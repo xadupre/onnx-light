@@ -331,8 +331,12 @@ jobs:
 
       - name: Configure 32-bit CMake build
         run: |
-          cmake -S . -B build-win32 -A Win32 -DCMAKE_BUILD_TYPE=Release -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
+          cmake -S . -B build-win32 -A Win32 -DCMAKE_BUILD_TYPE=Release -DONNX_LIGHT_BUILD_PYTHON=OFF -DONNX_LIGHT_BUILD_TESTS=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
 
       - name: Build 32-bit CMake build
         run: |
           cmake --build build-win32 --config Release --parallel
+
+      - name: Run C++ unit tests (32-bit)
+        run: |
+          ctest --test-dir build-win32 --output-on-failure -C Release --timeout 240

@@ -1284,7 +1284,7 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
 
 TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &weights_file)
     : FileStream(file_path), weights_stream_(weights_file), active_weights_location_(weights_file),
-      default_weights_location_(weights_file) {
+      default_weights_location_(weights_file), use_mmap_weights_(false) {
   std::filesystem::path parent = std::filesystem::path(file_path).parent_path();
   std::filesystem::path weights = std::filesystem::path(weights_file);
   std::filesystem::path rel = std::filesystem::relative(weights, parent);

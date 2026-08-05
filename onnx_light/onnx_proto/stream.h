@@ -836,8 +836,9 @@ protected:
   /** Maps object pointers to their byte offsets in the weights file. */
   std::unordered_map<const void *, uint64_t> position_cache_;
   /** When true, copying reads of the weights file source their bytes from a memory-mapped
-   *  view (see set_use_mmap_weights). */
-  bool use_mmap_weights_ = false;
+   *  view (see set_use_mmap_weights). Set once during construction; not meant to change
+   *  after reading has started. */
+  bool use_mmap_weights_;
 };
 
 ///////////////////////////////////////////////////////////////////////////////

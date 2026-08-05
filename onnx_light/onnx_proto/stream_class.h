@@ -10,7 +10,7 @@
 #include <utility>
 
 namespace onnx_light {
-namespace detail {
+namespace proto_default_detail {
 
 /// Returns a const reference to a default-constructed instance of T.
 /// Uses a template to defer instantiation until the type is complete.
@@ -20,7 +20,7 @@ inline const T &default_proto_instance() {
   return instance;
 }
 
-} // namespace detail
+} // namespace proto_default_detail
 } // namespace onnx_light
 
 #define FIELD_VARINT 0
@@ -310,7 +310,7 @@ public:                                                                         
   }                                                                                                \
   inline const type &ref_##name() const {                                                          \
     if (!name##_.has_value()) {                                                                    \
-      return ::onnx_light::detail::default_proto_instance<type>();                                  \
+      return ::onnx_light::proto_default_detail::default_proto_instance<type>();                     \
     }                                                                                              \
     return *name##_;                                                                               \
   }                                                                                                \

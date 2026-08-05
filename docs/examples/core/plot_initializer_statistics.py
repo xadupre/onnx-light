@@ -20,13 +20,13 @@ computes a handful of descriptive statistics for each of them:
 
 By default the script builds a small dummy model with a couple of 3D and
 4D initializers so that it runs out of the box.  An existing model can be
-analysed instead by passing its path on the command line::
+analyzed instead by passing its path on the command line::
 
     python plot_initializer_statistics.py --model model.onnx
 
 The initializer values are read through
 :func:`onnx_light.onnx.numpy_helper.to_array`, which relies on the
-``ml_dtypes`` fallback mechanism to materialise tensors stored with dtypes
+``ml_dtypes`` fallback mechanism to materialize tensors stored with dtypes
 that have no native NumPy equivalent (``float16``, ``bfloat16``,
 ``float8`` ...).  The statistics are always computed in ``float64`` so the
 same code path works for every element type.
@@ -43,6 +43,9 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx import load
+
+# Vectorised normal CDF helper built once so it is not recreated on every call.
+_erf = np.vectorize(math.erf)
 
 # %%
 # Command line
@@ -66,7 +69,7 @@ def parse_args() -> argparse.Namespace:
         "--model",
         default=None,
         help=(
-            "Path to an existing ONNX model to analyse. "
+            "Path to an existing ONNX model to analyze. "
             "When omitted, a dummy model is generated."
         ),
     )
@@ -98,9 +101,7 @@ def make_dummy_model() -> onnxl.ModelProto:
         # A weight drawn from a uniform law, further from normality.
         onh.from_array(rng.uniform(-1.0, 1.0, (16, 8, 3)).astype(np.float32), name="uniform_w"),
         # A half-precision weight to exercise the ml_dtypes fallback.
-        onh.from_array(
-            rng.standard_normal((4, 4, 4)).astype(np.float16), name="fp16_w"
-        ),
+        onh.from_array(rng.standard_normal((4, 4, 4)).astype(np.float16), name="fp16_w"),
         # A 1D bias, ignored because its rank is not greater than two.
         onh.from_array(rng.standard_normal((8,)).astype(np.float32), name="bias"),
     ]
@@ -146,7 +147,7 @@ def distance_to_normal_law(values: np.ndarray) -> float:
 
     # Normal cumulative distribution function evaluated at every value.
     scaled = (flat - mean) / (std * math.sqrt(2.0))
-    normal_cdf = 0.5 * (1.0 + np.vectorize(math.erf)(scaled))
+    normal_cdf = 0.5 * (1.0 + _erf(scaled))
 
     # Empirical cumulative distribution function bracketing each value.
     upper = np.arange(1, n + 1, dtype=np.float64) / n
@@ -158,7 +159,7 @@ def compute_statistics(tensor: onnxl.TensorProto) -> dict[str, float]:
     """Returns the descriptive statistics of an initializer.
 
     Args:
-        tensor: The initializer to analyse.
+        tensor: The initializer to analyze.
 
     Returns:
         A mapping with the ``min``, ``max``, ``median``, ``mean`` and
@@ -180,7 +181,7 @@ def compute_statistics(tensor: onnxl.TensorProto) -> dict[str, float]:
 # ----
 #
 # The model is loaded (or generated), then every initializer with a rank
-# greater than two is analysed and its statistics printed.
+# greater than two is analyzed and its statistics printed.
 
 args = parse_args()
 
@@ -192,16 +193,18 @@ else:
     model = make_dummy_model()
 
 print()
-header = f"{'name':<16} {'rank':>4} {'min':>10} {'max':>10} {'median':>10} {'mean':>10} {'normal':>10}"
+header = (
+    f"{'name':<16} {'rank':>4} {'min':>10} {'max':>10} {'median':>10} {'mean':>10} {'normal':>10}"
+)
 print(header)
 print("-" * len(header))
 
-n_analysed = 0
+n_analyzed = 0
 for init in model.graph.initializer:
     rank = len(init.dims)
     if rank <= 2:
         continue
-    n_analysed += 1
+    n_analyzed += 1
     stats = compute_statistics(init)
     print(
         f"{init.name:<16} {rank:>4} "
@@ -211,4 +214,4 @@ for init in model.graph.initializer:
     )
 
 print()
-print(f"Analysed {n_analysed} initializer(s) with more than two dimensions.")
+print(f"Analyzed {n_analyzed} initializer(s) with more than two dimensions.")

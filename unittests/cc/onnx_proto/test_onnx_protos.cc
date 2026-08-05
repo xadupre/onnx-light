@@ -518,6 +518,25 @@ TEST(onnx_string, String_NullVersusSizeZero) {
   EXPECT_EQ(&bound, &set_value.value());
 }
 
+TEST(onnx_string, OptionalString_ImplicitConstStringRef) {
+  // A set value implicitly converts to a const std::string& bound to the stored value.
+  utils::OptionalString set_value("hello");
+  const std::string &bound = set_value;
+  EXPECT_EQ(bound, "hello");
+  EXPECT_EQ(&bound, &set_value.value());
+
+  // An unset value implicitly converts to a shared empty string without throwing.
+  utils::OptionalString unset;
+  const std::string &empty_bound = unset;
+  EXPECT_TRUE(empty_bound.empty());
+  EXPECT_EQ(&empty_bound, &utils::OptionalString::empty_value());
+
+  // The implicit conversion also works when passing to a const std::string& parameter.
+  auto takes_string_ref = [](const std::string &s) { return s.size(); };
+  EXPECT_EQ(takes_string_ref(set_value), 5u);
+  EXPECT_EQ(takes_string_ref(unset), 0u);
+}
+
 TEST(onnx_proto, NodeProtoDomainKeepsExplicitEmptyString) {
   NodeProto with_empty_domain;
   with_empty_domain.set_op_type("Constant");

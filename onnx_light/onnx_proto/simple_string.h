@@ -202,12 +202,9 @@ public:
   inline char operator[](size_t i) const { return value()[i]; }
   /** Parses the content as a signed 64-bit integer. */
   inline int64_t toint64() const { return RefString(data(), size()).toint64(); }
-  /** Implicit conversion to const std::string& (static empty when unset).
+  /** Implicit conversion to const std::string& (shared empty when unset).
    *  Allows binding to const std::string& in call sites that expect protobuf semantics. */
-  inline operator const std::string &() const {
-    static const std::string empty;
-    return has_value() ? value() : empty;
-  }
+  inline operator const std::string &() const { return value(); }
   /** Implicit conversion to string_view (empty when unset). */
   inline operator std::string_view() const {
     return has_value() ? std::string_view(value()) : std::string_view();

@@ -36,6 +36,11 @@ The initializer values are read through
 that have no native NumPy equivalent (``float16``, ``bfloat16``,
 ``float8`` ...).  The statistics are always computed in ``float64`` so the
 same code path works for every element type.
+
+Finally, the six initializers that depart the most from the normal law
+(largest distance) are plotted: their histogram is drawn alongside the
+probability density function of the normal law fitted on the same weights,
+so the departure from normality can be seen at a glance.
 """
 
 from __future__ import annotations
@@ -43,6 +48,7 @@ from __future__ import annotations
 import argparse
 import math
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 import onnx_light.onnx as onnxl
@@ -108,6 +114,19 @@ def make_dummy_model() -> onnxl.ModelProto:
         onh.from_array(rng.uniform(-1.0, 1.0, (16, 8, 3)).astype(np.float32), name="uniform_w"),
         # A half-precision weight to exercise the ml_dtypes fallback.
         onh.from_array(rng.standard_normal((4, 4, 4)).astype(np.float16), name="fp16_w"),
+        # An exponential weight, strongly asymmetric (heavy right tail).
+        onh.from_array(rng.exponential(1.0, (8, 4, 4)).astype(np.float32), name="exp_w"),
+        # A heavy-tailed weight drawn from a Student's t law.
+        onh.from_array(rng.standard_t(3, (8, 4, 4)).astype(np.float32), name="student_w"),
+        # A bimodal weight, clearly non-normal.
+        onh.from_array(
+            np.concatenate(
+                [rng.normal(-3.0, 0.5, (4, 4, 4)), rng.normal(3.0, 0.5, (4, 4, 4))]
+            ).astype(np.float32),
+            name="bimodal_w",
+        ),
+        # A second normal weight with a different scale.
+        onh.from_array((2.0 * rng.standard_normal((6, 3, 3))).astype(np.float32), name="conv_w2"),
         # A 1D bias, ignored because its rank is not greater than two.
         onh.from_array(rng.standard_normal((8,)).astype(np.float32), name="bias"),
     ]
@@ -262,12 +281,14 @@ print(header)
 print("-" * len(header))
 
 n_analyzed = 0
+analyzed = []
 for init in model.graph.initializer:
     rank = len(init.dims)
     if rank <= 2:
         continue
     n_analyzed += 1
     stats = compute_statistics(init)
+    analyzed.append((init, stats))
     print(
         f"{init.name:<16} {rank:>4} "
         f"{stats['min']:>10.4f} {stats['max']:>10.4f} "
@@ -278,3 +299,40 @@ for init in model.graph.initializer:
 
 print()
 print(f"Analyzed {n_analyzed} initializer(s) with more than two dimensions.")
+
+
+# %%
+# Plotting the least normal initializers
+# --------------------------------------
+#
+# The six initializers whose distance to the normal law is the largest are
+# plotted: their histogram (as a density) is compared to the probability
+# density function of the normal law :math:`\mathcal{N}(\mu, \sigma^2)`
+# fitted on the same weights.  The wider the gap between the bars and the
+# curve, the less normal the weights are.
+
+least_normal = sorted(analyzed, key=lambda item: item[1]["normal_distance"], reverse=True)[:6]
+
+fig, axes = plt.subplots(2, 3, figsize=(14, 8))
+for ax, (init, stats) in zip(axes.ravel(), least_normal):
+    values = onh.to_array(init).astype(np.float64).ravel()
+    ax.hist(values, bins=40, density=True, color="steelblue", alpha=0.7)
+
+    mean = float(values.mean())
+    std = float(values.std())
+    if std > 0.0:
+        grid = np.linspace(values.min(), values.max(), 200)
+        pdf = np.exp(-0.5 * ((grid - mean) / std) ** 2) / (std * math.sqrt(2.0 * math.pi))
+        ax.plot(grid, pdf, color="crimson", label="fitted normal law")
+        ax.legend(loc="best", fontsize="small")
+
+    ax.set_title(f"{init.name} (normal distance={stats['normal_distance']:.3f})")
+    ax.set_xlabel("weight value")
+    ax.set_ylabel("density")
+
+# Hide any unused axes when fewer than six initializers are available.
+for ax in axes.ravel()[len(least_normal) :]:
+    ax.set_visible(False)
+
+fig.suptitle("Six initializers the furthest from the normal law")
+fig.tight_layout()

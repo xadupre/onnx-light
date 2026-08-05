@@ -63,6 +63,7 @@ disabled (``ORT_DISABLE_ALL``) so that the measurement reflects only the
 model loading overhead rather than compilation or fusion costs.
 
 * ``onnx``, ``onnxlight``, ``ort``: use ``onnx``, ``onnx-light``, or ``onnxruntime``
+* ``reference``: builds an ``onnx.reference.ReferenceEvaluator`` from the model
 * ``1filex1``: saves in a single file with 1 thread
 * ``1filex4``: saves in a single file with 4 threads
 * ``2filex1``: saves in a file and another for external data with 1 thread
@@ -694,6 +695,20 @@ if _run_scenario("load"):
         print("onnx_ir is not installed, skipping ir-py single-file load benchmark.")
 
     # %%
+    # Load with ``onnx.reference.ReferenceEvaluator``.  This measures the
+    # time to build a Python reference runtime from the model, which includes
+    # loading the model and preparing the operators for evaluation.
+
+    def _load_reference_evaluator():
+        import onnx
+        from onnx.reference import ReferenceEvaluator
+
+        return ReferenceEvaluator(onnx.load(onnx_path))
+
+    data.append(measure("load/1filex1/reference", _load_reference_evaluator))
+    print_stats("load/1filex1/reference", data[-1])
+
+    # %%
     # Load with ``onnxruntime`` (all optimizations disabled).
     # ``InferenceSession`` is created with ``ORT_DISABLE_ALL`` so the
     # measurement captures only model loading overhead, not graph optimization.
@@ -1292,7 +1307,7 @@ _common_title = (
     f"benchmark key: <op>/<files>x<threads>/<lib>\n"
     f"op=load|save|parse|serialize, files=1|2, threads=1|4, "
     f"lib=onnx|onnx-cpp|onnxlight|onnxlight-cpp|onnxlight-cpp-nocopy|"
-    f"onnxlight-nocopy|ir-py|ort"
+    f"onnxlight-nocopy|ir-py|ort|reference"
 )
 
 # Split the final graph into three separate graphs, one per tool family, so the

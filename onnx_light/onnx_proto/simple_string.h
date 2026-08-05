@@ -260,23 +260,72 @@ public:
   inline bool operator==(const std::string &other) const { return has_value() && value() == other; }
   inline bool operator!=(const std::string &other) const { return !(*this == other); }
 
-  /** String concatenation with standard strings and C strings. */
-  friend inline std::string operator+(const OptionalString &lhs, const char *rhs) {
-    return std::string(lhs) + rhs;
+  /** Three-way comparison of two OptionalString values (absent sorts before any present value).
+   *  Implemented as a named helper so the relational operators never invoke ``operator<`` between
+   *  two OptionalString values, which would drag std::optional's heterogeneous ``operator<=>``
+   *  templates into overload resolution and recurse for this optional-derived type. */
+  static inline int compare_opt(const OptionalString &lhs, const OptionalString &rhs) {
+    if (!lhs.has_value() && !rhs.has_value())
+      return 0;
+    if (!lhs.has_value())
+      return -1;
+    if (!rhs.has_value())
+      return 1;
+    return lhs.value().compare(rhs.value());
   }
-  friend inline std::string operator+(const char *lhs, const OptionalString &rhs) {
-    return lhs + std::string(rhs);
+
+  /** Orders two OptionalString values (absent sorts before any present value; disambiguation for
+   * C++20 heterogeneous optional overloads). */
+  inline bool operator<(const OptionalString &rhs) const { return compare_opt(*this, rhs) < 0; }
+  inline bool operator<=(const OptionalString &rhs) const { return compare_opt(*this, rhs) <= 0; }
+  inline bool operator>(const OptionalString &rhs) const { return compare_opt(*this, rhs) > 0; }
+  inline bool operator>=(const OptionalString &rhs) const { return compare_opt(*this, rhs) >= 0; }
+
+  /** Orders against a standard string (unset sorts before any std::string). */
+  inline bool operator<(const std::string &rhs) const { return !has_value() || value() < rhs; }
+  inline bool operator<=(const std::string &rhs) const { return !has_value() || value() <= rhs; }
+  inline bool operator>(const std::string &rhs) const { return has_value() && value() > rhs; }
+  inline bool operator>=(const std::string &rhs) const { return has_value() && value() >= rhs; }
+
+  /** Orders against a null-terminated string (nullptr and unset sort before present values). */
+  inline bool operator<(const char *rhs) const {
+    if (rhs == nullptr)
+      return false;
+    return !has_value() || value() < rhs;
   }
-  friend inline std::string operator+(const OptionalString &lhs, const std::string &rhs) {
-    return std::string(lhs) + rhs;
+  inline bool operator<=(const char *rhs) const {
+    if (rhs == nullptr)
+      return !has_value();
+    return !has_value() || value() <= rhs;
   }
-  friend inline std::string operator+(const std::string &lhs, const OptionalString &rhs) {
-    return lhs + std::string(rhs);
+  inline bool operator>(const char *rhs) const {
+    if (rhs == nullptr)
+      return has_value();
+    return has_value() && value() > rhs;
   }
-  friend inline std::string operator+(const OptionalString &lhs, const OptionalString &rhs) {
-    return std::string(lhs) + std::string(rhs);
+  inline bool operator>=(const char *rhs) const {
+    if (rhs == nullptr)
+      return true;
+    return has_value() && value() >= rhs;
   }
 };
+
+/** String concatenation with standard strings and C strings. */
+inline std::string operator+(const OptionalString &lhs, const char *rhs) {
+  return std::string(lhs) + rhs;
+}
+inline std::string operator+(const char *lhs, const OptionalString &rhs) {
+  return lhs + std::string(rhs);
+}
+inline std::string operator+(const OptionalString &lhs, const std::string &rhs) {
+  return std::string(lhs) + rhs;
+}
+inline std::string operator+(const std::string &lhs, const OptionalString &rhs) {
+  return lhs + std::string(rhs);
+}
+inline std::string operator+(const OptionalString &lhs, const OptionalString &rhs) {
+  return std::string(lhs) + std::string(rhs);
+}
 
 /** Assigns a non-owning view from an owning string. */
 inline RefString &RefString::operator=(const String &v) {
@@ -330,3 +379,20 @@ template <> struct std::hash<ONNX_LIGHT_NAMESPACE::utils::String> {
     return std::hash<std::string>{}(static_cast<const std::string &>(s));
   }
 };
+
+// OptionalString publicly derives from std::optional<std::string>, so it implicitly converts to
+// std::optional<std::string>&. C++20 gives std::optional a heterogeneous operator<=>
+// (const optional<T>&, const U&). Since C++23 (LWG 3746) that overload is constrained to reject
+// types *derived from* optional (libc++ and MSVC STL already implement this). libstdc++ instead
+// still guards with the narrower `!std::__is_optional_v<U>`, which does not exclude derived types.
+// As a result, once OptionalString defines its own relational operators, resolving
+// `OptionalString < OptionalString` drags the heterogeneous overload into overload resolution and
+// its `three_way_comparable_with<OptionalString, std::string>` constraint recurses on itself,
+// producing a hard "constraint depends on itself" error. Marking OptionalString as "optional-like"
+// for libstdc++ excludes it from that overload (matching the C++23 / libc++ / MSVC behaviour) and
+// breaks the cycle. Guarded to libstdc++ because the trait only exists there and the other
+// standard libraries already handle derived-from-optional types correctly.
+#ifdef __GLIBCXX__
+template <>
+inline constexpr bool std::__is_optional_v<ONNX_LIGHT_NAMESPACE::utils::OptionalString> = true;
+#endif

@@ -63,6 +63,7 @@ disabled (``ORT_DISABLE_ALL``) so that the measurement reflects only the
 model loading overhead rather than compilation or fusion costs.
 
 * ``onnx``, ``onnxlight``, ``ort``: use ``onnx``, ``onnx-light``, or ``onnxruntime``
+* ``reference``: builds an ``onnx_light.onnx.reference.ReferenceEvaluator`` from the model
 * ``1filex1``: saves in a single file with 1 thread
 * ``1filex4``: saves in a single file with 4 threads
 * ``2filex1``: saves in a file and another for external data with 1 thread
@@ -126,6 +127,7 @@ else:
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as onnxlh
+from onnx_light.onnx.reference import ReferenceEvaluator
 from onnx_light.doc import (
     find_standalone_executable,
     get_cpu_topology,
@@ -147,8 +149,19 @@ DIM = 256 if os.environ.get("UNITTEST_GOING") == "1" else 2048
 BENCHMARK_SCENARIOS = ("load", "save", "serialize", "parse", "cpp")
 
 
-def _parse_benchmark_scenarios(args=None) -> set[str]:
-    """Parses command-line arguments and returns the selected benchmark scenarios."""
+def _parse_args(args=None) -> argparse.Namespace:
+    """Parses all command-line arguments for plot_onnx_time.py.
+
+    Builds a single :class:`argparse.ArgumentParser` covering the
+    benchmark scenarios (``--scenario``), the local model path
+    (``--model``) and the Hugging Face download options (``--model-id``,
+    ``--model-file``).
+
+    Returns:
+        The parsed :class:`argparse.Namespace`. ``scenarios`` is a set of
+        the selected benchmark scenarios (all of them when ``all`` is
+        requested or nothing is specified).
+    """
     parser = argparse.ArgumentParser(
         description="Runs one or several benchmark scenarios for plot_onnx_time.py."
     )
@@ -162,20 +175,6 @@ def _parse_benchmark_scenarios(args=None) -> set[str]:
             "Supported values: load, save, serialize, parse, cpp, all."
         ),
     )
-    parsed, _ = parser.parse_known_args(args=args)
-    values = parsed.scenarios or ["all"]
-    if "all" in values:
-        return set(BENCHMARK_SCENARIOS)
-    return set(values)
-
-
-def _parse_model_path(args=None) -> str | None:
-    """Parses the ``--model`` command-line argument and returns the path.
-
-    Returns:
-        Path to an existing ONNX model file, or ``None`` if not provided.
-    """
-    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--model",
         dest="model_path",
@@ -185,20 +184,6 @@ def _parse_model_path(args=None) -> str | None:
             "instead of the default synthetic model."
         ),
     )
-    parsed, _ = parser.parse_known_args(args=args)
-    return parsed.model_path
-
-
-def _parse_model_id(args=None) -> tuple[str | None, str]:
-    """Parses the ``--model-id`` and ``--model-file`` command-line arguments.
-
-    Returns:
-        A tuple ``(model_id, model_file)`` where ``model_id`` is the
-        Hugging Face repository identifier (or ``None`` when not given)
-        and ``model_file`` is the path within the repository of the ONNX
-        file to download (defaults to ``onnx/model.onnx``).
-    """
-    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--model-id",
         dest="model_id",
@@ -218,7 +203,12 @@ def _parse_model_id(args=None) -> tuple[str | None, str]:
         ),
     )
     parsed, _ = parser.parse_known_args(args=args)
-    return parsed.model_id, parsed.model_file
+    values = parsed.scenarios or ["all"]
+    if "all" in values:
+        parsed.scenarios = set(BENCHMARK_SCENARIOS)
+    else:
+        parsed.scenarios = set(values)
+    return parsed
 
 
 def _download_hf_model(model_id: str, model_file: str, dest_dir: str) -> str | None:
@@ -260,9 +250,11 @@ def _download_hf_model(model_id: str, model_file: str, dest_dir: str) -> str | N
     return local_path
 
 
-SELECTED_SCENARIOS = _parse_benchmark_scenarios()
-_CLI_MODEL_PATH = _parse_model_path()
-_CLI_MODEL_ID, _CLI_MODEL_FILE = _parse_model_id()
+_CLI_ARGS = _parse_args()
+SELECTED_SCENARIOS = _CLI_ARGS.scenarios
+_CLI_MODEL_PATH = _CLI_ARGS.model_path
+_CLI_MODEL_ID = _CLI_ARGS.model_id
+_CLI_MODEL_FILE = _CLI_ARGS.model_file
 
 
 def _run_scenario(name: str) -> bool:
@@ -692,6 +684,29 @@ if _run_scenario("load"):
         print_stats("load/1filex1/ir-py", data[-1])
     else:
         print("onnx_ir is not installed, skipping ir-py single-file load benchmark.")
+
+    # %%
+    # Load with ``onnx_light.onnx.reference.ReferenceEvaluator``.  This measures
+    # the time to build a Python reference runtime from the model, which
+    # includes loading the model and preparing the operators for evaluation.
+
+    data.append(
+        measure("load/1filex1/reference", lambda: ReferenceEvaluator(onnxl.load(onnx_path)))
+    )
+    print_stats("load/1filex1/reference", data[-1])
+
+    # %%
+    # Load with ``onnx_light.onnx.reference.ReferenceEvaluator`` using parallel
+    # tensor loading.  The model is loaded with ``num_threads > 1`` before
+    # building the reference runtime.
+
+    data.append(
+        measure(
+            "load/1filex4/reference",
+            lambda: ReferenceEvaluator(onnxl.load(onnx_path, num_threads=4)),
+        )
+    )
+    print_stats("load/1filex4/reference", data[-1])
 
     # %%
     # Load with ``onnxruntime`` (all optimizations disabled).
@@ -1129,6 +1144,34 @@ if _run_scenario("load"):
         )
         print_stats("load/2filex1/ort", data[-1])
 
+    # %%
+    # Load with ``onnx_light.onnx.reference.ReferenceEvaluator`` using external
+    # data.  The model (with its external weights) is loaded and turned into a
+    # reference runtime.
+
+    data.append(
+        measure(
+            "load/2filex1/reference",
+            lambda: ReferenceEvaluator(onnxl.load(ext_load_onnx, location=ext_load_data)),
+        )
+    )
+    print_stats("load/2filex1/reference", data[-1])
+
+    # %%
+    # Load with ``onnx_light.onnx.reference.ReferenceEvaluator`` using external
+    # data and parallel tensor loading.  Combine external-data loading with
+    # ``num_threads > 1`` before building the reference runtime.
+
+    data.append(
+        measure(
+            "load/2filex4/reference",
+            lambda: ReferenceEvaluator(
+                onnxl.load(ext_load_onnx, location=ext_load_data, num_threads=4)
+            ),
+        )
+    )
+    print_stats("load/2filex4/reference", data[-1])
+
 # %%
 # Results
 # --------
@@ -1146,12 +1189,9 @@ df = df.sort_index(ascending=False)
 # ``onnx_light``, green family for ``onnxruntime``.  Solid shades represent
 # the average; lighter shades the median.
 #
-# Three graphs are produced, one per tool family so the benchmarks are not
-# grouped together: ``onnx`` (``plot_onnx_time_onnx.png``), ``onnx_light``
-# (``plot_onnx_time_onnx_light.png``) and ``ort`` (``plot_onnx_time_ort.png``,
-# which also includes the ``ir-py`` rows).
-# In addition, two API-focused graphs are produced: one restricted to the
-# Python API (``plot_onnx_time_python.png``) and one restricted to the C++ API
+# Three graphs are produced: one with everything
+# (``plot_onnx_time.png``), one restricted to the Python API
+# (``plot_onnx_time_python.png``) and one restricted to the C++ API
 # (``plot_onnx_time_cpp.png``). C++ API rows are those whose library part ends
 # with ``-cpp`` (for example ``onnxlight-cpp`` or ``onnxlight-cpp-nocopy``).
 import matplotlib.patches as mpatches
@@ -1190,20 +1230,6 @@ def _is_cpp_api(name: str) -> bool:
     """
     lib = name.rsplit("/", 1)[-1]
     return lib.endswith("-cpp") or "-cpp-" in lib
-
-
-def _tool_family(name: str) -> str:
-    """Returns the tool family a benchmark row belongs to.
-
-    The family is one of ``onnx_light`` (any ``onnxlight`` variant),
-    ``ort`` (``onnxruntime`` and ``ir-py`` rows) or ``onnx`` (everything else).
-    This mirrors the per-bar coloring used in :func:`plot_results`.
-    """
-    if "onnxlight" in name:
-        return "onnx_light"
-    if "/ir-py" in name or "/ort" in name:
-        return "ort"
-    return "onnx"
 
 
 def plot_results(frame, title, png_path):
@@ -1292,24 +1318,17 @@ _common_title = (
     f"benchmark key: <op>/<files>x<threads>/<lib>\n"
     f"op=load|save|parse|serialize, files=1|2, threads=1|4, "
     f"lib=onnx|onnx-cpp|onnxlight|onnxlight-cpp|onnxlight-cpp-nocopy|"
-    f"onnxlight-nocopy|ir-py|ort"
+    f"onnxlight-nocopy|ir-py|ort|reference"
 )
 
-# Split the final graph into three separate graphs, one per tool family, so the
-# benchmarks are not grouped together in a single chart.
-df_onnx = df[[_tool_family(name) == "onnx" for name in df.index]]
-df_onnx_light = df[[_tool_family(name) == "onnx_light" for name in df.index]]
-df_ort = df[[_tool_family(name) == "ort" for name in df.index]]
-
-plot_results(df_onnx, f"onnx load/save (s), {_common_title}", "plot_onnx_time_onnx.png")
-
+# Produce one graph with everything, then split the results into a
+# Python-API-only plot and a C++-API-only plot.
 plot_results(
-    df_onnx_light, f"onnx_light load/save (s), {_common_title}", "plot_onnx_time_onnx_light.png"
+    df,
+    f"onnx vs onnx_light vs ort load/save (s) - all APIs, {_common_title}",
+    "plot_onnx_time.png",
 )
 
-plot_results(df_ort, f"ort load/save (s), {_common_title}", "plot_onnx_time_ort.png")
-
-# Split the results into a Python-API-only plot and a C++-API-only plot.
 cpp_mask = [_is_cpp_api(name) for name in df.index]
 df_cpp = df[cpp_mask]
 df_python = df[[not is_cpp for is_cpp in cpp_mask]]

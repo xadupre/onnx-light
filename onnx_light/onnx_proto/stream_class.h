@@ -9,6 +9,19 @@
 #include <type_traits>
 #include <utility>
 
+namespace onnx_light {
+namespace proto_default_detail {
+
+/// Returns a const reference to a default-constructed instance of T.
+/// Uses a template to defer instantiation until the type is complete.
+template <typename T> inline const T &default_proto_instance() {
+  static const T instance{};
+  return instance;
+}
+
+} // namespace proto_default_detail
+} // namespace onnx_light
+
 #define FIELD_VARINT 0
 #define FIELD_FIXED64 1
 #define FIELD_FIXED_SIZE 2
@@ -295,7 +308,9 @@ public:                                                                         
     return *name##_;                                                                               \
   }                                                                                                \
   inline const type &ref_##name() const {                                                          \
-    EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value in " #type ".");   \
+    if (!name##_.has_value()) {                                                                    \
+      return ::onnx_light::proto_default_detail::default_proto_instance<type>();                   \
+    }                                                                                              \
     return *name##_;                                                                               \
   }                                                                                                \
   /** Compatibility accessor - returns a const reference like protobuf, so read access on a        \

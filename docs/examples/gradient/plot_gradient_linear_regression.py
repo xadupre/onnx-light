@@ -84,6 +84,21 @@ print(f"  outputs = {list(grad_fn.output)}")
 print(f"  nodes   = {[str(n.op_type) for n in grad_fn.node]}")
 
 ######################################
+# Save the gradient function to disk
+# ----------------------------------
+#
+# The gradient ``FunctionProto`` is serialized to disk so it can be
+# inspected or reloaded later.
+
+import os  # noqa: E402
+
+os.makedirs("temp_plot_gradient_linear_regression", exist_ok=True)
+grad_path = os.path.join("temp_plot_gradient_linear_regression", "gradient_function.onnxfunc")
+with open(grad_path, "wb") as f:
+    f.write(grad_fn.SerializeToString())
+print(f"Gradient function saved to {grad_path}")
+
+######################################
 # Training loop with NumPy
 # -------------------------
 #

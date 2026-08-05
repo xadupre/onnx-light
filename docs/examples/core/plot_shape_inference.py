@@ -341,3 +341,18 @@ for approach in approaches:
     for name, value in zip(TRACKED, data[approach]):
         print(f"    {name:<12} | {render_bar(value)}")
     print()
+
+
+#####################################
+# Save the model to disk
+# ++++++++++++++++++++++
+#
+# The model is written to disk with :func:`onnx_light.onnx.save` so it can be
+# inspected or reloaded later.
+
+import os  # noqa: E402
+
+os.makedirs("temp_plot_shape_inference", exist_ok=True)
+onnx_path = os.path.join("temp_plot_shape_inference", "shape_inference_demo.onnx")
+onnxl.save(model, onnx_path)
+print(f"\nModel saved to {onnx_path}")

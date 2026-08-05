@@ -118,6 +118,22 @@ for ev in run_nodes:
 print(f"Allocator peak footprint: {allocator.peak_allocated_size} bytes")
 
 #####################################
+# Save the model to disk
+# ++++++++++++++++++++++
+#
+# The parsed model is written to disk with :func:`onnx_light.onnx.save`
+# so it can be inspected or reloaded later.
+
+import os  # noqa: E402
+
+from onnx_light.onnx import save as save_model  # noqa: E402
+
+os.makedirs("temp_plot_runtime_memory", exist_ok=True)
+onnx_path = os.path.join("temp_plot_runtime_memory", "runtime_memory_demo.onnx")
+save_model(model, onnx_path)
+print(f"Model saved to {onnx_path}")
+
+#####################################
 # Render the memory profile as a table
 # ++++++++++++++++++++++++++++++++++++
 #

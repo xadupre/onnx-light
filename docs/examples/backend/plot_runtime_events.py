@@ -231,6 +231,22 @@ for ev in events:
     )
 
 #####################################
+# Save the model to disk
+# ++++++++++++++++++++++
+#
+# The parsed model is written to disk with :func:`onnx_light.onnx.save`
+# so it can be inspected or reloaded later.
+
+import os  # noqa: E402
+
+from onnx_light.onnx import save as save_model  # noqa: E402
+
+os.makedirs("temp_plot_runtime_events", exist_ok=True)
+onnx_path = os.path.join("temp_plot_runtime_events", "runtime_events_demo.onnx")
+save_model(model, onnx_path)
+print(f"Model saved to {onnx_path}")
+
+#####################################
 # Render the event log as a table
 # +++++++++++++++++++++++++++++++
 #

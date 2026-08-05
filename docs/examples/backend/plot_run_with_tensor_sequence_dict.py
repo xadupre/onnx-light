@@ -200,6 +200,25 @@ for k in tensor_map:
     np.testing.assert_array_equal(recovered[k], tensor_map[k])
 
 #####################################
+# Save the models to disk
+# +++++++++++++++++++++++
+#
+# Every model built above is written to disk with
+# :func:`onnx_light.onnx.save` so it can be inspected or reloaded later.
+
+import os  # noqa: E402
+
+os.makedirs("temp_plot_run_with_tensor_sequence_dict", exist_ok=True)
+for name, proto in [
+    ("tensor_model", tensor_model),
+    ("seq_model", seq_model),
+    ("dict_model", dict_model),
+]:
+    onnx_path = os.path.join("temp_plot_run_with_tensor_sequence_dict", f"{name}.onnx")
+    onnxl.save(proto, onnx_path)
+    print(f"Model saved to {onnx_path}")
+
+#####################################
 # Gallery thumbnail
 # +++++++++++++++++
 #

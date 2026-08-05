@@ -147,8 +147,19 @@ DIM = 256 if os.environ.get("UNITTEST_GOING") == "1" else 2048
 BENCHMARK_SCENARIOS = ("load", "save", "serialize", "parse", "cpp")
 
 
-def _parse_benchmark_scenarios(args=None) -> set[str]:
-    """Parses command-line arguments and returns the selected benchmark scenarios."""
+def _parse_args(args=None) -> argparse.Namespace:
+    """Parses all command-line arguments for plot_onnx_time.py.
+
+    Builds a single :class:`argparse.ArgumentParser` covering the
+    benchmark scenarios (``--scenario``), the local model path
+    (``--model``) and the Hugging Face download options (``--model-id``,
+    ``--model-file``).
+
+    Returns:
+        The parsed :class:`argparse.Namespace`. ``scenarios`` is a set of
+        the selected benchmark scenarios (all of them when ``all`` is
+        requested or nothing is specified).
+    """
     parser = argparse.ArgumentParser(
         description="Runs one or several benchmark scenarios for plot_onnx_time.py."
     )
@@ -162,20 +173,6 @@ def _parse_benchmark_scenarios(args=None) -> set[str]:
             "Supported values: load, save, serialize, parse, cpp, all."
         ),
     )
-    parsed, _ = parser.parse_known_args(args=args)
-    values = parsed.scenarios or ["all"]
-    if "all" in values:
-        return set(BENCHMARK_SCENARIOS)
-    return set(values)
-
-
-def _parse_model_path(args=None) -> str | None:
-    """Parses the ``--model`` command-line argument and returns the path.
-
-    Returns:
-        Path to an existing ONNX model file, or ``None`` if not provided.
-    """
-    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--model",
         dest="model_path",
@@ -185,20 +182,6 @@ def _parse_model_path(args=None) -> str | None:
             "instead of the default synthetic model."
         ),
     )
-    parsed, _ = parser.parse_known_args(args=args)
-    return parsed.model_path
-
-
-def _parse_model_id(args=None) -> tuple[str | None, str]:
-    """Parses the ``--model-id`` and ``--model-file`` command-line arguments.
-
-    Returns:
-        A tuple ``(model_id, model_file)`` where ``model_id`` is the
-        Hugging Face repository identifier (or ``None`` when not given)
-        and ``model_file`` is the path within the repository of the ONNX
-        file to download (defaults to ``onnx/model.onnx``).
-    """
-    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--model-id",
         dest="model_id",
@@ -218,7 +201,12 @@ def _parse_model_id(args=None) -> tuple[str | None, str]:
         ),
     )
     parsed, _ = parser.parse_known_args(args=args)
-    return parsed.model_id, parsed.model_file
+    values = parsed.scenarios or ["all"]
+    if "all" in values:
+        parsed.scenarios = set(BENCHMARK_SCENARIOS)
+    else:
+        parsed.scenarios = set(values)
+    return parsed
 
 
 def _download_hf_model(model_id: str, model_file: str, dest_dir: str) -> str | None:
@@ -260,9 +248,11 @@ def _download_hf_model(model_id: str, model_file: str, dest_dir: str) -> str | N
     return local_path
 
 
-SELECTED_SCENARIOS = _parse_benchmark_scenarios()
-_CLI_MODEL_PATH = _parse_model_path()
-_CLI_MODEL_ID, _CLI_MODEL_FILE = _parse_model_id()
+_CLI_ARGS = _parse_args()
+SELECTED_SCENARIOS = _CLI_ARGS.scenarios
+_CLI_MODEL_PATH = _CLI_ARGS.model_path
+_CLI_MODEL_ID = _CLI_ARGS.model_id
+_CLI_MODEL_FILE = _CLI_ARGS.model_file
 
 
 def _run_scenario(name: str) -> bool:

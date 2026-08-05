@@ -912,6 +912,31 @@ TEST(KernelClass, TreeEnsembleV5SetMembershipMatchesReference) {
   }
 }
 
+TEST(KernelClass, TreeEnsembleV5LeafLikeMultiRootMatchesReference) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 5)};
+  Tensor x = Tensor::FromDouble("", {1, 3}, {7.0, 7.0, 4.0});
+  onnx_kernels::kernel::TreeEnsemble tree_ens{
+      ctx,
+      /*tree_roots=*/{0, 2},
+      /*nodes_featureids=*/{0, 1, 0, 1, 2},
+      /*nodes_splits=*/{2.0, 2.0, 3.0, 2.0, 1.0},
+      /*nodes_modes=*/{0, 0, 0, 0, 0},
+      /*nodes_truenodeids=*/{1, 0, 3, 4, 5},
+      /*nodes_falsenodeids=*/{2, 1, 3, 4, 6},
+      /*nodes_trueleafs=*/{0, 1, 1, 1, 1},
+      /*nodes_falseleafs=*/{1, 1, 0, 0, 1},
+      /*nodes_missing=*/{},
+      /*leaf_targetids=*/{0, 0, 0, 0, 0, 0, 0},
+      /*leaf_weights=*/{100.0, 0.0, 25.0, 0.5, -0.5, -5.0, -9.0},
+      /*membership_values=*/{}};
+  Tensor y = tree_ens.operator()<double>(x, /*n_targets=*/1, /*aggregate_function=*/1,
+                                         /*post_transform=*/0);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::DOUBLE));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1}));
+  const double *py = y.AsDouble();
+  EXPECT_DOUBLE_EQ(py[0], 16.0);
+}
+
 TEST(KernelClass, DictVectorizerStringKeyInt64Value) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
   DictVectorizer dv{ctx};

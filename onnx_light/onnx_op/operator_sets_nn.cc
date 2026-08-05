@@ -730,7 +730,7 @@ const char *const kLSTMInitialCDescription =
 const char *const kLSTMPDescription =
     "The weight tensor for peepholes. Concatenation of `P[iof]` and "
     "`PB[iof]` (if bidirectional) along dimension 0. It has shape "
-    "`[num_directions, 3*hidde_size]`. Optional: If not specified - "
+    "`[num_directions, 3*hidden_size]`. Optional: If not specified - "
     "assumed to be 0.";
 
 const char *const kLSTMYcDescription = "The last output value of the cell. It has shape "

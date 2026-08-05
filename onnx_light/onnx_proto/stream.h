@@ -785,17 +785,18 @@ public:
     size_t alignment = 0;
   };
 
-  /** Opens *file_path* for protobuf data and *weights_file* for weight data. */
-  explicit TwoFilesStream(const std::string &file_path, const std::string &weights_file);
+  /** Opens *file_path* for protobuf data and *weights_file* for weight data.
+   *  When *use_mmap_weights* is true, copying reads of the weights file (the ``no_copy=false``
+   *  path) source their bytes from a memory-mapped view of each weights file instead of a
+   *  buffered ``std::ifstream``. This lets ``file_load_mode=MMAP`` memory-map the weights file
+   *  even when ``no_copy`` is not set, in which case the mapped bytes are copied into owned
+   *  per-tensor buffers. The flag is fixed at construction and not meant to change afterwards. */
+  explicit TwoFilesStream(const std::string &file_path, const std::string &weights_file,
+                          bool use_mmap_weights = false);
   /** Returns the path of the separate weights file. */
   inline const std::string &weights_file_path() const { return weights_stream_.file_path(); }
   /** Selects the active external weights location for subsequent reads. */
   void set_active_weights_location(const std::string &location);
-  /** Requests that copying reads of the weights file (the ``no_copy=false`` path) source their
-   *  bytes from a memory-mapped view of each weights file instead of a buffered ``std::ifstream``.
-   *  This lets ``file_load_mode=MMAP`` memory-map the weights file even when ``no_copy`` is not
-   *  set, in which case the mapped bytes are copied into owned per-tensor buffers. */
-  inline void set_use_mmap_weights(bool value) { use_mmap_weights_ = value; }
   /** Returns true when copying reads source their bytes from a memory-mapped weights view. */
   inline bool use_mmap_weights() const { return use_mmap_weights_; }
   /** Returns true when the active location is the default weights file. */
@@ -836,7 +837,7 @@ protected:
   /** Maps object pointers to their byte offsets in the weights file. */
   std::unordered_map<const void *, uint64_t> position_cache_;
   /** When true, copying reads of the weights file source their bytes from a memory-mapped
-   *  view (see set_use_mmap_weights). Set once during construction; not meant to change
+   *  view (see the constructor). Set once during construction; not meant to change
    *  after reading has started. */
   bool use_mmap_weights_;
 };

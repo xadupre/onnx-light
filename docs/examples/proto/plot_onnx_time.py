@@ -127,6 +127,7 @@ else:
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as onnxlh
+from onnx_light.onnx.reference import ReferenceEvaluator
 from onnx_light.doc import (
     find_standalone_executable,
     get_cpu_topology,
@@ -699,8 +700,6 @@ if _run_scenario("load"):
     # the time to build a Python reference runtime from the model, which
     # includes loading the model and preparing the operators for evaluation.
 
-    from onnx_light.onnx.reference import ReferenceEvaluator
-
     data.append(
         measure("load/1filex1/reference", lambda: ReferenceEvaluator(onnxl.load(onnx_path)))
     )
@@ -1141,6 +1140,19 @@ if _run_scenario("load"):
             )
         )
         print_stats("load/2filex1/ort", data[-1])
+
+    # %%
+    # Load with ``onnx_light.onnx.reference.ReferenceEvaluator`` using external
+    # data.  The model (with its external weights) is loaded and turned into a
+    # reference runtime.
+
+    data.append(
+        measure(
+            "load/2filex1/reference",
+            lambda: ReferenceEvaluator(onnxl.load(ext_load_onnx, location=ext_load_data)),
+        )
+    )
+    print_stats("load/2filex1/reference", data[-1])
 
 # %%
 # Results

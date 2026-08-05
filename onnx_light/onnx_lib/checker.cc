@@ -155,10 +155,12 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
     for (const StringStringEntryProto &entry : tensor.external_data()) {
       if (entry.has_key() && entry.has_value() && entry.key() == "location") {
         has_location = true;
-        resolve_external_data_location(ctx.get_model_dir(), entry.value(), tensor.name());
+        if (!ctx.skip_external_data_location_check()) {
+          resolve_external_data_location(ctx.get_model_dir(), entry.value(), tensor.name());
+        }
       }
     }
-    if (!has_location) {
+    if (!has_location && !ctx.skip_external_data_location_check()) {
       fail_check("TensorProto ( tensor name: ", tensor.name(),
                  ") is stored externally but doesn't have a location.");
     }
@@ -1131,7 +1133,8 @@ static void check_model(const ModelProto &model, CheckerContext &ctx) {
 }
 
 void check_model(const std::string &model_path, bool full_check,
-                 bool skip_opset_compatibility_check, bool check_custom_domain) {
+                 bool skip_opset_compatibility_check, bool check_custom_domain,
+                 bool skip_external_data_location_check) {
   ModelProto model;
   LoadProtoFromPath(model_path, model);
 
@@ -1144,6 +1147,7 @@ void check_model(const std::string &model_path, bool full_check,
   ctx.set_model_dir(model_dir);
   ctx.set_skip_opset_compatibility_check(skip_opset_compatibility_check);
   ctx.set_check_custom_domain(check_custom_domain);
+  ctx.set_skip_external_data_location_check(skip_external_data_location_check);
   check_model(model, ctx);
 
   if (full_check) {
@@ -1153,10 +1157,11 @@ void check_model(const std::string &model_path, bool full_check,
 }
 
 void check_model(const ModelProto &model, bool full_check, bool skip_opset_compatibility_check,
-                 bool check_custom_domain) {
+                 bool check_custom_domain, bool skip_external_data_location_check) {
   CheckerContext ctx;
   ctx.set_skip_opset_compatibility_check(skip_opset_compatibility_check);
   ctx.set_check_custom_domain(check_custom_domain);
+  ctx.set_skip_external_data_location_check(skip_external_data_location_check);
   check_model(model, ctx);
   if (full_check) {
     ShapeInferenceOptions options{true, 1, false};

@@ -14,8 +14,7 @@ namespace proto_default_detail {
 
 /// Returns a const reference to a default-constructed instance of T.
 /// Uses a template to defer instantiation until the type is complete.
-template <typename T>
-inline const T &default_proto_instance() {
+template <typename T> inline const T &default_proto_instance() {
   static const T instance{};
   return instance;
 }
@@ -310,7 +309,7 @@ public:                                                                         
   }                                                                                                \
   inline const type &ref_##name() const {                                                          \
     if (!name##_.has_value()) {                                                                    \
-      return ::onnx_light::proto_default_detail::default_proto_instance<type>();                     \
+      return ::onnx_light::proto_default_detail::default_proto_instance<type>();                   \
     }                                                                                              \
     return *name##_;                                                                               \
   }                                                                                                \

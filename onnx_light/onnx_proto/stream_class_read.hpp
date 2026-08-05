@@ -503,7 +503,12 @@ template <typename T>
 void read_repeated_field_numerical(utils::BinaryStream &stream, int wire_type,
                                    std::vector<T> &field, const char *name, bool is_packed,
                                    ParseOptions &options) {
-  if (is_packed) {
+  // The protobuf spec requires a decoder to accept both the packed and the
+  // unpacked wire format for any repeated numeric field, regardless of what
+  // the schema declares. The actual encoding is determined by the wire type:
+  // a length-delimited wire type (FIELD_FIXED_SIZE) always means a packed
+  // block, everything else is a single unpacked value.
+  if (is_packed || wire_type == FIELD_FIXED_SIZE) {
     read_repeated_field_packed_numerical(stream, wire_type, field, name, is_packed, options);
   } else {
     DEBUG_PRINT2("    read unpacked", name);

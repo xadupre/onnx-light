@@ -367,6 +367,7 @@ def _maybe_import_onnx_ir():
 
 if _CLI_MODEL_PATH is not None:
     onnx_path = os.path.abspath(_CLI_MODEL_PATH)
+    model = onnx_load(onnx_path)
     print(f"Using provided model: {onnx_path}")
 elif _CLI_MODEL_ID is not None:
     downloaded = _download_hf_model(_CLI_MODEL_ID, _CLI_MODEL_FILE, tmp_dir)

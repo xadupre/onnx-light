@@ -11,6 +11,12 @@ computes a handful of descriptive statistics for each of them:
 * **min** / **max** — the extreme values stored in the tensor,
 * **median** — the middle value once the weights are sorted,
 * **mean** — the arithmetic average,
+* **skewness** — the standardized third moment, measuring the symmetry
+  of the distribution.  ``0`` means the weights are symmetric around
+  their mean; a non-zero value reveals an asymmetric tail.
+* **excess kurtosis** — the standardized fourth moment minus three,
+  measuring how heavy the tails are compared to the normal law.  ``0``
+  matches the normal law; a positive value flags heavy tails.
 * **distance to normal law** — a Kolmogorov-Smirnov style distance
   between the empirical distribution of the weights and the normal law
   :math:`\\mathcal{N}(\\mu, \\sigma^2)` fitted on the same weights.  A
@@ -155,6 +161,58 @@ def distance_to_normal_law(values: np.ndarray) -> float:
     return float(np.maximum(np.abs(upper - normal_cdf), np.abs(normal_cdf - lower)).max())
 
 
+def skewness(values: np.ndarray) -> float:
+    """Returns the sample skewness of ``values``.
+
+    Skewness is the standardized third central moment; it measures the
+    asymmetry of the distribution.  A value of ``0.0`` means the weights
+    are symmetric around their mean, a positive value means the right tail
+    is heavier and a negative value means the left tail is heavier.
+
+    Args:
+        values: The tensor values as a flat array.
+
+    Returns:
+        The skewness; ``0.0`` for a degenerate distribution with a null
+        standard deviation.
+    """
+
+    flat = np.asarray(values, dtype=np.float64).ravel()
+    if flat.size == 0:
+        return 0.0
+    centered = flat - flat.mean()
+    std = float(centered.std())
+    if std == 0.0:
+        return 0.0
+    return float(np.mean(centered**3) / std**3)
+
+
+def excess_kurtosis(values: np.ndarray) -> float:
+    """Returns the excess kurtosis of ``values``.
+
+    Excess kurtosis is the standardized fourth central moment minus three,
+    so that a normal law has an excess kurtosis of ``0.0``.  A positive
+    value indicates heavier tails (and a sharper peak) than the normal
+    law, which is the heavy-tail behaviour of interest here.
+
+    Args:
+        values: The tensor values as a flat array.
+
+    Returns:
+        The excess kurtosis; ``0.0`` for a degenerate distribution with a
+        null standard deviation.
+    """
+
+    flat = np.asarray(values, dtype=np.float64).ravel()
+    if flat.size == 0:
+        return 0.0
+    centered = flat - flat.mean()
+    variance = float(np.mean(centered**2))
+    if variance == 0.0:
+        return 0.0
+    return float(np.mean(centered**4) / variance**2 - 3.0)
+
+
 def compute_statistics(tensor: onnxl.TensorProto) -> dict[str, float]:
     """Returns the descriptive statistics of an initializer.
 
@@ -162,8 +220,9 @@ def compute_statistics(tensor: onnxl.TensorProto) -> dict[str, float]:
         tensor: The initializer to analyze.
 
     Returns:
-        A mapping with the ``min``, ``max``, ``median``, ``mean`` and
-        ``normal_distance`` of the tensor values.
+        A mapping with the ``min``, ``max``, ``median``, ``mean``,
+        ``skewness``, ``excess_kurtosis`` and ``normal_distance`` of the
+        tensor values.
     """
 
     values = onh.to_array(tensor).astype(np.float64)
@@ -172,6 +231,8 @@ def compute_statistics(tensor: onnxl.TensorProto) -> dict[str, float]:
         "max": float(values.max()),
         "median": float(np.median(values)),
         "mean": float(values.mean()),
+        "skewness": skewness(values),
+        "excess_kurtosis": excess_kurtosis(values),
         "normal_distance": distance_to_normal_law(values),
     }
 
@@ -194,7 +255,8 @@ else:
 
 print()
 header = (
-    f"{'name':<16} {'rank':>4} {'min':>10} {'max':>10} {'median':>10} {'mean':>10} {'normal':>10}"
+    f"{'name':<16} {'rank':>4} {'min':>10} {'max':>10} "
+    f"{'median':>10} {'mean':>10} {'skew':>10} {'kurtosis':>10} {'normal':>10}"
 )
 print(header)
 print("-" * len(header))
@@ -210,6 +272,7 @@ for init in model.graph.initializer:
         f"{init.name:<16} {rank:>4} "
         f"{stats['min']:>10.4f} {stats['max']:>10.4f} "
         f"{stats['median']:>10.4f} {stats['mean']:>10.4f} "
+        f"{stats['skewness']:>10.4f} {stats['excess_kurtosis']:>10.4f} "
         f"{stats['normal_distance']:>10.4f}"
     )
 

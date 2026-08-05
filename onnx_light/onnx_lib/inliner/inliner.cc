@@ -467,13 +467,13 @@ void ConvertVersion(ModelProto &model, const NodeProto &call_node, FunctionProto
   auto converted =
       ONNX_LIGHT_NAMESPACE::version_conversion::ConvertVersion(function_as_model, target_version);
 
-  std::swap(function_nodes, converted.graph().node());
+  std::swap(function_nodes, converted.mutable_graph()->node());
 
   // Append new initializers to main graph initializers
   for (const auto &added_initializer : converted.graph().initializer())
-    model.graph().add_initializer(added_initializer);
+    model.mutable_graph()->add_initializer(added_initializer);
   for (const auto &added_initializer : converted.graph().sparse_initializer())
-    model.graph().add_sparse_initializer(added_initializer);
+    model.mutable_graph()->add_sparse_initializer(added_initializer);
 }
 #endif // ONNX_LIGHT_VERSION_CONVERTER
 
@@ -629,7 +629,7 @@ struct InlinerImpl {
         // Append node without inlining.
         for (auto &attr : node.attribute()) {
           if (attr.has_g()) {
-            ProcessGraph(attr.g());
+            ProcessGraph(*attr.mutable_g());
           }
           for (auto &g : attr.graphs()) {
             ProcessGraph(g);
@@ -701,7 +701,7 @@ struct InlinerImpl {
     }
 
     InlinerImpl inliner(model, all_functions, &map, nullptr);
-    inliner.ProcessGraph(model.graph());
+    inliner.ProcessGraph(*model.mutable_graph());
 
     // Remove the model-local functions we inlined. Functions with a mis-matched opset
     // version are not in `map`, so they are left for other handling (eg. a version-adapter).
@@ -729,7 +729,7 @@ struct InlinerImpl {
     }
 
     InlinerImpl inliner(model, to_inline, &map, schema_registry);
-    inliner.ProcessGraph(model.graph());
+    inliner.ProcessGraph(*model.mutable_graph());
 
     for (auto *function_ptr : non_inlined_functions) {
       inliner.ProcessFunction(*function_ptr);

@@ -506,6 +506,32 @@ class TestOnnxLightHelper(ExtTestCase):
         proto2.ParseFromFile(name, external_data_file=weights)
         self.assertEqual(len(proto2.graph.initializer), len(model.graph.initializer))
 
+    def test_writing_external_weights_read_with_file_load_mode(self):
+        # Parsing a two-file model must honour every file_load_mode. The small main
+        # file always uses the buffered std::ifstream via TwoFilesStream; MMAP applies
+        # to the (large) weights file, which is memory-mapped on the no_copy path.
+        nameo = self.get_dump_file("test_writing_external_weights_flm.original.onnx")
+        name = self.get_dump_file("test_writing_external_weights_flm.onnx")
+        weights = self.get_dump_file("test_writing_external_weights_flm.data")
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        proto = onnxl.ModelProto()
+        s = model.SerializeToString()
+        with open(nameo, "wb") as f:
+            f.write(s)
+        proto.ParseFromString(s)
+        proto.SerializeToFile(name, external_data_file=weights)
+        for mode in (
+            onnxl.FileLoadMode.AUTO,
+            onnxl.FileLoadMode.IFSTREAM,
+            onnxl.FileLoadMode.MMAP,
+        ):
+            with self.subTest(mode=mode):
+                opts = onnxl.ParseOptions()
+                opts.file_load_mode = mode
+                proto2 = onnxl.ModelProto()
+                proto2.ParseFromFile(name, opts, external_data_file=weights)
+                self.assertEqual(len(proto2.graph.initializer), len(model.graph.initializer))
+
     def test_writing_external_weights_read_from_onnx(self):
         model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
         expected = [onh.to_array(i) for i in model.graph.initializer]

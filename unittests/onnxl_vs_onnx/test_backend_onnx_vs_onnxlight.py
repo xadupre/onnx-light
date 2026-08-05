@@ -25,6 +25,8 @@ class TestOnnxVsOnnxLight(ExtTestCase):
     def add_test_methods(cls):
         tests = load_model_tests(kind="node")
         for test in tests:
+            if test.model_dir is None:
+                continue
             model = os.path.join(test.model_dir, "model.onnx")
             if not os.path.exists(model):
                 continue

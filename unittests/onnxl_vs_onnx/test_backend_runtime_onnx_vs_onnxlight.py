@@ -369,6 +369,8 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
     def test_run_one_loop16_seq_none(self):
         model_file = None
         for test in load_model_tests(kind="node"):
+            if test.model_dir is None:
+                continue
             if os.path.basename(test.model_dir) == "test_loop16_seq_none":
                 model_file = os.path.join(test.model_dir, "model.onnx")
                 break
@@ -476,7 +478,8 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         names = {
             os.path.basename(test.model_dir)
             for test in load_model_tests(kind="node")
-            if os.path.exists(os.path.join(test.model_dir, "model.onnx"))
+            if test.model_dir is not None
+            and os.path.exists(os.path.join(test.model_dir, "model.onnx"))
         }
         # Guard against a misconfigured environment where nothing is discovered.
         self.assertGreater(len(names), 0, "No ONNX backend node test could be found.")
@@ -494,6 +497,8 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
     @classmethod
     def add_test_methods(cls):
         for test in load_model_tests(kind="node"):
+            if test.model_dir is None:
+                continue
             model_file = os.path.join(test.model_dir, "model.onnx")
             if not os.path.exists(model_file):
                 continue

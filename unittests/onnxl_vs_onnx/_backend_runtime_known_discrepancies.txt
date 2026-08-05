@@ -5,3 +5,9 @@ test_training_dropout
 test_training_dropout_default
 test_training_dropout_default_mask
 test_training_dropout_mask
+test_gru_bidirectional
+test_gru_reverse
+test_lstm_bidirectional
+test_lstm_reverse
+test_simple_rnn_bidirectional
+test_simple_rnn_reverse

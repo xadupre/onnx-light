@@ -40,12 +40,13 @@ from unittest.mock import patch
 import numpy as np
 import onnx
 from onnx import numpy_helper
-from onnx.backend.test.loader import load_model_tests
 
 import onnx_light.onnx as onnxl
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light.onnx import helper as onnxl_helper
 from onnx_light.onnx import numpy_helper as onnxl_numpy_helper
+
+from _backend_node_tests import iter_node_model_dirs
 
 # The reference runtime is only available in the full build; skip this module on
 # a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
@@ -368,9 +369,9 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
 
     def test_run_one_loop16_seq_none(self):
         model_file = None
-        for test in load_model_tests(kind="node"):
-            if os.path.basename(test.model_dir) == "test_loop16_seq_none":
-                model_file = os.path.join(test.model_dir, "model.onnx")
+        for name, model_dir in iter_node_model_dirs():
+            if name == "test_loop16_seq_none":
+                model_file = os.path.join(model_dir, "model.onnx")
                 break
         self.assertIsNotNone(
             model_file, "ONNX backend case 'test_loop16_seq_none' was not found."
@@ -473,11 +474,7 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         # A name recorded in the snapshot that no longer corresponds to any ONNX
         # backend node test is a stale entry that must be removed.
         known = _load_known_discrepancies()
-        names = {
-            os.path.basename(test.model_dir)
-            for test in load_model_tests(kind="node")
-            if os.path.exists(os.path.join(test.model_dir, "model.onnx"))
-        }
+        names = {name for name, _ in iter_node_model_dirs()}
         # Guard against a misconfigured environment where nothing is discovered.
         self.assertGreater(len(names), 0, "No ONNX backend node test could be found.")
         stale_entries = sorted(known - names)
@@ -493,11 +490,8 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
 
     @classmethod
     def add_test_methods(cls):
-        for test in load_model_tests(kind="node"):
-            model_file = os.path.join(test.model_dir, "model.onnx")
-            if not os.path.exists(model_file):
-                continue
-            name = os.path.basename(test.model_dir)
+        for name, model_dir in iter_node_model_dirs():
+            model_file = os.path.join(model_dir, "model.onnx")
             if _should_exclude_runtime_test_name(name):
                 continue
 

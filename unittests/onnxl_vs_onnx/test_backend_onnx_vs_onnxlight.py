@@ -4,8 +4,9 @@ import shutil
 import unittest
 import onnx
 import onnx_light.onnx as onnxl
-from onnx.backend.test.loader import load_model_tests
 from onnx_light.ext_test_case import ExtTestCase
+
+from _backend_node_tests import iter_node_model_dirs
 
 
 class TestOnnxVsOnnxLight(ExtTestCase):
@@ -23,12 +24,9 @@ class TestOnnxVsOnnxLight(ExtTestCase):
 
     @classmethod
     def add_test_methods(cls):
-        tests = load_model_tests(kind="node")
-        for test in tests:
-            model = os.path.join(test.model_dir, "model.onnx")
-            if not os.path.exists(model):
-                continue
-            reason = cls.filter_out(model)
+        for name, model_dir in iter_node_model_dirs():
+            model = os.path.join(model_dir, "model.onnx")
+            reason = cls.filter_out(name)
             if reason:
 
                 @unittest.skip(reason)
@@ -40,7 +38,7 @@ class TestOnnxVsOnnxLight(ExtTestCase):
                 def _test_(self, name=model):
                     self.run_test(name)
 
-            short_name = os.path.split(test.model_dir)[-1].replace("test_", "")
+            short_name = name.replace("test_", "", 1)
             setattr(cls, f"test_vs_{short_name}", _test_)
 
     def break_into_pieces(self, model_name):

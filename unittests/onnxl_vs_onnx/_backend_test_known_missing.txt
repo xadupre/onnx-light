@@ -1,9 +1,31 @@
+# ONNX node backend tests that onnx-light does not (yet) cover.
+#
+# Lines starting with ``#`` are comments and blank lines are ignored (see
+# ``_load_known_missing`` in ``test_backend_test_names_onnx_vs_onnxlight.py``).
+#
+# Each entry below was investigated (see xadupre/onnx-light#4262). They are all
+# genuinely unsupported by the current onnx-light kernels, for the reasons noted
+# in each section, and therefore intentionally kept in this snapshot.
+
+# --- Recurrent layers: only the default ``forward`` direction is implemented ---
+# The GRU/LSTM/RNN kernels explicitly reject ``reverse`` and ``bidirectional``
+# (num_directions is always 1). Covering these would require implementing the
+# reverse-time traversal and the second direction slice.
+# See:
+#   onnx_light/onnx_extensions/kernels/kernels/nn/kernel_gru.cc
+#   onnx_light/onnx_extensions/kernels/kernels/nn/kernel_lstm.cc
+#   onnx_light/onnx_extensions/kernels/kernels/nn/kernel_rnn.cc
 gru_bidirectional
 gru_reverse
-image_decoder_decode_jpeg2k_rgb
-image_decoder_decode_tiff_rgb
-image_decoder_decode_webp_rgb
 lstm_bidirectional
 lstm_reverse
 simple_rnn_bidirectional
 simple_rnn_reverse
+
+# --- ImageDecoder: only BMP, JPEG (baseline), PNG and PNM are decoded ---
+# The JPEG 2000, TIFF and WebP compressed formats are not implemented by the
+# ImageDecoder kernel, so these tests cannot pass.
+# See: onnx_light/onnx_extensions/kernels/kernels/image/kernel_image_decoder.cc
+image_decoder_decode_jpeg2k_rgb
+image_decoder_decode_tiff_rgb
+image_decoder_decode_webp_rgb

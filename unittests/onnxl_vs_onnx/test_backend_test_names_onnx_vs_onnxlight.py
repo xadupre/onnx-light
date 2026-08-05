@@ -8,7 +8,8 @@ the remaining string is found as a substring in the name of at least one
 The set of ONNX test names that are not yet covered by ``onnx_light`` is
 maintained as a snapshot in ``_backend_test_known_missing.txt`` so the test
 fails when new ONNX tests appear (or when ``onnx_light`` gains coverage that
-makes a previously-missing entry stale).
+makes a previously-missing entry stale). In that file, blank lines and lines
+starting with ``#`` are ignored, so each entry can be documented inline.
 """
 
 import os
@@ -46,7 +47,9 @@ def _load_known_missing() -> set[str]:
         return {
             line.strip()
             for line in f
-            if line.strip() and not _should_exclude_backend_test_name(line.strip())
+            if line.strip()
+            and not line.lstrip().startswith("#")
+            and not _should_exclude_backend_test_name(line.strip())
         }
 
 
@@ -71,6 +74,19 @@ class TestBackendTestNameHelpers(ExtTestCase):
         try:
             with patch(f"{__name__}._KNOWN_MISSING_FILE", path):
                 self.assertEqual(_load_known_missing(), {"linear_attention_fp16"})
+        finally:
+            os.unlink(path)
+
+    def test_load_known_missing_ignores_comments_and_blanks(self):
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:
+            f.write("# a comment\n")
+            f.write("\n")
+            f.write("  # indented comment\n")
+            f.write("gru_reverse\n")
+            path = f.name
+        try:
+            with patch(f"{__name__}._KNOWN_MISSING_FILE", path):
+                self.assertEqual(_load_known_missing(), {"gru_reverse"})
         finally:
             os.unlink(path)
 

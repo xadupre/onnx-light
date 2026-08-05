@@ -144,8 +144,8 @@ public:                                                                         
   /** Compatibility accessor - equivalent to ref_##name() const; returns a ByteSpan. */            \
   inline const utils::ByteSpan &name() const { return name##_; }                                   \
   inline const utils::ByteSpan *ptr_##name() const { return &name##_; }                            \
-  /** Proto2 presence: true if the field was explicitly set (even to empty). */                     \
-  inline bool has_##name() const { return name##_was_set_ || !name##_.empty(); }                    \
+  /** Proto2 presence: true if the field was explicitly set (even to empty). */                    \
+  inline bool has_##name() const { return name##_was_set_ || !name##_.empty(); }                   \
   inline void set_##name(const utils::ByteSpan &v) {                                               \
     name##_ = v;                                                                                   \
     name##_was_set_ = true;                                                                        \

@@ -12,9 +12,10 @@ The following load configurations are timed:
   graph optimizations disabled (``ORT_DISABLE_ALL``).
 * ``onnxruntime (opt on)`` — :class:`onnxruntime.InferenceSession` with all
   graph optimizations enabled (``ORT_ENABLE_ALL``).
-* ``onnx_light 1 thread`` — :func:`onnx_light.onnx.load` with ``num_threads=1``.
-* ``onnx_light 2 threads`` — :func:`onnx_light.onnx.load` with ``num_threads=2``.
-* ``onnx_light 4 threads`` — :func:`onnx_light.onnx.load` with ``num_threads=4``.
+* ``onnx_light ifstream`` — :func:`onnx_light.onnx.load` with
+  ``file_load_mode="IFSTREAM"`` and ``num_threads`` = 1, 2, 4.
+* ``onnx_light memmap`` — :func:`onnx_light.onnx.load` with
+  ``file_load_mode="MMAP"`` and ``num_threads`` = 1, 2, 4.
 
 Usage::
 
@@ -28,7 +29,6 @@ import argparse
 import statistics
 import time
 
-import onnx
 import onnx_light.onnx as onnxl
 
 try:
@@ -73,15 +73,19 @@ def _build_cases(model_path: str) -> list[tuple[str, object]]:
             )
         )
 
-    for n_threads in (1, 2, 4, 8):
-        cases.append(
-            (
-                f"onnx_light {n_threads} thread(s)",
-                lambda threads=n_threads: onnxl.load(
-                    model_path, num_threads=threads, load_external_data=True
-                ),
+    for file_load_mode in ("IFSTREAM", "MMAP"):
+        for n_threads in (1, 2, 4, 8):
+            cases.append(
+                (
+                    f"onnx_light {file_load_mode.lower()} {n_threads} thread(s)",
+                    lambda mode=file_load_mode, threads=n_threads: onnxl.load(
+                        model_path,
+                        num_threads=threads,
+                        load_external_data=True,
+                        file_load_mode=mode,
+                    ),
+                )
             )
-        )
 
     return cases
 
@@ -107,7 +111,7 @@ def main(argv: list[str] | None = None) -> None:
 
     for label, fn in _build_cases(args.model):
         load_s = _measure(fn, args.iters)
-        print(f"{label:<24} {load_s * 1e3:9.3f} ms/iter")
+        print(f"{label:<32} {load_s * 1e3:9.3f} ms/iter")
 
 
 if __name__ == "__main__":

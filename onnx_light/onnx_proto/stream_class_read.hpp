@@ -82,6 +82,29 @@ inline void CheckAllocationLimit(uint64_t len, const ParseOptions &options, cons
   }
 }
 
+/**
+ * @brief Scoped guard that restores a BinaryStream's previous read limit.
+ *
+ * Calls BinaryStream::Restore() on destruction, so the limit pushed by the
+ * matching LimitToNext() is popped both on normal return and while an exception
+ * unwinds the parser. Using RAII instead of a try/catch keeps the recursive
+ * read_next_field_in_shortended_stream frame small: on MSVC an explicit
+ * try/catch (...) with a rethrow materializes exception state and enlarges the
+ * frame, and since that function is on the per-nesting-level recursion path the
+ * extra footprint can overflow the smaller (1 MB) default stack on Windows
+ * before the recursion-depth guard can reject a deeply nested message.
+ */
+class StreamLimitGuard {
+public:
+  explicit StreamLimitGuard(utils::BinaryStream &stream) : stream_(stream) {}
+  ~StreamLimitGuard() { stream_.Restore(); }
+  StreamLimitGuard(const StreamLimitGuard &) = delete;
+  StreamLimitGuard &operator=(const StreamLimitGuard &) = delete;
+
+private:
+  utils::BinaryStream &stream_;
+};
+
 template <typename T>
 void read_next_field_in_shortended_stream(utils::BinaryStream &stream, const char *,
                                           ParseOptions &options, T &field) {
@@ -89,13 +112,8 @@ void read_next_field_in_shortended_stream(utils::BinaryStream &stream, const cha
   recursion_guard.validate();
   uint64_t length = stream.next_uint64();
   stream.LimitToNext(length);
-  try {
-    field.ParseFromStream(stream, options);
-    stream.Restore();
-  } catch (...) {
-    stream.Restore();
-    throw;
-  }
+  StreamLimitGuard limit_guard(stream);
+  field.ParseFromStream(stream, options);
 }
 
 template <typename T>

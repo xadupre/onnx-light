@@ -43,6 +43,15 @@ using TypeProto_Tensor = TypeProto::Tensor;
 
 #define TensorProto_DataType_Name TensorProto::DataType_Name
 
+// Defined as free functions (rather than a macro like TensorProto_DataType_Name
+// above) because some consumers (e.g. onnxruntime's provider bridge) declare a
+// class member function named `TensorProto_DataType_IsValid`; a macro would
+// rewrite that declaration/definition and fail to compile.
+inline constexpr bool TensorProto_DataType_IsValid(TensorProto::DataType t) {
+  return TensorProto::DataType_IsValid(t);
+}
+inline constexpr bool TensorProto_DataType_IsValid(int t) { return TensorProto::DataType_IsValid(t); }
+
 // Flat protobuf-style enumerator constants exposed at namespace scope.
 //
 // The flat names are also available as members of the scoped enums (added to

@@ -345,9 +345,9 @@ def load(
         views into the mapping even when ``no_copy=True``, because each borrowed pointer retains
         the mmap ownership token so the mapping stays alive for as long as the model uses it) and
         ``FileLoadMode.IFSTREAM`` forces the buffered ``std::ifstream``-based reader. Ignored when
-        *f* is a :class:`bytes` object. When an external weights file is provided via ``location``,
-        the main model
-        file is always read through the buffered reader (``TwoFilesStream``); ``MMAP`` then
+        *f* is a :class:`bytes` object. When an external weights file is provided via
+        ``location``, the main model file is always read through the buffered reader
+        (``TwoFilesStream``); ``MMAP`` then
         applies to the separate weights file, which is memory-mapped once and shared by the
         model so that every tensor borrows a zero-copy view of it (as on the ``no_copy=True``
         path), so all modes are honoured.

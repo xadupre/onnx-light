@@ -4,11 +4,11 @@
 
 #include "tensor_util.h"
 
-#include <cstring>
+#include <algorithm>
+#include <cstddef>
 #include <string>
 #include <vector>
 
-#include "onnx_lib/common/common.h"
 #include "onnx_lib/common/platform_helpers.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -21,41 +21,20 @@ namespace ONNX_LIGHT_NAMESPACE {
       res.insert(res.end(), data.begin(), data.end());                                             \
       return res;                                                                                  \
     }                                                                                              \
-    /* make copy as we may have to reverse bytes */                                                \
-    utils::ByteSpan raw_data = tensor->ref_raw_data();                                             \
-    /* raw_data.data() returns a non-const pointer since raw_data is a local copy */               \
-    unsigned char *bytes = raw_data.data();                                                        \
-    /* onnx is always serialized as little endian - tweak byte order if needed */                  \
+    const utils::ByteSpan &raw_data = tensor->ref_raw_data();                                      \
+    /* copy byte-wise: raw_data may be unaligned for type */                                       \
+    /* require a whole number of elements */                                                       \
+    ONNX_ASSERTM(raw_data.size() % sizeof(type) == 0, "raw_data size ", raw_data.size(),           \
+                 " is not a multiple of element size ", sizeof(type));                             \
+    res.resize(raw_data.size() / sizeof(type));                                                    \
+    std::byte *bytes = reinterpret_cast<std::byte *>(res.data());                                  \
+    std::copy_n(reinterpret_cast<const std::byte *>(raw_data.data()), raw_data.size(), bytes);     \
+    /* swap byte order on big-endian hosts */                                                      \
     if (!is_processor_little_endian()) {                                                           \
-      size_t element_size = sizeof(type);                                                          \
-      size_t num_elements = raw_data.size() / element_size;                                        \
-      for (size_t i = 0; i < num_elements; ++i) {                                                  \
-        unsigned char *start_byte = bytes + i * element_size;                                      \
-        unsigned char *end_byte = start_byte + element_size - 1;                                   \
-        /* keep swapping */                                                                        \
-        for (size_t count = 0; count < element_size / 2; ++count) {                                \
-          unsigned char temp = *start_byte;                                                        \
-          *start_byte = *end_byte;                                                                 \
-          *end_byte = temp;                                                                        \
-          ++start_byte;                                                                            \
-          --end_byte;                                                                              \
-        }                                                                                          \
+      for (auto &element : res) {                                                                  \
+        std::byte *start_byte = reinterpret_cast<std::byte *>(&element);                           \
+        std::reverse(start_byte, start_byte + sizeof(type));                                       \
       }                                                                                            \
-    }                                                                                              \
-    /* raw_data.c_str()/bytes is a byte array and may not be properly  */                          \
-    /* aligned for the underlying type */                                                          \
-    /* We need to copy the raw_data.c_str()/bytes as byte instead of  */                           \
-    /* copying as the underlying type, otherwise we may hit memory   */                            \
-    /* misalignment issues on certain platforms, such as arm32-v7a */                              \
-    const size_t raw_data_size = raw_data.size();                                                  \
-    if (raw_data_size % sizeof(type) != 0) {                                                       \
-      ONNX_THROW("Raw data size (", raw_data_size, ") is not a multiple of element size (",        \
-                 sizeof(type), ")");                                                               \
-    }                                                                                              \
-    res.resize(raw_data_size / sizeof(type));                                                      \
-    /* memcpy requires a non-null destination even for a zero-length copy */                       \
-    if (raw_data_size != 0) {                                                                      \
-      memcpy(reinterpret_cast<char *>(res.data()), bytes, raw_data_size);                          \
     }                                                                                              \
     return res;                                                                                    \
   }
@@ -76,41 +55,20 @@ DEFINE_PARSE_DATA(uint64_t, ref_uint64_data)
       res.insert(res.end(), data.begin(), data.end());                                             \
       return res;                                                                                  \
     }                                                                                              \
-    /* make copy as we may have to reverse bytes */                                                \
-    std::string raw_data = tensor->raw();                                                          \
-    /* okay to remove const qualifier as we have already made a copy */                            \
-    char *bytes = raw_data.data();                                                                 \
-    /*onnx is little endian serialized always-tweak byte order if needed*/                         \
+    const std::string &raw_data = tensor->raw();                                                   \
+    /* copy byte-wise: raw_data may be unaligned for type */                                       \
+    /* require a whole number of elements */                                                       \
+    ONNX_ASSERTM(raw_data.size() % sizeof(type) == 0, "raw_data size ", raw_data.size(),           \
+                 " is not a multiple of element size ", sizeof(type));                             \
+    res.resize(raw_data.size() / sizeof(type));                                                    \
+    std::byte *bytes = reinterpret_cast<std::byte *>(res.data());                                  \
+    std::copy_n(reinterpret_cast<const std::byte *>(raw_data.data()), raw_data.size(), bytes);     \
+    /* swap byte order on big-endian hosts */                                                      \
     if (!is_processor_little_endian()) {                                                           \
-      const size_t element_size = sizeof(type);                                                    \
-      const size_t num_elements = raw_data.size() / element_size;                                  \
-      for (size_t i = 0; i < num_elements; ++i) {                                                  \
-        char *start_byte = bytes + i * element_size;                                               \
-        char *end_byte = start_byte + element_size - 1;                                            \
-        /* keep swapping */                                                                        \
-        for (size_t count = 0; count < element_size / 2; ++count) {                                \
-          char temp = *start_byte;                                                                 \
-          *start_byte = *end_byte;                                                                 \
-          *end_byte = temp;                                                                        \
-          ++start_byte;                                                                            \
-          --end_byte;                                                                              \
-        }                                                                                          \
+      for (auto &element : res) {                                                                  \
+        std::byte *start_byte = reinterpret_cast<std::byte *>(&element);                           \
+        std::reverse(start_byte, start_byte + sizeof(type));                                       \
       }                                                                                            \
-    }                                                                                              \
-    /* raw_data.c_str()/bytes is a byte array and may not be properly  */                          \
-    /* aligned for the underlying type */                                                          \
-    /* We need to copy the raw_data.c_str()/bytes as byte instead of  */                           \
-    /* copying as the underlying type, otherwise we may hit memory   */                            \
-    /* misalignment issues on certain platforms, such as arm32-v7a */                              \
-    const size_t raw_data_size = raw_data.size();                                                  \
-    if (raw_data_size % sizeof(type) != 0) {                                                       \
-      ONNX_THROW("Raw data size (", raw_data_size, ") is not a multiple of element size (",        \
-                 sizeof(type), ")");                                                               \
-    }                                                                                              \
-    res.resize(raw_data_size / sizeof(type));                                                      \
-    /* memcpy requires a non-null destination even for a zero-length copy */                       \
-    if (raw_data_size != 0) {                                                                      \
-      memcpy(reinterpret_cast<char *>(res.data()), bytes, raw_data_size);                          \
     }                                                                                              \
     return res;                                                                                    \
   }

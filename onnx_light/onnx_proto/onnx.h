@@ -262,7 +262,7 @@ enum DataType : int32_t {
 // DataTypeUtils::ToDataTypeString, which throws an uncaught exception for out-of-range values).
 inline static constexpr bool DataType_IsValid(DataType t) {
   return static_cast<int32_t>(t) >= static_cast<int32_t>(DataType::UNDEFINED) &&
-        static_cast<int32_t>(t) <= static_cast<int32_t>(DataType::INT2);
+         static_cast<int32_t>(t) <= static_cast<int32_t>(DataType::INT2);
 }
 /** Overload accepting int for protobuf compatibility. */
 inline static constexpr bool DataType_IsValid(int t) {

@@ -50,7 +50,9 @@ using TypeProto_Tensor = TypeProto::Tensor;
 inline constexpr bool TensorProto_DataType_IsValid(TensorProto::DataType t) {
   return TensorProto::DataType_IsValid(t);
 }
-inline constexpr bool TensorProto_DataType_IsValid(int t) { return TensorProto::DataType_IsValid(t); }
+inline constexpr bool TensorProto_DataType_IsValid(int t) {
+  return TensorProto::DataType_IsValid(t);
+}
 
 // Flat protobuf-style enumerator constants exposed at namespace scope.
 //

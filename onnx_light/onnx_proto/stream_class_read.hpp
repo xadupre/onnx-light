@@ -144,8 +144,8 @@ inline void SkipFieldByWireType(utils::BinaryStream &stream, uint64_t wire_type,
     stream.skip_bytes(4);
     break;
   default:
-    EXT_THROW("SkipFieldByWireType: cannot skip field '", name, "', unsupported wire_type=",
-              wire_type, " at position '", stream.tell_around(), "'");
+    EXT_THROW("SkipFieldByWireType: cannot skip field '", name,
+              "', unsupported wire_type=", wire_type, " at position '", stream.tell_around(), "'");
   }
 }
 
@@ -258,7 +258,7 @@ template <>
 void read_field(utils::BinaryStream &stream, int wire_type, utils::OptionalField<float> &field,
                 const char *name, ParseOptions &) {
   SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE || wire_type == FIELD_FIXED32, stream,
-                         wire_type, name);
+                          wire_type, name);
   field = stream.next_float();
 }
 
@@ -287,7 +287,7 @@ template <>
 void read_field(utils::BinaryStream &stream, int wire_type, float &field, const char *name,
                 ParseOptions &) {
   SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE || wire_type == FIELD_FIXED32, stream,
-                         wire_type, name);
+                          wire_type, name);
   field = stream.next_float();
 }
 

@@ -252,7 +252,18 @@ enum DataType : int32_t {
   // Future extensions go here.
 };
 
-inline static constexpr bool DataType_IsValid(DataType t) { return t != DataType::UNDEFINED; }
+// A value is considered valid only if it falls within the contiguous range of enum literals
+// declared above (UNDEFINED(0) .. INT2(26)); this matches the range-checking semantics of the
+// switch statement real protobuf generates for TensorProto_DataType_IsValid. The previous
+// implementation only rejected the single value UNDEFINED(0) and accepted *any* other int,
+// including out-of-range/garbage values such as -100 coming from a corrupted or malicious
+// protobuf; callers (e.g. onnxruntime's "does not have valid data type" check in graph.cc) rely
+// on this function to reject such values before they propagate further (e.g. into
+// DataTypeUtils::ToDataTypeString, which throws an uncaught exception for out-of-range values).
+inline static constexpr bool DataType_IsValid(DataType t) {
+  return static_cast<int32_t>(t) >= static_cast<int32_t>(DataType::UNDEFINED) &&
+        static_cast<int32_t>(t) <= static_cast<int32_t>(DataType::INT2);
+}
 /** Overload accepting int for protobuf compatibility. */
 inline static constexpr bool DataType_IsValid(int t) {
   return DataType_IsValid(static_cast<DataType>(t));

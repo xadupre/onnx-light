@@ -166,9 +166,13 @@
 
 #define READ_END(options, stream, cls)                                                             \
   else {                                                                                           \
-    EXT_THROW("unable to parse field_number=", field_number.string(), " in class ", #cls);         \
-  }                                                                                                \
-  }                                                                                                \
+    /* A field number not present in this message's schema is an unknown field.  Per the           \
+     * protobuf wire-format compatibility rules, it must be skipped (based on its wire type)        \
+     * rather than treated as a parse error, so forward/backward-compatible and adversarially       \
+     * crafted messages alike can still be parsed. */                                              \
+    SkipFieldByWireType(stream, field_number.wire_type, #cls);                                     \
+  }                                                                                                 \
+  }                                                                                                 \
   DEBUG_PRINT("+ read end " #cls)
 
 #define READ_FIELD(options, stream, name)                                                          \

@@ -7579,3 +7579,34 @@ TEST(onnx_compatibility, OptionalMessageReadDoesNotCreate) {
   type_proto.mutable_tensor_type();
   EXPECT_TRUE(type_proto.has_tensor_type());
 }
+
+TEST(onnx_compatibility, EmptyRawDataPresence) {
+  TensorProto tensor;
+  EXPECT_FALSE(tensor.has_raw_data());
+
+  tensor.set_raw_data(std::string());
+  EXPECT_TRUE(tensor.is_raw_data());
+  EXPECT_TRUE(tensor.has_raw_data());
+  EXPECT_TRUE(tensor.ref_raw_data().empty());
+  EXPECT_NE(tensor.ref_raw_data().data(), nullptr);
+  std::string serialized;
+  tensor.SerializeToString(serialized);
+  TensorProto parsed;
+  parsed.ParseFromString(serialized);
+  EXPECT_TRUE(parsed.is_raw_data());
+  EXPECT_TRUE(parsed.has_raw_data());
+  EXPECT_TRUE(parsed.ref_raw_data().empty());
+  EXPECT_NE(parsed.ref_raw_data().data(), nullptr);
+
+  parsed.clear_raw_data();
+  EXPECT_FALSE(parsed.has_raw_data());
+  EXPECT_EQ(parsed.ref_raw_data().data(), nullptr);
+
+  parsed.mutable_raw_data();
+  EXPECT_TRUE(parsed.has_raw_data());
+  parsed.set_raw_data(utils::ByteSpan());
+  EXPECT_FALSE(parsed.has_raw_data());
+
+  parsed.ref_raw_data().assign_borrowed(nullptr, 0);
+  EXPECT_FALSE(parsed.has_raw_data());
+}

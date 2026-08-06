@@ -436,7 +436,8 @@ inline void set_raw_data(const void *data, size_t size) {
 inline void set_raw_data(const std::string &data) { set_raw_data(data.data(), data.size()); }
 inline void clear_raw_data() { raw_data_.clear(); }
 inline void set_data_type(int v) { data_type_ = static_cast<DataType>(v); }
-inline bool is_raw_data() const { return !raw_data_.empty(); }
+/** Returns whether raw_data is present, including an explicitly set empty value. */
+inline bool is_raw_data() const { return has_raw_data(); }
 /**
  * Sets the tensor raw data to a borrowed view of an external buffer and attaches
  * a custom deleter called when all references to that buffer are dropped.

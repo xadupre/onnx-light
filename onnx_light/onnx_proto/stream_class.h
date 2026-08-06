@@ -144,10 +144,13 @@ public:                                                                         
   /** Compatibility accessor - equivalent to ref_##name() const; returns a ByteSpan. */            \
   inline const utils::ByteSpan &name() const { return name##_; }                                   \
   inline const utils::ByteSpan *ptr_##name() const { return &name##_; }                            \
-  inline bool has_##name() const { return _has_field_(name##_); }                                  \
+  inline bool has_##name() const { return name##_.data() != nullptr; }                             \
   inline void set_##name(const utils::ByteSpan &v) { name##_ = v; }                                \
   /** Compatibility accessor returning a mutable pointer to the ByteSpan field. */                 \
-  inline utils::ByteSpan *mutable_##name() { return &name##_; }                                    \
+  inline utils::ByteSpan *mutable_##name() {                                                       \
+    name##_.set_empty();                                                                           \
+    return &name##_;                                                                               \
+  }                                                                                                \
   inline int order_##name() const { return order; }                                                \
   static inline constexpr const char *_name_##name = #name;                                        \
   static inline constexpr const char *DOC_##name = doc;                                            \

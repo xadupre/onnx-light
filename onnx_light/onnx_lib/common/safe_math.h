@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "onnx_pb.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <iterator>

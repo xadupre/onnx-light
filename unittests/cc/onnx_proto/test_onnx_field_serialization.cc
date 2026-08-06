@@ -123,44 +123,127 @@ TEST(onnx_field_serialization, WriteReadSizeField_SubMessage) {
 }
 
 // ---------------------------------------------------------------------------
-// read_field wire-type leniency: per the protobuf spec, an implementation
-// must not fail to parse a message solely because a known field number is
-// encoded with an unexpected wire type -- such fields are simply skipped
-// (like an unknown field), not rejected. See SkipFieldByWireType /
-// SKIP_IF_WRONG_WIRE_TYPE in stream_class_read.hpp. Only a genuinely
-// unsupported wire_type value (i.e. not one of the four protobuf wire types)
-// still throws.
+// read_field wire-type handling: a known field number carrying a wire type the
+// field's C++ type cannot decode is treated like an unknown field, i.e. its
+// payload is skipped based on the wire type actually present and parsing
+// continues with the next field (protobuf wire-format compatibility rules).
 // ---------------------------------------------------------------------------
 
 TEST(onnx_field_serialization, ReadField_String_WrongWireType_Skipped) {
-  // AttributeProto.name (field 1) is a string and normally uses
-  // FIELD_FIXED_SIZE (wire type 2); emitting it as a varint (wire type 0)
-  // must be tolerated: the field is skipped and left unset, parsing succeeds.
-  std::string bytes = FieldTag(1, 0) + EncodeVarint(42);
+  // AttributeProto.name (field 1) is a string and must use FIELD_FIXED_SIZE
+  // (wire type 2); emitted as a varint (wire type 0) it is skipped, and the
+  // following well-formed AttributeProto.i (field 3) is still decoded.
+  std::string bytes = FieldTag(1, 0) + EncodeVarint(42) + FieldTag(3, 0) + EncodeVarint(7);
   AttributeProto parsed;
-  EXPECT_NO_THROW(parsed.ParseFromString(bytes));
-  EXPECT_FALSE(parsed.has_name());
+  parsed.ParseFromString(bytes);
+  EXPECT_EQ(parsed.ref_name().size(), 0u);
+  ASSERT_TRUE(parsed.has_i());
+  EXPECT_EQ(parsed.ref_i(), 7);
 }
 
 TEST(onnx_field_serialization, ReadField_Int64_WrongWireType_Skipped) {
-  // AttributeProto.i (field 3) is an int64 and normally uses FIELD_VARINT
-  // (wire type 0); emitting it as length-delimited (wire type 2) must be
-  // tolerated: the field is skipped and left unset, parsing succeeds.
+  // AttributeProto.i (field 3) is an int64 and must use FIELD_VARINT
+  // (wire type 0); emitted as length-delimited (wire type 2) it is skipped
+  // together with its payload and left unset.
   std::string payload = "xy";
   std::string bytes = FieldTag(3, 2) + EncodeVarint(payload.size()) + payload;
   AttributeProto parsed;
-  EXPECT_NO_THROW(parsed.ParseFromString(bytes));
+  parsed.ParseFromString(bytes);
   EXPECT_FALSE(parsed.has_i());
+
+  // Exactly the payload of the skipped field is consumed: a well-formed
+  // field 3 following it is still decoded.
+  std::string name = "attr";
+  bytes += FieldTag(3, 0) + EncodeVarint(11) + FieldTag(1, 2) + EncodeVarint(name.size()) + name;
+  AttributeProto parsed_then_valid;
+  parsed_then_valid.ParseFromString(bytes);
+  ASSERT_TRUE(parsed_then_valid.has_i());
+  EXPECT_EQ(parsed_then_valid.ref_i(), 11);
+  EXPECT_EQ(parsed_then_valid.ref_name(), "attr");
 }
 
 TEST(onnx_field_serialization, ReadFieldLimitParallel_RawData_WrongWireType_Skipped) {
   // TensorProto.raw_data (field 9) is read via read_field_limit_parallel and
-  // normally uses FIELD_FIXED_SIZE (wire type 2); a varint (wire type 0) must
-  // be tolerated: the field is skipped and left unset, parsing succeeds.
-  std::string bytes = FieldTag(9, 0) + EncodeVarint(1);
+  // must use FIELD_FIXED_SIZE (wire type 2); a varint (wire type 0) is skipped.
+  std::string name = "t";
+  std::string bytes =
+      FieldTag(9, 0) + EncodeVarint(1) + FieldTag(8, 2) + EncodeVarint(name.size()) + name;
   TensorProto parsed;
-  EXPECT_NO_THROW(parsed.ParseFromString(bytes));
-  EXPECT_TRUE(parsed.ref_raw_data().empty());
+  parsed.ParseFromString(bytes);
+  EXPECT_FALSE(parsed.has_raw_data());
+  EXPECT_EQ(parsed.ref_name(), "t");
+}
+
+TEST(onnx_field_serialization, ReadEnumField_WrongWireType_Skipped) {
+  // TensorProto.data_type (field 2) is an enum read as a varint; emitted as
+  // length-delimited it is skipped and keeps its default UNDEFINED value.
+  std::string payload = "zz";
+  std::string bytes =
+      FieldTag(2, 2) + EncodeVarint(payload.size()) + payload + FieldTag(1, 0) + EncodeVarint(4);
+  TensorProto parsed;
+  parsed.ParseFromString(bytes);
+  EXPECT_EQ(parsed.ref_data_type(), TensorProto::DataType::UNDEFINED);
+  ASSERT_EQ(parsed.ref_dims().size(), 1u);
+  EXPECT_EQ(parsed.ref_dims()[0], 4);
+}
+
+TEST(onnx_field_serialization, ReadProtoField_WrongWireType_Skipped) {
+  // TensorProto.external_data (field 13) is a repeated sub-message and requires
+  // FIELD_FIXED_SIZE; a varint payload is skipped instead of failing.
+  std::string bytes = FieldTag(13, 0) + EncodeVarint(9) + FieldTag(1, 0) + EncodeVarint(2);
+  TensorProto parsed;
+  parsed.ParseFromString(bytes);
+  EXPECT_EQ(parsed.ref_external_data().size(), 0u);
+  ASSERT_EQ(parsed.ref_dims().size(), 1u);
+  EXPECT_EQ(parsed.ref_dims()[0], 2);
+}
+
+// ---------------------------------------------------------------------------
+// Unknown field numbers (not part of the message schema) are skipped according
+// to their wire type, for each of the four skippable wire types.
+// ---------------------------------------------------------------------------
+
+TEST(onnx_field_serialization, UnknownField_Varint_Skipped) {
+  // Field 15 is unused by TensorProto (14 = data_location, 16 = metadata_props).
+  std::string bytes = FieldTag(15, 0) + EncodeVarint(300000) + FieldTag(1, 0) + EncodeVarint(6);
+  TensorProto parsed;
+  parsed.ParseFromString(bytes);
+  ASSERT_EQ(parsed.ref_dims().size(), 1u);
+  EXPECT_EQ(parsed.ref_dims()[0], 6);
+}
+
+TEST(onnx_field_serialization, UnknownField_Fixed64_Skipped) {
+  std::string bytes = FieldTag(1000, 1) + std::string(8, '\x7f') + FieldTag(1, 0) + EncodeVarint(6);
+  TensorProto parsed;
+  parsed.ParseFromString(bytes);
+  ASSERT_EQ(parsed.ref_dims().size(), 1u);
+  EXPECT_EQ(parsed.ref_dims()[0], 6);
+}
+
+TEST(onnx_field_serialization, UnknownField_LengthDelimited_Skipped) {
+  std::string payload = "unknown-payload";
+  std::string bytes =
+      FieldTag(1000, 2) + EncodeVarint(payload.size()) + payload + FieldTag(1, 0) + EncodeVarint(6);
+  TensorProto parsed;
+  parsed.ParseFromString(bytes);
+  ASSERT_EQ(parsed.ref_dims().size(), 1u);
+  EXPECT_EQ(parsed.ref_dims()[0], 6);
+}
+
+TEST(onnx_field_serialization, UnknownField_Fixed32_Skipped) {
+  std::string bytes = FieldTag(1000, 5) + std::string(4, '\x7f') + FieldTag(1, 0) + EncodeVarint(6);
+  TensorProto parsed;
+  parsed.ParseFromString(bytes);
+  ASSERT_EQ(parsed.ref_dims().size(), 1u);
+  EXPECT_EQ(parsed.ref_dims()[0], 6);
+}
+
+TEST(onnx_field_serialization, UnknownField_UnskippableWireType_Throws) {
+  // Wire types 3 and 4 (deprecated groups) carry no length information, so an
+  // unknown field using them cannot be skipped and must be reported.
+  std::string bytes = FieldTag(1000, 3);
+  TensorProto parsed;
+  EXPECT_THROW(parsed.ParseFromString(bytes), std::runtime_error);
 }
 
 TEST(onnx_field_serialization, ReadField_UnsupportedWireType_ParseFails) {
@@ -186,6 +269,28 @@ TEST(onnx_field_serialization, ParseFromString_TruncatedGarbage_ReturnsFalse) {
   std::string bytes = "this is not a valid ONNX model";
   ModelProto parsed;
   EXPECT_FALSE(parsed.ParseFromString(bytes));
+}
+
+TEST(onnx_field_serialization, UnknownField_LengthDelimited_LengthBeyondStream_Throws) {
+  // A truncated/oversized length on an unknown field must be rejected instead
+  // of skipping past the end of the buffer.
+  std::string bytes = FieldTag(1000, 2) + EncodeVarint(1024);
+  TensorProto parsed;
+  EXPECT_THROW(parsed.ParseFromString(bytes), std::runtime_error);
+}
+
+TEST(onnx_field_serialization, UnknownField_InsideSubMessage_Skipped) {
+  // The skip logic applies at every nesting level: an unknown field inside a
+  // nested StringStringEntryProto (TensorProto.external_data, field 13) is
+  // skipped and the known fields of that sub-message are still decoded.
+  std::string key = "location";
+  std::string entry =
+      FieldTag(1000, 0) + EncodeVarint(5) + FieldTag(1, 2) + EncodeVarint(key.size()) + key;
+  std::string bytes = FieldTag(13, 2) + EncodeVarint(entry.size()) + entry;
+  TensorProto parsed;
+  parsed.ParseFromString(bytes);
+  ASSERT_EQ(parsed.ref_external_data().size(), 1u);
+  EXPECT_EQ(parsed.ref_external_data()[0].ref_key(), "location");
 }
 
 // ---------------------------------------------------------------------------

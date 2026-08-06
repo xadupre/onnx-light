@@ -52,6 +52,13 @@ With ``setup.py``:
     python setup.py build_ext --inplace --build-temp build --cpp-tests
     ctest --test-dir build --output-on-failure
 
+Alternatively, ``--run-cpp-tests`` builds the C++ unit tests (it implies
+``--cpp-tests``) and runs them with ``ctest`` in one step:
+
+.. code-block:: bash
+
+    python setup.py build_ext --inplace --build-temp build --run-cpp-tests
+
 On multi-config generators such as Visual Studio, add the matching
 configuration to ``ctest``: use ``-C Debug`` when the build was configured with
 ``cmake.build-type=Debug``, and ``-C Release`` after ``python setup.py

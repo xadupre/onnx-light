@@ -924,10 +924,8 @@ void DetectCycleDFS(FuncPtr root, const CallGraph &call_graph,
       std::string cycle;
       for (auto cit = start; cit != path.end(); ++cit)
         cycle += (cit == start ? "" : " -> ") + GetFunctionImplId(**cit);
-      fail_check(
-          "Cycle detected in model-local function references: ", cycle, " -> ",
-          GetFunctionImplId(*callee),
-          ". Self-referencing or cyclically-referencing functions would cause infinite recursion.");
+      fail_check("Cycle detected in model-local function references: ", cycle, " -> ",
+                 GetFunctionImplId(*callee), ". Model-local functions must not be recursive.");
     } else if (s == VisitState::Unvisited) {
       push(callee);
     }

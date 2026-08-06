@@ -20,9 +20,7 @@
  *        ``image`` family.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes {
 
 // The generic shape-inference engine (ShapesContext, dispatch table,
 // domain constants, ...) lives in ``onnx_core`` so it never depends on
@@ -98,6 +96,4 @@ namespace image {
 void ComputeShapeImageDecoder(ShapesContext &ctx, const NodeProto &node, const char *a);
 
 } // namespace image
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes

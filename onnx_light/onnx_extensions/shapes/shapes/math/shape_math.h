@@ -19,9 +19,7 @@
  * @brief Shape-inference functions for ONNX operators in the ``math`` family.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes {
 
 // The generic shape-inference engine (ShapesContext, dispatch table,
 // domain constants, ...) lives in ``onnx_core`` so it never depends on
@@ -1005,6 +1003,4 @@ void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node);
 
 } // namespace math
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes

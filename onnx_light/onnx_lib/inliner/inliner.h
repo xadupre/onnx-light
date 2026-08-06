@@ -13,8 +13,7 @@
 #include "onnx_lib/defs/schema.h"
 #include "onnx_lib/onnx_pb.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace inliner {
+namespace ONNX_LIGHT_NAMESPACE::inliner {
 
 // IR version 10 introduces overloaded function names. The following APIs to specify
 // functions to be inlined currently allow only specifying (domain, name). Thus,
@@ -169,7 +168,6 @@ private:
   std::unique_ptr<Impl> pImpl_;
 };
 
-} // namespace inliner
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::inliner
 
 #endif // ONNX_INLINER_INLINER_H_

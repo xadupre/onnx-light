@@ -10,9 +10,7 @@
 #include <unordered_map>
 #include <utility>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace gradient {
+namespace ONNX_LIGHT_NAMESPACE::core::gradient {
 
 /**
  * Defines the signature for a per-operator backward (gradient) function.
@@ -84,6 +82,4 @@ void ApplyBackward(const NodeProto &node,
                    std::unordered_map<std::string, std::string> &grad_accum, int &counter,
                    FunctionProto &func, const GradRegistry &registry);
 
-} // namespace gradient
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::gradient

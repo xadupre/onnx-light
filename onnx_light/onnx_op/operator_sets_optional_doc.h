@@ -8,9 +8,7 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace optional {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::optional {
 
 /**
  * Returns the documentation string for the Optional operator at the given
@@ -39,6 +37,4 @@ std::string MakeOptionalHasElementDoc(int since_version);
  */
 std::string MakeOptionalGetElementDoc(int since_version);
 
-} // namespace optional
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::optional

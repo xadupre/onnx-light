@@ -65,9 +65,7 @@
  * convenience wrappers around :cpp:class:`ComputeContext`.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace compute {
+namespace ONNX_LIGHT_NAMESPACE::core::compute {
 
 using ::onnx_light::core::shapes::ShapesContext;
 
@@ -167,9 +165,7 @@ void WriteInPlaceReuseToMetadata(
     GraphProto &graph, const ShapesContext &ctx,
     const std::unordered_map<std::string, std::string> &value_tags = {});
 
-} // namespace compute
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::compute
 
 // Backward-compatibility include: ComputeContext was previously declared in
 // this header. Including compute_context.h here ensures that existing code

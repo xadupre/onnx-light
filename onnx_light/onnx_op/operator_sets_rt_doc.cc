@@ -4,9 +4,7 @@
 
 #include "onnx_op/operator_sets_rt_doc.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace rt {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::rt {
 
 /// Returns the documentation string for the DelayedInitializer operator.
 std::string MakeDelayedInitializerDoc() {
@@ -25,6 +23,4 @@ element type comes from the required ``dtype`` attribute.
 )DOC";
 }
 
-} // namespace rt
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::rt

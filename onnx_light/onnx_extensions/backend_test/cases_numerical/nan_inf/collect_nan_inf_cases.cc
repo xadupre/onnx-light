@@ -4,8 +4,7 @@
 
 #include "onnx_extensions/backend_test/cases_numerical/nan_inf/include_nan_inf_cases.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void CollectNanInfTestCases(std::vector<TestCase> &registry, const std::string &op_type,
                             TestMode mode) {
@@ -19,5 +18,4 @@ void CollectNanInfTestCases(std::vector<TestCase> &registry, const std::string &
   }
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

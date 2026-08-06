@@ -23,9 +23,7 @@
 
 #include <cstdint>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 // ---------------------------------------------------------------------------
 // Element-level saturating conversions to the unpacked 4-bit value carried in
@@ -83,6 +81,4 @@ inline void Write2BitElement(std::uint8_t *data, int64_t i, std::uint8_t bits) n
   byte = static_cast<std::uint8_t>((byte & ~mask) | (((bits & 0x03) << shift) & mask));
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

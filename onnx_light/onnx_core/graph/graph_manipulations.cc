@@ -6,9 +6,7 @@
 
 #include <unordered_set>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace graph {
+namespace ONNX_LIGHT_NAMESPACE::core::graph {
 
 namespace {
 
@@ -231,6 +229,4 @@ std::vector<std::string> CollectNodeInputs(const NodeProto &node) {
   return out;
 }
 
-} // namespace graph
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::graph

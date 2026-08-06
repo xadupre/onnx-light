@@ -19,8 +19,7 @@
 #pragma once
 #include "onnx_lib/onnx_pb.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace internal {
+namespace ONNX_LIGHT_NAMESPACE::internal {
 
 /**
  * @brief Read-only visitor for ONNX proto objects.
@@ -197,5 +196,4 @@ struct MutableVisitor {
   virtual ~MutableVisitor() = default;
 };
 
-} // namespace internal
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::internal

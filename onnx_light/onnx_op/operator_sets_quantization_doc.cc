@@ -6,9 +6,7 @@
 
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace quantization {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::quantization {
 
 namespace {
 
@@ -286,6 +284,4 @@ std::string MakeQLinearConvDoc(int /*since_version*/) { return kQLinearConvVer10
 
 std::string MakeQLinearMatMulDoc(int /*since_version*/) { return kQLinearMatMulDoc; }
 
-} // namespace quantization
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::quantization

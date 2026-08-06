@@ -13,10 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
-namespace detail {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail {
 
 // ---------------------------------------------------------------------------
 // Shared validation + iteration helpers used by element-wise backend test
@@ -437,7 +434,4 @@ Tensor BinaryHalfCompareElementwiseAlloc(const char *op_name, const char *dtype_
   return z;
 }
 
-} // namespace detail
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail

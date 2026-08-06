@@ -19,8 +19,7 @@
 #include "onnx_manipulations/tensor_util.h"
 #include "onnx_proto/onnx_alias.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
 /**
  * @brief Checks whether @p input2_sizes is unidirectionally broadcastable into
@@ -125,5 +124,4 @@ inline std::vector<int64_t> ReadInt64Tensor(const Tensor &tensor) {
   return ParseData<int64_t>(&tensor);
 }
 
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

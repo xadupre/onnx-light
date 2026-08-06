@@ -12,9 +12,7 @@
 #include <string>
 #include <utility>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 Tensor If::operator()(const Tensor &cond, const Tensor &then_value,
                       const Tensor &else_value) const {
@@ -79,6 +77,4 @@ Tensors If::operator()(RuntimeContext &rt, const Tensor &cond, const GraphProto 
   return session.Run({}, rt, branch_name);
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

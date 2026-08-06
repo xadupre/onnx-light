@@ -20,9 +20,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 // ---------------------------------------------------------------------------
 // Bit-level numeric conversions
@@ -132,6 +130,4 @@ Tensor MakeSubByteTensor(DataType dtype, const Shape &shape, const std::vector<s
 Tensor MakeFloat4E2M1Tensor(const Shape &shape, const std::vector<float> &values,
                             RawBufferAllocator *allocator = nullptr);
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

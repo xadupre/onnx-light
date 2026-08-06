@@ -25,9 +25,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace symbolic {
+namespace ONNX_LIGHT_NAMESPACE::core::symbolic {
 
 Device MakeGPUDevice(int index) {
   if (index < 0 || index > kMaxGPUIndex) {
@@ -724,6 +722,4 @@ bool SymTensorToValueInfo(const SymTensor &tensor, ValueInfoProto &vi) {
   return true;
 }
 
-} // namespace symbolic
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::symbolic

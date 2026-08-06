@@ -4,9 +4,7 @@
 
 #include "onnx_core/shapes/shape_check.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
 void CheckNodeOpAndOutput(const NodeProto &node, const char *expected_op_type, const char *caller) {
   EXT_ENFORCE_INVALID(node.op_type() == expected_op_type, caller, " expects op_type='",
@@ -14,6 +12,4 @@ void CheckNodeOpAndOutput(const NodeProto &node, const char *expected_op_type, c
   EXT_ENFORCE_INVALID(node.output_size() >= 1, caller, ": node has no output.");
 }
 
-} // namespace shapes
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::shapes

@@ -10,9 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 /// Evaluates the SVM kernel function for a single (sample, support-vector) pair.
 /// Supported ``kernel_type`` values: "LINEAR", "POLY", "RBF", "SIGMOID".
@@ -57,6 +55,4 @@ inline Tensor ToDoubleRowMajorTensor(const Tensor &x, int64_t sample_count, int6
 /// and rank-2 (batch) tensors.
 void ValidateFeatureMatrixShape(const Tensor &x, int64_t &sample_count, int64_t &feature_count);
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

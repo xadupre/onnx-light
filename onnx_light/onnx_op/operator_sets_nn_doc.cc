@@ -4,9 +4,7 @@
 
 #include "onnx_op/operator_sets_nn_doc.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace nn {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::nn {
 
 namespace {
 
@@ -1571,6 +1569,4 @@ std::string MakeLinearAttentionDoc(int since_version) {
   }
 }
 
-} // namespace nn
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::nn

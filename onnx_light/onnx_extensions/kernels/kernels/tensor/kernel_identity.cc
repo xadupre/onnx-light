@@ -10,9 +10,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor Identity::operator()(const Tensor &input, RuntimeContext *rt) const {
   Tensor output = MakeOutputTensor(input.data_type, input.shape, input.size_bytes(),
@@ -58,6 +56,4 @@ void Identity::Run(RuntimeContext &rt) {
   }
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

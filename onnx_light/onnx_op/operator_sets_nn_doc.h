@@ -8,9 +8,7 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace nn {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::nn {
 
 /**
  * Returns the documentation string for the AveragePool operator at the given
@@ -210,6 +208,4 @@ std::string MakeConvTransposeDoc(int since_version);
  */
 std::string MakeLinearAttentionDoc(int since_version);
 
-} // namespace nn
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::nn

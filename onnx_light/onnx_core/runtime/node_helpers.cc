@@ -4,9 +4,7 @@
 
 #include "onnx_core/runtime/node_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 const Tensor &GetInput(const NodeProto &node, int index, const TensorMap &tensors) {
   const std::string &name = node.input(index);
@@ -219,6 +217,4 @@ int64_t GetRequiredAttributeInt(const NodeProto &node, const std::string &name) 
   return attr->i();
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -4,9 +4,7 @@
 
 #include "onnx_op/operator_sets_sequence_doc.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace sequence {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::sequence {
 
 std::string MakeSequenceEmptyDoc() {
   return R"DOC(
@@ -98,6 +96,4 @@ This operator assumes that processing each sample is independent and could execu
 or in any order. Users cannot expect any specific ordering in which each subgraph is computed.)DOC";
 }
 
-} // namespace sequence
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::sequence

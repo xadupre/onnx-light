@@ -12,9 +12,7 @@
  *        ``ComputeShape*`` shape-inference function.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
 /**
  * Validates the common preamble of every ``ComputeShape*`` function:
@@ -31,6 +29,4 @@ namespace shapes {
  */
 void CheckNodeOpAndOutput(const NodeProto &node, const char *expected_op_type, const char *caller);
 
-} // namespace shapes
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::shapes

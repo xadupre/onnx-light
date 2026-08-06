@@ -9,10 +9,7 @@
 
 #include "onnx_core/shapes/shape_check.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace nn {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn {
 
 void ComputeShapeCausalConvWithState(ShapesContext &ctx, const NodeProto &node, const char *input,
                                      const char *weight) {
@@ -46,7 +43,4 @@ void ComputeShapeCausalConvWithState(ShapesContext &ctx, const NodeProto &node, 
   ctx.Set(node.output(1), SymTensor(nullptr, in.Dtype(), present_shape));
 }
 
-} // namespace nn
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn

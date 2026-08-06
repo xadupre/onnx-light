@@ -20,9 +20,7 @@
  *        ``logical`` family.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes {
 
 // The generic shape-inference engine (ShapesContext, dispatch table,
 // domain constants, ...) lives in ``onnx_core`` so it never depends on
@@ -447,6 +445,4 @@ void ComputeShapeIsInf(ShapesContext &ctx, const NodeProto &node, const char *x)
 void ComputeShapeBitShift(ShapesContext &ctx, const NodeProto &node, const char *x, const char *y);
 
 } // namespace logical
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes

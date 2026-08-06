@@ -13,9 +13,7 @@
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
 namespace {
 
@@ -160,6 +158,4 @@ void PropagateValueAsShapeArithmetic(ShapesContext &ctx, const NodeProto &node, 
   ctx.Set(out_name, std::move(updated));
 }
 
-} // namespace shapes
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::shapes

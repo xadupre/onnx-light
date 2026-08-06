@@ -15,9 +15,7 @@
 #include "onnx_proto/onnx_alias.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace builder {
+namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
 using ::onnx_light::core::shapes::kUnknownOpsetVersion;
 using ::onnx_light::core::shapes::ShapesContext;
@@ -1493,6 +1491,4 @@ FunctionProto GraphBuilder::ToFunction(const std::string &domain) {
   return function;
 }
 
-} // namespace builder
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::builder

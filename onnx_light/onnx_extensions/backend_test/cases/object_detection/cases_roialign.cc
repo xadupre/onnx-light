@@ -11,8 +11,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 namespace {
 
@@ -328,5 +327,4 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
   register_upstream("test_cc_roialign_mode_max", "max", "output_half_pixel");
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

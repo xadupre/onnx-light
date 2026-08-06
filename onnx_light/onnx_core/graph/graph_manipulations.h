@@ -9,9 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace graph {
+namespace ONNX_LIGHT_NAMESPACE::core::graph {
 
 /**
  * Returns the list of input names referenced by ``nodes`` that are not produced
@@ -63,6 +61,4 @@ CollectRemainingInputs(const utils::RepeatedProtoField<NodeProto> &nodes,
  */
 std::vector<std::string> CollectNodeInputs(const NodeProto &node);
 
-} // namespace graph
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::graph

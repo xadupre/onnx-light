@@ -5,10 +5,7 @@
 #include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_extensions/shapes/shapes/text/shape_text.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace text {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::text {
 
 void ComputeShapeStringConcat(ShapesContext &ctx, const NodeProto &node, const char *a,
                               const char *b) {
@@ -17,7 +14,4 @@ void ComputeShapeStringConcat(ShapesContext &ctx, const NodeProto &node, const c
   ComputeShapeBinaryBroadcast(ctx, node, a, b, "StringConcat", TensorType::kString);
 }
 
-} // namespace text
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::text

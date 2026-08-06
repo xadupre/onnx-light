@@ -56,8 +56,7 @@ struct open_how {
 
 #endif // _WIN32
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace checker {
+namespace ONNX_LIGHT_NAMESPACE::checker {
 
 #define enforce_has_field(proto, field)                                                            \
   do {                                                                                             \
@@ -1486,5 +1485,4 @@ bool check_is_experimental_op(const NodeProto &node) {
 #undef enforce_has_field
 #undef enforce_non_empty_field
 
-} // namespace checker
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::checker

@@ -16,14 +16,12 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes {
 
 // Alias to the symbolic dimension-expression library, which lives in
 // ``onnx_core`` so both ``onnx_op`` and ``onnx_shapes`` can share it.
 namespace expressions = ::ONNX_LIGHT_NAMESPACE::core::expressions;
-namespace shapes {
-namespace tensor {
+namespace shapes::tensor {
 
 namespace {
 
@@ -190,8 +188,6 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
   ctx.Set(node.output(0), SymTensor(nullptr, data.Dtype(), std::move(out_shape)));
 }
 
-} // namespace tensor
+} // namespace shapes::tensor
 
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes

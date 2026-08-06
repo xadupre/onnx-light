@@ -13,8 +13,7 @@
 #include <ostream>
 #include <string>
 
-namespace google {
-namespace protobuf {
+namespace google::protobuf {
 
 // --- Scalar integer typedefs (protobuf compat) ---
 // The protobuf runtime historically exposed these fixed-width integer aliases
@@ -128,5 +127,4 @@ inline bool ParseDelimitedFromCodedStream(Msg *message, io::CodedInputStream *in
   return message->ParseFromArray(buf.data(), static_cast<int>(size));
 }
 
-} // namespace protobuf
-} // namespace google
+} // namespace google::protobuf

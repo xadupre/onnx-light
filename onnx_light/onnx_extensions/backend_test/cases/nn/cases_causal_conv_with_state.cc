@@ -13,8 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // CausalConvWithState — stateful causal 1D depthwise convolution.
@@ -196,5 +195,4 @@ void RegisterCausalConvWithStateCases(std::vector<TestCase> &registry, TestMode 
   }
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

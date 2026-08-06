@@ -11,10 +11,7 @@
 #include <cstring>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
-namespace detail {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail {
 
 // Holds temporary typed storage for kernel helpers. Uses the provided
 // allocator when available and falls back to std::vector otherwise.
@@ -84,7 +81,4 @@ template <typename T> struct TemporaryTypedBuffer {
   void CopyFromBytes(const std::uint8_t *bytes) { std::memcpy(data(), bytes, size * sizeof(T)); }
 };
 
-} // namespace detail
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail

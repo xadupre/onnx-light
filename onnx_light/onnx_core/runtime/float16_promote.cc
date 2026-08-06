@@ -12,9 +12,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 Tensor PromoteToFloat32(const Tensor &src, RuntimeContext *rt) {
   const int32_t dt = src.data_type;
@@ -74,6 +72,4 @@ Tensor DemoteFromFloat32(const Tensor &src, int32_t target_dtype, RuntimeContext
   return result;
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

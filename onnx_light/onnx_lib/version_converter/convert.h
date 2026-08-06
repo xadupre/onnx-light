@@ -62,8 +62,7 @@
 #include "onnx_lib/version_converter/adapters/upsample_9_10.h"
 #include "onnx_lib/version_converter/adapters/upsample_9_8.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
 class DefaultVersionConverter : public BaseVersionConverter {
 private:
@@ -1145,5 +1144,4 @@ public:
 };
 
 ONNX_API ModelProto ConvertVersion(const ModelProto &mp_in, int target_version);
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

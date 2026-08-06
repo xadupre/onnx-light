@@ -9,8 +9,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 /// Builds a deterministic pseudo-random FLOAT weight vector of ``count``
 /// elements in ``[-0.05, 0.05]`` (a typical initialization range for small
@@ -44,5 +43,4 @@ inline std::vector<uint16_t> RandomWeightsF16(size_t count, uint32_t seed) {
   return values;
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

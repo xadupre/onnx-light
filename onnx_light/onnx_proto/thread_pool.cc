@@ -1,7 +1,6 @@
 #include "thread_pool.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace utils {
+namespace ONNX_LIGHT_NAMESPACE::utils {
 
 ThreadPool::ThreadPool() : stop_(false), is_started_(false), pending_jobs_(0) {}
 
@@ -123,5 +122,4 @@ void ThreadPool::Clear() {
   pending_jobs_ = 0;
 }
 
-} // namespace utils
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::utils

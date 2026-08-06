@@ -6,9 +6,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor CastLike::operator()(const Tensor &x, const Tensor &target_type, RuntimeContext *rt) const {
   // ``CastLike`` is defined by the spec as ``Cast`` with the ``to`` attribute
@@ -46,6 +44,4 @@ void CastLike::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(x, target_type, saturate, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

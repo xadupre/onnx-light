@@ -14,9 +14,7 @@
  *        evaluated through :cpp:func:`RunNode` / :cpp:class:`RuntimeSession`.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /**
  * Bundles the model-independent execution settings shared across the
@@ -65,6 +63,4 @@ struct RuntimeParameters {
   bool is_parallel() const noexcept { return EffectiveNumThreads() > 1; }
 };
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

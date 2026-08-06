@@ -10,9 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace backend_test {
+namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
 
 /**
  * Collector function type used by the registration mechanism.
@@ -47,6 +45,4 @@ int RegisterTestCasesCollector(TestCasesCollectorFn fn);
  */
 const std::vector<TestCasesCollectorFn> &GetRegisteredCollectors();
 
-} // namespace backend_test
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::backend_test

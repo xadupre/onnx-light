@@ -13,10 +13,7 @@
 #include "onnx_extensions/kernels/kernels/auto_pad.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace nn {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn {
 
 using onnx_kernels::kernel::AutoPad;
 using onnx_kernels::kernel::AutoPadFromString;
@@ -145,7 +142,4 @@ void ComputeShapeMaxPool(ShapesContext &ctx, const NodeProto &node, const char *
   }
 }
 
-} // namespace nn
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn

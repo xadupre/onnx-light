@@ -17,9 +17,7 @@
  *        broadcasting.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
 /**
  * Computes the broadcast result shape of two :cpp:class:`SymShape`
@@ -102,6 +100,4 @@ enum class BroadcastDimOp { kAdd, kSub };
 void PropagateValueAsShapeArithmetic(ShapesContext &ctx, const NodeProto &node, const char *input_a,
                                      const char *input_b, BroadcastDimOp op);
 
-} // namespace shapes
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::shapes

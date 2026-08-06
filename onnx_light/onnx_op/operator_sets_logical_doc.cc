@@ -4,9 +4,7 @@
 
 #include "onnx_op/operator_sets_logical_doc.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace logical {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::logical {
 
 std::string MakeBinaryLogicalOperatorDoc(const char *op_type, int since_version) {
   if (since_version == 1) {
@@ -74,6 +72,4 @@ This operator supports **multidirectional (i.e., Numpy-style) broadcasting**; fo
 )DOC";
 }
 
-} // namespace logical
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::logical

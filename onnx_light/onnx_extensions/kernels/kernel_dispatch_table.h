@@ -23,8 +23,7 @@
  * never needs to know about ``onnx_kernels``'s operator implementations.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels {
 
 /**
  * Registers every built-in ``onnx_kernels`` operator kernel with
@@ -49,5 +48,4 @@ namespace onnx_kernels {
  */
 void RegisterKernelFunctions();
 
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels

@@ -6,8 +6,7 @@
 #include "onnx_extensions/gradient/gradient/math/include_math_grads.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_gradient {
+namespace ONNX_LIGHT_NAMESPACE::onnx_gradient {
 
 bool GradGemm(const NodeProto &node, const std::string &output_grad,
               std::unordered_map<std::string, std::string> &grad_accum, int &counter,
@@ -47,5 +46,4 @@ bool GradGemm(const NodeProto &node, const std::string &output_grad,
   return true;
 }
 
-} // namespace onnx_gradient
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_gradient

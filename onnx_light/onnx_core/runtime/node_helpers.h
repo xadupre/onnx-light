@@ -26,9 +26,7 @@
  * ``node_helpers.cc`` (part of ``lib_onnx_core``).
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /// Vector-like wrapper for the value returned by
 /// :func:`GetAttributeIntsOrDefault`.
@@ -123,6 +121,4 @@ std::string GetRequiredAttributeString(const NodeProto &node, const std::string 
 
 int64_t GetRequiredAttributeInt(const NodeProto &node, const std::string &name);
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

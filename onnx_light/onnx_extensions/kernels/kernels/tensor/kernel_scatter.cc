@@ -6,9 +6,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor Scatter::operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
                            const Attributes &attrs, RuntimeContext *rt) const {
@@ -43,6 +41,4 @@ void Scatter::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(data, indices, updates, attrs, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

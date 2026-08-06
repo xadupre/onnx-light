@@ -12,8 +12,7 @@
 
 #include "onnx_lib/version_converter/adapters/adapter.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
 struct CompatibleAdapter final : public Adapter {
   explicit CompatibleAdapter(const std::string &op_name, const OpSetID &initial,
@@ -23,5 +22,4 @@ struct CompatibleAdapter final : public Adapter {
   Node *adapt(std::shared_ptr<Graph> /*unused*/, Node *node) const override { return node; }
 };
 
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

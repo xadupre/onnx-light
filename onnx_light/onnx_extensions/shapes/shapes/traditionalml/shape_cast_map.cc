@@ -9,10 +9,7 @@
 
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace traditionalml {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::traditionalml {
 
 namespace {
 
@@ -53,7 +50,4 @@ void ComputeShapeCastMap(ShapesContext &ctx, const NodeProto &node, const char *
   ctx.Set(node.output(0), SymTensor(nullptr, output_dtype, std::move(output_shape)));
 }
 
-} // namespace traditionalml
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::traditionalml

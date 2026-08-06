@@ -4,8 +4,7 @@
 
 #include "onnx_extensions/backend_test/cases/image/include_image_cases.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void CollectImageTestCases(std::vector<TestCase> &registry, const std::string &op_type,
                            TestMode mode) {
@@ -15,5 +14,4 @@ void CollectImageTestCases(std::vector<TestCase> &registry, const std::string &o
   DispatchRegisterByOpType(registry, op_type, kEntries, mode);
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

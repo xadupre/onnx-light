@@ -30,8 +30,7 @@
 
 #include <onnx/onnx_pb.h>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace proto {
+namespace ONNX_LIGHT_NAMESPACE::proto {
 
 namespace ol = ONNX_LIGHT_NAMESPACE;
 
@@ -337,5 +336,4 @@ private:
   std::string debug_info_;
 };
 
-} // namespace proto
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::proto

@@ -10,10 +10,7 @@
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace reduction {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::reduction {
 
 namespace {
 
@@ -62,7 +59,4 @@ void ComputeShapeArgReduce(ShapesContext &ctx, const NodeProto &node, const char
   ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kInt64, std::move(out_shape)));
 }
 
-} // namespace reduction
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::reduction

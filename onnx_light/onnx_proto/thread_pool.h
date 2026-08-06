@@ -8,8 +8,7 @@
 #include <thread>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace utils {
+namespace ONNX_LIGHT_NAMESPACE::utils {
 
 /**
  * Thread pool used to parallelize delayed block loading.
@@ -99,5 +98,4 @@ private:
   void worker_thread();
 };
 
-} // namespace utils
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::utils

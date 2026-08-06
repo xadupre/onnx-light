@@ -9,10 +9,7 @@
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace image {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::image {
 
 void ComputeShapeImageDecoder(ShapesContext &ctx, const NodeProto &node, const char *a) {
   CheckNodeOpAndOutput(node, "ImageDecoder", "ComputeShapeImageDecoder");
@@ -49,7 +46,4 @@ void ComputeShapeImageDecoder(ShapesContext &ctx, const NodeProto &node, const c
   ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kUint8, std::move(out_shape)));
 }
 
-} // namespace image
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::image

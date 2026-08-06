@@ -16,9 +16,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 // Precomputed contraction plan (forward-declared in the kernel header so
 // :cpp:class:`Einsum` can cache it between calls).
@@ -472,6 +470,4 @@ void Einsum::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(inputs, equation, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

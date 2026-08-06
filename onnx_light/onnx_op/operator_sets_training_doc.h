@@ -8,9 +8,7 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace training {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::training {
 
 /**
  * Returns the documentation string for the Gradient operator.
@@ -40,6 +38,4 @@ std::string MakeMomentumDoc();
  */
 std::string MakeAdamDoc();
 
-} // namespace training
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::training

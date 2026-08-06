@@ -8,8 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace utils {
+namespace ONNX_LIGHT_NAMESPACE::utils {
 
 /**
  * Non-owning, read-only view of a contiguous byte sequence.
@@ -560,5 +559,4 @@ private:
   std::shared_ptr<void> owner_;
 };
 
-} // namespace utils
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::utils

@@ -20,9 +20,7 @@
  *        ``quantization`` family.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes {
 
 // The generic shape-inference engine (ShapesContext, dispatch table,
 // domain constants, ...) lives in ``onnx_core`` so it never depends on
@@ -238,6 +236,4 @@ void ComputeShapeQLinearMatMul(ShapesContext &ctx, const NodeProto &node, const 
                                const char *b, const char *y_zero_point);
 
 } // namespace quantization
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes

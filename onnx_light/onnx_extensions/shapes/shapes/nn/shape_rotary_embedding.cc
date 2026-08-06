@@ -9,10 +9,7 @@
 
 #include "onnx_core/shapes/shape_check.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace nn {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn {
 
 void ComputeShapeRotaryEmbedding(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "RotaryEmbedding", "ComputeShapeRotaryEmbedding");
@@ -27,7 +24,4 @@ void ComputeShapeRotaryEmbedding(ShapesContext &ctx, const NodeProto &node, cons
   ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), in_shape));
 }
 
-} // namespace nn
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn

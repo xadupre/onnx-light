@@ -8,9 +8,7 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace controlflow {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::controlflow {
 
 /**
  * Returns the documentation string for the If operator.
@@ -146,6 +144,4 @@ std::string MakeIfThenBranchAttributeDescription();
  */
 std::string MakeIfElseBranchAttributeDescription();
 
-} // namespace controlflow
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::controlflow

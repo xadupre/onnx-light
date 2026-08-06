@@ -6,9 +6,7 @@
 
 #include "onnx_core/graph/graph_manipulations.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace compute {
+namespace ONNX_LIGHT_NAMESPACE::core::compute {
 
 ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow_input_overwrite) {
   const int num_nodes = graph.node().size();
@@ -93,6 +91,4 @@ ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow
   return info;
 }
 
-} // namespace compute
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::compute

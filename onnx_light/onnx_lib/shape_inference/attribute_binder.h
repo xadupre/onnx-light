@@ -9,8 +9,7 @@
 
 #include "onnx_lib/common/visitor.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace internal { // internal/private API
+namespace ONNX_LIGHT_NAMESPACE::internal { // internal/private API
 
 /// Maps formal attribute names to concrete attribute values from a call-site node.
 using AttributeMap = std::unordered_map<std::string, const AttributeProto *>;
@@ -74,5 +73,4 @@ private:
   const AttributeMap &attr_map_;
 };
 
-} // namespace internal
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::internal

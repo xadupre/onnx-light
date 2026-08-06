@@ -14,9 +14,7 @@
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
     : RuntimeSession(model, RuntimeSessionOptions{
@@ -346,6 +344,4 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
   }
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

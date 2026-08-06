@@ -11,9 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /**
  * Sequence — minimal runtime tensor sequence used by backend test
@@ -77,6 +75,4 @@ public:
   Sequences(std::vector<Sequence> &&values) : std::vector<Sequence>(std::move(values)) {}
 };
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

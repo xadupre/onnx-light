@@ -10,8 +10,7 @@
 #include <memory>
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace Common {
+namespace ONNX_LIGHT_NAMESPACE::Common {
 
 Status::Status(StatusCategory category, StatusCode code, const std::string &msg) {
   assert(StatusCode::OK != code);
@@ -78,5 +77,4 @@ const std::string &Status::EmptyString() {
   return empty_str;
 }
 
-} // namespace Common
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::Common

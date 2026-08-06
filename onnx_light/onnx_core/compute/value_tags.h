@@ -12,9 +12,7 @@
 
 #include "onnx_proto/onnx.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace compute {
+namespace ONNX_LIGHT_NAMESPACE::core::compute {
 
 class ComputeContext;
 
@@ -72,6 +70,4 @@ void WriteValueAndNodeTagsToMetadata(GraphProto &graph);
 void WriteValueAndNodeTagsToMetadata(FunctionProto &function);
 void WriteValueAndNodeTagsToMetadata(ModelProto &model);
 
-} // namespace compute
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::compute

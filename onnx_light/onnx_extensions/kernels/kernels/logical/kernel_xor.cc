@@ -9,9 +9,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 constexpr const char *kXorName = "kernel::Xor";
@@ -40,6 +38,4 @@ void Xor::Run(RuntimeContext &rt) {
   SetOutput(node, 0, (*this)(x, y, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

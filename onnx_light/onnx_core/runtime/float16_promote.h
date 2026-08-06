@@ -13,9 +13,7 @@
 #include <cstdint>
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 class RuntimeContext;
 
@@ -35,6 +33,4 @@ Tensor PromoteToFloat32(const Tensor &src, RuntimeContext *rt = nullptr);
 /// @return A new Tensor with data_type == target_dtype and the same shape/name.
 Tensor DemoteFromFloat32(const Tensor &src, int32_t target_dtype, RuntimeContext *rt = nullptr);
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

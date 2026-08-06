@@ -16,8 +16,7 @@
 
 #define NODE_TRANSFORMER(node) [=](const std::shared_ptr<Graph> &, Node *node)
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
 inline NodeTransformerFunction RemoveAttribute(Symbol attr) {
   return NODE_TRANSFORMER(node) {
@@ -91,5 +90,4 @@ inline NodeTransformerFunction SetAttributeIfAbsent(Symbol attr, int64_t value) 
   };
 }
 
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

@@ -25,8 +25,7 @@
 #include "onnx_op/operator_sets_traditionalml.h"
 #include "onnx_op/operator_sets_training.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op {
 
 using namespace ONNX_LIGHT_NAMESPACE::core::schema;
 
@@ -52,5 +51,4 @@ using namespace ONNX_LIGHT_NAMESPACE::core::schema;
 std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(const std::string &op_type = "",
                                                           bool init_doc = true);
 
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op

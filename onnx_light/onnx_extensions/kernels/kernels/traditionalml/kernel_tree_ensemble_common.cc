@@ -7,9 +7,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 TreeNodeMode ParseTreeNodeMode(const std::string &mode) {
   if (mode == "BRANCH_LEQ")
@@ -177,6 +175,4 @@ int64_t TraverseClassicTree(const ClassicNodeMap &node_map, int64_t tree_id, con
   }
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

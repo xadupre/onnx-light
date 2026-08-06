@@ -8,9 +8,7 @@
 #include <cstdint>
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Sequence SequenceInsert::operator()(const Sequence &input_sequence, const Tensor &tensor,
                                     const Tensor *position) const {
@@ -63,6 +61,4 @@ void SequenceInsert::Run(RuntimeContext &rt) {
   SetOutputSequence(node, 0, k(input_sequence, tensor, position), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

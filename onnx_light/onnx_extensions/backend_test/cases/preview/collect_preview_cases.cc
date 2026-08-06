@@ -4,8 +4,7 @@
 
 #include "onnx_extensions/backend_test/cases/preview/include_preview_cases.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void CollectPreviewTestCases(std::vector<TestCase> &registry, const std::string &op_type,
                              TestMode mode) {
@@ -15,5 +14,4 @@ void CollectPreviewTestCases(std::vector<TestCase> &registry, const std::string 
   DispatchRegisterByOpType(registry, op_type, kEntries, mode);
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

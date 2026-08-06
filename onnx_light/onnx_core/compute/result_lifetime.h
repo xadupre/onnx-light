@@ -26,9 +26,7 @@
  * matching.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace compute {
+namespace ONNX_LIGHT_NAMESPACE::core::compute {
 
 /// Holds per-node value-lifetime bookkeeping from :cpp:func:`ComputeResultLifetimeInfo`.
 struct ResultLifetimeNodeInfo {
@@ -131,6 +129,4 @@ private:
  */
 ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow_input_overwrite);
 
-} // namespace compute
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::compute

@@ -13,8 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 namespace {
 
@@ -264,5 +263,4 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
                            1.0f, 1.0f, 0.5f, 0, -128);
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

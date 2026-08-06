@@ -14,9 +14,7 @@
 #include <optional>
 #include <stdexcept>
 
-namespace onnx_light {
-namespace core {
-namespace expressions {
+namespace onnx_light::core::expressions {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Tokenizer
@@ -2169,6 +2167,4 @@ dim_ranges_from_expressions(const std::vector<std::pair<std::string, std::string
   return filtered;
 }
 
-} // namespace expressions
-} // namespace core
-} // namespace onnx_light
+} // namespace onnx_light::core::expressions

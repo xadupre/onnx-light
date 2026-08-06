@@ -9,8 +9,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMode mode) {
   // Single-tree binary classifier, single feature.
@@ -193,5 +192,4 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
          });
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

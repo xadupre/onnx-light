@@ -7,8 +7,7 @@
 #include "onnx_core/gradient/grad_common.h"
 #include "onnx_core/gradient/grad_dispatcher.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_gradient {
+namespace ONNX_LIGHT_NAMESPACE::onnx_gradient {
 
 // Import the core gradient types and helpers into the onnx_gradient namespace so
 // that existing callers and gradient-implementation files can use the
@@ -33,5 +32,4 @@ using core::gradient::RegisterGradientFunction;
  */
 const GradRegistry &DefaultGradRegistry();
 
-} // namespace onnx_gradient
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_gradient

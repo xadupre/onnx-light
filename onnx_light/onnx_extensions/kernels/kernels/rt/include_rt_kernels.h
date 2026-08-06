@@ -11,8 +11,7 @@
 #include <cstdint>
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels {
 // Re-exports the runtime types moved to ``onnx_core::runtime`` so
 // kernel implementations below can keep referring to them
 // unqualified, matching pre-move code.
@@ -59,5 +58,4 @@ private:
 };
 
 } // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels

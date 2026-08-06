@@ -8,8 +8,7 @@
 #include <string_view>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace utils {
+namespace ONNX_LIGHT_NAMESPACE::utils {
 
 class String;
 
@@ -364,8 +363,7 @@ inline std::ostream &operator<<(std::ostream &os, const OptionalString &s) {
   return os;
 }
 
-} // namespace utils
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::utils
 
 /** Specializes std::hash for OptionalString and String so they can be used as
  * keys in unordered containers (and with absl hashing). */

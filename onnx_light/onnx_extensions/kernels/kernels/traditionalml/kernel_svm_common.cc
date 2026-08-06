@@ -9,9 +9,7 @@
 #include <cmath>
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 double ComputeSvmKernel(const char *kernel_type, const double *x, const float *sv,
                         int64_t feature_count, float gamma, float coef0, float degree) {
@@ -56,6 +54,4 @@ void ValidateFeatureMatrixShape(const Tensor &x, int64_t &sample_count, int64_t 
                       "SVM kernels expect non-negative input dimensions.");
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

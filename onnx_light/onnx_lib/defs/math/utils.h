@@ -21,10 +21,7 @@
 #include "onnx_lib/onnx_pb.h"
 #include "onnx_manipulations/tensor_proto_util.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace defs {
-namespace math {
-namespace utils {
+namespace ONNX_LIGHT_NAMESPACE::defs::math::utils {
 
 std::function<void(OpSchema &)> TopKOpGenerator(std::vector<std::string> allowed_types);
 
@@ -57,7 +54,4 @@ const char *QLinearMatMulDoc();
 
 int64_t MathOpTwoIntegers(const std::string &op_type, int64_t a, int64_t b);
 
-} // namespace utils
-} // namespace math
-} // namespace defs
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::defs::math::utils

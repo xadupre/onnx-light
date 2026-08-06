@@ -8,9 +8,7 @@
 #include <map>
 #include <string_view>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace math {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::math {
 namespace {
 const std::map<std::string, std::string> kUnaryMathOutputDescriptionMapping{
     {"Sin", "The sine of the input tensor computed element-wise"},
@@ -371,6 +369,4 @@ std::string MakeSTFTDoc(int /*since_version*/) {
   return R"DOC(Computes the Short-time Fourier Transform of the signal.)DOC";
 }
 
-} // namespace math
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::math

@@ -5,10 +5,7 @@
 #include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_extensions/shapes/shapes/logical/shape_logical.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace logical {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::logical {
 
 void ComputeShapeGreaterOrEqual(ShapesContext &ctx, const NodeProto &node, const char *a,
                                 const char *b) {
@@ -17,7 +14,4 @@ void ComputeShapeGreaterOrEqual(ShapesContext &ctx, const NodeProto &node, const
   ComputeShapeBinaryBroadcast(ctx, node, a, b, "GreaterOrEqual", TensorType::kBool);
 }
 
-} // namespace logical
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::logical

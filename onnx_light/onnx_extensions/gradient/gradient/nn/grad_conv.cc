@@ -6,8 +6,7 @@
 #include "onnx_extensions/gradient/gradient/nn/include_nn_grads.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_gradient {
+namespace ONNX_LIGHT_NAMESPACE::onnx_gradient {
 
 namespace {
 
@@ -196,5 +195,4 @@ bool GradConv(const NodeProto &node, const std::string &output_grad,
   return true;
 }
 
-} // namespace onnx_gradient
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_gradient

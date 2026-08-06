@@ -8,9 +8,7 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace traditionalml {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::traditionalml {
 
 /**
  * Returns the documentation string for the ArrayFeatureExtractor operator.
@@ -151,6 +149,4 @@ std::string MakeDictVectorizerDoc();
  */
 std::string MakeFeatureVectorizerDoc();
 
-} // namespace traditionalml
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::traditionalml

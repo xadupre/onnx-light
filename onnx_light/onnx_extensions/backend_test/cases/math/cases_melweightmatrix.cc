@@ -6,8 +6,7 @@
 #include "onnx_extensions/backend_test/cases/math/include_math_cases.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // MelWeightMatrix — generates the triangular Mel filter-bank weight matrix
@@ -77,5 +76,4 @@ void RegisterMelWeightMatrixCases(std::vector<TestCase> &registry, TestMode mode
   });
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

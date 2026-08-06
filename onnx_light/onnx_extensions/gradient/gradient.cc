@@ -5,8 +5,7 @@
 #include "onnx_extensions/gradient/gradient.h"
 #include "onnx_core/gradient/gradient.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_gradient {
+namespace ONNX_LIGHT_NAMESPACE::onnx_gradient {
 
 FunctionProto GradientOfNodes(std::span<const NodeProto> nodes, std::span<const std::string> inputs,
                               std::span<const TensorProto> initializers,
@@ -21,5 +20,4 @@ FunctionProto GradientOfFunction(const FunctionProto &function, std::span<const 
   return core::gradient::GradientOfFunction(function, xs, y, zs, registry);
 }
 
-} // namespace onnx_gradient
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_gradient

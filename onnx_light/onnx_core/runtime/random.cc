@@ -9,9 +9,7 @@
 #include <stdexcept>
 #include <type_traits>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 namespace {
 
@@ -190,6 +188,4 @@ Tensor RandBool(const Shape &shape, std::optional<uint64_t> seed) {
   return Tensor("", static_cast<int32_t>(DataType::BOOL), shape, std::move(bytes));
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

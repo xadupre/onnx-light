@@ -30,9 +30,7 @@
  *        :cpp:class:`RuntimeSession`.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /**
  * Name-keyed map of tensors carrying both the graph inputs/initializers
@@ -783,6 +781,4 @@ private:
   symbolic::Device device_ = symbolic::Device::kUndefined;
 };
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

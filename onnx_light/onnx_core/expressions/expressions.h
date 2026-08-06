@@ -52,9 +52,7 @@
 #include <variant>
 #include <vector>
 
-namespace onnx_light {
-namespace core {
-namespace expressions {
+namespace onnx_light::core::expressions {
 
 // ─────────────────────────── operator kinds ───────────────────────────
 
@@ -871,6 +869,4 @@ std::unordered_map<std::string, DimRange>
 dim_ranges_from_expressions(const std::vector<std::pair<std::string, std::string>> &equalities,
                             const std::vector<std::string> &tokens = {});
 
-} // namespace expressions
-} // namespace core
-} // namespace onnx_light
+} // namespace onnx_light::core::expressions

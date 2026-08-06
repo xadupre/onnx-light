@@ -37,8 +37,7 @@
 #include <unordered_map>
 #include <utility>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels {
 
 // The generic per-node helpers (``RequireInputCount``, ``GetInput``, ...)
 // and runtime types (``Tensor``, ``RuntimeContext``, ...) now live in
@@ -331,5 +330,4 @@ void RegisterKernelFunctions() {
   (void)kRegistered;
 }
 
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels

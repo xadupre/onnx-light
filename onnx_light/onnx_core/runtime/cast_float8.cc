@@ -11,9 +11,7 @@
 #include <bit>
 #include <cstdint>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 namespace {
 
@@ -536,6 +534,4 @@ std::uint8_t FloatToFloat8E5M2FNUZBitsNoSaturate(float v) noexcept {
   return val;
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -13,9 +13,7 @@
 #include <string>
 #include <utility>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor NegativeLogLikelihoodLoss::operator()(const Tensor &input, const Tensor &target,
                                              const Tensor *weight, const std::string &reduction,
@@ -140,6 +138,4 @@ void NegativeLogLikelihoodLoss::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(input, target, weight, reduction, has_ignore_index, ignore_index, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

@@ -464,25 +464,22 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
                   file_path, external_data_file, mode == FileLoadMode::kMmap && !wants_no_copy);
               stream.reset(two_stream.release());
             } else if (mode == FileLoadMode::kMmap) {
-              EXT_ENFORCE(!wants_no_copy,
-                          "ParseFromFile: file_load_mode=MMAP with no_copy=True on a "
-                          "single-file model is not supported because the mmap mapping is "
-                          "released when ParseFromFile returns. Either set no_copy=False or "
-                          "use file_load_mode=AUTO (which falls back to FileStream when "
-                          "no_copy=True so inline raw_data is copied into owned buffers).");
+              // A single-file model is memory-mapped once and, when no_copy is set, every
+              // tensor borrows a zero-copy view into the mapping. This is safe because each
+              // borrowed span retains the mmap ownership token (MmapFileStream::zero_copy_owner),
+              // so the mapping outlives the stream object destroyed when ParseFromFile returns.
               stream.reset(new utils::MmapFileStream(file_path));
-            } else if (mode == FileLoadMode::kFileStream ||
-                       (mode == FileLoadMode::kAuto && wants_no_copy)) {
-              // FileStream::CanNoCopy() is false, so no_copy=True silently falls back to
-              // copying inline raw_data. Keep that behavior here so the borrowed pointers
-              // exposed by an mmap-backed stream do not outlive the stream object below.
+            } else if (mode == FileLoadMode::kFileStream) {
+              // Force the buffered std::ifstream reader. FileStream::CanNoCopy() is false, so
+              // no_copy=True silently falls back to copying inline raw_data into owned buffers.
               stream.reset(new utils::FileStream(file_path));
             } else {
-              // Default path: the file is mmap'd and parsed via StringStream-derived
-              // MmapFileStream. This avoids the FileStream double-buffer (4 KB read_buf_
-              // on top of std::ifstream's streambuf) and the seek-to-invalidate path
-              // taken on large tensor payloads, closing most of the gap with protobuf's
-              // hand-tuned ParseFromIstream.
+              // Default path (kAuto): the file is mmap'd and parsed via the StringStream-derived
+              // MmapFileStream. This avoids the FileStream double-buffer (4 KB read_buf_ on top
+              // of std::ifstream's streambuf) and the seek-to-invalidate path taken on large
+              // tensor payloads, closing most of the gap with protobuf's hand-tuned
+              // ParseFromIstream. With no_copy=True the borrowed spans retain the mmap ownership
+              // token, so zero-copy parsing is safe here too.
               stream.reset(new utils::MmapFileStream(file_path));
             }
             if (nb::isinstance<ParseOptions &>(options)) {

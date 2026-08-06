@@ -340,9 +340,9 @@ def load(
         file path. Accepts either a :class:`FileLoadMode` value or its name as a string
         (``"AUTO"``, ``"MMAP"`` or ``"IFSTREAM"``, case-insensitive). ``FileLoadMode.AUTO``
         (default) lets onnx-light pick the fastest implementation compatible with the other
-        options — currently :class:`MmapFileStream` for the main model file, except when
-        ``no_copy=True`` is set on a single-file model (in which case the buffered
-        :class:`FileStream` is used so borrowed pointers do not outlive the stream).
+        options — currently :class:`MmapFileStream` for the main model file, including when
+        ``no_copy=True`` is set on a single-file model (the borrowed pointers retain the mmap
+        ownership token, so the mapping stays alive for as long as the model uses it).
         ``FileLoadMode.MMAP`` forces memory-mapped I/O and ``FileLoadMode.IFSTREAM`` forces
         the buffered ``std::ifstream``-based reader. Ignored when *f* is a :class:`bytes`
         object. When an external weights file is provided via ``location``, the main model

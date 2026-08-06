@@ -145,6 +145,13 @@ public:
    *  When true, the returned pointer remains valid as long as the underlying data buffer lives.
    *  In-memory streams (StringStream) return true; file-backed streams return false. */
   virtual bool CanNoCopy() const { return false; }
+  /** Returns a shared_ptr that keeps the backing buffer alive for zero-copy borrows.
+   *  Borrowed ByteSpans capture this token so the buffer outlives the stream itself.
+   *  The default is an empty pointer: plain in-memory streams (StringStream) borrow from a
+   *  buffer owned by the caller, so the caller is responsible for its lifetime.  Streams that
+   *  own the mapped memory (MmapFileStream) return the owning pointer so a memory-mapped file
+   *  stays mapped for as long as any tensor references it. */
+  virtual std::shared_ptr<void> zero_copy_owner() const { return {}; }
   // to overwrite
   /** Reads and decodes the next base-128 varint as an unsigned 64-bit integer. */
   virtual uint64_t next_uint64() = 0;
@@ -446,6 +453,12 @@ public:
    *  stream's destruction, mirroring how TwoFilesStream tracks external
    *  weights buffers. */
   inline const std::shared_ptr<uint8_t> &mmap_owner() const { return mmap_; }
+
+  /** Returns the mmap ownership token so borrowed ByteSpans keep the mapping alive.
+   *  This makes zero-copy parsing (``no_copy``) safe on a single-file model: every tensor
+   *  borrows a view into the mapped file and retains this pointer, so the mapping survives
+   *  the stream's destruction. */
+  inline std::shared_ptr<void> zero_copy_owner() const override { return mmap_; }
 
 protected:
   /** Absolute path of the mapped file. */

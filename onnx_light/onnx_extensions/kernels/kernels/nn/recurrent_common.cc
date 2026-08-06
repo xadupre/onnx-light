@@ -14,6 +14,8 @@ namespace onnx_kernels {
 namespace kernel {
 namespace recurrent {
 
+using namespace ::ONNX_LIGHT_NAMESPACE::core::runtime;
+
 int64_t RecurrentNumDirections(const char *op, const std::string &direction) {
   if (direction == "forward" || direction == "reverse") {
     return 1;
@@ -36,7 +38,7 @@ Tensor RecurrentTransposeInitialState(const Tensor &state, int64_t num_direction
   const size_t n_bytes =
       static_cast<size_t>(num_directions * batch_size * hidden_size) * sizeof(float);
   Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
-                                onnx_kernels::Shape{num_directions, batch_size, hidden_size},
+                                core::runtime::Shape{num_directions, batch_size, hidden_size},
                                 n_bytes, allocator);
   float *dst = out.AsFloat();
   const float *src = state.AsFloat();
@@ -56,9 +58,10 @@ Tensor RecurrentPermuteYLayout1(const Tensor &y, int64_t seq_length, int64_t num
                                 RawBufferAllocator *allocator) {
   const size_t n_bytes =
       static_cast<size_t>(seq_length * num_directions * batch_size * hidden_size) * sizeof(float);
-  Tensor out = MakeOutputTensor(
-      static_cast<int32_t>(DataType::FLOAT),
-      onnx_kernels::Shape{batch_size, seq_length, num_directions, hidden_size}, n_bytes, allocator);
+  Tensor out =
+      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
+                       core::runtime::Shape{batch_size, seq_length, num_directions, hidden_size},
+                       n_bytes, allocator);
   float *dst = out.AsFloat();
   const float *src = y.AsFloat();
   for (int64_t s = 0; s < seq_length; ++s) {
@@ -82,7 +85,7 @@ Tensor RecurrentPermuteStateLayout1(const Tensor &state, int64_t num_directions,
   const size_t n_bytes =
       static_cast<size_t>(num_directions * batch_size * hidden_size) * sizeof(float);
   Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
-                                onnx_kernels::Shape{batch_size, num_directions, hidden_size},
+                                core::runtime::Shape{batch_size, num_directions, hidden_size},
                                 n_bytes, allocator);
   float *dst = out.AsFloat();
   const float *src = state.AsFloat();

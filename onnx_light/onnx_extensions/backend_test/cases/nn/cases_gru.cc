@@ -9,13 +9,14 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
-// GRU — single-direction (forward) one-layer GRU with the default
+// GRU — one-layer GRU with the default
 // Sigmoid/Tanh activations, mirroring the upstream ``test_gru_*``
 // reference cases (from onnx/backend/test/case/node/gru.py):
 //
@@ -276,6 +277,88 @@ void RegisterGRUCases(std::vector<TestCase> &registry, TestMode mode) {
 
       return IoData{{std::move(x_batchwise), std::move(w), std::move(r)},
                     {std::move(y_batchwise), std::move(y_h_batchwise)}};
+    });
+  }
+
+  // ``gru_reverse``: single ``reverse`` direction, seq_length=3,
+  // batch_size=1, input_size=2, hidden_size=5, mirroring upstream
+  // ``test_gru_reverse``. Only ``Y_h`` is produced.
+  {
+    NodeProto node;
+    node.set_op_type("GRU");
+    node.add_input("X");
+    node.add_input("W");
+    node.add_input("R");
+    node.add_output("");
+    node.add_output("Y_h");
+    AddAttribute<int64_t>(node, "hidden_size", 5);
+    AddAttribute(node, "direction", std::string("reverse"));
+    Expect(registry, std::move(node), "test_cc_gru_reverse", {opset}, [=]() -> IoData {
+      const int64_t seq_length = 3;
+      const int64_t batch_size = 1;
+      const int64_t input_size = 2;
+      const int64_t hidden_size = 5;
+      const std::vector<float> x_data{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+      const float weight_scale = 0.1f;
+      std::vector<float> w_data(static_cast<size_t>(kNumGates * hidden_size * input_size),
+                                weight_scale);
+      std::vector<float> r_data(static_cast<size_t>(kNumGates * hidden_size * hidden_size),
+                                weight_scale);
+      Tensor x = Tensor::FromFloat("", {seq_length, batch_size, input_size}, x_data);
+      Tensor w = Tensor::FromFloat("", {1, kNumGates * hidden_size, input_size}, w_data);
+      Tensor r = Tensor::FromFloat("", {1, kNumGates * hidden_size, hidden_size}, r_data);
+
+      auto [y_unused, y_h] = gru_kernel(x, w, r, Tensor{}, Tensor{}, 0, 0, "reverse");
+      (void)y_unused; // Y is skipped (empty output name).
+
+      return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y_h)}};
+    });
+  }
+
+  // ``gru_bidirectional``: ``bidirectional`` direction (num_directions=2),
+  // seq_length=3, batch_size=1, input_size=2, hidden_size=5, mirroring
+  // upstream ``test_gru_bidirectional``. Both ``Y`` and ``Y_h`` are produced.
+  {
+    NodeProto node;
+    node.set_op_type("GRU");
+    node.add_input("X");
+    node.add_input("W");
+    node.add_input("R");
+    node.add_output("Y");
+    node.add_output("Y_h");
+    AddAttribute<int64_t>(node, "hidden_size", 5);
+    AddAttribute(node, "direction", std::string("bidirectional"));
+    Expect(registry, std::move(node), "test_cc_gru_bidirectional", {opset}, [=]() -> IoData {
+      const int64_t num_directions = 2;
+      const int64_t seq_length = 3;
+      const int64_t batch_size = 1;
+      const int64_t input_size = 2;
+      const int64_t hidden_size = 5;
+      const std::vector<float> x_data{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+      std::vector<float> w_data(
+          static_cast<size_t>(num_directions * kNumGates * hidden_size * input_size));
+      std::vector<float> r_data(
+          static_cast<size_t>(num_directions * kNumGates * hidden_size * hidden_size));
+      const float scales[2] = {0.1f, 0.2f};
+      const int64_t w_block = kNumGates * hidden_size * input_size;
+      const int64_t r_block = kNumGates * hidden_size * hidden_size;
+      for (int64_t d = 0; d < num_directions; ++d) {
+        for (int64_t i = 0; i < w_block; ++i) {
+          w_data[static_cast<size_t>(d * w_block + i)] = scales[d];
+        }
+        for (int64_t i = 0; i < r_block; ++i) {
+          r_data[static_cast<size_t>(d * r_block + i)] = scales[d];
+        }
+      }
+      Tensor x = Tensor::FromFloat("", {seq_length, batch_size, input_size}, x_data);
+      Tensor w =
+          Tensor::FromFloat("", {num_directions, kNumGates * hidden_size, input_size}, w_data);
+      Tensor r =
+          Tensor::FromFloat("", {num_directions, kNumGates * hidden_size, hidden_size}, r_data);
+
+      auto [y, y_h] = gru_kernel(x, w, r, Tensor{}, Tensor{}, 0, 0, "bidirectional");
+
+      return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y), std::move(y_h)}};
     });
   }
 }

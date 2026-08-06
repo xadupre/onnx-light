@@ -298,6 +298,8 @@ TEST(BackendRunModel, InstanceNormalization) { RunBackendCasesFor("InstanceNorma
 TEST(BackendRunModel, LayerNormalization) { RunBackendCasesFor("LayerNormalization"); }
 TEST(BackendRunModel, RMSNormalization) { RunBackendCasesFor("RMSNormalization"); }
 TEST(BackendRunModel, RNN) { RunBackendCasesFor("RNN"); }
+TEST(BackendRunModel, GRU) { RunBackendCasesFor("GRU"); }
+TEST(BackendRunModel, LSTM) { RunBackendCasesFor("LSTM"); }
 TEST(BackendRunModel, RotaryEmbedding) { RunBackendCasesFor("RotaryEmbedding"); }
 TEST(BackendRunModel, MeanVarianceNormalization) {
   RunBackendCasesFor("MeanVarianceNormalization");

@@ -9,13 +9,14 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
-// RNN — single-direction (forward) one-layer RNN with the default Tanh
+// RNN — one-layer RNN with the default Tanh
 // activation, mirroring the upstream ``test_simple_rnn_*`` /
 // ``test_rnn_seq_length`` reference cases at opset 22:
 //
@@ -281,6 +282,83 @@ void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
 
       return IoData{{std::move(x_batchwise), std::move(w), std::move(r)},
                     {std::move(y_batchwise), std::move(y_h_batchwise)}};
+    });
+  }
+
+  // ``simple_rnn_reverse``: single ``reverse`` direction, seq_length=3,
+  // batch_size=1, input_size=2, hidden_size=5, mirroring upstream
+  // ``test_simple_rnn_reverse``. Only ``Y_h`` is produced.
+  {
+    NodeProto node;
+    node.set_op_type("RNN");
+    node.add_input("X");
+    node.add_input("W");
+    node.add_input("R");
+    node.add_output("");
+    node.add_output("Y_h");
+    AddAttribute<int64_t>(node, "hidden_size", 5);
+    AddAttribute(node, "direction", std::string("reverse"));
+    Expect(registry, std::move(node), "test_cc_simple_rnn_reverse", {opset}, [=]() -> IoData {
+      const int64_t seq_length = 3;
+      const int64_t batch_size = 1;
+      const int64_t input_size = 2;
+      const int64_t hidden_size = 5;
+      const std::vector<float> x_data{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+      const float weight_scale = 0.1f;
+      std::vector<float> w_data(static_cast<size_t>(hidden_size * input_size), weight_scale);
+      std::vector<float> r_data(static_cast<size_t>(hidden_size * hidden_size), weight_scale);
+      Tensor x = Tensor::FromFloat("", {seq_length, batch_size, input_size}, x_data);
+      Tensor w = Tensor::FromFloat("", {1, hidden_size, input_size}, w_data);
+      Tensor r = Tensor::FromFloat("", {1, hidden_size, hidden_size}, r_data);
+
+      auto [y_unused, y_h] = rnn_kernel(x, w, r, Tensor{}, Tensor{}, 0, "reverse");
+      (void)y_unused; // Y is skipped (empty output name).
+
+      return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y_h)}};
+    });
+  }
+
+  // ``bidirectional_rnn``: ``bidirectional`` direction (num_directions=2),
+  // seq_length=3, batch_size=1, input_size=2, hidden_size=5, mirroring
+  // upstream ``test_simple_rnn_bidirectional``. Both ``Y`` and ``Y_h`` are
+  // produced.
+  {
+    NodeProto node;
+    node.set_op_type("RNN");
+    node.add_input("X");
+    node.add_input("W");
+    node.add_input("R");
+    node.add_output("Y");
+    node.add_output("Y_h");
+    AddAttribute<int64_t>(node, "hidden_size", 5);
+    AddAttribute(node, "direction", std::string("bidirectional"));
+    Expect(registry, std::move(node), "test_cc_simple_rnn_bidirectional", {opset}, [=]() -> IoData {
+      const int64_t num_directions = 2;
+      const int64_t seq_length = 3;
+      const int64_t batch_size = 1;
+      const int64_t input_size = 2;
+      const int64_t hidden_size = 5;
+      const std::vector<float> x_data{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+      // Distinct per-direction weight scales so the forward and reverse
+      // passes produce different states.
+      std::vector<float> w_data(static_cast<size_t>(num_directions * hidden_size * input_size));
+      std::vector<float> r_data(static_cast<size_t>(num_directions * hidden_size * hidden_size));
+      const float scales[2] = {0.1f, 0.2f};
+      for (int64_t d = 0; d < num_directions; ++d) {
+        for (int64_t i = 0; i < hidden_size * input_size; ++i) {
+          w_data[static_cast<size_t>(d * hidden_size * input_size + i)] = scales[d];
+        }
+        for (int64_t i = 0; i < hidden_size * hidden_size; ++i) {
+          r_data[static_cast<size_t>(d * hidden_size * hidden_size + i)] = scales[d];
+        }
+      }
+      Tensor x = Tensor::FromFloat("", {seq_length, batch_size, input_size}, x_data);
+      Tensor w = Tensor::FromFloat("", {num_directions, hidden_size, input_size}, w_data);
+      Tensor r = Tensor::FromFloat("", {num_directions, hidden_size, hidden_size}, r_data);
+
+      auto [y, y_h] = rnn_kernel(x, w, r, Tensor{}, Tensor{}, 0, "bidirectional");
+
+      return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y), std::move(y_h)}};
     });
   }
 }

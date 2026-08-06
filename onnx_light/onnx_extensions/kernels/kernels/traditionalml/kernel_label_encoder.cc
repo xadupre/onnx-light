@@ -14,9 +14,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
@@ -294,6 +292,4 @@ void LabelEncoder::Run(RuntimeContext &rt) {
   SetOutput(node, 0, std::move(out), rt.tensors());
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

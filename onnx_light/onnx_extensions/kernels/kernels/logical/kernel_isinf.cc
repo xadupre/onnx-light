@@ -11,9 +11,7 @@
 #include <cstdint>
 #include <stdexcept>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor IsInf::operator()(const Tensor &x, int64_t detect_positive, int64_t detect_negative,
                          RuntimeContext *rt) const {
@@ -85,6 +83,4 @@ void IsInf::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(x, detect_positive, detect_negative, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

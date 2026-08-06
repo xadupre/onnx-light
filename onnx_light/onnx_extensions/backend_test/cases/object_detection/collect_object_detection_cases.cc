@@ -4,8 +4,7 @@
 
 #include "onnx_extensions/backend_test/cases/object_detection/include_object_detection_cases.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void CollectObjectDetectionTestCases(std::vector<TestCase> &registry, const std::string &op_type,
                                      TestMode mode) {
@@ -16,5 +15,4 @@ void CollectObjectDetectionTestCases(std::vector<TestCase> &registry, const std:
   DispatchRegisterByOpType(registry, op_type, kEntries, mode);
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

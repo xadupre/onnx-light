@@ -11,8 +11,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // Resize — nearest interpolation. Available since opset 10 (replaces the
@@ -1089,5 +1088,4 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
   }
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

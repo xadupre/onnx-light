@@ -10,8 +10,7 @@
 
 #include "onnx_core/light_op_schema/light_op_schema.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op {
 
 using namespace ONNX_LIGHT_NAMESPACE::core::schema;
 namespace reduction {
@@ -53,5 +52,4 @@ std::string MakeReduceOpDoc(const std::string &op_name, const std::string &empty
 std::string MakeArgReduceDoc(const std::string &op_name, int since_version);
 
 } // namespace reduction
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op

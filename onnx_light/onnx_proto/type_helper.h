@@ -14,8 +14,7 @@
 #include <cstdint>
 #include <stdexcept>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_proto {
+namespace ONNX_LIGHT_NAMESPACE::onnx_proto {
 
 /**
  * Identifies an element or sequence tensor type supported by onnx-light.
@@ -416,5 +415,4 @@ inline constexpr TensorType OptSeqTypeOf(TensorType elem) {
   }
 }
 
-} // namespace onnx_proto
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_proto

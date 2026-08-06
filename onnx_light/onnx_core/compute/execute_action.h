@@ -19,9 +19,7 @@
  *        node-execution operation.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /**
  * Kind of a single :cpp:class:`ExecuteAction`.
@@ -222,6 +220,4 @@ private:
   compute::InPlaceReuse inplace_;
 };
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -9,9 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace compute {
+namespace ONNX_LIGHT_NAMESPACE::core::compute {
 
 void WritePeakMemoryToMetadata(GraphProto &graph, const ShapesContext &ctx, Device device) {
   for (NodeProto &node : *graph.mutable_node()) {
@@ -32,6 +30,4 @@ void WritePeakMemoryToMetadata(GraphProto &graph, const ShapesContext &ctx, Devi
   }
 }
 
-} // namespace compute
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::compute

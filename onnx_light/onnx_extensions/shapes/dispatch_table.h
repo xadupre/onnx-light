@@ -20,8 +20,7 @@
  * never needs to know about ``onnx_shapes``'s operator implementations.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes {
 
 /**
  * Registers every built-in ``onnx_shapes`` shape function with
@@ -53,5 +52,4 @@ void RegisterShapeFunctions();
  */
 void RegisterPeakMemoryFunctions();
 
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes

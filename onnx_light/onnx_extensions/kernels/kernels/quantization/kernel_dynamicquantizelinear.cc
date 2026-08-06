@@ -13,9 +13,7 @@
 #include <string>
 #include <tuple>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
@@ -138,6 +136,4 @@ void DynamicQuantizeLinear::Run(RuntimeContext &rt) {
   SetOutput(node, 2, std::move(std::get<2>(out)), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

@@ -8,10 +8,7 @@
 
 #include "onnx_core/shapes/shape_check.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace preview {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::preview {
 
 namespace {
 
@@ -99,7 +96,4 @@ void ComputeShapeFlexAttention(ShapesContext &ctx, const NodeProto &node, const 
   ctx.Set(node.output(0), SymTensor(nullptr, Q.Dtype(), std::move(out_shape)));
 }
 
-} // namespace preview
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::preview

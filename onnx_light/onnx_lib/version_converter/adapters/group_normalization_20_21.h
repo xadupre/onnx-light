@@ -10,8 +10,7 @@
 
 #include "onnx_lib/version_converter/adapters/adapter.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
 class GroupNormalization_20_21 final : public Adapter {
 public:
@@ -119,5 +118,4 @@ public:
   }
 };
 
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

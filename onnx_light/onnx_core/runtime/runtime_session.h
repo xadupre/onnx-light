@@ -33,8 +33,7 @@
  * single time.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
+namespace ONNX_LIGHT_NAMESPACE::core {
 namespace shapes {
 // Forward declaration: VerifyDeclaredShape threads a ShapesContext (defined
 // in onnx_core/shapes/shapes_context.h) through SymShape::FitsConcreteShape
@@ -335,5 +334,4 @@ private:
 };
 
 } // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core

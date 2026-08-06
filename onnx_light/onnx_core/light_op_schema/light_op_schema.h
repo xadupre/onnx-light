@@ -60,9 +60,7 @@
 #include "onnx_proto/onnx.h"
 #include "onnx_proto/type_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace schema {
+namespace ONNX_LIGHT_NAMESPACE::core::schema {
 
 /// The standard ONNX operator domain string.
 constexpr const char *kOnnxDomain = "ai.onnx";
@@ -499,6 +497,4 @@ std::vector<LightOpSchema>
 CollectSchemasFromBuilders(const std::map<std::string, SchemaBuilder> &builders,
                            const std::string &op_type, bool init_doc);
 
-} // namespace schema
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::schema

@@ -33,9 +33,7 @@
  * :cpp:class:`core::shapes::ShapesContext` stores inferred descriptors.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace compute {
+namespace ONNX_LIGHT_NAMESPACE::core::compute {
 
 using ::onnx_light::core::shapes::ShapesContext;
 
@@ -645,6 +643,4 @@ private:
   expressions::SimplifiedExpressionCache incr_simplified_dim_cache_;
 };
 
-} // namespace compute
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::compute

@@ -10,10 +10,7 @@
 #include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_core/shapes/shape_check.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace quantization {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::quantization {
 
 void ComputeShapeQLinearMatMul(ShapesContext &ctx, const NodeProto &node, const char *a,
                                const char *b, const char *y_zero_point) {
@@ -76,7 +73,4 @@ void ComputeShapeQLinearMatMul(ShapesContext &ctx, const NodeProto &node, const 
   ctx.Set(node.output(0), SymTensor(nullptr, tensor_yzp.Dtype(), out_shape));
 }
 
-} // namespace quantization
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::quantization

@@ -7,9 +7,7 @@
 
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace generator {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::generator {
 
 namespace {
 
@@ -702,6 +700,4 @@ std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(const std::st
   return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
-} // namespace generator
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::generator

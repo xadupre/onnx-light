@@ -11,9 +11,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
@@ -216,6 +214,4 @@ void AffineGrid::Run(RuntimeContext &rt) {
   SetOutput(node, 0, affine_grid_kernel(theta, size, affine_grid_attrs, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

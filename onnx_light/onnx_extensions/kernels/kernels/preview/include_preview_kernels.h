@@ -10,8 +10,7 @@
 
 #include <functional>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels {
 // Re-exports the runtime types moved to ``onnx_core::runtime`` so
 // kernel implementations below can keep referring to them
 // unqualified, matching pre-move code.
@@ -153,5 +152,4 @@ public:
 };
 
 } // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels

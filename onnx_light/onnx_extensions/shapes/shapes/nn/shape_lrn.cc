@@ -6,10 +6,7 @@
 
 #include "onnx_core/shapes/shape_check.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace nn {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn {
 
 void ComputeShapeLRN(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "LRN", "ComputeShapeLRN");
@@ -23,7 +20,4 @@ void ComputeShapeLRN(ShapesContext &ctx, const NodeProto &node, const char *x) {
   ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), in_shape));
 }
 
-} // namespace nn
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn

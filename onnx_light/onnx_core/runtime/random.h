@@ -12,9 +12,7 @@
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /// Default seed used when no explicit seed is provided.
 inline constexpr uint64_t kDefaultSeed = 0;
@@ -203,6 +201,4 @@ extern template std::vector<uint64_t> RandUint<uint64_t>(int64_t high, const Sha
  */
 Tensor RandBool(const Shape &shape, std::optional<uint64_t> seed = std::nullopt);
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -9,8 +9,7 @@
 
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // Sinh — y = sinh(x) (since opset 9, widened to bfloat16 in opset 22).
@@ -71,5 +70,4 @@ void RegisterSinhCases(std::vector<TestCase> &registry, TestMode mode) {
   }
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

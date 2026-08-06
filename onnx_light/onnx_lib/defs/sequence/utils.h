@@ -19,15 +19,9 @@
 #include "onnx_lib/onnx_pb.h"
 #include "onnx_manipulations/tensor_proto_util.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace defs {
-namespace sequence {
-namespace utils {
+namespace ONNX_LIGHT_NAMESPACE::defs::sequence::utils {
 
 std::function<void(OpSchema &)> SplitToSequenceOpGenerator(std::vector<std::string> input_types,
                                                            std::vector<std::string> output_types);
 
-}
-} // namespace sequence
-} // namespace defs
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::defs::sequence::utils

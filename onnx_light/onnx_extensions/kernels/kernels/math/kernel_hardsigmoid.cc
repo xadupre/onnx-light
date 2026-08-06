@@ -8,9 +8,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor HardSigmoid::operator()(const Tensor &x, float alpha, float beta, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * sizeof(float);
@@ -52,6 +50,4 @@ void HardSigmoid::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(x, alpha, beta, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

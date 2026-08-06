@@ -8,10 +8,7 @@
 #include <string>
 #include <utility>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace text {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::text {
 
 void ComputeShapeStringSplit(ShapesContext &ctx, const NodeProto &node, const char *a) {
   CheckNodeOpAndOutput(node, "StringSplit", "ComputeShapeStringSplit");
@@ -29,7 +26,4 @@ void ComputeShapeStringSplit(ShapesContext &ctx, const NodeProto &node, const ch
   ctx.Set(z_name, SymTensor(nullptr, TensorType::kInt64, input.Shape()));
 }
 
-} // namespace text
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::text

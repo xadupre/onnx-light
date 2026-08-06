@@ -10,8 +10,7 @@
 
 #include "onnx_lib/version_converter/adapters/adapter.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 class AxisInputToAttribute : public Adapter {
 public:
   explicit AxisInputToAttribute(const std::string &op_name, const OpSetID &initial,
@@ -84,5 +83,4 @@ private:
   }
 };
 
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

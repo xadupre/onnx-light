@@ -10,9 +10,7 @@
 #include "onnx_core/compute/compute_context.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace compute {
+namespace ONNX_LIGHT_NAMESPACE::core::compute {
 
 namespace {
 
@@ -313,6 +311,4 @@ void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx,
   inplace.WriteToMetadata(graph);
 }
 
-} // namespace compute
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::compute

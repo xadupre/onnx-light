@@ -4,9 +4,7 @@
 
 #include "onnx_op/operator_sets_traditionalml_doc.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace traditionalml {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::traditionalml {
 
 std::string MakeArrayFeatureExtractorDoc() {
   return R"DOC(
@@ -296,6 +294,4 @@ std::string MakeFeatureVectorizerDoc() {
 )DOC";
 }
 
-} // namespace traditionalml
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::traditionalml

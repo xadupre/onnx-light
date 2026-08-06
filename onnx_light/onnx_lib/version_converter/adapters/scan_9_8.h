@@ -12,8 +12,7 @@
 
 #include "onnx_lib/version_converter/adapters/adapter.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
 struct Scan_9_8 final : public Adapter {
   explicit Scan_9_8() : Adapter("Scan", OpSetID(9), OpSetID(8)) {}
@@ -89,5 +88,4 @@ struct Scan_9_8 final : public Adapter {
   }
 };
 
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

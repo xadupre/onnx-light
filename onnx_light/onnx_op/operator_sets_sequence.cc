@@ -7,9 +7,7 @@
 
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace sequence {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::sequence {
 
 namespace {
 
@@ -223,6 +221,4 @@ std::vector<LightOpSchema> GetAllOnnxOpSequenceSchemasWithHistory(const std::str
   return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
-} // namespace sequence
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::sequence

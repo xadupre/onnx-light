@@ -12,10 +12,7 @@
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace reduction {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::reduction {
 
 namespace {
 
@@ -214,7 +211,4 @@ void ComputeShapeReduceLogSumExp(ShapesContext &ctx, const NodeProto &node, cons
   ComputeShapeReduceCommon(ctx, node, data, axes, "ReduceLogSumExp");
 }
 
-} // namespace reduction
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::reduction

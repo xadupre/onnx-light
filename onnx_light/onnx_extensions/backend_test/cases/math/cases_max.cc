@@ -12,8 +12,7 @@
 #include <utility>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // Max -- element-wise variadic max with NumPy-style broadcasting (since
@@ -209,5 +208,4 @@ void RegisterMaxCases(std::vector<TestCase> &registry, TestMode mode) {
   }
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

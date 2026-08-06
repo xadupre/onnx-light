@@ -8,9 +8,7 @@
 #include <sstream>
 #include <unordered_set>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace schema {
+namespace ONNX_LIGHT_NAMESPACE::core::schema {
 
 namespace {
 
@@ -475,6 +473,4 @@ void LightOpSchema::Verify(const NodeProto &node,
   }
 }
 
-} // namespace schema
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::schema

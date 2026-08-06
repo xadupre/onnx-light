@@ -9,9 +9,7 @@
 #include <cstring>
 #include <stdexcept>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 Tensor::~Tensor() {
   if (allocation_ != nullptr) {
@@ -492,6 +490,4 @@ Tensor MakeOutputTensor(int32_t data_type, const Shape &shape, size_t n_bytes,
   return t;
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

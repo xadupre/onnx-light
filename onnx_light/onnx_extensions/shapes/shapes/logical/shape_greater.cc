@@ -5,10 +5,7 @@
 #include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_extensions/shapes/shapes/logical/shape_logical.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace logical {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::logical {
 
 void ComputeShapeGreater(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b) {
   // Greater is element-wise with numpy-style broadcasting in every
@@ -16,7 +13,4 @@ void ComputeShapeGreater(ShapesContext &ctx, const NodeProto &node, const char *
   ComputeShapeBinaryBroadcast(ctx, node, a, b, "Greater", TensorType::kBool);
 }
 
-} // namespace logical
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::logical

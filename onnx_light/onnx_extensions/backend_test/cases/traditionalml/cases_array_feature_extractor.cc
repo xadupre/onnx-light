@@ -8,8 +8,7 @@
 
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterArrayFeatureExtractorCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
@@ -53,5 +52,4 @@ void RegisterArrayFeatureExtractorCases(std::vector<TestCase> &registry, TestMod
          });
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

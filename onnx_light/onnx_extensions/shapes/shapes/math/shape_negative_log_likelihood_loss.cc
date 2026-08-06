@@ -9,10 +9,7 @@
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace math {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math {
 
 void ComputeShapeNegativeLogLikelihoodLoss(ShapesContext &ctx, const NodeProto &node,
                                            const char *input, const char *target,
@@ -53,7 +50,4 @@ void ComputeShapeNegativeLogLikelihoodLoss(ShapesContext &ctx, const NodeProto &
   }
 }
 
-} // namespace math
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math

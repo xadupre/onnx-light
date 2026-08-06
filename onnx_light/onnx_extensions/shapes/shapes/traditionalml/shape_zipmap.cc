@@ -10,10 +10,7 @@
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace traditionalml {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::traditionalml {
 
 namespace {
 
@@ -63,7 +60,4 @@ void ComputeShapeZipMap(ShapesContext &ctx, const NodeProto &node, const char *x
   ctx.Set(node.output(0), SymTensor(nullptr, output_type, std::move(output_shape)));
 }
 
-} // namespace traditionalml
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::traditionalml

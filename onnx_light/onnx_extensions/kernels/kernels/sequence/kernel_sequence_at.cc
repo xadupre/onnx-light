@@ -10,9 +10,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor SequenceAt::operator()(const Sequence &input_sequence, const Tensor &position,
                               RuntimeContext *rt) const {
@@ -48,6 +46,4 @@ void SequenceAt::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(input_sequence, position, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

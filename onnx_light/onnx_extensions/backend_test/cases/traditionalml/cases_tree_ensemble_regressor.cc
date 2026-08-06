@@ -9,8 +9,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMode mode) {
   // Two-tree ensemble, single feature, single target, aggregate=SUM.
@@ -213,5 +212,4 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
          });
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

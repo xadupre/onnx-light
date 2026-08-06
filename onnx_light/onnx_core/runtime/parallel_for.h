@@ -22,9 +22,7 @@
  *        element-wise kernels.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /// Iteration count below which :cpp:func:`ParallelFor` runs the whole range
 /// inline on the calling thread. Waking worker threads for tiny ranges costs
@@ -280,6 +278,4 @@ template <typename Fn> void ParallelFor(int64_t total, Fn fn) {
   });
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

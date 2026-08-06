@@ -31,9 +31,7 @@
 #define ONNX_LIGHT_BACKEND_TEST_LOCAL
 #endif
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace backend_test {
+namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
 
 using namespace ::onnx_light::core::runtime;
 
@@ -451,6 +449,4 @@ std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex,
 std::vector<TestCase> GetTestCaseByName(const std::string &name, bool include_big = false,
                                         TestMode mode = TestMode::TEST);
 
-} // namespace backend_test
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::backend_test

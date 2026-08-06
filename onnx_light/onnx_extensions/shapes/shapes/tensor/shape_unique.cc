@@ -12,10 +12,7 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace tensor {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::tensor {
 
 void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Unique", "ComputeShapeUnique");
@@ -87,7 +84,4 @@ void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node) {
   }
 }
 
-} // namespace tensor
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::tensor

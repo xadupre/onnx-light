@@ -13,9 +13,7 @@
 #include <string>
 #include <utility>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 // IEEE-754 binary16 ↔ binary32 conversions used by the FLOAT16 dispatch
 // path are provided by ``onnx_core/runtime/cast_helper.h``.
@@ -205,6 +203,4 @@ void CausalConvWithState::Run(RuntimeContext &rt) {
   SetOutput(node, 1, std::move(present_state), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

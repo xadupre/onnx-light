@@ -8,13 +8,9 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace rt {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::rt {
 
 /// Returns the documentation string for the DelayedInitializer operator.
 std::string MakeDelayedInitializerDoc();
 
-} // namespace rt
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::rt

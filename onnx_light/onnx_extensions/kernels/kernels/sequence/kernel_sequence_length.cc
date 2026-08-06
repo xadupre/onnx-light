@@ -10,9 +10,7 @@
 #include <limits>
 #include <stdexcept>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor SequenceLength::operator()(const Sequence &input_sequence, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(input_sequence.size() <=
@@ -30,6 +28,4 @@ void SequenceLength::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(input_sequence, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

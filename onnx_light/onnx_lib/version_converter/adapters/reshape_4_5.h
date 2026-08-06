@@ -11,8 +11,7 @@
 
 #include "onnx_lib/version_converter/adapters/remove_consumed_inputs.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
 class Reshape_4_5 final : public RemoveConsumedInputs {
 public:
@@ -45,5 +44,4 @@ public:
   }
 };
 
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

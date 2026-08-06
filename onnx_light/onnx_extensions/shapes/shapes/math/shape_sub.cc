@@ -5,10 +5,7 @@
 #include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_extensions/shapes/shapes/math/shape_math.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace math {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math {
 
 void ComputeShapeSub(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b) {
   // Sub is element-wise with numpy-style broadcasting in every
@@ -19,7 +16,4 @@ void ComputeShapeSub(ShapesContext &ctx, const NodeProto &node, const char *a, c
   PropagateValueAsShapeArithmetic(ctx, node, a, b, BroadcastDimOp::kSub);
 }
 
-} // namespace math
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math

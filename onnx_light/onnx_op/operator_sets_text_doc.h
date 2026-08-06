@@ -8,9 +8,7 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace text {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::text {
 
 /**
  * Returns the documentation string for the StringConcat operator at the given
@@ -57,6 +55,4 @@ std::string MakeStringNormalizerDoc(int since_version);
  */
 std::string MakeTfIdfVectorizerDoc(int since_version);
 
-} // namespace text
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::text

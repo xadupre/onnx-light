@@ -14,9 +14,7 @@
 #include <tuple>
 #include <utility>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
@@ -247,6 +245,4 @@ void BatchNormalization::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(x, scale, bias, input_mean, input_var, GetEpsilon(node), &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

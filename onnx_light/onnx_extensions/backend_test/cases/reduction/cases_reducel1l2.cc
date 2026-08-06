@@ -12,8 +12,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 namespace {
 
@@ -214,5 +213,4 @@ void RegisterReduceL2Cases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterReduceL1L2OnnxCases(registry, "ReduceL2", reduce_l2_kernel, "reduce_l2");
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

@@ -14,8 +14,7 @@
 
 #include "onnx_lib/version_converter/adapters/adapter.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
 struct ExtendSupportedTypes final : public Adapter {
   explicit ExtendSupportedTypes(const std::string &op_name, const OpSetID &initial,
@@ -97,5 +96,4 @@ struct ExtendSupportedTypes final : public Adapter {
   }
 };
 
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

@@ -10,10 +10,7 @@
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace traditionalml {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::traditionalml {
 
 namespace {
 
@@ -51,7 +48,4 @@ void ComputeShapeOneHotEncoder(ShapesContext &ctx, const NodeProto &node, const 
   ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kFloat, std::move(output_shape)));
 }
 
-} // namespace traditionalml
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::traditionalml

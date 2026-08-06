@@ -7,10 +7,7 @@
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace sequence {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::sequence {
 
 void ComputeShapeSequenceLength(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "SequenceLength", "ComputeShapeSequenceLength");
@@ -20,7 +17,4 @@ void ComputeShapeSequenceLength(ShapesContext &ctx, const NodeProto &node) {
   ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kInt64, SymShape{}));
 }
 
-} // namespace sequence
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::sequence

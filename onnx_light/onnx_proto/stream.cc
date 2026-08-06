@@ -21,8 +21,7 @@
 #include <stdint.h>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace utils {
+namespace ONNX_LIGHT_NAMESPACE::utils {
 
 namespace {
 
@@ -1467,5 +1466,4 @@ void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {
   }
 }
 
-} // namespace utils
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::utils

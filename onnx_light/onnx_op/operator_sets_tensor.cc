@@ -8,9 +8,7 @@
 #include <limits>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace tensor {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::tensor {
 
 namespace {
 
@@ -2088,6 +2086,4 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
   return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
-} // namespace tensor
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::tensor

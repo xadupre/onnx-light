@@ -11,10 +11,7 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace sequence {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::sequence {
 
 void ComputeShapeSequenceEmpty(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "SequenceEmpty", "ComputeShapeSequenceEmpty");
@@ -35,7 +32,4 @@ void ComputeShapeSequenceEmpty(ShapesContext &ctx, const NodeProto &node) {
   ctx.SetSequence(node.output(0), SymSequence(elem_dtype, std::vector<SymShape>{}));
 }
 
-} // namespace sequence
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::sequence

@@ -35,9 +35,7 @@
  * node's outputs.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
 // The symbolic value descriptors (SymDim, SymShape, SymTensor, SymSequence,
 // TensorType, ...) live in ``onnx_core::symbolic`` so both ``onnx_op`` and
@@ -816,6 +814,4 @@ private:
   std::unordered_map<std::string, std::string> topk_k_dims_;
 };
 
-} // namespace shapes
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::shapes

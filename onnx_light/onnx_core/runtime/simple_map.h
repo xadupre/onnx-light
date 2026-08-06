@@ -10,9 +10,7 @@
 #include <string>
 #include <utility>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /**
  * Map — minimal runtime map used by backend test cases and reference kernel
@@ -58,6 +56,4 @@ struct Map {
   bool empty() const noexcept { return keys.element_count() == 0; }
 };
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -19,9 +19,7 @@
 
 #include <cstdint>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 // Saturating conversion from IEEE 754 binary32 to FLOAT8E4M3FN, returning
 // the resulting 8 raw bits. Non-finite inputs round to the format-specific
@@ -73,6 +71,4 @@ std::uint8_t FloatToFloat8E4M3FNUZBitsNoSaturate(float v) noexcept;
 std::uint8_t FloatToFloat8E5M2BitsNoSaturate(float v) noexcept;
 std::uint8_t FloatToFloat8E5M2FNUZBitsNoSaturate(float v) noexcept;
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

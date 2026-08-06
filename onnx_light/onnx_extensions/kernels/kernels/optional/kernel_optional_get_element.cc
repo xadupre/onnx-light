@@ -10,9 +10,7 @@
 #include <cstdint>
 #include <stdexcept>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor OptionalGetElement::operator()(const Tensor &input, RuntimeContext *rt) const {
   const size_t out_n_bytes = input.size_bytes();
@@ -65,6 +63,4 @@ void OptionalGetElement::Run(RuntimeContext &rt) {
   }
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

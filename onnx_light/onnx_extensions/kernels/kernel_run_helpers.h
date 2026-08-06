@@ -24,8 +24,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels {
 // Re-exports the runtime types moved to ``onnx_core::runtime`` so the helper
 // bodies below can keep referring to them unqualified.
 using namespace ::onnx_light::core::runtime;
@@ -182,5 +181,4 @@ auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name,
   return DispatchSVMByDataType(x, op_name, std::forward<Fn>(fn));
 }
 
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels

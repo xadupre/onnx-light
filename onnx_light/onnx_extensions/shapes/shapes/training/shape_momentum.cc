@@ -10,10 +10,7 @@
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace training {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::training {
 
 void ComputeShapeMomentum(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Momentum", "ComputeShapeMomentum");
@@ -48,7 +45,4 @@ void ComputeShapeMomentum(ShapesContext &ctx, const NodeProto &node) {
   }
 }
 
-} // namespace training
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::training

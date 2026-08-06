@@ -12,9 +12,7 @@
 
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
 namespace {
 
@@ -80,6 +78,4 @@ int64_t ComputePeakMemory(const std::string &domain, const std::string &op_type,
   return it->second(device, input_shapes);
 }
 
-} // namespace shapes
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::shapes

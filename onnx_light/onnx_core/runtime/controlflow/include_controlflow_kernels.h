@@ -19,8 +19,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 // every translation unit that needs only the kernel signatures.
 class GraphProto;
 
-namespace core {
-namespace runtime {
+namespace core::runtime {
 
 // Forward declaration; full definition lives in run_nodes.h. Kept as a
 // forward declaration here (rather than including run_nodes.h) since only
@@ -397,6 +396,5 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
-} // namespace runtime
-} // namespace core
+} // namespace core::runtime
 } // namespace ONNX_LIGHT_NAMESPACE

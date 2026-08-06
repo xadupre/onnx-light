@@ -15,8 +15,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 namespace {
 
@@ -421,5 +420,4 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
   }
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

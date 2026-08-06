@@ -8,9 +8,7 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace sequence {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::sequence {
 
 /**
  * Returns the documentation string for the SequenceEmpty operator.
@@ -76,6 +74,4 @@ std::string MakeConcatFromSequenceDoc();
  */
 std::string MakeSequenceMapDoc();
 
-} // namespace sequence
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::sequence

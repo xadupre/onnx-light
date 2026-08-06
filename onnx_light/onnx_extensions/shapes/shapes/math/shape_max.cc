@@ -9,10 +9,7 @@
 #include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_core/shapes/shape_check.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace math {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math {
 
 void ComputeShapeMax(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Max", "ComputeShapeMax");
@@ -36,7 +33,4 @@ void ComputeShapeMax(ShapesContext &ctx, const NodeProto &node) {
   ctx.Set(node.output(0), SymTensor(nullptr, out_dtype, std::move(out_shape)));
 }
 
-} // namespace math
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math

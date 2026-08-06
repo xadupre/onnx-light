@@ -9,8 +9,7 @@
 
 #include "onnx_core/light_op_schema/light_op_schema.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op {
 
 using namespace ONNX_LIGHT_NAMESPACE::core::schema;
 namespace nn {
@@ -28,5 +27,4 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
                                                             bool init_doc = true);
 
 } // namespace nn
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op

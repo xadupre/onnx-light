@@ -13,10 +13,7 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace generator {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::generator {
 
 namespace {
 
@@ -88,7 +85,4 @@ void ComputeShapeRandomUniformLike(ShapesContext &ctx, const NodeProto &node) {
   ComputeShapeRandomLikeImpl(ctx, node, "RandomUniformLike");
 }
 
-} // namespace generator
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::generator

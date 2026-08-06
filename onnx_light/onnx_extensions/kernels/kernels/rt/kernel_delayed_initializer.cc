@@ -12,9 +12,7 @@
 #include <limits>
 #include <utility>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
@@ -155,6 +153,4 @@ void DelayedInitializer::Run(RuntimeContext &rt) {
   SetOutput(node, 0, kernel(&rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

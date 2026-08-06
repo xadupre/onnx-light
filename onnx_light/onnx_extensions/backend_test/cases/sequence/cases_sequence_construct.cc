@@ -11,8 +11,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // SequenceConstruct — builds a tensor sequence from N input tensors that
@@ -104,5 +103,4 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mo
   }
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

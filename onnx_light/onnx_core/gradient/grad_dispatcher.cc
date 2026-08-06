@@ -5,9 +5,7 @@
 #include "onnx_core/gradient/grad_dispatcher.h"
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace gradient {
+namespace ONNX_LIGHT_NAMESPACE::core::gradient {
 
 const GradRegistry &DefaultGradRegistry() {
   static const GradRegistry kRegistry = [] {
@@ -46,6 +44,4 @@ void ApplyBackward(const NodeProto &node,
   it->second(node, output_grad, grad_accum, counter, func);
 }
 
-} // namespace gradient
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::gradient

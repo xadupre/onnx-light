@@ -8,8 +8,7 @@
 #include "onnx_extensions/gradient/gradient/reduction/include_reduction_grads.h"
 #include "onnx_extensions/gradient/gradient/tensor/include_tensor_grads.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_gradient {
+namespace ONNX_LIGHT_NAMESPACE::onnx_gradient {
 
 const GradRegistry &DefaultGradRegistry() {
   static const GradRegistry kRegistry = [] {
@@ -42,5 +41,4 @@ const GradRegistry &DefaultGradRegistry() {
   return kRegistry;
 }
 
-} // namespace onnx_gradient
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_gradient

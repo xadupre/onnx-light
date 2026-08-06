@@ -8,8 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op {
 
 using namespace ONNX_LIGHT_NAMESPACE::core::schema;
 namespace logical {
@@ -28,5 +27,4 @@ std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(const std::stri
                                                                  bool init_doc = true);
 
 } // namespace logical
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op

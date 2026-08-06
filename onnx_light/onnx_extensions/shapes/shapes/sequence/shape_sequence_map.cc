@@ -16,10 +16,7 @@
 #include "onnx_core/symbolic/sym_sequence.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace sequence {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::sequence {
 
 namespace {
 
@@ -115,7 +112,4 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
   }
 }
 
-} // namespace sequence
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::sequence

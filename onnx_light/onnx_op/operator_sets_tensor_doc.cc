@@ -4,9 +4,7 @@
 
 #include "onnx_op/operator_sets_tensor_doc.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace tensor {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::tensor {
 
 std::string MakeCastDoc(int since_version) {
   if (since_version == 1 || since_version == 6) {
@@ -2380,6 +2378,4 @@ output  = [[[5, 5, 5, 5], [6, 6, 6, 6], [7, 7, 7, 7], [8, 8, 8, 8]],
 )DOC";
 }
 
-} // namespace tensor
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::tensor

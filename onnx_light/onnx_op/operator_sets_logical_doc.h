@@ -6,8 +6,7 @@
 
 #include "onnx_core/light_op_schema/light_op_schema.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op {
 
 using namespace ONNX_LIGHT_NAMESPACE::core::schema;
 namespace logical {
@@ -62,5 +61,4 @@ std::string MakeBitwiseNotOperatorDoc();
 std::string MakeBitShiftOperatorDoc();
 
 } // namespace logical
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op

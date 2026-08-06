@@ -9,10 +9,7 @@
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace nn {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn {
 
 void ComputeShapeNonMaxSuppression(ShapesContext &ctx, const NodeProto &node, const char *boxes,
                                    const char *scores) {
@@ -39,7 +36,4 @@ void ComputeShapeNonMaxSuppression(ShapesContext &ctx, const NodeProto &node, co
   ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kInt64, std::move(out_shape)));
 }
 
-} // namespace nn
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn

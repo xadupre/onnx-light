@@ -13,9 +13,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
@@ -149,6 +147,4 @@ void EyeLike::Run(RuntimeContext &rt) {
   SetOutput(node, 0, kernel(x, k, static_cast<int32_t>(dtype), &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

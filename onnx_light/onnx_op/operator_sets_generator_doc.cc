@@ -4,9 +4,7 @@
 
 #include "onnx_op/operator_sets_generator_doc.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace generator {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::generator {
 
 std::string MakeBernoulliDoc() {
   return R"DOC(
@@ -152,6 +150,4 @@ bfloat16 would otherwise be inexact (e.g. `x + 1 == x` for large `x`).
   return doc;
 }
 
-} // namespace generator
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::generator

@@ -23,10 +23,7 @@
  * private control-flow / function-call helpers they depend on).
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
-namespace detail {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail {
 
 /**
  * Resolves how ``node`` must be dispatched, building and returning the
@@ -60,7 +57,4 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
 void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
                        const std::string &op_type, int verbose_override = -1);
 
-} // namespace detail
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail

@@ -21,8 +21,7 @@
 #include "onnx_lib/shape_inference/attribute_binder.h"
 #include "onnx_manipulations/data_type_utils.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace shape_inference {
+namespace ONNX_LIGHT_NAMESPACE::shape_inference {
 
 std::string GetValueCaseString(const TypeProto &type) {
   switch (type.value_case()) {
@@ -1071,5 +1070,4 @@ void TraverseGraphsToAddExistingSymbols(const GraphProto &g, SymbolTable &symbol
   }
 }
 
-} // namespace shape_inference
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::shape_inference

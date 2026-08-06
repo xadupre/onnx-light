@@ -16,14 +16,12 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes {
 
 // Alias to the symbolic dimension-expression library, which lives in
 // ``onnx_core`` so both ``onnx_op`` and ``onnx_shapes`` can share it.
 namespace expressions = ::ONNX_LIGHT_NAMESPACE::core::expressions;
-namespace shapes {
-namespace controlflow {
+namespace shapes::controlflow {
 
 namespace {
 
@@ -590,7 +588,5 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   ctx.RegisterSubgraphContext(ctx.current_node_index(), "body", std::move(local));
 }
 
-} // namespace controlflow
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace shapes::controlflow
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes

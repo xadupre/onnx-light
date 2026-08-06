@@ -13,8 +13,7 @@
 #include "onnx_lib/common/assertions.h"
 #include "onnx_lib/version_converter/adapters/type_restriction.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
 static const std::vector<TensorProto_DataType> q_dq_20_unallowed_types = {
     TensorProto_DataType_UINT16, TensorProto_DataType_INT16, TensorProto_DataType_UINT4,
@@ -72,5 +71,4 @@ public:
   }
 };
 
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

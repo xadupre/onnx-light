@@ -9,9 +9,7 @@
 
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace backend_test {
+namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
 
 using namespace ::onnx_light::core::runtime;
 
@@ -27,6 +25,4 @@ struct IoData {
   std::vector<Map> maps = {};
 };
 
-} // namespace backend_test
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::backend_test

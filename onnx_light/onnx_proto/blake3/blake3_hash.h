@@ -11,8 +11,7 @@
 
 #include "blake3.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace utils {
+namespace ONNX_LIGHT_NAMESPACE::utils {
 
 /**
  * Incremental BLAKE3 hasher used to hash tensor payloads.
@@ -41,5 +40,4 @@ private:
   blake3_hasher state_;
 };
 
-} // namespace utils
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::utils

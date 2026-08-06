@@ -9,9 +9,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p,
                                    RuntimeContext *rt) const {
@@ -80,6 +78,4 @@ void LpNormalization::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(x, axis, p, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

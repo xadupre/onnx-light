@@ -35,9 +35,7 @@
  * that does not need a caller-supplied context.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
 /**
  * Convenience helper: constructs a fresh :cpp:class:`ShapesContext`,
@@ -57,6 +55,4 @@ namespace shapes {
  */
 void InferShapesModel(ModelProto &model, bool prefill_with_value_info_output = false);
 
-} // namespace shapes
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::shapes

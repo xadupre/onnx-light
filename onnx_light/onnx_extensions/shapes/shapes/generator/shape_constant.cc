@@ -11,10 +11,7 @@
 
 #include "onnx_core/shapes/shape_check.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace generator {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::generator {
 
 namespace {
 
@@ -172,7 +169,4 @@ void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node) {
   ctx.Set(node.output(0), std::move(output));
 }
 
-} // namespace generator
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::generator

@@ -5,10 +5,7 @@
 #include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_extensions/shapes/shapes/math/shape_math.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace math {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math {
 
 void ComputeShapePow(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b) {
   // Pow is element-wise with numpy-style broadcasting in every
@@ -18,7 +15,4 @@ void ComputeShapePow(ShapesContext &ctx, const NodeProto &node, const char *a, c
   ComputeShapeBinaryBroadcast(ctx, node, a, b, "Pow", out_dtype);
 }
 
-} // namespace math
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math

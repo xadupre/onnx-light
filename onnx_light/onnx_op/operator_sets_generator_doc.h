@@ -8,9 +8,7 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace generator {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::generator {
 
 /**
  * Returns the documentation string for the Bernoulli operator. The
@@ -98,6 +96,4 @@ std::string MakeRandomUniformLikeDoc();
  */
 std::string MakeRangeDoc(int since_version);
 
-} // namespace generator
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::generator

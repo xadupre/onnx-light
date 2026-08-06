@@ -12,8 +12,7 @@
 #include <tuple>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // LayerNormalization (opset 17) — standardizes ``X`` over the last
@@ -182,5 +181,4 @@ void RegisterLayerNormalizationCases(std::vector<TestCase> &registry, TestMode m
                /*include_epsilon_attr=*/false);
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

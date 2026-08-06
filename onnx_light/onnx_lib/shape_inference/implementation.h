@@ -17,8 +17,7 @@
 #include "onnx_manipulations/tensor_proto_util.h"
 #include "onnx_proto/onnx_alias.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace shape_inference {
+namespace ONNX_LIGHT_NAMESPACE::shape_inference {
 
 using ModelLocalFunctionsMap = std::unordered_map<std::string, const FunctionProto *>;
 
@@ -528,5 +527,4 @@ std::string GetErrorWithNodeInfo(const NodeProto &n, const std::runtime_error &e
 
 void TraverseGraphsToAddExistingSymbols(const GraphProto &g, SymbolTable &symbol_table);
 
-} // namespace shape_inference
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::shape_inference

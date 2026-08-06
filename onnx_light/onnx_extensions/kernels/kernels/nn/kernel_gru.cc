@@ -13,9 +13,7 @@
 #include <cstring>
 #include <utility>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
@@ -369,6 +367,4 @@ void GRU::Run(RuntimeContext &rt) {
   set_optional_output(1, std::move(y_h));
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

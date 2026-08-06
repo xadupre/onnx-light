@@ -7,10 +7,7 @@
 
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace text {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::text {
 
 void ComputeShapeStringNormalizer(ShapesContext &ctx, const NodeProto &node, const char *a) {
   CheckNodeOpAndOutput(node, "StringNormalizer", "ComputeShapeStringNormalizer");
@@ -42,7 +39,4 @@ void ComputeShapeStringNormalizer(ShapesContext &ctx, const NodeProto &node, con
                     rank, ".");
 }
 
-} // namespace text
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::text

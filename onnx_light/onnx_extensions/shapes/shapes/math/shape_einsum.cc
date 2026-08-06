@@ -13,10 +13,7 @@
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace math {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math {
 
 namespace {
 
@@ -226,7 +223,4 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node) {
   ctx.Set(node.output(0), SymTensor(nullptr, out_dtype, SymShape(out_dims)));
 }
 
-} // namespace math
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math

@@ -10,10 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace text {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::text {
 
 void ComputeShapeTfIdfVectorizer(ShapesContext &ctx, const NodeProto &node, const char *a) {
   CheckNodeOpAndOutput(node, "TfIdfVectorizer", "ComputeShapeTfIdfVectorizer");
@@ -43,7 +40,4 @@ void ComputeShapeTfIdfVectorizer(ShapesContext &ctx, const NodeProto &node, cons
                     rank, ".");
 }
 
-} // namespace text
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::text

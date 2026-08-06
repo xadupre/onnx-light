@@ -5,10 +5,7 @@
 #include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_extensions/shapes/shapes/math/shape_math.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace math {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math {
 
 void ComputeShapePRelu(ShapesContext &ctx, const NodeProto &node, const char *x,
                        const char *slope) {
@@ -22,7 +19,4 @@ void ComputeShapePRelu(ShapesContext &ctx, const NodeProto &node, const char *x,
   ComputeShapeBinaryBroadcast(ctx, node, x, slope, "PRelu", out_dtype);
 }
 
-} // namespace math
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math

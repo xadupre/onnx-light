@@ -13,8 +13,7 @@
 #include <utility>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
@@ -393,5 +392,4 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
   }
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

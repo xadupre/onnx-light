@@ -24,9 +24,7 @@
 
 #include "onnx_core/expressions/expressions.h"
 
-namespace onnx_light {
-namespace core {
-namespace expressions {
+namespace onnx_light::core::expressions {
 
 /// Memoization cache mapping a symbolic expression string to its simplified
 /// form, shared across simplifications to avoid re-running the symbolic
@@ -63,6 +61,4 @@ private:
   std::map<std::string, int64_t> coefficients_;
 };
 
-} // namespace expressions
-} // namespace core
-} // namespace onnx_light
+} // namespace onnx_light::core::expressions

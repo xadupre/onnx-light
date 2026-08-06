@@ -9,9 +9,7 @@
 #include <limits>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace math {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::math {
 
 AttributeParam MakeSoftmaxAxisAttr(int64_t default_axis);
 
@@ -3118,6 +3116,4 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
   return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
-} // namespace math
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::math

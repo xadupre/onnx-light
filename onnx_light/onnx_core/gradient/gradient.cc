@@ -13,9 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace gradient {
+namespace ONNX_LIGHT_NAMESPACE::core::gradient {
 
 namespace {
 
@@ -161,6 +159,4 @@ FunctionProto GradientOfFunction(const FunctionProto &function, std::span<const 
                          domain, name, registry);
 }
 
-} // namespace gradient
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::gradient

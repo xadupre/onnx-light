@@ -11,9 +11,7 @@
 #define ONNX_LIGHT_NAMESPACE onnx_light
 #endif
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 /// Padding strategy for convolutional and pooling operators (ONNX
 /// ``auto_pad`` attribute).
@@ -61,6 +59,4 @@ inline constexpr const char *AutoPadToString(AutoPad ap) {
   }
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

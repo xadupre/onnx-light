@@ -5,9 +5,7 @@
 #include "onnx_op/operator_sets_object_detection.h"
 #include "onnx_op/operator_sets_object_detection_doc.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace object_detection {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::object_detection {
 
 namespace {
 
@@ -128,6 +126,4 @@ std::vector<LightOpSchema> GetAllOnnxOpObjectDetectionSchemasWithHistory(const s
   return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
-} // namespace object_detection
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::object_detection

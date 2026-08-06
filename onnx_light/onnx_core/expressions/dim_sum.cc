@@ -7,9 +7,7 @@
 #include <string>
 #include <variant>
 
-namespace onnx_light {
-namespace core {
-namespace expressions {
+namespace onnx_light::core::expressions {
 
 DimType simplify_dim_type(const DimType &value, SimplifiedExpressionCache *cache) {
   if (std::holds_alternative<int64_t>(value)) {
@@ -66,6 +64,4 @@ DimType DimSum::Build(SimplifiedExpressionCache *cache) const {
   return simplify_dim_type(DimType{expr}, cache);
 }
 
-} // namespace expressions
-} // namespace core
-} // namespace onnx_light
+} // namespace onnx_light::core::expressions

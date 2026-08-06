@@ -24,8 +24,7 @@
 #include "onnx_lib/onnx-data.pb.h"
 #include "onnx_lib/string_utils.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace checker {
+namespace ONNX_LIGHT_NAMESPACE::checker {
 /**
  * Exception type thrown by checker routines when validation fails.
  *
@@ -442,5 +441,4 @@ int64_t open_external_data(const std::string &base_dir, const std::string &locat
  */
 ONNX_API bool check_is_experimental_op(const NodeProto &node);
 
-} // namespace checker
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::checker

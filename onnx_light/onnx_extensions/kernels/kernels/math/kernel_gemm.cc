@@ -15,9 +15,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
@@ -186,6 +184,4 @@ void Gemm::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(a, b, c, alpha, beta, transA, transB, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

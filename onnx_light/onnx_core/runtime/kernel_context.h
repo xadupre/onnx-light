@@ -24,8 +24,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 // intentionally not pulled into this low-level runtime header.
 class NodeProto;
 
-namespace core {
-namespace runtime {
+namespace core::runtime {
 
 using ::onnx_light::core::runtime::RawBufferAllocator;
 
@@ -136,8 +135,7 @@ protected:
   const NodeProto *node_ = nullptr;
 };
 
-} // namespace runtime
-} // namespace core
+} // namespace core::runtime
 } // namespace ONNX_LIGHT_NAMESPACE
 
 #endif // ONNX_LIGHT_ONNX_CORE_RUNTIME_KERNEL_CONTEXT_H

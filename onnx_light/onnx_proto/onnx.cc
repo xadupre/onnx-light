@@ -636,6 +636,17 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
     // from triggering an unbounded allocation during serialization.
     if (expected_offset > current_offset) {
       const int64_t padding = expected_offset - current_offset;
+      // A legitimate gap only aligns the tensor to the next boundary, so it is always below one
+      // alignment boundary. Reject an offset that would pad the weights file with an unbounded,
+      // untrusted amount of zeros. This mirrors upstream PR
+      // https://github.com/onnx/onnx/pull/8260. The cap is the larger of the requested alignment
+      // and 64 KiB, the largest alignment boundary offsets may use (see ExternalData.md).
+      constexpr int64_t kMaxExternalDataPadding = 64 * 1024;
+      const int64_t max_padding = std::max<int64_t>(kMaxExternalDataPadding, options.alignment);
+      EXT_ENFORCE(padding <= max_padding, "External data offset ", expected_offset, " for tensor '",
+                  ref_name(), "' requires ", padding,
+                  " bytes of alignment padding which exceeds the maximum of ", max_padding,
+                  " bytes.");
       static constexpr size_t CHUNK = 128;
       static const uint8_t zeros[CHUNK] = {};
       for (int64_t written = 0; written < padding;) {

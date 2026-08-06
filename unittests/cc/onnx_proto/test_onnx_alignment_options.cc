@@ -469,3 +469,75 @@ TEST(onnx_alignment_options, ParseNoCopyExternalDataRemainsValidAfterStreamDestr
   std::remove(weights_file.c_str());
   std::remove(weights_file_1.c_str());
 }
+
+namespace {
+
+// Builds a model with a single initializer already marked EXTERNAL and carrying the given offset.
+// The inline raw_data is preserved so it can be written out during serialization; PopulateExternalData
+// skips tensors that are already external, so the crafted offset reaches the write path unchanged.
+ModelProto MakeModelWithExternalOffset(const std::string &location, int64_t offset) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  TensorProto *t = graph->add_initializer();
+  t->set_name("w0");
+  t->set_data_type(TensorProto::DataType::UINT8);
+  t->ref_dims().push_back(4);
+  t->ref_raw_data() = std::vector<uint8_t>{1, 2, 3, 4};
+  t->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+  StringStringEntryProto *loc = t->add_external_data();
+  loc->set_key("location");
+  loc->set_value(location);
+  StringStringEntryProto *off = t->add_external_data();
+  off->set_key("offset");
+  off->set_value(std::to_string(offset));
+  StringStringEntryProto *len = t->add_external_data();
+  len->set_key("length");
+  len->set_value(std::to_string(t->ref_raw_data().size()));
+  return model;
+}
+
+} // namespace
+
+// Propagates onnx/onnx#8260: a crafted external-data offset that would pad the weights file with an
+// unbounded amount of zeros is rejected during serialization instead of silently writing the zeros.
+TEST(onnx_alignment_options, SerializeRejectsUnboundedExternalDataPadding) {
+  const std::string onnx_file = "test_external_padding_reject.onnx";
+  const std::string weights_file = "test_external_padding_reject.data";
+  // Offset far beyond the 64 KiB cap; the tensor sits at offset 0 so the padding equals the offset.
+  ModelProto model = MakeModelWithExternalOffset(weights_file, 1 << 20);
+
+  utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+  SerializeOptions sopts;
+  sopts.raw_data_threshold = 0;
+  sopts.alignment = 16;
+  try {
+    SerializeProtoToStream(model, wstream, sopts);
+    FAIL() << "Expected SerializeProtoToStream to throw for out-of-bounds external-data padding.";
+  } catch (const std::runtime_error &err) {
+    const std::string message = err.what();
+    EXPECT_NE(message.find("exceeds the maximum"), std::string::npos) << message;
+  }
+
+  std::remove(onnx_file.c_str());
+  std::remove(weights_file.c_str());
+}
+
+// A padding gap up to the cap is legitimate (e.g. an aligned offset) and must still serialize.
+TEST(onnx_alignment_options, SerializeAcceptsBoundedExternalDataPadding) {
+  const std::string onnx_file = "test_external_padding_accept.onnx";
+  const std::string weights_file = "test_external_padding_accept.data";
+  // 64 KiB offset equals the cap, so the padding stays within bounds.
+  ModelProto model = MakeModelWithExternalOffset(weights_file, 64 * 1024);
+
+  {
+    utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+    SerializeOptions sopts;
+    sopts.raw_data_threshold = 0;
+    sopts.alignment = 16;
+    EXPECT_NO_THROW(SerializeProtoToStream(model, wstream, sopts));
+  }
+
+  std::remove(onnx_file.c_str());
+  std::remove(weights_file.c_str());
+}

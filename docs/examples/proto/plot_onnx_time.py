@@ -706,8 +706,8 @@ if _run_scenario("load"):
     # ``CreateFileMapping`` on Windows) and parses directly out of the mapped
     # region, while ``FileLoadMode.IFSTREAM`` forces the buffered
     # ``std::ifstream``-based reader.  The default ``FileLoadMode.AUTO``
-    # behaves like ``MMAP`` for single-file models when ``no_copy`` is not
-    # requested; running both modes side by side highlights the gain (or
+    # behaves like ``IFSTREAM`` (memory mapping is not used by default);
+    # running both modes side by side highlights the gain (or
     # cost) of memory mapping on the current platform/filesystem.
 
     data.append(

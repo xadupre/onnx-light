@@ -471,19 +471,13 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
                           "use file_load_mode=AUTO (which falls back to FileStream when "
                           "no_copy=True so inline raw_data is copied into owned buffers).");
               stream.reset(new utils::MmapFileStream(file_path));
-            } else if (mode == FileLoadMode::kFileStream ||
-                       (mode == FileLoadMode::kAuto && wants_no_copy)) {
-              // FileStream::CanNoCopy() is false, so no_copy=True silently falls back to
-              // copying inline raw_data. Keep that behavior here so the borrowed pointers
-              // exposed by an mmap-backed stream do not outlive the stream object below.
-              stream.reset(new utils::FileStream(file_path));
             } else {
-              // Default path: the file is mmap'd and parsed via StringStream-derived
-              // MmapFileStream. This avoids the FileStream double-buffer (4 KB read_buf_
-              // on top of std::ifstream's streambuf) and the seek-to-invalidate path
-              // taken on large tensor payloads, closing most of the gap with protobuf's
-              // hand-tuned ParseFromIstream.
-              stream.reset(new utils::MmapFileStream(file_path));
+              // mode == kFileStream or kAuto: use the buffered FileStream. Memory
+              // mapping is not the default for AUTO; MmapFileStream is only used when
+              // explicitly requested via file_load_mode=MMAP. FileStream::CanNoCopy() is
+              // false, so no_copy=True silently falls back to copying inline raw_data,
+              // which keeps borrowed pointers from outliving the stream object below.
+              stream.reset(new utils::FileStream(file_path));
             }
             if (nb::isinstance<ParseOptions &>(options)) {
               ParseOptions &coptions = nb::cast<ParseOptions &>(options);
@@ -1076,8 +1070,8 @@ void AddOnnxPyProto(nb::module_ &m) {
                           "Selects the file-backed stream implementation used when parsing "
                           "a model from a file path.")
       .value("AUTO", FileLoadMode::kAuto,
-             "Pick the fastest stream compatible with the other options "
-             "(currently mmap, except when no_copy=True on a single-file model).")
+             "Pick a compatible stream without memory-mapping (currently the buffered "
+             "FileStream; this choice may change in the future).")
       .value("MMAP", FileLoadMode::kMmap, "Force MmapFileStream (memory-mapped file).")
       .value("IFSTREAM", FileLoadMode::kFileStream, "Force FileStream (buffered std::ifstream).");
 
@@ -1171,9 +1165,11 @@ void AddOnnxPyProto(nb::module_ &m) {
               "``length``/``size`` is strictly below the threshold (in bytes).")
       .def_rw("file_load_mode", &ParseOptions::file_load_mode,
               "Selects the file-backed stream used when parsing a model from a path: "
-              "FileLoadMode.AUTO (default) picks mmap unless no_copy=True is set on a "
-              "single-file model, FileLoadMode.MMAP forces MmapFileStream, and "
-              "FileLoadMode.IFSTREAM forces the buffered std::ifstream-based FileStream. "
+              "FileLoadMode.AUTO (default) picks a compatible stream and does not "
+              "memory-map (currently the buffered std::ifstream-based FileStream, but "
+              "this choice may change in the future), FileLoadMode.MMAP forces "
+              "MmapFileStream, and FileLoadMode.IFSTREAM always forces the buffered "
+              "std::ifstream-based FileStream. "
               "Ignored when parsing from bytes or when an external_data_file is provided.")
       .def_rw("format", &ParseOptions::format,
               "Selects the on-disk serialization format expected when parsing. "

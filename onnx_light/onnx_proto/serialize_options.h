@@ -66,10 +66,9 @@ struct TensorBufferOptions {
 
 /** Selects which file-backed BinaryStream implementation is used when parsing
  *  a model from a file path (for example via ``ModelProto::ParseFromFile``).
- *  - ``kAuto`` (default): pick the fastest implementation that is compatible
- *    with the other options.  Today that means ``MmapFileStream`` except when
- *    ``no_copy`` is true with a single-file model — see ``ParseFromFile`` for
- *    the precise selection rules.
+ *  - ``kAuto`` (default): pick a compatible implementation without memory-mapping.
+ *    Today that means ``FileStream``, but the choice may change in the future —
+ *    see ``ParseFromFile`` for the precise selection rules.
  *  - ``kMmap``: force usage of ``MmapFileStream`` (memory-mapped file).
  *  - ``kFileStream``: force usage of ``FileStream`` (buffered ``std::ifstream``). */
 enum class FileLoadMode : int32_t {

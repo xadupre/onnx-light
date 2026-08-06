@@ -3855,6 +3855,53 @@ TEST(onnx_proto, TensorProto_NoCopyRawData) {
   EXPECT_EQ(reserialized.size(), tensor2.SerializeSize(st, sopts).size());
 }
 
+TEST(onnx_proto, TensorProto_NoCopyMmapSingleFileOutlivesStream) {
+  // Regression test for single-file mmap + no_copy: a tensor parsed with no_copy=true
+  // from a MmapFileStream borrows directly into the memory-mapped file. The borrowed
+  // span must retain the mmap ownership token so the mapping stays valid even after the
+  // stream that created it is destroyed.
+  const std::string temp_filename = "test_no_copy_mmap_single_file.tmp";
+
+  // Build a TensorProto with raw data and serialize it to a file.
+  TensorProto tensor1;
+  tensor1.set_name("mmap_no_copy_test");
+  tensor1.set_data_type(TensorProto::DataType::FLOAT);
+  tensor1.ref_dims().push_back(2);
+  tensor1.ref_dims().push_back(2);
+  const std::vector<float> data = {1.0f, 2.0f, 3.0f, 4.0f};
+  tensor1.ref_raw_data().resize(data.size() * sizeof(float));
+  std::memcpy(tensor1.ref_raw_data().data(), data.data(), data.size() * sizeof(float));
+  {
+    utils::FileWriteStream out(temp_filename);
+    SerializeOptions sopts;
+    tensor1.SerializeToStream(out, sopts);
+  }
+
+  TensorProto tensor2;
+  {
+    // Parse through a memory-mapped stream that is destroyed at the end of this scope.
+    utils::MmapFileStream stream(temp_filename);
+    ParseOptions no_copy_opts;
+    no_copy_opts.no_copy = true;
+    tensor2.ParseFromStream(stream, no_copy_opts);
+
+    EXPECT_TRUE(tensor2.ref_raw_data().is_borrowed());
+    EXPECT_EQ(tensor2.ref_raw_data().size(), data.size() * sizeof(float));
+  }
+
+  // The stream (and the local mmap_ shared_ptr) is gone, but the borrowed span kept
+  // the mapping alive through zero_copy_owner(), so the data is still valid here.
+  const utils::ByteSpan &raw_span = tensor2.ref_raw_data();
+  ASSERT_TRUE(raw_span.is_borrowed());
+  const float *raw_ptr = reinterpret_cast<const float *>(raw_span.data());
+  EXPECT_FLOAT_EQ(raw_ptr[0], 1.0f);
+  EXPECT_FLOAT_EQ(raw_ptr[1], 2.0f);
+  EXPECT_FLOAT_EQ(raw_ptr[2], 3.0f);
+  EXPECT_FLOAT_EQ(raw_ptr[3], 4.0f);
+
+  std::filesystem::remove(temp_filename);
+}
+
 TEST(onnx_stream, FileWriteStream) {
   std::string temp_filename = "test_file_write_stream.tmp";
 

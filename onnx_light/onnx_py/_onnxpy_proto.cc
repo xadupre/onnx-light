@@ -464,12 +464,10 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
                   file_path, external_data_file, mode == FileLoadMode::kMmap && !wants_no_copy);
               stream.reset(two_stream.release());
             } else if (mode == FileLoadMode::kMmap) {
-              EXT_ENFORCE(!wants_no_copy,
-                          "ParseFromFile: file_load_mode=MMAP with no_copy=True on a "
-                          "single-file model is not supported because the mmap mapping is "
-                          "released when ParseFromFile returns. Either set no_copy=False or "
-                          "use file_load_mode=AUTO (which falls back to FileStream when "
-                          "no_copy=True so inline raw_data is copied into owned buffers).");
+              // A single-file model is memory-mapped once and, when no_copy is set, every
+              // tensor borrows a zero-copy view into the mapping. This is safe because each
+              // borrowed span retains the mmap ownership token (MmapFileStream::zero_copy_owner),
+              // so the mapping outlives the stream object destroyed when ParseFromFile returns.
               stream.reset(new utils::MmapFileStream(file_path));
             } else {
               // mode == kFileStream or kAuto: use the buffered FileStream. Memory

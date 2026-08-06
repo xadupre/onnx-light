@@ -335,7 +335,7 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
                     " when no_copy=true. Disable no_copy or use a compatible alignment.");
       }
       const uint8_t *ptr = stream.read_bytes(static_cast<utils::offset_t>(len), nullptr);
-      field.assign_borrowed(ptr, static_cast<size_t>(len));
+      field.assign_borrowed(ptr, static_cast<size_t>(len), stream.zero_copy_owner());
     } else if (!options.is_parallel() && options.alignment > 1) {
       // Alignment-only fast path: no thread pool overhead.
       field.resize_aligned(static_cast<size_t>(len), static_cast<size_t>(options.alignment));

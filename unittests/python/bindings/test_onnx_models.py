@@ -411,15 +411,17 @@ class TestOnnxLightHelper(ExtTestCase):
         with self.assertRaises(ValueError):
             onnxl.load(name, file_load_mode="not-a-mode")
 
-    def test_load_file_load_mode_mmap_with_no_copy_raises(self):
-        # Explicitly forcing MMAP with no_copy=True on a single-file model
-        # is rejected by the binding because the mmap mapping is released
-        # when the binding returns, which would dangle the borrowed pointers.
+    def test_load_file_load_mode_mmap_with_no_copy(self):
+        # Forcing MMAP with no_copy=True on a single-file model borrows the tensor
+        # bytes directly from the memory-mapped file. The borrowed spans retain the
+        # mmap ownership token, so the mapping outlives the load call and the model
+        # stays valid after it returns.
         name = self.get_dump_file("test_load_file_load_mode_mmap_no_copy.onnx")
         model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
         onnxl.save(model, name)
-        with self.assertRaises(RuntimeError):
-            onnxl.load(name, no_copy=True, file_load_mode=onnxl.FileLoadMode.MMAP)
+        baseline = onnxl.load(name)
+        loaded = onnxl.load(name, no_copy=True, file_load_mode=onnxl.FileLoadMode.MMAP)
+        self.assertEqualModelProto(baseline, loaded)
 
     def test_load_with_touch_raw_data_pages_option(self):
         name = self.get_dump_file("test_load_with_touch_raw_data_pages_option.onnx")

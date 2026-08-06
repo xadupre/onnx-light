@@ -339,14 +339,15 @@ def load(
     :param file_load_mode: selects the file-backed stream implementation used when *f* is a
         file path. Accepts either a :class:`FileLoadMode` value or its name as a string
         (``"AUTO"``, ``"MMAP"`` or ``"IFSTREAM"``, case-insensitive). ``FileLoadMode.AUTO``
-        (default) lets onnx-light pick the fastest implementation compatible with the other
-        options — currently :class:`MmapFileStream` for the main model file, except when
-        ``no_copy=True`` is set on a single-file model (in which case the buffered
-        :class:`FileStream` is used so borrowed pointers do not outlive the stream).
-        ``FileLoadMode.MMAP`` forces memory-mapped I/O and ``FileLoadMode.IFSTREAM`` forces
-        the buffered ``std::ifstream``-based reader. Ignored when *f* is a :class:`bytes`
-        object. When an external weights file is provided via ``location``, the main model
-        file is always read through the buffered reader (``TwoFilesStream``); ``MMAP`` then
+        (default) lets onnx-light pick a compatible implementation without memory-mapping —
+        currently the buffered :class:`FileStream`, but this choice may change in the future.
+        ``FileLoadMode.MMAP`` forces memory-mapped I/O (a single-file model borrows zero-copy
+        views into the mapping even when ``no_copy=True``, because each borrowed pointer retains
+        the mmap ownership token so the mapping stays alive for as long as the model uses it) and
+        ``FileLoadMode.IFSTREAM`` forces the buffered ``std::ifstream``-based reader. Ignored when
+        *f* is a :class:`bytes` object. When an external weights file is provided via
+        ``location``, the main model file is always read through the buffered reader
+        (``TwoFilesStream``); ``MMAP`` then
         applies to the separate weights file, which is memory-mapped once and shared by the
         model so that every tensor borrows a zero-copy view of it (as on the ``no_copy=True``
         path), so all modes are honoured.

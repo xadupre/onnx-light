@@ -577,28 +577,30 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
-/// Single-direction (``"forward"``) one-layer RNN on FLOAT tensors using
-/// the ``Tanh`` activation. Implements the upstream ONNX ``RNN`` formula
+/// One-layer RNN on FLOAT tensors using the ``Tanh`` activation.
+/// Implements the upstream ONNX ``RNN`` formula
 ///
 ///   ``H_t = tanh(X_t @ W^T + W_b + H_{t-1} @ R^T + R_b)``
 ///
 /// for ``layout=0``, with ``X.shape = [seq_length, batch_size,
-/// input_size]``; ``W.shape = [1, hidden_size, input_size]``;
-/// ``R.shape = [1, hidden_size, hidden_size]``; optional ``B.shape =
-/// [1, 2 * hidden_size]`` (``[Wb, Rb]``); optional ``initial_h.shape =
-/// [1, batch_size, hidden_size]``, defaulting to zeros. ``layout=1``
-/// (batch-major) is also supported: the kernel transposes
-/// ``X``/``initial_h`` on entry and the outputs on exit so the core
-/// time-major loop is unchanged. The ``activations``
+/// input_size]``; ``W.shape = [num_directions, hidden_size, input_size]``;
+/// ``R.shape = [num_directions, hidden_size, hidden_size]``; optional
+/// ``B.shape = [num_directions, 2 * hidden_size]`` (``[Wb, Rb]``); optional
+/// ``initial_h.shape = [num_directions, batch_size, hidden_size]``,
+/// defaulting to zeros. ``layout=1`` (batch-major) is also supported: the
+/// kernel transposes ``X``/``initial_h`` on entry and the outputs on exit
+/// so the core time-major loop is unchanged. The ``activations``
 /// attribute, if present, must be either empty or the single value
-/// ``"Tanh"``; ``direction`` must be ``"forward"`` (the default);
-/// ``sequence_lens`` is not supported (every batch must share the same
-/// sequence length); ``clip`` is not supported.
+/// ``"Tanh"``; ``direction`` may be ``"forward"``, ``"reverse"`` or
+/// ``"bidirectional"`` (``num_directions`` is ``2`` for the last, ``1``
+/// otherwise); ``sequence_lens`` is not supported (every batch must share
+/// the same sequence length); ``clip`` is not supported.
 ///
 /// The two outputs are produced together: ``Y`` has shape
-/// ``[seq_length, 1, batch_size, hidden_size]`` and is the concatenation of
-/// every per-time-step hidden state; ``Y_h`` has shape
-/// ``[1, batch_size, hidden_size]`` and equals the last time step of ``Y``.
+/// ``[seq_length, num_directions, batch_size, hidden_size]`` and is the
+/// concatenation of every per-time-step hidden state; ``Y_h`` has shape
+/// ``[num_directions, batch_size, hidden_size]`` and equals the last time
+/// step of ``Y``.
 class RNN : public KernelBase {
 public:
   void Run(RuntimeContext &rt) override;
@@ -609,10 +611,12 @@ public:
   /// missing; same convention for ``initial_h``. ``layout`` may be ``0``
   /// (time-major, the default) or ``1`` (batch-major); for ``layout=1``
   /// the kernel transposes ``X``/``initial_h`` on entry and the outputs
-  /// on exit so the core time-major loop is unchanged.
+  /// on exit so the core time-major loop is unchanged. ``direction`` may
+  /// be ``"forward"``, ``"reverse"`` or ``"bidirectional"``.
   std::pair<Tensor, Tensor> operator()(const Tensor &x, const Tensor &w, const Tensor &r,
                                        const Tensor &b = Tensor{},
                                        const Tensor &initial_h = Tensor{}, int64_t layout = 0,
+                                       const std::string &direction = "forward",
                                        RuntimeContext *rt = nullptr) const;
 
   /// Output shape generally differs from the input shape, so storage
@@ -620,9 +624,8 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
-/// Single-direction (``"forward"``) one-layer GRU on FLOAT tensors using
-/// the default ``Sigmoid``/``Tanh`` activations. Implements the upstream
-/// ONNX ``GRU`` formula
+/// One-layer GRU on FLOAT tensors using the default ``Sigmoid``/``Tanh``
+/// activations. Implements the upstream ONNX ``GRU`` formula
 ///
 ///   ``z_t = sigmoid(X_t @ Wz^T + H_{t-1} @ Rz^T + Wbz + Rbz)``
 ///   ``r_t = sigmoid(X_t @ Wr^T + H_{t-1} @ Rr^T + Wbr + Rbr)``
@@ -633,24 +636,27 @@ public:
 ///   ``H_t = (1 - z_t) (.) h_t + z_t (.) H_{t-1}``
 ///
 /// for both ``layout=0`` (``X.shape = [seq_length, batch_size,
-/// input_size]``; optional ``initial_h.shape = [1, batch_size,
-/// hidden_size]``) and ``layout=1`` (``X.shape = [batch_size, seq_length,
-/// input_size]``; optional ``initial_h.shape = [batch_size, 1,
-/// hidden_size]``). ``W.shape = [1, 3 * hidden_size, input_size]``;
-/// ``R.shape = [1, 3 * hidden_size, hidden_size]``; optional ``B.shape =
-/// [1, 6 * hidden_size]`` (``[Wb, Rb]`` each with 3 gate blocks in the
-/// ONNX gate order ``z, r, h``); ``initial_h`` defaults to zeros.
+/// input_size]``; optional ``initial_h.shape = [num_directions,
+/// batch_size, hidden_size]``) and ``layout=1`` (``X.shape = [batch_size,
+/// seq_length, input_size]``; optional ``initial_h.shape = [batch_size,
+/// num_directions, hidden_size]``). ``W.shape = [num_directions,
+/// 3 * hidden_size, input_size]``; ``R.shape = [num_directions,
+/// 3 * hidden_size, hidden_size]``; optional ``B.shape = [num_directions,
+/// 6 * hidden_size]`` (``[Wb, Rb]`` each with 3 gate blocks in the ONNX
+/// gate order ``z, r, h``); ``initial_h`` defaults to zeros.
 /// ``sequence_lens`` is not supported (every batch must share the same
-/// sequence length); ``activations``, ``clip`` and non-``forward``
-/// ``direction`` are not supported.
+/// sequence length); ``activations`` and ``clip`` are not supported.
+/// ``direction`` may be ``"forward"``, ``"reverse"`` or
+/// ``"bidirectional"`` (``num_directions`` is ``2`` for the last, ``1``
+/// otherwise).
 ///
 /// The two outputs are produced together: for ``layout=0``, ``Y`` has shape
-/// ``[seq_length, 1, batch_size, hidden_size]`` and is the concatenation of
-/// every per-time-step hidden state; ``Y_h`` has shape
-/// ``[1, batch_size, hidden_size]`` and equals the last time step of
-/// ``Y``. For ``layout=1`` the corresponding shapes are
-/// ``[batch_size, seq_length, 1, hidden_size]`` and
-/// ``[batch_size, 1, hidden_size]``.
+/// ``[seq_length, num_directions, batch_size, hidden_size]`` and is the
+/// concatenation of every per-time-step hidden state; ``Y_h`` has shape
+/// ``[num_directions, batch_size, hidden_size]`` and equals the last time
+/// step of ``Y``. For ``layout=1`` the corresponding shapes are
+/// ``[batch_size, seq_length, num_directions, hidden_size]`` and
+/// ``[batch_size, num_directions, hidden_size]``.
 class GRU : public KernelBase {
 public:
   void Run(RuntimeContext &rt) override;
@@ -661,11 +667,13 @@ public:
   /// missing; same convention for ``initial_h``. ``linear_before_reset``
   /// matches the ONNX attribute of the same name (default ``0``).
   /// ``layout`` matches the ONNX attribute of the same name (default
-  /// ``0``).
+  /// ``0``). ``direction`` may be ``"forward"``, ``"reverse"`` or
+  /// ``"bidirectional"``.
   std::pair<Tensor, Tensor> operator()(const Tensor &x, const Tensor &w, const Tensor &r,
                                        const Tensor &b = Tensor{},
                                        const Tensor &initial_h = Tensor{},
                                        int64_t linear_before_reset = 0, int64_t layout = 0,
+                                       const std::string &direction = "forward",
                                        RuntimeContext *rt = nullptr) const;
 
   /// Output shape generally differs from the input shape, so storage
@@ -673,9 +681,9 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
-/// Single-direction (``"forward"``) one-layer LSTM on FLOAT tensors using
-/// the default ``Sigmoid``/``Tanh``/``Tanh`` activations. Implements the
-/// upstream ONNX ``LSTM`` formula
+/// One-layer LSTM on FLOAT tensors using the default
+/// ``Sigmoid``/``Tanh``/``Tanh`` activations. Implements the upstream ONNX
+/// ``LSTM`` formula
 ///
 ///   ``it = sigmoid(Xt @ Wi^T + Ht-1 @ Ri^T + Pi (.) Ct-1 + Wbi + Rbi)``
 ///   ``ft = sigmoid(Xt @ Wf^T + Ht-1 @ Rf^T + Pf (.) Ct-1 + Wbf + Rbf)``
@@ -684,45 +692,50 @@ public:
 ///   ``ot = sigmoid(Xt @ Wo^T + Ht-1 @ Ro^T + Po (.) Ct   + Wbo + Rbo)``
 ///   ``Ht = ot (.) tanh(Ct)``
 ///
-/// for ``W.shape = [1, 4 * hidden_size, input_size]``;
-/// ``R.shape = [1, 4 * hidden_size, hidden_size]``; optional ``B.shape =
-/// [1, 8 * hidden_size]`` (``[Wb, Rb]`` each with 4 gate blocks in the
-/// ONNX gate order ``i, o, f, c``); optional ``P.shape =
-/// [1, 3 * hidden_size]`` (peephole weights in gate order ``i, o, f``).
-/// ``sequence_lens`` is not supported (every batch must share the same
-/// sequence length); ``activations``, ``clip``, ``input_forget`` and
-/// non-``forward`` ``direction`` are not supported.
+/// for ``W.shape = [num_directions, 4 * hidden_size, input_size]``;
+/// ``R.shape = [num_directions, 4 * hidden_size, hidden_size]``; optional
+/// ``B.shape = [num_directions, 8 * hidden_size]`` (``[Wb, Rb]`` each with
+/// 4 gate blocks in the ONNX gate order ``i, o, f, c``); optional
+/// ``P.shape = [num_directions, 3 * hidden_size]`` (peephole weights in
+/// gate order ``i, o, f``). ``sequence_lens`` is not supported (every
+/// batch must share the same sequence length); ``activations``, ``clip``
+/// and ``input_forget`` are not supported. ``direction`` may be
+/// ``"forward"``, ``"reverse"`` or ``"bidirectional"`` (``num_directions``
+/// is ``2`` for the last, ``1`` otherwise).
 ///
 /// Both ``layout`` values defined by ONNX are supported:
 ///   * ``layout == 0`` (default): ``X.shape = [seq_length, batch_size,
 ///     input_size]``; optional ``initial_h.shape = initial_c.shape =
-///     [1, batch_size, hidden_size]``; ``Y.shape = [seq_length, 1,
-///     batch_size, hidden_size]``; ``Y_h.shape = [1, batch_size,
+///     [num_directions, batch_size, hidden_size]``; ``Y.shape =
+///     [seq_length, num_directions, batch_size, hidden_size]``;
+///     ``Y_h.shape = Y_c.shape = [num_directions, batch_size,
 ///     hidden_size]``.
 ///   * ``layout == 1``: ``X.shape = [batch_size, seq_length,
 ///     input_size]``; optional ``initial_h.shape = initial_c.shape =
-///     [batch_size, 1, hidden_size]``; ``Y.shape = [batch_size,
-///     seq_length, 1, hidden_size]``; ``Y_h.shape = [batch_size, 1,
+///     [batch_size, num_directions, hidden_size]``; ``Y.shape =
+///     [batch_size, seq_length, num_directions, hidden_size]``;
+///     ``Y_h.shape = Y_c.shape = [batch_size, num_directions,
 ///     hidden_size]``.
 ///
-/// The two outputs are produced together: ``Y`` is the concatenation of
-/// every per-time-step hidden state and ``Y_h`` equals the last time
-/// step of ``Y``. The optional third output ``Y_c`` is not produced by
-/// this overload.
+/// The three outputs are produced together: ``Y`` is the concatenation of
+/// every per-time-step hidden state, ``Y_h`` equals the last time step of
+/// ``Y`` and ``Y_c`` is the final cell state.
 class LSTM : public KernelBase {
 public:
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
-  /// Returns the pair ``(Y, Y_h)``. ``b``, ``initial_h``, ``initial_c``
-  /// and ``p`` may each be a default-constructed (empty-shape) ``Tensor``
-  /// to indicate that the corresponding optional input is missing.
-  /// ``layout`` selects between the two ONNX layouts (``0`` or ``1``);
-  /// any other value is rejected.
-  std::pair<Tensor, Tensor>
+  /// Returns the tuple ``(Y, Y_h, Y_c)``. ``b``, ``initial_h``,
+  /// ``initial_c`` and ``p`` may each be a default-constructed
+  /// (empty-shape) ``Tensor`` to indicate that the corresponding optional
+  /// input is missing. ``layout`` selects between the two ONNX layouts
+  /// (``0`` or ``1``); any other value is rejected. ``direction`` may be
+  /// ``"forward"``, ``"reverse"`` or ``"bidirectional"``.
+  std::tuple<Tensor, Tensor, Tensor>
   operator()(const Tensor &x, const Tensor &w, const Tensor &r, const Tensor &b = Tensor{},
              const Tensor &initial_h = Tensor{}, const Tensor &initial_c = Tensor{},
-             const Tensor &p = Tensor{}, int64_t layout = 0, RuntimeContext *rt = nullptr) const;
+             const Tensor &p = Tensor{}, int64_t layout = 0,
+             const std::string &direction = "forward", RuntimeContext *rt = nullptr) const;
 
   /// Output shape generally differs from the input shape, so storage
   /// cannot in general be shared.

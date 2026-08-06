@@ -3604,9 +3604,10 @@ TEST(RunNodes, RunNodeLSTMFromDispatchTable) {
   // Compare against the kernel's direct output to validate dispatch-time
   // wiring of inputs, attributes and outputs.
   const onnx_kernels::kernel::LSTM lstm_kernel(rt.kernel_ctx());
-  auto [y_ref, y_h_ref] =
+  auto [y_ref, y_h_ref, y_c_ref] =
       lstm_kernel(rt.tensors().at("X"), rt.tensors().at("W"), rt.tensors().at("R"));
   (void)y_ref;
+  (void)y_c_ref;
   ASSERT_EQ(y_h.element_count(), y_h_ref.element_count());
   for (int64_t i = 0; i < y_h.element_count(); ++i) {
     EXPECT_FLOAT_EQ(y_h.AsFloat()[i], y_h_ref.AsFloat()[i]);

@@ -144,15 +144,22 @@ TEST(onnx_field_serialization, ReadField_String_WrongWireType_Skipped) {
 TEST(onnx_field_serialization, ReadField_Int64_WrongWireType_Skipped) {
   // AttributeProto.i (field 3) is an int64 and must use FIELD_VARINT
   // (wire type 0); emitted as length-delimited (wire type 2) it is skipped
-  // together with its payload.
+  // together with its payload and left unset.
   std::string payload = "xy";
-  std::string name = "attr";
-  std::string bytes = FieldTag(3, 2) + EncodeVarint(payload.size()) + payload + FieldTag(1, 2) +
-                      EncodeVarint(name.size()) + name;
+  std::string bytes = FieldTag(3, 2) + EncodeVarint(payload.size()) + payload;
   AttributeProto parsed;
   parsed.ParseFromString(bytes);
   EXPECT_FALSE(parsed.has_i());
-  EXPECT_EQ(parsed.ref_name(), "attr");
+
+  // Exactly the payload of the skipped field is consumed: a well-formed
+  // field 3 following it is still decoded.
+  std::string name = "attr";
+  bytes += FieldTag(3, 0) + EncodeVarint(11) + FieldTag(1, 2) + EncodeVarint(name.size()) + name;
+  AttributeProto parsed_then_valid;
+  parsed_then_valid.ParseFromString(bytes);
+  ASSERT_TRUE(parsed_then_valid.has_i());
+  EXPECT_EQ(parsed_then_valid.ref_i(), 11);
+  EXPECT_EQ(parsed_then_valid.ref_name(), "attr");
 }
 
 TEST(onnx_field_serialization, ReadFieldLimitParallel_RawData_WrongWireType_Skipped) {

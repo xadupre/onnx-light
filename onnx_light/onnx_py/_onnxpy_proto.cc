@@ -1070,8 +1070,8 @@ void AddOnnxPyProto(nb::module_ &m) {
                           "Selects the file-backed stream implementation used when parsing "
                           "a model from a file path.")
       .value("AUTO", FileLoadMode::kAuto,
-             "Pick the stream compatible with the other options (currently the "
-             "buffered FileStream; memory mapping is not used by default).")
+             "Pick a compatible stream without memory-mapping (currently the buffered "
+             "FileStream; this choice may change in the future).")
       .value("MMAP", FileLoadMode::kMmap, "Force MmapFileStream (memory-mapped file).")
       .value("IFSTREAM", FileLoadMode::kFileStream, "Force FileStream (buffered std::ifstream).");
 
@@ -1165,9 +1165,10 @@ void AddOnnxPyProto(nb::module_ &m) {
               "``length``/``size`` is strictly below the threshold (in bytes).")
       .def_rw("file_load_mode", &ParseOptions::file_load_mode,
               "Selects the file-backed stream used when parsing a model from a path: "
-              "FileLoadMode.AUTO (default) uses the buffered std::ifstream-based "
-              "FileStream and does not memory-map, FileLoadMode.MMAP forces "
-              "MmapFileStream, and FileLoadMode.IFSTREAM forces the buffered "
+              "FileLoadMode.AUTO (default) picks a compatible stream and does not "
+              "memory-map (currently the buffered std::ifstream-based FileStream, but "
+              "this choice may change in the future), FileLoadMode.MMAP forces "
+              "MmapFileStream, and FileLoadMode.IFSTREAM always forces the buffered "
               "std::ifstream-based FileStream. "
               "Ignored when parsing from bytes or when an external_data_file is provided.")
       .def_rw("format", &ParseOptions::format,

@@ -334,6 +334,77 @@ TEST(onnx_defs, DataTypeUtils_ToType_MapOfMap) {
 // schema.cc tests
 // ===========================================================================
 
+// ---------------------------------------------------------------------------
+// TensorProto::DataType_IsValid: must reject values outside the contiguous
+// UNDEFINED(0)..INT2(26) enum range, matching real protobuf's generated
+// switch-based IsValid (rather than the previous, too-permissive
+// `t != UNDEFINED` check that let garbage values like -100 through).
+// ---------------------------------------------------------------------------
+
+TEST(onnx_defs, TensorProto_DataType_IsValid_AcceptsInRangeValues) {
+  EXPECT_TRUE(TensorProto::DataType_IsValid(TensorProto::DataType::UNDEFINED));
+  EXPECT_TRUE(TensorProto::DataType_IsValid(TensorProto::DataType::FLOAT));
+  EXPECT_TRUE(TensorProto::DataType_IsValid(TensorProto::DataType::BOOL));
+  EXPECT_TRUE(TensorProto::DataType_IsValid(TensorProto::DataType::INT2)); // last valid value (26)
+}
+
+TEST(onnx_defs, TensorProto_DataType_IsValid_RejectsOutOfRangeValues) {
+  EXPECT_FALSE(TensorProto::DataType_IsValid(-100));
+  EXPECT_FALSE(TensorProto::DataType_IsValid(-1));
+  EXPECT_FALSE(TensorProto::DataType_IsValid(
+      static_cast<int32_t>(TensorProto::DataType::INT2) + 1)); // 27, just past the last value
+  EXPECT_FALSE(TensorProto::DataType_IsValid(9999));
+}
+
+// ---------------------------------------------------------------------------
+// DataTypeUtils opaque-type support: ToString/FromString must round-trip the
+// "opaque(domain,name)" format used by real ONNX for TypeProto.opaque_type,
+// exercised end-to-end by OpaqueApiTest.RunModelWithOpaqueInputOutput /
+// OpaqueTypeTests.RunModel in onnxruntime.
+// ---------------------------------------------------------------------------
+
+TEST(onnx_defs, DataTypeUtils_ToType_OpaqueType_DomainAndName) {
+  // ToString is private; exercise it through the public ToType(TypeProto)
+  // overload, which computes the canonical string internally.
+  TypeProto proto;
+  proto.ref_opaque_type().set_domain("com.microsoft.test");
+  proto.ref_opaque_type().set_name("ComplexOpaqueType");
+  DataType dt = Utils::DataTypeUtils::ToType(proto);
+  ASSERT_NE(dt, nullptr);
+  EXPECT_EQ(*dt, "opaque(com.microsoft.test,ComplexOpaqueType)");
+}
+
+TEST(onnx_defs, DataTypeUtils_ToType_OpaqueType_EmptyDomainAndName) {
+  // Matches real ONNX's data_type_utils.cc: the comma separator is only
+  // emitted when domain is present and non-empty (see
+  // onnx/defs/data_type_utils.cc ToString's kOpaqueType case).
+  TypeProto proto;
+  proto.ref_opaque_type(); // create the oneof branch with domain/name unset
+  DataType dt = Utils::DataTypeUtils::ToType(proto);
+  ASSERT_NE(dt, nullptr);
+  EXPECT_EQ(*dt, "opaque()");
+}
+
+TEST(onnx_defs, DataTypeUtils_FromString_OpaqueType_DomainAndName) {
+  DataType dt = Utils::DataTypeUtils::ToType("opaque(com.microsoft.test,ComplexOpaqueType)");
+  ASSERT_NE(dt, nullptr);
+  EXPECT_EQ(*dt, "opaque(com.microsoft.test,ComplexOpaqueType)");
+
+  const TypeProto &proto = Utils::DataTypeUtils::ToTypeProto(dt);
+  ASSERT_TRUE(proto.has_opaque_type());
+  EXPECT_EQ(proto.ref_opaque_type().str_domain(), "com.microsoft.test");
+  EXPECT_EQ(proto.ref_opaque_type().str_name(), "ComplexOpaqueType");
+}
+
+TEST(onnx_defs, DataTypeUtils_OpaqueType_RoundTrip) {
+  // ToString(FromString(s)) == s for the exact string exercised by the
+  // onnxruntime opaque-type integration tests.
+  const std::string s = "opaque(com.microsoft.test,ComplexOpaqueType)";
+  DataType dt = Utils::DataTypeUtils::ToType(s);
+  ASSERT_NE(dt, nullptr);
+  EXPECT_EQ(*dt, s);
+}
+
 TEST(onnx_defs, Schema_FormalParameter_Getters) {
   DataTypeSet allowed{Utils::DataTypeUtils::ToType("float")};
   OpSchema::FormalParameter parameter("X", allowed, "T", "input", OpSchema::Single, true, 1,

@@ -123,32 +123,53 @@ TEST(onnx_field_serialization, WriteReadSizeField_SubMessage) {
 }
 
 // ---------------------------------------------------------------------------
-// read_field wire-type validation: a known field number carrying the wrong
-// wire type must be rejected by read_field's EXT_ENFORCE check.
+// read_field wire-type leniency: per the protobuf spec, an implementation
+// must not fail to parse a message solely because a known field number is
+// encoded with an unexpected wire type -- such fields are simply skipped
+// (like an unknown field), not rejected. See SkipFieldByWireType /
+// SKIP_IF_WRONG_WIRE_TYPE in stream_class_read.hpp. Only a genuinely
+// unsupported wire_type value (i.e. not one of the four protobuf wire types)
+// still throws.
 // ---------------------------------------------------------------------------
 
-TEST(onnx_field_serialization, ReadField_String_WrongWireType_Throws) {
-  // AttributeProto.name (field 1) is a string and must use FIELD_FIXED_SIZE
-  // (wire type 2); emitting it as a varint (wire type 0) must throw.
+TEST(onnx_field_serialization, ReadField_String_WrongWireType_Skipped) {
+  // AttributeProto.name (field 1) is a string and normally uses
+  // FIELD_FIXED_SIZE (wire type 2); emitting it as a varint (wire type 0)
+  // must be tolerated: the field is skipped and left unset, parsing succeeds.
   std::string bytes = FieldTag(1, 0) + EncodeVarint(42);
   AttributeProto parsed;
-  EXPECT_THROW(parsed.ParseFromString(bytes), std::runtime_error);
+  EXPECT_NO_THROW(parsed.ParseFromString(bytes));
+  EXPECT_FALSE(parsed.has_name());
 }
 
-TEST(onnx_field_serialization, ReadField_Int64_WrongWireType_Throws) {
-  // AttributeProto.i (field 3) is an int64 and must use FIELD_VARINT
-  // (wire type 0); emitting it as length-delimited (wire type 2) must throw.
+TEST(onnx_field_serialization, ReadField_Int64_WrongWireType_Skipped) {
+  // AttributeProto.i (field 3) is an int64 and normally uses FIELD_VARINT
+  // (wire type 0); emitting it as length-delimited (wire type 2) must be
+  // tolerated: the field is skipped and left unset, parsing succeeds.
   std::string payload = "xy";
   std::string bytes = FieldTag(3, 2) + EncodeVarint(payload.size()) + payload;
   AttributeProto parsed;
-  EXPECT_THROW(parsed.ParseFromString(bytes), std::runtime_error);
+  EXPECT_NO_THROW(parsed.ParseFromString(bytes));
+  EXPECT_FALSE(parsed.has_i());
 }
 
-TEST(onnx_field_serialization, ReadFieldLimitParallel_RawData_WrongWireType_Throws) {
+TEST(onnx_field_serialization, ReadFieldLimitParallel_RawData_WrongWireType_Skipped) {
   // TensorProto.raw_data (field 9) is read via read_field_limit_parallel and
-  // must use FIELD_FIXED_SIZE (wire type 2); a varint (wire type 0) must throw.
+  // normally uses FIELD_FIXED_SIZE (wire type 2); a varint (wire type 0) must
+  // be tolerated: the field is skipped and left unset, parsing succeeds.
   std::string bytes = FieldTag(9, 0) + EncodeVarint(1);
   TensorProto parsed;
+  EXPECT_NO_THROW(parsed.ParseFromString(bytes));
+  EXPECT_TRUE(parsed.ref_raw_data().empty());
+}
+
+TEST(onnx_field_serialization, ReadField_UnsupportedWireType_StillThrows) {
+  // Wire type 6 is not one of the four wire types protobuf defines
+  // (VARINT=0, FIXED64=1, FIXED_SIZE=2, FIXED32=5); SkipFieldByWireType
+  // cannot skip it and must still throw, since the stream position can no
+  // longer be trusted.
+  std::string bytes = FieldTag(1, 6);
+  AttributeProto parsed;
   EXPECT_THROW(parsed.ParseFromString(bytes), std::runtime_error);
 }
 

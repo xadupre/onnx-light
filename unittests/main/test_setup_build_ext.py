@@ -330,6 +330,51 @@ class TestSetupBuildExt(ExtTestCase):
         )
         self.assertIn("-DONNX_LIGHT_BUILD_KERNELS=OFF", f"{proc.stdout}\n{proc.stderr}")
 
+    @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
+    def test_setup_build_ext_run_cpp_tests_flag(self):
+        """Tests that --run-cpp-tests enables C++ tests and runs ctest."""
+        root = Path(__file__).resolve().parents[2]
+        command = [
+            sys.executable,
+            "setup.py",
+            "build_ext",
+            "--inplace",
+            "--dry-run",
+            "--run-cpp-tests",
+        ]
+        proc = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)
+
+        self.assertEqual(
+            proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
+        )
+        output = f"{proc.stdout}\n{proc.stderr}"
+        self.assertIn("-DONNX_LIGHT_BUILD_TESTS=ON", output)
+        self.assertIn("ctest", output)
+        self.assertIn("--output-on-failure", output)
+
+    @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
+    def test_setup_build_ext_without_setuptools_run_cpp_tests_flag(self):
+        """Tests that --run-cpp-tests enables C++ tests and runs ctest without setuptools."""
+        root = Path(__file__).resolve().parents[2]
+        command = [
+            sys.executable,
+            "-S",
+            "setup.py",
+            "build_ext",
+            "--inplace",
+            "--dry-run",
+            "--run-cpp-tests",
+        ]
+        proc = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)
+
+        self.assertEqual(
+            proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
+        )
+        output = f"{proc.stdout}\n{proc.stderr}"
+        self.assertIn("-DONNX_LIGHT_BUILD_TESTS=ON", output)
+        self.assertIn("ctest", output)
+        self.assertIn("--output-on-failure", output)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

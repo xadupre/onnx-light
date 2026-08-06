@@ -4,7 +4,8 @@
 
 #pragma once
 
-#include <cassert>
+#include "onnx_pb.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
@@ -13,17 +14,15 @@
 namespace ONNX_LIGHT_NAMESPACE {
 
 /**
- * @brief Multiplies two non-negative integers, reporting overflow.
+ * @brief Multiplies two signed int64 values, reporting overflow.
  *
- * Uses @c __builtin_mul_overflow on GCC/Clang and a manual check on MSVC.
- * Precondition: @p a and @p b must be non-negative. The MSVC fallback only
- * handles non-negative inputs correctly; passing a negative value can silently
- * overflow. safe_dim_product() enforces this by checking each dim before
- * calling, and the accumulated result stays non-negative because it aborts on
- * overflow.
+ * Uses @c __builtin_mul_overflow on GCC/Clang. The MSVC fallback compares
+ * against the int64 bounds per sign combination (the classic CERT INT32-C style
+ * check, generalized to 64 bits) before multiplying, so it never computes a
+ * product that doesn't fit and never divides @c INT64_MIN by -1.
  *
- * @param a First non-negative operand.
- * @param b Second non-negative operand.
+ * @param a First operand.
+ * @param b Second operand.
  * @param result Receives the product when no overflow occurs.
  * @returns True on overflow, false otherwise.
  */
@@ -31,12 +30,66 @@ inline bool checked_mul_overflow(int64_t a, int64_t b, int64_t *result) {
 #if defined(__GNUC__) || defined(__clang__)
   return __builtin_mul_overflow(a, b, result);
 #else
-  assert(a >= 0 && b >= 0 && "checked_mul_overflow requires non-negative inputs on MSVC");
-  if (a > 0 && b > std::numeric_limits<int64_t>::max() / a) {
+  if (a == 0 || b == 0) {
+    *result = 0;
+    return false;
+  }
+  constexpr int64_t kMax = std::numeric_limits<int64_t>::max();
+  constexpr int64_t kMin = std::numeric_limits<int64_t>::min();
+  const bool overflow =
+      a > 0 ? (b > 0 ? a > kMax / b : b < kMin / a) : (b > 0 ? a < kMin / b : b < kMax / a);
+  if (overflow) {
     return true;
   }
   *result = a * b;
   return false;
+#endif
+}
+
+/**
+ * @brief Adds two signed int64 values, reporting overflow.
+ *
+ * Uses @c __builtin_add_overflow on GCC/Clang. The MSVC fallback uses unsigned
+ * addition (no UB) and detects overflow via a sign-bit XOR. The cast back to
+ * @c int64_t is implementation-defined in C++17 but gives two's-complement on
+ * every MSVC target; it is mandated by the standard from C++20. Overflow occurs
+ * iff @p a and @p b have the same sign but the result has the opposite sign.
+ *
+ * @param a First operand.
+ * @param b Second operand.
+ * @param result Receives the sum when no overflow occurs.
+ * @returns True on overflow, false otherwise.
+ */
+inline bool checked_add_overflow(int64_t a, int64_t b, int64_t *result) {
+#if defined(__GNUC__) || defined(__clang__)
+  return __builtin_add_overflow(a, b, result);
+#else
+  const auto ur = static_cast<uint64_t>(a) + static_cast<uint64_t>(b);
+  *result = static_cast<int64_t>(ur);
+  return ((a ^ *result) & (b ^ *result)) < 0;
+#endif
+}
+
+/**
+ * @brief Subtracts two signed int64 values, reporting overflow.
+ *
+ * Uses @c __builtin_sub_overflow on GCC/Clang. The MSVC fallback uses unsigned
+ * subtraction (no UB) and detects overflow via a sign-bit XOR. Overflow occurs
+ * iff @p a and @p b have different signs and the result has a different sign
+ * from @p a.
+ *
+ * @param a First operand.
+ * @param b Second operand.
+ * @param result Receives the difference when no overflow occurs.
+ * @returns True on overflow, false otherwise.
+ */
+inline bool checked_sub_overflow(int64_t a, int64_t b, int64_t *result) {
+#if defined(__GNUC__) || defined(__clang__)
+  return __builtin_sub_overflow(a, b, result);
+#else
+  const auto ur = static_cast<uint64_t>(a) - static_cast<uint64_t>(b);
+  *result = static_cast<int64_t>(ur);
+  return ((a ^ b) & (a ^ *result)) < 0;
 #endif
 }
 

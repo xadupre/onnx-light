@@ -545,7 +545,8 @@ TEST(KernelClass, GRUUsesAllocatorForScratchBuffersAndMatchesFallback) {
   constexpr size_t kAllocatorSlotCapacity = 16;
   PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
   RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
-  auto [y, y_h] = gru(x, w, r, Tensor{}, Tensor{}, /*linear_before_reset=*/0, /*layout=*/0, &rt);
+  auto [y, y_h] = gru(x, w, r, Tensor{}, Tensor{}, /*linear_before_reset=*/0, /*layout=*/0,
+                      /*direction=*/"forward", &rt);
 
   ASSERT_TRUE(y.has_allocation());
   ASSERT_TRUE(y_h.has_allocation());
@@ -595,7 +596,8 @@ TEST(KernelClass, GRULayout1AllocatorMatchesFallback) {
   constexpr size_t kAllocatorSlotCapacity = 16;
   SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
   RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
-  auto [y, y_h] = gru(x, w, r, Tensor{}, Tensor{}, /*linear_before_reset=*/0, /*layout=*/1, &rt);
+  auto [y, y_h] = gru(x, w, r, Tensor{}, Tensor{}, /*linear_before_reset=*/0, /*layout=*/1,
+                      /*direction=*/"forward", &rt);
 
   ASSERT_TRUE(y.has_allocation());
   ASSERT_TRUE(y_h.has_allocation());
@@ -756,7 +758,8 @@ TEST(KernelClass, LSTMUsesAllocatorForScratchBuffers) {
   Tensor r = Tensor::FromFloat("", {1, kNumGates * kHidden, kHidden}, r_data);
 
   // Reference result computed without an allocator (inline std::vector storage).
-  auto [y_ref, y_h_ref] = lstm(x, w, r);
+  auto [y_ref, y_h_ref, y_c_ref] = lstm(x, w, r);
+  (void)y_c_ref;
 
   // Capacity for the peak: 2 result tensors plus the per-gate scratch buffers
   // (4 bias + 3 peephole + 4 state + 4 accumulator), with headroom.
@@ -764,16 +767,19 @@ TEST(KernelClass, LSTMUsesAllocatorForScratchBuffers) {
   PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
   RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
 
-  auto [y, y_h] = lstm(x, w, r, Tensor{}, Tensor{}, Tensor{}, Tensor{}, /*layout=*/0, &rt);
+  auto [y, y_h, y_c] = lstm(x, w, r, Tensor{}, Tensor{}, Tensor{}, Tensor{},
+                            /*layout=*/0, /*direction=*/"forward", &rt);
 
-  // Both outputs are drawn from the runtime allocator.
+  // All three outputs are drawn from the runtime allocator.
   ASSERT_TRUE(y.has_allocation());
   ASSERT_TRUE(y_h.has_allocation());
-  // The peak far exceeds the two outputs because every scratch buffer is
+  ASSERT_TRUE(y_c.has_allocation());
+  // The peak far exceeds the three outputs because every scratch buffer is
   // allocator-backed too.
   EXPECT_GE(alloc.peak(), 10u);
-  // All scratch buffers are released; only the two returned results remain.
-  EXPECT_EQ(alloc.allocated_count(), 2u);
+  // All scratch buffers are released; only the three returned results remain
+  // (Y, Y_h, Y_c).
+  EXPECT_EQ(alloc.allocated_count(), 3u);
 
   // The allocator-backed run must match the inline reference bit-for-bit.
   ASSERT_EQ(y.element_count(), y_ref.element_count());
@@ -816,12 +822,16 @@ TEST(KernelClass, LSTMLayout1AllocatorMatchesFallback) {
   Tensor initial_c = Tensor::FromFloat("", {kBatch, 1, kHidden}, init_data);
 
   // Reference result computed without an allocator (inline std::vector storage).
-  auto [y_ref, y_h_ref] = lstm(x, w, r, Tensor{}, initial_h, initial_c, Tensor{}, /*layout=*/1);
+  auto [y_ref, y_h_ref, y_c_ref] =
+      lstm(x, w, r, Tensor{}, initial_h, initial_c, Tensor{}, /*layout=*/1);
+  (void)y_c_ref;
 
   constexpr size_t kAllocatorSlotCapacity = 32;
   SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
   RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
-  auto [y, y_h] = lstm(x, w, r, Tensor{}, initial_h, initial_c, Tensor{}, /*layout=*/1, &rt);
+  auto [y, y_h, y_c] = lstm(x, w, r, Tensor{}, initial_h, initial_c, Tensor{},
+                            /*layout=*/1, /*direction=*/"forward", &rt);
+  (void)y_c;
 
   ASSERT_TRUE(y.has_allocation());
   ASSERT_TRUE(y_h.has_allocation());

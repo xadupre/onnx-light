@@ -686,21 +686,43 @@ TEST(onnx_external_ressource, SaveWithExternalData) {
   weights->ref_dims().push_back(256);
   weights->ref_raw_data() = std::vector<uint8_t>(256 * sizeof(float), 7);
 
-  auto serialized = std::string("test_onnx_file_save_with_external_data.onnx");
-  auto weights_file = std::string("test_onnx_file_save_with_external_data.data");
+  std::filesystem::path tmpdir =
+      std::filesystem::temp_directory_path() /
+      ("onnx_light_save_with_external_data_" +
+       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::remove_all(tmpdir);
+  std::filesystem::create_directories(tmpdir);
+
+  auto serialized = (tmpdir / "test_onnx_file_save_with_external_data.onnx").string();
+  auto weights_file = (tmpdir / "test_onnx_file_save_with_external_data.data").string();
   {
     utils::TwoFilesWriteStream wstream(serialized, weights_file);
     SerializeOptions wopts;
     wopts.raw_data_threshold = 2;
     SerializeProtoToStream(model, wstream, wopts);
   }
-  auto size = std::filesystem::file_size(serialized);
-  auto weights_size = std::filesystem::file_size(weights_file);
+  std::error_code model_size_error;
+  auto size = std::filesystem::file_size(serialized, model_size_error);
+  EXPECT_FALSE(static_cast<bool>(model_size_error)) << model_size_error.message();
+  std::error_code weights_size_error;
+  auto weights_size = std::filesystem::file_size(weights_file, weights_size_error);
+  EXPECT_FALSE(static_cast<bool>(weights_size_error)) << weights_size_error.message();
   EXPECT_GT(weights_size, 1000);
   EXPECT_GT(size, 10);
 
-  std::remove(serialized.c_str());
-  std::remove(weights_file.c_str());
+  ModelProto metadata;
+  {
+    utils::FileStream rstream(serialized);
+    ParseOptions ropts;
+    ParseProtoFromStream(metadata, rstream, ropts, /*clear_external_data=*/false);
+  }
+  ASSERT_EQ(metadata.ref_graph().ref_initializer().size(), 1u);
+  const TensorProto &saved = metadata.ref_graph().ref_initializer()[0];
+  EXPECT_FALSE(saved.has_raw_data());
+  EXPECT_TRUE(saved.has_external_data());
+  EXPECT_TRUE(saved.has_data_location());
+
+  std::filesystem::remove_all(tmpdir);
 }
 
 TEST(onnx_external_ressource, SaveWithExternalDataMaxFileSize) {
@@ -1288,8 +1310,16 @@ TEST(onnx_external_ressource, LoadWithExternalData) {
     }
   }
 
-  std::string onnx_file = "test_writing_external_weights_read_from_onnx.onnx";
-  std::string weights_file = "test_writing_external_weights_read_from_onnx.data";
+  std::filesystem::path tmpdir =
+      std::filesystem::temp_directory_path() /
+      ("onnx_light_load_with_external_data_" +
+       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::remove_all(tmpdir);
+  std::filesystem::create_directories(tmpdir);
+
+  std::string onnx_file = (tmpdir / "test_writing_external_weights_read_from_onnx.onnx").string();
+  std::string weights_file =
+      (tmpdir / "test_writing_external_weights_read_from_onnx.data").string();
   {
     utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
     SerializeOptions wopts;
@@ -1314,8 +1344,7 @@ TEST(onnx_external_ressource, LoadWithExternalData) {
   }
   EXPECT_EQ(big, 2);
 
-  std::remove(onnx_file.c_str());
-  std::remove(weights_file.c_str());
+  std::filesystem::remove_all(tmpdir);
 }
 
 // -----------------------------------------------------------------------

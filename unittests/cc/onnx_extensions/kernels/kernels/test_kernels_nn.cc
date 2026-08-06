@@ -1185,9 +1185,12 @@ TEST(KernelClass, AttentionFullyMaskedRowYieldsZeroOutput) {
   EXPECT_FLOAT_EQ(r.Y.AsFloat()[2], 0.0f);
   EXPECT_FLOAT_EQ(r.Y.AsFloat()[3], 0.0f);
 
+  // A fully-masked row softmaxes to all-zero probabilities. The mode-3
+  // ``qk_matmul_output`` is captured after that guard, so the exposed row is
+  // zeroed too (matching the ONNX reference), not left as NaN.
   ASSERT_EQ(r.qk_matmul_output.shape, (std::vector<int64_t>{1, 1, 2, 2}));
-  EXPECT_TRUE(std::isnan(r.qk_matmul_output.AsFloat()[2]));
-  EXPECT_TRUE(std::isnan(r.qk_matmul_output.AsFloat()[3]));
+  EXPECT_FLOAT_EQ(r.qk_matmul_output.AsFloat()[2], 0.0f);
+  EXPECT_FLOAT_EQ(r.qk_matmul_output.AsFloat()[3], 0.0f);
 }
 
 TEST(KernelClass, AttentionRank3FusedLayoutRoundTripMatchesRank4) {

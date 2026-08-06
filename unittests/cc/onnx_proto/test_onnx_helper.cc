@@ -8,6 +8,7 @@
 #include <fstream>
 #include <gtest/gtest.h>
 #include <random>
+#include <system_error>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -673,34 +674,56 @@ TEST(onnx_helper, SerializeModelProtoToStream_DoesNotMutateModel) {
 }
 
 TEST(onnx_external_ressource, SaveWithExternalData) {
-  namespace fs = std::filesystem;
-  fs::path source_path = __FILE__;
-  fs::path source_dir = source_path.parent_path();
-  fs::path file_path = source_dir / "data" / "test_writing_external_weights.original.onnx";
-  if (!std::filesystem::exists(file_path)) {
-    GTEST_SKIP() << "File not found: " << file_path.string();
-  }
-
+  // Build a model with a large weight in-memory, then serialize it to two files
+  // (model + external weights) and verify the external weights land in the
+  // separate data file.
   ModelProto model;
-  utils::FileStream stream(file_path.string());
-  ONNX_LIGHT_NAMESPACE::ParseOptions opts;
-  EXPECT_TRUE(model.ParseFromStream(stream, opts));
+  GraphProto *graph = model.add_graph();
+  graph->set_name("graph");
 
-  auto serialized = source_dir / "test_onnx_file_save_with_external_data.onnx";
-  auto weights = source_dir / "test_onnx_file_save_with_external_data.data";
+  TensorProto *weights = graph->add_initializer();
+  weights->set_name("big_weights");
+  weights->set_data_type(TensorProto::DataType::FLOAT);
+  weights->ref_dims().push_back(256);
+  weights->ref_raw_data() = std::vector<uint8_t>(256 * sizeof(float), 7);
+
+  std::filesystem::path tmpdir =
+      std::filesystem::temp_directory_path() /
+      ("onnx_light_save_with_external_data_" +
+       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::remove_all(tmpdir);
+  std::filesystem::create_directories(tmpdir);
+
+  auto serialized = (tmpdir / "test_onnx_file_save_with_external_data.onnx").string();
+  auto weights_file = (tmpdir / "test_onnx_file_save_with_external_data.data").string();
   {
-    utils::TwoFilesWriteStream wstream(serialized.string(), weights.string());
+    utils::TwoFilesWriteStream wstream(serialized, weights_file);
     SerializeOptions wopts;
     wopts.raw_data_threshold = 2;
     SerializeProtoToStream(model, wstream, wopts);
   }
-  auto size = std::filesystem::file_size(serialized);
-  auto weights_size = std::filesystem::file_size(weights);
+  std::error_code model_size_error;
+  auto size = std::filesystem::file_size(serialized, model_size_error);
+  EXPECT_FALSE(static_cast<bool>(model_size_error)) << model_size_error.message();
+  std::error_code weights_size_error;
+  auto weights_size = std::filesystem::file_size(weights_file, weights_size_error);
+  EXPECT_FALSE(static_cast<bool>(weights_size_error)) << weights_size_error.message();
   EXPECT_GT(weights_size, 1000);
   EXPECT_GT(size, 10);
 
-  std::remove(serialized.string().c_str());
-  std::remove(weights.string().c_str());
+  ModelProto metadata;
+  {
+    utils::FileStream rstream(serialized);
+    ParseOptions ropts;
+    ParseProtoFromStream(metadata, rstream, ropts, /*clear_external_data=*/false);
+  }
+  ASSERT_EQ(metadata.ref_graph().ref_initializer().size(), 1u);
+  const TensorProto &saved = metadata.ref_graph().ref_initializer()[0];
+  EXPECT_FALSE(saved.has_raw_data());
+  EXPECT_TRUE(saved.has_external_data());
+  EXPECT_TRUE(saved.has_data_location());
+
+  std::filesystem::remove_all(tmpdir);
 }
 
 TEST(onnx_external_ressource, SaveWithExternalDataMaxFileSize) {
@@ -1145,9 +1168,15 @@ TEST(onnx_file, FileStream_ModelProto_Write) {
   biasw2.ref_raw_data().push_back(4);
   biasw2.ref_raw_data().push_back(4);
 
-  std::string temp_filename = "test_tensor_file_stream.tmp";
-  std::string temp_filename2 = "test_tensor_file_stream2.tmp";
-  std::string temp_weights = "test_tensor_file_stream3.tmp";
+  std::filesystem::path tmpdir =
+      std::filesystem::temp_directory_path() /
+      ("onnx_light_file_stream_model_proto_write_" +
+       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::remove_all(tmpdir);
+  ASSERT_TRUE(std::filesystem::create_directories(tmpdir));
+  std::string temp_filename = (tmpdir / "test_tensor_file_stream.tmp").string();
+  std::string temp_filename2 = (tmpdir / "test_tensor_file_stream2.tmp").string();
+  std::string temp_weights = (tmpdir / "test_tensor_file_stream3.tmp").string();
 
   {
     utils::TwoFilesWriteStream wstream(temp_filename2, temp_weights);
@@ -1162,13 +1191,20 @@ TEST(onnx_file, FileStream_ModelProto_Write) {
     SerializeProtoToStream(model, wstream, wopts);
   }
 
-  auto size = std::filesystem::file_size(temp_filename);
-  auto size2 = std::filesystem::file_size(temp_filename2);
-  EXPECT_EQ(size, size2);
+  std::error_code size_error;
+  auto size = std::filesystem::file_size(temp_filename, size_error);
+  EXPECT_FALSE(size_error) << temp_filename << ": " << size_error.message();
+  std::error_code size2_error;
+  auto size2 = std::filesystem::file_size(temp_filename2, size2_error);
+  EXPECT_FALSE(size2_error) << temp_filename2 << ": " << size2_error.message();
+  if (!size_error && !size2_error) {
+    EXPECT_EQ(size, size2);
+  }
 
-  std::remove(temp_filename.c_str());
-  std::remove(temp_filename2.c_str());
-  std::remove(temp_weights.c_str());
+  std::error_code remove_error;
+  const auto removed = std::filesystem::remove_all(tmpdir, remove_error);
+  EXPECT_FALSE(remove_error) << tmpdir << ": " << remove_error.message();
+  EXPECT_GT(removed, 0u);
 }
 
 TEST(onnx_file, FileStream_ModelProto_WriteRead) {
@@ -1234,8 +1270,14 @@ TEST(onnx_file, FileStream_ModelProto_WriteRead) {
   biasw2.ref_raw_data().push_back(4);
   biasw2.ref_raw_data().push_back(4);
 
-  std::string temp_filename = "test_tensor_file_stream_read.0.tmp";
-  std::string temp_weights = "test_tensor_file_stream_read.0.weight.tmp";
+  std::filesystem::path tmpdir =
+      std::filesystem::temp_directory_path() /
+      ("onnx_light_file_stream_model_proto_write_read_" +
+       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::remove_all(tmpdir);
+  ASSERT_TRUE(std::filesystem::create_directories(tmpdir));
+  std::string temp_filename = (tmpdir / "test_tensor_file_stream_read.0.tmp").string();
+  std::string temp_weights = (tmpdir / "test_tensor_file_stream_read.0.weight.tmp").string();
 
   {
     utils::TwoFilesWriteStream wstream(temp_filename, temp_weights);
@@ -1243,6 +1285,18 @@ TEST(onnx_file, FileStream_ModelProto_WriteRead) {
     wopts.raw_data_threshold = 2;
     SerializeProtoToStream(model, wstream, wopts);
   }
+
+  ModelProto metadata;
+  {
+    utils::FileStream rstream(temp_filename);
+    ParseOptions ropts;
+    ParseProtoFromStream(metadata, rstream, ropts, /*clear_external_data=*/false);
+  }
+  ASSERT_EQ(metadata.ref_graph().ref_initializer().size(), 1u);
+  const TensorProto &saved = metadata.ref_graph().ref_initializer()[0];
+  EXPECT_FALSE(saved.has_raw_data());
+  EXPECT_TRUE(saved.has_external_data());
+  EXPECT_TRUE(saved.has_data_location());
 
   ModelProto model2;
   {
@@ -1260,26 +1314,97 @@ TEST(onnx_file, FileStream_ModelProto_WriteRead) {
               model2.ref_graph().ref_initializer()[i].ref_name());
   }
 
-  std::remove(temp_filename.c_str());
-  std::remove(temp_weights.c_str());
+  std::error_code remove_error;
+  const auto removed = std::filesystem::remove_all(tmpdir, remove_error);
+  EXPECT_FALSE(remove_error) << tmpdir << ": " << remove_error.message();
+  EXPECT_GT(removed, 0u);
 }
 
 TEST(onnx_external_ressource, LoadWithExternalData) {
-  namespace fs = std::filesystem;
-  fs::path source_path = __FILE__;
-  fs::path source_dir = source_path.parent_path();
-  fs::path file_path = source_dir / "data" / "test_writing_external_weights_read_from_onnx.onnx";
-  fs::path weights_path = source_dir / "data" / "test_writing_external_weights_read_from_onnx.data";
-  if (!std::filesystem::exists(file_path) || !std::filesystem::exists(weights_path)) {
-    GTEST_SKIP() << "File not found: " << file_path.string() << " or " << weights_path.string();
+  // Build a model with 7 initializers (2 of them large and multi-dimensional),
+  // write it out with external data, then read it back through TwoFilesStream and
+  // verify the large initializers round-trip via the external weights file.
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("graph");
+
+  for (int i = 0; i < 7; ++i) {
+    TensorProto *weights = graph->add_initializer();
+    weights->set_name("weights" + std::to_string(i));
+    weights->set_data_type(TensorProto::DataType::FLOAT);
+    if (i < 2) {
+      // Two large, multi-dimensional initializers with more than 1024 raw bytes.
+      weights->ref_dims().push_back(16);
+      weights->ref_dims().push_back(32);
+      weights->ref_raw_data() =
+          std::vector<uint8_t>(16 * 32 * sizeof(float), static_cast<uint8_t>(1 + i));
+    } else {
+      weights->ref_dims().push_back(1);
+      weights->ref_raw_data() = std::vector<uint8_t>{1, 2, static_cast<uint8_t>(3 + i), 4};
+    }
   }
 
-  ModelProto model;
-  utils::TwoFilesStream stream(file_path.string(), weights_path.string());
-  ONNX_LIGHT_NAMESPACE::ParseOptions opts;
-  EXPECT_TRUE(model.ParseFromStream(stream, opts));
-  EXPECT_EQ(model.ref_graph().ref_initializer().size(), 7);
-  IteratorTensorProto it(&model.ref_graph());
+  std::filesystem::path tmpdir =
+      std::filesystem::temp_directory_path() /
+      ("onnx_light_load_with_external_data_" +
+       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::remove_all(tmpdir);
+  ASSERT_TRUE(std::filesystem::create_directories(tmpdir));
+
+  std::string onnx_file = (tmpdir / "test_writing_external_weights_read_from_onnx.onnx").string();
+  std::string weights_file =
+      (tmpdir / "test_writing_external_weights_read_from_onnx.data").string();
+  {
+    utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+    SerializeOptions wopts;
+    wopts.raw_data_threshold = 2;
+    SerializeProtoToStream(model, wstream, wopts);
+  }
+  std::error_code model_size_error;
+  auto size = std::filesystem::file_size(onnx_file, model_size_error);
+  EXPECT_FALSE(model_size_error) << onnx_file << ": " << model_size_error.message();
+  std::error_code weights_size_error;
+  auto weights_size = std::filesystem::file_size(weights_file, weights_size_error);
+  EXPECT_FALSE(weights_size_error) << weights_file << ": " << weights_size_error.message();
+  if (!model_size_error) {
+    EXPECT_GT(size, 10);
+  }
+  if (!weights_size_error) {
+    EXPECT_GT(weights_size, 1024);
+  }
+
+  ModelProto metadata;
+  {
+    utils::FileStream metadata_stream(onnx_file);
+    ParseOptions metadata_opts;
+    ParseProtoFromStream(metadata, metadata_stream, metadata_opts, /*clear_external_data=*/false);
+  }
+  ASSERT_EQ(metadata.ref_graph().ref_initializer().size(), 7u);
+  for (const TensorProto &saved : metadata.ref_graph().ref_initializer()) {
+    EXPECT_FALSE(saved.has_raw_data());
+    EXPECT_TRUE(saved.has_external_data());
+    EXPECT_EQ(saved.ref_data_location(), TensorProto::DataLocation::EXTERNAL);
+    bool has_location = false;
+    bool has_offset = false;
+    bool has_length = false;
+    for (const StringStringEntryProto &entry : saved.ref_external_data()) {
+      has_location = has_location || entry.ref_key() == "location";
+      has_offset = has_offset || entry.ref_key() == "offset";
+      has_length = has_length || entry.ref_key() == "length" || entry.ref_key() == "size";
+    }
+    EXPECT_TRUE(has_location);
+    EXPECT_TRUE(has_offset);
+    EXPECT_TRUE(has_length);
+  }
+
+  ModelProto model2;
+  {
+    utils::TwoFilesStream stream(onnx_file, weights_file);
+    ONNX_LIGHT_NAMESPACE::ParseOptions opts;
+    EXPECT_TRUE(model2.ParseFromStream(stream, opts));
+  }
+  EXPECT_EQ(model2.ref_graph().ref_initializer().size(), 7);
+  IteratorTensorProto it(&model2.ref_graph());
   int big = 0;
   while (it.next()) {
     if (it->ref_dims().size() > 1) {
@@ -1288,6 +1413,11 @@ TEST(onnx_external_ressource, LoadWithExternalData) {
     }
   }
   EXPECT_EQ(big, 2);
+
+  std::error_code remove_error;
+  const auto removed = std::filesystem::remove_all(tmpdir, remove_error);
+  EXPECT_FALSE(remove_error) << tmpdir << ": " << remove_error.message();
+  EXPECT_GT(removed, 0u);
 }
 
 // -----------------------------------------------------------------------

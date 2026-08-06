@@ -10,8 +10,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // InstanceNormalization — Y = scale * (X - mean) / sqrt(var + epsilon) + B
@@ -99,5 +98,4 @@ void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry, TestMod
   }
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

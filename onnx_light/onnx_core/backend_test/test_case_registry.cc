@@ -4,9 +4,7 @@
 
 #include "onnx_core/backend_test/test_case_registry.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace backend_test {
+namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
 
 namespace {
 
@@ -26,6 +24,4 @@ const std::vector<TestCasesCollectorFn> &GetRegisteredCollectors() {
   return GetRegisteredCollectorsMutable();
 }
 
-} // namespace backend_test
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::backend_test

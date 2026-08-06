@@ -19,9 +19,7 @@
  * otherwise arise between the two files.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace compute {
+namespace ONNX_LIGHT_NAMESPACE::core::compute {
 
 /**
  * Classifies how an input buffer compares in size with the output that
@@ -97,6 +95,4 @@ constexpr const char *kNotUsedAfterMetadataKey = "onnx_light.not_used_after";
  */
 constexpr const char *kReleaseAfterShapeTagMetadataKey = "onnx_light.release_after_shape_tag";
 
-} // namespace compute
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::compute

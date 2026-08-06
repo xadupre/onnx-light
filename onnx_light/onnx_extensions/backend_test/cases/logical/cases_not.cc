@@ -11,8 +11,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 namespace {
 
@@ -76,5 +75,4 @@ void RegisterNotCases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterNotOnnxCase("test_not_4d", {3, 4, 5, 6}, 103, not_kernel, opset, registry);
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

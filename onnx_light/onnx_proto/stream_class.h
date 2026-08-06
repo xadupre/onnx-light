@@ -9,8 +9,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace onnx_light {
-namespace proto_default_detail {
+namespace onnx_light::proto_default_detail {
 
 /// Returns a const reference to a default-constructed instance of T.
 /// Uses a template to defer instantiation until the type is complete.
@@ -19,8 +18,7 @@ template <typename T> inline const T &default_proto_instance() {
   return instance;
 }
 
-} // namespace proto_default_detail
-} // namespace onnx_light
+} // namespace onnx_light::proto_default_detail
 
 #define FIELD_VARINT 0
 #define FIELD_FIXED64 1

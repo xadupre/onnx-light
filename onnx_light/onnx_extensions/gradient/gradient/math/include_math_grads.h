@@ -8,8 +8,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_gradient {
+namespace ONNX_LIGHT_NAMESPACE::onnx_gradient {
 
 /**
  * Applies the backward rule for the Add operator.
@@ -75,5 +74,4 @@ bool GradSub(const NodeProto &node, const std::string &output_grad,
              std::unordered_map<std::string, std::string> &grad_accum, int &counter,
              FunctionProto &func);
 
-} // namespace onnx_gradient
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_gradient

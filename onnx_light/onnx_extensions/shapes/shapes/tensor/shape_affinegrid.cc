@@ -11,10 +11,7 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace tensor {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::tensor {
 
 void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "AffineGrid", "ComputeShapeAffineGrid");
@@ -122,7 +119,4 @@ void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node) {
   ctx.Set(node.output(0), SymTensor(nullptr, theta.Dtype(), std::move(out_shape)));
 }
 
-} // namespace tensor
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::tensor

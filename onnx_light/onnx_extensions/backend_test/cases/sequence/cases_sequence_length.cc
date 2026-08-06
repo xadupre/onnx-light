@@ -10,8 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 namespace {
 
@@ -86,5 +85,4 @@ void RegisterSequenceLengthCases(std::vector<TestCase> &registry, TestMode mode)
   RegisterSequenceLengthCase("test_cc_sequence_length", {a, b, c}, opset, registry);
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

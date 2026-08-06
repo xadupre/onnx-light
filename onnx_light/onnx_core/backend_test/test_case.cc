@@ -7,9 +7,7 @@
 
 #include <stdexcept>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace backend_test {
+namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
 
 namespace {
 
@@ -175,6 +173,4 @@ void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string
   }
 }
 
-} // namespace backend_test
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::backend_test

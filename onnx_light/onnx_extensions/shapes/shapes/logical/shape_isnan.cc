@@ -6,10 +6,7 @@
 
 #include "onnx_core/shapes/shape_check.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace logical {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::logical {
 
 void ComputeShapeIsNaN(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "IsNaN", "ComputeShapeIsNaN");
@@ -19,7 +16,4 @@ void ComputeShapeIsNaN(ShapesContext &ctx, const NodeProto &node, const char *x)
   ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kBool, input.Shape()));
 }
 
-} // namespace logical
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::logical

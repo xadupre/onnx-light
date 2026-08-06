@@ -17,8 +17,7 @@
 #include "onnx_lib/version_converter/adapters/transformers.h"
 #include "onnx_lib/version_converter/internal_symbol.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
 class Scatter_16_15 : public Adapter {
 public:
@@ -53,5 +52,4 @@ private:
   }
 };
 
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

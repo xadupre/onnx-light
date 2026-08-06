@@ -6,9 +6,7 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 // Default implementation for kernels that are not runnable through the dispatch
 // path (e.g. helper kernels used only via their ``operator()``). Every
@@ -17,6 +15,4 @@ void KernelBase::Run(RuntimeContext & /*rt*/) {
   EXT_THROW_INVALID("KernelBase::Run: this kernel does not implement Run().");
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

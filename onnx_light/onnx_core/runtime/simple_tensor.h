@@ -14,9 +14,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /**
  * DataType — alias for ``TensorProto::DataType``.
@@ -808,6 +806,4 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator = nu
 Tensor MakeOutputTensor(int32_t data_type, const Shape &shape, size_t n_bytes,
                         RawBufferAllocator *allocator);
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

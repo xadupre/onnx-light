@@ -9,9 +9,7 @@
 
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
 // ── Opset versions ──────────────────────────────────────────────────
 
@@ -52,6 +50,4 @@ bool ShapesContext::RemoveCustomShapeInferenceFunction(const std::string &domain
   return custom_shape_inference_.erase(NormaliseDomain(domain) + ":" + op_type) > 0;
 }
 
-} // namespace shapes
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::shapes

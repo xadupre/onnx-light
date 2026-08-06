@@ -4,10 +4,7 @@
 
 #include "onnx_core/runtime/elementwise_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
-namespace detail {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail {
 
 Shape BroadcastShape(const char *op_name, const Shape &a, const Shape &b) {
   const size_t rank = a.size() > b.size() ? a.size() : b.size();
@@ -120,7 +117,4 @@ void CheckPreallocatedOutput(const char *op_name, const char *dtype_name, int32_
                       " preallocated output buffer has unexpected size in bytes.");
 }
 
-} // namespace detail
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail

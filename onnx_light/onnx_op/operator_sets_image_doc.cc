@@ -4,9 +4,7 @@
 
 #include "onnx_op/operator_sets_image_doc.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace image {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::image {
 
 std::string MakeImageDecoderDoc(int since_version) {
   if (since_version == 20) {
@@ -38,6 +36,4 @@ also referred as "smooth" or "fancy" upsampling.
   return "";
 }
 
-} // namespace image
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::image

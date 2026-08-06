@@ -12,8 +12,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 namespace {
 
@@ -230,5 +229,4 @@ void RegisterGridSampleCases(std::vector<TestCase> &registry, TestMode mode) {
            5.4000001f, 6.5999999f, 9.25f, 8.39999962f, 12.0f, 6.0999999f});
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

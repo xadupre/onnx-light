@@ -32,9 +32,7 @@
  * direction from ever being introduced.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /**
  * Factory signature registered in :cpp:func:`KernelDispatchTable` for every
@@ -108,6 +106,4 @@ const SequenceMapPackFn &GetSequenceMapPackFn();
  */
 void RegisterSequenceMapPackFn(SequenceMapPackFn fn);
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

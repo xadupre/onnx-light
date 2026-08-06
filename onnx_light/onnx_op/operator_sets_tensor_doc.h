@@ -8,9 +8,7 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace tensor {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::tensor {
 
 /**
  * Returns the documentation string for the Cast operator at the given opset
@@ -587,6 +585,4 @@ std::string MakeSplitTypeConstraintDescription(int since_version);
  */
 std::string MakeCompressTypeConstraintDescription(int since_version);
 
-} // namespace tensor
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::tensor

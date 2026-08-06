@@ -4,8 +4,7 @@
 
 #include "blake3_hash.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace utils {
+namespace ONNX_LIGHT_NAMESPACE::utils {
 
 Blake3Hasher::Blake3Hasher() { blake3_hasher_init(&state_); }
 
@@ -26,5 +25,4 @@ int64_t Blake3Hasher::Finalize64() const {
   return static_cast<int64_t>(value);
 }
 
-} // namespace utils
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::utils

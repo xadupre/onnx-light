@@ -24,9 +24,7 @@
 #include "onnx_light_helpers.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 namespace {
 
@@ -1173,6 +1171,4 @@ void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {
   }
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

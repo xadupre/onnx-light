@@ -37,9 +37,7 @@
  * descriptor: it never allocates the underlying data.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace symbolic {
+namespace ONNX_LIGHT_NAMESPACE::core::symbolic {
 
 /**
  * Descriptor for an ONNX tensor-sequence value. A sequence carries a
@@ -150,6 +148,4 @@ private:
   bool has_elem_shapes_ = false;
 };
 
-} // namespace symbolic
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::symbolic

@@ -4,9 +4,7 @@
 
 #include "onnx_op/operator_sets_controlflow_doc.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace controlflow {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::controlflow {
 
 std::string MakeIfDoc() { return "If conditional"; }
 
@@ -195,6 +193,4 @@ std::string MakeScanOutputAxesAttributeDescription() {
          "range is [-r, r-1].";
 }
 
-} // namespace controlflow
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::controlflow

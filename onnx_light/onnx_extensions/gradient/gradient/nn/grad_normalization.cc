@@ -8,8 +8,7 @@
 
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_gradient {
+namespace ONNX_LIGHT_NAMESPACE::onnx_gradient {
 
 namespace {
 
@@ -461,5 +460,4 @@ bool GradRMSNormalization(const NodeProto &node, const std::string &output_grad,
   return true;
 }
 
-} // namespace onnx_gradient
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_gradient

@@ -11,9 +11,7 @@
 #include <cstdint>
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
@@ -120,6 +118,4 @@ void GroupNormalization::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(x, scale, bias, num_groups, GetEpsilon(node), &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

@@ -9,9 +9,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Sequence SequenceErase::operator()(const Sequence &input_sequence, const Tensor *position) const {
   const int64_t n = static_cast<int64_t>(input_sequence.size());
@@ -63,6 +61,4 @@ void SequenceErase::Run(RuntimeContext &rt) {
   SetOutputSequence(node, 0, k(input_sequence, position), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

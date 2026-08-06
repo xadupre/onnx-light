@@ -13,8 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 namespace {
 
@@ -107,5 +106,4 @@ void RegisterDivNanInfCases(std::vector<TestCase> &registry, TestMode mode) {
   RegisterBinaryNanInf<onnx_kernels::kernel::Div>(registry, "Div", 14, "div");
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

@@ -5,9 +5,7 @@
 #include "onnx_op/operator_sets_traditionalml.h"
 #include "onnx_op/operator_sets_traditionalml_doc.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace traditionalml {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::traditionalml {
 
 namespace {
 
@@ -839,6 +837,4 @@ std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std
   return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
-} // namespace traditionalml
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::traditionalml

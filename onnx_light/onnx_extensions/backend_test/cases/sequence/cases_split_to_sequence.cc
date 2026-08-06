@@ -12,8 +12,7 @@
 #include <utility>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 namespace {
 
@@ -156,5 +155,4 @@ void RegisterSplitToSequenceCases(std::vector<TestCase> &registry, TestMode mode
                               /*axis=*/1, /*keepdims=*/0, /*elem_shape=*/{3}, opset, registry);
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

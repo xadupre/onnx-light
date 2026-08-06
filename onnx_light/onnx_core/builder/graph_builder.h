@@ -53,9 +53,7 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace builder {
+namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
 using ::onnx_light::core::compute::ComputeContext;
 using ::onnx_light::core::schema::LightOpSchema;
@@ -587,6 +585,4 @@ private:
   std::uint64_t auto_counter_ = 0;
 };
 
-} // namespace builder
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::builder

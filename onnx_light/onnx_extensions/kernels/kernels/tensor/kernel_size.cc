@@ -8,9 +8,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor Size::operator()(const Tensor &data, RuntimeContext *rt) const {
   const int64_t n = data.shape.product();
@@ -37,6 +35,4 @@ void Size::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(data, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

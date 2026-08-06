@@ -10,9 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /**
  * Abstract base class for RawBuffer allocators.
@@ -140,6 +138,4 @@ private:
   size_t allocated_count_ = 0;
 };
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -29,8 +29,7 @@
 #include "onnx_extensions/shapes/shapes/traditionalml/shape_traditionalml.h"
 #include "onnx_extensions/shapes/shapes/training/shape_training.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes {
 namespace shapes {
 
 namespace {
@@ -1387,5 +1386,4 @@ void RegisterPeakMemoryFunctions() {
   (void)kRegistered;
 }
 
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes

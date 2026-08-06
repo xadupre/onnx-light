@@ -12,8 +12,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // Upsample — nearest/linear interpolation, output_dim[i] = floor(input_dim[i]
@@ -123,5 +122,4 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
   }
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

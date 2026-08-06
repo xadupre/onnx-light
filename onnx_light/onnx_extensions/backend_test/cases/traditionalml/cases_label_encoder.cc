@@ -11,8 +11,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // LabelEncoder — y[i] = values_*[k] where keys_*[k] == x[i], else default_*
@@ -350,5 +349,4 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
   }
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

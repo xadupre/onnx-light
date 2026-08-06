@@ -13,10 +13,7 @@
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace tensor {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::tensor {
 
 namespace {
 
@@ -117,7 +114,4 @@ void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node) {
   ctx.Set(node.output(0), std::move(out_tensor));
 }
 
-} // namespace tensor
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::tensor

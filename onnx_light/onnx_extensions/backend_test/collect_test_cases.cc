@@ -38,9 +38,7 @@
 
 #include <regex>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace backend_test {
+namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
 
 namespace {
 
@@ -176,6 +174,4 @@ std::vector<TestCase> GetTestCaseByName(const std::string &name, bool include_bi
   return result;
 }
 
-} // namespace backend_test
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::backend_test

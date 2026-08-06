@@ -9,10 +9,7 @@
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace math {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math {
 
 void ComputeShapeGemm(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b) {
   CheckNodeOpAndOutput(node, "Gemm", "ComputeShapeGemm");
@@ -39,7 +36,4 @@ void ComputeShapeGemm(ShapesContext &ctx, const NodeProto &node, const char *a, 
   ctx.Set(node.output(0), SymTensor(nullptr, out_dtype, SymShape{dim_m, dim_n}));
 }
 
-} // namespace math
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math

@@ -10,8 +10,7 @@
 #include <utility>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // Constant — produces a tensor output whose data type, shape and bytes are
@@ -237,5 +236,4 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
   }
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

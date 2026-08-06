@@ -20,9 +20,7 @@
  *        ``tensor`` family.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes {
 
 // The generic shape-inference engine (ShapesContext, dispatch table,
 // domain constants, ...) lives in ``onnx_core`` so it never depends on
@@ -923,6 +921,4 @@ void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node);
 
 } // namespace tensor
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes

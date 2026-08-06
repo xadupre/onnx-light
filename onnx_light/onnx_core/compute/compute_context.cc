@@ -22,9 +22,7 @@
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/symbolic/symbolic_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace compute {
+namespace ONNX_LIGHT_NAMESPACE::core::compute {
 
 namespace {
 
@@ -776,6 +774,4 @@ runtime::ExecutionPlan ComputeContext::BuildExecutionPlan(ModelProto &model) con
   return BuildExecutionPlan(*model.mutable_graph());
 }
 
-} // namespace compute
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::compute

@@ -11,9 +11,7 @@
 #include <stdexcept>
 #include <unordered_set>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 namespace {
 
@@ -393,6 +391,4 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
   return child;
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

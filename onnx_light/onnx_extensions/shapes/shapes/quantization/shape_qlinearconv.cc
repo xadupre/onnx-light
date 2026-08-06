@@ -8,10 +8,7 @@
 #include "onnx_extensions/kernels/kernels/auto_pad.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace quantization {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::quantization {
 
 using onnx_kernels::kernel::AutoPad;
 using onnx_kernels::kernel::AutoPadFromString;
@@ -124,7 +121,4 @@ void ComputeShapeQLinearConv(ShapesContext &ctx, const NodeProto &node, const ch
   ctx.Set(node.output(0), SymTensor(nullptr, yzp_tensor.Dtype(), std::move(out_shape)));
 }
 
-} // namespace quantization
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::quantization

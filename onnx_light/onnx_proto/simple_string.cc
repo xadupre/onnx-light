@@ -2,8 +2,7 @@
 #include <charconv>
 #include <cstring>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace utils {
+namespace ONNX_LIGHT_NAMESPACE::utils {
 
 bool RefString::operator==(const char *other) const {
   if (size_ == 0)
@@ -67,5 +66,4 @@ std::string join_string(const std::vector<std::string> &elements, const char *de
   return result;
 }
 
-} // namespace utils
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::utils

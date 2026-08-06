@@ -12,8 +12,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 namespace {
 
@@ -138,5 +137,4 @@ void RegisterReduceMeanCases(std::vector<TestCase> &registry, TestMode mode) {
                      random_values, {-2}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

@@ -13,9 +13,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 template <typename T>
 Tensor LinearRegressor::operator()(const Tensor &x, const ParamFloats &coefficients,
@@ -82,6 +80,4 @@ void LinearRegressor::Run(RuntimeContext &rt) {
   SetOutput(node, 0, std::move(y), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

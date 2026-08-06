@@ -8,10 +8,7 @@
 
 #include <algorithm>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
-namespace detail {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel::detail {
 
 /// Promotes a 1-D MatMul operand to its logical 2-D shape.
 ///
@@ -108,7 +105,4 @@ inline Shape ComputeMatMulOutputShape(const Shape &a_shape, const Shape &b_shape
   return out_shape;
 }
 
-} // namespace detail
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel::detail

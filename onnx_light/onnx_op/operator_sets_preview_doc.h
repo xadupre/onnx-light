@@ -8,9 +8,7 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace preview {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::preview {
 
 /**
  * Returns the documentation string for the FlexAttention operator.
@@ -19,6 +17,4 @@ namespace preview {
  */
 std::string MakeFlexAttentionDoc();
 
-} // namespace preview
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::preview

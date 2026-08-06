@@ -6,9 +6,7 @@
 
 #include <thread>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 int32_t RuntimeParameters::EffectiveNumThreads() const noexcept {
   if (num_threads > 1) {
@@ -21,6 +19,4 @@ int32_t RuntimeParameters::EffectiveNumThreads() const noexcept {
   return cores == 0 ? 1 : static_cast<int32_t>(cores);
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

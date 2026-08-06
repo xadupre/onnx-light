@@ -18,9 +18,7 @@
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/dispatch_table.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
 namespace {
 
@@ -1019,6 +1017,4 @@ void InferShapesModel(ModelProto &model, bool prefill_with_value_info_output) {
   ctx.ApplyInferredShapesToModel(model);
 }
 
-} // namespace shapes
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::shapes

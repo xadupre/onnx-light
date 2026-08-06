@@ -6,10 +6,7 @@
 
 #include "onnx_core/shapes/shape_check.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace nn {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn {
 
 void ComputeShapeInstanceNormalization(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "InstanceNormalization", "ComputeShapeInstanceNormalization");
@@ -83,7 +80,4 @@ void ComputeShapeLayerNormalization(ShapesContext &ctx, const NodeProto &node, c
   }
 }
 
-} // namespace nn
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn

@@ -18,8 +18,7 @@
 
 #include "onnx_lib/defs/schema.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
 /**
  * @brief Exception thrown when an ONNX operator version conversion fails.
@@ -68,5 +67,4 @@ struct ConvertError final : public std::runtime_error {
       ONNX_LIGHT_NAMESPACE::MakeString(__VA_ARGS__)))
 #endif // fail_convert
 
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

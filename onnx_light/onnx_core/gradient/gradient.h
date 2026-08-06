@@ -9,9 +9,7 @@
 #include <span>
 #include <string>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace gradient {
+namespace ONNX_LIGHT_NAMESPACE::core::gradient {
 
 /**
  * Computes the gradient FunctionProto from a list of ONNX nodes.
@@ -70,6 +68,4 @@ FunctionProto GradientOfFunction(const FunctionProto &function, std::span<const 
                                  const std::string &y, std::span<const std::string> zs,
                                  const GradRegistry &registry);
 
-} // namespace gradient
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::gradient

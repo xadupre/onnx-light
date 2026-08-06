@@ -4,9 +4,7 @@
 
 #include "onnx_op/operator_sets_text_doc.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace text {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::text {
 
 std::string MakeStringConcatDoc(int since_version) {
   if (since_version == 20) {
@@ -85,6 +83,4 @@ If pool_strings is set, the input must be a string tensor.
   return "";
 }
 
-} // namespace text
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::text

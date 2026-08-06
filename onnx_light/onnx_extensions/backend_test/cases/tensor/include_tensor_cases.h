@@ -8,8 +8,7 @@
 
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 using namespace ::onnx_light::core::backend_test; // NOLINT(google-build-using-namespace)
 
 // ---------------------------------------------------------------------------
@@ -168,5 +167,4 @@ ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterScatterNDCases(std::vector<TestCase> 
 void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &op_type = "",
                             TestMode mode = TestMode::TEST);
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

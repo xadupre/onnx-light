@@ -45,8 +45,7 @@
  * the lifetime of the underlying buffer.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
+namespace ONNX_LIGHT_NAMESPACE::core {
 namespace shapes {
 // Forward declaration: SymShape::FitsConcreteShape records the concrete
 // values it binds to symbolic dimensions in a ShapesContext (defined in
@@ -740,5 +739,4 @@ bool SymTensorFromTensorProto(const TensorProto &tp, SymTensor &out);
 bool SymTensorToValueInfo(const SymTensor &tensor, ValueInfoProto &vi);
 
 } // namespace symbolic
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core

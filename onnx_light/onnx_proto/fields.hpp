@@ -9,8 +9,7 @@
 #include <utility>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace utils {
+namespace ONNX_LIGHT_NAMESPACE::utils {
 
 template <typename T>
 void RepeatedField<T>::PrintToStringStream(std::stringstream &ss,
@@ -156,5 +155,4 @@ template <typename T> OptionalField<T> &OptionalField<T>::operator=(const Option
   return *this;
 }
 
-} // namespace utils
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::utils

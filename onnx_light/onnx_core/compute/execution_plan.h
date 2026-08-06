@@ -21,9 +21,7 @@
  *        as they are no longer referenced.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 // Forward declaration so ExecutionPlan::ReleaseAfter can reference
 // RuntimeContext by reference without a full definition at this point.
@@ -181,6 +179,4 @@ private:
   std::vector<ExecuteAction> actions_;
 };
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

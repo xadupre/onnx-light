@@ -30,9 +30,7 @@
  * dependency direction from ever being introduced.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
 /**
  * Signature of every per-operator ``ComputeShape*`` trampoline
@@ -130,6 +128,4 @@ void RegisterComputePeakMemoryFn(const std::string &domain, const std::string &o
 int64_t ComputePeakMemory(const std::string &domain, const std::string &op_type, Device device,
                           const std::vector<SymShape> &input_shapes);
 
-} // namespace shapes
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::shapes

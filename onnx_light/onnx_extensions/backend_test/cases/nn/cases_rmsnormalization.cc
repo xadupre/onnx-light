@@ -12,8 +12,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // RMSNormalization (opset 23) — divides ``X`` by its root-mean-square taken
@@ -167,5 +166,4 @@ void RegisterRMSNormalizationCases(std::vector<TestCase> &registry, TestMode mod
                /*include_epsilon_attr=*/false);
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

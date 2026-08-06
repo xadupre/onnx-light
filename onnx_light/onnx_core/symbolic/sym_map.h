@@ -32,9 +32,7 @@
  * underlying data.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace symbolic {
+namespace ONNX_LIGHT_NAMESPACE::core::symbolic {
 
 /**
  * Descriptor for an ONNX ``map(K,V)`` value. A map carries a key
@@ -120,6 +118,4 @@ private:
   bool has_value_dtype_ = false;
 };
 
-} // namespace symbolic
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::symbolic

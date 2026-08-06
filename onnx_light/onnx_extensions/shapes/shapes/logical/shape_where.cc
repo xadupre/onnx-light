@@ -5,10 +5,7 @@
 #include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_extensions/shapes/shapes/logical/shape_logical.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace logical {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::logical {
 
 void ComputeShapeWhere(ShapesContext &ctx, const NodeProto &node, const char *condition,
                        const char *x, const char *y) {
@@ -27,7 +24,4 @@ void ComputeShapeWhere(ShapesContext &ctx, const NodeProto &node, const char *co
           core::symbolic::SymTensor(nullptr, x_tensor.Dtype(), std::move(out_shape)));
 }
 
-} // namespace logical
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::logical

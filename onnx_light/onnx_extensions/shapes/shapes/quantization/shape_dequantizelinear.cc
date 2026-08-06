@@ -11,10 +11,7 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace quantization {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::quantization {
 
 void ComputeShapeDequantizeLinear(ShapesContext &ctx, const NodeProto &node, const char *x,
                                   const char *x_scale) {
@@ -40,7 +37,4 @@ void ComputeShapeDequantizeLinear(ShapesContext &ctx, const NodeProto &node, con
   ctx.Set(node.output(0), SymTensor(nullptr, out_dtype, std::move(out_shape)));
 }
 
-} // namespace quantization
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::quantization

@@ -13,8 +13,7 @@
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_extensions/kernels/kernels/auto_pad.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels {
 using namespace ::onnx_light::core::runtime;
 
 // Shared spatial pooling attributes consumed by AveragePool / MaxPool / LpPool
@@ -40,5 +39,4 @@ inline PoolCommonAttrs ParsePoolCommonAttrs(const NodeProto &node) {
   return a;
 }
 
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels

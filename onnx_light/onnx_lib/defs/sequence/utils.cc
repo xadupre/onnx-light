@@ -9,10 +9,7 @@
 #include <utility>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace defs {
-namespace sequence {
-namespace utils {
+namespace ONNX_LIGHT_NAMESPACE::defs::sequence::utils {
 
 // Common documentation for SplitToSequence operator, versions 11 and 24
 static constexpr const char *SplitToSequence_ver11_doc =
@@ -186,7 +183,4 @@ std::function<void(OpSchema &)> SplitToSequenceOpGenerator(std::vector<std::stri
   };
 }
 
-} // namespace utils
-} // namespace sequence
-} // namespace defs
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::defs::sequence::utils

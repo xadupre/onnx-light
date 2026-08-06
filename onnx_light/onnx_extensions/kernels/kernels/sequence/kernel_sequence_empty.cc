@@ -7,9 +7,7 @@
 #include "onnx_core/runtime/node_helpers.h"
 #include <cstdint>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Sequence SequenceEmpty::operator()(int32_t dtype) const {
   // Per ONNX schema, the default element type when 'dtype' is unspecified
@@ -29,6 +27,4 @@ void SequenceEmpty::Run(RuntimeContext &rt) {
   SetOutputSequence(node, 0, k(static_cast<int32_t>(dtype)), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

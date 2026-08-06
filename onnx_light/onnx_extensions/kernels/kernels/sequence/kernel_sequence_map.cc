@@ -9,9 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Sequences SequenceMap::operator()(const Sequence &input_sequence,
                                   const std::vector<Tensors> &body_outputs_per_iter) const {
@@ -47,6 +45,4 @@ Sequences SequenceMap::operator()(const Sequence &input_sequence,
   return outputs;
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

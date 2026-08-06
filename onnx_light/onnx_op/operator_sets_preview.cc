@@ -7,9 +7,7 @@
 
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace preview {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::preview {
 
 namespace {
 
@@ -67,6 +65,4 @@ std::vector<LightOpSchema> GetAllOnnxOpPreviewSchemasWithHistory(const std::stri
   return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
-} // namespace preview
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::preview

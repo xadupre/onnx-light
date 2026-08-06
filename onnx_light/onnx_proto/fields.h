@@ -16,8 +16,7 @@
 #include <utility>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace utils {
+namespace ONNX_LIGHT_NAMESPACE::utils {
 
 /** Options that control how a proto message is printed. */
 struct PrintOptions {
@@ -659,5 +658,4 @@ protected:
   std::optional<T> value_;
 };
 
-} // namespace utils
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::utils

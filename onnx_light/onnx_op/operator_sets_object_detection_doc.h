@@ -8,9 +8,7 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace object_detection {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::object_detection {
 
 /**
  * Returns the documentation string for the RoiAlign operator.
@@ -28,6 +26,4 @@ std::string MakeRoiAlignDoc();
  */
 std::string MakeNonMaxSuppressionDoc();
 
-} // namespace object_detection
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::object_detection

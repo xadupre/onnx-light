@@ -7,9 +7,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 namespace {
 
@@ -123,6 +121,4 @@ std::uint8_t Uint2BitsToUint8(std::uint8_t bits) noexcept {
   return static_cast<std::uint8_t>(bits & 0x03);
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

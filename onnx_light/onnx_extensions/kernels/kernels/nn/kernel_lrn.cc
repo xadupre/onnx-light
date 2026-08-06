@@ -10,9 +10,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor LRN::operator()(const Tensor &x, int64_t size, float alpha, float beta, float bias,
                        RuntimeContext *rt) const {
@@ -78,6 +76,4 @@ void LRN::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(x, size, alpha, beta, bias, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

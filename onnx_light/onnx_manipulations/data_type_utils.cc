@@ -11,8 +11,7 @@
 #include <unordered_set>
 #include <utility>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace Utils {
+namespace ONNX_LIGHT_NAMESPACE::Utils {
 namespace {
 
 constexpr bool IsAsciiSpace(char c) {
@@ -380,5 +379,4 @@ TypesWrapper::TypesWrapper() {
 
 } // namespace
 
-} // namespace Utils
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::Utils

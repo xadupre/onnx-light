@@ -17,8 +17,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 namespace {
 
@@ -169,5 +168,4 @@ void RegisterDelayedInitializerCases(std::vector<TestCase> &registry, TestMode m
                                  Tensor::FromFloat("", {3}, {3.0f, 4.0f, 5.0f}));
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

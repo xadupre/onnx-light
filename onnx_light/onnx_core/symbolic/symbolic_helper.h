@@ -7,9 +7,7 @@
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace symbolic {
+namespace ONNX_LIGHT_NAMESPACE::core::symbolic {
 
 /// Converts an SymDim into the expressions::DimType variant used by the
 /// symbolic dimension expression helpers (``dim_add``, ``dim_mul``,
@@ -22,6 +20,4 @@ inline expressions::DimType ToDimType(const SymDim &d) {
   return expressions::DimType{d.AsExpr()};
 }
 
-} // namespace symbolic
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::symbolic

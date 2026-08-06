@@ -18,8 +18,7 @@
 #include "onnx_lib/defs/schema.h"
 #include "onnx_lib/version_converter/adapters/adapter.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
 // TODO(ONNX): Consider creating interface for this class.
 /// Base class that stores adapters and converts models between opset versions.
@@ -111,5 +110,4 @@ public:
   }
 };
 
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

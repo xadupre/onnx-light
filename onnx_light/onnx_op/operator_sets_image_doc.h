@@ -8,9 +8,7 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace image {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::image {
 
 /**
  * Returns the documentation string for the ImageDecoder operator at the given
@@ -21,6 +19,4 @@ namespace image {
  */
 std::string MakeImageDecoderDoc(int since_version);
 
-} // namespace image
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::image

@@ -4,9 +4,7 @@
 
 #include "onnx_core/gradient/grad_common.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace gradient {
+namespace ONNX_LIGHT_NAMESPACE::core::gradient {
 
 void AccumulateGrad(const std::string &contrib_name, std::string &acc_name, int &counter,
                     FunctionProto &func) {
@@ -23,6 +21,4 @@ std::string NewGradName(const std::string &prefix, int &counter) {
   return prefix + "_" + std::to_string(counter++);
 }
 
-} // namespace gradient
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::gradient

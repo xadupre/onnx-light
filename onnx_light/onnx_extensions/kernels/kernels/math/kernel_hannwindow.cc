@@ -9,9 +9,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor HannWindow::operator()(const Tensor &size, bool periodic, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(size.data_type == DataType::INT32,
@@ -69,6 +67,4 @@ void HannWindow::Run(RuntimeContext &rt) {
   SetOutput(node, 0, (*this)(size, periodic, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

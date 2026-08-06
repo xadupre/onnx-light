@@ -8,8 +8,7 @@
 
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 int check_numpy_unibroadcastable_and_require_broadcast(const std::vector<Dimension> &input1_sizes,
                                                        const std::vector<Dimension> &input2_sizes) {
   // Check that input1 is larger
@@ -69,5 +68,4 @@ void assertInputsAvailable(const ArrayRef<Value *> &inputs, const char *name, ui
     assertNotParams(inputs[i]->sizes());
   }
 }
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

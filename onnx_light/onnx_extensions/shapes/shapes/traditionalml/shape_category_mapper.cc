@@ -6,10 +6,7 @@
 
 #include "onnx_core/shapes/shape_check.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace traditionalml {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::traditionalml {
 
 void ComputeShapeCategoryMapper(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "CategoryMapper", "ComputeShapeCategoryMapper");
@@ -31,7 +28,4 @@ void ComputeShapeCategoryMapper(ShapesContext &ctx, const NodeProto &node, const
   ctx.Set(node.output(0), SymTensor(nullptr, output_dtype, input.Shape()));
 }
 
-} // namespace traditionalml
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::traditionalml

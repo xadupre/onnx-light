@@ -5,10 +5,7 @@
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_extensions/shapes/shapes/text/shape_text.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
-namespace text {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::text {
 
 void ComputeShapeRegexFullMatch(ShapesContext &ctx, const NodeProto &node, const char *a) {
   CheckNodeOpAndOutput(node, "RegexFullMatch", "ComputeShapeRegexFullMatch");
@@ -18,7 +15,4 @@ void ComputeShapeRegexFullMatch(ShapesContext &ctx, const NodeProto &node, const
   ctx.Set(node.output(0), SymTensor(nullptr, TensorType::kBool, input.Shape()));
 }
 
-} // namespace text
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::text

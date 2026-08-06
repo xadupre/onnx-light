@@ -7,9 +7,7 @@
 #include <new>
 #include <stdexcept>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 SimpleRawBufferAllocator::SimpleRawBufferAllocator(size_t capacity) : buffers_(capacity) {
   free_slots_.reserve(capacity);
@@ -60,6 +58,4 @@ size_t SimpleRawBufferAllocator::capacity() const noexcept { return buffers_.siz
 
 size_t SimpleRawBufferAllocator::allocated_count() const noexcept { return allocated_count_; }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -8,9 +8,7 @@
 
 #include "onnx_light_helpers.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace quantization {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::quantization {
 
 /**
  * Returns the documentation string for the QuantizeLinear operator at the
@@ -57,6 +55,4 @@ std::string MakeQLinearConvDoc(int since_version);
  */
 std::string MakeQLinearMatMulDoc(int since_version);
 
-} // namespace quantization
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::quantization

@@ -64,9 +64,7 @@
  * :cpp:class:`RuntimeSession`.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /**
  * Signature of every per-operator factory registered in
@@ -298,6 +296,4 @@ Tensor MakeBoolScalar(const std::string &name, bool v, RawBufferAllocator *alloc
 Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
                             const std::string &op_name);
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -23,9 +23,7 @@
  *        ``ai.onnx.ml`` (traditional machine-learning) family.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
-namespace shapes {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes {
 
 // The generic shape-inference engine (ShapesContext, dispatch table,
 // domain constants, ...) lives in ``onnx_core`` so it never depends on
@@ -498,6 +496,4 @@ void ComputeShapeFeatureVectorizer(ShapesContext &ctx, const NodeProto &node,
                                    const std::vector<std::string> &inputs);
 
 } // namespace traditionalml
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes

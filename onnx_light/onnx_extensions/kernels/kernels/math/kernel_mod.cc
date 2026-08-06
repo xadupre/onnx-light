@@ -15,9 +15,7 @@
 #include <string>
 #include <type_traits>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 constexpr const char *kModName = "kernel::Mod";
@@ -242,6 +240,4 @@ void Mod::Run(RuntimeContext &rt) {
   SetOutput(node, 0, k(x, y, fmod, &rt), rt);
 }
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

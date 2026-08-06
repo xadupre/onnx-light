@@ -12,9 +12,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
-namespace kernel {
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 /// Node modes for TreeEnsembleRegressor / TreeEnsembleClassifier (string form).
 enum class TreeNodeMode {
@@ -145,6 +143,4 @@ inline ClassicNodeMap BuildClassicNodeMap(
 int64_t TraverseClassicTree(const ClassicNodeMap &node_map, int64_t tree_id, const double *x_row,
                             int64_t feature_count);
 
-} // namespace kernel
-} // namespace onnx_kernels
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

@@ -4,9 +4,7 @@
 
 #include "onnx_op/operator_sets_object_detection_doc.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace object_detection {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::object_detection {
 
 std::string MakeRoiAlignDoc() {
   return R"DOC(
@@ -37,6 +35,4 @@ The bounding box coordinates corresponding to the selected indices can then be o
 )DOC";
 }
 
-} // namespace object_detection
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::object_detection

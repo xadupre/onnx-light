@@ -4,9 +4,7 @@
 
 #include "onnx_op/operator_sets_training_doc.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_op {
-namespace training {
+namespace ONNX_LIGHT_NAMESPACE::onnx_op::training {
 
 std::string MakeGradientDoc() {
   return R"DOC(
@@ -216,6 +214,4 @@ std::string MakeAdamDoc() {
 )DOC";
 }
 
-} // namespace training
-} // namespace onnx_op
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_op::training

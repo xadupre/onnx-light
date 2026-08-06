@@ -10,8 +10,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // BatchNormalization — Y = (X - mean) / sqrt(var + epsilon) * scale + B (and,
@@ -203,5 +202,4 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode m
   }
 }
 
-} // namespace onnx_backend_test
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

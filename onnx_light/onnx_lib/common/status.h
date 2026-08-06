@@ -12,8 +12,7 @@
 #include <string>
 #include <utility>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace Common {
+namespace ONNX_LIGHT_NAMESPACE::Common {
 
 /**
  * @brief Identifies the subsystem that generated a non-OK @c Status.
@@ -238,5 +237,4 @@ inline std::ostream &operator<<(std::ostream &out, const Status &status) {
   return out << status.ToString();
 }
 
-} // namespace Common
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::Common

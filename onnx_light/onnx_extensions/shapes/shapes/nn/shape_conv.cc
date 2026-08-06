@@ -11,14 +11,12 @@
 #include "onnx_extensions/kernels/kernels/auto_pad.h"
 #include "onnx_proto/onnx_helper.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_shapes {
+namespace ONNX_LIGHT_NAMESPACE::onnx_shapes {
 
 // Alias to the symbolic dimension-expression library, which lives in
 // ``onnx_core`` so both ``onnx_op`` and ``onnx_shapes`` can share it.
 namespace expressions = ::ONNX_LIGHT_NAMESPACE::core::expressions;
-namespace shapes {
-namespace nn {
+namespace shapes::nn {
 
 using onnx_kernels::kernel::AutoPad;
 using onnx_kernels::kernel::AutoPadFromString;
@@ -173,7 +171,5 @@ void ComputeShapeConvInteger(ShapesContext &ctx, const NodeProto &node, const ch
   ComputeShapeConvLike(ctx, node, x, w, "ConvInteger", TensorType::kInt32);
 }
 
-} // namespace nn
-} // namespace shapes
-} // namespace onnx_shapes
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace shapes::nn
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes

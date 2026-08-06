@@ -15,8 +15,7 @@
 #include "onnx_manipulations/tensor_proto_util.h"
 #include "onnx_manipulations/tensor_util.h"
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace version_conversion {
+namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
 struct Upsample_9_8 final : public Adapter {
   explicit Upsample_9_8() : Adapter("Upsample", OpSetID(9), OpSetID(8)) {}
@@ -76,5 +75,4 @@ struct Upsample_9_8 final : public Adapter {
   }
 };
 
-} // namespace version_conversion
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::version_conversion

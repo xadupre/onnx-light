@@ -15,9 +15,7 @@
 #include <utility>
 #include <vector>
 
-namespace ONNX_LIGHT_NAMESPACE {
-namespace core {
-namespace runtime {
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 namespace {
 
@@ -337,6 +335,4 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSes
                              scan_output_directions, rt.allocator());
 }
 
-} // namespace runtime
-} // namespace core
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

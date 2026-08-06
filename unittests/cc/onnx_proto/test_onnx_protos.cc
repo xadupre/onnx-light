@@ -7372,10 +7372,10 @@ TEST(onnx_compatibility, EmptyRawDataPresence) {
   EXPECT_FALSE(tensor.has_raw_data());
 
   tensor.set_raw_data(std::string());
+  EXPECT_TRUE(tensor.is_raw_data());
   EXPECT_TRUE(tensor.has_raw_data());
   EXPECT_TRUE(tensor.ref_raw_data().empty());
   EXPECT_NE(tensor.ref_raw_data().data(), nullptr);
-
   std::string serialized;
   tensor.SerializeToString(serialized);
   TensorProto parsed;

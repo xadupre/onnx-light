@@ -235,6 +235,52 @@ template <typename... Args> inline std::string MakeString(const Args &...args) {
 #endif
 
 /**
+ * @class ParseLimitExceeded
+ * Thrown when parsing hits a deliberate, configurable resource guard --
+ * ParseOptions::max_recursion_depth, ParseOptions::max_tensor_size_bytes, or
+ * ParseOptions::alignment -- rather than genuinely malformed/corrupted wire
+ * bytes. Kept as a distinct type (derived from std::runtime_error) so the
+ * top-level ParseFromString/ParseFromArray entry point can let these
+ * deliberate policy violations continue to propagate as exceptions (the
+ * caller configured the limit and needs to know it was hit) while still
+ * catching genuine wire-format corruption and reporting it via a plain
+ * `false` return, matching the protobuf API contract.
+ */
+class ParseLimitExceeded : public std::runtime_error {
+public:
+  explicit ParseLimitExceeded(const std::string &message) : std::runtime_error(message) {}
+};
+
+/**
+ * @def EXT_THROW_LIMIT(...)
+ * Throws a `ParseLimitExceeded` whose message is built by MakeString from @p __VA_ARGS__,
+ * prefixed with "[onnx-light]". Use for deliberate, configurable resource guards
+ * (recursion depth, tensor size, alignment) as opposed to wire-format corruption.
+ */
+#if !defined(_THROW_LIMIT_DEFINED)
+#define EXT_THROW_LIMIT(...)                                                                       \
+  throw onnx_light_helpers::ParseLimitExceeded(onnx_light_helpers::MakeString(                     \
+      "[onnx-light] ", onnx_light_helpers::MakeString(__VA_ARGS__)));
+#define _THROW_LIMIT_DEFINED
+#endif
+
+/**
+ * @def EXT_ENFORCE_LIMIT(cond, ...)
+ * Evaluates @p cond and throws a `ParseLimitExceeded` when it is false. Behaves
+ * like EXT_ENFORCE but is used for deliberate, configurable resource guards
+ * (recursion depth, tensor size, alignment) as opposed to wire-format corruption.
+ */
+#if !defined(_ENFORCE_LIMIT_DEFINED)
+#define EXT_ENFORCE_LIMIT(cond, ...)                                                                \
+  if (!(cond))                                                                                     \
+    throw onnx_light_helpers::ParseLimitExceeded(onnx_light_helpers::MakeString(                   \
+        "`", #cond, "` failed. ",                                                                  \
+        onnx_light_helpers::MakeString("[onnx-light] ",                                            \
+                                       onnx_light_helpers::MakeString(__VA_ARGS__))));
+#define _ENFORCE_LIMIT_DEFINED
+#endif
+
+/**
  * @def EXT_ENFORCE_INVALID(cond, ...)
  * Evaluates @p cond and throws a `std::invalid_argument` when it is false.
  * The error message includes the stringified condition and the message built
@@ -260,12 +306,14 @@ inline bool IsPowerOfTwo(int64_t value) { return value > 0 && (value & (value - 
  * Validates an alignment option value.
  * @param alignment Alignment value to validate.
  * @param option_name Name of the option used in error messages.
- * Throws std::runtime_error when alignment is negative or not a power of two when positive.
+ * Throws ParseLimitExceeded when alignment is negative or not a power of two when positive:
+ * this rejects a caller-supplied configuration value, not wire-format-corrupted input, so it
+ * must keep propagating as an exception through ParseFromString/ParseFromArray.
  */
 inline void ValidateAlignmentOption(int64_t alignment, const char *option_name) {
-  EXT_ENFORCE(alignment >= 0, option_name, " must be >= 0.");
-  EXT_ENFORCE(alignment <= 1 || IsPowerOfTwo(alignment), option_name,
-              " must be a power of two when > 0, got ", alignment, ".");
+  EXT_ENFORCE_LIMIT(alignment >= 0, option_name, " must be >= 0.");
+  EXT_ENFORCE_LIMIT(alignment <= 1 || IsPowerOfTwo(alignment), option_name,
+                    " must be a power of two when > 0, got ", alignment, ".");
 }
 
 /**

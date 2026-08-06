@@ -44,13 +44,16 @@ public:
   /// Throws when the current nesting depth exceeds the configured limit. Kept
   /// separate from the constructor so that, if it throws, this fully constructed
   /// guard's destructor still runs and restores the depth counter while the
-  /// exception unwinds the parser.
+  /// exception unwinds the parser. Uses ParseLimitExceeded (not a plain
+  /// std::runtime_error) since this is a deliberate, configurable resource guard
+  /// and must keep propagating out of ParseFromString/ParseFromArray rather than
+  /// being swallowed as a generic parse failure.
   void validate() const {
-    EXT_ENFORCE(options_._recursion_depth <= options_.max_recursion_depth,
-                "Protobuf message nesting depth (", options_._recursion_depth,
-                ") exceeds the maximum allowed recursion depth (", options_.max_recursion_depth,
-                "); the message is nested too deeply. Increase "
-                "ParseOptions::max_recursion_depth if this nesting is intentional.");
+    EXT_ENFORCE_LIMIT(options_._recursion_depth <= options_.max_recursion_depth,
+                      "Protobuf message nesting depth (", options_._recursion_depth,
+                      ") exceeds the maximum allowed recursion depth (", options_.max_recursion_depth,
+                      "); the message is nested too deeply. Increase "
+                      "ParseOptions::max_recursion_depth if this nesting is intentional.");
   }
 
 private:
@@ -97,7 +100,11 @@ inline void CheckAllocationLimit(uint64_t len, const ParseOptions &options, cons
                                  const char *location) {
   if (options.max_tensor_size_bytes > 0 &&
       len > static_cast<uint64_t>(options.max_tensor_size_bytes)) {
-    EXT_THROW(
+    // ParseLimitExceeded (not a plain std::runtime_error): this is a deliberate,
+    // configurable resource guard, not wire-format corruption, so it must keep
+    // propagating out of ParseFromString/ParseFromArray rather than being
+    // swallowed as a generic parse failure.
+    EXT_THROW_LIMIT(
         location, ": tensor field '", name, "' requests ", len,
         " bytes which exceeds ParseOptions::max_tensor_size_bytes=", options.max_tensor_size_bytes,
         ". Increase max_tensor_size_bytes or set it to 0 to disable the limit.");
@@ -373,10 +380,14 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
     if (use_zero_copy) {
       if (options.alignment > 1) {
         const utils::offset_t raw_data_offset = stream.tell();
-        EXT_ENFORCE(raw_data_offset % options.alignment == 0, "Raw data field '", name, "' offset ",
-                    raw_data_offset,
-                    " is incompatible with ParseOptions.alignment=", options.alignment,
-                    " when no_copy=true. Disable no_copy or use a compatible alignment.");
+        // ParseLimitExceeded: this is a deliberate alignment/no_copy configuration
+        // guard, not wire-format corruption, so it must keep propagating out of
+        // ParseFromString/ParseFromArray rather than being swallowed as a generic
+        // parse failure.
+        EXT_ENFORCE_LIMIT(raw_data_offset % options.alignment == 0, "Raw data field '", name,
+                          "' offset ", raw_data_offset,
+                          " is incompatible with ParseOptions.alignment=", options.alignment,
+                          " when no_copy=true. Disable no_copy or use a compatible alignment.");
       }
       const uint8_t *ptr = stream.read_bytes(static_cast<utils::offset_t>(len), nullptr);
       field.assign_borrowed(ptr, static_cast<size_t>(len), stream.zero_copy_owner());

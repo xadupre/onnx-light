@@ -163,14 +163,29 @@ TEST(onnx_field_serialization, ReadFieldLimitParallel_RawData_WrongWireType_Skip
   EXPECT_TRUE(parsed.ref_raw_data().empty());
 }
 
-TEST(onnx_field_serialization, ReadField_UnsupportedWireType_StillThrows) {
+TEST(onnx_field_serialization, ReadField_UnsupportedWireType_ParseFails) {
   // Wire type 6 is not one of the four wire types protobuf defines
   // (VARINT=0, FIXED64=1, FIXED_SIZE=2, FIXED32=5); SkipFieldByWireType
-  // cannot skip it and must still throw, since the stream position can no
-  // longer be trusted.
+  // cannot skip it internally (the stream position can no longer be
+  // trusted) and raises an exception, but per the protobuf API contract
+  // ParseFromString/ParseFromArray never throw -- the top-level entry point
+  // catches it and reports the failure by returning false, exactly like a
+  // truncated or otherwise corrupted message.
   std::string bytes = FieldTag(1, 6);
   AttributeProto parsed;
-  EXPECT_THROW(parsed.ParseFromString(bytes), std::runtime_error);
+  EXPECT_FALSE(parsed.ParseFromString(bytes));
+}
+
+TEST(onnx_field_serialization, ParseFromString_TruncatedGarbage_ReturnsFalse) {
+  // Arbitrary non-protobuf bytes must not cause ParseFromString to throw;
+  // it must gracefully report failure via its bool return value, matching
+  // real protobuf's ParseFromArray/ParseFromString contract. This is what
+  // onnxruntime's Model::LoadFromBytes / GetCompatibilityInfoFromModelBytes
+  // rely on to turn malformed model bytes into a normal Status rather than
+  // an uncaught C++ exception.
+  std::string bytes = "this is not a valid ONNX model";
+  ModelProto parsed;
+  EXPECT_FALSE(parsed.ParseFromString(bytes));
 }
 
 // ---------------------------------------------------------------------------

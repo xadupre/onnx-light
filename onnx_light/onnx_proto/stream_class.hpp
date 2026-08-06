@@ -274,13 +274,28 @@ bool _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
     EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
                 "ParseFromString: unrecognised SerializeFormat value ",
                 static_cast<int>(opts.format), "; only kOnnx is currently supported.");
-    const uint8_t *ptr = reinterpret_cast<const uint8_t *>(raw.data());
-    ONNX_LIGHT_NAMESPACE::utils::StringStream st(ptr, raw.size());
-    if (opts.is_parallel())
-      st.StartThreadPool(opts.num_threads);
-    self.ParseFromStream(st, opts);
-    if (opts.is_parallel())
-      st.WaitForDelayedBlock();
+    // Per the protobuf API contract, ParseFromString/ParseFromArray never throw: any
+    // failure while decoding *raw* (malformed varints, truncated fields, corrupted
+    // tags, etc.) must be reported by returning false, not by letting an exception
+    // escape. Callers throughout onnxruntime (e.g. Model::LoadFromBytes) rely on this
+    // to turn adversarial/corrupted model bytes into a normal Status rather than an
+    // uncaught C++ exception. Deliberate, configurable resource guards
+    // (ParseLimitExceeded: max_recursion_depth / max_tensor_size_bytes / alignment)
+    // are re-thrown -- the caller configured that limit and needs to know it was hit,
+    // unlike generic wire-format corruption.
+    try {
+      const uint8_t *ptr = reinterpret_cast<const uint8_t *>(raw.data());
+      ONNX_LIGHT_NAMESPACE::utils::StringStream st(ptr, raw.size());
+      if (opts.is_parallel())
+        st.StartThreadPool(opts.num_threads);
+      self.ParseFromStream(st, opts);
+      if (opts.is_parallel())
+        st.WaitForDelayedBlock();
+    } catch (const onnx_light_helpers::ParseLimitExceeded &) {
+      throw;
+    } catch (const std::exception &) {
+      return false;
+    }
   }
   return true;
 }

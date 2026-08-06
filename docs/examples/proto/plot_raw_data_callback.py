@@ -46,17 +46,19 @@ print(f"Number of initializers: {len(onnx_model.graph.initializer)}")
 # Define the parsing callback
 # ---------------------------
 #
-# ``raw_data_callback`` receives the freshly parsed tensor.  Here we record the
-# name and byte size of every tensor and return a deleter that notes when the
-# underlying buffer is released.
+# ``raw_data_callback`` receives the freshly parsed tensor together with its
+# parent :class:`onnx_light.onnx.GraphProto` (``None`` for a standalone tensor).
+# Here we record the name, the parent graph name, and the byte size of every
+# tensor and return a deleter that notes when the underlying buffer is released.
 
 parsed_tensors = []
 released_tensors = []
 
 
-def on_raw_data(tensor: onnxl.TensorProto):
+def on_raw_data(tensor: onnxl.TensorProto, graph: onnxl.GraphProto | None):
     """Records the tensor and returns a deleter run when its raw_data is freed."""
-    parsed_tensors.append((tensor.name, len(tensor.raw_data)))
+    graph_name = None if graph is None else graph.name
+    parsed_tensors.append((tensor.name, graph_name, len(tensor.raw_data)))
 
     def deleter():
         released_tensors.append(tensor.name)
@@ -78,8 +80,8 @@ options.raw_data_callback = on_raw_data
 parsed_model = onnxl.ModelProto()
 parsed_model.ParseFromString(serialized, options)
 
-for name, size in parsed_tensors:
-    print(f"parsed tensor {name!r}: {size} bytes of raw_data")
+for name, graph_name, size in parsed_tensors:
+    print(f"parsed tensor {name!r} in graph {graph_name!r}: {size} bytes of raw_data")
 
 # %%
 # The tensor data is fully usable: attaching a deleter does not move the bytes.
@@ -115,7 +117,7 @@ names = []
 inspect_options = onnxl.ParseOptions()
 
 
-def record_name(tensor: onnxl.TensorProto):
+def record_name(tensor: onnxl.TensorProto, graph: onnxl.GraphProto | None):
     """Records the tensor name and returns None to keep ownership unchanged."""
     names.append(tensor.name)
     return None
@@ -179,7 +181,9 @@ if hasattr(onnxl.ModelProto(), "SerializeToEncryptedString"):
     encrypted_by_name = {}
     meta_by_name = {}
 
-    def encrypt_weights(tensor: onnxl.TensorProto, buffer, size_only: bool) -> int:
+    def encrypt_weights(
+        tensor: onnxl.TensorProto, graph: onnxl.GraphProto | None, buffer, size_only: bool
+    ) -> int:
         """Encrypts tensor bytes during callback serialization.
 
         Returns:
@@ -204,7 +208,7 @@ if hasattr(onnxl.ModelProto(), "SerializeToEncryptedString"):
     serialize_options.raw_data_callback = encrypt_weights
     encrypted_serialized = onnx_model.SerializeToString(serialize_options)
 
-    def decrypt_weights(tensor: onnxl.TensorProto) -> None:
+    def decrypt_weights(tensor: onnxl.TensorProto, graph: onnxl.GraphProto | None) -> None:
         """Restores original tensor metadata and raw_data during parsing.
 
         Returns:

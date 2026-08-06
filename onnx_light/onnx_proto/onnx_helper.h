@@ -53,14 +53,18 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
 void ClearExternalData(ModelProto &model);
 
 /**
- * Applies :cpp:member:`SerializeOptions::raw_data_callback` to every tensor carrying
- * ``raw_data`` in ``model``.
+ * Applies :cpp:member:`SerializeOptions::raw_data_callback` and
+ * :cpp:member:`SerializeOptions::node_callback` to every tensor/node in ``model`` in place.
  *
- * The callback is first asked for the rewritten byte size, then invoked again with an
- * onnx-light-allocated writable buffer of that size so it can populate the serialized bytes and
- * update tensor metadata in place.
+ * The callbacks mutate the model directly (the ``raw_data_callback`` is first asked for the
+ * rewritten byte size, then invoked again with an onnx-light-allocated writable buffer of that
+ * size so it can populate the serialized bytes and update tensor metadata). To avoid deep-copying
+ * the whole model, the returned :cpp:class:`SerializeCallbackRestorer` records an undo action for
+ * each visited tensor/node; keep it alive while serializing and let it restore the model
+ * afterwards.
  */
-void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options);
+[[nodiscard]] SerializeCallbackRestorer
+ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options);
 
 /**
  * Rewrites an existing two-file ONNX model (one ``.onnx`` proto + one or more

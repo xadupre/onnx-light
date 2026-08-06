@@ -169,7 +169,7 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertIsNone(opts.raw_data_callback)
 
         # Round-trips the exact Python callable that was assigned.
-        def callback(tensor):
+        def callback(tensor, graph):
             return None
 
         opts.raw_data_callback = callback
@@ -188,16 +188,17 @@ class TestOnnxLightHelper(ExtTestCase):
         seen = []
         deleted = []
 
-        def callback(parsed_tensor):
-            seen.append(parsed_tensor.name)
+        def callback(parsed_tensor, graph):
+            seen.append((parsed_tensor.name, None if graph is None else graph.name))
             return lambda: deleted.append(parsed_tensor.name)
 
         opts = onnxl.ParseOptions()
         opts.raw_data_callback = callback
         parsed = onnxl.ModelProto()
         parsed.ParseFromString(serialized, opts)
-        # The callback fires once for the only tensor carrying raw_data.
-        self.assertEqual(seen, ["W"])
+        # The callback fires once for the only tensor carrying raw_data and receives the parent
+        # graph.
+        self.assertEqual(seen, [("W", "g")])
         # Data is still readable: attaching a deleter does not move the bytes.
         np.testing.assert_array_equal(onh.to_array(parsed.graph.initializer[0]), arr)
         # The deleter runs once the tensor's raw_data is released.
@@ -257,17 +258,124 @@ class TestOnnxLightHelper(ExtTestCase):
         serialized = model.SerializeToString()
 
         opts = onnxl.ParseOptions()
-        opts.raw_data_callback = lambda parsed_tensor: None
+        opts.raw_data_callback = lambda parsed_tensor, graph: None
         parsed = onnxl.ModelProto()
         parsed.ParseFromString(serialized, opts)
         # Returning None leaves the tensor ownership and data unchanged.
         np.testing.assert_array_equal(onh.to_array(parsed.graph.initializer[0]), arr)
 
+    @staticmethod
+    def _make_model_with_subgraph():
+        # Main graph with an Add node (its second input is an initializer) plus
+        # an If node carrying a then-subgraph with its own Identity node.
+        arr = np.array([1.0, 2.0], dtype=np.float32)
+        add = oh.make_node("Add", ["X", "W"], ["Y"], name="add0")
+        sub_node = oh.make_node("Identity", ["cond"], ["Z"], name="id0")
+        sub = oh.make_graph([sub_node], "then_graph", [], [])
+        if_node = oh.make_node("If", ["cond"], ["Z"], name="if0", then_branch=sub)
+        graph = oh.make_graph(
+            [add, if_node], "main", [], [], initializer=[onh.from_array(arr, name="W")]
+        )
+        return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
+
+    def test_parse_options_node_callback(self):
+        # Default is None (no callback).
+        opts = onnxl.ParseOptions()
+        self.assertIsNone(opts.node_callback)
+
+        # Round-trips the exact Python callable that was assigned.
+        def callback(node, graph):
+            return None
+
+        opts.node_callback = callback
+        self.assertIs(opts.node_callback, callback)
+
+        # Assigning None disables the callback again.
+        opts.node_callback = None
+        self.assertIsNone(opts.node_callback)
+
+    def test_parse_options_node_callback_invoked_with_parent_graph(self):
+        model = self._make_model_with_subgraph()
+        serialized = model.SerializeToString()
+
+        seen = []
+        opts = onnxl.ParseOptions()
+
+        def callback(node, graph):
+            seen.append((node.op_type, graph.name))
+
+        opts.node_callback = callback
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(serialized, opts)
+
+        # The subgraph node fires while parsing the If node, before the main graph.
+        self.assertEqual(seen, [("Identity", "then_graph"), ("Add", "main"), ("If", "main")])
+
+    def test_parse_options_node_callback_edits_node_in_place(self):
+        model = self._make_model_with_subgraph()
+        serialized = model.SerializeToString()
+
+        opts = onnxl.ParseOptions()
+        opts.node_callback = lambda node, graph: setattr(node, "doc_string", "visited")
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(serialized, opts)
+
+        self.assertEqual(parsed.graph.node[0].doc_string, "visited")
+        self.assertEqual(parsed.graph.node[1].doc_string, "visited")
+        # The subgraph node inside the If's then_branch was visited too.
+        sub = parsed.graph.node[1].attribute[0].g
+        self.assertEqual(sub.node[0].doc_string, "visited")
+
+    def test_serialize_options_node_callback(self):
+        opts = onnxl.SerializeOptions()
+        self.assertIsNone(opts.node_callback)
+
+        def callback(node, graph):
+            return None
+
+        opts.node_callback = callback
+        self.assertIs(opts.node_callback, callback)
+        opts.node_callback = None
+        self.assertIsNone(opts.node_callback)
+
+    def test_serialize_options_node_callback_invoked_with_parent_graph(self):
+        model = self._make_model_with_subgraph()
+
+        seen = []
+        opts = onnxl.SerializeOptions()
+
+        def callback(node, graph):
+            seen.append((node.op_type, graph.name))
+
+        opts.node_callback = callback
+        model.SerializeToString(opts)
+
+        self.assertEqual(seen, [("Add", "main"), ("If", "main"), ("Identity", "then_graph")])
+        # The callback runs on a working copy: the caller's model is unchanged.
+        self.assertEqual(model.graph.node[0].doc_string, "")
+
+    def test_serialize_options_node_callback_edits_round_trip(self):
+        model = self._make_model_with_subgraph()
+
+        opts = onnxl.SerializeOptions()
+        opts.node_callback = lambda node, graph: setattr(node, "doc_string", "stamped")
+        serialized = model.SerializeToString(opts)
+
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(serialized)
+        self.assertEqual(parsed.graph.node[0].doc_string, "stamped")
+        self.assertEqual(parsed.graph.node[1].doc_string, "stamped")
+        # The subgraph node was stamped too.
+        sub = parsed.graph.node[1].attribute[0].g
+        self.assertEqual(sub.node[0].doc_string, "stamped")
+        # The caller's model remains untouched.
+        self.assertEqual(model.graph.node[0].doc_string, "")
+
     def test_serialize_options_raw_data_callback(self):
         opts = onnxl.SerializeOptions()
         self.assertIsNone(opts.raw_data_callback)
 
-        def callback(tensor, buffer, size_only):
+        def callback(tensor, graph, buffer, size_only):
             return 0
 
         opts.raw_data_callback = callback
@@ -388,7 +496,7 @@ class TestOnnxLightHelper(ExtTestCase):
             oh.make_graph([], "g", [], [], [onh.from_array(original, name="W")])
         )
 
-        def callback(tensor, buffer, size_only):
+        def callback(tensor, graph, buffer, size_only):
             expected_size = replacement.nbytes if tensor.name == "W" else len(tensor.raw_data)
             if size_only:
                 return expected_size
@@ -435,7 +543,7 @@ class TestOnnxLightHelper(ExtTestCase):
             holder = onnxl.load_encrypted_string(blob, key)
             return onh.to_array(holder.graph.initializer[0]).tobytes()
 
-        def serialize_callback(tensor: onnxl.TensorProto, buffer, size_only: bool) -> int:
+        def serialize_callback(tensor: onnxl.TensorProto, graph, buffer, size_only: bool) -> int:
             """Encrypts tensor bytes and writes them into the provided serialization buffer."""
             encrypted = encrypted_by_name.get(tensor.name)
             if encrypted is None:
@@ -456,7 +564,7 @@ class TestOnnxLightHelper(ExtTestCase):
         sopts.raw_data_callback = serialize_callback
         serialized = model.SerializeToString(sopts)
 
-        def parse_callback(tensor: onnxl.TensorProto) -> None:
+        def parse_callback(tensor: onnxl.TensorProto, graph) -> None:
             """Decrypts callback-encrypted tensor bytes and restores original metadata."""
             if not tensor.doc_string.startswith("chacha20:"):
                 return None
@@ -684,7 +792,7 @@ class TestOnnxLightHelper(ExtTestCase):
         seen = []
         replacement_bytes = np.frombuffer(replacement.tobytes(), dtype=np.uint8)
 
-        def callback(serialized_tensor, buffer, size_only):
+        def callback(serialized_tensor, graph, buffer, size_only):
             seen.append(
                 (serialized_tensor.name, size_only, None if buffer is None else len(buffer))
             )
@@ -746,7 +854,7 @@ class TestOnnxLightHelper(ExtTestCase):
         replacement_bytes = np.frombuffer(replacement.tobytes(), dtype=np.uint8)
         saved = self.get_dump_file("test_save_raw_data_callback.onnx")
 
-        def callback(serialized_tensor, buffer, size_only):
+        def callback(serialized_tensor, graph, buffer, size_only):
             seen.append(
                 (serialized_tensor.name, size_only, None if buffer is None else len(buffer))
             )

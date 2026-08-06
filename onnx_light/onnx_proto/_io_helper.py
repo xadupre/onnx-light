@@ -95,7 +95,7 @@ def save(
     num_threads: int = -1,
     min_block_size: int = 0,
     max_external_file_size: int = 0,
-    raw_data_callback: Callable[[TensorProto, Any | None, bool], int] | None = None,
+    raw_data_callback: Callable[[TensorProto, Any | None, Any | None, bool], int] | None = None,
 ) -> None:
     """
     Saves the ModelProto to the specified path and optionally,
@@ -143,8 +143,9 @@ def save(
         weight file when saving with external data. A value of 0 (default)
         means no limit.
     :param raw_data_callback: optional callable invoked as
-        ``fn(tensor, buffer, size_only)`` for every tensor carrying
-        ``raw_data`` immediately before serialization. It is first called with
+        ``fn(tensor, graph, buffer, size_only)`` for every tensor carrying
+        ``raw_data`` immediately before serialization. ``graph`` is the tensor's
+        parent GraphProto (or ``None``). It is first called with
         ``buffer=None`` and ``size_only=True`` and must return the number of
         bytes it will write. onnx-light then allocates a writable buffer of
         that size and calls it again with ``size_only=False`` so it can fill

@@ -3,15 +3,52 @@
 #include "stream.h"
 #include <cstdint>
 #include <functional>
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 
 // Forward declaration: ParseOptions::raw_data_callback references TensorProto, which is
 // defined later in onnx.h. Only the declaration is needed for the std::function signature.
 class TensorProto;
+class NodeProto;
+class GraphProto;
 class ModelProto;
 struct SerializeOptions;
-void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options);
+
+/**
+ * Restores the tensors/nodes a serialize callback mutated in place.
+ *
+ * :cpp:func:`ApplySerializeRawDataCallback` applies the callbacks directly to the model (so no
+ * full ``ModelProto`` copy is needed) and records one undo action per visited tensor/node in the
+ * returned restorer. Calling :cpp:func:`Restore` (also done automatically on destruction) puts the
+ * original state back, keeping the caller's model untouched once the serialized bytes are produced.
+ */
+class SerializeCallbackRestorer {
+public:
+  SerializeCallbackRestorer() = default;
+  SerializeCallbackRestorer(SerializeCallbackRestorer &&) = default;
+  SerializeCallbackRestorer &operator=(SerializeCallbackRestorer &&) = default;
+  SerializeCallbackRestorer(const SerializeCallbackRestorer &) = delete;
+  SerializeCallbackRestorer &operator=(const SerializeCallbackRestorer &) = delete;
+  ~SerializeCallbackRestorer() { Restore(); }
+
+  /** Registers an action putting a proto back to its pre-callback state. */
+  void AddUndo(std::function<void()> undo) { undo_.emplace_back(std::move(undo)); }
+
+  /** Runs every registered undo action in reverse order, then clears them. */
+  void Restore() {
+    for (auto it = undo_.rbegin(); it != undo_.rend(); ++it) {
+      (*it)();
+    }
+    undo_.clear();
+  }
+
+private:
+  std::vector<std::function<void()>> undo_;
+};
+
+SerializeCallbackRestorer ApplySerializeRawDataCallback(ModelProto &model,
+                                                        const SerializeOptions &options);
 
 /**
  * Common options shared by tensor buffer operations: in-place consolidation
@@ -136,8 +173,25 @@ struct ParseOptions : TensorBufferOptions {
    *  existing storage without moving the bytes.  Return an empty ``std::function`` to leave the
    *  tensor's ownership unchanged.
    *
+   *  The callback also receives the parent GraphProto (the graph the tensor belongs to) as a
+   *  pointer, or ``nullptr`` when the tensor is parsed on its own (for example
+   *  ``TensorProto::ParseFromString``) rather than as part of a graph.
+   *
    *  By default it is empty (no callback) and parsing behaves exactly as before. */
-  std::function<std::function<void()>(TensorProto &)> raw_data_callback = {};
+  std::function<std::function<void()>(TensorProto &, GraphProto *)> raw_data_callback = {};
+  /** Internal transient pointer to the GraphProto currently being parsed, used only to pass the
+   *  parent graph to ``raw_data_callback``. It is set and restored automatically by
+   *  ``CurrentGraphGuard`` while parsing a GraphProto, is never serialized, and is not exposed in
+   *  the Python bindings. */
+  GraphProto *_current_graph = nullptr;
+  /** Holds an optional callback invoked for each NodeProto once it has been fully parsed.
+   *
+   *  The callback receives the freshly parsed NodeProto and its parent GraphProto (the graph the
+   *  node belongs to) by reference and may inspect or modify the node in place.  The parent graph
+   *  lets the callback read graph-level metadata or the surrounding nodes.
+   *
+   *  By default it is empty (no callback) and parsing behaves exactly as before. */
+  std::function<void(NodeProto &, GraphProto &)> node_callback = {};
 };
 
 /** Controls behavior when serializing ONNX protobuf messages to a stream or string. */
@@ -184,14 +238,18 @@ struct SerializeOptions : TensorBufferOptions {
   /** Holds an optional callback invoked for each TensorProto carrying ``raw_data`` immediately
    *  before serialization.
    *
+   *  The callback also receives the parent GraphProto (the graph the tensor belongs to) by
+   *  pointer, taken from a working copy of the model, so the parent graph lets the callback locate
+   *  the tensor's surrounding graph.
+   *
    *  Serialization calls the callback twice per tensor:
    *
-   *  - size pass: ``fn(tensor, nullptr, 0, true)`` must return the number of bytes that the
-   *    callback will serialize for that tensor.
+   *  - size pass: ``fn(tensor, graph, nullptr, 0, true)`` must return the number of bytes that
+   *    the callback will serialize for that tensor.
    *  - fill pass: onnx-light allocates a buffer of that size, then calls
-   *    ``fn(tensor, buffer, buffer_size, false)``. The callback may update the tensor metadata
-   *    in place (for example dims or data_type), must fill ``buffer`` with exactly that many
-   *    bytes, and must return the same size again.
+   *    ``fn(tensor, graph, buffer, buffer_size, false)``. The callback may update the tensor
+   *    metadata in place (for example dims or data_type), must fill ``buffer`` with exactly that
+   *    many bytes, and must return the same size again.
    *
    *  When the tensor was previously marked with ``data_location=EXTERNAL`` and still carries
    *  ``raw_data`` (for example after ``load_external_data``), serialization regenerates the
@@ -199,7 +257,16 @@ struct SerializeOptions : TensorBufferOptions {
    *  the rewritten bytes.
    *
    *  By default it is empty (no callback) and serialization behaves exactly as before. */
-  std::function<int64_t(TensorProto &, uint8_t *, size_t, bool)> raw_data_callback = {};
+  std::function<int64_t(TensorProto &, GraphProto *, uint8_t *, size_t, bool)> raw_data_callback =
+      {};
+  /** Holds an optional callback invoked for each NodeProto immediately before it is serialized.
+   *
+   *  The callback receives the NodeProto and its parent GraphProto (both from a working copy of
+   *  the model, so edits never alter the caller's model) by reference and may inspect or modify
+   *  the node in place.  The parent graph lets the callback locate the node's surrounding graph.
+   *
+   *  By default it is empty (no callback) and serialization behaves exactly as before. */
+  std::function<void(NodeProto &, GraphProto &)> node_callback = {};
 };
 
 /** Enforces ``SerializeOptions::max_serialized_size_bytes`` for a computed serialized size. */

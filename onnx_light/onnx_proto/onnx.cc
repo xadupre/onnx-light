@@ -810,7 +810,7 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
   // After raw_data (inline or external) has been resolved, gives the caller a chance to take
   // custom ownership of the tensor data and register a matching deleter.
   if (options.raw_data_callback && has_raw_data()) {
-    std::function<void()> deleter = options.raw_data_callback(*this);
+    std::function<void()> deleter = options.raw_data_callback(*this, options._current_graph);
     if (deleter) {
       ref_raw_data().attach_deleter(std::move(deleter));
     }
@@ -1468,6 +1468,10 @@ void GraphProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
 }
 bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  // Expose this graph to raw_data_callback while its tensors are being parsed. The guard restores
+  // the previous value on scope exit (including exceptions) so subgraphs (parsed recursively via
+  // node attributes) correctly restore the enclosing graph pointer.
+  CurrentGraphGuard current_graph_guard(options, this);
   READ_BEGIN(options, stream, GraphProto)                       //
   READ_REPEATED_FIELD(options, stream, node)                    //
   READ_FIELD(options, stream, name)                             //
@@ -1480,6 +1484,11 @@ bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
   READ_REPEATED_FIELD(options, stream, quantization_annotation) //
   READ_REPEATED_FIELD(options, stream, metadata_props)          //
   READ_END(options, stream, GraphProto)                         //  // NOLINT
+  if (options.node_callback) {
+    for (int i = 0; i < static_cast<int>(ref_node().size()); ++i) {
+      options.node_callback(ref_node()[i], *this);
+    }
+  }
   return true;
 }
 void GraphProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
@@ -1556,13 +1565,16 @@ void FunctionProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptio
 IMPLEMENT_PROTO(ModelProto)
 SerializeSizeResult ModelProto::SerializeSize(utils::BinaryWriteStream &stream,
                                               SerializeOptions &options) const {
-  if (options.raw_data_callback) {
-    ModelProto copy;
-    copy.CopyFrom(*this);
-    ApplySerializeRawDataCallback(copy, options);
+  if (options.raw_data_callback || options.node_callback) {
+    // Apply the callbacks in place and restore afterwards instead of copying the whole model.
+    // Serialization is logically const: the restorer reverts every touched tensor/node before
+    // returning, so the model is observably unchanged.
+    ModelProto &mutable_self = const_cast<ModelProto &>(*this);
+    SerializeCallbackRestorer restorer = ApplySerializeRawDataCallback(mutable_self, options);
     SerializeOptions local_opts = options;
     local_opts.raw_data_callback = {};
-    return copy.SerializeSize(stream, local_opts);
+    local_opts.node_callback = {};
+    return SerializeSize(stream, local_opts);
   }
   SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, ir_version)
@@ -1636,9 +1648,14 @@ bool ModelProto::SerializeToString(std::string &out,
   ModelProto copy;
   copy.CopyFrom(*this);
   SerializeOptions local_opts = opts;
-  if (local_opts.raw_data_callback) {
-    ApplySerializeRawDataCallback(copy, local_opts);
+  // The restorer is kept alive until the end of the function so the callbacks' in-place edits
+  // remain visible while ``copy`` is serialized. ``copy`` is a throw-away local, so the restore
+  // it performs on destruction is harmless.
+  SerializeCallbackRestorer restorer;
+  if (local_opts.raw_data_callback || local_opts.node_callback) {
+    restorer = ApplySerializeRawDataCallback(copy, local_opts);
     local_opts.raw_data_callback = {};
+    local_opts.node_callback = {};
   }
   local_opts.num_threads = 1;
   local_opts.use_external_data_location = true;

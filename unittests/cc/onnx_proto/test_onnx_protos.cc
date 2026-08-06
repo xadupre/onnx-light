@@ -7168,10 +7168,12 @@ TEST(onnx_proto, ParseOptions_RawDataCallback_InvokedAndDeleterAttached) {
   size_t seen_size = 0;
 
   ParseOptions options;
-  options.raw_data_callback = [&](TensorProto &t) -> std::function<void()> {
+  GraphProto *seen_graph = reinterpret_cast<GraphProto *>(0x1);
+  options.raw_data_callback = [&](TensorProto &t, GraphProto *graph) -> std::function<void()> {
     ++callback_calls;
     seen_name = t.ref_name();
     seen_size = t.ref_raw_data().size();
+    seen_graph = graph;
     return [&deleter_called]() { deleter_called = true; };
   };
 
@@ -7181,6 +7183,7 @@ TEST(onnx_proto, ParseOptions_RawDataCallback_InvokedAndDeleterAttached) {
     EXPECT_EQ(callback_calls, 1);
     EXPECT_EQ(seen_name, "weights");
     EXPECT_EQ(seen_size, data.size() * sizeof(float));
+    EXPECT_EQ(seen_graph, nullptr); // standalone tensor has no parent graph
     EXPECT_EQ(tensor2.ref_raw_data().size(), data.size() * sizeof(float));
     EXPECT_FALSE(deleter_called);
   } // tensor2 destroyed → attached deleter fires
@@ -7203,7 +7206,7 @@ TEST(onnx_proto, ParseOptions_RawDataCallback_EmptyReturnLeavesOwnershipUnchange
 
   int callback_calls = 0;
   ParseOptions options;
-  options.raw_data_callback = [&](TensorProto &) -> std::function<void()> {
+  options.raw_data_callback = [&](TensorProto &, GraphProto *) -> std::function<void()> {
     ++callback_calls;
     return {}; // leave ownership unchanged
   };
@@ -7232,7 +7235,7 @@ TEST(onnx_proto, ParseOptions_RawDataCallback_NotInvokedWithoutRawData) {
 
   int callback_calls = 0;
   ParseOptions options;
-  options.raw_data_callback = [&](TensorProto &) -> std::function<void()> {
+  options.raw_data_callback = [&](TensorProto &, GraphProto *) -> std::function<void()> {
     ++callback_calls;
     return {};
   };
@@ -7240,6 +7243,216 @@ TEST(onnx_proto, ParseOptions_RawDataCallback_NotInvokedWithoutRawData) {
   TensorProto tensor2;
   tensor2.ParseFromString(serialized, options);
   EXPECT_EQ(callback_calls, 0);
+}
+
+// ---------------------------------------------------------------------------
+// ParseOptions / SerializeOptions node_callback and parent-graph argument
+// ---------------------------------------------------------------------------
+
+namespace {
+// Builds a small model: main graph with an Add node whose second input is an
+// initializer, plus an If node carrying a then-subgraph with its own node.
+ModelProto MakeModelWithSubgraph() {
+  ModelProto model;
+  model.set_ir_version(9);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("main");
+
+  NodeProto *add = graph->add_node();
+  add->set_op_type("Add");
+  add->set_name("add0");
+  add->add_input("X");
+  add->add_input("W");
+  add->add_output("Y");
+
+  TensorProto *init = graph->add_initializer();
+  init->set_name("W");
+  init->set_data_type(TensorProto::DataType::FLOAT);
+  init->ref_dims().push_back(2);
+  init->ref_raw_data().resize(2 * sizeof(float));
+
+  NodeProto *if_node = graph->add_node();
+  if_node->set_op_type("If");
+  if_node->set_name("if0");
+  if_node->add_input("cond");
+  if_node->add_output("Z");
+  AttributeProto *then_attr = if_node->add_attribute();
+  then_attr->set_name("then_branch");
+  then_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *sub = then_attr->add_g();
+  sub->set_name("then_graph");
+  NodeProto *sub_node = sub->add_node();
+  sub_node->set_op_type("Identity");
+  sub_node->set_name("id0");
+  sub_node->add_input("cond");
+  sub_node->add_output("Z");
+  return model;
+}
+} // namespace
+
+TEST(onnx_proto, ParseOptions_NodeCallback_InvokedPerNodeWithParentGraph) {
+  ModelProto model = MakeModelWithSubgraph();
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  std::vector<std::pair<std::string, std::string>> seen; // (node op_type, parent graph name)
+  ParseOptions options;
+  options.node_callback = [&](NodeProto &node, GraphProto &parent) {
+    seen.emplace_back(node.ref_op_type(), std::string(parent.ref_name()));
+  };
+
+  ModelProto parsed;
+  parsed.ParseFromString(serialized, options);
+
+  ASSERT_EQ(seen.size(), 3u);
+  // Subgraph node fires while parsing the If node (before the main graph's callbacks).
+  EXPECT_EQ(seen[0].first, "Identity");
+  EXPECT_EQ(seen[0].second, "then_graph");
+  EXPECT_EQ(seen[1].first, "Add");
+  EXPECT_EQ(seen[1].second, "main");
+  EXPECT_EQ(seen[2].first, "If");
+  EXPECT_EQ(seen[2].second, "main");
+}
+
+TEST(onnx_proto, ParseOptions_NodeCallback_CanEditNodeInPlace) {
+  ModelProto model = MakeModelWithSubgraph();
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  ParseOptions options;
+  options.node_callback = [&](NodeProto &node, GraphProto &) { node.set_doc_string("visited"); };
+
+  ModelProto parsed;
+  parsed.ParseFromString(serialized, options);
+  ASSERT_EQ(parsed.ref_graph().ref_node().size(), 2);
+  EXPECT_EQ(parsed.ref_graph().ref_node()[0].ref_doc_string(), "visited");
+  EXPECT_EQ(parsed.ref_graph().ref_node()[1].ref_doc_string(), "visited");
+}
+
+TEST(onnx_proto, SerializeOptions_NodeCallback_InvokedPerNodeWithParentGraph) {
+  ModelProto model = MakeModelWithSubgraph();
+
+  std::vector<std::pair<std::string, std::string>> seen;
+  SerializeOptions options;
+  options.node_callback = [&](NodeProto &node, GraphProto &parent) {
+    seen.emplace_back(node.ref_op_type(), std::string(parent.ref_name()));
+  };
+
+  std::string serialized;
+  model.SerializeToString(serialized, options);
+
+  ASSERT_EQ(seen.size(), 3u);
+  EXPECT_EQ(seen[0].first, "Add");
+  EXPECT_EQ(seen[0].second, "main");
+  EXPECT_EQ(seen[1].first, "If");
+  EXPECT_EQ(seen[1].second, "main");
+  EXPECT_EQ(seen[2].first, "Identity");
+  EXPECT_EQ(seen[2].second, "then_graph");
+
+  // The callback edits the nodes in place, but onnx-light restores them afterwards, so the
+  // caller's model is unchanged.
+  EXPECT_EQ(model.ref_graph().ref_node()[0].has_doc_string(), false);
+}
+
+TEST(onnx_proto, SerializeOptions_NodeCallback_EditsRoundTrip) {
+  ModelProto model = MakeModelWithSubgraph();
+
+  SerializeOptions options;
+  options.node_callback = [&](NodeProto &node, GraphProto &) { node.set_doc_string("stamped"); };
+
+  std::string serialized;
+  model.SerializeToString(serialized, options);
+
+  ModelProto parsed;
+  parsed.ParseFromString(serialized);
+  EXPECT_EQ(parsed.ref_graph().ref_node()[0].ref_doc_string(), "stamped");
+  EXPECT_EQ(parsed.ref_graph().ref_node()[1].ref_doc_string(), "stamped");
+  // The subgraph node was stamped too.
+  const AttributeProto &then_attr = parsed.ref_graph().ref_node()[1].ref_attribute()[0];
+  EXPECT_EQ(then_attr.ref_g().ref_node()[0].ref_doc_string(), "stamped");
+  // Caller's model remains untouched.
+  EXPECT_FALSE(model.ref_graph().ref_node()[0].has_doc_string());
+}
+
+TEST(onnx_proto, ParseOptions_RawDataCallback_ReceivesParentGraph) {
+  // The parse raw_data_callback must receive the parent GraphProto of the tensor it is invoked
+  // for (the initializer W belongs to the "main" graph).
+  ModelProto model = MakeModelWithSubgraph();
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  std::vector<std::pair<std::string, std::string>> seen; // (tensor name, parent graph name)
+  ParseOptions options;
+  options.raw_data_callback = [&](TensorProto &tensor, GraphProto *graph) -> std::function<void()> {
+    seen.emplace_back(std::string(tensor.ref_name()),
+                      graph == nullptr ? std::string("<null>") : std::string(graph->ref_name()));
+    return {};
+  };
+
+  ModelProto parsed;
+  parsed.ParseFromString(serialized, options);
+
+  ASSERT_EQ(seen.size(), 1u);
+  EXPECT_EQ(seen[0].first, "W");
+  EXPECT_EQ(seen[0].second, "main");
+}
+
+TEST(onnx_proto, SerializeOptions_RawDataCallback_ReceivesParentGraph) {
+  // The serialize raw_data_callback must receive the parent GraphProto of the tensor it rewrites.
+  ModelProto model = MakeModelWithSubgraph();
+
+  std::vector<std::pair<std::string, std::string>> seen;
+  SerializeOptions options;
+  options.raw_data_callback = [&](TensorProto &tensor, GraphProto *graph, uint8_t *buffer,
+                                  size_t buffer_size, bool size_only) -> int64_t {
+    if (size_only) {
+      seen.emplace_back(std::string(tensor.ref_name()),
+                        graph == nullptr ? std::string("<null>") : std::string(graph->ref_name()));
+      return static_cast<int64_t>(tensor.ref_raw_data().size());
+    }
+    // Keep the original bytes so the tensor stays valid.
+    std::memcpy(buffer, tensor.ref_raw_data().data(),
+                std::min(buffer_size, tensor.ref_raw_data().size()));
+    return static_cast<int64_t>(buffer_size);
+  };
+
+  std::string serialized;
+  model.SerializeToString(serialized, options);
+
+  ASSERT_EQ(seen.size(), 1u);
+  EXPECT_EQ(seen[0].first, "W");
+  EXPECT_EQ(seen[0].second, "main");
+}
+
+TEST(onnx_proto, SerializeOptions_RawDataCallback_LeavesCallerModelUntouched) {
+  // The serialize raw_data_callback rewrites raw_data in place while producing the bytes, but the
+  // caller's model must be restored to its original raw_data afterwards.
+  ModelProto model = MakeModelWithSubgraph();
+  const auto &original_raw = model.ref_graph().ref_initializer()[0].ref_raw_data();
+  std::string original(reinterpret_cast<const char *>(original_raw.data()), original_raw.size());
+
+  SerializeOptions options;
+  options.raw_data_callback = [&](TensorProto &tensor, GraphProto *, uint8_t *buffer,
+                                  size_t buffer_size, bool size_only) -> int64_t {
+    if (size_only) {
+      // Rewrite to a single sentinel byte, changing the tensor from its original bytes.
+      return 1;
+    }
+    if (buffer_size > 0) {
+      buffer[0] = 0x7F;
+    }
+    return static_cast<int64_t>(buffer_size);
+  };
+
+  std::string serialized;
+  model.SerializeToString(serialized, options);
+
+  // The caller's initializer keeps its original raw_data despite the in-place rewrite.
+  const TensorProto &initializer = model.ref_graph().ref_initializer()[0];
+  ASSERT_EQ(initializer.ref_raw_data().size(), original.size());
+  EXPECT_EQ(std::string(reinterpret_cast<const char *>(initializer.ref_raw_data().data()),
+                        initializer.ref_raw_data().size()),
+            original);
 }
 
 TEST(onnx_proto, ParseFromIstream_ModelProto) {

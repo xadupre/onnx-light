@@ -112,9 +112,11 @@ view of an mmap or external weights file) or in CPU memory (an owned buffer) —
 deleter is layered on top of the existing storage without moving the bytes::
 
     ParseOptions options;
-    options.raw_data_callback = [](TensorProto &tensor) -> std::function<void()> {
-      // Inspect tensor.ref_raw_data(); optionally relocate it (e.g. to a device) and
-      // return the matching cleanup. Returning {} keeps the default ownership.
+    options.raw_data_callback = [](TensorProto &tensor,
+                                   GraphProto *graph) -> std::function<void()> {
+      // Inspect tensor.ref_raw_data() and the parent graph (``graph`` is nullptr for a
+      // standalone tensor); optionally relocate it (e.g. to a device) and return the matching
+      // cleanup. Returning {} keeps the default ownership.
       return [name = tensor.ref_name()]() { /* release resources */ };
     };
     model.ParseFromString(bytes, options);
@@ -123,13 +125,15 @@ By default ``raw_data_callback`` is empty and parsing behaves exactly as before.
 
 The same hook is available from Python as
 :attr:`onnx_light.onnx.ParseOptions.raw_data_callback`.  The callback is called as
-``fn(tensor)`` with the freshly parsed :class:`~onnx_light.onnx.TensorProto` and must return
+:attr:`onnx_light.onnx.ParseOptions.raw_data_callback`.  The callback is called as
+``fn(tensor, graph)`` with the freshly parsed :class:`~onnx_light.onnx.TensorProto` and its
+parent :class:`~onnx_light.onnx.GraphProto` (or ``None`` for a standalone tensor) and must return
 either ``None`` (ownership unchanged) or a zero-argument callable used as the deleter::
 
     import onnx_light.onnx as onnx
 
     options = onnx.ParseOptions()
-    options.raw_data_callback = lambda tensor: print(tensor.name, len(tensor.raw_data))
+    options.raw_data_callback = lambda tensor, graph: print(tensor.name, len(tensor.raw_data))
 
     model = onnx.ModelProto()
     model.ParseFromString(serialized, options)

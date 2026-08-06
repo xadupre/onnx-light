@@ -389,13 +389,17 @@ template <typename cls> bool _SerializeToString(cls &self, std::string &out) {
 template <typename cls>
 bool _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   if constexpr (std::is_same_v<std::remove_cv_t<cls>, ModelProto>) {
-    if (opts.raw_data_callback) {
-      ModelProto copy;
-      copy.CopyFrom(self);
-      ApplySerializeRawDataCallback(copy, opts);
+    if (opts.raw_data_callback || opts.node_callback) {
+      // Apply the callbacks in place and restore the model once the bytes are produced, avoiding
+      // a full-model copy. Serialization is logically const: the restorer puts every tensor/node a
+      // callback touched back to its original state before returning, so the caller's model is
+      // observably unchanged despite the transient in-place edits.
+      ModelProto &mutable_self = const_cast<ModelProto &>(self);
+      SerializeCallbackRestorer restorer = ApplySerializeRawDataCallback(mutable_self, opts);
       SerializeOptions local_opts = opts;
       local_opts.raw_data_callback = {};
-      return _SerializeToString(copy, out, local_opts);
+      local_opts.node_callback = {};
+      return _SerializeToString(self, out, local_opts);
     }
   }
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
@@ -434,13 +438,15 @@ template <typename cls> bool _SerializeToFileDescriptor(cls &self, int fd) {
 
 template <typename cls> bool _SerializeToFileDescriptor(cls &self, int fd, SerializeOptions &opts) {
   if constexpr (std::is_same_v<std::remove_cv_t<cls>, ModelProto>) {
-    if (opts.raw_data_callback) {
-      ModelProto copy;
-      copy.CopyFrom(self);
-      ApplySerializeRawDataCallback(copy, opts);
+    if (opts.raw_data_callback || opts.node_callback) {
+      // Apply the callbacks in place and restore the model once the bytes are produced, avoiding
+      // a full-model copy. See _SerializeToString for why the const_cast is safe here.
+      ModelProto &mutable_self = const_cast<ModelProto &>(self);
+      SerializeCallbackRestorer restorer = ApplySerializeRawDataCallback(mutable_self, opts);
       SerializeOptions local_opts = opts;
       local_opts.raw_data_callback = {};
-      return _SerializeToFileDescriptor(copy, fd, local_opts);
+      local_opts.node_callback = {};
+      return _SerializeToFileDescriptor(self, fd, local_opts);
     }
   }
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,

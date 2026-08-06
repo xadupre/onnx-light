@@ -42,9 +42,8 @@ Tensor RecurrentPermuteYLayout1(const Tensor &y, int64_t seq_length, int64_t num
 // Permutes a hidden/cell state output (``Y_h`` or ``Y_c``) from the time-major
 // layout ``[num_directions, batch_size, hidden_size]`` to the batch-major
 // ``layout=1`` shape ``[batch_size, num_directions, hidden_size]``.
-Tensor RecurrentPermuteStateLayout1(const Tensor &state, int64_t num_directions,
-                                    int64_t batch_size, int64_t hidden_size,
-                                    RawBufferAllocator *allocator);
+Tensor RecurrentPermuteStateLayout1(const Tensor &state, int64_t num_directions, int64_t batch_size,
+                                    int64_t hidden_size, RawBufferAllocator *allocator);
 
 } // namespace recurrent
 } // namespace kernel

@@ -87,7 +87,8 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
     x_p = &x_storage;
 
     if (!(initial_h_in.shape.empty() && initial_h_in.size_bytes() == 0)) {
-      initial_h_storage = recurrent::RecurrentTransposeInitialState(initial_h_in, num_directions, allocator);
+      initial_h_storage =
+          recurrent::RecurrentTransposeInitialState(initial_h_in, num_directions, allocator);
       initial_h_p = &initial_h_storage;
     }
   }
@@ -213,9 +214,9 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, c
     // Permute Y [seq, D, batch, hidden] -> [batch, seq, D, hidden] and
     // Y_h [D, batch, hidden] -> [batch, D, hidden].
     y = recurrent::RecurrentPermuteYLayout1(y, seq_length, num_directions, batch_size, hidden_size,
-                                        allocator);
+                                            allocator);
     y_h = recurrent::RecurrentPermuteStateLayout1(y_h, num_directions, batch_size, hidden_size,
-                                             allocator);
+                                                  allocator);
   }
 
   return std::pair<Tensor, Tensor>(std::move(y), std::move(y_h));

@@ -352,14 +352,14 @@ void RegisterGRUCases(std::vector<TestCase> &registry, TestMode mode) {
         }
       }
       Tensor x = Tensor::FromFloat("", {seq_length, batch_size, input_size}, x_data);
-      Tensor w = Tensor::FromFloat("", {num_directions, kNumGates * hidden_size, input_size}, w_data);
+      Tensor w =
+          Tensor::FromFloat("", {num_directions, kNumGates * hidden_size, input_size}, w_data);
       Tensor r =
           Tensor::FromFloat("", {num_directions, kNumGates * hidden_size, hidden_size}, r_data);
 
       auto [y, y_h] = gru_kernel(x, w, r, Tensor{}, Tensor{}, 0, 0, "bidirectional");
 
-      return IoData{{std::move(x), std::move(w), std::move(r)},
-                    {std::move(y), std::move(y_h)}};
+      return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y), std::move(y_h)}};
     });
   }
 }

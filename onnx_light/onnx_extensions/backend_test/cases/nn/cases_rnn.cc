@@ -359,8 +359,7 @@ void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
 
       auto [y, y_h] = rnn_kernel(x, w, r, Tensor{}, Tensor{}, 0, "bidirectional");
 
-      return IoData{{std::move(x), std::move(w), std::move(r)},
-                    {std::move(y), std::move(y_h)}};
+      return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y), std::move(y_h)}};
     });
   }
 }

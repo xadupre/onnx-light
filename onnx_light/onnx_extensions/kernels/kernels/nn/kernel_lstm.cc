@@ -190,10 +190,10 @@ LSTM::operator()(const Tensor &x_in, const Tensor &w, const Tensor &r, const Ten
   Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_shape, y_n_bytes, allocator);
   const size_t state_n_bytes =
       static_cast<size_t>(num_directions * batch_size * hidden_size) * sizeof(float);
-  Tensor y_h =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), state_shape, state_n_bytes, allocator);
-  Tensor y_c =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), state_shape, state_n_bytes, allocator);
+  Tensor y_h = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), state_shape, state_n_bytes,
+                                allocator);
+  Tensor y_c = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), state_shape, state_n_bytes,
+                                allocator);
   float *py = y.AsFloat();
   float *py_h = y_h.AsFloat();
   float *py_c = y_c.AsFloat();
@@ -362,11 +362,11 @@ LSTM::operator()(const Tensor &x_in, const Tensor &w, const Tensor &r, const Ten
     // Permute Y [seq, D, batch, hidden] -> [batch, seq, D, hidden] and
     // Y_h / Y_c [D, batch, hidden] -> [batch, D, hidden].
     y = recurrent::RecurrentPermuteYLayout1(y, seq_length, num_directions, batch_size, hidden_size,
-                                         allocator);
+                                            allocator);
     y_h = recurrent::RecurrentPermuteStateLayout1(y_h, num_directions, batch_size, hidden_size,
-                                               allocator);
+                                                  allocator);
     y_c = recurrent::RecurrentPermuteStateLayout1(y_c, num_directions, batch_size, hidden_size,
-                                               allocator);
+                                                  allocator);
   }
 
   return std::tuple<Tensor, Tensor, Tensor>(std::move(y), std::move(y_h), std::move(y_c));
@@ -427,10 +427,10 @@ void LSTM::Run(RuntimeContext &rt) {
   }
 
   onnx_kernels::kernel::LSTM kernel(rt.kernel_ctx());
-  auto [y, y_h, y_c] = kernel(x, w, r, b != nullptr ? *b : Tensor{},
-                              initial_h != nullptr ? *initial_h : Tensor{},
-                              initial_c != nullptr ? *initial_c : Tensor{},
-                              p != nullptr ? *p : Tensor{}, layout, direction);
+  auto [y, y_h, y_c] =
+      kernel(x, w, r, b != nullptr ? *b : Tensor{}, initial_h != nullptr ? *initial_h : Tensor{},
+             initial_c != nullptr ? *initial_c : Tensor{}, p != nullptr ? *p : Tensor{}, layout,
+             direction);
 
   auto set_optional_output = [&node, &rt](int index, Tensor output) {
     if (index >= node.output_size()) {

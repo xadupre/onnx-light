@@ -64,7 +64,7 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor w = Tensor::FromFloat("", w_shape, Randn<float>(w_shape, 2002));
              Tensor r = Tensor::FromFloat("", r_shape, Randn<float>(r_shape, 2003));
              auto [y_unused, y_h, y_c_unused] = lstm_kernel(x, w, r);
-      (void)y_c_unused;
+             (void)y_c_unused;
              (void)y_unused;
              return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y_h)}};
            });
@@ -327,8 +327,7 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
           lstm_kernel(x, w, r, Tensor{}, Tensor{}, Tensor{}, Tensor{}, 0, "reverse");
       (void)y_unused; // Y is skipped (empty output name).
 
-      return IoData{{std::move(x), std::move(w), std::move(r)},
-                    {std::move(y_h), std::move(y_c)}};
+      return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y_h), std::move(y_c)}};
     });
   }
 
@@ -370,7 +369,8 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
         }
       }
       Tensor x = Tensor::FromFloat("", {seq_length, batch_size, input_size}, x_data);
-      Tensor w = Tensor::FromFloat("", {num_directions, kNumGates * hidden_size, input_size}, w_data);
+      Tensor w =
+          Tensor::FromFloat("", {num_directions, kNumGates * hidden_size, input_size}, w_data);
       Tensor r =
           Tensor::FromFloat("", {num_directions, kNumGates * hidden_size, hidden_size}, r_data);
 

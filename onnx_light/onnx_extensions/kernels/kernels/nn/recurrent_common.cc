@@ -77,9 +77,8 @@ Tensor RecurrentPermuteYLayout1(const Tensor &y, int64_t seq_length, int64_t num
   return out;
 }
 
-Tensor RecurrentPermuteStateLayout1(const Tensor &state, int64_t num_directions,
-                                    int64_t batch_size, int64_t hidden_size,
-                                    RawBufferAllocator *allocator) {
+Tensor RecurrentPermuteStateLayout1(const Tensor &state, int64_t num_directions, int64_t batch_size,
+                                    int64_t hidden_size, RawBufferAllocator *allocator) {
   const size_t n_bytes =
       static_cast<size_t>(num_directions * batch_size * hidden_size) * sizeof(float);
   Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),

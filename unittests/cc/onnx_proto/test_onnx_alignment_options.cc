@@ -473,8 +473,9 @@ TEST(onnx_alignment_options, ParseNoCopyExternalDataRemainsValidAfterStreamDestr
 namespace {
 
 // Builds a model with a single initializer already marked EXTERNAL and carrying the given offset.
-// The inline raw_data is preserved so it can be written out during serialization; PopulateExternalData
-// skips tensors that are already external, so the crafted offset reaches the write path unchanged.
+// The inline raw_data is preserved so it can be written out during serialization;
+// PopulateExternalData skips tensors that are already external, so the crafted offset reaches the
+// write path unchanged.
 ModelProto MakeModelWithExternalOffset(const std::string &location, int64_t offset) {
   ModelProto model;
   GraphProto *graph = model.add_graph();

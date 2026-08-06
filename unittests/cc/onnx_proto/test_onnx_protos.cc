@@ -3891,8 +3891,9 @@ TEST(onnx_proto, TensorProto_NoCopyMmapSingleFileOutlivesStream) {
 
   // The stream (and the local mmap_ shared_ptr) is gone, but the borrowed span kept
   // the mapping alive through zero_copy_owner(), so the data is still valid here.
-  ASSERT_TRUE(tensor2.ref_raw_data().is_borrowed());
-  const float *raw_ptr = reinterpret_cast<const float *>(tensor2.ref_raw_data().data());
+  const utils::ByteSpan &raw_span = tensor2.ref_raw_data();
+  ASSERT_TRUE(raw_span.is_borrowed());
+  const float *raw_ptr = reinterpret_cast<const float *>(raw_span.data());
   EXPECT_FLOAT_EQ(raw_ptr[0], 1.0f);
   EXPECT_FLOAT_EQ(raw_ptr[1], 2.0f);
   EXPECT_FLOAT_EQ(raw_ptr[2], 3.0f);

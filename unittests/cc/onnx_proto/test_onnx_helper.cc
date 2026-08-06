@@ -1326,6 +1326,27 @@ TEST(onnx_external_ressource, LoadWithExternalData) {
     wopts.raw_data_threshold = 2;
     SerializeProtoToStream(model, wstream, wopts);
   }
+  std::error_code model_size_error;
+  auto size = std::filesystem::file_size(onnx_file, model_size_error);
+  EXPECT_FALSE(static_cast<bool>(model_size_error)) << model_size_error.message();
+  std::error_code weights_size_error;
+  auto weights_size = std::filesystem::file_size(weights_file, weights_size_error);
+  EXPECT_FALSE(static_cast<bool>(weights_size_error)) << weights_size_error.message();
+  EXPECT_GT(size, 10);
+  EXPECT_GT(weights_size, 1024);
+
+  ModelProto metadata;
+  {
+    utils::FileStream metadata_stream(onnx_file);
+    ParseOptions metadata_opts;
+    ParseProtoFromStream(metadata, metadata_stream, metadata_opts, /*clear_external_data=*/false);
+  }
+  ASSERT_EQ(metadata.ref_graph().ref_initializer().size(), 7u);
+  for (const TensorProto &saved : metadata.ref_graph().ref_initializer()) {
+    EXPECT_FALSE(saved.has_raw_data());
+    EXPECT_TRUE(saved.has_external_data());
+    EXPECT_TRUE(saved.has_data_location());
+  }
 
   ModelProto model2;
   {

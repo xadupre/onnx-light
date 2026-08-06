@@ -505,20 +505,26 @@ ModelProto MakeModelWithExternalOffset(const std::string &location, int64_t offs
 TEST(onnx_alignment_options, SerializeRejectsUnboundedExternalDataPadding) {
   const std::string onnx_file = "test_external_padding_reject.onnx";
   const std::string weights_file = "test_external_padding_reject.data";
-  // Offset far beyond the 64 KiB cap; the tensor sits at offset 0 so the padding equals the offset.
-  ModelProto model = MakeModelWithExternalOffset(weights_file, 1 << 20);
+  // The tensor sits at offset 0, so the padding equals the offset. One byte over the 64 KiB cap is
+  // the exact boundary complement of SerializeAcceptsBoundedExternalDataPadding (which uses 64
+  // KiB).
+  ModelProto model = MakeModelWithExternalOffset(weights_file, 64 * 1024 + 1);
 
   utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
   SerializeOptions sopts;
   sopts.raw_data_threshold = 0;
   sopts.alignment = 16;
-  try {
-    SerializeProtoToStream(model, wstream, sopts);
-    FAIL() << "Expected SerializeProtoToStream to throw for out-of-bounds external-data padding.";
-  } catch (const std::runtime_error &err) {
-    const std::string message = err.what();
-    EXPECT_NE(message.find("exceeds the maximum"), std::string::npos) << message;
-  }
+  EXPECT_THROW(
+      {
+        try {
+          SerializeProtoToStream(model, wstream, sopts);
+        } catch (const std::runtime_error &err) {
+          EXPECT_NE(std::string(err.what()).find("exceeds the maximum"), std::string::npos)
+              << err.what();
+          throw;
+        }
+      },
+      std::runtime_error);
 
   std::remove(onnx_file.c_str());
   std::remove(weights_file.c_str());

@@ -7380,6 +7380,7 @@ TEST(onnx_compatibility, EmptyRawDataPresence) {
   tensor.SerializeToString(serialized);
   TensorProto parsed;
   parsed.ParseFromString(serialized);
+  EXPECT_TRUE(parsed.is_raw_data());
   EXPECT_TRUE(parsed.has_raw_data());
   EXPECT_TRUE(parsed.ref_raw_data().empty());
   EXPECT_NE(parsed.ref_raw_data().data(), nullptr);

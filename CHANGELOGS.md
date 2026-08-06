@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.13] – Unreleased
 
+### Improvements
+
+- Made the upstream node backend-test consumers work when `onnx` builds node test
+  data on the fly (`TestCase.model` / `TestCase.data_sets` in memory with
+  `model_dir` set to `None`) instead of materialising it on disk under
+  `onnx/backend/test/data/node` (propagated from onnx/onnx#7959). Both the
+  `schema_comparison` backend-test counter and the `ImageDecoder` case generator
+  now prefer the in-memory model and fall back to the on-disk layout.
+
 ### Documentation & CI
 
 - Bumped the release version to `0.1.13`.

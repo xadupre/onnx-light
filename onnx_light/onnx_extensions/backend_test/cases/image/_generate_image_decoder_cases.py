@@ -2,17 +2,48 @@ import os
 
 import onnx
 from onnx import numpy_helper
-
-base = os.path.dirname(onnx.__file__) + "/backend/test/data/node"
+from onnx.backend.test.loader import load_model_tests
 
 # The TIFF, WebP and JPEG2000 formats are intentionally not decoded by the
 # lightweight ``ImageDecoder`` kernel, so their upstream reference cases are
 # skipped to keep the generated registry in sync with the kernel behavior.
 skipped_formats = ("tiff", "webp", "jpeg2k", "jpeg2000")
+
+
+def load_case(test_case):
+    """Returns ``(model, input_array, output_array)`` for a node test case.
+
+    Recent ``onnx`` releases build node backend-test data on the fly and
+    expose the model in memory via ``TestCase.model`` and the reference
+    tensors via ``TestCase.data_sets`` (propagated from onnx/onnx#7959).
+    Older releases materialise the data on disk under ``TestCase.model_dir``;
+    both layouts are supported here.
+    """
+    if test_case.model is not None:
+        inputs, outputs = test_case.data_sets[0]
+        return (test_case.model, _to_array(inputs[0]), _to_array(outputs[0]))
+    data_dir = os.path.join(test_case.model_dir, "test_data_set_0")
+    return (
+        onnx.load(os.path.join(test_case.model_dir, "model.onnx")),
+        numpy_helper.to_array(onnx.load_tensor(os.path.join(data_dir, "input_0.pb"))),
+        numpy_helper.to_array(onnx.load_tensor(os.path.join(data_dir, "output_0.pb"))),
+    )
+
+
+def _to_array(value):
+    if isinstance(value, onnx.TensorProto):
+        return numpy_helper.to_array(value)
+    return value
+
+
 cases = sorted(
-    d
-    for d in os.listdir(base)
-    if d.startswith("test_image_decoder_") and not any(fmt in d for fmt in skipped_formats)
+    (
+        tc
+        for tc in load_model_tests(kind="node")
+        if tc.name.startswith("test_image_decoder_")
+        and not any(fmt in tc.name for fmt in skipped_formats)
+    ),
+    key=lambda tc: tc.name,
 )
 
 
@@ -64,16 +95,14 @@ src = [
 
 entries = []  # (case_name, pixel_format, in_name, in_size, out_name, h, w, c)
 
-for d in cases:
-    p = os.path.join(base, d, "test_data_set_0")
-    m = onnx.load(os.path.join(base, d, "model.onnx"))
-    node = m.graph.node[0]
+for tc in cases:
+    d = tc.name
+    model, inp, out = load_case(tc)
+    node = model.graph.node[0]
     pixel_format = "RGB"
     for a in node.attribute:
         if a.name == "pixel_format":
             pixel_format = a.s.decode()
-    inp = numpy_helper.to_array(onnx.load_tensor(p + "/input_0.pb"))
-    out = numpy_helper.to_array(onnx.load_tensor(p + "/output_0.pb"))
     assert inp.dtype.name == "uint8" and inp.ndim == 1
     assert out.dtype.name == "uint8" and out.ndim == 3
     h, w, c = out.shape

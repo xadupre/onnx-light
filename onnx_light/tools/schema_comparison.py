@@ -515,13 +515,20 @@ def _count_onnx_backend_tests(
             # does not match any known operator (defensive: keeps the count
             # consistent with prior behaviour for custom or third-party
             # operators that ship test data but no schema).
-            model_path = os.path.join(t.model_dir, "model.onnx") if t.model_dir else None
-            if not model_path or not os.path.exists(model_path):
-                continue
-            try:
-                m = onnx.load(model_path, load_external_data=False)
-            except Exception:  # pragma: no cover - defensive
-                continue
+            #
+            # Recent ``onnx`` releases build node test data on the fly and
+            # expose the model in memory via ``TestCase.model`` with
+            # ``model_dir`` set to ``None`` (propagated from onnx/onnx#7959).
+            # Older releases materialise it on disk under ``model_dir``.
+            m = t.model
+            if m is None:
+                model_path = os.path.join(t.model_dir, "model.onnx") if t.model_dir else None
+                if not model_path or not os.path.exists(model_path):
+                    continue
+                try:
+                    m = onnx.load(model_path, load_external_data=False)
+                except Exception:  # pragma: no cover - defensive
+                    continue
             if not m.graph.node:
                 continue
             n = m.graph.node[0]

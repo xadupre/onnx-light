@@ -506,6 +506,28 @@ TEST(onnx_defs, ParseData_Float_FromEmptyRawData_Tensor) {
   EXPECT_TRUE(data.empty());
 }
 
+TEST(onnx_defs, ParseData_Int32_FromRawData_TensorProto) {
+  int32_t raw_vals[3] = {0, 0x01010101, 0x7F7F7F7F};
+  std::string raw_str(reinterpret_cast<const char *>(raw_vals), 3 * sizeof(int32_t));
+
+  TensorProto tensor;
+  tensor.set_raw_data(raw_str);
+
+  auto data = ParseData<int32_t>(&tensor);
+  ASSERT_EQ(data.size(), 3u);
+  EXPECT_EQ(data[0], raw_vals[0]);
+  EXPECT_EQ(data[1], raw_vals[1]);
+  EXPECT_EQ(data[2], raw_vals[2]);
+}
+
+TEST(onnx_defs, ParseData_Int32_FromEmptyRawData_TensorProto) {
+  TensorProto tensor;
+  tensor.set_raw_data(std::string());
+
+  auto data = ParseData<int32_t>(&tensor);
+  EXPECT_TRUE(data.empty());
+}
+
 // ===========================================================================
 // doc_strings.cc tests
 // ===========================================================================

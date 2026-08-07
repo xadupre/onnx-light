@@ -115,6 +115,10 @@ Format coverage summary
      - 3.4
      - ``Sparse`` + ``Block`` + ``Linear``
      - ✅
+   * - STQ1_0 (Sherry)
+     - 1.3125
+     - ``StructuredBlock``
+     - ✅
 
 QuantizedTensorProto
 ++++++++++++++++++++
@@ -158,6 +162,9 @@ QuantizationProto
             BlockQuantizationProto block = 8;
             TilingQuantizationProto tiling = 13;
             IdentityProto identity = 14;
+            CastUniformProto cast = 16;
+            PackedLinearUniformProto packed_linear = 17;
+            StructuredBlockUniformProto structured_block = 18;
         }
         int32 data_type = 15;              // dequantized element type (same enum as TensorProto.data_type)
         string doc_string = 9;             // human-readable description
@@ -185,6 +192,23 @@ Classic affine/symmetric: ``value = (q - zero_point) * scale``.
         int32 axis = 7;               // axis for per-channel, -1 if per-tensor
     }
 
+.. code-block:: python
+
+    # Dequantize
+    values = unpack(data, q.bits)
+    if q.scale_float:
+        result = (values - q.zero_point) * q.scale_float
+    else:
+        result = (values - q.zero_point) * (2 ** q.scale_int)
+
+    # Quantize
+    if q.scale_float:
+        values = round(tensor / q.scale_float) + q.zero_point
+    else:
+        values = round(tensor / (2 ** q.scale_int)) + q.zero_point
+    values = clip(values, 0, (1 << q.bits) - 1)
+    raw_data = pack(values, q.bits)
+
 CodebookUniformProto
 ^^^^^^^^^^^^^^^^^^^^
 
@@ -201,6 +225,17 @@ Lookup-table based: ``value = codebook[index] * scale``.
         int32 packed_count = 4;       // number of values packed
         int32 packed_bytes = 5;       // into this many bytes
     }
+
+.. code-block:: python
+
+    # Dequantize
+    indices = unpack_base(data, len(q.codebook), q.packed_count, q.packed_bytes)
+    result = [q.codebook[i] * q.scale for i in indices]
+
+    # Quantize
+    scaled = tensor / q.scale
+    indices = [nearest(scaled[i], q.codebook) for i in range(len(tensor))]
+    raw_data = pack_base(indices, len(q.codebook), q.packed_count, q.packed_bytes)
 
 VectorCodebookUniformProto
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -220,6 +255,16 @@ of lookups from ``num_codebooks`` codebooks.
         repeated float codebook_data = 5;  // all codebooks concatenated:
                                            // num_codebooks * codebook_size * vector_size floats
     }
+
+.. code-block:: python
+
+    # Dequantize
+    result = zeros(n_elements)
+    for k in range(q.num_codebooks):
+        indices = unpack(data[k], q.index_bits)
+        codebook_k = q.codebook_data[k * q.codebook_size * q.vector_size:]
+        for i, idx in enumerate(indices):
+            result[i*q.vector_size:(i+1)*q.vector_size] += codebook_k[idx]
 
 FloatingPointUniformProto
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -241,6 +286,15 @@ Covers FP6, FP4, MXFP and similar reduced-precision floating-point formats.
         int32 packed_bytes = 9;       // into this many bytes
     }
 
+.. code-block:: python
+
+    # Dequantize
+    bits_per_elem = q.sign_bits + q.exponent_bits + q.mantissa_bits
+    raw_values = unpack(data, bits_per_elem, q.split_storage)
+    result = [fp_decode(v, q.sign_bits, q.exponent_bits,
+                        q.mantissa_bits, q.exponent_bias)
+              for v in raw_values]
+
 SparseQuantizationProto
 ^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -257,6 +311,21 @@ a base quantization scheme.
         float outlier_ratio = 4;           // fraction of values stored as outliers (e.g. 0.01)
     }
 
+.. code-block:: python
+
+    # Dequantize
+    base_values = dequantize(base_data, q.base_quant)
+    outlier_indices, outlier_values = read_sparse(outlier_data, q.outlier_data_type)
+    result = base_values
+    result[outlier_indices] = outlier_values
+
+    # Quantize
+    mask = abs(tensor) > q.outlier_threshold
+    outlier_indices, outlier_values = where(mask), tensor[mask]
+    base_tensor = tensor.copy(); base_tensor[mask] = 0
+    base_data = quantize(base_tensor, q.base_quant)
+    outlier_data = write_sparse(outlier_indices, outlier_values, q.outlier_data_type)
+
 LogUniformProto
 ^^^^^^^^^^^^^^^
 
@@ -270,6 +339,27 @@ Logarithmic quantization: ``value = sign * base^(q + offset)``.
         float offset = 3;            // exponent offset
         bool has_sign = 4;           // true if sign bit is stored separately
     }
+
+.. code-block:: python
+
+    # Dequantize
+    values = unpack(data, q.bits)
+    if q.has_sign:
+        signs = extract_sign_bits(values)
+        exponents = extract_magnitude(values)
+        result = signs * (q.base ** (exponents + q.offset))
+    else:
+        result = q.base ** (values + q.offset)
+
+    # Quantize
+    if q.has_sign:
+        signs = sign(tensor)
+        exponents = round(log(abs(tensor)) / log(q.base) - q.offset)
+        values = pack_sign_magnitude(signs, exponents)
+    else:
+        values = round(log(tensor) / log(q.base) - q.offset)
+    values = clip(values, 0, (1 << q.bits) - 1)
+    raw_data = pack(values, q.bits)
 
 FunctionUniformProto
 ^^^^^^^^^^^^^^^^^^^^
@@ -289,7 +379,25 @@ the quantize op does the reverse.
         int32 bits = 2;               // bits per element (for sub-byte packing)
         string quantize_op = 3;       // op: data_type -> storage_type (e.g. "custom::Quantize")
         string dequantize_op = 4;     // op: storage_type -> data_type (e.g. "custom::Dequantize")
+        optional BlockLayoutProto block_layout = 5;  // physical block structure (for introspection)
     }
+
+.. code-block:: python
+
+    # Dequantize
+    if q.block_layout:
+        blocks = split_blocks(data, q.block_layout.bytes_per_block)
+        result = concat([call_op(q.dequantize_op, block) for block in blocks])
+    else:
+        raw = interpret(data, q.storage_type, q.bits)
+        result = call_op(q.dequantize_op, raw)
+
+    # Quantize
+    if q.block_layout:
+        blocks = tile(tensor, q.block_layout.block_size)
+        raw_data = concat([call_op(q.quantize_op, block) for block in blocks])
+    else:
+        raw_data = call_op(q.quantize_op, tensor)
 
 BlockQuantizationProto
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -306,6 +414,16 @@ is cycled from the beginning (``elem_quant[i % len(elem_quant)]``).
         int32 block_size = 1;                          // elements per block at this level
         repeated QuantizationProto elem_quant = 2;     // one per block
     }
+
+.. code-block:: python
+
+    # Dequantize
+    blocks = split(data, q.block_size)
+    result = []
+    for i, block in enumerate(blocks):
+        eq = q.elem_quant[i % len(q.elem_quant)]
+        result.append(dequantize(block, eq))
+    result = concat(result)
 
 TilingQuantizationProto
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -325,6 +443,17 @@ quantization parameters vary along more than one axis.
         repeated int32 perm = 4;                       // permutation of axes in memory layout
     }
 
+.. code-block:: python
+
+    # Dequantize
+    shape = resolve_tile_shape(q.tile_shape, tensor_shape)
+    tiles = split_tiles(data, shape, q.axes, q.perm)
+    result = empty(tensor_shape)
+    for coords, tile_data in tiles:
+        result[coords] = dequantize(tile_data, q.elem_quant)
+    if q.perm:
+        result = inverse_permute(result, q.perm)
+
 IdentityProto
 ^^^^^^^^^^^^^
 
@@ -336,6 +465,149 @@ The element type is given by ``QuantizationProto.data_type``.
 .. code-block:: text
 
     message IdentityProto {}
+
+.. code-block:: python
+
+    # Dequantize
+    result = interpret(data, quant_proto.data_type)
+
+CastUniformProto
+^^^^^^^^^^^^^^^^
+
+Type conversion without quantization. Stores values cast from the
+original type to a different type (e.g. float32 → bfloat16).
+The source type is ``QuantizationProto.data_type``, the target type
+is ``storage_type``.
+
+.. code-block:: text
+
+    message CastUniformProto {
+        int32 storage_type = 1;        // target element type (same enum as TensorProto.data_type)
+    }
+
+.. code-block:: python
+
+    # Dequantize
+    result = cast(data, from_type=q.storage_type, to_type=quant_proto.data_type)
+
+    # Quantize
+    raw_data = cast(tensor, from_type=quant_proto.data_type, to_type=q.storage_type)
+
+PackedLinearUniformProto
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Block-wise linear quantization where scales, zero points and corrections
+are stored inside ``raw_data`` alongside the quantized weights.
+Used for prepacked formats (CompInt8, QGEMM) where the runtime bakes
+metadata into a single contiguous buffer.
+
+.. code-block:: text
+
+    message PackedLinearUniformProto {
+        int32 storage_type = 1;        // quantized weight element type (e.g. UINT4, INT8)
+        int32 bits = 2;                // bits per weight element
+        bool symmetric = 3;           // true if zero_point is always 0
+        int32 block_size = 4;          // quantization group size
+        int32 axis = 5;                // quantization axis (-1 = per-tensor)
+        int32 scale_type = 6;          // element type of embedded scales (e.g. FLOAT)
+        int32 zero_point_type = 7;     // element type of embedded zero points (0 = absent)
+        int32 correction_type = 8;     // element type of corrections (0 = absent)
+        PackedLayout layout = 9;       // how regions are organized in the blob
+    }
+
+    enum PackedLayout {
+        SEQUENTIAL = 0;               // [weights][scales][zero_points][corrections]
+        INTERLEAVED = 1;              // per-block: [block_weights, scale, zp, correction] repeated
+    }
+
+.. code-block:: python
+
+    # Dequantize
+    if q.layout == SEQUENTIAL:
+        weights, scales, zps, corrections = split_sequential(data, shape, q)
+    else:
+        weights, scales, zps, corrections = split_interleaved(data, shape, q)
+    weights = unpack(weights, q.bits)
+    for block_i in range(n_blocks):
+        s = scales[block_i]
+        zp = zps[block_i] if q.zero_point_type else 0
+        c = corrections[block_i] if q.correction_type else 0
+        result[block_i] = (weights[block_i] - zp) * s + c
+
+StructuredBlockUniformProto
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Generic block quantization with explicit physical layout. Each block
+contains named fields at known bit offsets, an optional codebook, an
+index formula combining fields into codebook indices, and an optional
+scatter pattern for non-contiguous element placement.
+Covers exotic formats (STQ1_0, future formats) while keeping
+dequantization fully deductible from the proto structure.
+
+.. code-block:: text
+
+    enum BlockFieldRole {
+        VALUES = 0;           // quantized values or codebook indices
+        SIGN = 1;             // sign bits
+        SCALE = 2;            // per-block scale
+        ZERO_POINT = 3;       // per-block zero point
+        BIAS = 4;             // per-block bias correction
+        EXPONENT = 5;         // shared exponent
+        CODE = 6;             // codebook index (partial)
+        MASK = 7;             // sparsity mask
+    }
+
+    message BlockFieldProto {
+        BlockFieldRole role = 1;       // semantic role of this field
+        int32 bit_offset = 2;          // offset in bits from block start
+        int32 bit_width = 3;           // bits per element
+        int32 count = 4;               // number of elements
+        int32 data_type = 5;           // element type (0 = raw unsigned bits)
+    }
+
+    message BlockLayoutProto {
+        int32 block_size = 1;                  // logical values per block
+        int32 bytes_per_block = 2;             // physical bytes per block
+        repeated BlockFieldProto fields = 3;   // physical fields in the block
+    }
+
+    message FieldWeightProto {
+        BlockFieldRole field = 1;      // which field to use
+        int32 multiplier = 2;          // coefficient in index formula
+    }
+
+    message ScatterProto {
+        int32 group_size = 1;          // logical group size (e.g. 64)
+        int32 vector_size = 2;         // lanes per codebook entry (e.g. 4)
+        int32 stride = 3;             // stride within group (e.g. 16)
+    }
+
+    message StructuredBlockUniformProto {
+        BlockLayoutProto block_layout = 1;             // physical block structure
+        repeated float codebook_data = 2;              // codebook entries (flattened)
+        int32 codebook_vector_size = 3;                // values per codebook entry
+        repeated FieldWeightProto index_formula = 4;   // index = sum(field * multiplier)
+        optional ScatterProto scatter = 5;             // output element placement (absent = contiguous)
+    }
+
+.. code-block:: python
+
+    # Dequantize
+    blocks = split_blocks(data, q.block_layout.bytes_per_block)
+    result = []
+    for block in blocks:
+        fields = parse_fields(block, q.block_layout.fields)
+        scale = fields[SCALE][0] if SCALE in fields else 1.0
+        zp = fields[ZERO_POINT][0] if ZERO_POINT in fields else 0.0
+        values = []
+        for i in range(q.block_layout.block_size):
+            idx = sum(fields[fw.field][i] * fw.multiplier for fw in q.index_formula)
+            vec = q.codebook_data[idx * q.codebook_vector_size:][:q.codebook_vector_size]
+            values.extend(vec)
+        if q.scatter:
+            values = inverse_scatter(values, q.scatter)
+        result.append((values - zp) * scale)
+    result = concat(result)
 
 RotationProto
 ^^^^^^^^^^^^^
@@ -846,6 +1118,68 @@ that expect block-tiled storage.
         }
     }
 
+STQ1_0 (Sherry, 1.25 bits/weight, ternary codebook)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+256 values per 42-byte block. Each 5-bit combined index (4-bit code +
+1-bit sign) selects from a 32-entry codebook of 4 ternary values.
+Output positions use a stride-16 scatter within each 64-value chunk.
+
+.. code-block:: text
+
+    QuantizationProto {
+        data_type: FLOAT,
+        structured_block: StructuredBlockUniformProto {
+            block_layout: BlockLayoutProto {
+                block_size: 256, bytes_per_block: 42,
+                fields: [
+                    BlockFieldProto { role: CODE,  bit_offset: 0,   bit_width: 4,  count: 64, data_type: 0 },
+                    BlockFieldProto { role: SIGN,  bit_offset: 256, bit_width: 1,  count: 64, data_type: 0 },
+                    BlockFieldProto { role: SCALE, bit_offset: 320, bit_width: 16, count: 1,  data_type: FLOAT16 },
+                ]
+            },
+            codebook_data: [...]  // 32 * 4 = 128 ternary values in {-1, 0, 1}
+            codebook_vector_size: 4,
+            index_formula: [
+                FieldWeightProto { field: CODE, multiplier: 1 },
+                FieldWeightProto { field: SIGN, multiplier: 16 },
+            ],
+            scatter: ScatterProto { group_size: 64, vector_size: 4, stride: 16 }
+        }
+    }
+
+Dequantization of one block (derived from proto fields):
+
+.. code-block:: python
+
+    sb = proto.structured_block
+    bl = sb.block_layout
+    code_field = bl.fields[role == CODE]    # bit_offset=0, bit_width=4, count=64
+    sign_field = bl.fields[role == SIGN]    # bit_offset=256, bit_width=1, count=64
+    scale_field = bl.fields[role == SCALE]  # bit_offset=320, bit_width=16, count=1
+
+    scale = extract(block, scale_field.bit_offset, scale_field.bit_width, scale_field.data_type)
+
+    for g in range(code_field.count):
+        # Extract fields
+        code = extract(block, code_field.bit_offset + code_field.bit_width * g, code_field.bit_width)
+        sign = extract(block, sign_field.bit_offset + sign_field.bit_width * g, sign_field.bit_width)
+
+        # Combine fields into codebook index using index_formula
+        index = sum(values[fw.field] * fw.multiplier for fw in sb.index_formula)
+        # = code * 1 + sign * 16
+
+        # Codebook lookup
+        vector = sb.codebook_data[index * sb.codebook_vector_size : (index+1) * sb.codebook_vector_size]
+
+        # Scatter to output positions
+        s = sb.scatter
+        groups_per_chunk = s.group_size // s.vector_size  # 64 // 4 = 16
+        chunk = g // groups_per_chunk
+        lane = g % groups_per_chunk
+        for p in range(s.vector_size):
+            output[s.group_size * chunk + lane + s.stride * p] = vector[p] * scale
+
 Column-major layout
 ^^^^^^^^^^^^^^^^^^^
 
@@ -869,110 +1203,33 @@ so ``[0, 0]`` is a single tile covering the whole tensor.
 Pseudo-code
 +++++++++++
 
-Dequantization
-^^^^^^^^^^^^^^
+The dequantize and quantize pseudo-code for each format is shown inline
+in the corresponding proto section above. The top-level dispatcher is:
 
 .. code-block:: python
 
     def dequantize(qtensor: QuantizedTensorProto, model: ModelProto) -> float[]:
         quant = model.quantizations[qtensor.quantized_type]
         data = qtensor.raw_data
-        n_elements = product(qtensor.dims)
 
         match quant.kind:
-
-            case LinearUniformProto as q:
-                values = unpack(data, q.bits)
-                if q.scale_float:
-                    result = (values - q.zero_point) * q.scale_float
-                else:
-                    result = (values - q.zero_point) * (2 ** q.scale_int)
-
-            case CodebookUniformProto as q:
-                indices = unpack_base(data, len(q.codebook), q.packed_count, q.packed_bytes)
-                result = [q.codebook[i] * q.scale for i in indices]
-
-            case VectorCodebookUniformProto as q:
-                result = zeros(n_elements)
-                for k in range(q.num_codebooks):
-                    indices = unpack(data[k], q.index_bits)
-                    codebook_k = q.codebook_data[k * q.codebook_size * q.vector_size:]
-                    for i, idx in enumerate(indices):
-                        result[i*q.vector_size:(i+1)*q.vector_size] += codebook_k[idx]
-
-            case FloatingPointUniformProto as q:
-                bits_per_elem = q.sign_bits + q.exponent_bits + q.mantissa_bits
-                raw_values = unpack(data, bits_per_elem, q.split_storage)
-                result = [fp_decode(v, q.sign_bits, q.exponent_bits,
-                                    q.mantissa_bits, q.exponent_bias)
-                          for v in raw_values]
-
-            case SparseQuantizationProto as q:
-                result = dequantize_with(data.dense_part, q.base_quant)
-                for (index, value) in data.outliers:
-                    result[index] = value
-
-            case LogUniformProto as q:
-                raw = unpack(data, q.bits)
-                if q.has_sign:
-                    sign = extract_sign(raw)
-                    magnitude = raw & ((1 << (q.bits - 1)) - 1)
-                else:
-                    sign = 1
-                    magnitude = raw
-                result = sign * (q.base ** (magnitude + q.offset))
-
-            case FunctionUniformProto as q:
-                tensor = unpack(data, q.bits, q.storage_type)
-                result = call_op(q.dequantize_op, tensor)
-
-            case BlockQuantizationProto as q:
-                result = []
-                blocks = split(data, num_blocks=len(q.elem_quant))
-                for i, block_data in enumerate(blocks):
-                    block_values = dequantize_with(block_data, q.elem_quant[i])
-                    result.extend(block_values)
+            case LinearUniformProto as q:     ...  # see LinearUniformProto section
+            case CodebookUniformProto as q:   ...  # see CodebookUniformProto section
+            case VectorCodebookUniformProto:  ...
+            case FloatingPointUniformProto:   ...
+            case SparseQuantizationProto:     ...
+            case LogUniformProto:             ...
+            case FunctionUniformProto:        ...
+            case BlockQuantizationProto:      ...
+            case TilingQuantizationProto:     ...
+            case IdentityProto:              ...
+            case CastUniformProto:           ...
+            case PackedLinearUniformProto:    ...
+            case StructuredBlockUniformProto: ...
 
         # Apply post-rotation if present
         if quant.post_rotation:
-            result = apply_rotation(result, quant.post_rotation)
+            result = apply_rotation(result, quant.post_rotation, model)
 
-        assert len(result) == n_elements
+        assert len(result) == product(qtensor.dims)
         return result
-
-Quantization
-^^^^^^^^^^^^
-
-.. code-block:: python
-
-    def quantize(tensor: float[], quant: QuantizationProto) -> QuantizedTensorProto:
-        # Apply pre-rotation if present
-        if quant.pre_rotation:
-            tensor = apply_rotation(tensor, quant.pre_rotation)
-
-        match quant.kind:
-
-            case LinearUniformProto as q:
-                if q.scale_float:
-                    values = round(tensor / q.scale_float) + q.zero_point
-                else:
-                    values = round(tensor / (2 ** q.scale_int)) + q.zero_point
-                values = clip(values, 0, (1 << q.bits) - 1)
-                raw_data = pack(values, q.bits)
-
-            case CodebookUniformProto as q:
-                scaled = tensor / q.scale
-                indices = [nearest(scaled[i], q.codebook) for i in range(len(tensor))]
-                raw_data = pack_base(indices, len(q.codebook), q.packed_count, q.packed_bytes)
-
-            case BlockQuantizationProto as q:
-                blocks = split(tensor, q.block_size)
-                raw_data = b""
-                for i, block in enumerate(blocks):
-                    raw_data += quantize(block, q.elem_quant[i]).raw_data
-
-            # ... other variants follow same pattern
-
-        return QuantizedTensorProto(
-            dims=shape(tensor), raw_data=raw_data,
-            n_bytes=len(raw_data), quantized_type=<index>)

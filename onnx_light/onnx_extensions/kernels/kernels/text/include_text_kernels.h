@@ -64,6 +64,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// NumPy-style bidirectional broadcasting.
 class StringConcat : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:StringConcat";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -91,6 +92,7 @@ public:
 /// semantics and splits on consecutive whitespace.
 class StringSplit : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:StringSplit";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -117,6 +119,7 @@ public:
 /// supports the ``"en_US"``-equivalent ASCII semantics.
 class StringNormalizer : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:StringNormalizer";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -171,6 +174,7 @@ public:
 /// ``std::regex`` will throw ``std::invalid_argument``.
 class RegexFullMatch : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:RegexFullMatch";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -220,6 +224,7 @@ public:
 ///   empty.
 class TfIdfVectorizer : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:TfIdfVectorizer";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 

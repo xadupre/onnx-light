@@ -66,6 +66,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// Only FLOAT tensors are supported.
 class Adam : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.preview.training:Adam";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -117,6 +118,7 @@ public:
 /// are supported.
 class Adagrad : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.preview.training:Adagrad";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -168,6 +170,7 @@ public:
 /// tensors are supported.
 class Momentum : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.preview.training:Momentum";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 

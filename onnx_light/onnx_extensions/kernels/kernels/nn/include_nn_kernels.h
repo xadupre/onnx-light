@@ -73,6 +73,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// the begin/end padding is computed from the input shape.
 class AveragePool : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:AveragePool";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -98,6 +99,7 @@ public:
 /// reduced to 1 by computing the mean over all elements in that dimension.
 class GlobalAveragePool : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GlobalAveragePool";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -113,6 +115,7 @@ public:
 /// reduced to 1 by computing the maximum over all elements in that dimension.
 class GlobalMaxPool : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GlobalMaxPool";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -130,6 +133,7 @@ public:
 /// pooling; ``p == 2`` (default) gives the RMS/L2 pooling defined by ONNX.
 class GlobalLpPool : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GlobalLpPool";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -157,6 +161,7 @@ public:
 /// ``2`` (L2 norm).
 class LpPool : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LpPool";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -185,6 +190,7 @@ public:
 /// statistics and returns the updated running mean / variance.
 class BatchNormalization : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:BatchNormalization";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -228,6 +234,7 @@ public:
 /// FLOAT tensors of length ``C``.
 class InstanceNormalization : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:InstanceNormalization";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -257,6 +264,7 @@ public:
 /// are 1-D FLOAT tensors of length ``C``. ``num_groups`` must divide ``C``.
 class GroupNormalization : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GroupNormalization";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -290,6 +298,7 @@ public:
 /// with the trailing ``r - axis`` dimensions collapsed to 1.
 class LayerNormalization : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LayerNormalization";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -326,6 +335,7 @@ public:
 /// broadcastable to the normalized shape (i.e. ``X.shape[axis:]``).
 class RMSNormalization : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:RMSNormalization";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -349,6 +359,7 @@ public:
 /// The default axes are ``[0, 2, 3]``.
 class MeanVarianceNormalization : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:MeanVarianceNormalization";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -376,6 +387,7 @@ public:
 /// the input dtype.
 class Flatten : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Flatten";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -400,6 +412,7 @@ public:
 /// ``data``. ``ratio`` must be in ``[0, 1)``.
 class Dropout : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Dropout";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -431,6 +444,7 @@ public:
 /// ``1.0`` (the ONNX defaults). The output shape matches the input shape.
 class LRN : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LRN";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -455,6 +469,7 @@ public:
 /// input shape.
 class LpNormalization : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LpNormalization";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -483,6 +498,7 @@ public:
 /// the upstream ONNX semantics).
 class MaxPool : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:MaxPool";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -519,6 +535,7 @@ public:
 /// ``pads`` attribute is ignored, matching the ONNX spec).
 class MaxUnpool : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:MaxUnpool";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -549,6 +566,7 @@ public:
 /// ``onnx/reference/ops/op_max_roi_pool.py``.
 class MaxRoiPool : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:MaxRoiPool";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``MaxRoiPool`` operator.
   struct Attributes {
@@ -602,6 +620,7 @@ public:
 /// step of ``Y``.
 class RNN : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:RNN";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -658,6 +677,7 @@ public:
 /// ``[batch_size, num_directions, hidden_size]``.
 class GRU : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GRU";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -721,6 +741,7 @@ public:
 /// ``Y`` and ``Y_c`` is the final cell state.
 class LSTM : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LSTM";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -787,6 +808,7 @@ public:
 /// Not modeled: the ``softmax_precision`` attribute.
 class Attention : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Attention";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -889,6 +911,7 @@ public:
 ///     indicates absence (treated as ones).
 class DeformConv : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:DeformConv";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``DeformConv`` operator. Defaults match
   /// the upstream schema (since opset 19).
@@ -924,6 +947,7 @@ public:
 /// attributes (``NOTSET``, ``SAME_UPPER``, ``SAME_LOWER``, ``VALID``).
 class Conv : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Conv";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Conv`` operator.
   struct Attributes {
@@ -959,6 +983,7 @@ public:
 /// same dtype as ``w``. Empty-shape ``Tensor`` indicates absence.
 class ConvInteger : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ConvInteger";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``ConvInteger`` operator.
   struct Attributes {
@@ -995,6 +1020,7 @@ public:
 ///  ((k[i]-1)*dil[i]+1) - pads[start] - pads[end]``.
 class ConvTranspose : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ConvTranspose";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``ConvTranspose`` operator.
   struct Attributes {
@@ -1047,6 +1073,7 @@ public:
 /// block contributions are summed (matching PyTorch's ``fold``).
 class Col2Im : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Col2Im";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Col2Im`` operator.
   struct Attributes {
@@ -1091,6 +1118,7 @@ public:
 /// instead of the (default) splitting into two contiguous halves.
 class RotaryEmbedding : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:RotaryEmbedding";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``RotaryEmbedding`` operator. All
   /// defaults match the upstream schema.
@@ -1138,6 +1166,7 @@ public:
 ///   along the causal axis.
 class CausalConvWithState : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:CausalConvWithState";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ``CausalConvWithState`` operator.
   struct Attributes {
@@ -1176,6 +1205,7 @@ public:
 /// promoted to FLOAT32 for the recurrence and the outputs are demoted back.
 class LinearAttention : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LinearAttention";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``LinearAttention`` operator.
   struct Attributes {

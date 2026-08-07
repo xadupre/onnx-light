@@ -75,6 +75,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// type.
 class FlexAttention : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.preview:FlexAttention";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 

@@ -62,6 +62,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// Returns the ``value`` attribute of the ``Constant`` op without copying.
 class Constant : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Constant";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &value, RuntimeContext *rt = nullptr) const;
@@ -86,6 +87,7 @@ public:
 /// ``BOOL``. Other dtypes throw ``std::invalid_argument``.
 class ConstantOfShape : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ConstantOfShape";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// ``shape`` must be a 1-D INT64 tensor whose entries describe the
@@ -106,6 +108,7 @@ public:
 /// output shape copied from the 2-D ``input`` tensor.
 class EyeLike : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:EyeLike";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &input, int64_t k = 0, int32_t dtype = 0,
@@ -136,6 +139,7 @@ public:
 /// 0/1 value has a natural representation).
 class Bernoulli : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Bernoulli";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// Draws Bernoulli samples for every element of ``input``. ``seed`` is
@@ -175,6 +179,7 @@ public:
 /// other value of ``dtype`` triggers ``std::invalid_argument``.
 class RandomNormal : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:RandomNormal";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// Produces a ``shape``-shaped tensor of normal samples. ``mean`` and
@@ -203,6 +208,7 @@ public:
 /// of ``dtype`` triggers ``std::invalid_argument``.
 class RandomUniform : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:RandomUniform";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// Produces a ``shape``-shaped tensor of uniform samples in
@@ -228,6 +234,7 @@ public:
 /// otherwise the value overrides the output dtype.
 class RandomNormalLike : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:RandomNormalLike";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &input, double mean = 0.0, double scale = 1.0,
@@ -245,6 +252,7 @@ public:
 /// ``input``.
 class RandomUniformLike : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:RandomUniformLike";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &input, double low = 0.0, double high = 1.0,
@@ -273,6 +281,7 @@ public:
 /// Supported output dtypes are ``INT32`` (default) and ``INT64``.
 class Multinomial : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Multinomial";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// Draws ``sample_size`` samples per batch row of ``input``. ``seed`` is
@@ -313,6 +322,7 @@ public:
 /// returns an empty 1-D tensor of length 0.
 class Range : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Range";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &start, const Tensor &limit, const Tensor &delta,

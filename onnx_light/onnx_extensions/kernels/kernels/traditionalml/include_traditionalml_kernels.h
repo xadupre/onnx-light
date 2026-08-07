@@ -73,6 +73,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// preallocated output's dtype/shape/byte size do not match the input's.
 class Binarizer : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:Binarizer";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -110,6 +111,7 @@ public:
 /// output.
 class CategoryMapper : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:CategoryMapper";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -148,6 +150,7 @@ public:
 /// preallocated output's dtype/shape/byte size do not match the input's.
 class Imputer : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:Imputer";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -171,6 +174,7 @@ public:
 /// the input shape with the last dimension replaced by ``numel(indices)``.
 class ArrayFeatureExtractor : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:ArrayFeatureExtractor";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -208,6 +212,7 @@ public:
 /// type/shape do not match the resolved value type and the input shape.
 class LabelEncoder : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:LabelEncoder";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -265,6 +270,7 @@ public:
 /// output's dtype/shape/byte size do not match the expected one-hot output.
 class OneHotEncoder : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:OneHotEncoder";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -296,6 +302,7 @@ public:
 /// ``[-z, z]`` convention).
 class LinearClassifier : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:LinearClassifier";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -320,6 +327,7 @@ public:
 /// assumed). Only ``post_transform == "NONE"`` is supported.
 class LinearRegressor : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:LinearRegressor";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -340,6 +348,7 @@ public:
 ///   * ``Z``: one raw decision score per sample
 class SVMClassifier : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:SVMClassifier";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -365,6 +374,7 @@ public:
 /// operator (since opset 1).
 class SVMRegressor : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:SVMRegressor";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -401,6 +411,7 @@ public:
 /// float output.
 class Scaler : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:Scaler";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -443,6 +454,7 @@ public:
 /// float output.
 class Normalizer : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:Normalizer";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -493,6 +505,7 @@ public:
 /// "AVERAGE", "MIN", and "MAX", and ``post_transform`` value "NONE".
 class TreeEnsembleRegressor : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:TreeEnsembleRegressor";
   void Run(RuntimeContext &rt) override;
   /// Inherits the context-only constructor so the dispatch factory can
   /// build the kernel; ``Run`` parses the ONNX attributes and constructs the
@@ -556,6 +569,7 @@ private:
 /// Supports integer and string class labels.
 class TreeEnsembleClassifier : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:TreeEnsembleClassifier";
   void Run(RuntimeContext &rt) override;
   /// Inherits the context-only constructor so the dispatch factory can
   /// build the kernel; ``Run`` parses the ONNX attributes and constructs the
@@ -600,6 +614,7 @@ private:
 /// Only ``post_transform`` 0 (NONE) and 1 (SOFTMAX) are supported.
 class TreeEnsemble : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:TreeEnsemble";
   void Run(RuntimeContext &rt) override;
   /// Inherits the context-only constructor so the dispatch factory can
   /// build the kernel; ``Run`` parses the ONNX attributes and constructs the
@@ -691,6 +706,7 @@ private:
 /// ``input_values`` must have the same length.
 class DictVectorizer : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:DictVectorizer";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -756,6 +772,7 @@ public:
 /// when the in-place output's dtype/shape do not match the expected output.
 class CastMap : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:CastMap";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -823,6 +840,7 @@ public:
 /// type ``DataType`` dispatches to the right template specialization.
 class FeatureVectorizer : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:FeatureVectorizer";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 

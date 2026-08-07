@@ -77,6 +77,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// the output defaults to UINT8 with a zero point of 0.
 class QuantizeLinear : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:QuantizeLinear";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -118,6 +119,7 @@ public:
 /// along ``axis`` (only FLOAT ``x_scale`` is supported for per-axis).
 class DequantizeLinear : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:DequantizeLinear";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -160,6 +162,7 @@ public:
 ///   ``y = saturate(round(x / y_scale) + y_zero_point)``
 class DynamicQuantizeLinear : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:DynamicQuantizeLinear";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -183,6 +186,7 @@ public:
 /// :cpp:class:`MatMul` broadcasting rules.
 class QLinearMatMul : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:QLinearMatMul";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -209,6 +213,7 @@ public:
 /// :cpp:class:`Conv` shape/padding/dilation rules.
 class QLinearConv : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:QLinearConv";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``QLinearConv`` operator.
   struct Attributes {

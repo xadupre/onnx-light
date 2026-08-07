@@ -79,6 +79,7 @@ class SubgraphSession;
 /// same data type and shape.
 class If : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_core:CPU:ai.onnx:If";
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value) const;
   void operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
@@ -133,6 +134,7 @@ public:
 /// from any graph executor.
 class Loop : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_core:CPU:ai.onnx:Loop";
   using KernelBase::KernelBase;
 
   /// Returning overload.
@@ -283,6 +285,7 @@ public:
 ///     values are reversed before stacking (prepend semantics).
 class Scan : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_core:CPU:ai.onnx:Scan";
   using KernelBase::KernelBase;
 
   /// Body-aware overload.

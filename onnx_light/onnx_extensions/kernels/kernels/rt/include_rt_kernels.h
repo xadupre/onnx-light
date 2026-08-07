@@ -26,6 +26,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// Reference implementation of the light-only ``ai.rt::DelayedInitializer`` op.
 class DelayedInitializer : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.rt:DelayedInitializer";
   void Run(RuntimeContext &rt) override;
   /// Inherits the context-only constructor so the dispatch factory can
   /// build the kernel; ``Run`` parses the ONNX attributes and constructs the

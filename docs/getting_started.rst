@@ -45,19 +45,12 @@ With ``pip install``:
     pip install -C build-dir=build -C cmake.build-type=Debug -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev] -v
     ctest --test-dir build --output-on-failure
 
-With ``setup.py``:
+With ``setup.py``, ``--cpp-tests`` builds the C++ unit tests and runs them with
+``ctest`` in one step:
 
 .. code-block:: bash
 
     python setup.py build_ext --inplace --build-temp build --cpp-tests
-    ctest --test-dir build --output-on-failure
-
-Alternatively, ``--run-cpp-tests`` builds the C++ unit tests (it implies
-``--cpp-tests``) and runs them with ``ctest`` in one step:
-
-.. code-block:: bash
-
-    python setup.py build_ext --inplace --build-temp build --run-cpp-tests
 
 On multi-config generators such as Visual Studio, add the matching
 configuration to ``ctest``: use ``-C Debug`` when the build was configured with

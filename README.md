@@ -111,7 +111,8 @@ python setup.py build_ext --inplace
 
 `setup.py build_ext` configures CMake with `-DCMAKE_BUILD_TYPE=Release` by
 default (unless `CMAKE_ARGS` already sets `CMAKE_BUILD_TYPE`).
-``--cpp-tests`` can be used to build with the tests.
+``--cpp-tests`` can be used to build the C++ unit tests and run them with
+``ctest``.
 
 To speed up compilation with multiple threads, pass `--parallel` (or `-j`) with
 the number of jobs:
@@ -145,18 +146,11 @@ pip install -C build-dir=build -C cmake.build-type=Debug -C cmake.define.ONNX_LI
 ctest --test-dir build --output-on-failure
 ```
 
-With `setup.py`:
+With `setup.py`, `--cpp-tests` builds the C++ unit tests and runs them with
+`ctest` in one step:
 
 ```bash
 python setup.py build_ext --inplace --build-temp build --cpp-tests
-ctest --test-dir build --output-on-failure
-```
-
-Alternatively, `--run-cpp-tests` builds the C++ unit tests (it implies
-`--cpp-tests`) and runs them with `ctest` in one step:
-
-```bash
-python setup.py build_ext --inplace --build-temp build --run-cpp-tests
 ```
 
 On multi-config generators such as Visual Studio, add the matching

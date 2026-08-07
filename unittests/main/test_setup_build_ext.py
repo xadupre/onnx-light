@@ -53,7 +53,7 @@ class TestSetupBuildExt(ExtTestCase):
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_inplace_dry_run_cpp_tests_flag(self):
-        """Tests that setup.py build_ext enables C++ tests with --cpp-tests."""
+        """Tests that setup.py build_ext builds and runs C++ tests with --cpp-tests."""
         root = Path(__file__).resolve().parents[2]
         command = [
             sys.executable,
@@ -68,7 +68,10 @@ class TestSetupBuildExt(ExtTestCase):
         self.assertEqual(
             proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
         )
-        self.assertIn("-DONNX_LIGHT_BUILD_TESTS=ON", f"{proc.stdout}\n{proc.stderr}")
+        output = f"{proc.stdout}\n{proc.stderr}"
+        self.assertIn("-DONNX_LIGHT_BUILD_TESTS=ON", output)
+        self.assertIn("ctest", output)
+        self.assertIn("--output-on-failure", output)
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_cpp_tests_flag_overrides_cmake_args(self):
@@ -129,7 +132,7 @@ class TestSetupBuildExt(ExtTestCase):
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_inplace_dry_run_without_setuptools_cpp_tests_flag(self):
-        """Tests that setup.py build_ext enables C++ tests with --cpp-tests without setuptools."""
+        """Tests that build_ext builds and runs C++ tests with --cpp-tests without setuptools."""
         root = Path(__file__).resolve().parents[2]
         command = [
             sys.executable,
@@ -145,7 +148,10 @@ class TestSetupBuildExt(ExtTestCase):
         self.assertEqual(
             proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
         )
-        self.assertIn("-DONNX_LIGHT_BUILD_TESTS=ON", f"{proc.stdout}\n{proc.stderr}")
+        output = f"{proc.stdout}\n{proc.stderr}"
+        self.assertIn("-DONNX_LIGHT_BUILD_TESTS=ON", output)
+        self.assertIn("ctest", output)
+        self.assertIn("--output-on-failure", output)
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_without_setuptools_cpp_tests_flag_overrides_cmake_args(self):
@@ -331,8 +337,8 @@ class TestSetupBuildExt(ExtTestCase):
         self.assertIn("-DONNX_LIGHT_BUILD_KERNELS=OFF", f"{proc.stdout}\n{proc.stderr}")
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
-    def test_setup_build_ext_run_cpp_tests_flag(self):
-        """Tests that --run-cpp-tests enables C++ tests and runs ctest."""
+    def test_setup_build_ext_run_cpp_tests_flag_removed(self):
+        """Tests that the removed --run-cpp-tests flag is rejected."""
         root = Path(__file__).resolve().parents[2]
         command = [
             sys.executable,
@@ -344,17 +350,14 @@ class TestSetupBuildExt(ExtTestCase):
         ]
         proc = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)
 
-        self.assertEqual(
+        self.assertNotEqual(
             proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
         )
-        output = f"{proc.stdout}\n{proc.stderr}"
-        self.assertIn("-DONNX_LIGHT_BUILD_TESTS=ON", output)
-        self.assertIn("ctest", output)
-        self.assertIn("--output-on-failure", output)
+        self.assertIn("--run-cpp-tests", f"{proc.stdout}\n{proc.stderr}")
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
-    def test_setup_build_ext_without_setuptools_run_cpp_tests_flag(self):
-        """Tests that --run-cpp-tests enables C++ tests and runs ctest without setuptools."""
+    def test_setup_build_ext_without_setuptools_run_cpp_tests_flag_removed(self):
+        """Tests that the removed --run-cpp-tests flag is rejected without setuptools."""
         root = Path(__file__).resolve().parents[2]
         command = [
             sys.executable,
@@ -367,13 +370,10 @@ class TestSetupBuildExt(ExtTestCase):
         ]
         proc = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)
 
-        self.assertEqual(
+        self.assertNotEqual(
             proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
         )
-        output = f"{proc.stdout}\n{proc.stderr}"
-        self.assertIn("-DONNX_LIGHT_BUILD_TESTS=ON", output)
-        self.assertIn("ctest", output)
-        self.assertIn("--output-on-failure", output)
+        self.assertIn("--run-cpp-tests", f"{proc.stdout}\n{proc.stderr}")
 
 
 if __name__ == "__main__":

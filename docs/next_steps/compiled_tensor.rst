@@ -14,20 +14,8 @@ so that the prepacking step can be skipped on reload.
         bytes raw_data = 2;            // prepacked blob as produced by the runtime
         int32 data_type = 3;           // element data type (same enum as TensorProto.data_type)
         int64 n_bytes = 4;             // byte size of raw_data
-        int32 layout = 5;              // index into ModelProto.layouts
-        int32 quantized_type = 6;      // index into ModelProto.quantizations
-        int32 device = 7;              // index into ModelProto.devices
-    }
-
-LayoutProto
-+++++++++++
-
-.. code-block:: text
-
-    message LayoutProto {
-        string name = 1;       // layout identifier (e.g. "MlasPackedGemm")
-        string runtime = 2;   // runtime that produces this layout (e.g. "onnxruntime")
-        int64 version = 3;    // layout format version
+        int32 quantized_type = 5;      // index into ModelProto.quantizations
+        int32 device = 6;              // index into ModelProto.devices
     }
 
 DeviceProto
@@ -47,13 +35,12 @@ ModelProto extension
 
     message ModelProto {
         ...
-        repeated LayoutProto layouts = <N>;
-        repeated QuantizationProto quantizations = <N+1>;
-        repeated DeviceProto devices = <N+2>;
-        repeated TensorProto rotation_matrices = <N+3>;
+        repeated QuantizationProto quantizations = <N>;
+        repeated DeviceProto devices = <N+1>;
+        repeated TensorProto rotation_matrices = <N+2>;
         ...
     }
 
-``CompiledTensorProto.layout``, ``CompiledTensorProto.quantized_type``
+``CompiledTensorProto.quantized_type``
 and ``CompiledTensorProto.device`` are indices into these lists.
 ``RotationProto.matrix_index`` is an index into ``rotation_matrices``.

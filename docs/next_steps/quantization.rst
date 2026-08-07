@@ -28,6 +28,7 @@ QuantizationProto
             FunctionUniformProto function = 7;
             BlockQuantizationProto block = 8;
             TilingQuantizationProto tiling = 13;
+            IdentityProto identity = 14;
         }
         string doc_string = 9;             // human-readable description
         repeated StringStringEntryProto metadata_props = 10;  // arbitrary key-value metadata
@@ -165,6 +166,8 @@ BlockQuantizationProto
 Recursive block quantization. Each block has a size and a nested
 ``QuantizationProto`` describing how elements within the block are
 quantized. Nesting allows multi-level hierarchies (K-Quants, MXFP).
+If there are more blocks than entries in ``elem_quant``, the list
+is cycled from the beginning (``elem_quant[i % len(elem_quant)]``).
 
 .. code-block:: text
 
@@ -185,11 +188,22 @@ quantization parameters vary along more than one axis.
 .. code-block:: text
 
     message TilingQuantizationProto {
-        repeated int64 tile_shape = 1;                 // block size per axis (e.g. [32, 128])
+        repeated int64 tile_shape = 1;                 // block size per axis (0 = full tensor dim)
         repeated int32 axes = 2;                       // axes being tiled (e.g. [0, 1])
         QuantizationProto elem_quant = 3;              // quantization scheme (same for all tiles)
         repeated int32 perm = 4;                       // permutation of axes in memory layout
     }
+
+IdentityProto
+^^^^^^^^^^^^^
+
+No quantization. Data is stored as-is in its original data type.
+Useful with ``TilingQuantizationProto`` to express a pure retiling
+(block layout) without any value transformation.
+
+.. code-block:: text
+
+    message IdentityProto {}
 
 RotationProto
 ^^^^^^^^^^^^^
@@ -679,6 +693,44 @@ in memory for cache locality.
                 symmetric: true, scale_float: 0.0, zero_point: 0, axis: -1
             }},
             perm: [1, 0]   // N-major ordering in memory
+        }
+    }
+
+Block-tiled floats (no quantization)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Reorganizes a row-major float matrix into tiles of ``[32, 128]``
+without any value transformation. Useful for prepack layouts
+that expect block-tiled storage.
+
+.. code-block:: text
+
+    // Weight shape: [4096, 4096], tiled into [32, 128] blocks
+    QuantizationProto {
+        tiling: TilingQuantizationProto {
+            tile_shape: [32, 128],
+            axes: [0, 1],
+            elem_quant: QuantizationProto { identity: IdentityProto {} }
+        }
+    }
+
+Column-major layout
+^^^^^^^^^^^^^^^^^^^
+
+Expresses a column-major (Fortran-order) storage of a 2D matrix.
+A ``tile_shape`` value of 0 means "same as the tensor dimension on that axis",
+so ``[0, 0]`` is a single tile covering the whole tensor.
+``perm: [1, 0]`` reverses the axis order in memory.
+
+.. code-block:: text
+
+    // Weight shape: [M, N], stored column-major
+    QuantizationProto {
+        tiling: TilingQuantizationProto {
+            tile_shape: [0, 0],
+            axes: [0, 1],
+            elem_quant: QuantizationProto { identity: IdentityProto {} },
+            perm: [1, 0]
         }
     }
 

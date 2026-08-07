@@ -50,8 +50,10 @@ ModelProto extension
         repeated LayoutProto layouts = <N>;
         repeated QuantizationProto quantizations = <N+1>;
         repeated DeviceProto devices = <N+2>;
+        repeated TensorProto rotation_matrices = <N+3>;
         ...
     }
 
 ``CompiledTensorProto.layout``, ``CompiledTensorProto.quantized_type``
 and ``CompiledTensorProto.device`` are indices into these lists.
+``RotationProto.matrix_index`` is an index into ``rotation_matrices``.

@@ -27,6 +27,7 @@ QuantizationProto
             LogUniformProto log = 6;
             FunctionUniformProto function = 7;
             BlockQuantizationProto block = 8;
+            TilingQuantizationProto tiling = 13;
         }
         string doc_string = 9;             // human-readable description
         repeated StringStringEntryProto metadata_props = 10;  // arbitrary key-value metadata
@@ -172,6 +173,24 @@ quantized. Nesting allows multi-level hierarchies (K-Quants, MXFP).
         repeated QuantizationProto elem_quant = 2;     // one per block
     }
 
+TilingQuantizationProto
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Multi-dimensional block quantization. Extends ``BlockQuantizationProto``
+to N dimensions: weights are partitioned into tiles of shape
+``tile_shape`` along the given ``axes``, and each tile is quantized
+independently. Useful for prepack layouts (MatMulNBits) where
+quantization parameters vary along more than one axis.
+
+.. code-block:: text
+
+    message TilingQuantizationProto {
+        repeated int64 tile_shape = 1;                 // block size per axis (e.g. [32, 128])
+        repeated int32 axes = 2;                       // axes being tiled (e.g. [0, 1])
+        QuantizationProto elem_quant = 3;              // quantization scheme (same for all tiles)
+        repeated int32 perm = 4;                       // permutation of axes in memory layout
+    }
+
 RotationProto
 ^^^^^^^^^^^^^
 
@@ -180,12 +199,15 @@ Dequantization with rotation: ``values = post_rotation @ dequant(data) @ pre_rot
 
 .. code-block:: text
 
+    enum RotationType {
+        HADAMARD = 0;
+        PLAIN = 1;
+    }
+
     message RotationProto {
-        oneof kind {
-            int32 hadamard_size = 1;      // Hadamard matrix of this size (must be power of 2)
-            bytes matrix_data = 2;        // arbitrary rotation matrix stored as raw float data
-        }
-        repeated int32 dims = 3;          // shape of the rotation matrix
+        RotationType matrix_type = 1;         // type of rotation
+        repeated int32 dims = 2;              // shape of the rotation matrix
+        optional int32 matrix_index = 3;      // index into ModelProto.rotation_matrices (for PLAIN)
     }
 
 Known quantization schemes
@@ -637,6 +659,29 @@ Custom (plugin-based)
         }
     }
 
+MatMulNBits INT4 (onnxruntime, per-group of 32, tiled)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Weights of shape ``[K, N]`` are tiled into blocks of 32 along axis K
+and 128 along axis N (SIMD width). All tiles share the same INT4
+quantization scheme. ``perm: [1, 0]`` indicates N-major tile ordering
+in memory for cache locality.
+
+.. code-block:: text
+
+    // Weight shape: [4096, 4096], group_size=32, N_tile=128
+    QuantizationProto {
+        tiling: TilingQuantizationProto {
+            tile_shape: [32, 128],
+            axes: [0, 1],
+            elem_quant: QuantizationProto { linear: LinearUniformProto {
+                data_type: UINT4, bits: 4,
+                symmetric: true, scale_float: 0.0, zero_point: 0, axis: -1
+            }},
+            perm: [1, 0]   // N-major ordering in memory
+        }
+    }
+
 QuantizedTensorProto
 ++++++++++++++++++++
 
@@ -830,6 +875,10 @@ Format coverage summary
    * - Log quantization
      - 4.0
      - ``Log``
+     - ✅
+   * - MatMulNBits INT4 (ORT)
+     - 4.5
+     - ``Tiling`` + ``Linear``
      - ✅
    * - MXFP4
      - 5.0

@@ -158,6 +158,8 @@ QuantizationProto
             BlockQuantizationProto block = 8;
             TilingQuantizationProto tiling = 13;
             IdentityProto identity = 14;
+            CastUniformProto cast = 16;
+            PackedLinearUniformProto packed_linear = 17;
         }
         int32 data_type = 15;              // dequantized element type (same enum as TensorProto.data_type)
         string doc_string = 9;             // human-readable description
@@ -336,6 +338,47 @@ The element type is given by ``QuantizationProto.data_type``.
 .. code-block:: text
 
     message IdentityProto {}
+
+CastUniformProto
+^^^^^^^^^^^^^^^^
+
+Type conversion without quantization. Stores values cast from the
+original type to a different type (e.g. float32 → bfloat16).
+The source type is ``QuantizationProto.data_type``, the target type
+is ``storage_type``.
+
+.. code-block:: text
+
+    message CastUniformProto {
+        int32 storage_type = 1;        // target element type (same enum as TensorProto.data_type)
+    }
+
+PackedLinearUniformProto
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Block-wise linear quantization where scales, zero points and corrections
+are stored inside ``raw_data`` alongside the quantized weights.
+Used for prepacked formats (CompInt8, QGEMM) where the runtime bakes
+metadata into a single contiguous buffer.
+
+.. code-block:: text
+
+    message PackedLinearUniformProto {
+        int32 storage_type = 1;        // quantized weight element type (e.g. UINT4, INT8)
+        int32 bits = 2;                // bits per weight element
+        bool symmetric = 3;           // true if zero_point is always 0
+        int32 block_size = 4;          // quantization group size
+        int32 axis = 5;                // quantization axis (-1 = per-tensor)
+        int32 scale_type = 6;          // element type of embedded scales (e.g. FLOAT)
+        int32 zero_point_type = 7;     // element type of embedded zero points (0 = absent)
+        int32 correction_type = 8;     // element type of corrections (0 = absent)
+        PackedLayout layout = 9;       // how regions are organized in the blob
+    }
+
+    enum PackedLayout {
+        SEQUENTIAL = 0;               // [weights][scales][zero_points][corrections]
+        INTERLEAVED = 1;              // per-block: [block_weights, scale, zp, correction] repeated
+    }
 
 RotationProto
 ^^^^^^^^^^^^^

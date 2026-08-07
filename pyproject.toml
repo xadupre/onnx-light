@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "onnx-light"
-version = "0.1.14"
+version = "0.1.15"
 description = "onnx without protobuf"
 readme = "README.md"
 license = "Apache-2.0"

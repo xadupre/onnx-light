@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `onnx/backend/test/data/node` (propagated from onnx/onnx#7959). Both the
   `schema_comparison` backend-test counter and the `ImageDecoder` case generator
   now prefer the in-memory model and fall back to the on-disk layout.
+- Updates for onnxruntime.
 
 ### Documentation & CI
 

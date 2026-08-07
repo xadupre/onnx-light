@@ -132,6 +132,18 @@ std::string DataTypeUtils::ToString(const TypeProto &type_proto, const std::stri
     return left + "sparse_tensor(" + ToDataTypeString(static_cast<int32_t>(stype.ref_elem_type())) +
            ")" + right;
   }
+  if (type_proto.has_opaque_type()) {
+    const auto &otype = type_proto.ref_opaque_type();
+    std::string result = left + "opaque(";
+    if (otype.has_domain() && !otype.str_domain().empty()) {
+      result += otype.str_domain() + ",";
+    }
+    if (otype.has_name() && !otype.str_name().empty()) {
+      result += otype.str_name();
+    }
+    result += ")" + right;
+    return result;
+  }
   ONNX_THROW_EX(std::invalid_argument("Unsupported type proto: no type set"));
 }
 
@@ -175,6 +187,23 @@ void DataTypeUtils::FromString(const std::string &type_str, TypeProto &type_prot
     TypeProto val_type;
     FromString(std::string(v.Data(), v.Size()), val_type);
     type_proto.ref_map_type().ref_value_type() = std::move(val_type);
+    return;
+  }
+  if (s.LStrip("opaque")) {
+    auto &otype = type_proto.ref_opaque_type();
+    s.ParensWhitespaceStrip();
+    if (!s.Empty()) {
+      size_t cm = s.Find(',');
+      if (cm != std::string::npos) {
+        if (cm > 0) {
+          otype.set_domain(std::string(s.Data(), cm));
+        }
+        s.LStrip(cm + 1); // skip comma
+      }
+      if (!s.Empty()) {
+        otype.set_name(std::string(s.Data(), s.Size()));
+      }
+    }
     return;
   }
   if (s.LStrip("sparse_tensor")) {

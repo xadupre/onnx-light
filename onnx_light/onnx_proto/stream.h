@@ -186,9 +186,15 @@ public:
   virtual double next_double();
   /** Reads the next protobuf tag and returns a FieldNumber struct. */
   virtual FieldNumber next_field();
-  /** Reads a single packed element of type *T* from the stream into *value*. */
+  /** Reads a single packed element of type *T* from the stream into *value*.
+   *  Always copies into *value* via an explicit destination buffer (matching
+   *  next_float()/next_double()) rather than relying on read_bytes()'s
+   *  zero-copy mode (pre_allocated_buffer == nullptr): file-descriptor-backed
+   *  streams (FdReadStream) cannot hand out a stable pointer into their own
+   *  buffer, since a fresh internal block is filled by every Next() call, so
+   *  requesting a zero-copy read for a scalar element would throw. */
   template <typename T> void next_packed_element(T &value) {
-    value = *reinterpret_cast<const T *>(read_bytes(sizeof(T)));
+    read_bytes(sizeof(T), reinterpret_cast<uint8_t *>(&value));
   }
   // Reading substream
   /** Pushes a new read limit of *len* bytes relative to the current position.
@@ -1060,9 +1066,14 @@ public:
   virtual int64_t size() const override { return limit_; }
   /** Returns a short human-readable excerpt around the current position. */
   virtual std::string tell_around() const override;
-  /** Reads *n_bytes* into *pre_allocated_buffer*.
-   *  Zero-copy mode (pre_allocated_buffer == nullptr) is not supported for fd streams;
-   *  always provide a destination buffer. */
+  /** Reads *n_bytes* into *pre_allocated_buffer*, or -- when *pre_allocated_buffer*
+   *  is nullptr -- into a small heap block owned by this stream (see owned_blocks_)
+   *  whose pointer stays valid for the lifetime of this FdReadStream. This supports
+   *  the RefString/String zero-copy read path (BinaryStream::next_string(),
+   *  next_packed_element()) used for scalar/string field values: FdReadStream's own
+   *  4KB rotating buffer_ is overwritten by every Next() call and cannot be handed
+   *  out as a stable pointer, but a short-lived owned copy is fine since ONNX
+   *  messages hold RefStrings/spans only as long as the source stream is alive. */
   virtual const uint8_t *read_bytes(offset_t n_bytes, uint8_t *pre_allocated_buffer) override;
   /** Advances the read position by *n_bytes* using lseek. */
   virtual void skip_bytes(offset_t n_bytes) override;
@@ -1112,6 +1123,10 @@ protected:
   int64_t limit_;
   /** Set to true by Next() when ::read() returns ≤ 0 (end-of-file or error). */
   bool eof_;
+  /** Owned copies handed out by read_bytes(n, nullptr) (the RefString/scalar zero-copy
+   *  path). Kept alive for the lifetime of this stream since those callers only hold a
+   *  non-owning pointer/RefString into the returned block. */
+  std::vector<std::unique_ptr<uint8_t[]>> owned_blocks_;
 };
 
 /** Minimal coded input stream wrapping a BinaryStream, providing the protobuf

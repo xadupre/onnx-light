@@ -151,17 +151,15 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
     PreparedKernel &prepared = kernels_[index];
     prepared.key = domain + ":" + op_type;
     prepared.instance = ResolveNodeKernel(node, rt, domain, op_type);
-    // Compose the kernel's unique name from the implementation's
-    // statically-defined library, the resolved device and the node's
-    // (domain, op_type), so the session can report which implementation it
-    // resolved for each node. A host runtime device (kUndefined or kCPU)
-    // resolves to the CPU host kernel (see DeviceKeySuffix), so it is reported
-    // as CPU; any other device is reported as-is.
+    // Report the kernel's explicit, statically-defined unique name. The
+    // control-flow, model-local-function and user-custom kernels carry it on
+    // the instance; dispatch-table kernels register it alongside their factory,
+    // so fall back to the registered name for those.
     if (prepared.instance) {
-      const core::symbolic::Device device = core::symbolic::DeviceKeySuffix(rt.device()).empty()
-                                                ? core::symbolic::Device::kCPU
-                                                : rt.device();
-      prepared.name = KernelUniqueName(prepared.instance->library(), device, domain, op_type);
+      prepared.name = prepared.instance->name();
+      if (prepared.name.empty()) {
+        prepared.name = KernelDispatchName(domain, op_type, rt.device());
+      }
     }
   }
   // Record the external inputs the scheduled nodes read (names not produced by

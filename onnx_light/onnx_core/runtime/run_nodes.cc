@@ -848,6 +848,11 @@ public:
   ModelLocalFunctionKernel(const NodeProto &node, const FunctionProto &func)
       : KernelBase(KernelContext{}), func_(func) {
     set_node(node);
+    // A model-local function's op_type is only known at resolution time, so its
+    // unique name is composed once here (never per run) and stored inline.
+    const std::string node_domain = node.domain();
+    const std::string domain = node_domain.empty() ? std::string(kDefaultOnnxDomain) : node_domain;
+    name_owned_ = "onnx_core.function:CPU:" + domain + ":" + std::string(node.op_type());
     // Pre-bind attribute references at construction time (the call-site
     // node and function body are both fixed for this kernel's lifetime).
     std::unordered_map<std::string, const AttributeProto *> attr_map;
@@ -866,7 +871,7 @@ public:
     plan_ = std::make_unique<ExecutionPlan>(bound_func_);
   }
 
-  const char *library() const override { return "onnx_core.function"; }
+  const char *name() const override { return name_owned_.c_str(); }
 
   void Run(RuntimeContext &rt) override {
     const std::string op_type = node_->op_type();
@@ -926,6 +931,7 @@ public:
 private:
   const FunctionProto &func_;
   FunctionProto bound_func_;
+  std::string name_owned_;
   std::unique_ptr<ExecutionPlan> plan_;
   std::unique_ptr<RuntimeSession> session_;
 };
@@ -936,11 +942,10 @@ class IfKernel : public KernelBase {
 public:
   IfKernel(const NodeProto &node, std::shared_ptr<SubgraphSession> then_session,
            std::shared_ptr<SubgraphSession> else_session)
-      : KernelBase(KernelContext{}), then_session_(std::move(then_session)),
-        else_session_(std::move(else_session)) {
+      : KernelBase(KernelContext{}, "onnx_core:CPU:ai.onnx:If"),
+        then_session_(std::move(then_session)), else_session_(std::move(else_session)) {
     set_node(node);
   }
-  const char *library() const override { return "onnx_core"; }
   void Run(RuntimeContext &rt) override { RunIfNode(*node_, rt, *then_session_, *else_session_); }
 
 private:
@@ -951,10 +956,10 @@ private:
 class LoopKernel : public KernelBase {
 public:
   LoopKernel(const NodeProto &node, std::shared_ptr<SubgraphSession> body_session)
-      : KernelBase(KernelContext{}), body_session_(std::move(body_session)) {
+      : KernelBase(KernelContext{}, "onnx_core:CPU:ai.onnx:Loop"),
+        body_session_(std::move(body_session)) {
     set_node(node);
   }
-  const char *library() const override { return "onnx_core"; }
   void Run(RuntimeContext &rt) override { RunLoopNode(*node_, rt, *body_session_); }
 
 private:
@@ -964,10 +969,10 @@ private:
 class ScanKernel : public KernelBase {
 public:
   ScanKernel(const NodeProto &node, std::shared_ptr<SubgraphSession> body_session)
-      : KernelBase(KernelContext{}), body_session_(std::move(body_session)) {
+      : KernelBase(KernelContext{}, "onnx_core:CPU:ai.onnx:Scan"),
+        body_session_(std::move(body_session)) {
     set_node(node);
   }
-  const char *library() const override { return "onnx_core"; }
   void Run(RuntimeContext &rt) override { RunScanNode(*node_, rt, *body_session_); }
 
 private:
@@ -977,10 +982,10 @@ private:
 class SequenceMapKernel : public KernelBase {
 public:
   SequenceMapKernel(const NodeProto &node, std::shared_ptr<SubgraphSession> body_session)
-      : KernelBase(KernelContext{}), body_session_(std::move(body_session)) {
+      : KernelBase(KernelContext{}, "onnx_core:CPU:ai.onnx:SequenceMap"),
+        body_session_(std::move(body_session)) {
     set_node(node);
   }
-  const char *library() const override { return "onnx_core"; }
   void Run(RuntimeContext &rt) override { RunSequenceMapNode(*node_, rt, *body_session_); }
 
 private:
@@ -994,12 +999,18 @@ public:
   CustomKernelAdapter(const NodeProto &node, CustomKernelFn fn)
       : KernelBase(KernelContext{}), fn_(std::move(fn)) {
     set_node(node);
+    // A custom kernel's op_type is only known at resolution time, so its unique
+    // name is composed once here (never per run) and stored inline.
+    const std::string node_domain = node.domain();
+    const std::string domain = node_domain.empty() ? std::string(kDefaultOnnxDomain) : node_domain;
+    name_owned_ = "custom:CPU:" + domain + ":" + std::string(node.op_type());
   }
-  const char *library() const override { return "custom"; }
+  const char *name() const override { return name_owned_.c_str(); }
   void Run(RuntimeContext &rt) override { fn_(*node_, rt); }
 
 private:
   CustomKernelFn fn_;
+  std::string name_owned_;
 };
 
 } // namespace

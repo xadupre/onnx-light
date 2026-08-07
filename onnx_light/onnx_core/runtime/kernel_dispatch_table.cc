@@ -45,21 +45,33 @@ SequenceMapPackFn &MutableSequenceMapPackFn() {
   return fn;
 }
 
+// Returns the mutable ``(domain, op_type, device) -> unique name`` table
+// singleton, populated alongside the dispatch table by
+// :cpp:func:`RegisterKernelFn`.
+std::unordered_map<std::string, std::string> &MutableKernelNameTable() {
+  static std::unordered_map<std::string, std::string> table;
+  return table;
+}
+
 } // namespace
 
 const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
   return MutableKernelDispatchTable();
 }
 
-std::string KernelUniqueName(const std::string &library, symbolic::Device device,
-                             const std::string &domain, const std::string &op_type) {
-  const std::string normalised_domain = domain.empty() ? std::string(kDefaultOnnxDomain) : domain;
-  return library + ":" + symbolic::DeviceName(device) + ":" + normalised_domain + ":" + op_type;
+void RegisterKernelFn(const std::string &domain, const std::string &op_type,
+                      symbolic::Device device, NodeKernelFn fn, const char *name) {
+  const std::string key = DispatchKey(domain, op_type, device);
+  MutableKernelDispatchTable()[key] = std::move(fn);
+  MutableKernelNameTable()[key] = name;
 }
 
-void RegisterKernelFn(const std::string &domain, const std::string &op_type,
-                      symbolic::Device device, NodeKernelFn fn) {
-  MutableKernelDispatchTable()[DispatchKey(domain, op_type, device)] = std::move(fn);
+const std::string &KernelDispatchName(const std::string &domain, const std::string &op_type,
+                                      symbolic::Device device) {
+  static const std::string kEmpty;
+  const auto &table = MutableKernelNameTable();
+  auto it = table.find(DispatchKey(domain, op_type, device));
+  return it == table.end() ? kEmpty : it->second;
 }
 
 const SequenceMapPackFn &GetSequenceMapPackFn() { return MutableSequenceMapPackFn(); }

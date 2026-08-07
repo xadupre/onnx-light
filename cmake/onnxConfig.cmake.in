@@ -9,6 +9,16 @@ find_dependency(onnx_light CONFIG REQUIRED
   NO_DEFAULT_PATH
 )
 
+# The drop-in `onnx/*.h` / `google/protobuf/*.h` forwarding headers live
+# alongside the onnx_light headers (installed by CMakeLists.txt's
+# `install(DIRECTORY .../onnx_compat_include/ DESTINATION
+# .../onnx_light/onnx_compat_include)` rule). Linking against
+# onnx_light::lib_onnx_lib etc. alone only propagates the
+# include/onnx_light include dir, NOT this compat dir, so it must be added
+# explicitly here or downstream code including "onnx/defs/schema.h" and
+# friends fails with "No such file or directory".
+set(_onnx_compat_include_dir "${PACKAGE_PREFIX_DIR}/include/onnx_light/onnx_compat_include")
+
 # Aggregate the onnx-light libraries that together provide the upstream-onnx
 # C++ API surface (message types, operator schemas, checker and shape
 # inference) behind a single drop-in `onnx::onnx` target.
@@ -17,6 +27,7 @@ if(NOT TARGET onnx::onnx)
   set_target_properties(onnx::onnx PROPERTIES
     INTERFACE_LINK_LIBRARIES
       "onnx_light::lib_onnx_lib;onnx_light::lib_onnx_op;onnx_light::lib_onnx_shape;onnx_light::lib_onnx_manipulations;onnx_light::lib_onnx_proto"
+    INTERFACE_INCLUDE_DIRECTORIES "${_onnx_compat_include_dir}"
   )
 endif()
 
@@ -25,6 +36,7 @@ if(NOT TARGET onnx::onnx_proto)
   add_library(onnx::onnx_proto INTERFACE IMPORTED)
   set_target_properties(onnx::onnx_proto PROPERTIES
     INTERFACE_LINK_LIBRARIES onnx_light::lib_onnx_proto
+    INTERFACE_INCLUDE_DIRECTORIES "${_onnx_compat_include_dir}"
   )
 endif()
 

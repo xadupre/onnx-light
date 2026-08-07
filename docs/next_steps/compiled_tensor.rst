@@ -6,16 +6,13 @@ CompiledTensorProto
 
 Stores prepacked tensors produced by a runtime (e.g. onnxruntime)
 so that the prepacking step can be skipped on reload.
+A ``CompiledTensorProto`` is a ``QuantizedTensorProto`` bound to a device.
 
 .. code-block:: text
 
     message CompiledTensorProto {
-        repeated int64 dims = 1;       // dimensions of the tensor
-        bytes raw_data = 2;            // prepacked blob as produced by the runtime
-        int32 data_type = 3;           // element data type (same enum as TensorProto.data_type)
-        int64 n_bytes = 4;             // byte size of raw_data
-        int32 quantized_type = 5;      // index into ModelProto.quantizations
-        int32 device = 6;              // index into ModelProto.devices
+        QuantizedTensorProto tensor = 1;   // quantized (or tiled) tensor data
+        int32 device = 2;                  // index into ModelProto.devices
     }
 
 DeviceProto
@@ -41,6 +38,6 @@ ModelProto extension
         ...
     }
 
-``CompiledTensorProto.quantized_type``
-and ``CompiledTensorProto.device`` are indices into these lists.
+``QuantizedTensorProto.quantized_type`` is an index into ``quantizations``.
+``CompiledTensorProto.device`` is an index into ``devices``.
 ``RotationProto.matrix_index`` is an index into ``rotation_matrices``.

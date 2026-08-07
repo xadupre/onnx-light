@@ -5,7 +5,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.13] – Unreleased
 
+### New Features
+
+- Added a `NodeProto` callback hook to `ParseOptions` and `SerializeOptions` so callers can inspect or rewrite each node while a model is being parsed or serialized.
+
 ### Improvements
+
+- Propagated reverse and bidirectional `RNN`/`GRU`/`LSTM` support (propagated from onnx/onnx#7935).
+- Improved ONNX Runtime compatibility: added ordering operators and an implicit conversion to `const std::string&` to `OptionalString`, made `add_string_data` accept an `OptionalString`, switched `AttributeProto.strings` to `FIELD_REPEATED_STR`, and stopped creating an empty shape in `TypeProto::FromString` for tensor types without a shape.
+- Modernized the `ParseData` `raw_data` handling (propagated from onnx/onnx#8109).
+- Made `FileLoadMode.AUTO` use a buffered stream instead of memory mapping.
+- Honored `file_load_mode="MMAP"` when loading models with external data.
+- Loaded deeply nested control-flow models by raising the default proto recursion limit.
+- Accepted the packed wire format for repeated integer proto fields.
+- Added an opt-in bypass for the external `TensorProto` location error in the checker.
+- Reduced the binary size of `onnx_proto` via section garbage collection / dead-code elimination.
+
+### Fixes
+
+- Fixed single-file mmap `no_copy` zero-copy parsing.
+- Added proto2-style presence tracking for `FIELD_BYTES`.
+- Fixed the `Attention` mode-3 fully-masked `NaN` output.
+- Stopped reading an optional message sub-field from auto-creating it.
+- Fixed a `ParseFromFile` `RuntimeError` when `file_load_mode` is set together with an `external_data_file`.
+- Returned the real parse result from `TraditionalMLData::ParseFromArray`.
+- Refined the cyclic model-local function error message (propagated from onnx/onnx#8233).
+- Fixed compilation when OpenSSL is built without ChaCha20-Poly1305.
+- Fixed the `ScatterND` `updates` shape documentation (propagated from onnx/onnx#8212).
+
+### Security
+
+- Added overflow-checked `int64` arithmetic in shape inference (propagated from onnx/onnx#8031).
+- Bounded external-data padding on serialization (propagated from onnx/onnx#8260).
+
+### Testing
 
 - Made the upstream node backend-test consumers work when `onnx` builds node test
   data on the fly (`TestCase.model` / `TestCase.data_sets` in memory with
@@ -13,9 +46,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `onnx/backend/test/data/node` (propagated from onnx/onnx#7959). Both the
   `schema_comparison` backend-test counter and the `ImageDecoder` case generator
   now prefer the in-memory model and fall back to the on-disk layout.
+- Added a `TreeEnsembleLeafLike` backend test case (`UINT8` `nodes_modes` via `int32_data`).
+- Fixed the skipped external-data tests and a latent `Normalizer` benchmark count bug.
+- Fixed unit tests failing due to the latest `onnx-weekly`.
+- Investigated and documented the known-missing ONNX backend tests.
 
 ### Documentation & CI
 
+- Added a benchmark tool measuring single-model load times across `onnx`, `onnxruntime`, and `onnx_light`.
+- Extended `plot_onnx_time.py`: produced three graphs (all / Python / C++), used a single argument parser, added a `ReferenceEvaluator` load benchmark, and fixed the `--model` option for custom models and external weights.
+- Added a descriptive-statistics-over-ND-initializers example and persisted the ONNX graphs built by gallery examples to disk.
+- Added a `--run-cpp-tests` option to `setup.py` to build and run the C++ tests, and ran the C++ tests in the Windows x86 CI job.
+- Enabled the `modernize-concat-nested-namespaces` check (propagated from onnx/onnx#8150) and the clang-tidy math-parentheses and consistent-parameter-name checks (propagated from onnx/onnx#8259).
 - Bumped the release version to `0.1.13`.
 
 ## [0.1.12] – 2026-08-05

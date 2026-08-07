@@ -51,7 +51,8 @@ public:
   void validate() const {
     EXT_ENFORCE_LIMIT(options_._recursion_depth <= options_.max_recursion_depth,
                       "Protobuf message nesting depth (", options_._recursion_depth,
-                      ") exceeds the maximum allowed recursion depth (", options_.max_recursion_depth,
+                      ") exceeds the maximum allowed recursion depth (",
+                      options_.max_recursion_depth,
                       "); the message is nested too deeply. Increase "
                       "ParseOptions::max_recursion_depth if this nesting is intentional.");
   }

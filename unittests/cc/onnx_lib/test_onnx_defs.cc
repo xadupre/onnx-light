@@ -351,8 +351,8 @@ TEST(onnx_defs, TensorProto_DataType_IsValid_AcceptsInRangeValues) {
 TEST(onnx_defs, TensorProto_DataType_IsValid_RejectsOutOfRangeValues) {
   EXPECT_FALSE(TensorProto::DataType_IsValid(-100));
   EXPECT_FALSE(TensorProto::DataType_IsValid(-1));
-  EXPECT_FALSE(TensorProto::DataType_IsValid(
-      static_cast<int32_t>(TensorProto::DataType::INT2) + 1)); // 27, just past the last value
+  EXPECT_FALSE(TensorProto::DataType_IsValid(static_cast<int32_t>(TensorProto::DataType::INT2) +
+                                             1)); // 27, just past the last value
   EXPECT_FALSE(TensorProto::DataType_IsValid(9999));
 }
 

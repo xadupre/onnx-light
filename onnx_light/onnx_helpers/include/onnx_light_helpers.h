@@ -271,7 +271,7 @@ public:
  * (recursion depth, tensor size, alignment) as opposed to wire-format corruption.
  */
 #if !defined(_ENFORCE_LIMIT_DEFINED)
-#define EXT_ENFORCE_LIMIT(cond, ...)                                                                \
+#define EXT_ENFORCE_LIMIT(cond, ...)                                                               \
   if (!(cond))                                                                                     \
     throw onnx_light_helpers::ParseLimitExceeded(onnx_light_helpers::MakeString(                   \
         "`", #cond, "` failed. ",                                                                  \

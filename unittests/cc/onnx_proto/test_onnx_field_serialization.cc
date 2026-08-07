@@ -238,12 +238,13 @@ TEST(onnx_field_serialization, UnknownField_Fixed32_Skipped) {
   EXPECT_EQ(parsed.ref_dims()[0], 6);
 }
 
-TEST(onnx_field_serialization, UnknownField_UnskippableWireType_Throws) {
+TEST(onnx_field_serialization, UnknownField_UnskippableWireType_ParseFails) {
   // Wire types 3 and 4 (deprecated groups) carry no length information, so an
-  // unknown field using them cannot be skipped and must be reported.
+  // unknown field using them cannot be skipped; ParseFromString reports the
+  // failure by returning false (see ReadField_UnsupportedWireType_ParseFails).
   std::string bytes = FieldTag(1000, 3);
   TensorProto parsed;
-  EXPECT_THROW(parsed.ParseFromString(bytes), std::runtime_error);
+  EXPECT_FALSE(parsed.ParseFromString(bytes));
 }
 
 TEST(onnx_field_serialization, ReadField_UnsupportedWireType_ParseFails) {
@@ -271,12 +272,13 @@ TEST(onnx_field_serialization, ParseFromString_TruncatedGarbage_ReturnsFalse) {
   EXPECT_FALSE(parsed.ParseFromString(bytes));
 }
 
-TEST(onnx_field_serialization, UnknownField_LengthDelimited_LengthBeyondStream_Throws) {
+TEST(onnx_field_serialization, UnknownField_LengthDelimited_LengthBeyondStream_ParseFails) {
   // A truncated/oversized length on an unknown field must be rejected instead
-  // of skipping past the end of the buffer.
+  // of skipping past the end of the buffer; the failure surfaces as a false
+  // return value from ParseFromString.
   std::string bytes = FieldTag(1000, 2) + EncodeVarint(1024);
   TensorProto parsed;
-  EXPECT_THROW(parsed.ParseFromString(bytes), std::runtime_error);
+  EXPECT_FALSE(parsed.ParseFromString(bytes));
 }
 
 TEST(onnx_field_serialization, UnknownField_InsideSubMessage_Skipped) {

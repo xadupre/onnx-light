@@ -108,6 +108,12 @@ void RegisterKernelFn(const std::string &domain, const std::string &op_type,
  * Keys are the canonical ``"<domain>:<op_type>"`` pair (the default ONNX
  * domain — the empty ``NodeProto::domain()`` — is normalised to
  * :cpp:var:`kDefaultOnnxDomain`).
+ *
+ * Like the built-in :cpp:func:`KernelDispatchTable`, this registry is a plain
+ * process-wide singleton and is **not** synchronised: register / unregister
+ * global kernels before starting concurrent :cpp:func:`RunNode` /
+ * :cpp:class:`RuntimeSession::Run` calls (e.g. during start-up), not while
+ * other threads are resolving nodes.
  */
 const CustomKernelMap &GlobalCustomKernels();
 

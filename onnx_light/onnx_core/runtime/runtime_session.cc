@@ -110,6 +110,24 @@ std::unique_ptr<KernelBase> RuntimeSession::ResolveNodeKernel(const NodeProto &n
   return detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
 }
 
+std::vector<std::string> RuntimeSession::kernel_names() const {
+  // Report the resolved kernels in plan execution order (the order Run drives
+  // them), skipping non-execute actions and any node without a resolved
+  // instance (e.g. before the first Run populates kernels_).
+  std::vector<std::string> names;
+  for (const ExecuteAction &action : plan_.actions()) {
+    if (action.kind() != ExecuteActionKind::kExecuteNode) {
+      continue;
+    }
+    const size_t index = action.node_index();
+    if (index >= kernels_.size() || !kernels_[index].instance) {
+      continue;
+    }
+    names.push_back(kernels_[index].instance->name());
+  }
+  return names;
+}
+
 void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
   // Resolve and build the kernel instance for every node the plan will
   // execute, once and up front. Node indices come from the plan's

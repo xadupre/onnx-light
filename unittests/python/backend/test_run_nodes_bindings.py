@@ -127,6 +127,30 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertEqual(sorted(session.required_inputs), ["x", "y"])
         self.assertEqual(_unpack_floats(ctx.get("z")), (11.0, 18.0))
 
+    def test_runtime_session_exposes_kernel_names(self):
+        # Every kernel the session instantiates carries a unique name encoding
+        # the library it belongs to and the device it runs on together with its
+        # (domain, op_type). ``kernel_names`` exposes those names in plan
+        # execution order and is empty until the first ``run``.
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "agraph (float[2] x, float[2] y, float[2] z) => (float[2] out) {\n"
+            "  t = Mul(x, y)\n"
+            "  out = Sub(t, z)\n"
+            "}\n"
+        )
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.set("x", _make_float_tensor("x", [1.0, 2.0]))
+        ctx.set("y", _make_float_tensor("y", [3.0, 4.0]))
+        ctx.set("z", _make_float_tensor("z", [0.5, 0.25]))
+        session = rt.RuntimeSession(model)
+        self.assertEqual(list(session.kernel_names), [])
+        session.run(ctx)
+        self.assertEqual(
+            list(session.kernel_names),
+            ["onnx_kernels:CPU:ai.onnx:Mul", "onnx_kernels:CPU:ai.onnx:Sub"],
+        )
+
     def test_runtime_session_allow_external_output_allocators_option(self):
         # The ``allow_external_output_allocators`` option is exposed on both
         # constructors and defaults to False; when set, it is reflected by the

@@ -317,7 +317,7 @@ void RegisterKernelFunctions() {
       const std::size_t sep = key.find(':');
       ::onnx_light::core::runtime::RegisterKernelFn(key.substr(0, sep), key.substr(sep + 1),
                                                     ::onnx_light::core::symbolic::Device::kCPU,
-                                                    entry.second);
+                                                    entry.second, "onnx_kernels");
     }
     ::onnx_light::core::runtime::RegisterSequenceMapPackFn(
         [](RuntimeContext &rt, const Sequence &input_sequence,

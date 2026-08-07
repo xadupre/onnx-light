@@ -51,9 +51,28 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
   return MutableKernelDispatchTable();
 }
 
+std::string KernelUniqueName(const std::string &library, symbolic::Device device,
+                             const std::string &domain, const std::string &op_type) {
+  const std::string normalised_domain = domain.empty() ? std::string(kDefaultOnnxDomain) : domain;
+  return library + ":" + symbolic::DeviceName(device) + ":" + normalised_domain + ":" + op_type;
+}
+
 void RegisterKernelFn(const std::string &domain, const std::string &op_type,
-                      symbolic::Device device, NodeKernelFn fn) {
-  MutableKernelDispatchTable()[DispatchKey(domain, op_type, device)] = std::move(fn);
+                      symbolic::Device device, NodeKernelFn fn, const std::string &library) {
+  // Wrap the factory so every kernel it produces carries its unique name
+  // (library + device + domain + op_type). The name is assigned right after
+  // construction so a resolved kernel always reports which implementation
+  // (device + library) the runtime selected for it.
+  std::string name = KernelUniqueName(library, device, domain, op_type);
+  MutableKernelDispatchTable()[DispatchKey(domain, op_type, device)] =
+      [fn = std::move(fn), name = std::move(name)](
+          const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
+    std::unique_ptr<KernelBase> kernel = fn(node, rt);
+    if (kernel) {
+      kernel->set_name(name);
+    }
+    return kernel;
+  };
 }
 
 const SequenceMapPackFn &GetSequenceMapPackFn() { return MutableSequenceMapPackFn(); }

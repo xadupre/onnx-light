@@ -850,6 +850,34 @@ TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {
   EXPECT_EQ(rt.tensors()["out"].name, "out");
 }
 
+TEST(RunNodes, RuntimeSessionExposesKernelNames) {
+  // Each kernel the session instantiates carries a unique name identifying the
+  // library it belongs to and the device it runs on, together with its
+  // (domain, op_type). RuntimeSession::kernel_names() exposes those names, in
+  // plan execution order, for every scheduled node.
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2}, {1.0f, 2.0f});
+  rt.tensors()["y"] = Tensor::FromFloat("y", {2}, {3.0f, 4.0f});
+  rt.tensors()["z"] = Tensor::FromFloat("z", {2}, {0.5f, 0.25f});
+
+  utils::RepeatedProtoField<NodeProto> nodes;
+  *nodes.Add() = MakeNode("Mul", {"x", "y"}, {"t"});
+  *nodes.Add() = MakeNode("Sub", {"t", "z"}, {"out"});
+
+  core::runtime::ExecutionPlan plan(nodes, {});
+  core::runtime::RuntimeSession session(plan);
+
+  // Empty before the first run resolves and caches the kernels.
+  EXPECT_TRUE(session.kernel_names().empty());
+
+  session.Run(rt);
+
+  const std::vector<std::string> names = session.kernel_names();
+  ASSERT_EQ(names.size(), 2u);
+  EXPECT_EQ(names[0], "onnx_kernels:CPU:ai.onnx:Mul");
+  EXPECT_EQ(names[1], "onnx_kernels:CPU:ai.onnx:Sub");
+}
+
 TEST(RunNodes, RunNodesOnIteratorRangeFromVector) {
   // Same graph, but the node list starts out as a std::vector<NodeProto>;
   // it is converted to a RepeatedProtoField<NodeProto> (which any container

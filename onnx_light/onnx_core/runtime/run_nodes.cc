@@ -1024,7 +1024,9 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
     auto fit = rt.functions().find(fkey);
     if (fit != rt.functions().end()) {
       const FunctionProto *func = fit->second;
-      return std::make_unique<ModelLocalFunctionKernel>(node, *func);
+      auto kernel = std::make_unique<ModelLocalFunctionKernel>(node, *func);
+      kernel->set_name(KernelUniqueName("onnx_core.function", rt.device(), domain, op_type));
+      return kernel;
     }
   }
 
@@ -1038,24 +1040,33 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
     // selected branch's kernels from scratch.
     auto then_session = std::make_shared<SubgraphSession>(rt, then_branch);
     auto else_session = std::make_shared<SubgraphSession>(rt, else_branch);
-    return std::make_unique<IfKernel>(node, std::move(then_session), std::move(else_session));
+    auto kernel =
+        std::make_unique<IfKernel>(node, std::move(then_session), std::move(else_session));
+    kernel->set_name(KernelUniqueName("onnx_core", rt.device(), domain, op_type));
+    return kernel;
   }
   if (domain == kDefaultOnnxDomain && op_type == "Loop") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
     // Built once here so the body's kernels are resolved a single time and
     // reused across every iteration of every invocation of this node.
     auto body_session = std::make_shared<SubgraphSession>(rt, body);
-    return std::make_unique<LoopKernel>(node, std::move(body_session));
+    auto kernel = std::make_unique<LoopKernel>(node, std::move(body_session));
+    kernel->set_name(KernelUniqueName("onnx_core", rt.device(), domain, op_type));
+    return kernel;
   }
   if (domain == kDefaultOnnxDomain && op_type == "Scan") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
     auto body_session = std::make_shared<SubgraphSession>(rt, body);
-    return std::make_unique<ScanKernel>(node, std::move(body_session));
+    auto kernel = std::make_unique<ScanKernel>(node, std::move(body_session));
+    kernel->set_name(KernelUniqueName("onnx_core", rt.device(), domain, op_type));
+    return kernel;
   }
   if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
     auto body_session = std::make_shared<SubgraphSession>(rt, body);
-    return std::make_unique<SequenceMapKernel>(node, std::move(body_session));
+    auto kernel = std::make_unique<SequenceMapKernel>(node, std::move(body_session));
+    kernel->set_name(KernelUniqueName("onnx_core", rt.device(), domain, op_type));
+    return kernel;
   }
 
   const std::string key = domain + ":" + op_type;
@@ -1065,7 +1076,9 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
   auto ckit = rt.custom_kernels().find(key);
   if (ckit != rt.custom_kernels().end()) {
     CustomKernelFn fn = ckit->second;
-    return std::make_unique<CustomKernelAdapter>(node, fn);
+    auto kernel = std::make_unique<CustomKernelAdapter>(node, fn);
+    kernel->set_name(KernelUniqueName("custom", rt.device(), domain, op_type));
+    return kernel;
   }
   // A kernel's identity in :cpp:func:`KernelDispatchTable` is
   // ``(domain, op_type, device)``. The default host devices

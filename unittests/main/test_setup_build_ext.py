@@ -353,6 +353,7 @@ class TestSetupBuildExt(ExtTestCase):
         self.assertNotEqual(
             proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
         )
+        self.assertIn("--run-cpp-tests", f"{proc.stdout}\n{proc.stderr}")
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_without_setuptools_run_cpp_tests_flag_removed(self):

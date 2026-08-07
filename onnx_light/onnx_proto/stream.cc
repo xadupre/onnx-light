@@ -773,9 +773,17 @@ std::string FdReadStream::tell_around() const {
 }
 
 const uint8_t *FdReadStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_buffer) {
-  EXT_ENFORCE(pre_allocated_buffer != nullptr,
-              "[FdReadStream::read_bytes] zero-copy mode is not supported for file-backed "
-              "streams; use MmapFileStream or StringStream for no-copy parsing.");
+  // When no destination is supplied, allocate and own a small buffer for this read
+  // (rather than throwing): file-descriptor-backed streams cannot hand out a stable
+  // pointer into their own rotating block_size_ buffer (each Next() call overwrites
+  // it), but callers of the zero-copy read path (BinaryStream::next_string() for
+  // RefString/String fields, next_packed_element<T>() for scalar fixed-width fields)
+  // only need the returned pointer to remain valid for the lifetime of this stream.
+  std::unique_ptr<uint8_t[]> owned;
+  if (pre_allocated_buffer == nullptr) {
+    owned = std::make_unique<uint8_t[]>(static_cast<size_t>(n_bytes));
+    pre_allocated_buffer = owned.get();
+  }
   auto *dst = pre_allocated_buffer;
   offset_t remaining = n_bytes;
   while (remaining > 0) {
@@ -792,6 +800,8 @@ const uint8_t *FdReadStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated
       BackUp(avail - to_copy);
   }
   pos_ += n_bytes;
+  if (owned)
+    owned_blocks_.push_back(std::move(owned));
   return pre_allocated_buffer;
 }
 

@@ -123,3 +123,51 @@ TEST(onnxruntime_dropin, SchemaRegistryConstIntOverrideDispatches) {
   EXPECT_EQ(registry.last_key_, "Gemm");
   EXPECT_EQ(registry.last_version_, 11);
 }
+
+// ---------------------------------------------------------------------------
+// TensorProto_DataType_IsValid: onnxruntime calls the flat protobuf-style name
+// and expects real range checking (only the declared enumerators are valid).
+// It is a set of free functions, not a macro, so that a class member with the
+// same name (onnxruntime's provider bridge) still compiles.
+// ---------------------------------------------------------------------------
+
+static_assert(TensorProto_DataType_IsValid(TensorProto_DataType_FLOAT),
+              "declared enumerators must be valid");
+static_assert(!TensorProto_DataType_IsValid(-100), "out-of-range values must be invalid");
+
+namespace {
+
+// Mirrors onnxruntime's provider bridge, which declares a member function named
+// TensorProto_DataType_IsValid. This only compiles if the flat name is not a
+// function-like macro.
+struct ProviderHostLike {
+  bool TensorProto_DataType_IsValid(int value) const {
+    return ONNX_LIGHT_NAMESPACE::TensorProto_DataType_IsValid(value);
+  }
+};
+
+} // namespace
+
+TEST(onnxruntime_dropin, DataTypeIsValidAcceptsDeclaredEnumerators) {
+  for (int i = static_cast<int>(TensorProto::DataType::UNDEFINED);
+       i <= static_cast<int>(TensorProto::DataType::INT2); ++i) {
+    EXPECT_TRUE(TensorProto::DataType_IsValid(i)) << "value " << i << " must be valid";
+    EXPECT_TRUE(TensorProto_DataType_IsValid(i)) << "value " << i << " must be valid";
+  }
+  EXPECT_TRUE(
+      TensorProto_DataType_IsValid(static_cast<TensorProto::DataType>(TensorProto_DataType_INT64)));
+}
+
+TEST(onnxruntime_dropin, DataTypeIsValidRejectsOutOfRangeValues) {
+  const int first_invalid = static_cast<int>(TensorProto::DataType::INT2) + 1;
+  for (int value : {-100, -1, first_invalid, first_invalid + 1, 1000}) {
+    EXPECT_FALSE(TensorProto::DataType_IsValid(value)) << "value " << value << " must be invalid";
+    EXPECT_FALSE(TensorProto_DataType_IsValid(value)) << "value " << value << " must be invalid";
+  }
+}
+
+TEST(onnxruntime_dropin, DataTypeIsValidUsableAsMemberFunctionName) {
+  ProviderHostLike host;
+  EXPECT_TRUE(host.TensorProto_DataType_IsValid(TensorProto_DataType_FLOAT));
+  EXPECT_FALSE(host.TensorProto_DataType_IsValid(-100));
+}

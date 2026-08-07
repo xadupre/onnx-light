@@ -44,13 +44,17 @@ public:
   /// Throws when the current nesting depth exceeds the configured limit. Kept
   /// separate from the constructor so that, if it throws, this fully constructed
   /// guard's destructor still runs and restores the depth counter while the
-  /// exception unwinds the parser.
+  /// exception unwinds the parser. Uses ParseLimitExceeded (not a plain
+  /// std::runtime_error) since this is a deliberate, configurable resource guard
+  /// and must keep propagating out of ParseFromString/ParseFromArray rather than
+  /// being swallowed as a generic parse failure.
   void validate() const {
-    EXT_ENFORCE(options_._recursion_depth <= options_.max_recursion_depth,
-                "Protobuf message nesting depth (", options_._recursion_depth,
-                ") exceeds the maximum allowed recursion depth (", options_.max_recursion_depth,
-                "); the message is nested too deeply. Increase "
-                "ParseOptions::max_recursion_depth if this nesting is intentional.");
+    EXT_ENFORCE_LIMIT(options_._recursion_depth <= options_.max_recursion_depth,
+                      "Protobuf message nesting depth (", options_._recursion_depth,
+                      ") exceeds the maximum allowed recursion depth (",
+                      options_.max_recursion_depth,
+                      "); the message is nested too deeply. Increase "
+                      "ParseOptions::max_recursion_depth if this nesting is intentional.");
   }
 
 private:
@@ -97,12 +101,77 @@ inline void CheckAllocationLimit(uint64_t len, const ParseOptions &options, cons
                                  const char *location) {
   if (options.max_tensor_size_bytes > 0 &&
       len > static_cast<uint64_t>(options.max_tensor_size_bytes)) {
-    EXT_THROW(
+    // ParseLimitExceeded (not a plain std::runtime_error): this is a deliberate,
+    // configurable resource guard, not wire-format corruption, so it must keep
+    // propagating out of ParseFromString/ParseFromArray rather than being
+    // swallowed as a generic parse failure.
+    EXT_THROW_LIMIT(
         location, ": tensor field '", name, "' requests ", len,
         " bytes which exceeds ParseOptions::max_tensor_size_bytes=", options.max_tensor_size_bytes,
         ". Increase max_tensor_size_bytes or set it to 0 to disable the limit.");
   }
 }
+
+/**
+ * @brief Skips a single field's on-wire payload according to *wire_type*, without interpreting it.
+ *
+ * The protobuf wire format requires decoders to accept messages that contain a known field number
+ * paired with a wire type that does not match what the schema declares for that field (e.g. a
+ * newer/older/adversarial writer, or bit-flipped data). Per the protobuf spec, such a field must be
+ * treated exactly like an unrecognized field number: its bytes are skipped based on the wire type
+ * actually present in the tag, and parsing continues with the next field. This mirrors the
+ * behavior of the protobuf-generated C++ parser (google::protobuf), which stores such
+ * fields in an UnknownFieldSet rather than failing to parse.
+ *
+ * Only throws when *wire_type* is not one of the four wire types protobuf defines for scalar/
+ * length-delimited encoding (varint, 64-bit, length-delimited, 32-bit); such a value cannot be
+ * skipped unambiguously and indicates a corrupted stream.
+ *
+ * @param stream   Stream positioned right after the field's tag (field_number/wire_type), i.e.
+ *                 at the start of the field's value.
+ * @param wire_type Wire type read from the tag (FIELD_VARINT / FIELD_FIXED64 / FIELD_FIXED_SIZE /
+ *                 FIELD_FIXED32).
+ * @param name     Field or message name, included in the error message when *wire_type* is
+ *                 itself invalid.
+ */
+inline void SkipFieldByWireType(utils::BinaryStream &stream, uint64_t wire_type, const char *name) {
+  switch (wire_type) {
+  case FIELD_VARINT:
+    stream.next_uint64();
+    break;
+  case FIELD_FIXED64:
+    stream.skip_bytes(8);
+    break;
+  case FIELD_FIXED_SIZE: {
+    uint64_t len = stream.next_uint64();
+    stream.CanRead(len, "[SkipFieldByWireType] length exceeds stream bounds");
+    stream.skip_bytes(static_cast<utils::offset_t>(len));
+    break;
+  }
+  case FIELD_FIXED32:
+    stream.skip_bytes(4);
+    break;
+  default:
+    EXT_THROW("SkipFieldByWireType: cannot skip field '", name,
+              "', unsupported wire_type=", wire_type, " at position '", stream.tell_around(), "'");
+  }
+}
+
+/**
+ * @brief Skips the current field and returns from the enclosing (void) function when *cond* is
+ * false.
+ *
+ * Used at the top of the per-type read_field/read_enum_field/read_repeated_field overloads that
+ * are dispatched by field number from the READ_FIELD family of macros: when the actual wire type
+ * on the wire does not match what the field's C++ type requires, the field is treated like an
+ * unknown field (skipped via SkipFieldByWireType) instead of raising a hard parse error, matching
+ * protobuf's documented wire-format compatibility rules. See SkipFieldByWireType for rationale.
+ */
+#define SKIP_IF_WRONG_WIRE_TYPE(cond, stream, wire_type, name)                                     \
+  if (!(cond)) {                                                                                   \
+    SkipFieldByWireType(stream, static_cast<uint64_t>(wire_type), name);                           \
+    return;                                                                                        \
+  }
 
 /**
  * @brief Scoped guard that restores a BinaryStream's previous read limit.
@@ -141,8 +210,7 @@ void read_next_field_in_shortended_stream(utils::BinaryStream &stream, const cha
 template <typename T>
 void read_field(utils::BinaryStream &stream, int wire_type, T &field, const char *name,
                 ParseOptions &options) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
-              name, "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE, stream, wire_type, name);
   read_next_field_in_shortended_stream(stream, name, options, field);
 }
 
@@ -150,8 +218,7 @@ template <typename T>
 void read_optional_proto_field(utils::BinaryStream &stream, int wire_type,
                                utils::OptionalField<T> &field, const char *name,
                                ParseOptions &options) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
-              name, "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE, stream, wire_type, name);
   field.set_empty_value();
   read_next_field_in_shortended_stream(stream, name, options, *field);
 }
@@ -159,24 +226,21 @@ void read_optional_proto_field(utils::BinaryStream &stream, int wire_type,
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, utils::RefString &field,
                 const char *name, ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
-              name, "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE, stream, wire_type, name);
   field = stream.next_string();
 }
 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, utils::String &field, const char *name,
                 ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
-              name, "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE, stream, wire_type, name);
   field = stream.next_string();
 }
 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, utils::OptionalString &field,
                 const char *name, ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
-              name, "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE, stream, wire_type, name);
   utils::RefString ref = stream.next_string();
   if (ref.data() == nullptr)
     field.emplace();
@@ -187,74 +251,65 @@ void read_field(utils::BinaryStream &stream, int wire_type, utils::OptionalStrin
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, utils::OptionalField<int64_t> &field,
                 const char *name, ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_VARINT, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_VARINT, stream, wire_type, name);
   field = stream.next_int64();
 }
 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, utils::OptionalField<int32_t> &field,
                 const char *name, ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_VARINT, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_VARINT, stream, wire_type, name);
   field = stream.next_int32();
 }
 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, utils::OptionalField<float> &field,
                 const char *name, ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE || wire_type == FIELD_FIXED32,
-              "unexpected wire_type=", wire_type, " for field '", name, "' at position '",
-              stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE || wire_type == FIELD_FIXED32, stream,
+                          wire_type, name);
   field = stream.next_float();
 }
 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, uint64_t &field, const char *name,
                 ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_VARINT, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_VARINT, stream, wire_type, name);
   field = stream.next_uint64();
 }
 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, int64_t &field, const char *name,
                 ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_VARINT, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_VARINT, stream, wire_type, name);
   field = stream.next_int64();
 }
 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, int32_t &field, const char *name,
                 ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_VARINT, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_VARINT, stream, wire_type, name);
   field = stream.next_int32();
 }
 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, float &field, const char *name,
                 ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE || wire_type == FIELD_FIXED32,
-              "unexpected wire_type=", wire_type, " for field '", name, "' at position '",
-              stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE || wire_type == FIELD_FIXED32, stream,
+                          wire_type, name);
   field = stream.next_float();
 }
 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, double &field, const char *name,
                 ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
-              name, "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE, stream, wire_type, name);
   field = stream.next_double();
 }
 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, std::vector<uint8_t> &field,
                 const char *name, ParseOptions &options) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
-              name, "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE, stream, wire_type, name);
   uint64_t len = stream.next_uint64();
   stream.CanRead(len, "[read_field<vector<uint8_t>>] length exceeds stream bounds");
   CheckAllocationLimit(len, options, name, "read_field<vector<uint8_t>>");
@@ -265,8 +320,7 @@ void read_field(utils::BinaryStream &stream, int wire_type, std::vector<uint8_t>
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, utils::ByteSpan &field,
                 const char *name, ParseOptions &options) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
-              name, "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE, stream, wire_type, name);
   uint64_t len = stream.next_uint64();
   stream.CanRead(len, "[read_field<ByteSpan>] length exceeds stream bounds");
   CheckAllocationLimit(len, options, name, "read_field<ByteSpan>");
@@ -280,8 +334,7 @@ void read_field_limit_parallel(utils::BinaryStream &stream, int wire_type,
   if (!options.skip_raw_data && !options.is_parallel()) {
     read_field(stream, wire_type, field, name, options);
   } else {
-    EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
-                name, "' at position '", stream.tell_around(), "'");
+    SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE, stream, wire_type, name);
     uint64_t len = stream.next_uint64();
     stream.CanRead(len, "[read_field_limit_parallel] length exceeds stream bounds");
     if (!options.skip_raw_data || static_cast<int64_t>(len) < options.raw_data_threshold) {
@@ -320,8 +373,7 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
     read_field(stream, wire_type, field, name, options);
     return;
   }
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
-              name, "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE, stream, wire_type, name);
   uint64_t len = stream.next_uint64();
   stream.CanRead(len, "[read_field_limit_parallel_nc] length exceeds stream bounds");
   if (!options.skip_raw_data || static_cast<int64_t>(len) < options.raw_data_threshold) {
@@ -329,10 +381,14 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
     if (use_zero_copy) {
       if (options.alignment > 1) {
         const utils::offset_t raw_data_offset = stream.tell();
-        EXT_ENFORCE(raw_data_offset % options.alignment == 0, "Raw data field '", name, "' offset ",
-                    raw_data_offset,
-                    " is incompatible with ParseOptions.alignment=", options.alignment,
-                    " when no_copy=true. Disable no_copy or use a compatible alignment.");
+        // ParseLimitExceeded: this is a deliberate alignment/no_copy configuration
+        // guard, not wire-format corruption, so it must keep propagating out of
+        // ParseFromString/ParseFromArray rather than being swallowed as a generic
+        // parse failure.
+        EXT_ENFORCE_LIMIT(raw_data_offset % options.alignment == 0, "Raw data field '", name,
+                          "' offset ", raw_data_offset,
+                          " is incompatible with ParseOptions.alignment=", options.alignment,
+                          " when no_copy=true. Disable no_copy or use a compatible alignment.");
       }
       const uint8_t *ptr = stream.read_bytes(static_cast<utils::offset_t>(len), nullptr);
       field.assign_borrowed(ptr, static_cast<size_t>(len), stream.zero_copy_owner());
@@ -364,8 +420,7 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
 template <typename T>
 void read_enum_field(utils::BinaryStream &stream, int wire_type, T &field, const char *name,
                      ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_VARINT, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_VARINT, stream, wire_type, name);
   field = static_cast<T>(static_cast<int32_t>(stream.next_uint64()));
 }
 
@@ -373,8 +428,7 @@ template <typename T>
 void read_optional_enum_field(utils::BinaryStream &stream, int wire_type,
                               utils::OptionalEnumField<T> &field, const char *name,
                               ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_VARINT, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_VARINT, stream, wire_type, name);
   field = static_cast<T>(stream.next_uint64());
 }
 
@@ -392,8 +446,7 @@ void read_repeated_field(utils::BinaryStream &stream, int wire_type,
                          ParseOptions &options) {
   EXT_ENFORCE(!is_packed, "option is_packed is not implemented for field name '", name,
               "' at position '", stream.tell_around(), "'");
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
-              name, "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE, stream, wire_type, name);
   T &elem = field.add();
   read_next_field_in_shortended_stream(stream, name, options, elem);
 }
@@ -402,8 +455,7 @@ template <typename T>
 void read_repeated_field(utils::BinaryStream &stream, int wire_type, std::vector<T> &field,
                          const char *name, bool is_packed, ParseOptions &options) {
   EXT_ENFORCE(!is_packed, "option is_packed is not implemented for field name '", name, "'");
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
-              name, "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE, stream, wire_type, name);
   // Construct the element directly in place to avoid an extra default construct
   // + copy/move of T into the vector.
   T &elem = field.emplace_back();
@@ -415,8 +467,7 @@ void read_repeated_field(utils::BinaryStream &stream, int wire_type,
                          std::vector<utils::String> &field, const char *name, bool is_packed,
                          ParseOptions &) {
   EXT_ENFORCE(!is_packed, "option is_packed is not implemented for field name '", name, "'");
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
-              name, "' at position '", stream.tell_around(), "'");
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_FIXED_SIZE, stream, wire_type, name);
   field.emplace_back(utils::String(stream.next_string()));
 }
 

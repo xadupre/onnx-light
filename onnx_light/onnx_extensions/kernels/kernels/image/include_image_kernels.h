@@ -100,6 +100,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// or attribute values throw ``std::invalid_argument``.
 class ImageDecoder : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ImageDecoder";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 

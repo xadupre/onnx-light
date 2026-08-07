@@ -57,6 +57,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// Element-wise absolute value.
 class Abs : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Abs";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -69,6 +70,7 @@ public:
 /// Element-wise arc cosine: y = acos(x), with x in [-1, 1] and y in [0, pi].
 class Acos : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Acos";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -81,6 +83,7 @@ public:
 /// Element-wise inverse hyperbolic cosine: y = acosh(x), with x >= 1.
 class Acosh : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Acosh";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -93,6 +96,7 @@ public:
 /// Element-wise arc sine: y = asin(x), with x in [-1, 1] and y in [-pi/2, pi/2].
 class Asin : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Asin";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -105,6 +109,7 @@ public:
 /// Element-wise inverse hyperbolic sine: y = asinh(x), defined for all real x.
 class Asinh : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Asinh";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -117,6 +122,7 @@ public:
 /// Element-wise arc tangent: y = atan(x), defined for all real x.
 class Atan : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Atan";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -129,6 +135,7 @@ public:
 /// Element-wise inverse hyperbolic tangent: y = atanh(x), with x in (-1, 1).
 class Atanh : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Atanh";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -141,6 +148,7 @@ public:
 /// Element-wise cosine: y = cos(x), defined for all real x with y in [-1, 1].
 class Cos : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Cos";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -153,6 +161,7 @@ public:
 /// Element-wise hyperbolic cosine: y = cosh(x), defined for all real x with y >= 1.
 class Cosh : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Cosh";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -170,6 +179,7 @@ public:
 /// scalar (rank-0). Both input and output are FLOAT tensors.
 class Det : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Det";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -183,6 +193,7 @@ public:
 /// Element-wise ceiling: y = ceil(x), the smallest integer >= x.
 class Ceil : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Ceil";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -195,6 +206,7 @@ public:
 /// Element-wise floor: y = floor(x), the largest integer <= x.
 class Floor : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Floor";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -213,6 +225,7 @@ public:
 /// matching the ONNX specification (``Min(max, Max(input, min))``).
 class Clip : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Clip";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// Computes ``y = clip(x, min, max)``. ``min``/``max`` may be ``nullptr``
@@ -229,6 +242,7 @@ public:
 /// Element-wise sign: y = sign(x), returning -1 for x<0, 0 for x==0, +1 for x>0.
 class Sign : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Sign";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -241,6 +255,7 @@ public:
 /// Element-wise round to nearest integer, ties to even (banker's rounding).
 class Round : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Round";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -253,6 +268,7 @@ public:
 /// Element-wise exponential: y = exp(x), defined for all real x.
 class Exp : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Exp";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -265,6 +281,7 @@ public:
 /// Element-wise error function: y = erf(x), defined for all real x.
 class Erf : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Erf";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -277,6 +294,7 @@ public:
 /// Element-wise natural logarithm: y = log(x), with x > 0.
 class Log : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Log";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -289,6 +307,7 @@ public:
 /// Element-wise reciprocal: y = 1 / x (Inf for x = 0).
 class Reciprocal : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Reciprocal";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -301,6 +320,7 @@ public:
 /// Element-wise square root: y = sqrt(x), with x >= 0 (NaN otherwise).
 class Sqrt : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Sqrt";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -313,6 +333,7 @@ public:
 /// Element-wise logistic sigmoid: y = 1 / (1 + exp(-x)).
 class Sigmoid : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Sigmoid";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -326,6 +347,7 @@ public:
 ///     y = max(0, min(1, alpha * x + beta)).
 class HardSigmoid : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:HardSigmoid";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float alpha, float beta, RuntimeContext *rt = nullptr) const;
@@ -339,6 +361,7 @@ public:
 ///     y = x * max(0, min(1, x/6 + 0.5)) = x * HardSigmoid(x; alpha=1/6, beta=0.5).
 class HardSwish : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:HardSwish";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -352,6 +375,7 @@ public:
 /// 0 elsewhere. The output has the same shape and dtype as the input.
 class Hardmax : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Hardmax";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int64_t axis, RuntimeContext *rt = nullptr) const;
@@ -365,6 +389,7 @@ public:
 /// Element-wise sine: y = sin(x), defined for all real x with y in [-1, 1].
 class Sin : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Sin";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -377,6 +402,7 @@ public:
 /// Softmax normalized exponential along a selected axis.
 class Softmax : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Softmax";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int64_t axis, RuntimeContext *rt = nullptr) const;
@@ -390,6 +416,7 @@ public:
 /// LogSoftmax: log of the normalized exponential along a selected axis.
 class LogSoftmax : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LogSoftmax";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int64_t axis, RuntimeContext *rt = nullptr) const;
@@ -403,6 +430,7 @@ public:
 /// Element-wise softplus activation: y = ln(1 + exp(x)).
 class Softplus : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Softplus";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -416,6 +444,7 @@ public:
 /// x * tanh(ln(1 + exp(x))).
 class Mish : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Mish";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -428,6 +457,7 @@ public:
 /// Element-wise softsign activation: y = x / (1 + |x|).
 class Softsign : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Softsign";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -446,6 +476,7 @@ public:
 /// is free to ignore ``log_prob`` when the node does not request it.
 class SoftmaxCrossEntropyLoss : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:SoftmaxCrossEntropyLoss";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// @param scores Input scores of shape ``(N, C)`` or ``(N, C, D1, ..., Dk)``.
@@ -473,6 +504,7 @@ public:
 /// log-probabilities (no softmax is applied internally).
 class NegativeLogLikelihoodLoss : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:NegativeLogLikelihoodLoss";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// @param input Log-probabilities of shape ``(N, C)`` or ``(N, C, D1, ..., Dk)``.
@@ -494,6 +526,7 @@ public:
 /// Element-wise hyperbolic sine: y = sinh(x), defined for all real x.
 class Sinh : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Sinh";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -506,6 +539,7 @@ public:
 /// Element-wise tangent: y = tan(x); undefined at x = (2k+1) * pi/2.
 class Tan : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Tan";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -518,6 +552,7 @@ public:
 /// Element-wise hyperbolic tangent: y = tanh(x), with y in (-1, 1).
 class Tanh : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Tanh";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -531,6 +566,7 @@ public:
 /// floating-point and signed integer tensors (see schema since v14).
 class Relu : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Relu";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -545,6 +581,7 @@ public:
 /// ``alpha`` defaults to 1.0 to match the ONNX schema.
 class Elu : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Elu";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float alpha = 1.0f, RuntimeContext *rt = nullptr) const;
@@ -560,6 +597,7 @@ public:
 /// are accepted (matching the v12 schema).
 class Celu : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Celu";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float alpha = 1.0f, RuntimeContext *rt = nullptr) const;
@@ -575,6 +613,7 @@ public:
 /// ``y = 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))`` is used.
 class Gelu : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Gelu";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const std::string &approximate = "none",
@@ -589,6 +628,7 @@ public:
 /// defaults to 1.0 to match the ONNX schema (opset 24).
 class Swish : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Swish";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float alpha = 1.0f, RuntimeContext *rt = nullptr) const;
@@ -604,6 +644,7 @@ public:
 /// ``alpha`` defaults to 1.0 to match the ONNX schema (opset 28).
 class SwiGLU : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:SwiGLU";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &a, const Tensor &b, float alpha = 1.0f,
@@ -615,6 +656,7 @@ public:
 /// otherwise. ``alpha`` defaults to 1.0 to match the ONNX schema.
 class ThresholdedRelu : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ThresholdedRelu";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float alpha = 1.0f, RuntimeContext *rt = nullptr) const;
@@ -629,6 +671,7 @@ public:
 /// ``alpha`` defaults to 0.01 to match the ONNX schema.
 class LeakyRelu : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LeakyRelu";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float alpha = 0.01f, RuntimeContext *rt = nullptr) const;
@@ -643,6 +686,7 @@ public:
 /// ``y = 0`` otherwise. ``lambd`` defaults to 0.5 and ``bias`` defaults to 0.
 class Shrink : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Shrink";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float bias = 0.0f, float lambd = 0.5f,
@@ -660,6 +704,7 @@ public:
 /// (~1.6732632 and ~1.0507009 respectively).
 class Selu : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Selu";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, float alpha = 1.67326319217681884765625f,
@@ -673,6 +718,7 @@ public:
 /// Element-wise addition with NumPy-style broadcasting.
 class Add : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Add";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -687,6 +733,7 @@ public:
 /// Element-wise subtraction with NumPy-style broadcasting.
 class Sub : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Sub";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -701,6 +748,7 @@ public:
 /// Element-wise multiplication with NumPy-style broadcasting.
 class Mul : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Mul";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -722,6 +770,7 @@ public:
 /// infinite inputs; see microsoft/onnxruntime#28732).
 class PRelu : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:PRelu";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &slope, RuntimeContext *rt = nullptr) const;
@@ -736,6 +785,7 @@ public:
 /// Element-wise division with NumPy-style broadcasting.
 class Div : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Div";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -756,6 +806,7 @@ public:
 ///     integer inputs (where it coincides with C ``%`` truncated modulo).
 class Mod : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Mod";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, int64_t fmod = 0,
@@ -773,6 +824,7 @@ public:
 /// supported.
 class Neg : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Neg";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -796,6 +848,7 @@ public:
 /// backend test cases.
 class Pow : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Pow";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -813,6 +866,7 @@ public:
 /// the last sample is discarded (matches NumPy/ONNX conventions).
 class BlackmanWindow : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:BlackmanWindow";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &size, bool periodic = true, RuntimeContext *rt = nullptr) const;
@@ -828,6 +882,7 @@ public:
 /// the last sample is discarded (matches NumPy/ONNX conventions).
 class HannWindow : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:HannWindow";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &size, bool periodic = true, RuntimeContext *rt = nullptr) const;
@@ -843,6 +898,7 @@ public:
 /// the last sample is discarded (matches NumPy/ONNX conventions).
 class HammingWindow : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:HammingWindow";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &size, bool periodic = true, RuntimeContext *rt = nullptr) const;
@@ -859,6 +915,7 @@ public:
 /// When ``c`` is ``nullptr`` the bias term is omitted (treated as zero).
 class Gemm : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Gemm";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
@@ -878,6 +935,7 @@ public:
 /// - higher-rank prefixes are broadcast, then batched matrix multiply
 class MatMul : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:MatMul";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &a, const Tensor &b, RuntimeContext *rt = nullptr) const;
@@ -895,6 +953,7 @@ public:
 /// zero points.
 class MatMulInteger : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:MatMulInteger";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -919,6 +978,7 @@ public:
 /// all inputs and the same dtype.
 class Sum : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Sum";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
@@ -937,6 +997,7 @@ public:
 /// broadcast shape of all inputs and the same dtype.
 class Max : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Max";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
@@ -954,6 +1015,7 @@ public:
 /// broadcast shape of all inputs and the same dtype.
 class Min : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Min";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
@@ -970,6 +1032,7 @@ public:
 /// inputs divided by the number of inputs.
 class Mean : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Mean";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
@@ -987,6 +1050,7 @@ public:
 /// ``output_dtype`` (default ``FLOAT``).
 class MelWeightMatrix : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:MelWeightMatrix";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &num_mel_bins, const Tensor &dft_length, const Tensor &sample_rate,
@@ -1008,6 +1072,7 @@ public:
 /// true, performs the summation in the opposite direction along ``axis``.
 class CumSum : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:CumSum";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &axis, bool exclusive = false,
@@ -1029,6 +1094,7 @@ public:
 /// ``exclusive`` mode the starting value is 1 (multiplicative identity).
 class CumProd : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:CumProd";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &axis, bool exclusive = false,
@@ -1054,6 +1120,7 @@ struct EinsumPlan;
 /// same dtype (FLOAT or DOUBLE); the output has the same dtype.
 class Einsum : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Einsum";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensors &inputs, const std::string &equation,
@@ -1089,6 +1156,7 @@ private:
 /// ``2 * (signal_dim_axis - 1)`` for the IRFFT default).
 class DFT : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:DFT";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// ``axis`` is the signal axis (must satisfy ``-rank <= axis``, ``axis !=
@@ -1124,6 +1192,7 @@ public:
 /// or ``frame_length`` must be provided.
 class STFT : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:STFT";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
@@ -1155,6 +1224,7 @@ public:
 /// dimension replaced by ``k``.
 class TopK : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:TopK";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   std::pair<Tensor, Tensor> operator()(const Tensor &x, int64_t k, int64_t axis = -1,

@@ -56,6 +56,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// the back of the input rank.
 class Concat : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Concat";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensors &inputs, int64_t axis, RuntimeContext *rt = nullptr) const;
@@ -82,6 +83,7 @@ public:
 /// supported conversions.
 class Cast : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Cast";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int32_t to, RuntimeContext *rt = nullptr) const;
@@ -103,6 +105,7 @@ public:
 /// targeted by the backend test library.
 class BitCast : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:BitCast";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int32_t to, RuntimeContext *rt = nullptr) const;
@@ -137,6 +140,7 @@ public:
 /// implementation).
 class AffineGrid : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:AffineGrid";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``AffineGrid`` operator.
   struct Attributes {
@@ -182,6 +186,7 @@ public:
 /// element types of ``X`` and ``grid``.
 class GridSample : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GridSample";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``GridSample`` operator.
   struct Attributes {
@@ -212,6 +217,7 @@ public:
 /// supports the same element-type matrix.
 class CastLike : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:CastLike";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &target_type, RuntimeContext *rt = nullptr) const;
@@ -240,6 +246,7 @@ public:
 /// to throw ``std::invalid_argument``.
 class Expand : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Expand";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &input, const Tensor &shape, RuntimeContext *rt = nullptr) const;
@@ -259,6 +266,7 @@ public:
 /// ``0`` copies the corresponding input dim unless ``allowzero`` is set.
 class Reshape : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Reshape";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const Tensor &shape, int64_t allowzero = 0,
@@ -275,6 +283,7 @@ public:
 /// and clamping behavior aligned with ONNX shape-inference rules.
 class Slice : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Slice";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const Tensor &starts, const Tensor &ends,
@@ -306,6 +315,7 @@ public:
 /// throw ``std::invalid_argument``.
 class Pad : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Pad";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value = nullptr,
@@ -331,6 +341,7 @@ public:
 /// throw ``std::invalid_argument``.
 class Tile : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Tile";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &input, const Tensor &repeats, RuntimeContext *rt = nullptr) const;
@@ -355,6 +366,7 @@ public:
 /// ``std::invalid_argument``.
 class Split : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Split";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// Computes the split. Exactly one of ``split`` (non-empty) or
@@ -385,6 +397,7 @@ public:
 /// are removed.
 class Squeeze : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Squeeze";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const onnx_kernels::Shape &axes,
@@ -399,6 +412,7 @@ public:
 /// (ONNX ``Unsqueeze`` operator).
 class Unsqueeze : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Unsqueeze";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const onnx_kernels::Shape &axes,
@@ -417,6 +431,7 @@ public:
 /// supported by :cpp:func:`ElementSize`.
 class Transpose : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Transpose";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const onnx_kernels::Shape &perm,
@@ -440,6 +455,7 @@ public:
 /// ``std::invalid_argument``.
 class NonZero : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:NonZero";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -473,6 +489,7 @@ public:
 /// all numeric and ``BOOL`` element types for ``values`` / the output.
 class OneHot : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:OneHot";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``OneHot`` operator.
   struct Attributes {
@@ -506,6 +523,7 @@ public:
 /// accepts an input of any element type.
 class Shape : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Shape";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Shape`` operator.
   struct Attributes {
@@ -535,6 +553,7 @@ public:
 /// accepts an input of any element type.
 class Size : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Size";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -555,6 +574,7 @@ public:
 /// element type supported by ``Tensor``.
 class Identity : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Identity";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &input, RuntimeContext *rt = nullptr) const;
@@ -573,6 +593,7 @@ public:
 /// the gathered axis. The output dtype always matches ``data``.
 class Gather : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Gather";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const Tensor &indices, int64_t axis = 0,
@@ -592,6 +613,7 @@ public:
 /// INT64; negative values count from the back of the gathered axis.
 class GatherElements : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GatherElements";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const Tensor &indices, int64_t axis = 0,
@@ -612,6 +634,7 @@ public:
 /// corresponding ``data`` axis.
 class GatherND : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GatherND";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims = 0,
@@ -648,6 +671,7 @@ public:
 /// Output dtype and shape always match ``past_cache``.
 class TensorScatter : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:TensorScatter";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``TensorScatter`` operator.
   struct Attributes {
@@ -681,6 +705,7 @@ public:
 /// ``data`` is updated with ``f(out_elem, updates_elem)``.
 class ScatterElements : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ScatterElements";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``ScatterElements`` operator.
   struct Attributes {
@@ -709,6 +734,7 @@ public:
 /// axis.
 class Scatter : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Scatter";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Scatter`` operator.
   struct Attributes {
@@ -739,6 +765,7 @@ public:
 /// ``f(out_slice, updates_slice)``.
 class ScatterND : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ScatterND";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``ScatterND`` operator.
   struct Attributes {
@@ -770,6 +797,7 @@ public:
 /// value and is therefore unknown at shape-inference time.
 class Compress : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Compress";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   /// ``axis`` is an ``std::optional<int64_t>``: pass ``std::nullopt`` to
@@ -807,6 +835,7 @@ public:
 /// for ``STRING`` to the empty string).
 class Trilu : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Trilu";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Trilu`` operator.
   struct Attributes {
@@ -847,6 +876,7 @@ public:
 /// Output shape and dtype always match ``input``.
 class ReverseSequence : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ReverseSequence";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``ReverseSequence`` operator.
   struct Attributes {
@@ -882,6 +912,7 @@ public:
 /// supported by :cpp:func:`ElementSize`.
 class DepthToSpace : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:DepthToSpace";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``DepthToSpace`` operator.
   struct Attributes {
@@ -910,6 +941,7 @@ public:
 /// supported by :cpp:func:`ElementSize`.
 class SpaceToDepth : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:SpaceToDepth";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``SpaceToDepth`` operator.
   struct Attributes {
@@ -942,6 +974,7 @@ public:
 /// total padding is odd).
 class CenterCropPad : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:CenterCropPad";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``CenterCropPad`` operator. ``axes`` is
   /// optional; an empty vector here means "all axes" (i.e. ``shape`` has
@@ -985,6 +1018,7 @@ public:
 /// mode requires a floating-point input (``FLOAT16``/``FLOAT``/``DOUBLE``).
 class Upsample : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Upsample";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Upsample`` operator.
   struct Attributes {
@@ -1041,6 +1075,7 @@ public:
 /// floating-point input (``FLOAT`` or ``DOUBLE``).
 class Resize : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Resize";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Resize`` operator.
   struct Attributes {
@@ -1121,6 +1156,7 @@ public:
 /// BOOL) and STRING.
 class Unique : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Unique";
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Unique`` operator.
   struct Attributes {

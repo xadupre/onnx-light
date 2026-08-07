@@ -59,6 +59,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// output's element type, shape and bytes are an exact copy of ``input``.
 class Optional : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Optional";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -85,6 +86,7 @@ public:
 /// is correct in both cases. The kernel does not consume attributes.
 class OptionalGetElement : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:OptionalGetElement";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -110,6 +112,7 @@ public:
 /// opset-18 behavior where the input is omitted.
 class OptionalHasElement : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:OptionalHasElement";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 

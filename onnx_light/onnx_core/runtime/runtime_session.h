@@ -183,14 +183,6 @@ public:
   /// :cpp:func:`Run`.
   const std::vector<std::string> &required_inputs() const noexcept { return required_inputs_; }
 
-  /// Returns the unique name of every kernel this session instantiated, one per
-  /// scheduled node in plan execution order. Each name identifies the resolved
-  /// kernel implementation — the library it belongs to and the device it runs
-  /// on, together with its ``(domain, op_type)`` (see
-  /// :cpp:func:`KernelBase::name`). Populated during kernel initialization;
-  /// empty until the first :cpp:func:`Run`.
-  std::vector<std::string> kernel_names() const;
-
   /// Enables or disables concrete-shape validation. When enabled, :cpp:func:`Run`
   /// checks that the concrete shape of every tensor carrying a declared
   /// (possibly symbolic) shape — the graph inputs, outputs and ``value_info``
@@ -268,10 +260,6 @@ private:
   struct PreparedKernel {
     std::string key;
     std::unique_ptr<KernelBase> instance;
-    /// The kernel's unique name, copied once during
-    /// :cpp:func:`InitializeKernels` from the kernel's explicit,
-    /// statically-defined :cpp:func:`KernelBase::name`.
-    std::string name;
   };
 
   /// Resolves and builds the kernel instance for every node the plan executes,

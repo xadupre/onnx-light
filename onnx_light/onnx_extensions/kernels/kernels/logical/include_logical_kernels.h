@@ -53,6 +53,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// Element-wise logical AND on BOOL tensors with multidirectional broadcasting.
 class And : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:And";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -64,6 +65,7 @@ public:
 /// Element-wise logical OR on BOOL tensors with multidirectional broadcasting.
 class Or : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Or";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -75,6 +77,7 @@ public:
 /// Element-wise logical XOR on BOOL tensors with multidirectional broadcasting.
 class Xor : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Xor";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -88,6 +91,7 @@ public:
 /// ``Not`` reference implementation (``np.logical_not``).
 class Not : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Not";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -102,6 +106,7 @@ public:
 /// (``np.isnan``). Supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16 inputs.
 class IsNaN : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:IsNaN";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -121,6 +126,7 @@ public:
 /// the FLOAT input dtype is supported.
 class IsInf : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:IsInf";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int64_t detect_positive = 1, int64_t detect_negative = 1,
@@ -140,6 +146,7 @@ public:
 /// reference implementation (``np.greater``).
 class Greater : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Greater";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -155,6 +162,7 @@ public:
 /// reference implementation (``np.less``).
 class Less : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Less";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -170,6 +178,7 @@ public:
 /// ONNX ``GreaterOrEqual`` reference implementation (``np.greater_equal``).
 class GreaterOrEqual : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GreaterOrEqual";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -185,6 +194,7 @@ public:
 /// ONNX ``LessOrEqual`` reference implementation (``np.less_equal``).
 class LessOrEqual : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LessOrEqual";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -202,6 +212,7 @@ public:
 /// to equal-shape inputs or scalar broadcasting.
 class Equal : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Equal";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -216,6 +227,7 @@ public:
 /// UINT32, UINT64 or STRING. Output dtype equals ``x``/``y`` dtype.
 class Where : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Where";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &condition, const Tensor &x, const Tensor &y,
@@ -232,6 +244,7 @@ public:
 /// reference implementation (``np.bitwise_and``).
 class BitwiseAnd : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:BitwiseAnd";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -247,6 +260,7 @@ public:
 /// reference implementation (``np.bitwise_or``).
 class BitwiseOr : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:BitwiseOr";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -262,6 +276,7 @@ public:
 /// reference implementation (``np.bitwise_xor``).
 class BitwiseXor : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:BitwiseXor";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
@@ -276,6 +291,7 @@ public:
 /// reference implementation (``np.bitwise_not``).
 class BitwiseNot : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:BitwiseNot";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -292,6 +308,7 @@ public:
 /// ``np.left_shift`` / ``np.right_shift`` reference implementations.
 class BitShift : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:BitShift";
   void Run(RuntimeContext &rt) override;
   /// Direction of the bitwise shift.
   enum class Direction { kLeft, kRight };

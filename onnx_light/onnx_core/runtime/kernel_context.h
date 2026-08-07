@@ -113,13 +113,6 @@ struct KernelContext {
 class KernelBase {
 public:
   explicit KernelBase(const KernelContext &ctx) : ctx_(ctx) {}
-
-  /// Constructs the kernel and stamps it with its unique @p name. @p name must
-  /// point to a string with static storage duration (typically a string
-  /// literal defined once by the kernel's registration): the kernel keeps the
-  /// pointer as-is and never copies or frees it, so an instance cannot change
-  /// its own name.
-  KernelBase(const KernelContext &ctx, const char *name) : ctx_(ctx), name_(name) {}
   KernelBase(const KernelBase &) = default;
   KernelBase &operator=(const KernelBase &) = default;
   virtual ~KernelBase() = default;
@@ -127,16 +120,6 @@ public:
   /// Attaches the node this kernel runs for. Called once at kernel-resolution
   /// time; the node outlives the kernel.
   void set_node(const NodeProto &node) { node_ = &node; }
-
-  /// Returns this kernel's unique name in the form
-  /// ``"<library>:<device>:<domain>:<op_type>"``. The name is an explicit
-  /// string statically defined for each kernel class (an instance cannot change
-  /// it): dispatch-table kernels receive their name from the registration
-  /// table, the control-flow kernels define it inline, and the
-  /// model-local-function and user-custom kernels (whose ``op_type`` is only
-  /// known at resolution time) override this accessor. Empty when the kernel is
-  /// instantiated directly (e.g. in tests) without a name.
-  virtual const char *name() const { return name_; }
 
   /// Runs the kernel for its node (see :cpp:func:`set_node`) against the
   /// current state of ``rt``: reads the node's current inputs, computes and
@@ -150,10 +133,6 @@ protected:
   /// The node this kernel was built for, or ``nullptr`` when the kernel is used
   /// directly (e.g. in tests) without being resolved through the dispatch path.
   const NodeProto *node_ = nullptr;
-
-  /// This kernel's unique name (see :cpp:func:`name`). Points to static storage
-  /// (a string literal) supplied at construction; empty (``""``) by default.
-  const char *name_ = "";
 };
 
 } // namespace core::runtime

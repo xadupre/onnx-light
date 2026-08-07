@@ -67,6 +67,7 @@ using ::onnx_light::core::runtime::OpsetId;
 /// the concatenation of the per-input byte buffers.
 class SequenceConstruct : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:SequenceConstruct";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -102,6 +103,7 @@ public:
 /// ``new_axis == 1``).
 class ConcatFromSequence : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ConcatFromSequence";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -125,6 +127,7 @@ public:
 /// ``SequenceLength`` (since opset 11 in the ai.onnx domain).
 class SequenceLength : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:SequenceLength";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -142,6 +145,7 @@ public:
 /// ``DataType::FLOAT`` to match the ONNX schema default.
 class SequenceEmpty : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:SequenceEmpty";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -164,6 +168,7 @@ public:
 /// is ``[-n, n - 1]`` where ``n`` is the sequence length.
 class SequenceErase : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:SequenceErase";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -181,6 +186,7 @@ public:
 /// where ``n`` is the sequence length.
 class SequenceAt : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:SequenceAt";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -213,6 +219,7 @@ public:
 /// executor.
 class SequenceMap : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:SequenceMap";
   using KernelBase::KernelBase;
 
   /// @param input_sequence         Input sequence whose length determines
@@ -245,6 +252,7 @@ public:
 /// ``n`` is the sequence length.
 class SequenceInsert : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:SequenceInsert";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
@@ -274,6 +282,7 @@ public:
 /// ``std::invalid_argument``.
 class SplitToSequence : public KernelBase {
 public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:SplitToSequence";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 

@@ -110,24 +110,6 @@ std::unique_ptr<KernelBase> RuntimeSession::ResolveNodeKernel(const NodeProto &n
   return detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
 }
 
-std::vector<std::string> RuntimeSession::kernel_names() const {
-  // Report the resolved kernels in plan execution order (the order Run drives
-  // them), skipping non-execute actions and any node without a resolved
-  // instance (e.g. before the first Run populates kernels_).
-  std::vector<std::string> names;
-  for (const ExecuteAction &action : plan_.actions()) {
-    if (action.kind() != ExecuteActionKind::kExecuteNode) {
-      continue;
-    }
-    const size_t index = action.node_index();
-    if (index >= kernels_.size() || !kernels_[index].instance) {
-      continue;
-    }
-    names.push_back(kernels_[index].name);
-  }
-  return names;
-}
-
 void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
   // Resolve and build the kernel instance for every node the plan will
   // execute, once and up front. Node indices come from the plan's
@@ -151,16 +133,6 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
     PreparedKernel &prepared = kernels_[index];
     prepared.key = domain + ":" + op_type;
     prepared.instance = ResolveNodeKernel(node, rt, domain, op_type);
-    // Report the kernel's explicit, statically-defined unique name. The
-    // control-flow, model-local-function and user-custom kernels carry it on
-    // the instance; dispatch-table kernels register it alongside their factory,
-    // so fall back to the registered name for those.
-    if (prepared.instance) {
-      prepared.name = prepared.instance->name();
-      if (prepared.name.empty()) {
-        prepared.name = KernelDispatchName(domain, op_type, rt.device());
-      }
-    }
   }
   // Record the external inputs the scheduled nodes read (names not produced by
   // any node in the plan, including values captured by subgraph attributes) so

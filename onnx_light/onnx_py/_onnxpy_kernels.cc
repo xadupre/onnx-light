@@ -619,14 +619,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                    "lines without mutating the context itself.")
       .def_prop_ro("required_inputs", &RuntimeSession::required_inputs,
                    "Returns the external input names the scheduled nodes read. Populated "
-                   "during kernel initialization; empty until the first :func:`run`.")
-      .def_prop_ro("kernel_names", &RuntimeSession::kernel_names,
-                   "Returns the unique name of every kernel this session instantiated, one "
-                   "per scheduled node in plan execution order. Each name identifies the "
-                   "resolved kernel implementation — the library it belongs to and the device "
-                   "it runs on, together with its ``(domain, op_type)`` — in the form "
-                   "``\"<library>:<device>:<domain>:<op_type>\"``. Populated during kernel "
-                   "initialization; empty until the first :func:`run`.");
+                   "during kernel initialization; empty until the first :func:`run`.");
 
   // RuntimeParameters — model-independent execution knobs (parallelism, ...).
   nb::class_<RuntimeParameters>(

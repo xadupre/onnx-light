@@ -88,26 +88,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable();
  * @param op_type The ONNX operator type name (e.g. ``"Abs"``).
  * @param device  The device the kernel runs on (e.g. :cpp:enumerator:`symbolic::Device::kCPU`).
  * @param fn      The factory implementing kernel construction for this operator.
- * @param name    The kernel's explicit unique name (``"<library>:<device>:<domain>:<op_type>"``),
- *                a string literal with static storage. Retrievable via
- *                :cpp:func:`KernelDispatchName`; defaults to empty.
  */
 void RegisterKernelFn(const std::string &domain, const std::string &op_type,
-                      symbolic::Device device, NodeKernelFn fn, const char *name = "");
-
-/**
- * Returns the explicit unique name registered for the kernel identified by
- * (@p domain, @p op_type, @p device) (see :cpp:func:`RegisterKernelFn`), or an
- * empty string when no name was registered for that identifier. The reference
- * session uses it to report which dispatch-table implementation it resolved for
- * each node.
- *
- * @param domain  The operator domain (``""`` or ``"ai.onnx"`` for standard ONNX).
- * @param op_type The ONNX operator type name (e.g. ``"Abs"``).
- * @param device  The device the kernel runs on (e.g. :cpp:enumerator:`symbolic::Device::kCPU`).
- */
-const std::string &KernelDispatchName(const std::string &domain, const std::string &op_type,
-                                      symbolic::Device device);
+                      symbolic::Device device, NodeKernelFn fn);
 
 /**
  * Returns the currently registered ``SequenceMap`` output-packing

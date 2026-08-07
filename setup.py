@@ -91,7 +91,6 @@ except ModuleNotFoundError:
             command = args[0]
             inplace = False
             cpp_tests = False
-            run_cpp_tests = False
             dry_run = False
             build_temp = "build/temp"
             build_lib = "build/lib"
@@ -106,9 +105,6 @@ except ModuleNotFoundError:
                 if arg in {"--inplace", "-i"}:
                     inplace = True
                 elif arg == "--cpp-tests":
-                    cpp_tests = True
-                elif arg == "--run-cpp-tests":
-                    run_cpp_tests = True
                     cpp_tests = True
                 elif arg in {"--dry-run", "-n"}:
                     dry_run = True
@@ -149,7 +145,7 @@ except ModuleNotFoundError:
                     raise ValueError(
                         f"Unsupported argument for {command}: {arg!r}. "
                         "Supported arguments include: --inplace, --dry-run, "
-                        "--build-temp, --build-lib, --cpp-tests, --run-cpp-tests, "
+                        "--build-temp, --build-lib, --cpp-tests, "
                         "--gprof, --with-upstream-onnx, --no-kernels, --parallel."
                     )
                 i += 1
@@ -236,7 +232,7 @@ except ModuleNotFoundError:
                     ["cmake", "--install", str(build_temp_path), "--prefix", str(install_prefix)],
                     dry_run,
                 )
-                if run_cpp_tests:
+                if cpp_tests:
                     ctest_cmd = [
                         "ctest",
                         "--test-dir",
@@ -271,13 +267,7 @@ class BuildExt(Command):
         ("inplace", "i", "build extension in the source tree"),
         ("build-temp=", "t", "temporary build directory"),
         ("build-lib=", "b", "build directory for platform-specific files"),
-        ("cpp-tests", None, "enable the C++ unit tests"),
-        (
-            "run-cpp-tests",
-            None,
-            "build the C++ unit tests (implies --cpp-tests) and run them with "
-            "ctest after installing",
-        ),
+        ("cpp-tests", None, "build the C++ unit tests and run them with ctest after installing"),
         (
             "with-upstream-onnx",
             None,
@@ -295,13 +285,7 @@ class BuildExt(Command):
         ),
         ("parallel=", "j", "number of parallel build jobs"),
     ]
-    boolean_options = [
-        "inplace",
-        "cpp-tests",
-        "run-cpp-tests",
-        "with-upstream-onnx",
-        "no-kernels",
-    ]
+    boolean_options = ["inplace", "cpp-tests", "with-upstream-onnx", "no-kernels"]
 
     def initialize_options(self):
         """Initializes default values for command options."""
@@ -309,7 +293,6 @@ class BuildExt(Command):
         self.build_temp = None
         self.build_lib = None
         self.cpp_tests = False
-        self.run_cpp_tests = False
         self.with_upstream_onnx = False
         self.no_kernels = False
         self.parallel = _default_parallel_jobs()
@@ -321,8 +304,6 @@ class BuildExt(Command):
             self.build_temp = os.path.join(build_base, "temp")
         if self.build_lib is None:
             self.build_lib = os.path.join(build_base, "lib")
-        if self.run_cpp_tests:
-            self.cpp_tests = True
 
     def run(self):
         """Runs CMake configure, build, and install commands."""
@@ -366,7 +347,7 @@ class BuildExt(Command):
             build_cmd += ["--parallel", str(self.parallel)]
         self.spawn(build_cmd)
         self.spawn(["cmake", "--install", str(build_temp), "--prefix", str(install_prefix)])
-        if self.run_cpp_tests:
+        if self.cpp_tests:
             ctest_cmd = [
                 "ctest",
                 "--test-dir",

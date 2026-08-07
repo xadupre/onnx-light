@@ -12,7 +12,7 @@ cd ..
 echo "--"
 echo "-- Builds inline (no protobuf in benchmarks)"
 echo "--"
-python setup.py build_ext --inplace --cpp-tests || exit 1
+CMAKE_ARGS="-DONNX_LIGHT_BUILD_TESTS=ON" python setup.py build_ext --inplace || exit 1
 echo "--"
 echo "-- Runs one test."
 echo "--"

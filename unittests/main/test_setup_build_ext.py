@@ -20,6 +20,14 @@ skip_test = has_setuptool()
 
 
 class TestSetupBuildExt(ExtTestCase):
+    def _line_index(self, lines, predicate, description):
+        """Returns the index of the first line matching predicate, failing clearly otherwise."""
+        for i, line in enumerate(lines):
+            if predicate(line):
+                return i
+        self.fail(f"No line matching {description} in output:\n" + "\n".join(lines))
+        return -1  # pragma: no cover - self.fail raises
+
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_inplace_dry_run(self):
         """Verifies setup.py build_ext --inplace --dry-run execution."""
@@ -92,11 +100,13 @@ class TestSetupBuildExt(ExtTestCase):
         )
         output = f"{proc.stdout}\n{proc.stderr}"
         lines = output.splitlines()
-        python_build_index = next(
-            i for i, line in enumerate(lines) if "--target _onnxpyprotoop" in line
+        python_build_index = self._line_index(
+            lines, lambda line: "--target _onnxpyprotoop" in line, "the Python extension build"
         )
-        install_index = next(i for i, line in enumerate(lines) if "cmake --install" in line)
-        ctest_index = next(i for i, line in enumerate(lines) if line.startswith("ctest "))
+        install_index = self._line_index(
+            lines, lambda line: "cmake --install" in line, "cmake --install"
+        )
+        ctest_index = self._line_index(lines, lambda line: line.startswith("ctest "), "ctest")
         self.assertLess(python_build_index, install_index)
         self.assertLess(install_index, ctest_index)
 
@@ -200,11 +210,13 @@ class TestSetupBuildExt(ExtTestCase):
         )
         output = f"{proc.stdout}\n{proc.stderr}"
         lines = output.splitlines()
-        python_build_index = next(
-            i for i, line in enumerate(lines) if "--target _onnxpyprotoop" in line
+        python_build_index = self._line_index(
+            lines, lambda line: "--target _onnxpyprotoop" in line, "the Python extension build"
         )
-        install_index = next(i for i, line in enumerate(lines) if "cmake --install" in line)
-        ctest_index = next(i for i, line in enumerate(lines) if line.startswith("ctest "))
+        install_index = self._line_index(
+            lines, lambda line: "cmake --install" in line, "cmake --install"
+        )
+        ctest_index = self._line_index(lines, lambda line: line.startswith("ctest "), "ctest")
         self.assertLess(python_build_index, install_index)
         self.assertLess(install_index, ctest_index)
 

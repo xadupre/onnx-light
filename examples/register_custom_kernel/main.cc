@@ -145,6 +145,14 @@ int main() {
   ONNX_LIGHT_NAMESPACE::onnx_kernels::RegisterKernelFunctions();
   example::RegisterExampleAbsKernel();
 
+  // Verify the kernel class exposes the expected "<library>:<device>:<domain>:<op_type>"
+  // identifier before we rely on it below.
+  if (std::string(ExampleAbsKernel::name) != "example:CPU:ai.onnx:Abs") {
+    std::cerr << "ERROR: unexpected kernel class name '" << ExampleAbsKernel::name
+              << "', expected 'example:CPU:ai.onnx:Abs'.\n";
+    return 1;
+  }
+
   std::cout << "Registered custom kernel class '" << ExampleAbsKernel::name
             << "' for op_type 'Abs' (default domain, CPU device).\n";
 

@@ -22,17 +22,29 @@ enum OperatorStatus : int { EXPERIMENTAL = 0, STABLE = 1 };
 
 // StringStringEntryProto
 
+// message StringStringEntryProto {
+//   optional string key = 1;
+//   optional string value = 2;
+// }
 BEGIN_PROTO(StringStringEntryProto, "Defines a key value pair, both defines a string.")
 FIELD_STR(key, 1, "the key")
 FIELD_STR(value, 2, "the value")
 END_PROTO()
 
+// message IntIntListEntryProto {
+//   optional int64 key = 1;
+//   repeated int64 value = 2;
+// }
 BEGIN_PROTO(IntIntListEntryProto,
             "Defines a key value pair, key is an integer, value is a list of integers.")
 FIELD_DEFAULT(int64_t, key, 1, 0, "the key")
 FIELD_REPEATED(int64_t, value, 2, "the value is a list of integers")
 END_PROTO()
 
+// message TensorAnnotation {
+//   optional string tensor_name = 1;
+//   repeated StringStringEntryProto quant_parameter_tensor_names = 2;
+// }
 BEGIN_PROTO(TensorAnnotation, "Defines a tensor annotation, useful for quantized tensors.")
 FIELD_STR(tensor_name, 1, "tensor name")
 FIELD_REPEATED_PROTO(
@@ -45,6 +57,11 @@ END_PROTO()
 
 // DeviceConfigurationProto
 
+// message DeviceConfigurationProto {
+//     optional string name = 1;
+//     optional int32 num_devices = 2;
+//     repeated string device = 3;
+// }
 BEGIN_PROTO(DeviceConfigurationProto, "Describes a multi-device configuration for a model.")
 FIELD_STR(name, 1,
           "This field MUST be present for this version of the IR. Name of the configuration.")
@@ -57,6 +74,13 @@ END_PROTO()
 
 // SimpleShardedDimProto
 
+// message SimpleShardedDimProto {
+//     oneof dim {
+//         int64 dim_value = 1;
+//         string dim_param = 2;
+//     }
+//     optional int64 num_shards = 3;
+// }
 BEGIN_PROTO(SimpleShardedDimProto,
             "Indicates that N blocks are divided into M shards. N is allowed to be symbolic "
             "where M is required to be a constant.")
@@ -67,6 +91,10 @@ FIELD_DEFAULT(int64_t, num_shards, 3, 0,
               "split dim into.")
 END_PROTO()
 
+// message ShardedDimProto {
+//   optional int64 axis = 1;
+//   repeated SimpleShardedDimProto simple_sharding = 2;
+// }
 BEGIN_PROTO_NOINIT(ShardedDimProto,
                    "Describes the sharding spec for a single axis of a sharded tensor.")
 inline ShardedDimProto() : axis_(0) {}
@@ -83,6 +111,12 @@ END_PROTO()
 
 // ShardingSpecProto
 
+// message ShardingSpecProto {
+//   optional string tensor_name = 1;
+//   repeated int64 device = 2;
+//   repeated IntIntListEntryProto index_to_device_group_map = 3;
+//   repeated ShardedDimProto sharded_dim = 4;
+// }
 BEGIN_PROTO(ShardingSpecProto,
             "Describes the sharding spec for a specific, input or output tensor of a node.")
 FIELD_STR(
@@ -106,6 +140,11 @@ END_PROTO()
 
 // NodeDeviceConfigurationProto
 
+// message NodeDeviceConfigurationProto {
+//     optional string configuration_id = 1;
+//     repeated ShardingSpecProto sharding_spec = 2;
+//     optional int32 pipeline_stage = 3;
+// }
 BEGIN_PROTO(NodeDeviceConfigurationProto,
             "Defines a multi-device configuration proto for NodeProto.")
 FIELD_STR(configuration_id, 1,
@@ -115,6 +154,10 @@ FIELD_REPEATED_PROTO(ShardingSpecProto, sharding_spec, 2, "Sharding spec for the
 FIELD_OPTIONAL(int32_t, pipeline_stage, 3, "Pipeline stage of this node.")
 END_PROTO()
 
+// message OperatorSetIdProto {
+//   optional string domain = 1;
+//   optional int64 version = 2;
+// }
 BEGIN_PROTO(OperatorSetIdProto,
             "Defines a unique pair domain, opset version for a set of operators.")
 FIELD_STR(domain, 1,
@@ -129,9 +172,26 @@ END_PROTO()
 
 // TensorShapeProto
 
+// message TensorShapeProto {
+//   message Dimension {
+//     oneof value {
+//       int64 dim_value = 1;
+//       string dim_param = 2;
+//     };
+//     optional string denotation = 3;
+//   };
+//   repeated Dimension dim = 1;
+// }
 BEGIN_PROTO_NOINIT(TensorShapeProto,
                    "Defines a tensor shape. A dimension can be either an integer value or a "
                    "symbolic variable. A symbolic variable represents an unknown dimension.")
+// message Dimension {
+//   oneof value {
+//     int64 dim_value = 1;
+//     string dim_param = 2;
+//   };
+//   optional string denotation = 3;
+// }
 BEGIN_PROTO(Dimension, "Defines a dimension, it can be fixed (an integer dim_value) or dynamic "
                        "(a string dim_param). Only one of them can be set.")
 FIELD_OPTIONAL(int64_t, dim_value, 1, "Dimension value if it is a fixed value.")
@@ -161,6 +221,60 @@ END_PROTO()
 
 // TensorProto
 
+// message TensorProto {
+//   enum DataType {
+//     UNDEFINED = 0;
+//     FLOAT = 1;
+//     UINT8 = 2;
+//     INT8 = 3;
+//     UINT16 = 4;
+//     INT16 = 5;
+//     INT32 = 6;
+//     INT64 = 7;
+//     STRING = 8;
+//     BOOL = 9;
+//     FLOAT16 = 10;
+//     DOUBLE = 11;
+//     UINT32 = 12;
+//     UINT64 = 13;
+//     COMPLEX64 = 14;
+//     COMPLEX128 = 15;
+//     BFLOAT16 = 16;
+//     FLOAT8E4M3FN = 17;
+//     FLOAT8E4M3FNUZ = 18;
+//     FLOAT8E5M2 = 19;
+//     FLOAT8E5M2FNUZ = 20;
+//     UINT4 = 21;
+//     INT4 = 22;
+//     FLOAT4E2M1 = 23;
+//     FLOAT8E8M0 = 24;
+//     UINT2 = 25;
+//     INT2 = 26;
+//   }
+//   repeated int64 dims = 1;
+//   optional int32 data_type = 2;
+//   message Segment {
+//     optional int64 begin = 1;
+//     optional int64 end = 2;
+//   }
+//   optional Segment segment = 3;
+//   repeated float float_data = 4 [packed = true];
+//   repeated int32 int32_data = 5 [packed = true];
+//   repeated bytes string_data = 6;
+//   repeated int64 int64_data = 7 [packed = true];
+//   optional string name = 8;
+//   optional string doc_string = 12;
+//   optional bytes raw_data = 9;
+//   repeated StringStringEntryProto external_data = 13;
+//   enum DataLocation {
+//     DEFAULT = 0;
+//     EXTERNAL = 1;
+//   }
+//   optional DataLocation data_location = 14;
+//   repeated double double_data = 10 [packed = true];
+//   repeated uint64 uint64_data = 11 [packed = true];
+//   repeated StringStringEntryProto metadata_props = 16;
+// }
 BEGIN_PROTO_NOINIT(TensorProto, "Defines a tensor and its content.")
 enum DataType : int32_t {
   UNDEFINED = 0,
@@ -340,6 +454,10 @@ enum DataLocation : int32_t {
   TensorProto_DataLocation_EXTERNAL = 1
 };
 
+// message Segment {
+//   optional int64 begin = 1;
+//   optional int64 end = 2;
+// }
 BEGIN_PROTO(
     Segment,
     "For very large tensors, we may want to store them in chunks, in which case the following "
@@ -523,6 +641,11 @@ END_PROTO()
 
 // SparseTensorProto
 
+// message SparseTensorProto {
+//   optional TensorProto values = 1;
+//   optional TensorProto indices = 2;
+//   repeated int64 dims = 3;
+// }
 BEGIN_PROTO(SparseTensorProto, "A sparse tensor.")
 FIELD(TensorProto, values, 1,
       "The sequence of non-default values are encoded as a tensor of shape [NNZ]. The "
@@ -543,9 +666,46 @@ END_PROTO()
 
 // TypeProto
 
+// message TypeProto {
+//   message Tensor {
+//     optional int32 elem_type = 1;
+//     optional TensorShapeProto shape = 2;
+//   }
+//   message Sequence {
+//     optional TypeProto elem_type = 1;
+//   };
+//   message Map {
+//     optional int32 key_type = 1;
+//     optional TypeProto value_type = 2;
+//   };
+//   message Optional {
+//     optional TypeProto elem_type = 1;
+//   };
+//   message SparseTensor {
+//     optional int32 elem_type = 1;
+//     optional TensorShapeProto shape = 2;
+//   }
+//   message Opaque {
+//     optional string domain = 1;
+//     optional string name = 2;
+//   }
+//   oneof value {
+//     Tensor tensor_type = 1;
+//     Sequence sequence_type = 4;
+//     Map map_type = 5;
+//     Optional optional_type = 9;
+//     SparseTensor sparse_tensor_type = 8;
+//     Opaque opaque_type = 7;
+//   }
+//   optional string denotation = 6;
+// }
 BEGIN_PROTO_NOINIT(TypeProto, "Defines a type, it can be a tensor type (element type and "
                               "shape), a sequence of the same element type, ...")
 
+// message Tensor {
+//   optional int32 elem_type = 1;
+//   optional TensorShapeProto shape = 2;
+// }
 BEGIN_PROTO(Tensor, "Defines a tensor type (element type, shape).")
 FIELD_OPTIONAL_ENUM(
     TensorProto::DataType, elem_type, 1,
@@ -555,6 +715,10 @@ FIELD_OPTIONAL(TensorShapeProto, shape, 2, "The shape.")
 inline void set_elem_type(int v) { elem_type_ = static_cast<TensorProto::DataType>(v); }
 END_PROTO()
 
+// message SparseTensor {
+//   optional int32 elem_type = 1;
+//   optional TensorShapeProto shape = 2;
+// }
 BEGIN_PROTO(SparseTensor, "Defines a sparse tensor type (element type, shape)")
 FIELD_OPTIONAL_ENUM(
     TensorProto::DataType, elem_type, 1,
@@ -564,12 +728,18 @@ FIELD_OPTIONAL(TensorShapeProto, shape, 2, "The shape.")
 inline void set_elem_type(int v) { elem_type_ = static_cast<TensorProto::DataType>(v); }
 END_PROTO()
 
+// message Sequence {
+//   optional TypeProto elem_type = 1;
+// }
 BEGIN_PROTO(Sequence, "Defines the type of each element in a sequence.")
 FIELD_OPTIONAL(TypeProto, elem_type, 1,
                "The type and optional shape of each element of the sequence. This field MUST "
                "be present for this version of the IR.")
 END_PROTO()
 
+// message Optional {
+//   optional TypeProto elem_type = 1;
+// }
 BEGIN_PROTO(Optional, "Defines the type of an optional value.")
 FIELD_OPTIONAL(
     TypeProto, elem_type, 1,
@@ -577,6 +747,10 @@ FIELD_OPTIONAL(
     "version of the IR. Possible values correspond to OptionalProto.DataType enum")
 END_PROTO()
 
+// message Map {
+//   optional int32 key_type = 1;
+//   optional TypeProto value_type = 2;
+// }
 BEGIN_PROTO(Map, "Defines the type of the key and the type of each value in a dictionary.")
 FIELD_DEFAULT(
     int32_t, key_type, 1, -1,
@@ -586,6 +760,10 @@ FIELD_DEFAULT(
 FIELD_OPTIONAL(TypeProto, value_type, 2, "This field MUST be present for this version of the IR.")
 END_PROTO()
 
+// message Opaque {
+//   optional string domain = 1;
+//   optional string name = 2;
+// }
 BEGIN_PROTO(Opaque, "Defines an opaque, runtime-specific type identified by a domain and name.")
 FIELD_STR(domain, 1, "The domain of the opaque type.")
 FIELD_STR(name, 2, "The name of the opaque type.")
@@ -640,6 +818,12 @@ END_PROTO()
 
 // ValueInfoProto
 
+// message ValueInfoProto {
+//   optional string name = 1;
+//   optional TypeProto type = 2;
+//   optional string doc_string = 3;
+//   repeated StringStringEntryProto metadata_props = 4;
+// }
 BEGIN_PROTO(
     ValueInfoProto,
     "Defines information on value, including the name, the type, and the shape of the value.")
@@ -655,6 +839,45 @@ END_PROTO()
 // AttributeProto
 class GraphProto;
 
+// message AttributeProto {
+//   reserved 12, 16 to 19;
+//   reserved "v";
+//   enum AttributeType {
+//     UNDEFINED = 0;
+//     FLOAT = 1;
+//     INT = 2;
+//     STRING = 3;
+//     TENSOR = 4;
+//     GRAPH = 5;
+//     SPARSE_TENSOR = 11;
+//     TYPE_PROTO = 13;
+//     FLOATS = 6;
+//     INTS = 7;
+//     STRINGS = 8;
+//     TENSORS = 9;
+//     GRAPHS = 10;
+//     SPARSE_TENSORS = 12;
+//     TYPE_PROTOS = 14;
+//   }
+//   optional string name = 1;
+//   optional string ref_attr_name = 21;
+//   optional string doc_string = 13;
+//   optional AttributeType type = 20;
+//   optional float f = 2;
+//   optional int64 i = 3;
+//   optional bytes s = 4;
+//   optional TensorProto t = 5;
+//   optional GraphProto g = 6;
+//   optional SparseTensorProto sparse_tensor = 22;
+//   optional TypeProto tp = 14;
+//   repeated float floats = 7;
+//   repeated int64 ints = 8;
+//   repeated bytes strings = 9;
+//   repeated TensorProto tensors = 10;
+//   repeated GraphProto graphs = 11;
+//   repeated SparseTensorProto sparse_tensors = 23;
+//   repeated TypeProto type_protos = 15;
+// }
 BEGIN_PROTO_NOINIT(
     AttributeProto,
     "A named attribute containing either singular float, integer, string, graph, and "
@@ -784,6 +1007,18 @@ END_PROTO()
 
 // NodeProto
 
+// message NodeProto {
+//   repeated string input = 1;
+//   repeated string output = 2;
+//   optional string name = 3;
+//   optional string op_type = 4;
+//   optional string domain = 7;
+//   optional string overload = 8;
+//   repeated AttributeProto attribute = 5;
+//   optional string doc_string = 6;
+//   repeated StringStringEntryProto metadata_props = 9;
+//   repeated NodeDeviceConfigurationProto device_configurations = 10;
+// }
 BEGIN_PROTO(NodeProto,
             "Computation graphs are made up of a DAG of nodes, which represent what is "
             "commonly called a 'layer' or 'pipeline stage' in machine learning frameworks. "
@@ -831,6 +1066,20 @@ END_PROTO()
 
 // GraphProto
 
+// message GraphProto {
+//   repeated NodeProto node = 1;
+//   optional string name = 2;
+//   repeated TensorProto initializer = 5;
+//   repeated SparseTensorProto sparse_initializer = 15;
+//   optional string doc_string = 10;
+//   repeated ValueInfoProto input = 11;
+//   repeated ValueInfoProto output = 12;
+//   repeated ValueInfoProto value_info = 13;
+//   repeated TensorAnnotation quantization_annotation = 14;
+//   repeated StringStringEntryProto metadata_props = 16;
+//   reserved 3, 4, 6 to 9;
+//   reserved "ir_version", "producer_version", "producer_tag", "domain";
+// }
 BEGIN_PROTO(
     GraphProto,
     "A graph defines the computational logic of a model and is comprised of a parameterized "
@@ -890,6 +1139,24 @@ inline constexpr const char *AttributeProto_AttributeType_Name(AttributeProto::A
 
 // FunctionProto
 
+// message FunctionProto {
+//   optional string name = 1;
+//   reserved 2;
+//   reserved "since_version";
+//   reserved 3;
+//   reserved "status";
+//   repeated string input = 4;
+//   repeated string output = 5;
+//   repeated string attribute = 6;
+//   repeated AttributeProto attribute_proto = 11;
+//   repeated NodeProto node = 7;
+//   optional string doc_string = 8;
+//   repeated OperatorSetIdProto opset_import = 9;
+//   optional string domain = 10;
+//   optional string overload = 13;
+//   repeated ValueInfoProto value_info = 12;
+//   repeated StringStringEntryProto metadata_props = 14;
+// }
 BEGIN_PROTO(FunctionProto,
             "A function defines a sub-operator that can be used in a graph. It is similar to a "
             "function in C/C++ or Python, and can be used to define reusable sub-graphs.")
@@ -946,6 +1213,20 @@ END_PROTO()
 
 // ModelProto
 
+// message ModelProto {
+//   optional int64 ir_version = 1;
+//   repeated OperatorSetIdProto opset_import = 8;
+//   optional string producer_name = 2;
+//   optional string producer_version = 3;
+//   optional string domain = 4;
+//   optional int64 model_version = 5;
+//   optional string doc_string = 6;
+//   optional GraphProto graph = 7;
+//   repeated StringStringEntryProto metadata_props = 14;
+//   repeated TrainingInfoProto training_info = 20;
+//   repeated FunctionProto functions = 25;
+//   repeated DeviceConfigurationProto configuration = 26;
+// }
 BEGIN_PROTO(ModelProto,
             "ModelProto is a top-level file/container format for bundling a ML model and "
             "associating its computation graph with metadata. The semantics of the model "
@@ -1045,6 +1326,23 @@ END_PROTO()
 class MapProto;
 class OptionalProto;
 
+// message SequenceProto {
+//   optional string name = 1;
+//   enum DataType {
+//     UNDEFINED = 0;
+//     TENSOR = 1;
+//     SPARSE_TENSOR = 2;
+//     SEQUENCE = 3;
+//     MAP = 4;
+//     OPTIONAL = 5;
+//   }
+//   optional int32 elem_type = 2;
+//   repeated TensorProto tensor_values = 3;
+//   repeated SparseTensorProto sparse_tensor_values = 4;
+//   repeated SequenceProto sequence_values = 5;
+//   repeated MapProto map_values = 6;
+//   repeated OptionalProto optional_values = 7;
+// }
 BEGIN_PROTO_NOINIT(
     SequenceProto,
     "Defines a dense, ordered, collection of elements that are of homogeneous types. "
@@ -1092,6 +1390,13 @@ END_PROTO()
 
 // MapProto
 
+// message MapProto {
+//   optional string name = 1;
+//   optional int32 key_type = 2;
+//   repeated int64 keys = 3;
+//   repeated bytes string_keys = 4;
+//   optional SequenceProto values = 5;
+// }
 BEGIN_PROTO_NOINIT(
     MapProto,
     "Specifies an associative table, defined by keys and values. MapProto is formed with a "
@@ -1122,6 +1427,23 @@ END_PROTO()
 
 // OptionalProto
 
+// message OptionalProto {
+//   optional string name = 1;
+//   enum DataType {
+//     UNDEFINED = 0;
+//     TENSOR = 1;
+//     SPARSE_TENSOR = 2;
+//     SEQUENCE = 3;
+//     MAP = 4;
+//     OPTIONAL = 5;
+//   }
+//   optional int32 elem_type = 2;
+//   optional TensorProto tensor_value = 3;
+//   optional SparseTensorProto sparse_tensor_value = 4;
+//   optional SequenceProto sequence_value = 5;
+//   optional MapProto map_value = 6;
+//   optional OptionalProto optional_value = 7;
+// }
 BEGIN_PROTO_NOINIT(OptionalProto,
                    "A container that may or may not hold a value. The value, if present, may be a "
                    "Tensor, Sparse Tensor, Sequence, Map, or another Optional. An absent value is "

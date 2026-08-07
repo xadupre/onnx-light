@@ -52,6 +52,10 @@ With ``setup.py``, ``--cpp-tests`` builds the C++ unit tests and runs them with
 
     python setup.py build_ext --inplace --build-temp build --cpp-tests
 
+The Python package is built and installed inplace *before* the C++ unit tests
+are built and run, so the editable install is always available even if a C++
+test fails to build or run.
+
 On multi-config generators such as Visual Studio, add the matching
 configuration to ``ctest``: use ``-C Debug`` when the build was configured with
 ``cmake.build-type=Debug``, and ``-C Release`` after ``python setup.py

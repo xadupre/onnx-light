@@ -74,6 +74,33 @@ class TestSetupBuildExt(ExtTestCase):
         self.assertIn("--output-on-failure", output)
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
+    def test_setup_build_ext_cpp_tests_installs_python_before_ctest(self):
+        """Tests that --cpp-tests installs the Python package inplace before running ctest."""
+        root = Path(__file__).resolve().parents[2]
+        command = [
+            sys.executable,
+            "setup.py",
+            "build_ext",
+            "--inplace",
+            "--dry-run",
+            "--cpp-tests",
+        ]
+        proc = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)
+
+        self.assertEqual(
+            proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
+        )
+        output = f"{proc.stdout}\n{proc.stderr}"
+        lines = output.splitlines()
+        python_build_index = next(
+            i for i, line in enumerate(lines) if "--target _onnxpyprotoop" in line
+        )
+        install_index = next(i for i, line in enumerate(lines) if "cmake --install" in line)
+        ctest_index = next(i for i, line in enumerate(lines) if line.startswith("ctest "))
+        self.assertLess(python_build_index, install_index)
+        self.assertLess(install_index, ctest_index)
+
+    @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_cpp_tests_flag_overrides_cmake_args(self):
         """Tests that --cpp-tests overrides ONNX_LIGHT_BUILD_TESTS from CMAKE_ARGS."""
         root = Path(__file__).resolve().parents[2]
@@ -152,6 +179,34 @@ class TestSetupBuildExt(ExtTestCase):
         self.assertIn("-DONNX_LIGHT_BUILD_TESTS=ON", output)
         self.assertIn("ctest", output)
         self.assertIn("--output-on-failure", output)
+
+    @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
+    def test_setup_build_ext_without_setuptools_installs_python_before_ctest(self):
+        """Tests --cpp-tests installs the Python package inplace before ctest (no setuptools)."""
+        root = Path(__file__).resolve().parents[2]
+        command = [
+            sys.executable,
+            "-S",
+            "setup.py",
+            "build_ext",
+            "--inplace",
+            "--dry-run",
+            "--cpp-tests",
+        ]
+        proc = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)
+
+        self.assertEqual(
+            proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
+        )
+        output = f"{proc.stdout}\n{proc.stderr}"
+        lines = output.splitlines()
+        python_build_index = next(
+            i for i, line in enumerate(lines) if "--target _onnxpyprotoop" in line
+        )
+        install_index = next(i for i, line in enumerate(lines) if "cmake --install" in line)
+        ctest_index = next(i for i, line in enumerate(lines) if line.startswith("ctest "))
+        self.assertLess(python_build_index, install_index)
+        self.assertLess(install_index, ctest_index)
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_without_setuptools_cpp_tests_flag_overrides_cmake_args(self):

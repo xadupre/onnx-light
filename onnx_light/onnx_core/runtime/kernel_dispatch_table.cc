@@ -51,9 +51,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
   return MutableKernelDispatchTable();
 }
 
-void RegisterKernelFn(const std::string &domain, const std::string &op_type,
-                      symbolic::Device device, NodeKernelFn fn) {
-  MutableKernelDispatchTable()[DispatchKey(domain, op_type, device)] = std::move(fn);
+bool RegisterKernelFn(const std::string &domain, const std::string &op_type,
+                      symbolic::Device device, NodeKernelFn fn, bool overwrite) {
+  auto &table = MutableKernelDispatchTable();
+  const std::string key = DispatchKey(domain, op_type, device);
+  if (!overwrite && table.find(key) != table.end()) {
+    return false;
+  }
+  table[key] = std::move(fn);
+  return true;
 }
 
 const SequenceMapPackFn &GetSequenceMapPackFn() { return MutableSequenceMapPackFn(); }

@@ -84,13 +84,27 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable();
  * ``onnx_core`` (e.g. ``onnx_kernels``); see
  * ``onnx_kernels::RegisterKernelFunctions``.
  *
- * @param domain  The operator domain (``""`` or ``"ai.onnx"`` for standard ONNX).
- * @param op_type The ONNX operator type name (e.g. ``"Abs"``).
- * @param device  The device the kernel runs on (e.g. :cpp:enumerator:`symbolic::Device::kCPU`).
- * @param fn      The factory implementing kernel construction for this operator.
+ * When @p overwrite is ``true`` (the default) an existing entry for the same
+ * identifier is replaced. Pass ``false`` to register the factory only if no
+ * kernel is registered for that identifier yet; this lets bulk built-in
+ * registration (``onnx_kernels::RegisterKernelFunctions``) run *without*
+ * clobbering an override that a downstream library (e.g. ``onnx-light-cpu``)
+ * installed earlier, so a custom kernel wins regardless of the order in which
+ * the two registrations happen. Explicit per-operator overrides keep the
+ * default ``overwrite = true`` so they always take precedence over the
+ * built-ins.
+ *
+ * @param domain    The operator domain (``""`` or ``"ai.onnx"`` for standard ONNX).
+ * @param op_type   The ONNX operator type name (e.g. ``"Abs"``).
+ * @param device    The device the kernel runs on (e.g. :cpp:enumerator:`symbolic::Device::kCPU`).
+ * @param fn        The factory implementing kernel construction for this operator.
+ * @param overwrite Whether to replace an existing entry (``true``, default) or
+ *                  keep it and ignore @p fn when one already exists (``false``).
+ * @return ``true`` when @p fn was stored, ``false`` when an existing entry was
+ *         kept because @p overwrite was ``false``.
  */
-void RegisterKernelFn(const std::string &domain, const std::string &op_type,
-                      symbolic::Device device, NodeKernelFn fn);
+bool RegisterKernelFn(const std::string &domain, const std::string &op_type,
+                      symbolic::Device device, NodeKernelFn fn, bool overwrite = true);
 
 /**
  * Returns the currently registered ``SequenceMap`` output-packing

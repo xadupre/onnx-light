@@ -60,3 +60,14 @@ jobs:
         run: |
           UNITTEST_GOING=1 ./build/load-onnx-light-time-example/load_onnx_light_time \
             ./unittests/cc/onnx_proto/data/test_softmax_example_expanded.onnx
+
+      - name: Build standalone register_custom_kernel example
+        run: |
+          cmake -S examples/register_custom_kernel -B build/register-custom-kernel-example \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/build/install-onnx-light"
+          cmake --build build/register-custom-kernel-example --parallel "${CMAKE_BUILD_PARALLEL_LEVEL}"
+
+      - name: Smoke-run standalone register_custom_kernel example
+        run: |
+          ./build/register-custom-kernel-example/register_custom_kernel

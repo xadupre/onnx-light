@@ -45,6 +45,22 @@ SequenceMapPackFn &MutableSequenceMapPackFn() {
   return fn;
 }
 
+// Returns the process-wide (global) custom-kernel registry singleton. Only the
+// Register/Unregister/Clear global helpers mutate it; :cpp:func:`GlobalCustomKernels`
+// exposes a read-only view consulted during kernel resolution.
+CustomKernelMap &MutableGlobalCustomKernels() {
+  static CustomKernelMap kernels;
+  return kernels;
+}
+
+// Returns the canonical ``"<domain>:<op_type>"`` custom-kernel key, normalising
+// an empty domain to :cpp:var:`kDefaultOnnxDomain` (matching the key form used
+// by :cpp:func:`RuntimeContext::RegisterCustomKernel` and the resolution logic
+// in ``run_nodes.cc``).
+std::string CustomKernelKey(const std::string &domain, const std::string &op_type) {
+  return (domain.empty() ? kDefaultOnnxDomain : domain) + ":" + op_type;
+}
+
 } // namespace
 
 const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
@@ -55,6 +71,19 @@ void RegisterKernelFn(const std::string &domain, const std::string &op_type,
                       symbolic::Device device, NodeKernelFn fn) {
   MutableKernelDispatchTable()[DispatchKey(domain, op_type, device)] = std::move(fn);
 }
+
+const CustomKernelMap &GlobalCustomKernels() { return MutableGlobalCustomKernels(); }
+
+void RegisterGlobalCustomKernel(const std::string &domain, const std::string &op_type,
+                                CustomKernelFn fn) {
+  MutableGlobalCustomKernels()[CustomKernelKey(domain, op_type)] = std::move(fn);
+}
+
+bool UnregisterGlobalCustomKernel(const std::string &domain, const std::string &op_type) {
+  return MutableGlobalCustomKernels().erase(CustomKernelKey(domain, op_type)) > 0;
+}
+
+void ClearGlobalCustomKernels() { MutableGlobalCustomKernels().clear(); }
 
 const SequenceMapPackFn &GetSequenceMapPackFn() { return MutableSequenceMapPackFn(); }
 

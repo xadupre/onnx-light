@@ -1008,7 +1008,8 @@ private:
 //
 // Resolution precedence mirrors the historical inline logic of
 // :cpp:func:`RunNode`: model-local functions override built-ins, then the
-// control-flow operators, then user custom kernels, then the dispatch table.
+// control-flow operators, then per-context custom kernels, then global custom
+// kernels, then the dispatch table.
 // An unsupported ``(domain, op_type)`` is rejected here (at resolution
 // time) with the same diagnostic previously emitted at run time.
 std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
@@ -1061,10 +1062,23 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
   const std::string key = domain + ":" + op_type;
   // User-registered custom kernels take precedence over built-in
   // kernel dispatch table entries so callers can override (or
-  // extend) the runtime with their own implementations.
+  // extend) the runtime with their own implementations. Per-context
+  // registrations (:cpp:func:`RuntimeContext::RegisterCustomKernel`) are
+  // consulted first, so a context can override a globally registered
+  // kernel of the same ``(domain, op_type)``.
   auto ckit = rt.custom_kernels().find(key);
   if (ckit != rt.custom_kernels().end()) {
     CustomKernelFn fn = ckit->second;
+    return std::make_unique<CustomKernelAdapter>(node, fn);
+  }
+  // Process-wide (global) custom kernels apply to every RuntimeContext, so a
+  // caller can install a kernel once (:cpp:func:`RegisterGlobalCustomKernel`)
+  // instead of registering it on each context. They still override the
+  // built-in :cpp:func:`KernelDispatchTable` below.
+  const auto &global_custom = GlobalCustomKernels();
+  auto gckit = global_custom.find(key);
+  if (gckit != global_custom.end()) {
+    CustomKernelFn fn = gckit->second;
     return std::make_unique<CustomKernelAdapter>(node, fn);
   }
   // A kernel's identity in :cpp:func:`KernelDispatchTable` is

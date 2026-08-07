@@ -4239,6 +4239,111 @@ TEST(RunNodes, RunNodeUnknownOpWithoutCustomKernelThrows) {
   EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// Global (process-wide) custom kernel registration through
+// core::runtime::RegisterGlobalCustomKernel.
+// ---------------------------------------------------------------------------
+
+// A globally registered custom kernel is picked up by RunNode on any
+// RuntimeContext, without registering it on that context. Cleared afterwards
+// so the registration does not leak into other tests.
+TEST(RunNodes, RunNodeDispatchesGlobalCustomKernelForUnknownOp) {
+  core::runtime::ClearGlobalCustomKernels();
+  core::runtime::RegisterGlobalCustomKernel(
+      "my.domain", "Scale", [](const NodeProto &node, RuntimeContext &ctx) {
+        float factor = 1.0f;
+        for (int i = 0; i < node.attribute_size(); ++i) {
+          if (node.attribute(i).name() == "factor") {
+            factor = node.attribute(i).f();
+          }
+        }
+        const Tensor &in = ctx.Get(node.input(0));
+        std::vector<float> out(static_cast<size_t>(in.element_count()));
+        const float *src = in.AsFloat();
+        for (size_t i = 0; i < out.size(); ++i) {
+          out[i] = src[i] * factor;
+        }
+        ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, out));
+      });
+
+  NodeProto node = MakeNode("Scale", {"x"}, {"y"}, "my.domain");
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("factor");
+  attr->set_type(AttributeProto::AttributeType::FLOAT);
+  attr->set_f(3.0f);
+
+  // A fresh context that never called RegisterCustomKernel still resolves the
+  // globally registered kernel.
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors().at("y");
+  ASSERT_EQ(y.element_count(), 3);
+  const float *yp = y.AsFloat();
+  EXPECT_FLOAT_EQ(yp[0], 3.0f);
+  EXPECT_FLOAT_EQ(yp[1], 6.0f);
+  EXPECT_FLOAT_EQ(yp[2], 9.0f);
+
+  // Unregistering the global kernel makes the unknown op fail again.
+  EXPECT_TRUE(core::runtime::UnregisterGlobalCustomKernel("my.domain", "Scale"));
+  EXPECT_FALSE(core::runtime::UnregisterGlobalCustomKernel("my.domain", "Scale"));
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
+}
+
+// A per-context custom kernel overrides a global one for the same key, while
+// the global kernel still overrides the built-in dispatch entry.
+TEST(RunNodes, PerContextCustomKernelOverridesGlobalCustomKernel) {
+  core::runtime::ClearGlobalCustomKernels();
+  // Global override of Abs multiplies by 10 (distinct from both the built-in
+  // Abs and the per-context override below).
+  core::runtime::RegisterGlobalCustomKernel(
+      "", "Abs", [](const NodeProto &node, RuntimeContext &ctx) {
+        const Tensor &in = ctx.Get(node.input(0));
+        std::vector<float> out(static_cast<size_t>(in.element_count()));
+        const float *src = in.AsFloat();
+        for (size_t i = 0; i < out.size(); ++i) {
+          out[i] = src[i] * 10.0f;
+        }
+        ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, out));
+      });
+
+  NodeProto node = MakeNode("Abs", {"x"}, {"y"});
+
+  // With only the global kernel registered, the global override applies.
+  {
+    RuntimeContext rt(KernelContext(DefaultOpset(18)));
+    rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+    RunNode(node, rt);
+    const float *yp = rt.tensors().at("y").AsFloat();
+    EXPECT_FLOAT_EQ(yp[0], 10.0f);
+    EXPECT_FLOAT_EQ(yp[1], 20.0f);
+    EXPECT_FLOAT_EQ(yp[2], 30.0f);
+  }
+
+  // A per-context override (negation) takes precedence over the global one.
+  {
+    RuntimeContext rt(KernelContext(DefaultOpset(18)));
+    rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+    rt.RegisterCustomKernel("", "Abs", [](const NodeProto &node, RuntimeContext &ctx) {
+      const Tensor &in = ctx.Get(node.input(0));
+      std::vector<float> out(static_cast<size_t>(in.element_count()));
+      const float *src = in.AsFloat();
+      for (size_t i = 0; i < out.size(); ++i) {
+        out[i] = -src[i];
+      }
+      ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, out));
+    });
+    RunNode(node, rt);
+    const float *yp = rt.tensors().at("y").AsFloat();
+    EXPECT_FLOAT_EQ(yp[0], -1.0f);
+    EXPECT_FLOAT_EQ(yp[1], -2.0f);
+    EXPECT_FLOAT_EQ(yp[2], -3.0f);
+  }
+
+  core::runtime::ClearGlobalCustomKernels();
+  EXPECT_TRUE(core::runtime::GlobalCustomKernels().empty());
+}
+
 // A node whose output is allocated from an allocator other than the session's
 // unique allocator is rejected by RuntimeSession::Run's default output
 // allocator check.

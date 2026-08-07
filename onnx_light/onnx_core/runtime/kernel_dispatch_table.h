@@ -93,6 +93,49 @@ void RegisterKernelFn(const std::string &domain, const std::string &op_type,
                       symbolic::Device device, NodeKernelFn fn);
 
 /**
+ * Returns the process-wide (global) custom-kernel registry consulted by
+ * :cpp:func:`RunNode` / :cpp:class:`RuntimeSession` during kernel resolution.
+ *
+ * Global custom kernels complement the per-:cpp:class:`RuntimeContext`
+ * registry (:cpp:func:`RuntimeContext::RegisterCustomKernel`): they let a
+ * caller install a kernel once and have every :cpp:class:`RuntimeContext`
+ * pick it up, rather than registering it on each context separately.
+ * Resolution precedence is: model-local functions, built-in control-flow
+ * operators, per-context custom kernels, **global custom kernels**, then the
+ * built-in :cpp:func:`KernelDispatchTable`. A per-context registration for the
+ * same ``(domain, op_type)`` therefore overrides the global one.
+ *
+ * Keys are the canonical ``"<domain>:<op_type>"`` pair (the default ONNX
+ * domain — the empty ``NodeProto::domain()`` — is normalised to
+ * :cpp:var:`kDefaultOnnxDomain`).
+ */
+const CustomKernelMap &GlobalCustomKernels();
+
+/**
+ * Registers (or replaces) a process-wide (global) custom kernel for
+ * (@p domain, @p op_type) in :cpp:func:`GlobalCustomKernels`. The empty
+ * domain is normalised to :cpp:var:`kDefaultOnnxDomain`. Unlike
+ * :cpp:func:`RegisterKernelFn` (which registers a per-device kernel
+ * *factory*), @p fn keeps the simple "run the whole node now" contract of
+ * :cpp:type:`CustomKernelFn`.
+ */
+void RegisterGlobalCustomKernel(const std::string &domain, const std::string &op_type,
+                                CustomKernelFn fn);
+
+/**
+ * Removes the process-wide custom kernel registered for (@p domain,
+ * @p op_type). The empty domain is normalised to :cpp:var:`kDefaultOnnxDomain`.
+ * Returns ``true`` when an entry was removed, ``false`` otherwise.
+ */
+bool UnregisterGlobalCustomKernel(const std::string &domain, const std::string &op_type);
+
+/**
+ * Removes every process-wide custom kernel registration from
+ * :cpp:func:`GlobalCustomKernels`.
+ */
+void ClearGlobalCustomKernels();
+
+/**
  * Returns the currently registered ``SequenceMap`` output-packing
  * callback, or an empty ``std::function`` if none has been registered
  * yet (see :cpp:func:`RegisterSequenceMapPackFn`).

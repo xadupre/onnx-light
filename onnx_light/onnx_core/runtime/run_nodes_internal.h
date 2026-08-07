@@ -37,7 +37,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail {
  *
  * Resolution precedence mirrors the historical inline logic of
  * :cpp:func:`RunNode`: model-local functions override built-ins, then the
- * control-flow operators, then user custom kernels, then the dispatch table.
+ * control-flow operators, then per-context custom kernels, then global custom
+ * kernels, then the dispatch table.
  * An unsupported ``(domain, op_type)`` is rejected here (at resolution time)
  * with the same diagnostic previously emitted at run time.
  */

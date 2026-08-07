@@ -155,6 +155,47 @@ def _numpy_to_cpp_tensor(name: str, arr: np.ndarray, copy: bool = True) -> Any:
     return _runtime.tensor_from_proto(tp)
 
 
+def _make_numpy_custom_kernel(domain: str, op_type: str, fn: Any) -> Any:
+    """Wraps a numpy-friendly custom kernel ``fn`` as a low-level callback.
+
+    The returned callable follows the ``fn(node, ctx)`` contract expected by
+    the ``register_custom_kernel`` bindings: it reads the node inputs from
+    ``ctx`` as :class:`numpy.ndarray`, invokes ``fn(node, *inputs)`` and writes
+    the returned array(s) back into ``ctx``. Shared by
+    :meth:`ReferenceEvaluator.register_custom_kernel` (per-session) and
+    :meth:`ReferenceEvaluator.register_custom_kernel_global` (process-wide).
+    """
+
+    def _wrapper(node: Any, ctx: Any) -> None:
+        inputs: list[Any] = []
+        for raw_name in node.input:
+            name = str(raw_name)
+            if not name:
+                inputs.append(None)
+            else:
+                inputs.append(_cpp_tensor_to_numpy(ctx.get(name)))
+        result = fn(node, *inputs)
+        if isinstance(result, (list, tuple)):
+            outputs = list(result)
+        else:
+            outputs = [result]
+        output_names = [str(n) for n in node.output]
+        expected = len(output_names)
+        if len(outputs) != expected:
+            raise ValueError(
+                f"Custom kernel for {domain!r}:{op_type!r} returned "
+                f"{len(outputs)} output(s) but the node declares {expected} "
+                f"output(s)."
+            )
+        for i, value in enumerate(outputs):
+            name = output_names[i]
+            if not name:
+                continue
+            ctx.put(name, _numpy_to_cpp_tensor(name, value), "output")
+
+    return _wrapper
+
+
 def _run_via_session(
     graph_or_function: Any, ctx: Any, sessions: dict[int, Any] | None = None
 ) -> None:
@@ -439,33 +480,7 @@ class ReferenceEvaluator:
 
             sess.register_custom_kernel("my.domain", "Square", square)
         """
-
-        def _wrapper(node: Any, ctx: Any) -> None:
-            inputs: list[Any] = []
-            for raw_name in node.input:
-                name = str(raw_name)
-                if not name:
-                    inputs.append(None)
-                else:
-                    inputs.append(_cpp_tensor_to_numpy(ctx.get(name)))
-            result = fn(node, *inputs)
-            if isinstance(result, (list, tuple)):
-                outputs = list(result)
-            else:
-                outputs = [result]
-            output_names = [str(n) for n in node.output]
-            expected = len(output_names)
-            if len(outputs) != expected:
-                raise ValueError(
-                    f"Custom kernel for {domain!r}:{op_type!r} returned "
-                    f"{len(outputs)} output(s) but the node declares {expected} "
-                    f"output(s)."
-                )
-            for i, value in enumerate(outputs):
-                name = output_names[i]
-                if not name:
-                    continue
-                ctx.put(name, _numpy_to_cpp_tensor(name, value), "output")
+        _wrapper = _make_numpy_custom_kernel(domain, op_type, fn)
 
         self._custom_kernels[f"{domain or 'ai.onnx'}:{op_type}"] = (domain, op_type, _wrapper)
         # Register the wrapper directly on the persistent RuntimeContext. A
@@ -521,6 +536,68 @@ class ReferenceEvaluator:
         # the restored built-in kernel.
         self._sessions.clear()
         return True
+
+    @staticmethod
+    def register_custom_kernel_global(domain: str, op_type: str, fn: Any) -> None:
+        """Registers a process-wide (global) numpy custom kernel.
+
+        Unlike :meth:`register_custom_kernel`, which only affects the
+        evaluator it is called on, a global kernel is picked up by every
+        :class:`ReferenceEvaluator` (and any other runtime context). Register
+        the kernel *before* running an evaluator, since an evaluator caches its
+        runtime sessions on first run and only rebuilds them when its own
+        (per-session) registrations change.
+
+        ``fn`` follows the same ``fn(node, *inputs)`` numpy contract as
+        :meth:`register_custom_kernel`. A per-session registration for the same
+        ``(domain, op_type)`` overrides the global one.
+
+        Parameters
+        ----------
+        domain:
+            Operator domain. The empty string is treated as ``ai.onnx``.
+        op_type:
+            Operator name (``NodeProto.op_type``).
+        fn:
+            Python callable invoked as ``fn(node, *inputs)``; see
+            :meth:`register_custom_kernel`.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            def square(node, x):
+                return x * x
+
+            ReferenceEvaluator.register_custom_kernel_global("my.domain", "Square", square)
+        """
+        _wrapper = _make_numpy_custom_kernel(domain, op_type, fn)
+        _runtime.register_custom_kernel(domain, op_type, _wrapper)
+
+    @staticmethod
+    def unregister_custom_kernel_global(domain: str, op_type: str) -> bool:
+        """Removes a process-wide custom kernel registered by
+        :meth:`register_custom_kernel_global`.
+
+        The empty domain is normalised to ``ai.onnx``. Returns ``True`` when a
+        global custom kernel was removed, ``False`` otherwise. Note that
+        evaluators which already built (and cached) their runtime sessions keep
+        dispatching to the previously resolved kernel until their sessions are
+        rebuilt.
+
+        Parameters
+        ----------
+        domain:
+            Operator domain. The empty string is treated as ``ai.onnx``.
+        op_type:
+            Operator name (``NodeProto.op_type``).
+
+        Returns
+        -------
+        bool
+            ``True`` when a global custom kernel was removed.
+        """
+        return bool(_runtime.unregister_custom_kernel(domain, op_type))
 
     # -- proto loading ------------------------------------------------------
 

@@ -866,6 +866,8 @@ public:
     plan_ = std::make_unique<ExecutionPlan>(bound_func_);
   }
 
+  const char *library() const override { return "onnx_core.function"; }
+
   void Run(RuntimeContext &rt) override {
     const std::string op_type = node_->op_type();
     EXT_ENFORCE_INVALID(
@@ -938,6 +940,7 @@ public:
         else_session_(std::move(else_session)) {
     set_node(node);
   }
+  const char *library() const override { return "onnx_core"; }
   void Run(RuntimeContext &rt) override { RunIfNode(*node_, rt, *then_session_, *else_session_); }
 
 private:
@@ -951,6 +954,7 @@ public:
       : KernelBase(KernelContext{}), body_session_(std::move(body_session)) {
     set_node(node);
   }
+  const char *library() const override { return "onnx_core"; }
   void Run(RuntimeContext &rt) override { RunLoopNode(*node_, rt, *body_session_); }
 
 private:
@@ -963,6 +967,7 @@ public:
       : KernelBase(KernelContext{}), body_session_(std::move(body_session)) {
     set_node(node);
   }
+  const char *library() const override { return "onnx_core"; }
   void Run(RuntimeContext &rt) override { RunScanNode(*node_, rt, *body_session_); }
 
 private:
@@ -975,6 +980,7 @@ public:
       : KernelBase(KernelContext{}), body_session_(std::move(body_session)) {
     set_node(node);
   }
+  const char *library() const override { return "onnx_core"; }
   void Run(RuntimeContext &rt) override { RunSequenceMapNode(*node_, rt, *body_session_); }
 
 private:
@@ -989,6 +995,7 @@ public:
       : KernelBase(KernelContext{}), fn_(std::move(fn)) {
     set_node(node);
   }
+  const char *library() const override { return "custom"; }
   void Run(RuntimeContext &rt) override { fn_(*node_, rt); }
 
 private:
@@ -1024,9 +1031,7 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
     auto fit = rt.functions().find(fkey);
     if (fit != rt.functions().end()) {
       const FunctionProto *func = fit->second;
-      auto kernel = std::make_unique<ModelLocalFunctionKernel>(node, *func);
-      kernel->set_name(KernelUniqueName("onnx_core.function", rt.device(), domain, op_type));
-      return kernel;
+      return std::make_unique<ModelLocalFunctionKernel>(node, *func);
     }
   }
 
@@ -1040,33 +1045,24 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
     // selected branch's kernels from scratch.
     auto then_session = std::make_shared<SubgraphSession>(rt, then_branch);
     auto else_session = std::make_shared<SubgraphSession>(rt, else_branch);
-    auto kernel =
-        std::make_unique<IfKernel>(node, std::move(then_session), std::move(else_session));
-    kernel->set_name(KernelUniqueName("onnx_core", rt.device(), domain, op_type));
-    return kernel;
+    return std::make_unique<IfKernel>(node, std::move(then_session), std::move(else_session));
   }
   if (domain == kDefaultOnnxDomain && op_type == "Loop") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
     // Built once here so the body's kernels are resolved a single time and
     // reused across every iteration of every invocation of this node.
     auto body_session = std::make_shared<SubgraphSession>(rt, body);
-    auto kernel = std::make_unique<LoopKernel>(node, std::move(body_session));
-    kernel->set_name(KernelUniqueName("onnx_core", rt.device(), domain, op_type));
-    return kernel;
+    return std::make_unique<LoopKernel>(node, std::move(body_session));
   }
   if (domain == kDefaultOnnxDomain && op_type == "Scan") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
     auto body_session = std::make_shared<SubgraphSession>(rt, body);
-    auto kernel = std::make_unique<ScanKernel>(node, std::move(body_session));
-    kernel->set_name(KernelUniqueName("onnx_core", rt.device(), domain, op_type));
-    return kernel;
+    return std::make_unique<ScanKernel>(node, std::move(body_session));
   }
   if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
     auto body_session = std::make_shared<SubgraphSession>(rt, body);
-    auto kernel = std::make_unique<SequenceMapKernel>(node, std::move(body_session));
-    kernel->set_name(KernelUniqueName("onnx_core", rt.device(), domain, op_type));
-    return kernel;
+    return std::make_unique<SequenceMapKernel>(node, std::move(body_session));
   }
 
   const std::string key = domain + ":" + op_type;
@@ -1076,9 +1072,7 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
   auto ckit = rt.custom_kernels().find(key);
   if (ckit != rt.custom_kernels().end()) {
     CustomKernelFn fn = ckit->second;
-    auto kernel = std::make_unique<CustomKernelAdapter>(node, fn);
-    kernel->set_name(KernelUniqueName("custom", rt.device(), domain, op_type));
-    return kernel;
+    return std::make_unique<CustomKernelAdapter>(node, fn);
   }
   // A kernel's identity in :cpp:func:`KernelDispatchTable` is
   // ``(domain, op_type, device)``. The default host devices

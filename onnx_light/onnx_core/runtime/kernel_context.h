@@ -121,17 +121,15 @@ public:
   /// time; the node outlives the kernel.
   void set_node(const NodeProto &node) { node_ = &node; }
 
-  /// Sets this kernel's unique name. The name identifies the kernel
-  /// implementation across the runtime: it encodes the library the kernel
-  /// belongs to, the device it runs on and the ``(domain, op_type)`` it
-  /// implements (see :cpp:func:`core::runtime::KernelUniqueName`). Set once at
-  /// kernel-resolution time by the dispatch layer.
-  void set_name(std::string name) { name_ = std::move(name); }
-
-  /// Returns this kernel's unique name (see :cpp:func:`set_name`). Empty when
-  /// the kernel was instantiated directly (e.g. in tests) without being
-  /// resolved through the dispatch path.
-  const std::string &name() const noexcept { return name_; }
+  /// Returns the library this kernel implementation belongs to. This is a
+  /// compile-time constant statically defined by each kernel class (an
+  /// instance cannot change it); it is the ``<library>`` component the runtime
+  /// composes into a kernel's unique name (see
+  /// :cpp:func:`core::runtime::KernelUniqueName`). Defaults to the built-in
+  /// operator library ``"onnx_kernels"`` that every dispatch-table kernel
+  /// belongs to; the special control-flow, model-local-function and
+  /// user-custom kernels override it.
+  virtual const char *library() const { return "onnx_kernels"; }
 
   /// Runs the kernel for its node (see :cpp:func:`set_node`) against the
   /// current state of ``rt``: reads the node's current inputs, computes and
@@ -145,10 +143,6 @@ protected:
   /// The node this kernel was built for, or ``nullptr`` when the kernel is used
   /// directly (e.g. in tests) without being resolved through the dispatch path.
   const NodeProto *node_ = nullptr;
-
-  /// The kernel's unique name (see :cpp:func:`set_name` / :cpp:func:`name`).
-  /// Empty until the dispatch layer assigns it at kernel-resolution time.
-  std::string name_;
 };
 
 } // namespace core::runtime

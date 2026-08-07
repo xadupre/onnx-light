@@ -187,7 +187,7 @@ public:
   /// scheduled node in plan execution order. Each name identifies the resolved
   /// kernel implementation — the library it belongs to and the device it runs
   /// on, together with its ``(domain, op_type)`` (see
-  /// :cpp:func:`KernelUniqueName` and :cpp:func:`KernelBase::name`). Populated
+  /// :cpp:func:`KernelUniqueName` and :cpp:func:`KernelBase::library`). Populated
   /// during kernel initialization; empty until the first :cpp:func:`Run`.
   std::vector<std::string> kernel_names() const;
 
@@ -268,6 +268,11 @@ private:
   struct PreparedKernel {
     std::string key;
     std::unique_ptr<KernelBase> instance;
+    /// The kernel's unique name, composed once during
+    /// :cpp:func:`InitializeKernels` from the kernel's statically-defined
+    /// :cpp:func:`KernelBase::library`, the resolution device and the node's
+    /// ``(domain, op_type)`` (see :cpp:func:`KernelUniqueName`).
+    std::string name;
   };
 
   /// Resolves and builds the kernel instance for every node the plan executes,

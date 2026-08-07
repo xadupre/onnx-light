@@ -123,7 +123,7 @@ std::vector<std::string> RuntimeSession::kernel_names() const {
     if (index >= kernels_.size() || !kernels_[index].instance) {
       continue;
     }
-    names.push_back(kernels_[index].instance->name());
+    names.push_back(kernels_[index].name);
   }
   return names;
 }
@@ -151,6 +151,18 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
     PreparedKernel &prepared = kernels_[index];
     prepared.key = domain + ":" + op_type;
     prepared.instance = ResolveNodeKernel(node, rt, domain, op_type);
+    // Compose the kernel's unique name from the implementation's
+    // statically-defined library, the resolved device and the node's
+    // (domain, op_type), so the session can report which implementation it
+    // resolved for each node. A host runtime device (kUndefined or kCPU)
+    // resolves to the CPU host kernel (see DeviceKeySuffix), so it is reported
+    // as CPU; any other device is reported as-is.
+    if (prepared.instance) {
+      const core::symbolic::Device device = core::symbolic::DeviceKeySuffix(rt.device()).empty()
+                                                ? core::symbolic::Device::kCPU
+                                                : rt.device();
+      prepared.name = KernelUniqueName(prepared.instance->library(), device, domain, op_type);
+    }
   }
   // Record the external inputs the scheduled nodes read (names not produced by
   // any node in the plan, including values captured by subgraph attributes) so

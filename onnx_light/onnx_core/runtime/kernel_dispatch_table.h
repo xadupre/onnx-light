@@ -101,21 +101,13 @@ std::string KernelUniqueName(const std::string &library, symbolic::Device device
  * ``onnx_core`` (e.g. ``onnx_kernels``); see
  * ``onnx_kernels::RegisterKernelFunctions``.
  *
- * Every kernel the registered factory produces is assigned its unique name
- * (:cpp:func:`KernelUniqueName` built from @p library, @p device, @p domain
- * and @p op_type) via :cpp:func:`KernelBase::set_name`, so the reference
- * session can report the device- and library-qualified implementation it
- * resolved for each node.
- *
  * @param domain  The operator domain (``""`` or ``"ai.onnx"`` for standard ONNX).
  * @param op_type The ONNX operator type name (e.g. ``"Abs"``).
  * @param device  The device the kernel runs on (e.g. :cpp:enumerator:`symbolic::Device::kCPU`).
  * @param fn      The factory implementing kernel construction for this operator.
- * @param library The library that owns the kernel (e.g. ``"onnx_kernels"``);
- *                encoded into every produced kernel's unique name.
  */
 void RegisterKernelFn(const std::string &domain, const std::string &op_type,
-                      symbolic::Device device, NodeKernelFn fn, const std::string &library = "");
+                      symbolic::Device device, NodeKernelFn fn);
 
 /**
  * Returns the currently registered ``SequenceMap`` output-packing

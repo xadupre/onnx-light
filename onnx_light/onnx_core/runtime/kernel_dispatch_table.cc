@@ -58,21 +58,8 @@ std::string KernelUniqueName(const std::string &library, symbolic::Device device
 }
 
 void RegisterKernelFn(const std::string &domain, const std::string &op_type,
-                      symbolic::Device device, NodeKernelFn fn, const std::string &library) {
-  // Wrap the factory so every kernel it produces carries its unique name
-  // (library + device + domain + op_type). The name is assigned right after
-  // construction so a resolved kernel always reports which implementation
-  // (device + library) the runtime selected for it.
-  std::string name = KernelUniqueName(library, device, domain, op_type);
-  MutableKernelDispatchTable()[DispatchKey(domain, op_type, device)] =
-      [fn = std::move(fn), name = std::move(name)](
-          const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
-    std::unique_ptr<KernelBase> kernel = fn(node, rt);
-    if (kernel) {
-      kernel->set_name(name);
-    }
-    return kernel;
-  };
+                      symbolic::Device device, NodeKernelFn fn) {
+  MutableKernelDispatchTable()[DispatchKey(domain, op_type, device)] = std::move(fn);
 }
 
 const SequenceMapPackFn &GetSequenceMapPackFn() { return MutableSequenceMapPackFn(); }

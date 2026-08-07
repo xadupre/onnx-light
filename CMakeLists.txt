@@ -1066,6 +1066,18 @@ if(ONNX_LIGHT_INSTALL)
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 
+  # Install the drop-in `onnx/*.h` / `google/protobuf/*.h` compatibility headers.
+  # These back the INSTALL_INTERFACE include dir
+  # (${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_compat_include) referenced by
+  # lib_onnx_lib / lib_onnx_op above; without this rule that directory is never
+  # populated by `cmake --install`, so consumers of the installed/prebuilt
+  # package (e.g. via find_package(onnx)) fail to find "onnx/defs/*.h" and
+  # "google/protobuf/*.h" even though the include path is advertised.
+  install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_compat_include/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_compat_include"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+  )
+
   # Install public headers from onnx_light/onnx_proto
   install(DIRECTORY "${ONNX_PROTO_PATH}/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light"

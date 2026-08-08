@@ -192,8 +192,8 @@ It carries its own byte size explicitly.
     }
 
 ``name`` identifies the concrete quantized value and ``doc_string`` documents
-that value. ``QuantizationProto.doc_string`` documents the reusable
-quantization type instead.
+that value. ``n_bytes`` makes the payload size explicit even when the bytes are
+stored out of line (for example via an external-data mechanism).
 
 TypeProto and containers
 ^^^^^^^^^^^^^^^^^^^^^^^^

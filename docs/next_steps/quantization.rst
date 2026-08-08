@@ -648,7 +648,7 @@ deductible from the proto structure.
                     n_codes = len(fields[fw.field])
                 else:
                     assert len(fields[fw.field]) == n_codes, f"field {fw.field} has inconsistent length (expected {n_codes})"
-            assert n_codes is not None
+            assert n_codes is not None, "index_formula must not be empty"
             for i in range(n_codes):
                 raw_idx = sum(fields[fw.field][i] * fw.multiplier for fw in q.index_formula)
                 idx = int(raw_idx)

@@ -640,6 +640,7 @@ deductible from the proto structure.
             assert q.index_formula, "index_formula is required when codebook_data is set"
             values = []
             n_codes = len(fields[q.index_formula[0].field])
+            for i in range(n_codes):
                 idx = sum(fields[fw.field][i] * fw.multiplier for fw in q.index_formula)
                 begin = idx * q.codebook_vector_size
                 values.extend(q.codebook_data[begin:begin + q.codebook_vector_size])

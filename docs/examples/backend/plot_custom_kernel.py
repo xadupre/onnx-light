@@ -112,6 +112,23 @@ sess2.register_custom_kernel("", "Abs", fake_abs)
 print(f"Abs replaced by negation: y = {y2}")
 
 #####################################
+# Registering globally instead of per session
+# ++++++++++++++++++++++++++++++++++++++++++++
+#
+# The registrations above only affect the evaluator they are called on. A
+# kernel can instead be registered *globally* so that every evaluator created
+# afterwards picks it up, without registering it on each one. A per-session
+# registration still overrides a global one for the same ``(domain, op_type)``.
+# Register the global kernel before running the evaluators that should use it,
+# since an evaluator caches its runtime sessions on first ``run``.
+
+ReferenceEvaluator.register_custom_kernel_global("my.domain", "Scale", scale)
+sess3 = ReferenceEvaluator(model)  # no per-session registration needed
+(y3,) = sess3.run(None, {"x": x})
+print(f"y (global kernel) = {y3}")
+ReferenceEvaluator.unregister_custom_kernel_global("my.domain", "Scale")
+
+#####################################
 # See also
 # ++++++++
 #

@@ -1145,4 +1145,39 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "(default), bytes are copied into owned tensor storage. When ``copy=False``, "
       "the tensor borrows the NumPy buffer (zero-copy). Use this overload for "
       "bfloat16, float8, and sub-byte packed types.");
+
+  // --- global (process-wide) custom kernels -------------------------------
+  // Module-level counterparts of RuntimeContext.register_custom_kernel that
+  // install a kernel once for *every* RuntimeContext instead of a single one.
+  rt_mod.def(
+      "register_custom_kernel",
+      [](const std::string &domain, const std::string &op_type, nb::callable fn) {
+        // Same GIL-safe wrapping as the RuntimeContext binding: the callable is
+        // captured in an nb::callable (keeping a Python reference alive until the
+        // registration is replaced or cleared) and the GIL is reacquired before
+        // it is invoked from the RunNode dispatcher.
+        core::runtime::RegisterGlobalCustomKernel(domain, op_type,
+                                                  [fn](const NodeProto &node, RuntimeContext &ctx) {
+                                                    nb::gil_scoped_acquire gil;
+                                                    fn(nb::cast(&node, nb::rv_policy::reference),
+                                                       nb::cast(&ctx, nb::rv_policy::reference));
+                                                  });
+      },
+      nb::arg("domain"), nb::arg("op_type"), nb::arg("fn"),
+      "Registers a process-wide (global) custom kernel for ``(domain, op_type)``. "
+      "Unlike :meth:`RuntimeContext.register_custom_kernel`, which affects a single "
+      "context, a global kernel is picked up by every :class:`RuntimeContext`. The "
+      "empty domain is normalised to ``ai.onnx``. ``fn`` is a Python callable "
+      "invoked as ``fn(node, ctx)`` (see "
+      ":meth:`RuntimeContext.register_custom_kernel`). A per-context registration "
+      "for the same key overrides the global one; both override any built-in entry, "
+      "but model-local functions and the built-in control-flow operators (``If``, "
+      "``Loop``, ``Scan``, ``SequenceMap``) still take precedence.");
+  rt_mod.def("unregister_custom_kernel", &core::runtime::UnregisterGlobalCustomKernel,
+             nb::arg("domain"), nb::arg("op_type"),
+             "Removes a process-wide custom kernel registration for "
+             "``(domain, op_type)``. The empty domain is normalised to ``ai.onnx``. "
+             "Returns ``True`` when an entry was removed.");
+  rt_mod.def("clear_custom_kernels", &core::runtime::ClearGlobalCustomKernels,
+             "Removes every process-wide custom kernel registration.");
 }

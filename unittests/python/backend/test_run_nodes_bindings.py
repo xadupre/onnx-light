@@ -99,6 +99,9 @@ class TestRunNodesBindings(ExtTestCase):
             "tensor_to_numpy",
             "run_node",
             "register_model_functions",
+            "register_custom_kernel",
+            "unregister_custom_kernel",
+            "clear_custom_kernels",
         ]:
             self.assertTrue(hasattr(rt, name), name)
 
@@ -516,6 +519,103 @@ class TestRunNodesBindings(ExtTestCase):
         del custom
         gc.collect()
         self.assertIsNone(custom_ref())
+
+    def test_register_global_custom_kernel(self):
+        # A globally registered custom kernel is picked up by a fresh
+        # RuntimeContext that never called register_custom_kernel itself.
+        model_src = (
+            '<ir_version: 10, opset_import: ["" : 18, "my.domain" : 1]>\n'
+            "agraph (float[3] x) => (float[3] y) {\n"
+            "  y = my.domain.Triple(x)\n"
+            "}\n"
+        )
+        model = parser.parse_model(model_src)
+
+        called = []
+
+        def triple(node, c):
+            called.append(str(node.op_type))
+            x = c.get(str(node.input[0]))
+            tp = TensorProto()
+            tp.name = str(node.output[0])
+            tp.dims.append(3)
+            tp.data_type = int(TensorProto.FLOAT)
+            vals = struct.unpack("<3f", bytes(x.raw_data()))
+            tp.raw_data = struct.pack("<3f", *(v * 3.0 for v in vals))
+            c.put(tp.name, rt.tensor_from_proto(tp), "output")
+
+        triple_ref = weakref.ref(triple)
+        rt.register_custom_kernel("my.domain", "Triple", triple)
+        try:
+            ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+            ctx.set("x", _make_float_tensor("x", [1.0, 2.0, 3.0]))
+            _run_model(model, ctx)
+            self.assertEqual(called, ["Triple"])
+            self.assertEqual(_unpack_floats(ctx.get("y")), (3.0, 6.0, 9.0))
+        finally:
+            unregistered = rt.unregister_custom_kernel("my.domain", "Triple")
+
+        self.assertTrue(unregistered)
+        del triple
+        gc.collect()
+        self.assertIsNone(triple_ref())
+
+        # Once unregistered, the unknown op fails again on a new context.
+        self.assertFalse(rt.unregister_custom_kernel("my.domain", "Triple"))
+        ctx2 = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx2.set("x", _make_float_tensor("x", [1.0, 2.0, 3.0]))
+        with self.assertRaises(ValueError) as err:
+            _run_model(parser.parse_model(model_src), ctx2)
+        self.assertIn("unsupported op_type", str(err.exception))
+
+    def test_per_context_custom_kernel_overrides_global(self):
+        # A per-context registration overrides the global one for the same key.
+        abs_src = (
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "agraph (float[3] x) => (float[3] y) { y = Abs(x) }\n"
+        )
+
+        def global_abs(node, c):
+            x = c.get(str(node.input[0]))
+            vals = struct.unpack("<3f", bytes(x.raw_data()))
+            tp = TensorProto()
+            tp.name = str(node.output[0])
+            tp.dims.append(3)
+            tp.data_type = int(TensorProto.FLOAT)
+            tp.raw_data = struct.pack("<3f", *(v * 10.0 for v in vals))
+            c.put(tp.name, rt.tensor_from_proto(tp), "output")
+
+        def context_abs(node, c):
+            x = c.get(str(node.input[0]))
+            vals = struct.unpack("<3f", bytes(x.raw_data()))
+            tp = TensorProto()
+            tp.name = str(node.output[0])
+            tp.dims.append(3)
+            tp.data_type = int(TensorProto.FLOAT)
+            tp.raw_data = struct.pack("<3f", *(-v for v in vals))
+            c.put(tp.name, rt.tensor_from_proto(tp), "output")
+
+        rt.register_custom_kernel("", "Abs", global_abs)
+        try:
+            # Only the global kernel: x * 10.
+            ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+            ctx.set("x", _make_float_tensor("x", [1.0, 2.0, 3.0]))
+            _run_model(parser.parse_model(abs_src), ctx)
+            self.assertEqual(_unpack_floats(ctx.get("y")), (10.0, 20.0, 30.0))
+
+            # Per-context override wins: negation.
+            ctx2 = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+            ctx2.set("x", _make_float_tensor("x", [1.0, 2.0, 3.0]))
+            ctx2.register_custom_kernel("", "Abs", context_abs)
+            _run_model(parser.parse_model(abs_src), ctx2)
+            self.assertEqual(_unpack_floats(ctx2.get("y")), (-1.0, -2.0, -3.0))
+        finally:
+            rt.clear_custom_kernels()
+        # After clearing the global kernel, the built-in Abs applies again.
+        ctx3 = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx3.set("x", _make_float_tensor("x", [-1.0, -2.0, -3.0]))
+        _run_model(parser.parse_model(abs_src), ctx3)
+        self.assertEqual(_unpack_floats(ctx3.get("y")), (1.0, 2.0, 3.0))
 
 
 class TestExecutionPlanBindings(ExtTestCase):

@@ -14,8 +14,11 @@ with ``unsupported op_type``.
 
 This page shows how to plug a custom kernel into the runtime so such a
 graph runs, in Python and in C++. The hook is exposed at three layers; pick
-the one that matches your use case.  All three share the single C++ entry
-point :cpp:func:`onnx_light::core::runtime::RuntimeContext::RegisterCustomKernel`.
+the one that matches your use case.  The per-session layers share the single
+C++ entry point
+:cpp:func:`onnx_light::core::runtime::RuntimeContext::RegisterCustomKernel`; a
+kernel can also be registered globally (see
+`Register globally or per session`_).
 
 Register a numpy kernel (recommended)
 -------------------------------------
@@ -103,6 +106,78 @@ Registering or unregistering a kernel invalidates the evaluator's cached
 runtime sessions; the next
 :py:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run` recreates them
 and picks up the updated dispatch.
+
+Register globally or per session
+--------------------------------
+
+The examples above register a kernel on a single
+:class:`~onnx_light.onnx.reference.ReferenceEvaluator` (equivalently, on one
+:class:`RuntimeContext`) — the kernel is only visible to that object. onnx-light
+also supports **global** (process-wide) registration: a global kernel is picked
+up by *every* :class:`RuntimeContext` created afterwards, so you install it once
+instead of on every evaluator.
+
+Both scopes are supported, and a per-session registration always overrides a
+global one for the same ``(domain, op_type)``. Resolution precedence, from
+highest to lowest, is: model-local functions, the built-in control-flow
+operators (``If`` / ``Loop`` / ``Scan`` / ``SequenceMap``), per-session custom
+kernels, global custom kernels, then the built-in
+:cpp:func:`onnx_light::core::runtime::KernelDispatchTable`.
+
+Because an evaluator caches its runtime sessions on first
+:py:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run`, register a global
+kernel *before* running the evaluators that should use it.
+
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
+
+          from onnx_light.onnx.reference import ReferenceEvaluator
+
+          def square(node, x):
+              return x * x
+
+          # Registered once; visible to every evaluator created afterwards.
+          ReferenceEvaluator.register_custom_kernel_global("my.domain", "Square", square)
+
+          sess = ReferenceEvaluator(model)  # no per-session registration needed
+          (y,) = sess.run(None, {"x": np.array([1.0, 2.0, 3.0], dtype=np.float32)})
+
+          # Remove the global registration when done.
+          ReferenceEvaluator.unregister_custom_kernel_global("my.domain", "Square")
+
+      The low-level counterparts live on the ``runtime`` submodule:
+      ``runtime.register_custom_kernel(domain, op_type, fn)``,
+      ``runtime.unregister_custom_kernel(domain, op_type)`` and
+      ``runtime.clear_custom_kernels()`` (module-level, i.e. global), as opposed
+      to the identically named methods on :class:`RuntimeContext` (per session).
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
+
+          #include "onnx_core/runtime/kernel_dispatch_table.h"
+
+          using namespace onnx_light::core::runtime;
+
+          // Global: picked up by every RuntimeContext.
+          RegisterGlobalCustomKernel(
+              "my.domain", "Scale",
+              [](const NodeProto &node, RuntimeContext &c) {
+                const Tensor &x = c.Get(node.input(0));
+                // ...
+                c.Put(node.output(0), /* Tensor */ ...);
+              });
+
+          // Per session: only this context (overrides the global one above).
+          RuntimeContext ctx(KernelContext(/*opset=*/18));
+          ctx.RegisterCustomKernel("my.domain", "Scale", /* ... */);
+
+          UnregisterGlobalCustomKernel("my.domain", "Scale");  // remove global
 
 Override a built-in kernel
 --------------------------

@@ -1254,5 +1254,61 @@ class TestReferenceEvaluatorUnregisterCustomKernels(ExtTestCase):
         self.assertIn("unsupported op_type", str(ctx.exception))
 
 
+class TestReferenceEvaluatorGlobalCustomKernels(ExtTestCase):
+    """Tests for :meth:`ReferenceEvaluator.register_custom_kernel_global`."""
+
+    _CUSTOM_MODEL_SRC = (
+        '<ir_version: 10, opset_import: ["" : 18, "my.domain" : 1]>\n'
+        "agraph (float[3] x) => (float[3] y) {\n"
+        "  y = my.domain.Square(x)\n"
+        "}\n"
+    )
+
+    def test_global_custom_kernel_seen_by_new_evaluator(self):
+        # A globally registered kernel is picked up by any evaluator created
+        # after the registration, without registering it on that evaluator.
+        ReferenceEvaluator.register_custom_kernel_global(
+            "my.domain", "Square", lambda node, x: x * x
+        )
+        try:
+            model = parser.parse_model(self._CUSTOM_MODEL_SRC)
+            sess = ReferenceEvaluator(model)
+            x = np.array([-1.0, 2.0, -3.5], dtype=np.float32)
+            (y,) = sess.run(None, {"x": x})
+            np.testing.assert_array_equal(y, x * x)
+        finally:
+            unregistered = ReferenceEvaluator.unregister_custom_kernel_global(
+                "my.domain", "Square"
+            )
+        self.assertTrue(unregistered)
+        # A second unregister finds nothing to remove.
+        self.assertFalse(
+            ReferenceEvaluator.unregister_custom_kernel_global("my.domain", "Square")
+        )
+        # After unregistering, a fresh evaluator fails on the unknown op again.
+        sess2 = ReferenceEvaluator(parser.parse_model(self._CUSTOM_MODEL_SRC))
+        with self.assertRaises(ValueError) as ctx:
+            sess2.run(None, {"x": np.array([1.0, 2.0, 3.0], dtype=np.float32)})
+        self.assertIn("unsupported op_type", str(ctx.exception))
+
+    def test_per_session_kernel_overrides_global(self):
+        ReferenceEvaluator.register_custom_kernel_global(
+            "my.domain", "Square", lambda node, x: x * x
+        )
+        try:
+            model = parser.parse_model(self._CUSTOM_MODEL_SRC)
+            sess = ReferenceEvaluator(model)
+            # A per-session registration for the same key wins over the global.
+            sess.register_custom_kernel("my.domain", "Square", lambda node, x: x + 1.0)
+            x = np.array([-1.0, 2.0, -3.5], dtype=np.float32)
+            (y,) = sess.run(None, {"x": x})
+            np.testing.assert_array_equal(y, x + 1.0)
+        finally:
+            unregistered = ReferenceEvaluator.unregister_custom_kernel_global(
+                "my.domain", "Square"
+            )
+        self.assertTrue(unregistered)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

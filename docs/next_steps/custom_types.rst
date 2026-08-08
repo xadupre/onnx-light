@@ -28,14 +28,20 @@ exact byte size is computed:
         repeated StringStringEntryProto external_data = 4;
         string name = 5;
         string doc_string = 6;
+        repeated uint64 dims = 7;  // values of the declared dimension parameters
     }
 
 The container itself is outside the scope of this page. The purpose of the
 specification is to define ``StructTypeProto``: a portable structure
 that can be overlaid on the bytes of a ``StructProto``.
 
-``dims`` is intentionally absent because not every structured value is
-tensor-shaped. Physical dimensions are already part of its arrays.
+``dims`` is not a logical tensor shape. It holds the value of every dimension
+parameter declared by the selected type, in declaration order. A type whose
+repetition counts are all constants declares no parameter and leaves ``dims``
+empty. A type describing a variable number of elements, such as a tensor of a
+custom element type, declares one parameter per variable repetition, and the
+exact payload size is then a function of the type and of ``dims`` only. It is
+never inferred from the payload length.
 
 The type system adds three serialized structural kinds, named integer enums,
 and constant fields:
@@ -60,7 +66,10 @@ Requirements
 * Bits and multi-byte values use one canonical ordering convention.
 * A structure may be nested and repeated without introducing a new proto
   for each format.
-* Every array and packed-array length is a concrete non-negative integer.
+* Every array and packed-array length is either a concrete non-negative
+  integer or one dimension parameter supplied by the value.
+* The number of payload bytes of a value is computable from its type and its
+  ``dims``, without reading the payload.
 * The physical structure is inspectable without loading a vendor plugin.
 * An optional standard ONNX decoder defines logical semantics such as
   dequantization.
@@ -74,8 +83,8 @@ The proposal has three valid uses of ``StructTypeProto``:
     Selects ``array``, ``packed_array``, ``structure``, or ``enum_type``. It
     appears in
     ``ModelProto.struct_types`` or in
-    ``StructProto.struct_type``. It completely determines the
-    payload size.
+    ``StructProto.struct_type``. Together with ``StructProto.dims`` it
+    completely determines the payload size.
 
 ``exact static reference``
     Selects ``type_index`` and appears inside ``TypeProto``. It accepts only
@@ -87,10 +96,11 @@ The proposal has three valid uses of ``StructTypeProto``:
     sequences and maps.
 
 ``type_index`` may also occur below a concrete root through
-``Array.element_type`` or ``Structure.Field.type``. A constant tensor or enum
+``Array.element_type`` or ``Structure.Field.type``; such a reference must
+select a declaration without dimension parameters. A constant tensor or enum
 value is attached directly to a ``Structure.Field``. A concrete root may not
 be a ``type_index`` or an unset ``kind``. Static forms may not carry
-``decoder``, ``encoder``, ``name``, or metadata.
+``decoder``, ``encoder``, ``name``, ``dims_param``, or metadata.
 
 Only the ``decoder`` and ``encoder`` attached to the selected concrete root
 are invoked. A declaration reached through a nested ``type_index`` contributes
@@ -98,20 +108,63 @@ only its physical structure, enum definition, and constants; its decoder and
 encoder are not composed implicitly.
 
 No other interpretation of an absent field is permitted. In particular,
-there are no symbolic physical dimensions, inferred lengths, implicit
-alignment, hidden padding, semantic traits, or alternate byte orders.
+counts are either constants or parameters bound by ``StructProto.dims``,
+and there are no inferred lengths, implicit alignment, hidden padding,
+semantic traits, or alternate byte orders.
+
+Dimension parameters
+++++++++++++++++++++
+
+A repetition count is either a constant declared by the type or a parameter
+supplied by the value. The concrete root declaration lists its parameter names
+in ``dims_param``, in declaration order. Inside that declaration, an ``Array``
+or a ``PackedArray`` selects ``dimension`` for a constant count or
+``dims_index`` for a parametric one; ``dims_index`` is a position in
+``dims_param`` and in ``StructProto.dims``.
+
+The rules are:
+
+* a declaration with an empty ``dims_param`` is *static*: its byte size
+  depends on the type alone and every ``count`` selects ``dimension``;
+* only a concrete root declares parameters; an inline nested declaration
+  leaves ``dims_param`` empty and its ``dims_index`` values are resolved
+  against the enclosing root;
+* a declaration with a non-empty ``dims_param`` is *parametric*: it may be
+  selected by a value or by an exact static reference inside ``TypeProto``,
+  but never nested through ``Array.element_type`` or ``Structure.Field.type``,
+  so parameters are never rebound and size computation stays local;
+* every ``dims_index`` is smaller than the number of declared parameters and
+  every declared parameter is used at least once;
+* ``StructProto.dims`` has exactly one entry per declared parameter;
+* a static declaration requires an empty ``StructProto.dims``;
+* the same parameter may be used by several arrays, which forces their counts
+  to be equal;
+* dimension names are documentation and binding keys only; no expression,
+  arithmetic, or constraint language is introduced.
+
+Consequently the payload size of a value is a pure function of its type and
+its ``dims``, and it is still an error when it differs from the declared
+payload length. The value never determines a count from the buffer size.
+
+A decoder output shape may use ``dim_param`` names taken from ``dims_param``.
+A runtime binds each such name to the corresponding ``StructProto.dims``
+entry. Any other ``dim_param`` stays symbolic and never participates in the
+size computation.
 
 Physical size function
 ++++++++++++++++++++++
 
-The serialized size is computed recursively in bits:
+The serialized size is computed recursively in bits. It takes the concrete
+root declaration and the dimension values ``d = StructProto.dims``:
 
 .. code-block:: text
 
+    count(dimension=n)          = n
+    count(dims_index=k)         = d[k]
     size(scalar(T))             = bit_width(T)
     size(Enum(T))               = bit_width(T)
-    size(Array(T, n))           = n * size(T)
-    size(PackedArray(c...), n)  = n * sum(c.bit_width)
+    size(Array(T, c))           = count(c) * size(T)
+    size(PackedArray(c..., n))  = count(n) * sum(c.bit_width)
     size(Field(constant))       = 0
     size(Field(enum_constant))  = 0
     size(Field(T))              = size(T)
@@ -120,8 +173,9 @@ The serialized size is computed recursively in bits:
 
 All arithmetic is checked in ``uint64``. References must be acyclic. The
 concrete root size must be divisible by eight and equal the inline
-``raw_data`` length or the external-data ``length``. These rules make the
-physical schema and payload independently checkable.
+``raw_data`` length or the external-data ``length``. Only ``dims`` enters the
+computation besides the type, so the physical schema and payload remain
+independently checkable.
 
 StructTypeProto
 +++++++++++++++++++++
@@ -149,10 +203,13 @@ type message.
             repeated uint64 dims = 3;   // empty for a scalar
         }
 
-        // Repeats one physical element a fixed number of times.
+        // Repeats one physical element a fixed or parametric number of times.
         message Array {
             TypeProto element_type = 1;  // repeated physical element
-            uint64 dimension = 2;        // exact element count
+            oneof count {
+                uint64 dimension = 2;    // exact element count
+                uint32 dims_index = 3;   // index into dims_param
+            }
         }
 
         // Repeats one explicitly decomposed bit pattern.
@@ -163,7 +220,10 @@ type message.
             }
 
             repeated Component component = 1;  // bit order within each element
-            uint64 dimension = 2;              // exact element count
+            oneof count {
+                uint64 dimension = 2;   // exact element count
+                uint32 dims_index = 3;  // index into dims_param
+            }
         }
 
         // Names one component of a structure.
@@ -196,6 +256,7 @@ type message.
         string name = 8;                     // reusable type name
         string doc_string = 9;               // type documentation
         repeated StringStringEntryProto metadata_props = 10;  // type metadata
+        repeated string dims_param = 11;     // names of the dimension parameters
     }
 
 ``StructTypeProto`` is itself the new ``TypeProto`` branch; there is no
@@ -301,8 +362,11 @@ branches are invalid here unless ONNX defines a canonical fixed-width byte
 representation for them.
 
 ``Array.dimension`` is a concrete non-negative integer. Its Protobuf default
-is zero; it is never symbolic or inferred from the enclosing buffer.
-Consequently, the physical size of every array is known from its type alone.
+is zero; it is never symbolic or inferred from the enclosing buffer. When the
+array instead selects ``dims_index``, the count comes from
+``StructProto.dims`` at that position. Consequently, the physical size of
+every array is known from its type and from the ``dims`` of the value, and
+from nothing else.
 
 For readability, a fixed-width ONNX data type such as ``INT4`` denotes its
 scalar ``TypeProto.Tensor`` leaf directly. ``array(T, dimension=d)`` denotes
@@ -421,7 +485,8 @@ empty for a zero-sized physical type. When ``external_data`` is non-empty,
 ``length`` entry. The parse succeeds only if:
 
 * ``raw_data.size()`` or external-data ``length`` equals the size computed
-  from the physical type;
+  from the physical type and ``dims``;
+* ``dims`` has one entry per declared dimension parameter;
 * the computed physical size is a whole number of bytes;
 * arithmetic on dimensions and element sizes does not overflow ``uint64``;
 * the root physical kind consumes the whole buffer, including explicit
@@ -511,13 +576,16 @@ Static type and static data
 
 The type and the data are both static:
 
-* ``StructTypeProto`` fixes field order, widths, counts, and
-  interpretation.
-* ``raw_data`` or external-data length fixes the concrete payload size.
+* ``StructTypeProto`` fixes field order, widths, interpretation, and every
+  count that is not a declared parameter.
+* ``StructProto.dims`` fixes the remaining counts.
+* ``raw_data`` or external-data length fixes the concrete payload size, which
+  must equal the size computed from the two previous items.
 
 There is no symbolic relation to solve between logical and physical
-dimensions. The checker validates the concrete overlay and the decoder
-validates the logical interpretation.
+dimensions. A dimension parameter is bound by a value, not inferred. The
+checker validates the concrete overlay and the decoder validates the logical
+interpretation.
 
 TypeProto integration
 ++++++++++++++++++++++
@@ -684,6 +752,137 @@ exactly three payload bytes:
         type: <FLOAT6_E3M2 type index>
         raw_data: <3 bytes>
     }
+
+Tensor of FLOAT6_E3M2
++++++++++++++++++++++
+
+The previous declaration has a constant count, so it describes exactly four
+values. A tensor of ``FLOAT6_E3M2`` needs a count that belongs to the value,
+which is what a dimension parameter provides:
+
+.. code-block:: text
+
+    StructTypeProto {
+        name: "FLOAT6_E3M2_TENSOR"
+        dims_param: ["n_values"]
+        packed_array: PackedArray {
+            component: { name: "sign",     bit_width: 1 }
+            component: { name: "exponent", bit_width: 3 }
+            component: { name: "mantissa", bit_width: 2 }
+            dims_index: 0
+        }
+        decoder: FunctionProto {
+            output: "Y"
+            value_info: {
+                name: "Y"
+                type: TypeProto {
+                    tensor_type: Tensor {
+                        elem_type: FLOAT
+                        shape: TensorShapeProto {
+                            dim: { dim_param: "n_values" }
+                        }
+                    }
+                }
+            }
+            // Decodes E3M2 with bias 3.
+        }
+    }
+
+    StructProto {
+        type: <FLOAT6_E3M2_TENSOR type index>
+        dims: [1000]
+        raw_data: <750 bytes>
+    }
+
+The size is ``1000 * 6 = 6000`` bits, that is ``750`` bytes, and four values
+occupy three bytes as before. It is computed from the type and ``dims``
+without reading the payload and without executing the decoder.
+
+Six bits do not tile a byte, so a value is rejected when
+``n_values * 6`` is not a multiple of eight. Two portable options exist:
+
+* restrict the parameter to a byte-aligned unit by counting groups instead of
+  values, for instance an array of the four-value ``FLOAT6_E3M2`` declaration
+  with ``dims_index: 0``, where ``dims: [250]`` also gives ``750`` bytes;
+* declare the padding explicitly as an additional structure field, which is
+  possible only when its width is a constant.
+
+The first option is the recommended profile for sub-byte element types,
+because every count then addresses a whole number of bytes.
+
+Tensor of 2D points
++++++++++++++++++++
+
+A record element follows the same pattern. The point layout is static and
+therefore shareable, while the number of points belongs to the value:
+
+.. code-block:: text
+
+    ModelProto {
+        struct_types: [
+            StructTypeProto {             // index 0: one point, 8 bytes
+                name: "POINT2D"
+                structure: Structure {
+                    field: { name: "x", type: FLOAT }
+                    field: { name: "y", type: FLOAT }
+                }
+            },
+            StructTypeProto {             // index 1: n points
+                name: "POINT2D_TENSOR"
+                dims_param: ["n_points"]
+                array: Array {
+                    dims_index: 0
+                    element_type: TypeProto {
+                        struct_type: StructTypeProto {
+                            type_index: 0
+                        }
+                    }
+                }
+            }
+        ]
+    }
+
+    StructProto {
+        type: 1
+        dims: [1000]
+        raw_data: <8000 bytes>
+    }
+
+The canonical leaf view contains ``x[1000]`` and ``y[1000]``. No decoder is
+required when an operator consumes those leaves directly; a decoder producing
+``FLOAT[n_points, 2]`` may be added when a single tensor is preferred.
+
+A two-dimensional grid of points uses one parameter per axis:
+
+.. code-block:: text
+
+    StructTypeProto {
+        name: "POINT2D_GRID"
+        dims_param: ["height", "width"]
+        array: Array {
+            dims_index: 0
+            element_type: TypeProto {
+                struct_type: StructTypeProto {
+                    array: Array {
+                        dims_index: 1
+                        element_type: TypeProto {
+                            struct_type: StructTypeProto { type_index: 0 }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    StructProto {
+        type: <POINT2D_GRID type index>
+        dims: [4, 5]
+        raw_data: <160 bytes>
+    }
+
+``POINT2D`` stays static and is shared by both declarations. The parametric
+declarations are roots, so ``4 * 5 * 8 = 160`` bytes is obtained without any
+parameter substitution across declarations.
 
 Quantization profile
 ++++++++++++++++++++
@@ -1073,6 +1272,9 @@ A checker validates:
 * non-negative type indices are in range;
 * ``type`` and ``struct_type`` satisfy the -1 sentinel rules;
 * the computed physical size equals the inline or external payload length;
+* every ``dims_index`` is in range and every declared parameter is used;
+* ``StructProto.dims`` has one entry per declared parameter of its type;
+* a parametric declaration is never nested inside another physical type;
 * model-level and inline concrete types select exactly one ``array``,
   ``structure``, or ``enum_type`` kind;
 * ``type_index`` references are in range and do not form cycles;

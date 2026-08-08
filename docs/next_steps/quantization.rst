@@ -201,6 +201,7 @@ It carries its own byte size explicitly.
 
          StructProto {
              type: <quantization-profile type index>
+             dims: ...  // one value per declared dimension parameter
              raw_data: ...
              name: ...
              doc_string: ...
@@ -209,8 +210,11 @@ It carries its own byte size explicitly.
 ``QuantizedTensorProto`` becomes ``StructProto``. ``raw_data``,
 ``external_data``, ``name``, and ``doc_string`` are carried by that generic
 value. Its exact model-level or inline ``StructTypeProto`` replaces
-``quantized_type`` and ``quantization``. The size computed from that physical
-type must equal ``raw_data.size()`` or external-data ``length``. Logical
+``quantized_type`` and ``quantization``. Counts such as a block or tile
+number are either constants of that type or dimension parameters bound by
+``StructProto.dims``, so one declaration serves every tensor size. The size
+computed from the physical type and ``dims`` must equal ``raw_data.size()`` or
+external-data ``length``. Logical
 dimensions and element type belong to the decoder output ``ValueInfoProto``.
 
 In both forms, ``name`` identifies the concrete value and ``doc_string``

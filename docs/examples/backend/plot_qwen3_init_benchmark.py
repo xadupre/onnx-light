@@ -51,7 +51,7 @@ else:
 
 
 def measure(name: str, fn, n: int = N_ITER, warmup: int = N_WARMUP) -> dict:
-    """Executes *fn* with warm-up iterations and records timing statistics.
+    """Runs *fn* with warm-up iterations and records timing statistics.
 
     Args:
         name: Benchmark name.
@@ -83,7 +83,7 @@ def measure(name: str, fn, n: int = N_ITER, warmup: int = N_WARMUP) -> dict:
 
 
 def initializer_is_metadata_only(initializer: TensorProto) -> bool:
-    """Tells whether an initializer carries shape/dtype metadata but no data.
+    """Returns whether an initializer carries shape/dtype metadata but no data.
 
     The backend test model stores its large weights as metadata-only
     initializers (external references without a payload). Such an initializer
@@ -153,6 +153,11 @@ def materialize_random_weights(model, seed: int = 0) -> int:
 
 def get_qwen3_model():
     """Returns the Qwen3-like model from the backend test case collection.
+
+    As a side effect, the retrieved model is written to
+    ``{OUTPUT_PREFIX}.onnx`` in the current working directory and reloaded so
+    the metadata-only weights come back detached from the backend registry
+    before they are materialized.
 
     Returns:
         The ``ModelProto`` of ``test_cc_shape_inference_big_qwen3_4_layers_like``

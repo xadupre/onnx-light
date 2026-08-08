@@ -641,7 +641,9 @@ deductible from the proto structure.
             assert q.codebook_vector_size > 0, "codebook_vector_size must be > 0"
             n_entries = len(q.codebook_data) // q.codebook_vector_size
             values = []
-            n_codes = len(fields[q.index_formula[0].field])
+            ref_field = q.index_formula[0].field
+            assert ref_field in fields, f"missing field {ref_field} for index_formula"
+            n_codes = len(fields[ref_field])
             for fw in q.index_formula:
                 assert fw.field in fields, f"missing field {fw.field} for index_formula"
                 assert len(fields[fw.field]) == n_codes, (

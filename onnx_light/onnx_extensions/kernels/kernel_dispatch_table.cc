@@ -315,9 +315,14 @@ void RegisterKernelFunctions() {
     for (const auto &entry : BuiltinKernelFunctions()) {
       const std::string &key = entry.first;
       const std::size_t sep = key.find(':');
+      // Register the built-in factory only when no kernel is already
+      // registered for this identifier, so a downstream override (e.g. the
+      // SIMD kernels shipped by onnx-light-cpu) installed *before* this bulk
+      // registration is not clobbered. Overrides installed afterwards keep
+      // using the default overwriting RegisterKernelFn and still win.
       ::onnx_light::core::runtime::RegisterKernelFn(key.substr(0, sep), key.substr(sep + 1),
                                                     ::onnx_light::core::symbolic::Device::kCPU,
-                                                    entry.second);
+                                                    entry.second, /*overwrite=*/false);
     }
     ::onnx_light::core::runtime::RegisterSequenceMapPackFn(
         [](RuntimeContext &rt, const Sequence &input_sequence,

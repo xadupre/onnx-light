@@ -15,4 +15,5 @@ headers via `Doxygen <https://www.doxygen.nl/>`_ and rendered by
     load_onnx_light_time_example
     load_onnx_time_example
     print_proto_debug_example
+    register_custom_kernel_example
     run_backend_test_ort_example

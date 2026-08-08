@@ -4,7 +4,9 @@
 
 #include "onnx_proto/onnx.h"
 
+#include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/kernel_dispatch_table.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 
 #include <gtest/gtest.h>
@@ -60,6 +62,65 @@ TEST(OnnxKernelsDispatchTable, DeviceIsPartOfIdentifier) {
   EXPECT_NE(table.find("test.onnxlight.device_kernel:DeviceOp:" +
                        std::to_string(static_cast<int32_t>(gpu))),
             table.end());
+}
+
+// `RegisterKernelFn` with `overwrite=false` must keep an existing entry and
+// report that it did not store the new factory, whereas the default
+// (`overwrite=true`) replaces it. This is the primitive that makes a custom
+// kernel override survive the built-in bulk registration
+// (`RegisterKernelFunctions`) regardless of the order in which the two run:
+// the bulk registration uses `overwrite=false`, so it never clobbers a
+// previously registered override.
+TEST(OnnxKernelsDispatchTable, RegisterKernelFnOverwriteFlagControlsReplacement) {
+  const std::string domain = "test.onnxlight.overwrite_flag";
+  const std::string key = domain + ":OverwriteOp";
+  // Static: the factories below are stored in the process-global dispatch table
+  // and must not capture a reference to a local that dies with the test.
+  static int which = 0;
+  which = 0;
+
+  core::runtime::RuntimeContext ctx(core::runtime::KernelContext(core::runtime::DefaultOpset(18)));
+  const NodeProto node;
+
+  const bool stored_first = core::runtime::RegisterKernelFn(
+      domain, "OverwriteOp", core::symbolic::Device::kCPU,
+      [](const NodeProto &,
+         core::runtime::RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+        which = 1;
+        return nullptr;
+      });
+  EXPECT_TRUE(stored_first);
+
+  const auto &table = core::runtime::KernelDispatchTable();
+  auto it = table.find(key);
+  ASSERT_NE(it, table.end());
+
+  // overwrite=false: the existing entry is kept and the call reports false.
+  const bool stored_if_absent = core::runtime::RegisterKernelFn(
+      domain, "OverwriteOp", core::symbolic::Device::kCPU,
+      [](const NodeProto &,
+         core::runtime::RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+        which = 2;
+        return nullptr;
+      },
+      /*overwrite=*/false);
+  EXPECT_FALSE(stored_if_absent);
+  which = 0;
+  table.find(key)->second(node, ctx);
+  EXPECT_EQ(which, 1) << "overwrite=false must keep the first factory.";
+
+  // overwrite=true (default): the entry is replaced and the call reports true.
+  const bool stored_overwrite = core::runtime::RegisterKernelFn(
+      domain, "OverwriteOp", core::symbolic::Device::kCPU,
+      [](const NodeProto &,
+         core::runtime::RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+        which = 3;
+        return nullptr;
+      });
+  EXPECT_TRUE(stored_overwrite);
+  which = 0;
+  table.find(key)->second(node, ctx);
+  EXPECT_EQ(which, 3) << "overwrite=true must replace the factory.";
 }
 
 } // namespace Test

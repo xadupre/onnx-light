@@ -6,11 +6,11 @@ ThreadPool::ThreadPool()
     : stop_(false), is_started_(false), requested_threads_(0), pending_jobs_(0) {}
 
 void ThreadPool::Start(int32_t num_threads) {
-  EXT_ENFORCE(workers_.size() == 0, "ThreadPool already started");
   if (num_threads < 0)
     num_threads = static_cast<int32_t>(std::thread::hardware_concurrency());
 
   std::lock_guard<std::mutex> lock(mutex_);
+  EXT_ENFORCE(!is_started_, "ThreadPool already started");
   stop_ = false;
   is_started_ = true;
   requested_threads_ = num_threads;

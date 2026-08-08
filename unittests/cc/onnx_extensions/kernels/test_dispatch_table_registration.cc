@@ -74,6 +74,8 @@ TEST(OnnxKernelsDispatchTable, DeviceIsPartOfIdentifier) {
 TEST(OnnxKernelsDispatchTable, RegisterKernelFnOverwriteFlagControlsReplacement) {
   const std::string domain = "test.onnxlight.overwrite_flag";
   const std::string key = domain + ":OverwriteOp";
+  // Static: the factories below are stored in the process-global dispatch table
+  // and must not capture a reference to a local that dies with the test.
   static int which = 0;
   which = 0;
 
@@ -82,8 +84,8 @@ TEST(OnnxKernelsDispatchTable, RegisterKernelFnOverwriteFlagControlsReplacement)
 
   const bool stored_first = core::runtime::RegisterKernelFn(
       domain, "OverwriteOp", core::symbolic::Device::kCPU,
-      [&which](const NodeProto &,
-               core::runtime::RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+      [](const NodeProto &,
+         core::runtime::RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
         which = 1;
         return nullptr;
       });
@@ -96,8 +98,8 @@ TEST(OnnxKernelsDispatchTable, RegisterKernelFnOverwriteFlagControlsReplacement)
   // overwrite=false: the existing entry is kept and the call reports false.
   const bool stored_if_absent = core::runtime::RegisterKernelFn(
       domain, "OverwriteOp", core::symbolic::Device::kCPU,
-      [&which](const NodeProto &,
-               core::runtime::RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+      [](const NodeProto &,
+         core::runtime::RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
         which = 2;
         return nullptr;
       },
@@ -110,8 +112,8 @@ TEST(OnnxKernelsDispatchTable, RegisterKernelFnOverwriteFlagControlsReplacement)
   // overwrite=true (default): the entry is replaced and the call reports true.
   const bool stored_overwrite = core::runtime::RegisterKernelFn(
       domain, "OverwriteOp", core::symbolic::Device::kCPU,
-      [&which](const NodeProto &,
-               core::runtime::RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+      [](const NodeProto &,
+         core::runtime::RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
         which = 3;
         return nullptr;
       });

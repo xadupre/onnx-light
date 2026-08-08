@@ -22,8 +22,8 @@ exact byte size is computed:
 .. code-block:: text
 
     message UnstructuredProto {
-        int32 type = 1;  // model-level index, or -1 when unstructured_type is present
-        optional UnstructuredTypeProto unstructured_type = 2;
+        int32 type = 1;  // model-level index, or -1 when struct_type is present
+        optional StructTypeProto struct_type = 2;
         bytes raw_data = 3;
         repeated StringStringEntryProto external_data = 4;
         string name = 5;
@@ -31,7 +31,7 @@ exact byte size is computed:
     }
 
 The container itself is outside the scope of this page. The purpose of the
-specification is to define ``UnstructuredTypeProto``: a portable structure
+specification is to define ``StructTypeProto``: a portable structure
 that can be overlaid on the bytes of an ``UnstructuredProto``.
 
 ``dims`` is intentionally absent because not every unstructured value is
@@ -67,12 +67,12 @@ Requirements
 Stable contract
 +++++++++++++++
 
-The proposal has three valid uses of ``UnstructuredTypeProto``:
+The proposal has three valid uses of ``StructTypeProto``:
 
 ``concrete declaration``
     Selects ``array``, ``structure``, or ``enum_type``. It appears in
-    ``ModelProto.unstructured_types`` or in
-    ``UnstructuredProto.unstructured_type``. It completely determines the
+    ``ModelProto.struct_types`` or in
+    ``UnstructuredProto.struct_type``. It completely determines the
     payload size.
 
 ``exact static reference``
@@ -113,14 +113,14 @@ The serialized size is computed recursively in bits:
     size(Field(enum_constant))  = 0
     size(Field(T))              = size(T)
     size(Structure(f...))       = sum(size(f))
-    size(type_index=i)          = size(ModelProto.unstructured_types[i])
+    size(type_index=i)          = size(ModelProto.struct_types[i])
 
 All arithmetic is checked in ``uint64``. References must be acyclic. The
 concrete root size must be divisible by eight and equal the inline
 ``raw_data`` length or the external-data ``length``. These rules make the
 physical schema and payload independently checkable.
 
-UnstructuredTypeProto
+StructTypeProto
 +++++++++++++++++++++
 
 The complete proposal adds a named integer enum and one top-level structured
@@ -139,7 +139,7 @@ type message.
         repeated Value value = 2;  // allowed names and numbers
     }
 
-    message UnstructuredTypeProto {
+    message StructTypeProto {
         message EnumConstant {
             int32 type_index = 1;     // model enum declaration
             repeated int64 number = 2;  // allowed EnumProto numbers
@@ -173,7 +173,7 @@ type message.
             Array array = 1;          // repeated elements
             Structure structure = 2;  // ordered named fields
             EnumProto enum_type = 3;  // named integer values
-            int32 type_index = 4;     // ModelProto.unstructured_types index
+            int32 type_index = 4;     // ModelProto.struct_types index
         }
 
         optional FunctionProto decoder = 5;  // structured leaves to ONNX value
@@ -183,14 +183,14 @@ type message.
         repeated StringStringEntryProto metadata_props = 9;  // type metadata
     }
 
-``UnstructuredTypeProto`` is itself the new ``TypeProto`` branch; there is no
+``StructTypeProto`` is itself the new ``TypeProto`` branch; there is no
 intermediate ``Layout`` message. A concrete model-level or inline physical
 type selects exactly one of ``array``, ``structure``, and ``enum_type``. A
 nested or static exact type may select one model-level declaration with
 ``type_index``. A static type may leave ``kind`` unset only for the
 unconstrained category defined above.
 
-``UnstructuredProto.type`` and ``UnstructuredTypeProto.type_index`` are both
+``UnstructuredProto.type`` and ``StructTypeProto.type_index`` are both
 model-level indices. The former selects the type of one value; the latter
 references a type from another physical declaration.
 
@@ -204,7 +204,7 @@ repeated attribute forms described below.
     message TypeProto {
         oneof value {
             ...
-            UnstructuredTypeProto unstructured_type = <N>;
+            StructTypeProto struct_type = <N>;
         }
     }
 
@@ -217,26 +217,26 @@ Reusable types are stored once at model level:
 
     message ModelProto {
         ...
-        repeated UnstructuredTypeProto unstructured_types = <N>;
+        repeated StructTypeProto struct_types = <N>;
     }
 
 Shared types use a non-negative ``type`` index. The integer is local to the
 model and is remapped by model composition tools. A value whose type is unique
-sets ``type`` to -1 and stores it in ``unstructured_type`` instead, avoiding a
+sets ``type`` to -1 and stores it in ``struct_type`` instead, avoiding a
 single-use entry in the model list.
 
 The two forms are mutually exclusive:
 
 * ``type >= 0`` requires an in-range model index and forbids
-  ``unstructured_type``;
-* ``type == -1`` requires ``unstructured_type``;
+  ``struct_type``;
+* ``type == -1`` requires ``struct_type``;
 * every other negative value is invalid.
 
 As with ``TensorProto``, ``UnstructuredProto.name`` identifies the concrete
 value and its ``doc_string`` documents that value.
-``UnstructuredTypeProto.name`` identifies the type declaration instead. It
-must be non-empty and unique among ``ModelProto.unstructured_types`` entries;
-it is optional for an inline type. ``UnstructuredTypeProto.doc_string``
+``StructTypeProto.name`` identifies the type declaration instead. It
+must be non-empty and unique among ``ModelProto.struct_types`` entries;
+it is optional for an inline type. ``StructTypeProto.doc_string``
 documents that type.
 
 Standard ONNX leaves
@@ -278,9 +278,9 @@ Array type
 
 An array repeats an existing ONNX ``TypeProto``. A scalar element is a
 scalar-shaped ``tensor_type``. A structured element is an
-``unstructured_type`` referencing an entry in
-``ModelProto.unstructured_types``. For a physical array element, that
-``unstructured_type`` contains either one ``type_index`` or one inline
+``struct_type`` referencing an entry in
+``ModelProto.struct_types``. For a physical array element, that
+``struct_type`` contains either one ``type_index`` or one inline
 physical kind so its byte representation is unambiguous. Other ``TypeProto``
 branches are invalid here unless ONNX defines a canonical fixed-width byte
 representation for them.
@@ -330,8 +330,8 @@ available to checkers and inspection tools.
 .. code-block:: text
 
     ModelProto {
-        unstructured_types: [
-            UnstructuredTypeProto {  // index 0
+        struct_types: [
+            StructTypeProto {  // index 0
                 name: "BLOCK_STORAGE_ORDER"
                 enum_type: EnumProto {
                     storage_type: UINT8
@@ -339,7 +339,7 @@ available to checkers and inspection tools.
                     value: { name: "SEQUENTIAL", number: 1 }
                 }
             },
-            UnstructuredTypeProto {  // index 1
+            StructTypeProto {  // index 1
                 name: "BLOCKS"
                 structure: Structure {
                     field: {
@@ -463,7 +463,7 @@ An optional encoder defines one canonical serialization:
     ) -> buffer: tensor(UINT8)[serialized_size]
 
 The result must parse successfully with the same
-``UnstructuredTypeProto``. An encoder does not define calibration,
+``StructTypeProto``. An encoder does not define calibration,
 training policy, or parameter selection. Formats with several valid
 encodings may omit it.
 The encoder input type is declared by its ``ValueInfoProto`` and must equal
@@ -476,7 +476,7 @@ Static type and static data
 
 The type and the data are both static:
 
-* ``UnstructuredTypeProto`` fixes field order, widths, counts, and
+* ``StructTypeProto`` fixes field order, widths, counts, and
   interpretation.
 * ``raw_data`` or external-data length fixes the concrete payload size.
 
@@ -488,7 +488,7 @@ TypeProto integration
 ++++++++++++++++++++++
 
 ``UnstructuredProto`` is a value category, not merely an initializer
-encoding. ``TypeProto`` therefore contains ``UnstructuredTypeProto`` directly,
+encoding. ``TypeProto`` therefore contains ``StructTypeProto`` directly,
 as shown above. This makes recursion uniform: ``Array.element_type`` and
 ``Field.type`` reuse ``TypeProto`` rather than an intermediate layout
 language. A physical element or field must nevertheless have a canonical
@@ -497,16 +497,16 @@ unstructured array, structure, and enum types, but not sequences, maps, or
 optionals.
 
 The concrete ``UnstructuredProto`` selects exactly one
-``UnstructuredTypeProto`` declaration. The static type is a constraint:
+``StructTypeProto`` declaration. The static type is a constraint:
 
-* when ``UnstructuredTypeProto.type_index`` is present, the value must
+* when ``StructTypeProto.type_index`` is present, the value must
   reference that exact model-level declaration;
 * when ``kind`` is unset, the explicitly unconstrained static category accepts
   any concrete unstructured type.
 
-Model-level and ``UnstructuredProto.unstructured_type`` definitions must
+Model-level and ``UnstructuredProto.struct_type`` definitions must
 select ``array``, ``structure``, or ``enum_type``. A
-``TypeProto.unstructured_type`` may instead:
+``TypeProto.struct_type`` may instead:
 
 * select a physical kind to define one exact inline type;
 * select one model-level declaration with ``type_index``;
@@ -522,10 +522,10 @@ Because ``Sequence``, ``Map``, and ``Optional`` already refer recursively to
 
 .. code-block:: text
 
-    sequence(unstructured(...))
-    map(int64, unstructured(...))
-    optional(unstructured(...))
-    sequence(map(int64, unstructured(...)))
+    sequence(struct(...))
+    map(int64, struct(...))
+    optional(struct(...))
+    sequence(map(int64, struct(...)))
 
 The usual ONNX map-key restrictions remain unchanged.
 
@@ -566,7 +566,7 @@ sequence/map attributes self-describing rather than relying on surrounding
 graph type information.
 
 All values in a sequence remain homogeneous with respect to their static
-``TypeProto.Unstructured`` category. With the unconstrained static form, they
+``TypeProto.Struct`` category. With the unconstrained static form, they
 need not have the same concrete declaration: each value still carries its
 exact physical type.
 
@@ -607,7 +607,7 @@ therefore consume no payload bytes.
 
 .. code-block:: text
 
-    UnstructuredTypeProto {
+    StructTypeProto {
         name: "FLOAT6_E3M2"
         structure: Structure {
             field: {
@@ -697,7 +697,7 @@ constraint:
     TypeProto {
         sequence_type: Sequence {
             elem_type: TypeProto {
-                unstructured_type: UnstructuredTypeProto {}
+                struct_type: StructTypeProto {}
             }
         }
     }
@@ -710,8 +710,8 @@ A concrete sequence may mix page encodings:
 .. code-block:: text
 
     ModelProto {
-        unstructured_types: [
-            UnstructuredTypeProto {
+        struct_types: [
+            StructTypeProto {
                 name: "INT4_KV_PAGE"
                 structure: Structure {
                     field: {
@@ -742,7 +742,7 @@ A concrete sequence may mix page encodings:
                     // Y = Cast(values, FLOAT16) * scale
                 }
             },
-            UnstructuredTypeProto {
+            StructTypeProto {
                 name: "FP8_E4M3_KV_PAGE"
                 structure: Structure {
                     field: {
@@ -775,7 +775,7 @@ A concrete sequence may mix page encodings:
     SequenceProto {
         elem_type: UNSTRUCTURED
         value_type: TypeProto {
-            unstructured_type: UnstructuredTypeProto {}
+            struct_type: StructTypeProto {}
         }
         unstructured_values: [
             UnstructuredProto {
@@ -823,8 +823,8 @@ STQ1_0 stores 256 logical values in each 42-byte block:
 .. code-block:: text
 
     ModelProto {
-        unstructured_types: [
-            UnstructuredTypeProto {             // index 0: one physical block
+        struct_types: [
+            StructTypeProto {             // index 0: one physical block
                 name: "STQ1_0_BLOCK"
                 structure: Structure {
                     field: {
@@ -841,12 +841,12 @@ STQ1_0 stores 256 logical values in each 42-byte block:
                     }
                 }
             },
-            UnstructuredTypeProto {             // index 1: complete value
+            StructTypeProto {             // index 1: complete value
                 name: "STQ1_0"
                 array: Array {
                     dimension: 10
                     element_type: TypeProto {
-                        unstructured_type: UnstructuredTypeProto {
+                        struct_type: StructTypeProto {
                             type_index: 0
                         }
                     }
@@ -891,8 +891,8 @@ An INT4 format with 32 values followed by one FLOAT16 scale per block is:
 .. code-block:: text
 
     ModelProto {
-        unstructured_types: [
-            UnstructuredTypeProto {             // index 0: one block
+        struct_types: [
+            StructTypeProto {             // index 0: one block
                 name: "INT4_BLOCK_32"
                 structure: Structure {
                     field: {
@@ -905,12 +905,12 @@ An INT4 format with 32 values followed by one FLOAT16 scale per block is:
                     }
                 }
             },
-            UnstructuredTypeProto {             // index 1: all blocks
+            StructTypeProto {             // index 1: all blocks
                 name: "INT4_BLOCKWISE"
                 array: Array {
                     dimension: 10
                     element_type: TypeProto {
-                        unstructured_type: UnstructuredTypeProto {
+                        struct_type: StructTypeProto {
                             type_index: 0
                         }
                     }
@@ -947,8 +947,8 @@ seven fixed-size nodes:
 .. code-block:: text
 
     ModelProto {
-        unstructured_types: [
-            UnstructuredTypeProto {             // index 0: one node
+        struct_types: [
+            StructTypeProto {             // index 0: one node
                 name: "DECISION_NODE_3_CLASSES"
                 structure: Structure {
                     field: { name: "kind",       type: UINT8 }
@@ -962,13 +962,13 @@ seven fixed-size nodes:
                     }
                 }
             },
-            UnstructuredTypeProto {             // index 1: complete tree
+            StructTypeProto {             // index 1: complete tree
                 name: "DECISION_TREE_7_NODES_3_CLASSES"
                 structure: Structure {
                     field: {
                         name: "nodes"
                         type: array(
-                            unstructured(type_index=0),
+                            struct(type_index=0),
                             dimension=7
                         )
                     }
@@ -1030,7 +1030,7 @@ Validation and security
 A checker validates:
 
 * non-negative type indices are in range;
-* ``type`` and ``unstructured_type`` satisfy the -1 sentinel rules;
+* ``type`` and ``struct_type`` satisfy the -1 sentinel rules;
 * model-level and inline concrete types select exactly one ``array``,
   ``structure``, or ``enum_type`` kind;
 * ``type_index`` references are in range and do not form cycles;
@@ -1092,5 +1092,5 @@ Comparison with Opaque
      - Yes
      - No, when a decoder is present
 
-``UnstructuredTypeProto`` is therefore a schema for bytes, not an opaque
+``StructTypeProto`` is therefore a schema for bytes, not an opaque
 escape hatch and not a closed list of application-specific formats.

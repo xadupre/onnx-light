@@ -50,7 +50,7 @@ The conceptual syntax is:
 
     message UnstructuredProto {
         int32 type = 1;
-        optional UnstructuredTypeProto unstructured_type = 2;
+        optional StructTypeProto struct_type = 2;
         bytes raw_data = 3;
         repeated StringStringEntryProto external_data = 4;
         string name = 5;
@@ -69,7 +69,7 @@ The equivalent standard Protobuf declaration is flattened:
 
     message QuantizedTensorProto {
         int32 type = 1;
-        optional UnstructuredTypeProto unstructured_type = 2;
+        optional StructTypeProto struct_type = 2;
         bytes raw_data = 3;
         repeated StringStringEntryProto external_data = 4;
         string name = 5;

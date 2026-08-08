@@ -30,7 +30,7 @@ Stable contract
     }
 
 ``value`` is always an exact unstructured value: it uses either a non-negative
-model-level ``type`` index or an inline concrete ``unstructured_type``. An
+model-level ``type`` index or an inline concrete ``struct_type``. An
 unconstrained static type is not valid here.
 
 ``source_name`` refers to one initializer in ``ModelProto.graph``. The first
@@ -69,14 +69,14 @@ ModelProto extension
 
     message ModelProto {
         ...
-        repeated UnstructuredTypeProto unstructured_types = <N>;
+        repeated StructTypeProto struct_types = <N>;
         repeated DeviceProto devices = <N+1>;
         repeated CompiledTensorProto compiled_tensors = <N+2>;
     }
 
 Several compiled entries may reference the same ``source_name`` for different
 architectures, runtimes, or packing strategies. Their
-``UnstructuredTypeProto.name`` and metadata distinguish the physical formats.
+``StructTypeProto.name`` and metadata distinguish the physical formats.
 
 Loading rules
 +++++++++++++
@@ -88,7 +88,7 @@ A runtime uses a compiled entry only when all of the following hold:
 * ``device`` is an in-range model-level index;
 * device type, architecture, runtime, version, and required metadata are
   compatible;
-* ``value`` and its concrete ``UnstructuredTypeProto`` pass structural and
+* ``value`` and its concrete ``StructTypeProto`` pass structural and
   payload-size validation;
 * the runtime recognizes that physical type and compiled-format version.
 

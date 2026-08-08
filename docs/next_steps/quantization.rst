@@ -9,7 +9,7 @@ Quantization
     The structures on this page are descriptive quantization profiles. They
     should be implemented with :ref:`l-next-steps-custom-types`, not as a
     parallel protobuf hierarchy. Each specialized structure below is followed
-    by its ``UnstructuredTypeProto`` translation. The families remain useful
+    by its ``StructTypeProto`` translation. The families remain useful
     as format names, validation profiles, and decoder specifications.
 
 Format coverage summary
@@ -208,7 +208,7 @@ It carries its own byte size explicitly.
 
 ``QuantizedTensorProto`` becomes ``UnstructuredProto``. ``raw_data``,
 ``external_data``, ``name``, and ``doc_string`` are carried by that generic
-value. Its exact model-level or inline ``UnstructuredTypeProto`` replaces
+value. Its exact model-level or inline ``StructTypeProto`` replaces
 ``quantized_type`` and ``quantization``. The physical type determines the
 payload size, so ``n_bytes`` is not duplicated. Logical dimensions and element
 type belong to the decoder output ``ValueInfoProto``.
@@ -268,7 +268,7 @@ if ``QuantizedTensorProto`` remained a distinct value category:
          message TypeProto {
              oneof value {
                  ...
-                 UnstructuredTypeProto unstructured_type = <N>;
+                 StructTypeProto struct_type = <N>;
              }
          }
 
@@ -302,7 +302,7 @@ These specialized branches map to the generic integrations defined by
 :ref:`l-next-steps-custom-types`:
 
 * ``TypeProto.QuantizedTensor`` becomes
-  ``TypeProto.unstructured_type``;
+  ``TypeProto.struct_type``;
 * ``QUANTIZED_TENSOR`` becomes the ``UNSTRUCTURED`` value category;
 * ``quantized_tensor_values`` and ``quantized_tensor_value`` become
   ``unstructured_values`` and ``unstructured_value``;
@@ -362,8 +362,8 @@ QuantizationProto
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      // One concrete array or structure and its decoder.
                  },
                  ...
@@ -371,8 +371,8 @@ QuantizationProto
          }
 
 There is no direct ``QuantizationProto`` message in the recommended schema.
-Each entry becomes one concrete ``UnstructuredTypeProto`` in
-``ModelProto.unstructured_types``:
+Each entry becomes one concrete ``StructTypeProto`` in
+``ModelProto.struct_types``:
 
 * the selected profile determines its ``array`` or ``structure``;
 * scalar parameters and lookup tables become fields with ``constant``;
@@ -390,7 +390,7 @@ specialized declaration.
 Code blocks containing names such as ``N``, ``K``, ``packed_bytes``, or
 ``tile_type`` are translation templates, not valid serialized declarations.
 Every such name is replaced by a concrete value or model type index in an
-``UnstructuredTypeProto``.
+``StructTypeProto``.
 
 LinearUniformProto
 ^^^^^^^^^^^^^^^^^^
@@ -419,7 +419,7 @@ Classic affine/symmetric: ``value = (q - zero_point) * scale``.
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "LINEAR"
              structure: Structure {
                  field: { name: "values",       type: array(INT4, dimension=N) }
@@ -495,7 +495,7 @@ each codebook.
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "CODEBOOK"
              structure: Structure {
                  field: { name: "indices",  type: array(UINT8, dimension=packed_bytes) }
@@ -582,7 +582,7 @@ Covers FP6, FP4, MXFP and similar reduced-precision floating-point formats.
 
       .. code-block:: text
 
-         UnstructuredTypeProto {  // translation template; not serialized as-is
+         StructTypeProto {  // translation template; not serialized as-is
              structure: Structure {
                  // Serialized payload.
                  field: {
@@ -635,7 +635,7 @@ Covers FP6, FP4, MXFP and similar reduced-precision floating-point formats.
              }
          }
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "FLOAT6_E3M2"
              structure: Structure {
                  field: {
@@ -725,10 +725,10 @@ a base quantization scheme.
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "SPARSE_QUANTIZED"
              structure: Structure {
-                 field: { name: "base",    type: unstructured(type_index=base_type) }
+                 field: { name: "base",    type: struct(type_index=base_type) }
                  field: { name: "indices", type: array(INT64, dimension=K) }
                  field: { name: "values",  type: array(FLOAT16, dimension=K) }
                  field: {
@@ -792,7 +792,7 @@ Logarithmic quantization: ``value = sign * base^(q + offset)``.
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "LOG_UNIFORM"
              structure: Structure {
                  field: { name: "codes",  type: array(UINT4, dimension=N) }
@@ -863,7 +863,7 @@ the quantize op does the reverse.
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "FUNCTION_QUANTIZED"
              structure: Structure {
                  field: {
@@ -884,7 +884,7 @@ the quantize op does the reverse.
 
 ``storage_type``, ``bits``, and ``block_layout`` become the concrete
 ``Array``/``Structure`` schema. ``dequantize_op`` becomes
-``UnstructuredTypeProto.decoder`` and ``quantize_op`` becomes ``encoder`` when
+``StructTypeProto.decoder`` and ``quantize_op`` becomes ``encoder`` when
 both can be expressed as deterministic standard-domain ONNX functions.
 
 If either operation requires a custom-domain operator, the physical type
@@ -941,13 +941,13 @@ hierarchies such as K-Quants and MXFP.
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "TILED"
              structure: Structure {
                  field: {
                      name: "tiles"
                      type: array(
-                         unstructured(type_index=tile_type),
+                         struct(type_index=tile_type),
                          dimension=concrete_tile_count
                      )
                  }
@@ -1013,7 +1013,7 @@ the identity operation, useful for pure retiling.
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "CAST"
              array: Array {
                  element_type: BFLOAT16
@@ -1108,7 +1108,7 @@ deducible from the proto structure.
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "BLOCK_FIELD_ROLE"
              enum_type: EnumProto {
                  storage_type: UINT8
@@ -1123,7 +1123,7 @@ deducible from the proto structure.
              }
          }
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "BLOCK_STORAGE_ORDER"
              enum_type: EnumProto {
                  storage_type: UINT8
@@ -1132,13 +1132,13 @@ deducible from the proto structure.
              }
          }
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "STRUCTURED_BLOCK"
              structure: Structure {
                  field: {
                      name: "blocks"
                      type: array(
-                         unstructured(type_index=block_type),
+                         struct(type_index=block_type),
                          dimension=concrete_block_count
                      )
                  }
@@ -1347,7 +1347,7 @@ For a tensor of 1024 elements:
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "INT4_SYMMETRIC_1024"
              structure: Structure {
                  field: {
@@ -1421,7 +1421,7 @@ For a tensor of 1024 elements (8 groups):
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "GPTQ_INT4_1024_GROUP128"
              structure: Structure {
                  field: {
@@ -1478,7 +1478,7 @@ NF4 (QLoRA / bitsandbytes)
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "NF4"
              structure: Structure {
                  field: {
@@ -1533,8 +1533,8 @@ AWQ INT4 (per-group of 128)
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "AWQ_INT4_BLOCK_128"
                      structure: Structure {
                          field: { name: "values", type: array(INT4, dimension=128) }
@@ -1549,13 +1549,13 @@ AWQ INT4 (per-group of 128)
                          field: { name: "axis", constant: tensor(INT32, [], -1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "AWQ_INT4_TILES"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=block_count
                              )
                          }
@@ -1603,8 +1603,8 @@ Q2_K (llama.cpp, nested 256/16)
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "Q2_K_SUBBLOCK_16"
                      structure: Structure {
                          field: { name: "values", type: array(UINT8, dimension=4) }
@@ -1619,12 +1619,12 @@ Q2_K (llama.cpp, nested 256/16)
                          field: { name: "axis", constant: tensor(INT32, [], -1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "Q2_K_SUPERBLOCK_256"
                      structure: Structure {
                          field: {
                              name: "subblocks"
-                             type: array(unstructured(type_index=0), dimension=16)
+                             type: array(struct(type_index=0), dimension=16)
                          }
                          field: {
                              name: "tile_shape"
@@ -1632,13 +1632,13 @@ Q2_K (llama.cpp, nested 256/16)
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "Q2_K_TENSOR"
                      structure: Structure {
                          field: {
                              name: "superblocks"
                              type: array(
-                                 unstructured(type_index=1),
+                                 struct(type_index=1),
                                  dimension=superblock_count
                              )
                          }
@@ -1686,8 +1686,8 @@ Q3_K (llama.cpp, nested 256/32)
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "Q3_K_SUBBLOCK_32"
                      structure: Structure {
                          field: { name: "values", type: array(UINT8, dimension=12) }
@@ -1702,12 +1702,12 @@ Q3_K (llama.cpp, nested 256/32)
                          field: { name: "axis", constant: tensor(INT32, [], -1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "Q3_K_SUPERBLOCK_256"
                      structure: Structure {
                          field: {
                              name: "subblocks"
-                             type: array(unstructured(type_index=0), dimension=8)
+                             type: array(struct(type_index=0), dimension=8)
                          }
                          field: {
                              name: "tile_shape"
@@ -1715,13 +1715,13 @@ Q3_K (llama.cpp, nested 256/32)
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "Q3_K_TENSOR"
                      structure: Structure {
                          field: {
                              name: "superblocks"
                              type: array(
-                                 unstructured(type_index=1),
+                                 struct(type_index=1),
                                  dimension=superblock_count
                              )
                          }
@@ -1769,8 +1769,8 @@ Q4_K (llama.cpp, nested 256/32)
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "Q4_K_SUBBLOCK_32"
                      structure: Structure {
                          field: { name: "values", type: array(UINT4, dimension=32) }
@@ -1785,12 +1785,12 @@ Q4_K (llama.cpp, nested 256/32)
                          field: { name: "axis", constant: tensor(INT32, [], -1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "Q4_K_SUPERBLOCK_256"
                      structure: Structure {
                          field: {
                              name: "subblocks"
-                             type: array(unstructured(type_index=0), dimension=8)
+                             type: array(struct(type_index=0), dimension=8)
                          }
                          field: {
                              name: "tile_shape"
@@ -1798,13 +1798,13 @@ Q4_K (llama.cpp, nested 256/32)
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "Q4_K_TENSOR"
                      structure: Structure {
                          field: {
                              name: "superblocks"
                              type: array(
-                                 unstructured(type_index=1),
+                                 struct(type_index=1),
                                  dimension=superblock_count
                              )
                          }
@@ -1852,8 +1852,8 @@ Q5_K (llama.cpp, nested 256/32)
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "Q5_K_SUBBLOCK_32"
                      structure: Structure {
                          field: { name: "values", type: array(UINT8, dimension=20) }
@@ -1868,12 +1868,12 @@ Q5_K (llama.cpp, nested 256/32)
                          field: { name: "axis", constant: tensor(INT32, [], -1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "Q5_K_SUPERBLOCK_256"
                      structure: Structure {
                          field: {
                              name: "subblocks"
-                             type: array(unstructured(type_index=0), dimension=8)
+                             type: array(struct(type_index=0), dimension=8)
                          }
                          field: {
                              name: "tile_shape"
@@ -1881,13 +1881,13 @@ Q5_K (llama.cpp, nested 256/32)
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "Q5_K_TENSOR"
                      structure: Structure {
                          field: {
                              name: "superblocks"
                              type: array(
-                                 unstructured(type_index=1),
+                                 struct(type_index=1),
                                  dimension=superblock_count
                              )
                          }
@@ -1935,8 +1935,8 @@ Q6_K (llama.cpp, nested 256/16)
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "Q6_K_SUBBLOCK_16"
                      structure: Structure {
                          field: { name: "values", type: array(UINT8, dimension=12) }
@@ -1951,12 +1951,12 @@ Q6_K (llama.cpp, nested 256/16)
                          field: { name: "axis", constant: tensor(INT32, [], -1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "Q6_K_SUPERBLOCK_256"
                      structure: Structure {
                          field: {
                              name: "subblocks"
-                             type: array(unstructured(type_index=0), dimension=16)
+                             type: array(struct(type_index=0), dimension=16)
                          }
                          field: {
                              name: "tile_shape"
@@ -1964,13 +1964,13 @@ Q6_K (llama.cpp, nested 256/16)
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "Q6_K_TENSOR"
                      structure: Structure {
                          field: {
                              name: "superblocks"
                              type: array(
-                                 unstructured(type_index=1),
+                                 struct(type_index=1),
                                  dimension=superblock_count
                              )
                          }
@@ -2011,8 +2011,8 @@ MXFP4 (OCP Microscaling, shared exponent per group of 32)
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "MXFP4_E2M1_BLOCK_32"
                      structure: Structure {
                          field: {
@@ -2034,13 +2034,13 @@ MXFP4 (OCP Microscaling, shared exponent per group of 32)
                          field: { name: "packed_bytes", constant: tensor(INT32, [], 1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "MXFP4_TILES"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=block_count
                              )
                          }
@@ -2081,8 +2081,8 @@ MXFP6 E3M2 (OCP Microscaling, 6-bit float per group of 32)
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "MXFP6_E3M2_BLOCK_32"
                      structure: Structure {
                          field: { name: "values", type: array(UINT8, dimension=24) }
@@ -2101,13 +2101,13 @@ MXFP6 E3M2 (OCP Microscaling, 6-bit float per group of 32)
                          field: { name: "packed_bytes", constant: tensor(INT32, [], 3) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "MXFP6_E3M2_TILES"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=block_count
                              )
                          }
@@ -2159,8 +2159,8 @@ Tensor Core alignment.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {  // index 0: four FLOAT6_E3M2 values
+             struct_types: [
+                 StructTypeProto {  // index 0: four FLOAT6_E3M2 values
                      name: "FLOAT6_E3M2"
                      structure: Structure {
                          field: {
@@ -2182,13 +2182,13 @@ Tensor Core alignment.
                          field: { name: "packed_bytes", constant: tensor(INT32, [], 3) }
                      }
                  },
-                 UnstructuredTypeProto {  // index 1: one tile
+                 StructTypeProto {  // index 1: one tile
                      name: "FP6_LLM_TILE_128"
                      structure: Structure {
                          field: {
                              name: "values"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=32
                              )
                          }
@@ -2221,7 +2221,7 @@ INT8 per-channel (classic CNN)
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "INT8_PER_CHANNEL"
              structure: Structure {
                  field: { name: "values", type: array(INT8, dimension=N) }
@@ -2258,7 +2258,7 @@ INT8 per-channel (classic CNN)
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "TERNARY_1_58"
              structure: Structure {
                  field: {
@@ -2299,7 +2299,7 @@ FP8 E4M3 (per-tensor)
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "FP8_E4M3_PER_TENSOR"
              structure: Structure {
                  field: {
@@ -2341,7 +2341,7 @@ AQLM 2×8 (Additive Quantization, 2 bits/weight)
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "AQLM_2X8"
              structure: Structure {
                  field: {
@@ -2397,8 +2397,8 @@ Wrapped in a block of 256 for the shared FP16 scale.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "IQ1_S_BLOCK_256"
                      structure: Structure {
                          field: {
@@ -2435,13 +2435,13 @@ Wrapped in a block of 256 for the shared FP16 scale.
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "IQ1_S_TILES"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=block_count
                              )
                          }
@@ -2490,8 +2490,8 @@ Outliers (>1% of values) stored in FP16, rest in INT3 per-group.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "SPQR_INT3_BLOCK_16"
                      structure: Structure {
                          field: { name: "values", type: array(UINT8, dimension=6) }
@@ -2506,13 +2506,13 @@ Outliers (>1% of values) stored in FP16, rest in INT3 per-group.
                          field: { name: "axis", constant: tensor(INT32, [], -1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "SPQR_DENSE_TILES"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=dense_block_count
                              )
                          }
@@ -2522,12 +2522,12 @@ Outliers (>1% of values) stored in FP16, rest in INT3 per-group.
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "SPQR"
                      structure: Structure {
                          field: {
                              name: "base"
-                             type: unstructured(type_index=1)
+                             type: struct(type_index=1)
                          }
                          field: {
                              name: "outlier_indices"
@@ -2580,8 +2580,8 @@ QuIP# (Vector quantization with Hadamard rotation)
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "ROTATION_TYPE"
                      enum_type: EnumProto {
                          storage_type: UINT8
@@ -2589,7 +2589,7 @@ QuIP# (Vector quantization with Hadamard rotation)
                          value: { name: "PLAIN", number: 1 }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "QUIP_SHARP"
                      structure: Structure {
                          field: {
@@ -2694,8 +2694,8 @@ important layers and 4-bit for critical ones.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "EXL2_INT2_BLOCK_128"
                      structure: Structure {
                          field: { name: "values", type: array(UINT8, dimension=32) }
@@ -2710,7 +2710,7 @@ important layers and 4-bit for critical ones.
                          field: { name: "axis", constant: tensor(INT32, [], -1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "EXL2_INT4_BLOCK_128"
                      structure: Structure {
                          field: { name: "values", type: array(INT4, dimension=128) }
@@ -2725,13 +2725,13 @@ important layers and 4-bit for critical ones.
                          field: { name: "axis", constant: tensor(INT32, [], -1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "EXL2_LAYER_A"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=layer_a_block_count
                              )
                          }
@@ -2741,13 +2741,13 @@ important layers and 4-bit for critical ones.
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "EXL2_LAYER_B"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=1),
+                                 struct(type_index=1),
                                  dimension=layer_b_block_count
                              )
                          }
@@ -2782,7 +2782,7 @@ Log quantization (4-bit)
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "LOG4"
              structure: Structure {
                  field: { name: "codes", type: array(UINT4, dimension=N) }
@@ -2818,7 +2818,7 @@ Custom (plugin-based)
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "VENDOR_QUANTIZE_V2"
              structure: Structure {
                  field: { name: "payload", type: array(UINT4, dimension=N) }
@@ -2870,8 +2870,8 @@ in memory for cache locality.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "MATMUL_NBITS_INT4_TILE_32X128"
                      structure: Structure {
                          field: {
@@ -2889,13 +2889,13 @@ in memory for cache locality.
                          field: { name: "axis", constant: tensor(INT32, [], -1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "MATMUL_NBITS_INT4_4096X4096"
                      structure: Structure {
                          field: {
                              name: "tiles"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimensions=[32, 128]
                              )
                          }
@@ -2946,8 +2946,8 @@ that expect block-tiled storage.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "FLOAT_TILE_32X128"
                      array: Array {
                          element_type: FLOAT
@@ -2955,13 +2955,13 @@ that expect block-tiled storage.
                          dimension: 128
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "BLOCK_TILED_FLOAT_4096X4096"
                      structure: Structure {
                          field: {
                              name: "tiles"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimensions=[128, 32]
                              )
                          }
@@ -3017,8 +3017,8 @@ Output positions use a stride-16 scatter within each 64-value chunk.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "STQ1_0_FIELD_ROLE"
                      enum_type: EnumProto {
                          storage_type: UINT8
@@ -3027,7 +3027,7 @@ Output positions use a stride-16 scatter within each 64-value chunk.
                          value: { name: "CODE", number: 6 }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "STQ1_0_BLOCK_256"
                      structure: Structure {
                          field: { name: "code", type: array(UINT4, dimension=64) }
@@ -3059,13 +3059,13 @@ Output positions use a stride-16 scatter within each 64-value chunk.
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "STQ1_0"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=1),
+                                 struct(type_index=1),
                                  dimension=block_count
                              )
                          }
@@ -3178,8 +3178,8 @@ so ``[0, 0]`` is a single tile covering the whole tensor.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "FLOAT_MATRIX_MXN"
                      array: Array {
                          element_type: FLOAT
@@ -3187,13 +3187,13 @@ so ``[0, 0]`` is a single tile covering the whole tensor.
                          dimension: N
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "COLUMN_MAJOR_FLOAT_MXN"
                      structure: Structure {
                          field: {
                              name: "tiles"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=1
                              )
                          }
@@ -3252,8 +3252,8 @@ into one byte (3⁵ = 243 ≤ 255). One FP16 scale per block of 256 weights.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "TQ1_0_BLOCK_256"
                      structure: Structure {
                          field: { name: "indices", type: array(UINT8, dimension=52) }
@@ -3272,13 +3272,13 @@ into one byte (3⁵ = 243 ≤ 255). One FP16 scale per block of 256 weights.
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "TQ1_0"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=block_count
                              )
                          }
@@ -3330,8 +3330,8 @@ Mapping: 0 → -1, 1 → 0, 2 → +1.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "TQ2_0_BLOCK_256"
                      structure: Structure {
                          field: { name: "indices", type: array(UINT8, dimension=64) }
@@ -3350,13 +3350,13 @@ Mapping: 0 → -1, 1 → 0, 2 → +1.
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "TQ2_0"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=block_count
                              )
                          }
@@ -3407,8 +3407,8 @@ The difference is in training (QAT), not in the storage format.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "BITNET_B1_58_BLOCK_256"
                      structure: Structure {
                          field: { name: "indices", type: array(UINT8, dimension=52) }
@@ -3427,13 +3427,13 @@ The difference is in training (QAT), not in the storage format.
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "BITNET_B1_58"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=block_count
                              )
                          }
@@ -3504,8 +3504,8 @@ codebook. If the SEQ rounding function is needed at inference, use
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "PARETOQ_TERNARY_BLOCK_256"
                      structure: Structure {
                          field: { name: "indices", type: array(UINT8, dimension=52) }
@@ -3524,7 +3524,7 @@ codebook. If the SEQ rounding function is needed at inference, use
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "PARETOQ_UINT2_BLOCK_128"
                      structure: Structure {
                          field: { name: "values", type: array(UINT8, dimension=32) }
@@ -3539,13 +3539,13 @@ codebook. If the SEQ rounding function is needed at inference, use
                          field: { name: "axis", constant: tensor(INT32, [], -1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "PARETOQ_TERNARY"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=ternary_block_count
                              )
                          }
@@ -3559,13 +3559,13 @@ codebook. If the SEQ rounding function is needed at inference, use
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "PARETOQ_UINT2"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=1),
+                                 struct(type_index=1),
                                  dimension=uint2_block_count
                              )
                          }
@@ -3619,8 +3619,8 @@ The deadzone-free quantization function is only used during training.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "TEQUILA_BLOCK_256"
                      structure: Structure {
                          field: { name: "indices", type: array(UINT8, dimension=52) }
@@ -3639,13 +3639,13 @@ The deadzone-free quantization function is only used during training.
                          }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "TEQUILA"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=block_count
                              )
                          }
@@ -3691,7 +3691,7 @@ FasterTransformer / TensorRT-LLM.
 
       .. code-block:: text
 
-         UnstructuredTypeProto {
+         StructTypeProto {
              name: "EETQ_INT8_PER_CHANNEL"
              structure: Structure {
                  field: { name: "values", type: array(INT8, dimension=N) }
@@ -3747,8 +3747,8 @@ nested ``TilingQuantizationProto``).
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "EXL3_UINT3_BLOCK_128"
                      structure: Structure {
                          field: { name: "values", type: array(UINT8, dimension=48) }
@@ -3763,13 +3763,13 @@ nested ``TilingQuantizationProto``).
                          field: { name: "axis", constant: tensor(INT32, [], -1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "EXL3_LAYER"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=block_count
                              )
                          }
@@ -3825,8 +3825,8 @@ a 2-bit weight with per-group scales.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "HQQ_UINT2_BLOCK_64"
                      structure: Structure {
                          field: { name: "values", type: array(UINT8, dimension=16) }
@@ -3841,13 +3841,13 @@ a 2-bit weight with per-group scales.
                          field: { name: "axis", constant: tensor(INT32, [], -1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "HQQ_HEAD"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=block_count
                              )
                          }
@@ -3905,8 +3905,8 @@ block of 16 elements.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "NVFP4_E2M1_BLOCK_16"
                      structure: Structure {
                          field: {
@@ -3928,13 +3928,13 @@ block of 16 elements.
                          field: { name: "packed_bytes", constant: tensor(INT32, [], 1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "NVFP4"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=0),
+                                 struct(type_index=0),
                                  dimension=block_count
                              )
                          }
@@ -3995,8 +3995,8 @@ in ``RotationProto``.
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "ROTATION_TYPE"
                      enum_type: EnumProto {
                          storage_type: UINT8
@@ -4004,7 +4004,7 @@ in ``RotationProto``.
                          value: { name: "PLAIN", number: 1 }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "QUAROT_UINT4_BLOCK_128"
                      structure: Structure {
                          field: { name: "values", type: array(UINT4, dimension=128) }
@@ -4019,13 +4019,13 @@ in ``RotationProto``.
                          field: { name: "axis", constant: tensor(INT32, [], -1) }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "QUAROT"
                      structure: Structure {
                          field: {
                              name: "blocks"
                              type: array(
-                                 unstructured(type_index=1),
+                                 struct(type_index=1),
                                  dimension=block_count
                              )
                          }
@@ -4092,8 +4092,8 @@ matrix stored as a rotation matrix (``PLAIN`` type).
       .. code-block:: text
 
          ModelProto {
-             unstructured_types: [
-                 UnstructuredTypeProto {
+             struct_types: [
+                 StructTypeProto {
                      name: "ROTATION_TYPE"
                      enum_type: EnumProto {
                          storage_type: UINT8
@@ -4101,7 +4101,7 @@ matrix stored as a rotation matrix (``PLAIN`` type).
                          value: { name: "PLAIN", number: 1 }
                      }
                  },
-                 UnstructuredTypeProto {
+                 StructTypeProto {
                      name: "SMOOTHQUANT_INT8"
                      structure: Structure {
                          field: {

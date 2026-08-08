@@ -37,11 +37,13 @@ that can be overlaid on the bytes of an ``UnstructuredProto``.
 ``dims`` is intentionally absent because not every unstructured value is
 tensor-shaped. Physical dimensions are already part of its arrays.
 
-The type system adds two serialized structural kinds and one field property:
+The type system adds two serialized structural kinds, named integer enums,
+and constant fields:
 
 * an array of a statically sized ``TypeProto``;
 * a structure containing named, statically sized ``TypeProto`` fields;
-* an optional constant value on a structure field, consuming no payload bytes.
+* an enum with a fixed-width integer storage type and named values;
+* a tensor or enum constant consuming no payload bytes.
 
 Scalars and ordinary tensors continue to use ``TypeProto.Tensor``. Quantized
 values, packed records, custom numeric types, image pixels, and other static
@@ -68,7 +70,7 @@ Stable contract
 The proposal has three valid uses of ``UnstructuredTypeProto``:
 
 ``concrete declaration``
-    Selects ``array`` or ``structure``. It appears in
+    Selects ``array``, ``structure``, or ``enum_type``. It appears in
     ``ModelProto.unstructured_types`` or in
     ``UnstructuredProto.unstructured_type``. It completely determines the
     payload size.
@@ -83,15 +85,15 @@ The proposal has three valid uses of ``UnstructuredTypeProto``:
     sequences and maps.
 
 ``type_index`` may also occur below a concrete root through
-``Array.element_type`` or ``Structure.Field.type``. A constant value is
-attached directly to a ``Structure.Field``. A concrete root may not be a
-``type_index`` or an unset ``kind``. Static forms may not carry ``decoder``,
-``encoder``, ``name``, or metadata.
+``Array.element_type`` or ``Structure.Field.type``. A constant tensor or enum
+value is attached directly to a ``Structure.Field``. A concrete root may not
+be a ``type_index`` or an unset ``kind``. Static forms may not carry
+``decoder``, ``encoder``, ``name``, or metadata.
 
 Only the ``decoder`` and ``encoder`` attached to the selected concrete root
 are invoked. A declaration reached through a nested ``type_index`` contributes
-only its physical structure and constants; its decoder and encoder are not
-composed implicitly.
+only its physical structure, enum definition, and constants; its decoder and
+encoder are not composed implicitly.
 
 No other interpretation of an absent field is permitted. In particular,
 there are no symbolic physical dimensions, inferred lengths, implicit
@@ -104,12 +106,14 @@ The serialized size is computed recursively in bits:
 
 .. code-block:: text
 
-    size(scalar(T))          = bit_width(T)
-    size(Array(T, n))        = n * size(T)
-    size(Field(constant))    = 0
-    size(Field(T))           = size(T)
-    size(Structure(f...))    = sum(size(f))
-    size(type_index=i)       = size(ModelProto.unstructured_types[i])
+    size(scalar(T))             = bit_width(T)
+    size(Enum(T))               = bit_width(T)
+    size(Array(T, n))           = n * size(T)
+    size(Field(constant))       = 0
+    size(Field(enum_constant))  = 0
+    size(Field(T))              = size(T)
+    size(Structure(f...))       = sum(size(f))
+    size(type_index=i)          = size(ModelProto.unstructured_types[i])
 
 All arithmetic is checked in ``uint64``. References must be acyclic. The
 concrete root size must be divisible by eight and equal the inline
@@ -119,12 +123,29 @@ physical schema and payload independently checkable.
 UnstructuredTypeProto
 +++++++++++++++++++++
 
-The complete proposal is one top-level message with nested structural
-messages.
+The complete proposal adds a named integer enum and one top-level structured
+type message.
 
 .. code-block:: text
 
+    message EnumProto {
+        message Value {
+            string name = 1;        // symbolic name
+            int64 number = 2;       // serialized integer value
+            string doc_string = 3;  // value documentation
+        }
+
+        int32 storage_type = 1;    // fixed-width integer TensorProto data type
+        repeated Value value = 2;  // allowed names and numbers
+    }
+
     message UnstructuredTypeProto {
+        message EnumConstant {
+            int32 type_index = 1;     // model enum declaration
+            repeated int64 number = 2;  // allowed EnumProto numbers
+            repeated uint64 dims = 3;   // empty for a scalar
+        }
+
         // Repeats one physical element a fixed number of times.
         message Array {
             TypeProto element_type = 1;  // repeated physical element
@@ -135,8 +156,9 @@ messages.
         message Field {
             string name = 1;        // unique within the structure
             oneof content {
-                TypeProto type = 2;        // schema read from the payload
-                TensorProto constant = 4;  // literal value; reads no payload
+                TypeProto type = 2;               // schema read from payload
+                TensorProto constant = 4;         // tensor; reads no payload
+                EnumConstant enum_constant = 5;   // enum; reads no payload
             }
             string doc_string = 3;  // field documentation
         }
@@ -150,6 +172,7 @@ messages.
         oneof kind {
             Array array = 1;          // repeated elements
             Structure structure = 2;  // ordered named fields
+            EnumProto enum_type = 3;  // named integer values
             int32 type_index = 4;     // ModelProto.unstructured_types index
         }
 
@@ -162,10 +185,10 @@ messages.
 
 ``UnstructuredTypeProto`` is itself the new ``TypeProto`` branch; there is no
 intermediate ``Layout`` message. A concrete model-level or inline physical
-type selects exactly one of ``array`` and ``structure``. A nested or static
-exact type may select one model-level declaration with ``type_index``. A
-static type may leave ``kind`` unset only for the unconstrained category
-defined above.
+type selects exactly one of ``array``, ``structure``, and ``enum_type``. A
+nested or static exact type may select one model-level declaration with
+``type_index``. A static type may leave ``kind`` unset only for the
+unconstrained category defined above.
 
 ``UnstructuredProto.type`` and ``UnstructuredTypeProto.type_index`` are both
 model-level indices. The former selects the type of one value; the latter
@@ -289,14 +312,60 @@ therefore the sum of its non-constant field sizes. Alignment and padding are
 represented by ordinary named padding fields, so every serialized bit remains
 explicit.
 
+Enum type
++++++++++
+
+``EnumProto`` assigns symbolic names to fixed-width integer values. Its
+``storage_type`` must be one of the fixed-width signed or unsigned integer
+``TensorProto`` data types, and every declared number must be representable by
+that type. Names and numbers are unique within one enum.
+
+An enum used as a physical field consumes the width of ``storage_type``. An
+``EnumConstant`` instead references a model-level enum declaration and
+consumes no payload bits. Each ``number`` must be one of the values declared
+by that enum, and their count must match ``dims``; empty ``dims`` denotes one
+scalar number. Integer values are supplied to a decoder; symbolic names are
+available to checkers and inspection tools.
+
+.. code-block:: text
+
+    ModelProto {
+        unstructured_types: [
+            UnstructuredTypeProto {  // index 0
+                name: "BLOCK_STORAGE_ORDER"
+                enum_type: EnumProto {
+                    storage_type: UINT8
+                    value: { name: "INTERLEAVED", number: 0 }
+                    value: { name: "SEQUENTIAL", number: 1 }
+                }
+            },
+            UnstructuredTypeProto {  // index 1
+                name: "BLOCKS"
+                structure: Structure {
+                    field: {
+                        name: "storage_order"
+                        enum_constant: {
+                            type_index: 0
+                            number: [0]  // scalar INTERLEAVED
+                        }
+                    }
+                    field: {
+                        name: "data"
+                        type: array(UINT8, dimension=128)
+                    }
+                }
+            }
+        ]
+    }
+
 Constant fields
 +++++++++++++++
 
-``Structure.Field`` selects exactly one of ``type`` and ``constant``. A
-physical field uses ``type`` and consumes payload bits. A constant field uses
-an inline ``TensorProto`` and consumes zero payload bits. A scalar constant is
-a rank-zero tensor, represented by an empty ``dims`` list. The tensor must not
-use ``external_data``.
+``Structure.Field`` selects exactly one of ``type``, ``constant``, and
+``enum_constant``. A physical field uses ``type`` and consumes payload bits. A
+tensor constant uses an inline ``TensorProto`` and consumes zero payload bits.
+A scalar tensor constant has rank zero, represented by an empty ``dims`` list.
+The tensor must not use ``external_data``.
 
 Only structure fields may be constants; roots and array elements remain
 physical types. For readability, examples write
@@ -306,10 +375,11 @@ physical types. For readability, examples write
 Applying a type to a buffer
 +++++++++++++++++++++++++++
 
-Parsing starts with the selected ``array`` or ``structure`` kind at bit offset
-zero. A successful parse produces a tree of typed views into the original
-buffer plus the constants embedded in the type. Implementations should avoid
-copying byte-aligned fields and may lazily unpack bit fields.
+Parsing starts with the selected ``array``, ``structure``, or ``enum_type``
+kind at bit offset zero. A successful parse produces a tree of typed views
+into the original buffer plus the constants embedded in the type.
+Implementations should avoid copying byte-aligned fields and may lazily unpack
+bit fields.
 
 When ``external_data`` is empty, ``raw_data`` is the payload and may itself be
 empty for a zero-sized physical type. When ``external_data`` is non-empty,
@@ -328,12 +398,12 @@ contains an uninterpreted suffix must declare it as a ``UINT8`` array.
 Logical leaf view
 +++++++++++++++++
 
-Every physical scalar ONNX ``TypeProto`` field and every field with
-``constant`` is a leaf. Unstructured arrays and structures only organize
-leaves. The canonical leaf order is depth-first declaration order. A constant
-field contributes one tensor leaf at its declaration position, does not
-advance the current buffer position, and is not replicated by an enclosing
-array. It is shared by every instance of the declaring type.
+Every physical scalar ONNX ``TypeProto`` field, enum, and constant field is a
+leaf. Unstructured arrays and structures only organize leaves. The canonical
+leaf order is depth-first declaration order. A constant field contributes one
+scalar or tensor leaf at its declaration position, does not advance the
+current buffer position, and is not replicated by an enclosing array. It is
+shared by every instance of the declaring type.
 
 When a repeated structure contains an array field, corresponding scalar
 leaves are grouped into one decoder input. For example, an array of ten
@@ -423,7 +493,8 @@ as shown above. This makes recursion uniform: ``Array.element_type`` and
 ``Field.type`` reuse ``TypeProto`` rather than an intermediate layout
 language. A physical element or field must nevertheless have a canonical
 fixed size; currently this permits standard tensor types and exact
-unstructured types, but not sequences, maps, or optionals.
+unstructured array, structure, and enum types, but not sequences, maps, or
+optionals.
 
 The concrete ``UnstructuredProto`` selects exactly one
 ``UnstructuredTypeProto`` declaration. The static type is a constraint:
@@ -434,8 +505,8 @@ The concrete ``UnstructuredProto`` selects exactly one
   any concrete unstructured type.
 
 Model-level and ``UnstructuredProto.unstructured_type`` definitions must
-select ``array`` or ``structure``. A ``TypeProto.unstructured_type`` may
-instead:
+select ``array``, ``structure``, or ``enum_type``. A
+``TypeProto.unstructured_type`` may instead:
 
 * select a physical kind to define one exact inline type;
 * select one model-level declaration with ``type_index``;
@@ -960,10 +1031,15 @@ A checker validates:
 
 * non-negative type indices are in range;
 * ``type`` and ``unstructured_type`` satisfy the -1 sentinel rules;
-* model-level and inline concrete types select exactly one ``array`` or
-  ``structure`` kind;
+* model-level and inline concrete types select exactly one ``array``,
+  ``structure``, or ``enum_type`` kind;
 * ``type_index`` references are in range and do not form cycles;
-* every structure field selects exactly one of ``type`` and ``constant``;
+* enum storage types are fixed-width integers;
+* enum names and numbers are unique and representable by the storage type;
+* every structure field selects exactly one of ``type``, ``constant``, and
+  ``enum_constant``;
+* every enum constant references an enum declaration and uses an allowed
+  number;
 * valid standard ONNX leaf types;
 * constant tensors are inline, concretely shaped, and have no external data;
 * unique field names within each structure;

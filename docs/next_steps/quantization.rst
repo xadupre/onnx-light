@@ -1109,6 +1109,30 @@ deducible from the proto structure.
       .. code-block:: text
 
          UnstructuredTypeProto {
+             name: "BLOCK_FIELD_ROLE"
+             enum_type: EnumProto {
+                 storage_type: UINT8
+                 value: { name: "VALUES", number: 0 }
+                 value: { name: "SIGN", number: 1 }
+                 value: { name: "SCALE", number: 2 }
+                 value: { name: "ZERO_POINT", number: 3 }
+                 value: { name: "BIAS", number: 4 }
+                 value: { name: "EXPONENT", number: 5 }
+                 value: { name: "CODE", number: 6 }
+                 value: { name: "MASK", number: 7 }
+             }
+         }
+
+         UnstructuredTypeProto {
+             name: "BLOCK_STORAGE_ORDER"
+             enum_type: EnumProto {
+                 storage_type: UINT8
+                 value: { name: "INTERLEAVED", number: 0 }
+                 value: { name: "SEQUENTIAL", number: 1 }
+             }
+         }
+
+         UnstructuredTypeProto {
              name: "STRUCTURED_BLOCK"
              structure: Structure {
                  field: {
@@ -1132,11 +1156,11 @@ deducible from the proto structure.
                  }
                  field: {
                      name: "index_fields"
-                     constant: tensor(
-                         INT32,
-                         [index_term_count],
-                         concrete_index_fields
-                     )
+                     enum_constant: {
+                         type_index: block_field_role_enum_type
+                         dims: [index_term_count]
+                         number: concrete_index_fields
+                     }
                  }
                  field: {
                      name: "index_multipliers"
@@ -1148,7 +1172,10 @@ deducible from the proto structure.
                  }
                  field: {
                      name: "storage_order"
-                     constant: tensor(INT32, [], concrete_storage_order)
+                     enum_constant: {
+                         type_index: storage_order_enum_type
+                         number: [concrete_storage_order]
+                     }
                  }
                  field: {
                      name: "block_size"
@@ -1294,230 +1321,804 @@ INT8 symmetric (per-tensor)
         }
     }
 
+INT4 symmetric (per-tensor)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For a tensor of 1024 elements:
+
+.. tab-set::
+
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             linear: LinearUniformProto {
+                 storage_type: INT4
+                 bits: 4
+                 symmetric: true
+                 scale_float: 0.02
+                 zero_point: 0
+                 axis: -1
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         UnstructuredTypeProto {
+             name: "INT4_SYMMETRIC_1024"
+             structure: Structure {
+                 field: {
+                     name: "values"
+                     type: array(INT4, dimension=1024)
+                 }
+                 field: {
+                     name: "storage_type"
+                     constant: tensor(INT32, [], INT4)
+                 }
+                 field: { name: "bits", constant: tensor(INT32, [], 4) }
+                 field: { name: "symmetric", constant: tensor(BOOL, [], true) }
+                 field: { name: "scale", constant: tensor(FLOAT, [], 0.02) }
+                 field: { name: "zero_point", constant: tensor(INT64, [], 0) }
+                 field: { name: "axis", constant: tensor(INT32, [], -1) }
+             }
+         }
+
 INT4 asymmetric (GPTQ, per-group of 128)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 For a tensor of 1024 elements (8 groups):
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [128]
-            elem_quant: [
-                QuantizationProto { linear: LinearUniformProto {
-                    storage_type: INT4, bits: 4,
-                    symmetric: false, scale_float: 0.015, zero_point: 8, axis: -1
-                }},
-                QuantizationProto { linear: LinearUniformProto {
-                    storage_type: INT4, bits: 4,
-                    symmetric: false, scale_float: 0.012, zero_point: 7, axis: -1
-                }},
-                // ... one per block (8 total)
-            ]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [128]
+                 elem_quant: [
+                     QuantizationProto { linear: LinearUniformProto {
+                         storage_type: INT4, bits: 4, symmetric: false,
+                         scale_float: 0.015, zero_point: 8, axis: -1
+                     }},
+                     QuantizationProto { linear: LinearUniformProto {
+                         storage_type: INT4, bits: 4, symmetric: false,
+                         scale_float: 0.012, zero_point: 7, axis: -1
+                     }},
+                     QuantizationProto { linear: LinearUniformProto {
+                         storage_type: INT4, bits: 4, symmetric: false,
+                         scale_float: 0.014, zero_point: 8, axis: -1
+                     }},
+                     QuantizationProto { linear: LinearUniformProto {
+                         storage_type: INT4, bits: 4, symmetric: false,
+                         scale_float: 0.013, zero_point: 8, axis: -1
+                     }},
+                     QuantizationProto { linear: LinearUniformProto {
+                         storage_type: INT4, bits: 4, symmetric: false,
+                         scale_float: 0.016, zero_point: 7, axis: -1
+                     }},
+                     QuantizationProto { linear: LinearUniformProto {
+                         storage_type: INT4, bits: 4, symmetric: false,
+                         scale_float: 0.011, zero_point: 8, axis: -1
+                     }},
+                     QuantizationProto { linear: LinearUniformProto {
+                         storage_type: INT4, bits: 4, symmetric: false,
+                         scale_float: 0.015, zero_point: 9, axis: -1
+                     }},
+                     QuantizationProto { linear: LinearUniformProto {
+                         storage_type: INT4, bits: 4, symmetric: false,
+                         scale_float: 0.012, zero_point: 8, axis: -1
+                     }}
+                 ]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         UnstructuredTypeProto {
+             name: "GPTQ_INT4_1024_GROUP128"
+             structure: Structure {
+                 field: {
+                     name: "values"
+                     type: array(INT4, dimensions=[8, 128])
+                 }
+                 field: {
+                     name: "scales"
+                     constant: tensor(
+                         FLOAT,
+                         [8],
+                         [0.015, 0.012, 0.014, 0.013,
+                          0.016, 0.011, 0.015, 0.012]
+                     )
+                 }
+                 field: {
+                     name: "zero_points"
+                     constant: tensor(INT64, [8], [8, 7, 8, 8, 7, 8, 9, 8])
+                 }
+                 field: {
+                     name: "tile_shape"
+                     constant: tensor(INT64, [1], [128])
+                 }
+                 field: {
+                     name: "storage_type"
+                     constant: tensor(INT32, [], INT4)
+                 }
+                 field: { name: "bits", constant: tensor(INT32, [], 4) }
+                 field: { name: "symmetric", constant: tensor(BOOL, [], false) }
+                 field: { name: "axis", constant: tensor(INT32, [], -1) }
+             }
+         }
 
 NF4 (QLoRA / bitsandbytes)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        codebook: CodebookProto {
-            scale_float: 1.0,
-            codebook_data: [-1.0, -0.6962, -0.5251, -0.3949, -0.2844,
-                       -0.1848, -0.0911, 0.0, 0.0796, 0.1609,
-                       0.2461, 0.3379, 0.4407, 0.5626, 0.7230, 1.0],
-            packed_count: 2, packed_bytes: 1
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             codebook: CodebookProto {
+                 scale_float: 1.0,
+                 codebook_data: [-1.0, -0.6962, -0.5251, -0.3949, -0.2844,
+                            -0.1848, -0.0911, 0.0, 0.0796, 0.1609,
+                            0.2461, 0.3379, 0.4407, 0.5626, 0.7230, 1.0],
+                 packed_count: 2, packed_bytes: 1
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         UnstructuredTypeProto {
+             name: "NF4"
+             structure: Structure {
+                 field: {
+                     name: "indices"
+                     type: array(UINT8, dimension=packed_byte_count)
+                 }
+                 field: {
+                     name: "codebook"
+                     constant: tensor(
+                         FLOAT,
+                         [16],
+                         [-1.0, -0.6962, -0.5251, -0.3949,
+                          -0.2844, -0.1848, -0.0911, 0.0,
+                          0.0796, 0.1609, 0.2461, 0.3379,
+                          0.4407, 0.5626, 0.7230, 1.0]
+                     )
+                 }
+                 field: { name: "scale", constant: tensor(FLOAT, [], 1.0) }
+                 field: { name: "packed_count", constant: tensor(INT32, [], 2) }
+                 field: { name: "packed_bytes", constant: tensor(INT32, [], 1) }
+                 field: { name: "num_codebooks", constant: tensor(INT32, [], 1) }
+                 field: { name: "codebook_size", constant: tensor(INT32, [], 16) }
+                 field: { name: "vector_size", constant: tensor(INT32, [], 1) }
+                 field: { name: "index_bits", constant: tensor(INT32, [], 0) }
+             }
+         }
 
 AWQ INT4 (per-group of 128)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [128]
-            elem_quant: [
-                QuantizationProto { linear: LinearUniformProto {
-                    storage_type: INT4, bits: 4,
-                    symmetric: false, scale_float: 0.01, zero_point: 8, axis: -1
-                }},
-                // ... one per block
-            ]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [128]
+                 elem_quant: [
+                     QuantizationProto { linear: LinearUniformProto {
+                         storage_type: INT4, bits: 4,
+                         symmetric: false, scale_float: 0.01, zero_point: 8, axis: -1
+                     }},
+                     // ... one per block
+                 ]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "AWQ_INT4_BLOCK_128"
+                     structure: Structure {
+                         field: { name: "values", type: array(INT4, dimension=128) }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], INT4)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 4) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], false) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.01) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 8) }
+                         field: { name: "axis", constant: tensor(INT32, [], -1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "AWQ_INT4_TILES"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [128])
+                         }
+                     }
+                 }
+             ]
+         }
 
 Q2_K (llama.cpp, nested 256/16)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [256]
-            elem_quant: [
-                QuantizationProto {
-                    tiling: TilingQuantizationProto {
-                        tile_shape: [16]
-                        elem_quant: [
-                            QuantizationProto { linear: LinearUniformProto {
-                                storage_type: UINT2, bits: 2,
-                                symmetric: false, scale_float: 0.005, zero_point: 1, axis: -1
-                            }},
-                            // ... 16 sub-blocks per super-block
-                        ]
-                    }
-                },
-                // ... one per super-block
-            ]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [256]
+                 elem_quant: [
+                     QuantizationProto {
+                         tiling: TilingQuantizationProto {
+                             tile_shape: [16]
+                             elem_quant: [
+                                 QuantizationProto { linear: LinearUniformProto {
+                                     storage_type: UINT2, bits: 2,
+                                     symmetric: false, scale_float: 0.005, zero_point: 1, axis: -1
+                                 }},
+                                 // ... 16 sub-blocks per super-block
+                             ]
+                         }
+                     },
+                     // ... one per super-block
+                 ]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "Q2_K_SUBBLOCK_16"
+                     structure: Structure {
+                         field: { name: "values", type: array(UINT8, dimension=4) }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], UINT2)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 2) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], false) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.005) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 1) }
+                         field: { name: "axis", constant: tensor(INT32, [], -1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "Q2_K_SUPERBLOCK_256"
+                     structure: Structure {
+                         field: {
+                             name: "subblocks"
+                             type: array(unstructured(type_index=0), dimension=16)
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [16])
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "Q2_K_TENSOR"
+                     structure: Structure {
+                         field: {
+                             name: "superblocks"
+                             type: array(
+                                 unstructured(type_index=1),
+                                 dimension=superblock_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [256])
+                         }
+                     }
+                 }
+             ]
+         }
 
 Q3_K (llama.cpp, nested 256/32)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [256]
-            elem_quant: [
-                QuantizationProto {
-                    tiling: TilingQuantizationProto {
-                        tile_shape: [32]
-                        elem_quant: [
-                            QuantizationProto { linear: LinearUniformProto {
-                                storage_type: UINT4, bits: 3,
-                                symmetric: false, scale_float: 0.004, zero_point: 3, axis: -1
-                            }},
-                            // ... 8 sub-blocks per super-block
-                        ]
-                    }
-                },
-                // ... one per super-block
-            ]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [256]
+                 elem_quant: [
+                     QuantizationProto {
+                         tiling: TilingQuantizationProto {
+                             tile_shape: [32]
+                             elem_quant: [
+                                 QuantizationProto { linear: LinearUniformProto {
+                                     storage_type: UINT4, bits: 3,
+                                     symmetric: false, scale_float: 0.004, zero_point: 3, axis: -1
+                                 }},
+                                 // ... 8 sub-blocks per super-block
+                             ]
+                         }
+                     },
+                     // ... one per super-block
+                 ]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "Q3_K_SUBBLOCK_32"
+                     structure: Structure {
+                         field: { name: "values", type: array(UINT8, dimension=12) }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], UINT4)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 3) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], false) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.004) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 3) }
+                         field: { name: "axis", constant: tensor(INT32, [], -1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "Q3_K_SUPERBLOCK_256"
+                     structure: Structure {
+                         field: {
+                             name: "subblocks"
+                             type: array(unstructured(type_index=0), dimension=8)
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [32])
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "Q3_K_TENSOR"
+                     structure: Structure {
+                         field: {
+                             name: "superblocks"
+                             type: array(
+                                 unstructured(type_index=1),
+                                 dimension=superblock_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [256])
+                         }
+                     }
+                 }
+             ]
+         }
 
 Q4_K (llama.cpp, nested 256/32)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [256]
-            elem_quant: [
-                QuantizationProto {
-                    tiling: TilingQuantizationProto {
-                        tile_shape: [32]
-                        elem_quant: [
-                            QuantizationProto { linear: LinearUniformProto {
-                                storage_type: UINT4, bits: 4,
-                                symmetric: false, scale_float: 0.003, zero_point: 2, axis: -1
-                            }},
-                            // ... 8 sub-blocks per super-block
-                        ]
-                    }
-                },
-                // ... one per super-block
-            ]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [256]
+                 elem_quant: [
+                     QuantizationProto {
+                         tiling: TilingQuantizationProto {
+                             tile_shape: [32]
+                             elem_quant: [
+                                 QuantizationProto { linear: LinearUniformProto {
+                                     storage_type: UINT4, bits: 4,
+                                     symmetric: false, scale_float: 0.003, zero_point: 2, axis: -1
+                                 }},
+                                 // ... 8 sub-blocks per super-block
+                             ]
+                         }
+                     },
+                     // ... one per super-block
+                 ]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "Q4_K_SUBBLOCK_32"
+                     structure: Structure {
+                         field: { name: "values", type: array(UINT4, dimension=32) }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], UINT4)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 4) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], false) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.003) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 2) }
+                         field: { name: "axis", constant: tensor(INT32, [], -1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "Q4_K_SUPERBLOCK_256"
+                     structure: Structure {
+                         field: {
+                             name: "subblocks"
+                             type: array(unstructured(type_index=0), dimension=8)
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [32])
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "Q4_K_TENSOR"
+                     structure: Structure {
+                         field: {
+                             name: "superblocks"
+                             type: array(
+                                 unstructured(type_index=1),
+                                 dimension=superblock_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [256])
+                         }
+                     }
+                 }
+             ]
+         }
 
 Q5_K (llama.cpp, nested 256/32)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [256]
-            elem_quant: [
-                QuantizationProto {
-                    tiling: TilingQuantizationProto {
-                        tile_shape: [32]
-                        elem_quant: [
-                            QuantizationProto { linear: LinearUniformProto {
-                                storage_type: UINT8, bits: 5,
-                                symmetric: false, scale_float: 0.002, zero_point: 4, axis: -1
-                            }},
-                            // ... 8 sub-blocks per super-block
-                        ]
-                    }
-                },
-                // ... one per super-block
-            ]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [256]
+                 elem_quant: [
+                     QuantizationProto {
+                         tiling: TilingQuantizationProto {
+                             tile_shape: [32]
+                             elem_quant: [
+                                 QuantizationProto { linear: LinearUniformProto {
+                                     storage_type: UINT8, bits: 5,
+                                     symmetric: false, scale_float: 0.002, zero_point: 4, axis: -1
+                                 }},
+                                 // ... 8 sub-blocks per super-block
+                             ]
+                         }
+                     },
+                     // ... one per super-block
+                 ]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "Q5_K_SUBBLOCK_32"
+                     structure: Structure {
+                         field: { name: "values", type: array(UINT8, dimension=20) }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], UINT8)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 5) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], false) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.002) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 4) }
+                         field: { name: "axis", constant: tensor(INT32, [], -1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "Q5_K_SUPERBLOCK_256"
+                     structure: Structure {
+                         field: {
+                             name: "subblocks"
+                             type: array(unstructured(type_index=0), dimension=8)
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [32])
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "Q5_K_TENSOR"
+                     structure: Structure {
+                         field: {
+                             name: "superblocks"
+                             type: array(
+                                 unstructured(type_index=1),
+                                 dimension=superblock_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [256])
+                         }
+                     }
+                 }
+             ]
+         }
 
 Q6_K (llama.cpp, nested 256/16)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [256]
-            elem_quant: [
-                QuantizationProto {
-                    tiling: TilingQuantizationProto {
-                        tile_shape: [16]
-                        elem_quant: [
-                            QuantizationProto { linear: LinearUniformProto {
-                                storage_type: UINT8, bits: 6,
-                                symmetric: false, scale_float: 0.001, zero_point: 5, axis: -1
-                            }},
-                            // ... 16 sub-blocks per super-block
-                        ]
-                    }
-                },
-                // ... one per super-block
-            ]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [256]
+                 elem_quant: [
+                     QuantizationProto {
+                         tiling: TilingQuantizationProto {
+                             tile_shape: [16]
+                             elem_quant: [
+                                 QuantizationProto { linear: LinearUniformProto {
+                                     storage_type: UINT8, bits: 6,
+                                     symmetric: false, scale_float: 0.001, zero_point: 5, axis: -1
+                                 }},
+                                 // ... 16 sub-blocks per super-block
+                             ]
+                         }
+                     },
+                     // ... one per super-block
+                 ]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "Q6_K_SUBBLOCK_16"
+                     structure: Structure {
+                         field: { name: "values", type: array(UINT8, dimension=12) }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], UINT8)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 6) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], false) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.001) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 5) }
+                         field: { name: "axis", constant: tensor(INT32, [], -1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "Q6_K_SUPERBLOCK_256"
+                     structure: Structure {
+                         field: {
+                             name: "subblocks"
+                             type: array(unstructured(type_index=0), dimension=16)
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [16])
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "Q6_K_TENSOR"
+                     structure: Structure {
+                         field: {
+                             name: "superblocks"
+                             type: array(
+                                 unstructured(type_index=1),
+                                 dimension=superblock_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [256])
+                         }
+                     }
+                 }
+             ]
+         }
 
 MXFP4 (OCP Microscaling, shared exponent per group of 32)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [32]
-            elem_quant: [
-                QuantizationProto { floating_point: FloatingPointUniformProto {
-                    sign_bits: 1, exponent_bits: 2, mantissa_bits: 1,
-                    exponent_bias: 1, has_inf: false, has_nan: false,
-                    split_storage: false, packed_count: 2, packed_bytes: 1
-                }},
-                // ... one per block, shared exponent at super-block level
-            ]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [32]
+                 elem_quant: [
+                     QuantizationProto { floating_point: FloatingPointUniformProto {
+                         sign_bits: 1, exponent_bits: 2, mantissa_bits: 1,
+                         exponent_bias: 1, has_inf: false, has_nan: false,
+                         split_storage: false, packed_count: 2, packed_bytes: 1
+                     }},
+                     // ... one per block, shared exponent at super-block level
+                 ]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "MXFP4_E2M1_BLOCK_32"
+                     structure: Structure {
+                         field: {
+                             name: "values"
+                             type: array(FLOAT4E2M1, dimension=32)
+                         }
+                         field: {
+                             name: "scale"
+                             type: array(FLOAT8E8M0, dimension=1)
+                         }
+                         field: { name: "sign_bits", constant: tensor(INT32, [], 1) }
+                         field: { name: "exponent_bits", constant: tensor(INT32, [], 2) }
+                         field: { name: "mantissa_bits", constant: tensor(INT32, [], 1) }
+                         field: { name: "exponent_bias", constant: tensor(INT32, [], 1) }
+                         field: { name: "has_inf", constant: tensor(BOOL, [], false) }
+                         field: { name: "has_nan", constant: tensor(BOOL, [], false) }
+                         field: { name: "split_storage", constant: tensor(BOOL, [], false) }
+                         field: { name: "packed_count", constant: tensor(INT32, [], 2) }
+                         field: { name: "packed_bytes", constant: tensor(INT32, [], 1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "MXFP4_TILES"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [32])
+                         }
+                     }
+                 }
+             ]
+         }
 
 MXFP6 E3M2 (OCP Microscaling, 6-bit float per group of 32)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [32]
-            elem_quant: [
-                QuantizationProto { floating_point: FloatingPointUniformProto {
-                    sign_bits: 1, exponent_bits: 3, mantissa_bits: 2,
-                    exponent_bias: 3, has_inf: false, has_nan: false,
-                    split_storage: false, packed_count: 4, packed_bytes: 3
-                }},
-                // ... one per block
-            ]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [32]
+                 elem_quant: [
+                     QuantizationProto { floating_point: FloatingPointUniformProto {
+                         sign_bits: 1, exponent_bits: 3, mantissa_bits: 2,
+                         exponent_bias: 3, has_inf: false, has_nan: false,
+                         split_storage: false, packed_count: 4, packed_bytes: 3
+                     }},
+                     // ... one per block
+                 ]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "MXFP6_E3M2_BLOCK_32"
+                     structure: Structure {
+                         field: { name: "values", type: array(UINT8, dimension=24) }
+                         field: {
+                             name: "scale"
+                             type: array(FLOAT8E8M0, dimension=1)
+                         }
+                         field: { name: "sign_bits", constant: tensor(INT32, [], 1) }
+                         field: { name: "exponent_bits", constant: tensor(INT32, [], 3) }
+                         field: { name: "mantissa_bits", constant: tensor(INT32, [], 2) }
+                         field: { name: "exponent_bias", constant: tensor(INT32, [], 3) }
+                         field: { name: "has_inf", constant: tensor(BOOL, [], false) }
+                         field: { name: "has_nan", constant: tensor(BOOL, [], false) }
+                         field: { name: "split_storage", constant: tensor(BOOL, [], false) }
+                         field: { name: "packed_count", constant: tensor(INT32, [], 4) }
+                         field: { name: "packed_bytes", constant: tensor(INT32, [], 3) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "MXFP6_E3M2_TILES"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [32])
+                         }
+                     }
+                 }
+             ]
+         }
 
 FP6 LLM (DeepSpeed TC-FPn, per-group of 128)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1580,21 +2181,6 @@ Tensor Core alignment.
                          field: { name: "packed_count", constant: tensor(INT32, [], 4) }
                          field: { name: "packed_bytes", constant: tensor(INT32, [], 3) }
                      }
-                     decoder: FunctionProto {
-                         output: "Y"
-                         value_info: {
-                             name: "Y"
-                             type: TypeProto {
-                                 tensor_type: Tensor {
-                                     elem_type: FLOAT
-                                     shape: TensorShapeProto {
-                                         dim: { dim_value: 4 }
-                                     }
-                                 }
-                             }
-                         }
-                         // Recombines both planes and decodes FLOAT6_E3M2.
-                     }
                  },
                  UnstructuredTypeProto {  // index 1: one tile
                      name: "FP6_LLM_TILE_128"
@@ -1611,21 +2197,6 @@ Tensor Core alignment.
                              constant: tensor(INT64, [1], [128])
                          }
                      }
-                     decoder: FunctionProto {
-                         output: "Y"
-                         value_info: {
-                             name: "Y"
-                             type: TypeProto {
-                                 tensor_type: Tensor {
-                                     elem_type: FLOAT
-                                     shape: TensorShapeProto {
-                                         dim: { dim_value: 128 }
-                                     }
-                                 }
-                             }
-                         }
-                         // Applies the FLOAT6_E3M2 decoding nodes to 32 groups.
-                     }
                  }
              ]
          }
@@ -1633,54 +2204,164 @@ Tensor Core alignment.
 INT8 per-channel (classic CNN)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        linear: LinearUniformProto {
-            storage_type: INT8, bits: 8, symmetric: true,
-            scale_float: 0.03, zero_point: 0, axis: 0
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             linear: LinearUniformProto {
+                 storage_type: INT8, bits: 8, symmetric: true,
+                 scale_float: 0.03, zero_point: 0, axis: 0
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         UnstructuredTypeProto {
+             name: "INT8_PER_CHANNEL"
+             structure: Structure {
+                 field: { name: "values", type: array(INT8, dimension=N) }
+                 field: {
+                     name: "storage_type"
+                     constant: tensor(INT32, [], INT8)
+                 }
+                 field: { name: "bits", constant: tensor(INT32, [], 8) }
+                 field: { name: "symmetric", constant: tensor(BOOL, [], true) }
+                 field: { name: "scale", constant: tensor(FLOAT, [], 0.03) }
+                 field: { name: "zero_point", constant: tensor(INT64, [], 0) }
+                 field: { name: "axis", constant: tensor(INT32, [], 0) }
+             }
+         }
 
 1.58-bit ternary (BitNet b1.58)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        codebook: CodebookProto {
-            scale_float: 0.5,
-            codebook_data: [-1.0, 0.0, 1.0],
-            packed_count: 5, packed_bytes: 1
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             codebook: CodebookProto {
+                 scale_float: 0.5,
+                 codebook_data: [-1.0, 0.0, 1.0],
+                 packed_count: 5, packed_bytes: 1
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         UnstructuredTypeProto {
+             name: "TERNARY_1_58"
+             structure: Structure {
+                 field: {
+                     name: "indices"
+                     type: array(UINT8, dimension=packed_byte_count)
+                 }
+                 field: {
+                     name: "codebook"
+                     constant: tensor(FLOAT, [3], [-1.0, 0.0, 1.0])
+                 }
+                 field: { name: "scale", constant: tensor(FLOAT, [], 0.5) }
+                 field: { name: "packed_count", constant: tensor(INT32, [], 5) }
+                 field: { name: "packed_bytes", constant: tensor(INT32, [], 1) }
+                 field: { name: "num_codebooks", constant: tensor(INT32, [], 1) }
+                 field: { name: "codebook_size", constant: tensor(INT32, [], 3) }
+                 field: { name: "vector_size", constant: tensor(INT32, [], 1) }
+                 field: { name: "index_bits", constant: tensor(INT32, [], 0) }
+             }
+         }
 
 FP8 E4M3 (per-tensor)
 ^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        linear: LinearUniformProto {
-            storage_type: FLOAT8E4M3FN, bits: 8, symmetric: true,
-            scale_float: 1.0, zero_point: 0, axis: -1
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             linear: LinearUniformProto {
+                 storage_type: FLOAT8E4M3FN, bits: 8, symmetric: true,
+                 scale_float: 1.0, zero_point: 0, axis: -1
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         UnstructuredTypeProto {
+             name: "FP8_E4M3_PER_TENSOR"
+             structure: Structure {
+                 field: {
+                     name: "values"
+                     type: array(FLOAT8E4M3FN, dimension=N)
+                 }
+                 field: {
+                     name: "storage_type"
+                     constant: tensor(INT32, [], FLOAT8E4M3FN)
+                 }
+                 field: { name: "bits", constant: tensor(INT32, [], 8) }
+                 field: { name: "symmetric", constant: tensor(BOOL, [], true) }
+                 field: { name: "scale", constant: tensor(FLOAT, [], 1.0) }
+                 field: { name: "zero_point", constant: tensor(INT64, [], 0) }
+                 field: { name: "axis", constant: tensor(INT32, [], -1) }
+             }
+         }
 
 AQLM 2×8 (Additive Quantization, 2 bits/weight)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        codebook: CodebookProto {
-            num_codebooks: 2,
-            codebook_size: 256,
-            vector_size: 8,
-            index_bits: 8,
-            codebook_data: [...]  // 2 * 256 * 8 = 4096 floats
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             codebook: CodebookProto {
+                 num_codebooks: 2,
+                 codebook_size: 256,
+                 vector_size: 8,
+                 index_bits: 8,
+                 codebook_data: [...]  // 2 * 256 * 8 = 4096 floats
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         UnstructuredTypeProto {
+             name: "AQLM_2X8"
+             structure: Structure {
+                 field: {
+                     name: "indices"
+                     type: array(UINT8, dimensions=[vector_count, 2])
+                 }
+                 field: {
+                     name: "codebooks"
+                     constant: tensor(
+                         FLOAT,
+                         [2, 256, 8],
+                         aqlm_codebook_data
+                     )
+                 }
+                 field: { name: "num_codebooks", constant: tensor(INT32, [], 2) }
+                 field: { name: "codebook_size", constant: tensor(INT32, [], 256) }
+                 field: { name: "vector_size", constant: tensor(INT32, [], 8) }
+                 field: { name: "index_bits", constant: tensor(INT32, [], 8) }
+             }
+         }
 
 IQ1_S (llama.cpp, 1.56 bits/weight, E8 lattice)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1689,67 +2370,282 @@ Uses a 2048-entry vector codebook (E8 lattice grid, 8 values per entry).
 Each sub-block of 8 weights is looked up with an 11-bit index.
 Wrapped in a block of 256 for the shared FP16 scale.
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [256]
-            elem_quant: [
-                QuantizationProto { codebook: CodebookProto {
-                    num_codebooks: 1,
-                    codebook_size: 2048,
-                    vector_size: 8,
-                    index_bits: 11,
-                    codebook_data: [...]  // 2048 * 8 = 16384 values in {-1, 0, 1}
-                }},
-                // ... one per super-block
-            ]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [256]
+                 elem_quant: [
+                     QuantizationProto { codebook: CodebookProto {
+                         num_codebooks: 1,
+                         codebook_size: 2048,
+                         vector_size: 8,
+                         index_bits: 11,
+                         codebook_data: [...]  // 2048 * 8 = 16384 values in {-1, 0, 1}
+                     }},
+                     // ... one per super-block
+                 ]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "IQ1_S_BLOCK_256"
+                     structure: Structure {
+                         field: {
+                             name: "indices"
+                             type: array(UINT8, dimension=44)
+                         }
+                         field: {
+                             name: "scale"
+                             type: array(FLOAT16, dimension=1)
+                         }
+                         field: {
+                             name: "codebook"
+                             constant: tensor(
+                                 FLOAT,
+                                 [2048, 8],
+                                 iq1_s_e8_codebook
+                             )
+                         }
+                         field: {
+                             name: "num_codebooks"
+                             constant: tensor(INT32, [], 1)
+                         }
+                         field: {
+                             name: "codebook_size"
+                             constant: tensor(INT32, [], 2048)
+                         }
+                         field: {
+                             name: "vector_size"
+                             constant: tensor(INT32, [], 8)
+                         }
+                         field: {
+                             name: "index_bits"
+                             constant: tensor(INT32, [], 11)
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "IQ1_S_TILES"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [256])
+                         }
+                     }
+                 }
+             ]
+         }
 
 SpQR (Sparse Quantization, ~3.4 bits/weight)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Outliers (>1% of values) stored in FP16, rest in INT3 per-group.
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        sparse: SparseQuantizationProto {
-            base_quant: QuantizationProto {
-                tiling: TilingQuantizationProto {
-                    tile_shape: [16]
-                    elem_quant: [
-                        QuantizationProto { linear: LinearUniformProto {
-                            storage_type: INT4, bits: 3,
-                            symmetric: false, scale_float: 0.01, zero_point: 4, axis: -1
-                        }},
-                        // ... one per block
-                    ]
-                }
-            },
-            outlier_data_type: FLOAT16,
-            outlier_threshold: 6.0,
-            outlier_ratio: 0.01
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             sparse: SparseQuantizationProto {
+                 base_quant: QuantizationProto {
+                     tiling: TilingQuantizationProto {
+                         tile_shape: [16]
+                         elem_quant: [
+                             QuantizationProto { linear: LinearUniformProto {
+                                 storage_type: INT4, bits: 3,
+                                 symmetric: false, scale_float: 0.01, zero_point: 4, axis: -1
+                             }},
+                             // ... one per block
+                         ]
+                     }
+                 },
+                 outlier_data_type: FLOAT16,
+                 outlier_threshold: 6.0,
+                 outlier_ratio: 0.01
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "SPQR_INT3_BLOCK_16"
+                     structure: Structure {
+                         field: { name: "values", type: array(UINT8, dimension=6) }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], INT4)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 3) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], false) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.01) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 4) }
+                         field: { name: "axis", constant: tensor(INT32, [], -1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "SPQR_DENSE_TILES"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=dense_block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [16])
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "SPQR"
+                     structure: Structure {
+                         field: {
+                             name: "base"
+                             type: unstructured(type_index=1)
+                         }
+                         field: {
+                             name: "outlier_indices"
+                             type: array(INT64, dimension=outlier_count)
+                         }
+                         field: {
+                             name: "outlier_values"
+                             type: array(FLOAT16, dimension=outlier_count)
+                         }
+                         field: {
+                             name: "outlier_data_type"
+                             constant: tensor(INT32, [], FLOAT16)
+                         }
+                         field: {
+                             name: "outlier_threshold"
+                             constant: tensor(FLOAT, [], 6.0)
+                         }
+                         field: {
+                             name: "outlier_ratio"
+                             constant: tensor(FLOAT, [], 0.01)
+                         }
+                     }
+                 }
+             ]
+         }
 
 QuIP# (Vector quantization with Hadamard rotation)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        codebook: CodebookProto {
-            num_codebooks: 1,
-            codebook_size: 256,
-            vector_size: 8,
-            index_bits: 8,
-            codebook_data: [...]  // learned codebook, 256 * 8 = 2048 floats
-        },
-        pre_rotation: RotationProto { matrix_type: HADAMARD, dims: [4096, 4096] },
-        post_rotation: RotationProto { matrix_type: HADAMARD, dims: [4096, 4096] }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             codebook: CodebookProto {
+                 num_codebooks: 1,
+                 codebook_size: 256,
+                 vector_size: 8,
+                 index_bits: 8,
+                 codebook_data: [...]  // learned codebook, 256 * 8 = 2048 floats
+             },
+             pre_rotation: RotationProto { matrix_type: HADAMARD, dims: [4096, 4096] },
+             post_rotation: RotationProto { matrix_type: HADAMARD, dims: [4096, 4096] }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "ROTATION_TYPE"
+                     enum_type: EnumProto {
+                         storage_type: UINT8
+                         value: { name: "HADAMARD", number: 0 }
+                         value: { name: "PLAIN", number: 1 }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "QUIP_SHARP"
+                     structure: Structure {
+                         field: {
+                             name: "indices"
+                             type: array(UINT8, dimension=vector_count)
+                         }
+                         field: {
+                             name: "codebook"
+                             constant: tensor(
+                                 FLOAT,
+                                 [256, 8],
+                                 quip_sharp_codebook
+                             )
+                         }
+                         field: {
+                             name: "num_codebooks"
+                             constant: tensor(INT32, [], 1)
+                         }
+                         field: {
+                             name: "codebook_size"
+                             constant: tensor(INT32, [], 256)
+                         }
+                         field: {
+                             name: "vector_size"
+                             constant: tensor(INT32, [], 8)
+                         }
+                         field: {
+                             name: "index_bits"
+                             constant: tensor(INT32, [], 8)
+                         }
+                         field: {
+                             name: "pre_rotation_type"
+                             enum_constant: {
+                                 type_index: 0
+                                 number: [0]
+                             }
+                         }
+                         field: {
+                             name: "pre_rotation_dims"
+                             constant: tensor(INT32, [2], [4096, 4096])
+                         }
+                         field: {
+                             name: "post_rotation_type"
+                             enum_constant: {
+                                 type_index: 0
+                                 number: [0]
+                             }
+                         }
+                         field: {
+                             name: "post_rotation_dims"
+                             constant: tensor(INT32, [2], [4096, 4096])
+                         }
+                     }
+                 }
+             ]
+         }
 
 EXL2 (variable bits per layer, ~3.5 bpw average)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1759,62 +2655,188 @@ Each layer gets its own ``QuantizationProto`` (via ``quantized_type`` index),
 so a model may use several quantization entries — e.g. 2-bit for less
 important layers and 4-bit for critical ones.
 
-.. code-block:: text
+.. tab-set::
 
-    // Layer A (less important): 2-bit per group of 128
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [128]
-            elem_quant: [
-                QuantizationProto { linear: LinearUniformProto {
-                    storage_type: INT4, bits: 2,
-                    symmetric: false, scale_float: 0.005, zero_point: 2, axis: -1
-                }},
-                // ... one per block
-            ]
-        }
-    }
+   .. tab-item:: Specialized proto
 
-    // Layer B (critical): 4-bit per group of 128
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [128]
-            elem_quant: [
-                QuantizationProto { linear: LinearUniformProto {
-                    storage_type: INT4, bits: 4,
-                    symmetric: false, scale_float: 0.01, zero_point: 8, axis: -1
-                }},
-                // ... one per block
-            ]
-        }
-    }
+      .. code-block:: text
+
+         // Layer A (less important): 2-bit per group of 128
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [128]
+                 elem_quant: [
+                     QuantizationProto { linear: LinearUniformProto {
+                         storage_type: INT4, bits: 2,
+                         symmetric: false, scale_float: 0.005, zero_point: 2, axis: -1
+                     }},
+                     // ... one per block
+                 ]
+             }
+         }
+
+         // Layer B (critical): 4-bit per group of 128
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [128]
+                 elem_quant: [
+                     QuantizationProto { linear: LinearUniformProto {
+                         storage_type: INT4, bits: 4,
+                         symmetric: false, scale_float: 0.01, zero_point: 8, axis: -1
+                     }},
+                     // ... one per block
+                 ]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "EXL2_INT2_BLOCK_128"
+                     structure: Structure {
+                         field: { name: "values", type: array(UINT8, dimension=32) }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], INT4)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 2) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], false) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.005) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 2) }
+                         field: { name: "axis", constant: tensor(INT32, [], -1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "EXL2_INT4_BLOCK_128"
+                     structure: Structure {
+                         field: { name: "values", type: array(INT4, dimension=128) }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], INT4)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 4) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], false) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.01) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 8) }
+                         field: { name: "axis", constant: tensor(INT32, [], -1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "EXL2_LAYER_A"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=layer_a_block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [128])
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "EXL2_LAYER_B"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=1),
+                                 dimension=layer_b_block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [128])
+                         }
+                     }
+                 }
+             ]
+         }
 
 Log quantization (4-bit)
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        log: LogUniformProto {
-            bits: 4,
-            base: 2.0,
-            offset: -7.0,
-            has_sign: true
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             log: LogUniformProto {
+                 bits: 4,
+                 base: 2.0,
+                 offset: -7.0,
+                 has_sign: true
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         UnstructuredTypeProto {
+             name: "LOG4"
+             structure: Structure {
+                 field: { name: "codes", type: array(UINT4, dimension=N) }
+                 field: {
+                     name: "signs"
+                     type: array(UINT8, dimension=sign_byte_count)
+                 }
+                 field: { name: "bits", constant: tensor(INT32, [], 4) }
+                 field: { name: "base", constant: tensor(FLOAT, [], 2.0) }
+                 field: { name: "offset", constant: tensor(FLOAT, [], -7.0) }
+                 field: { name: "has_sign", constant: tensor(BOOL, [], true) }
+             }
+         }
 
 Custom (plugin-based)
 ^^^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        function: FunctionUniformProto {
-            storage_type: UINT4, bits: 4,
-            quantize_op: "vendor::QuantizeV2",
-            dequantize_op: "vendor::DequantizeV2"
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             function: FunctionUniformProto {
+                 storage_type: UINT4, bits: 4,
+                 quantize_op: "vendor::QuantizeV2",
+                 dequantize_op: "vendor::DequantizeV2"
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         UnstructuredTypeProto {
+             name: "VENDOR_QUANTIZE_V2"
+             structure: Structure {
+                 field: { name: "payload", type: array(UINT4, dimension=N) }
+                 field: {
+                     name: "storage_type"
+                     constant: tensor(INT32, [], UINT4)
+                 }
+                 field: { name: "bits", constant: tensor(INT32, [], 4) }
+             }
+             metadata_props: {
+                 key: "quantize_op"
+                 value: "vendor::QuantizeV2"
+             }
+             metadata_props: {
+                 key: "dequantize_op"
+                 value: "vendor::DequantizeV2"
+             }
+         }
 
 MatMulNBits INT4 (onnxruntime, per-group of 32, tiled)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1824,20 +2846,75 @@ and 128 along axis N (SIMD width). All tiles share the same INT4
 quantization scheme. ``perm: [1, 0]`` indicates N-major tile ordering
 in memory for cache locality.
 
-.. code-block:: text
+.. tab-set::
 
-    // Weight shape: [4096, 4096], group_size=32, N_tile=128
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [32, 128],
-            axes: [0, 1],
-            elem_quant: [QuantizationProto { linear: LinearUniformProto {
-                storage_type: UINT4, bits: 4,
-                symmetric: true, scale_float: 0.0, zero_point: 0, axis: -1
-            }}],
-            perm: [1, 0]   // N-major ordering in memory
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         // Weight shape: [4096, 4096], group_size=32, N_tile=128
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [32, 128],
+                 axes: [0, 1],
+                 elem_quant: [QuantizationProto { linear: LinearUniformProto {
+                     storage_type: UINT4, bits: 4,
+                     symmetric: true, scale_float: 0.0, zero_point: 0, axis: -1
+                 }}],
+                 perm: [1, 0]   // N-major ordering in memory
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "MATMUL_NBITS_INT4_TILE_32X128"
+                     structure: Structure {
+                         field: {
+                             name: "values"
+                             type: array(UINT4, dimensions=[32, 128])
+                         }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], UINT4)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 4) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], true) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.0) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 0) }
+                         field: { name: "axis", constant: tensor(INT32, [], -1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "MATMUL_NBITS_INT4_4096X4096"
+                     structure: Structure {
+                         field: {
+                             name: "tiles"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimensions=[32, 128]
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [2], [32, 128])
+                         }
+                         field: {
+                             name: "axes"
+                             constant: tensor(INT32, [2], [0, 1])
+                         }
+                         field: {
+                             name: "perm"
+                             constant: tensor(INT32, [2], [1, 0])
+                         }
+                     }
+                 }
+             ]
+         }
 
 Block-tiled floats (no quantization)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1846,19 +2923,60 @@ Reorganizes a row-major float matrix into tiles of ``[32, 128]``
 without any value transformation. Useful for prepack layouts
 that expect block-tiled storage.
 
-.. code-block:: text
+.. tab-set::
 
-    // Weight shape: [4096, 4096], tiled into [32, 128] blocks
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [32, 128],
-            axes: [0, 1],
-            elem_quant: [QuantizationProto {
-                data_type: FLOAT,
-                cast: CastUniformProto { storage_type: FLOAT }
-            }]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         // Weight shape: [4096, 4096], tiled into [32, 128] blocks
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [32, 128],
+                 axes: [0, 1],
+                 elem_quant: [QuantizationProto {
+                     data_type: FLOAT,
+                     cast: CastUniformProto { storage_type: FLOAT }
+                 }]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "FLOAT_TILE_32X128"
+                     array: Array {
+                         element_type: FLOAT
+                         dimension: 32
+                         dimension: 128
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "BLOCK_TILED_FLOAT_4096X4096"
+                     structure: Structure {
+                         field: {
+                             name: "tiles"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimensions=[128, 32]
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [2], [32, 128])
+                         }
+                         field: {
+                             name: "axes"
+                             constant: tensor(INT32, [2], [0, 1])
+                         }
+                     }
+                 }
+             ]
+         }
 
 STQ1_0 (Sherry, 1.25 bits/weight, ternary codebook)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1867,28 +2985,134 @@ STQ1_0 (Sherry, 1.25 bits/weight, ternary codebook)
 1-bit sign) selects from a 32-entry codebook of 4 ternary values.
 Output positions use a stride-16 scatter within each 64-value chunk.
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        data_type: FLOAT,
-        structured_block: StructuredBlockUniformProto {
-            block_layout: BlockLayoutProto {
-                block_size: 256, bytes_per_block: 42,
-                fields: [
-                    BlockFieldProto { role: CODE,  bit_offset: 0,   bit_width: 4,  count: 64, data_type: 0 },
-                    BlockFieldProto { role: SIGN,  bit_offset: 256, bit_width: 1,  count: 64, data_type: 0 },
-                    BlockFieldProto { role: SCALE, bit_offset: 320, bit_width: 16, count: 1,  data_type: FLOAT16 },
-                ]
-            },
-            codebook_data: [...]  // 32 * 4 = 128 ternary values in {-1, 0, 1}
-            codebook_vector_size: 4,
-            index_formula: [
-                FieldWeightProto { field: CODE, multiplier: 1 },
-                FieldWeightProto { field: SIGN, multiplier: 16 },
-            ],
-            scatter: ScatterProto { group_size: 64, vector_size: 4, stride: 16 }
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             data_type: FLOAT,
+             structured_block: StructuredBlockUniformProto {
+                 block_layout: BlockLayoutProto {
+                     block_size: 256, bytes_per_block: 42,
+                     fields: [
+                         BlockFieldProto { role: CODE,  bit_offset: 0,   bit_width: 4,  count: 64, data_type: 0 },
+                         BlockFieldProto { role: SIGN,  bit_offset: 256, bit_width: 1,  count: 64, data_type: 0 },
+                         BlockFieldProto { role: SCALE, bit_offset: 320, bit_width: 16, count: 1,  data_type: FLOAT16 },
+                     ]
+                 },
+                 codebook_data: [...]  // 32 * 4 = 128 ternary values in {-1, 0, 1}
+                 codebook_vector_size: 4,
+                 index_formula: [
+                     FieldWeightProto { field: CODE, multiplier: 1 },
+                     FieldWeightProto { field: SIGN, multiplier: 16 },
+                 ],
+                 scatter: ScatterProto { group_size: 64, vector_size: 4, stride: 16 }
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "STQ1_0_FIELD_ROLE"
+                     enum_type: EnumProto {
+                         storage_type: UINT8
+                         value: { name: "SIGN", number: 1 }
+                         value: { name: "SCALE", number: 2 }
+                         value: { name: "CODE", number: 6 }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "STQ1_0_BLOCK_256"
+                     structure: Structure {
+                         field: { name: "code", type: array(UINT4, dimension=64) }
+                         field: { name: "sign", type: array(UINT8, dimension=8) }
+                         field: { name: "scale", type: array(FLOAT16, dimension=1) }
+                         field: {
+                             name: "field_roles"
+                             enum_constant: {
+                                 type_index: 0
+                                 dims: [3]
+                                 number: [6, 1, 2]
+                             }
+                         }
+                         field: {
+                             name: "sign_bit_width"
+                             constant: tensor(INT32, [], 1)
+                         }
+                         field: {
+                             name: "sign_count"
+                             constant: tensor(INT32, [], 64)
+                         }
+                         field: {
+                             name: "block_size"
+                             constant: tensor(INT32, [], 256)
+                         }
+                         field: {
+                             name: "bytes_per_block"
+                             constant: tensor(INT32, [], 42)
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "STQ1_0"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=1),
+                                 dimension=block_count
+                             )
+                         }
+                         field: {
+                             name: "codebook"
+                             constant: tensor(
+                                 FLOAT,
+                                 [32, 4],
+                                 stq1_0_codebook
+                             )
+                         }
+                         field: {
+                             name: "codebook_vector_size"
+                             constant: tensor(INT32, [], 4)
+                         }
+                         field: {
+                             name: "index_fields"
+                             enum_constant: {
+                                 type_index: 0
+                                 dims: [2]
+                                 number: [6, 1]
+                             }
+                         }
+                         field: {
+                             name: "index_multipliers"
+                             constant: tensor(INT32, [2], [1, 16])
+                         }
+                         field: {
+                             name: "scatter_group_size"
+                             constant: tensor(INT32, [], 64)
+                         }
+                         field: {
+                             name: "scatter_vector_size"
+                             constant: tensor(INT32, [], 4)
+                         }
+                         field: {
+                             name: "scatter_stride"
+                             constant: tensor(INT32, [], 16)
+                         }
+                         field: {
+                             name: "data_type"
+                             constant: tensor(INT32, [], FLOAT)
+                         }
+                     }
+                 }
+             ]
+         }
 
 Dequantization of one block (derived from proto fields):
 
@@ -1930,20 +3154,65 @@ A ``tile_shape`` value of 0 means "same as the tensor dimension on that axis",
 so ``[0, 0]`` is a single tile covering the whole tensor.
 ``perm: [1, 0]`` reverses the axis order in memory.
 
-.. code-block:: text
+.. tab-set::
 
-    // Weight shape: [M, N], stored column-major
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [0, 0],
-            axes: [0, 1],
-            elem_quant: [QuantizationProto {
-                data_type: FLOAT,
-                cast: CastUniformProto { storage_type: FLOAT }
-            }],
-            perm: [1, 0]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         // Weight shape: [M, N], stored column-major
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [0, 0],
+                 axes: [0, 1],
+                 elem_quant: [QuantizationProto {
+                     data_type: FLOAT,
+                     cast: CastUniformProto { storage_type: FLOAT }
+                 }],
+                 perm: [1, 0]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "FLOAT_MATRIX_MXN"
+                     array: Array {
+                         element_type: FLOAT
+                         dimension: M
+                         dimension: N
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "COLUMN_MAJOR_FLOAT_MXN"
+                     structure: Structure {
+                         field: {
+                             name: "tiles"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=1
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [2], [0, 0])
+                         }
+                         field: {
+                             name: "axes"
+                             constant: tensor(INT32, [2], [0, 1])
+                         }
+                         field: {
+                             name: "perm"
+                             constant: tensor(INT32, [2], [1, 0])
+                         }
+                     }
+                 }
+             ]
+         }
 
 TQ1_0 (llama.cpp, 1.6 bits/weight, ternary)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1951,28 +3220,80 @@ TQ1_0 (llama.cpp, 1.6 bits/weight, ternary)
 Pure ternary: each weight is {-1, 0, +1}. Five ternary values are packed
 into one byte (3⁵ = 243 ≤ 255). One FP16 scale per block of 256 weights.
 
-.. code-block:: text
+.. tab-set::
 
-    // Codebook: [-1, 0, +1], packed 5 per byte
-    QuantizationProto {
-        data_type: FLOAT16,
-        tiling: TilingQuantizationProto {
-            tile_shape: [256],
-            elem_quant: [QuantizationProto {
-                codebook: CodebookProto {
-                    scale_float: 1.0,       // scale is per-block, stored separately
-                    codebook_data: [-1.0, 0.0, 1.0],
-                    packed_count: 5,        // 5 ternary values per byte
-                    packed_bytes: 1
-                }
-            }]
-        }
-    }
+   .. tab-item:: Specialized proto
 
-    // Dequantize: for each block of 256 weights
-    // indices = unpack_base3(data, 5 values/byte)
-    // result = [codebook[i] * scale for i in indices]
-    //        = [{-1,0,+1}[i] * d for i in indices]
+      .. code-block:: text
+
+         // Codebook: [-1, 0, +1], packed 5 per byte
+         QuantizationProto {
+             data_type: FLOAT16,
+             tiling: TilingQuantizationProto {
+                 tile_shape: [256],
+                 elem_quant: [QuantizationProto {
+                     codebook: CodebookProto {
+                         scale_float: 1.0,       // scale is per-block, stored separately
+                         codebook_data: [-1.0, 0.0, 1.0],
+                         packed_count: 5,        // 5 ternary values per byte
+                         packed_bytes: 1
+                     }
+                 }]
+             }
+         }
+
+         // Dequantize: for each block of 256 weights
+         // indices = unpack_base3(data, 5 values/byte)
+         // result = [codebook[i] * scale for i in indices]
+         //        = [{-1,0,+1}[i] * d for i in indices]
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "TQ1_0_BLOCK_256"
+                     structure: Structure {
+                         field: { name: "indices", type: array(UINT8, dimension=52) }
+                         field: { name: "scale", type: array(FLOAT16, dimension=1) }
+                         field: {
+                             name: "codebook"
+                             constant: tensor(FLOAT, [3], [-1.0, 0.0, 1.0])
+                         }
+                         field: {
+                             name: "packed_count"
+                             constant: tensor(INT32, [], 5)
+                         }
+                         field: {
+                             name: "packed_bytes"
+                             constant: tensor(INT32, [], 1)
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "TQ1_0"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [256])
+                         }
+                         field: {
+                             name: "data_type"
+                             constant: tensor(INT32, [], FLOAT16)
+                         }
+                     }
+                 }
+             ]
+         }
 
 TQ2_0 (llama.cpp, 2 bits/weight, ternary)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1980,25 +3301,77 @@ TQ2_0 (llama.cpp, 2 bits/weight, ternary)
 Ternary with 2 bits per weight (simpler packing, 1 unused state).
 Mapping: 0 → -1, 1 → 0, 2 → +1.
 
-.. code-block:: text
+.. tab-set::
 
-    // Codebook: [-1, 0, +1], 2 bits per value
-    QuantizationProto {
-        data_type: FLOAT16,
-        tiling: TilingQuantizationProto {
-            tile_shape: [256],
-            elem_quant: [QuantizationProto {
-                codebook: CodebookProto {
-                    scale_float: 1.0,
-                    codebook_data: [-1.0, 0.0, 1.0],
-                    packed_count: 4,        // 4 values per byte (2 bits each)
-                    packed_bytes: 1
-                }
-            }]
-        }
-    }
+   .. tab-item:: Specialized proto
 
-    // Dequantize: same as TQ1_0 but simpler unpack (2 bits, not base-3)
+      .. code-block:: text
+
+         // Codebook: [-1, 0, +1], 2 bits per value
+         QuantizationProto {
+             data_type: FLOAT16,
+             tiling: TilingQuantizationProto {
+                 tile_shape: [256],
+                 elem_quant: [QuantizationProto {
+                     codebook: CodebookProto {
+                         scale_float: 1.0,
+                         codebook_data: [-1.0, 0.0, 1.0],
+                         packed_count: 4,        // 4 values per byte (2 bits each)
+                         packed_bytes: 1
+                     }
+                 }]
+             }
+         }
+
+         // Dequantize: same as TQ1_0 but simpler unpack (2 bits, not base-3)
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "TQ2_0_BLOCK_256"
+                     structure: Structure {
+                         field: { name: "indices", type: array(UINT8, dimension=64) }
+                         field: { name: "scale", type: array(FLOAT16, dimension=1) }
+                         field: {
+                             name: "codebook"
+                             constant: tensor(FLOAT, [3], [-1.0, 0.0, 1.0])
+                         }
+                         field: {
+                             name: "packed_count"
+                             constant: tensor(INT32, [], 4)
+                         }
+                         field: {
+                             name: "packed_bytes"
+                             constant: tensor(INT32, [], 1)
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "TQ2_0"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [256])
+                         }
+                         field: {
+                             name: "data_type"
+                             constant: tensor(INT32, [], FLOAT16)
+                         }
+                     }
+                 }
+             ]
+         }
 
 BitNet b1.58 (Microsoft, 1.58 bits/weight, native ternary)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -2007,23 +3380,75 @@ Model trained natively with ternary weights {-1, 0, +1}.
 Storage is identical to TQ1_0 (5 ternary values per byte).
 The difference is in training (QAT), not in the storage format.
 
-.. code-block:: text
+.. tab-set::
 
-    // Same storage as TQ1_0
-    QuantizationProto {
-        data_type: FLOAT16,
-        tiling: TilingQuantizationProto {
-            tile_shape: [256],
-            elem_quant: [QuantizationProto {
-                codebook: CodebookProto {
-                    scale_float: 1.0,
-                    codebook_data: [-1.0, 0.0, 1.0],
-                    packed_count: 5,
-                    packed_bytes: 1
-                }
-            }]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         // Same storage as TQ1_0
+         QuantizationProto {
+             data_type: FLOAT16,
+             tiling: TilingQuantizationProto {
+                 tile_shape: [256],
+                 elem_quant: [QuantizationProto {
+                     codebook: CodebookProto {
+                         scale_float: 1.0,
+                         codebook_data: [-1.0, 0.0, 1.0],
+                         packed_count: 5,
+                         packed_bytes: 1
+                     }
+                 }]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "BITNET_B1_58_BLOCK_256"
+                     structure: Structure {
+                         field: { name: "indices", type: array(UINT8, dimension=52) }
+                         field: { name: "scale", type: array(FLOAT16, dimension=1) }
+                         field: {
+                             name: "codebook"
+                             constant: tensor(FLOAT, [3], [-1.0, 0.0, 1.0])
+                         }
+                         field: {
+                             name: "packed_count"
+                             constant: tensor(INT32, [], 5)
+                         }
+                         field: {
+                             name: "packed_bytes"
+                             constant: tensor(INT32, [], 1)
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "BITNET_B1_58"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [256])
+                         }
+                         field: {
+                             name: "data_type"
+                             constant: tensor(INT32, [], FLOAT16)
+                         }
+                     }
+                 }
+             ]
+         }
 
 ParetoQ (Meta, 1.58–2 bits/weight, SEQ ternary/2-bit)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -2034,41 +3459,128 @@ is used only during training. At inference, the model uses a standard
 codebook. If the SEQ rounding function is needed at inference, use
 ``FunctionUniformProto``.
 
-.. code-block:: text
+.. tab-set::
 
-    // Ternary variant (same storage as TQ1_0)
-    QuantizationProto {
-        data_type: FLOAT16,
-        tiling: TilingQuantizationProto {
-            tile_shape: [256],
-            elem_quant: [QuantizationProto {
-                codebook: CodebookProto {
-                    scale_float: 1.0,
-                    codebook_data: [-1.0, 0.0, 1.0],
-                    packed_count: 5,
-                    packed_bytes: 1
-                }
-            }]
-        }
-    }
+   .. tab-item:: Specialized proto
 
-    // 2-bit variant (4 levels)
-    QuantizationProto {
-        data_type: FLOAT16,
-        tiling: TilingQuantizationProto {
-            tile_shape: [128],
-            elem_quant: [QuantizationProto {
-                linear: LinearUniformProto {
-                    storage_type: UINT8,
-                    bits: 2,
-                    symmetric: false,
-                    scale_float: 0.023,
-                    zero_point: 1,
-                    axis: -1
-                }
-            }]
-        }
-    }
+      .. code-block:: text
+
+         // Ternary variant (same storage as TQ1_0)
+         QuantizationProto {
+             data_type: FLOAT16,
+             tiling: TilingQuantizationProto {
+                 tile_shape: [256],
+                 elem_quant: [QuantizationProto {
+                     codebook: CodebookProto {
+                         scale_float: 1.0,
+                         codebook_data: [-1.0, 0.0, 1.0],
+                         packed_count: 5,
+                         packed_bytes: 1
+                     }
+                 }]
+             }
+         }
+
+         // 2-bit variant (4 levels)
+         QuantizationProto {
+             data_type: FLOAT16,
+             tiling: TilingQuantizationProto {
+                 tile_shape: [128],
+                 elem_quant: [QuantizationProto {
+                     linear: LinearUniformProto {
+                         storage_type: UINT8,
+                         bits: 2,
+                         symmetric: false,
+                         scale_float: 0.023,
+                         zero_point: 1,
+                         axis: -1
+                     }
+                 }]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "PARETOQ_TERNARY_BLOCK_256"
+                     structure: Structure {
+                         field: { name: "indices", type: array(UINT8, dimension=52) }
+                         field: { name: "scale", type: array(FLOAT16, dimension=1) }
+                         field: {
+                             name: "codebook"
+                             constant: tensor(FLOAT, [3], [-1.0, 0.0, 1.0])
+                         }
+                         field: {
+                             name: "packed_count"
+                             constant: tensor(INT32, [], 5)
+                         }
+                         field: {
+                             name: "packed_bytes"
+                             constant: tensor(INT32, [], 1)
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "PARETOQ_UINT2_BLOCK_128"
+                     structure: Structure {
+                         field: { name: "values", type: array(UINT8, dimension=32) }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], UINT8)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 2) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], false) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.023) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 1) }
+                         field: { name: "axis", constant: tensor(INT32, [], -1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "PARETOQ_TERNARY"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=ternary_block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [256])
+                         }
+                         field: {
+                             name: "data_type"
+                             constant: tensor(INT32, [], FLOAT16)
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "PARETOQ_UINT2"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=1),
+                                 dimension=uint2_block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [128])
+                         }
+                         field: {
+                             name: "data_type"
+                             constant: tensor(INT32, [], FLOAT16)
+                         }
+                     }
+                 }
+             ]
+         }
 
 Tequila (ICLR 2026, 1.58 bits/weight, deadzone-free ternary)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -2077,26 +3589,78 @@ Improved ternary QAT that removes the dead-zone around zero.
 Storage is identical to TQ1_0/BitNet (ternary codebook).
 The deadzone-free quantization function is only used during training.
 
-.. code-block:: text
+.. tab-set::
 
-    // Same storage as TQ1_0 / BitNet b1.58
-    QuantizationProto {
-        data_type: FLOAT16,
-        tiling: TilingQuantizationProto {
-            tile_shape: [256],
-            elem_quant: [QuantizationProto {
-                codebook: CodebookProto {
-                    scale_float: 1.0,
-                    codebook_data: [-1.0, 0.0, 1.0],
-                    packed_count: 5,
-                    packed_bytes: 1
-                }
-            }]
-        }
-    }
+   .. tab-item:: Specialized proto
 
-    // Note: the difference with BitNet is in training only.
-    // At inference, both use the same ternary codebook.
+      .. code-block:: text
+
+         // Same storage as TQ1_0 / BitNet b1.58
+         QuantizationProto {
+             data_type: FLOAT16,
+             tiling: TilingQuantizationProto {
+                 tile_shape: [256],
+                 elem_quant: [QuantizationProto {
+                     codebook: CodebookProto {
+                         scale_float: 1.0,
+                         codebook_data: [-1.0, 0.0, 1.0],
+                         packed_count: 5,
+                         packed_bytes: 1
+                     }
+                 }]
+             }
+         }
+
+         // Note: the difference with BitNet is in training only.
+         // At inference, both use the same ternary codebook.
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "TEQUILA_BLOCK_256"
+                     structure: Structure {
+                         field: { name: "indices", type: array(UINT8, dimension=52) }
+                         field: { name: "scale", type: array(FLOAT16, dimension=1) }
+                         field: {
+                             name: "codebook"
+                             constant: tensor(FLOAT, [3], [-1.0, 0.0, 1.0])
+                         }
+                         field: {
+                             name: "packed_count"
+                             constant: tensor(INT32, [], 5)
+                         }
+                         field: {
+                             name: "packed_bytes"
+                             constant: tensor(INT32, [], 1)
+                         }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "TEQUILA"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [256])
+                         }
+                         field: {
+                             name: "data_type"
+                             constant: tensor(INT32, [], FLOAT16)
+                         }
+                     }
+                 }
+             ]
+         }
 
 EETQ (INT8 weight-only per-channel)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -2105,19 +3669,47 @@ Simple INT8 per-channel weight-only quantization (NetEase FuXi).
 No calibration, no QAT. Uses optimized W8A16 GEMM kernels from
 FasterTransformer / TensorRT-LLM.
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        data_type: FLOAT16,
-        linear: LinearUniformProto {
-            storage_type: INT8,
-            bits: 8,
-            symmetric: true,
-            scale_float: 0.0042,    // per-channel scale
-            zero_point: 0,
-            axis: 0                 // per output channel (row)
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             data_type: FLOAT16,
+             linear: LinearUniformProto {
+                 storage_type: INT8,
+                 bits: 8,
+                 symmetric: true,
+                 scale_float: 0.0042,    // per-channel scale
+                 zero_point: 0,
+                 axis: 0                 // per output channel (row)
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         UnstructuredTypeProto {
+             name: "EETQ_INT8_PER_CHANNEL"
+             structure: Structure {
+                 field: { name: "values", type: array(INT8, dimension=N) }
+                 field: {
+                     name: "storage_type"
+                     constant: tensor(INT32, [], INT8)
+                 }
+                 field: { name: "bits", constant: tensor(INT32, [], 8) }
+                 field: { name: "symmetric", constant: tensor(BOOL, [], true) }
+                 field: { name: "scale", constant: tensor(FLOAT, [], 0.0042) }
+                 field: { name: "zero_point", constant: tensor(INT64, [], 0) }
+                 field: { name: "axis", constant: tensor(INT32, [], 0) }
+                 field: {
+                     name: "data_type"
+                     constant: tensor(INT32, [], FLOAT16)
+                 }
+             }
+         }
 
 EXL3 (improved EXL2, 2–6 bpw)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -2126,25 +3718,73 @@ Successor to EXL2 with improved codebook and mixed-precision per layer.
 Storage is structurally identical to EXL2 (variable bpw per layer using
 nested ``TilingQuantizationProto``).
 
-.. code-block:: text
+.. tab-set::
 
-    // Same structure as EXL2, different calibration
-    QuantizationProto {
-        data_type: FLOAT16,
-        tiling: TilingQuantizationProto {
-            tile_shape: [128],
-            elem_quant: [QuantizationProto {
-                linear: LinearUniformProto {
-                    storage_type: UINT8,
-                    bits: 3,               // varies per layer (2–6)
-                    symmetric: false,
-                    scale_float: 0.015,
-                    zero_point: 4,
-                    axis: -1
-                }
-            }]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         // Same structure as EXL2, different calibration
+         QuantizationProto {
+             data_type: FLOAT16,
+             tiling: TilingQuantizationProto {
+                 tile_shape: [128],
+                 elem_quant: [QuantizationProto {
+                     linear: LinearUniformProto {
+                         storage_type: UINT8,
+                         bits: 3,               // varies per layer (2–6)
+                         symmetric: false,
+                         scale_float: 0.015,
+                         zero_point: 4,
+                         axis: -1
+                     }
+                 }]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "EXL3_UINT3_BLOCK_128"
+                     structure: Structure {
+                         field: { name: "values", type: array(UINT8, dimension=48) }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], UINT8)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 3) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], false) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.015) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 4) }
+                         field: { name: "axis", constant: tensor(INT32, [], -1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "EXL3_LAYER"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [128])
+                         }
+                         field: {
+                             name: "data_type"
+                             constant: tensor(INT32, [], FLOAT16)
+                         }
+                     }
+                 }
+             ]
+         }
 
 HQQ (Hybrid Quantization, 2–4 bits, mixed-precision per head)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -2153,28 +3793,76 @@ Different bit-widths for Q, K, V projections in attention layers.
 Each tensor gets its own ``QuantizationProto``; the example shows
 a 2-bit weight with per-group scales.
 
-.. code-block:: text
+.. tab-set::
 
-    // Example: 2-bit weight with group size 64
-    QuantizationProto {
-        data_type: FLOAT16,
-        tiling: TilingQuantizationProto {
-            tile_shape: [64],
-            elem_quant: [QuantizationProto {
-                linear: LinearUniformProto {
-                    storage_type: UINT8,
-                    bits: 2,
-                    symmetric: false,
-                    scale_float: 0.032,
-                    zero_point: 2,
-                    axis: -1
-                }
-            }]
-        }
-    }
+   .. tab-item:: Specialized proto
 
-    // In practice, Q proj may use 4-bit while V proj uses 2-bit.
-    // Each tensor simply references a different QuantizationProto index.
+      .. code-block:: text
+
+         // Example: 2-bit weight with group size 64
+         QuantizationProto {
+             data_type: FLOAT16,
+             tiling: TilingQuantizationProto {
+                 tile_shape: [64],
+                 elem_quant: [QuantizationProto {
+                     linear: LinearUniformProto {
+                         storage_type: UINT8,
+                         bits: 2,
+                         symmetric: false,
+                         scale_float: 0.032,
+                         zero_point: 2,
+                         axis: -1
+                     }
+                 }]
+             }
+         }
+
+         // In practice, Q proj may use 4-bit while V proj uses 2-bit.
+         // Each tensor simply references a different QuantizationProto index.
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "HQQ_UINT2_BLOCK_64"
+                     structure: Structure {
+                         field: { name: "values", type: array(UINT8, dimension=16) }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], UINT8)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 2) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], false) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.032) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 2) }
+                         field: { name: "axis", constant: tensor(INT32, [], -1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "HQQ_HEAD"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [64])
+                         }
+                         field: {
+                             name: "data_type"
+                             constant: tensor(INT32, [], FLOAT16)
+                         }
+                     }
+                 }
+             ]
+         }
 
 NVFP4 (NVIDIA FP4 E2M1 with FP8 scale, 4.5 bpw)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -2183,30 +3871,85 @@ NVIDIA's block floating-point FP4 format. Each element is E2M1
 (2 exponent bits, 1 mantissa bit), with one FP8 E4M3 scale per
 block of 16 elements.
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        data_type: FLOAT16,
-        tiling: TilingQuantizationProto {
-            tile_shape: [16],
-            elem_quant: [QuantizationProto {
-                floating_point: FloatingPointUniformProto {
-                    sign_bits: 1,
-                    exponent_bits: 2,
-                    mantissa_bits: 1,
-                    exponent_bias: 1,
-                    has_inf: false,
-                    has_nan: false,
-                    packed_count: 2,      // 2 FP4 values per byte
-                    packed_bytes: 1
-                }
-            }]
-        }
-    }
+   .. tab-item:: Specialized proto
 
-    // Dequantize: for each block of 16 elements
-    // values = [fp_decode(v, 1, 2, 1, bias=1) for v in unpack_fp4(data)]
-    // result = values * scale_fp8
+      .. code-block:: text
+
+         QuantizationProto {
+             data_type: FLOAT16,
+             tiling: TilingQuantizationProto {
+                 tile_shape: [16],
+                 elem_quant: [QuantizationProto {
+                     floating_point: FloatingPointUniformProto {
+                         sign_bits: 1,
+                         exponent_bits: 2,
+                         mantissa_bits: 1,
+                         exponent_bias: 1,
+                         has_inf: false,
+                         has_nan: false,
+                         packed_count: 2,      // 2 FP4 values per byte
+                         packed_bytes: 1
+                     }
+                 }]
+             }
+         }
+
+         // Dequantize: for each block of 16 elements
+         // values = [fp_decode(v, 1, 2, 1, bias=1) for v in unpack_fp4(data)]
+         // result = values * scale_fp8
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "NVFP4_E2M1_BLOCK_16"
+                     structure: Structure {
+                         field: {
+                             name: "values"
+                             type: array(FLOAT4E2M1, dimension=16)
+                         }
+                         field: {
+                             name: "scale"
+                             type: array(FLOAT8E4M3FN, dimension=1)
+                         }
+                         field: { name: "sign_bits", constant: tensor(INT32, [], 1) }
+                         field: { name: "exponent_bits", constant: tensor(INT32, [], 2) }
+                         field: { name: "mantissa_bits", constant: tensor(INT32, [], 1) }
+                         field: { name: "exponent_bias", constant: tensor(INT32, [], 1) }
+                         field: { name: "has_inf", constant: tensor(BOOL, [], false) }
+                         field: { name: "has_nan", constant: tensor(BOOL, [], false) }
+                         field: { name: "split_storage", constant: tensor(BOOL, [], false) }
+                         field: { name: "packed_count", constant: tensor(INT32, [], 2) }
+                         field: { name: "packed_bytes", constant: tensor(INT32, [], 1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "NVFP4"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [16])
+                         }
+                         field: {
+                             name: "data_type"
+                             constant: tensor(INT32, [], FLOAT16)
+                         }
+                     }
+                 }
+             ]
+         }
 
 QuaRot (rotational quantization, 4 bits)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -2215,33 +3958,100 @@ Applies a Hadamard rotation before INT4 quantization to spread
 outlier magnitudes evenly across channels. The rotation is stored
 in ``RotationProto``.
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        data_type: FLOAT16,
-        pre_rotation: RotationProto {
-            type: HADAMARD,
-            dims: [4096]
-        },
-        tiling: TilingQuantizationProto {
-            tile_shape: [128],
-            elem_quant: [QuantizationProto {
-                linear: LinearUniformProto {
-                    storage_type: UINT8,
-                    bits: 4,
-                    symmetric: true,
-                    scale_float: 0.018,
-                    zero_point: 0,
-                    axis: -1
-                }
-            }]
-        }
-    }
+   .. tab-item:: Specialized proto
 
-    // Dequantize:
-    // 1. values = unpack(data, 4 bits)
-    // 2. result = values * scale
-    // 3. result = hadamard_inverse(result)  ← RotationProto
+      .. code-block:: text
+
+         QuantizationProto {
+             data_type: FLOAT16,
+             pre_rotation: RotationProto {
+                 type: HADAMARD,
+                 dims: [4096]
+             },
+             tiling: TilingQuantizationProto {
+                 tile_shape: [128],
+                 elem_quant: [QuantizationProto {
+                     linear: LinearUniformProto {
+                         storage_type: UINT8,
+                         bits: 4,
+                         symmetric: true,
+                         scale_float: 0.018,
+                         zero_point: 0,
+                         axis: -1
+                     }
+                 }]
+             }
+         }
+
+         // Dequantize:
+         // 1. values = unpack(data, 4 bits)
+         // 2. result = values * scale
+         // 3. result = hadamard_inverse(result)  ← RotationProto
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "ROTATION_TYPE"
+                     enum_type: EnumProto {
+                         storage_type: UINT8
+                         value: { name: "HADAMARD", number: 0 }
+                         value: { name: "PLAIN", number: 1 }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "QUAROT_UINT4_BLOCK_128"
+                     structure: Structure {
+                         field: { name: "values", type: array(UINT4, dimension=128) }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], UINT8)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 4) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], true) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.018) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 0) }
+                         field: { name: "axis", constant: tensor(INT32, [], -1) }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "QUAROT"
+                     structure: Structure {
+                         field: {
+                             name: "blocks"
+                             type: array(
+                                 unstructured(type_index=1),
+                                 dimension=block_count
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [128])
+                         }
+                         field: {
+                             name: "pre_rotation_type"
+                             enum_constant: {
+                                 type_index: 0
+                                 number: [0]
+                             }
+                         }
+                         field: {
+                             name: "pre_rotation_dims"
+                             constant: tensor(INT32, [1], [4096])
+                         }
+                         field: {
+                             name: "data_type"
+                             constant: tensor(INT32, [], FLOAT16)
+                         }
+                     }
+                 }
+             ]
+         }
 
 SmoothQuant (W8A8, smoothed INT8)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -2250,28 +4060,86 @@ Shifts quantization difficulty from activations to weights via a
 per-channel scaling transform. The smoothing factor is a diagonal
 matrix stored as a rotation matrix (``PLAIN`` type).
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        data_type: FLOAT,
-        pre_rotation: RotationProto {
-            type: PLAIN,
-            dims: [4096],
-            matrix_index: 0          // index into ModelProto.rotation_matrices
-        },
-        linear: LinearUniformProto {
-            storage_type: INT8,
-            bits: 8,
-            symmetric: true,
-            scale_float: 0.0042,
-            zero_point: 0,
-            axis: 1                  // per-channel
-        }
-    }
+   .. tab-item:: Specialized proto
 
-    // Dequantize:
-    // 1. result = int8_values * scale (per-channel)
-    // 2. result = result @ diag(smooth_factors)^(-1)  ← RotationProto
+      .. code-block:: text
+
+         QuantizationProto {
+             data_type: FLOAT,
+             pre_rotation: RotationProto {
+                 type: PLAIN,
+                 dims: [4096],
+                 matrix_index: 0          // index into ModelProto.rotation_matrices
+             },
+             linear: LinearUniformProto {
+                 storage_type: INT8,
+                 bits: 8,
+                 symmetric: true,
+                 scale_float: 0.0042,
+                 zero_point: 0,
+                 axis: 1                  // per-channel
+             }
+         }
+
+         // Dequantize:
+         // 1. result = int8_values * scale (per-channel)
+         // 2. result = result @ diag(smooth_factors)^(-1)  ← RotationProto
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {
+                     name: "ROTATION_TYPE"
+                     enum_type: EnumProto {
+                         storage_type: UINT8
+                         value: { name: "HADAMARD", number: 0 }
+                         value: { name: "PLAIN", number: 1 }
+                     }
+                 },
+                 UnstructuredTypeProto {
+                     name: "SMOOTHQUANT_INT8"
+                     structure: Structure {
+                         field: {
+                             name: "values"
+                             type: array(INT8, dimension=N)
+                         }
+                         field: {
+                             name: "storage_type"
+                             constant: tensor(INT32, [], INT8)
+                         }
+                         field: { name: "bits", constant: tensor(INT32, [], 8) }
+                         field: { name: "symmetric", constant: tensor(BOOL, [], true) }
+                         field: { name: "scale", constant: tensor(FLOAT, [], 0.0042) }
+                         field: { name: "zero_point", constant: tensor(INT64, [], 0) }
+                         field: { name: "axis", constant: tensor(INT32, [], 1) }
+                         field: {
+                             name: "pre_rotation_type"
+                             enum_constant: {
+                                 type_index: 0
+                                 number: [1]
+                             }
+                         }
+                         field: {
+                             name: "pre_rotation_dims"
+                             constant: tensor(INT32, [1], [4096])
+                         }
+                         field: {
+                             name: "pre_rotation"
+                             constant: tensor(FLOAT, [4096], smooth_factors)
+                         }
+                         field: {
+                             name: "data_type"
+                             constant: tensor(INT32, [], FLOAT)
+                         }
+                     }
+                 }
+             ]
+         }
 
 Pseudo-code
 +++++++++++

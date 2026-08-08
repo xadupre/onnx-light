@@ -76,7 +76,7 @@ public:
                                            : workers_.size();
   }
 
-  /** Returns whether the pool has been started and workers are running. */
+  /** Returns whether the pool has been started (workers may start lazily). */
   inline bool IsStarted() const { return is_started_; }
 
   /**

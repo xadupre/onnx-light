@@ -38,15 +38,17 @@ that can be overlaid on the bytes of an ``UnstructuredProto``.
 tensor-shaped. Physical dimensions are already part of its arrays and tensor
 fields.
 
-The type system extends ``TypeProto`` with only two structural kinds:
+The type system adds two serialized structural kinds and one type-level
+constant leaf:
 
 * an array of a statically sized ``TypeProto``;
-* a structure containing named, statically sized ``TypeProto`` fields.
+* a structure containing named, statically sized ``TypeProto`` fields;
+* a constant ``TensorProto`` that consumes no payload bytes.
 
 Scalars and ordinary tensors continue to use ``TypeProto.Tensor``. Quantized
 values, packed records, custom numeric types, image pixels, and other static
 binary formats are recursive compositions of existing ONNX types and these
-two additions.
+additions.
 
 Requirements
 ++++++++++++
@@ -61,6 +63,58 @@ Requirements
 * The physical structure is inspectable without loading a vendor plugin.
 * An optional standard ONNX decoder defines logical semantics such as
   dequantization.
+
+Stable contract
++++++++++++++++
+
+The proposal has three valid uses of ``UnstructuredTypeProto``:
+
+``concrete declaration``
+    Selects ``array`` or ``structure``. It appears in
+    ``ModelProto.unstructured_types`` or in
+    ``UnstructuredProto.unstructured_type``. It completely determines the
+    payload size.
+
+``exact static reference``
+    Selects ``type_index`` and appears inside ``TypeProto``. It accepts only
+    the referenced model-level declaration.
+
+``unconstrained static category``
+    Leaves ``kind`` unset and appears only inside ``TypeProto``. It accepts
+    any concrete unstructured declaration. This form is used by heterogeneous
+    sequences and maps.
+
+``Constant`` and ``type_index`` may also occur below a concrete root through
+``Array.element_type`` or ``Structure.Field.type``. A concrete root may not be
+a ``Constant``, a ``type_index``, or an unset ``kind``. Static forms may not
+carry ``decoder``, ``encoder``, ``name``, or metadata.
+
+Only the ``decoder`` and ``encoder`` attached to the selected concrete root
+are invoked. A declaration reached through a nested ``type_index`` contributes
+only its physical structure and constants; its decoder and encoder are not
+composed implicitly.
+
+No other interpretation of an absent field is permitted. In particular,
+there are no symbolic physical dimensions, inferred lengths, implicit
+alignment, hidden padding, semantic traits, or alternate byte orders.
+
+Physical size function
+++++++++++++++++++++++
+
+The serialized size is computed recursively in bits:
+
+.. code-block:: text
+
+    size(scalar(T))       = bit_width(T)
+    size(Constant)        = 0
+    size(Array(T, n))     = n * size(T)
+    size(Structure(f...)) = sum(size(f.type))
+    size(type_index=i)    = size(ModelProto.unstructured_types[i])
+
+All arithmetic is checked in ``uint64``. References must be acyclic. The
+concrete root size must be divisible by eight and equal the inline
+``raw_data`` length or the external-data ``length``. These rules make the
+physical schema and payload independently checkable.
 
 UnstructuredTypeProto
 +++++++++++++++++++++
@@ -113,8 +167,8 @@ messages.
 intermediate ``Layout`` message. A concrete model-level or inline physical
 type selects exactly one of ``array`` and ``structure``. A nested or static
 exact type may select one model-level declaration with ``type_index``. A
-static constraint may leave ``kind`` unset to accept any concrete
-unstructured type.
+static type may leave ``kind`` unset only for the unconstrained category
+defined above.
 
 ``UnstructuredProto.type`` and ``UnstructuredTypeProto.type_index`` are both
 model-level indices. The former selects the type of one value; the latter
@@ -373,7 +427,8 @@ The concrete ``UnstructuredProto`` selects exactly one
 
 * when ``UnstructuredTypeProto.type_index`` is present, the value must
   reference that exact model-level declaration;
-* when ``kind`` is unset, any concrete unstructured type is accepted.
+* when ``kind`` is unset, the explicitly unconstrained static category accepts
+  any concrete unstructured type.
 
 Model-level and ``UnstructuredProto.unstructured_type`` definitions must
 select ``array`` or ``structure``. A ``TypeProto.unstructured_type`` may
@@ -381,11 +436,12 @@ instead:
 
 * select a physical kind to define one exact inline type;
 * select one model-level declaration with ``type_index``;
-* leave ``kind`` unset as a wildcard.
+* leave ``kind`` unset as the unconstrained category.
 
 These forms are mutually exclusive. This distinction permits both exact and
 heterogeneous types. A graph input may require one exact type, while a
-container using the wildcard may contain different physical types.
+container using the unconstrained category may contain different physical
+types.
 
 Because ``Sequence``, ``Map``, and ``Optional`` already refer recursively to
 ``TypeProto``, no special container type grammar is needed:
@@ -436,9 +492,9 @@ sequence/map attributes self-describing rather than relying on surrounding
 graph type information.
 
 All values in a sequence remain homogeneous with respect to their static
-``TypeProto.Unstructured`` category. With the wildcard constraint, they need
-not have the same concrete declaration: each value still carries its exact
-physical type.
+``TypeProto.Unstructured`` category. With the unconstrained static form, they
+need not have the same concrete declaration: each value still carries its
+exact physical type.
 
 AttributeProto integration
 ++++++++++++++++++++++++++
@@ -615,6 +671,13 @@ A concrete sequence may mix page encodings:
 Both decoder signatures produce ``FLOAT16`` with the same logical page shape.
 Their physical layouts and byte sizes may differ.
 
+The INT4 page contains ``2 * 32 * 128 * 128`` four-bit values
+(``524288`` bytes) and ``2 * 32 * 128`` FLOAT16 scales (``16384`` bytes), for
+an exact payload of ``540672`` bytes. The FP8 page contains
+``2 * 32 * 128 * 128`` one-byte values, for ``1048576`` bytes. The sequence
+accepts both because its static element category is unconstrained, while each
+``UnstructuredProto.type`` still selects one exact physical declaration.
+
 For page lookup by identifier, ``MapProto`` uses integer keys and this
 sequence as its values:
 
@@ -692,7 +755,12 @@ STQ1_0 stores 256 logical values in each 42-byte block:
 
 For a 420-byte buffer, the root array contains exactly ten blocks and
 describes 2560 logical values. Its complete structure and expected byte size
-are derived exclusively from the static type.
+are derived exclusively from the static type:
+
+.. code-block:: text
+
+    block = 64 * 4 bits + 16 * 4 bits + 16 bits = 336 bits = 42 bytes
+    value = 10 * 42 bytes = 420 bytes
 
 Linear block example
 ++++++++++++++++++++
@@ -748,6 +816,93 @@ An INT4 format with 32 values followed by one FLOAT16 scale per block is:
 The canonical leaf view contains ``values[10, 32]`` and ``scale[10]``. A
 linear decoder reconstructs ``values * scale``.
 
+Decision-tree example
++++++++++++++++++++++
+
+A finite decision tree does not require a recursive physical type. Child
+relations are stored as node indices. The following three-class tree has
+seven fixed-size nodes:
+
+.. code-block:: text
+
+    ModelProto {
+        unstructured_types: [
+            UnstructuredTypeProto {             // index 0: one node
+                name: "DECISION_NODE_3_CLASSES"
+                structure: Structure {
+                    field: { name: "kind",       type: UINT8 }
+                    field: { name: "feature_id", type: INT64 }
+                    field: { name: "threshold",  type: FLOAT }
+                    field: { name: "left",       type: INT32 }
+                    field: { name: "right",      type: INT32 }
+                    field: {
+                        name: "value"
+                        type: array(FLOAT, dimension=3)
+                    }
+                }
+            },
+            UnstructuredTypeProto {             // index 1: complete tree
+                name: "DECISION_TREE_7_NODES_3_CLASSES"
+                structure: Structure {
+                    field: {
+                        name: "nodes"
+                        type: array(
+                            unstructured(type_index=0),
+                            dimension=7
+                        )
+                    }
+                    field: {
+                        name: "class_ids"
+                        type: constant(tensor(INT64, [0, 1, 2]))
+                    }
+                }
+            }
+        ]
+    }
+
+    UnstructuredProto {
+        type: 1
+        raw_data: ...                 // exactly 231 bytes
+    }
+
+One node occupies ``1 + 8 + 4 + 4 + 4 + 3 * 4 = 33`` bytes, so the seven
+serialized nodes occupy ``231`` bytes. ``class_ids`` is embedded in the type
+and consumes no payload bytes. ``left`` and ``right`` use node indices or a
+profile-defined sentinel for leaves. No decoder is required when a tree
+operator consumes the canonical leaf view directly.
+
+Reference-case validation
++++++++++++++++++++++++++
+
+The three reference cases exercise distinct requirements:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 28 24 24
+
+   * - Case
+     - Physical composition
+     - Exact payload
+     - Additional rule
+   * - STQ1_0
+     - Array of structured sub-byte blocks
+     - 420 bytes
+     - Decoder output is ``FLOAT[2560]``
+   * - Paged KV-cache
+     - Heterogeneous sequence of structures
+     - 540672 or 1048576 bytes per page
+     - Both decoders output the same page type
+   * - Decision tree
+     - Array of indexed nodes plus a constant
+     - 231 bytes
+     - Child indices are in ``[-1, 6]``
+
+A conforming checker must accept these sizes without inspecting decoder
+implementation details. It must reject any truncated or oversized payload,
+cyclic ``type_index``, out-of-range tree child, or mismatched decoder
+signature. The tree child-index rule and equal KV decoder signatures are
+profile validation layered on top of the generic structural checker.
+
 Validation and security
 +++++++++++++++++++++++
 
@@ -767,8 +922,8 @@ A checker validates:
 * exact consumption of the concrete buffer;
 * decoder and encoder signatures;
 * decoder restrictions and represented output type;
-* every unstructured value satisfies its exact or wildcard physical constraint
-  inside graph inputs, outputs, sequences, maps, and optionals.
+* every unstructured value satisfies its exact or unconstrained static
+  category inside graph inputs, outputs, sequences, maps, and optionals.
 
 Implementations must impose configurable limits on nesting depth, field
 count, array count, constant bytes, and total extracted leaves. Validation

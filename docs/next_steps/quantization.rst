@@ -644,7 +644,7 @@ deductible from the proto structure.
             ref_field = q.index_formula[0].field
             assert ref_field in fields, f"missing field {ref_field} for index_formula"
             n_codes = len(fields[ref_field])
-            for fw in q.index_formula:
+            for fw in q.index_formula[1:]:
                 assert fw.field in fields, f"missing field {fw.field} for index_formula"
                 assert len(fields[fw.field]) == n_codes, (
                     f"field {fw.field} has inconsistent length")

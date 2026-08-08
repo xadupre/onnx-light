@@ -7,5 +7,7 @@ Next Steps
 .. toctree::
     :maxdepth: 1
 
-    compiled_tensor
+    custom_types
+    proto_inheritance
     quantization
+    compiled_tensor

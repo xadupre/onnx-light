@@ -4,6 +4,14 @@
 Quantization
 ============
 
+.. note::
+
+    This page describes a specialized quantization hierarchy. The more
+    general :ref:`l-next-steps-custom-types` proposal can express the same
+    formats by applying an ``UnstructuredTypeProto`` layout and ONNX decoder
+    to a byte buffer. In that design, the families below are profiles rather
+    than protobuf variants.
+
 Format coverage summary
 +++++++++++++++++++++++
 
@@ -21,7 +29,7 @@ Format coverage summary
      - ✅
    * - AQLM 2×8
      - 3.0
-     - ``VectorCodebook``
+     - ``Codebook``
      - ✅
    * - Binary/XNOR (1-bit)
      - 1.0
@@ -29,7 +37,7 @@ Format coverage summary
      - ✅
    * - EXL2 (variable bpw)
      - 3.5
-     - ``Block`` + ``Linear`` (multiple)
+     - ``Tiling`` + ``Linear`` (multiple)
      - ✅
    * - EETQ (INT8 weight-only)
      - 8.0
@@ -37,11 +45,11 @@ Format coverage summary
      - ✅
    * - EXL3 (improved EXL2)
      - 2–6
-     - ``Block`` + ``Linear`` or ``Codebook``
+     - ``Tiling`` + ``Linear`` or ``Codebook``
      - ✅
    * - FP6 LLM (TC-FPn)
      - 6.125
-     - ``Block`` + ``FloatingPoint``
+     - ``Tiling`` + ``FloatingPoint``
      - ✅
    * - FP8 E4M3
      - 8.0
@@ -49,15 +57,15 @@ Format coverage summary
      - ✅
    * - HQQ (mixed-precision per head)
      - 2–4
-     - ``Block`` + ``Linear``
+     - ``Tiling`` + ``Linear``
      - ✅
    * - INT4 AWQ (per-group)
      - 4.5
-     - ``Block`` + ``Linear``
+     - ``Tiling`` + ``Linear``
      - ✅
    * - INT4 GPTQ (per-group)
      - 4.5
-     - ``Block`` + ``Linear``
+     - ``Tiling`` + ``Linear``
      - ✅
    * - INT4 Symmetric
      - 4.5
@@ -73,7 +81,7 @@ Format coverage summary
      - ✅
    * - IQ1_S
      - 1.56
-     - ``Block`` + ``VectorCodebook``
+     - ``Tiling`` + ``Codebook``
      - ✅
    * - IQ4_NL
      - 4.5
@@ -89,11 +97,11 @@ Format coverage summary
      - ✅
    * - MXFP4
      - 5.0
-     - ``Block`` + ``FloatingPoint``
+     - ``Tiling`` + ``FloatingPoint``
      - ✅
    * - MXFP6 E3M2
      - 6.125
-     - ``Block`` + ``FloatingPoint``
+     - ``Tiling`` + ``FloatingPoint``
      - ✅
    * - NF4 (QLoRA)
      - 4.5
@@ -101,27 +109,27 @@ Format coverage summary
      - ✅
    * - NVFP4 (E2M1 + FP8 scale)
      - 4.5
-     - ``Block`` + ``FloatingPoint``
+     - ``Tiling`` + ``FloatingPoint``
      - ✅
    * - Q2_K
      - 2.625
-     - ``Block`` × 2 + ``Linear``
+     - ``Tiling`` × 2 + ``Linear``
      - ✅
    * - Q3_K
      - 3.4
-     - ``Block`` × 2 + ``Linear``
+     - ``Tiling`` × 2 + ``Linear``
      - ✅
    * - Q4_K
      - 4.5
-     - ``Block`` × 2 + ``Linear``
+     - ``Tiling`` × 2 + ``Linear``
      - ✅
    * - Q5_K
      - 5.5
-     - ``Block`` × 2 + ``Linear``
+     - ``Tiling`` × 2 + ``Linear``
      - ✅
    * - Q6_K
      - 6.6
-     - ``Block`` × 2 + ``Linear``
+     - ``Tiling`` × 2 + ``Linear``
      - ✅
    * - QuaRot (rotational quantization)
      - 4.0
@@ -129,11 +137,11 @@ Format coverage summary
      - ✅
    * - QuIP#
      - 2.0
-     - ``VectorCodebook`` + rotation
+     - ``Codebook`` + rotation
      - ✅
    * - SpQR
      - 3.4
-     - ``Sparse`` + ``Block`` + ``Linear``
+     - ``Sparse`` + ``Tiling`` + ``Linear``
      - ✅
    * - SmoothQuant (W8A8)
      - 8.0
@@ -179,35 +187,99 @@ It carries its own byte size explicitly.
         int64 n_bytes = 3;            // byte size of raw_data
         int32 quantized_type = 4;      // index into ModelProto.quantizations
         optional QuantizationProto quantization = 5;  // inline if unique to this tensor
+        string name = 6;
+        string doc_string = 7;
     }
+
+``name`` identifies the concrete quantized value and ``doc_string`` documents
+that value. ``QuantizationProto.doc_string`` documents the reusable
+quantization type instead.
+
+TypeProto and containers
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+If ``QuantizedTensorProto`` remains a distinct value category rather than an
+``UnstructuredProto`` profile, it must be usable everywhere a recursive
+``TypeProto`` is accepted:
+
+.. code-block:: text
+
+    message TypeProto {
+        message QuantizedTensor {
+            repeated int32 allowed_quantized_type = 1;
+            optional int32 elem_type = 2;       // decoded logical element type
+            optional TensorShapeProto shape = 3;
+        }
+
+        oneof value {
+            ...
+            QuantizedTensor quantized_tensor_type = <N>;
+        }
+    }
+
+``allowed_quantized_type`` is a set of indices into
+``ModelProto.quantizations``. An empty set accepts any quantization declaration
+whose decoded element type and logical shape satisfy the remaining
+constraints. This allows a sequence or map to contain pages using different
+quantization formats without becoming untyped.
+
+The corresponding value containers require a new category:
+
+.. code-block:: text
+
+    message SequenceProto {
+        enum DataType {
+            ...
+            QUANTIZED_TENSOR = <N>;
+        }
+        repeated QuantizedTensorProto quantized_tensor_values = <N>;
+        optional TypeProto value_type = <N+1>;
+    }
+
+    message OptionalProto {
+        enum DataType {
+            ...
+            QUANTIZED_TENSOR = <N>;
+        }
+        optional QuantizedTensorProto quantized_tensor_value = <N>;
+        optional TypeProto value_type = <N+1>;
+    }
+
+``MapProto`` inherits support because its values are represented by a
+``SequenceProto``. Consequently, ``Sequence<QuantizedTensor>`` and
+``Map<int64, QuantizedTensor>`` can represent a paged KV-cache with a different
+quantization declaration for each page.
+
+``value_type`` is required for these new categories and carries the complete
+``TypeProto.QuantizedTensor`` constraint. It makes standalone sequence and map
+values self-describing and must agree with any enclosing ``ValueInfoProto``.
+
+The generalized design in :ref:`l-next-steps-custom-types` avoids duplicating
+this machinery: a quantized tensor is an unstructured value with an explicit
+physical type and a decoder with a typed output signature.
 
 QuantizationProto
 +++++++++++++++++
 
 .. code-block:: text
 
-    // Describes how a tensor is quantized. Eight variants cover the
-    // common families: linear affine/symmetric, scalar codebook lookup,
-    // vector codebook (additive VQ), micro-float (exponent+mantissa),
-    // sparse (outlier separation), logarithmic, custom function, and
-    // recursive block-wise quantization.
-    // BlockQuantizationProto can nest QuantizationProto to express
+    // Describes how a tensor is quantized. Nine variants cover the
+    // common families without separate messages for scalar/vector
+    // codebooks, one-/multi-dimensional tiling, identity casts, or
+    // packed linear layouts.
+    // TilingQuantizationProto can nest QuantizationProto to express
     // multi-level hierarchies (e.g. K-Quants, MXFP).
     // Optional pre/post rotations support QuIP#, SmoothQuant, etc.
     message QuantizationProto {
         oneof kind {
             LinearUniformProto linear = 1;
-            CodebookUniformProto codebook = 2;
-            VectorCodebookUniformProto vector_codebook = 3;
+            CodebookProto codebook = 2;
             FloatingPointUniformProto floating_point = 4;
             SparseQuantizationProto sparse = 5;
             LogUniformProto log = 6;
             FunctionUniformProto function = 7;
-            BlockQuantizationProto block = 8;
             TilingQuantizationProto tiling = 13;
-            IdentityProto identity = 14;
             CastUniformProto cast = 16;
-            PackedLinearUniformProto packed_linear = 17;
             StructuredBlockUniformProto structured_block = 18;
         }
         int32 data_type = 15;              // dequantized element type (same enum as TensorProto.data_type)
@@ -253,62 +325,54 @@ Classic affine/symmetric: ``value = (q - zero_point) * scale``.
     values = clip(values, 0, (1 << q.bits) - 1)
     raw_data = pack(values, q.bits)
 
-CodebookUniformProto
-^^^^^^^^^^^^^^^^^^^^
+CodebookProto
+^^^^^^^^^^^^^
 
-Lookup-table based: ``value = codebook[index] * scale``.
+Scalar or additive vector lookup-table quantization. Scalar codebooks
+use ``num_codebooks = vector_size = 1``. For additive vector
+quantization, each vector is reconstructed as the sum of one entry from
+each codebook.
 
 .. code-block:: text
 
-    message CodebookUniformProto {
+    message CodebookProto {
         oneof scale {
             float scale_float = 1;    // scale as float
             int32 scale_int = 2;      // scale as shared exponent
         }
-        repeated float codebook = 3;  // lookup table values, len(codebook) = base
+        repeated float codebook_data = 3;  // concatenated codebooks
         int32 packed_count = 4;       // number of values packed
         int32 packed_bytes = 5;       // into this many bytes
+        int32 num_codebooks = 6;      // additive codebooks; 0 means 1
+        int32 codebook_size = 7;      // entries per codebook; 0 means infer
+        int32 vector_size = 8;        // values per entry; 0 means 1
+        int32 index_bits = 9;         // bits per index; 0 means base-N packing
     }
 
 .. code-block:: python
 
     # Dequantize
-    indices = unpack_base(data, len(q.codebook), q.packed_count, q.packed_bytes)
-    result = [q.codebook[i] * q.scale for i in indices]
+    num_codebooks = q.num_codebooks or 1
+    vector_size = q.vector_size or 1
+    codebook_size = q.codebook_size or (
+        len(q.codebook_data) // (num_codebooks * vector_size))
+    indices = unpack_indices(data, q.index_bits, codebook_size,
+                             q.packed_count, q.packed_bytes)
+    result = zeros(n_vectors * vector_size)
+    for k in range(num_codebooks):
+        codebook_k = q.codebook_data[
+            k * codebook_size * vector_size:
+            (k + 1) * codebook_size * vector_size]
+        for i, idx in enumerate(indices[k]):
+            begin = idx * vector_size
+            result[i*vector_size:(i+1)*vector_size] += (
+                codebook_k[begin:begin + vector_size])
+    result *= q.scale
 
     # Quantize
-    scaled = tensor / q.scale
-    indices = [nearest(scaled[i], q.codebook) for i in range(len(tensor))]
-    raw_data = pack_base(indices, len(q.codebook), q.packed_count, q.packed_bytes)
-
-VectorCodebookUniformProto
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Additive vector codebook quantization (AQLM, residual VQ).
-Each block of ``vector_size`` values is reconstructed as the sum
-of lookups from ``num_codebooks`` codebooks.
-``values[0:vector_size] = sum(codebooks[k][index_k] for k in range(num_codebooks))``
-
-.. code-block:: text
-
-    message VectorCodebookUniformProto {
-        int32 num_codebooks = 1;      // number of additive codebooks (e.g. 2)
-        int32 codebook_size = 2;      // entries per codebook (e.g. 256 for 8-bit index)
-        int32 vector_size = 3;        // floats per codebook entry (e.g. 8)
-        int32 index_bits = 4;         // bits per index (e.g. 8)
-        repeated float codebook_data = 5;  // all codebooks concatenated:
-                                           // num_codebooks * codebook_size * vector_size floats
-    }
-
-.. code-block:: python
-
-    # Dequantize
-    result = zeros(n_elements)
-    for k in range(q.num_codebooks):
-        indices = unpack(data[k], q.index_bits)
-        codebook_k = q.codebook_data[k * q.codebook_size * q.vector_size:]
-        for i, idx in enumerate(indices):
-            result[i*q.vector_size:(i+1)*q.vector_size] += codebook_k[idx]
+    indices = nearest_additive_codewords(tensor / q.scale, q)
+    raw_data = pack_indices(indices, q.index_bits, codebook_size,
+                            q.packed_count, q.packed_bytes)
 
 FloatingPointUniformProto
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -443,77 +507,37 @@ the quantize op does the reverse.
     else:
         raw_data = call_op(q.quantize_op, tensor)
 
-BlockQuantizationProto
-^^^^^^^^^^^^^^^^^^^^^^
-
-Recursive block quantization. Each block has a size and a nested
-``QuantizationProto`` describing how elements within the block are
-quantized. Nesting allows multi-level hierarchies (K-Quants, MXFP).
-If there are more blocks than entries in ``elem_quant``, the list
-is cycled from the beginning (``elem_quant[i % len(elem_quant)]``).
-
-.. code-block:: text
-
-    message BlockQuantizationProto {
-        int32 block_size = 1;                          // elements per block at this level
-        repeated QuantizationProto elem_quant = 2;     // one per block
-    }
-
-.. code-block:: python
-
-    # Dequantize
-    blocks = split(data, q.block_size)
-    result = []
-    for i, block in enumerate(blocks):
-        eq = q.elem_quant[i % len(q.elem_quant)]
-        result.append(dequantize(block, eq))
-    result = concat(result)
-
 TilingQuantizationProto
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-Multi-dimensional block quantization. Extends ``BlockQuantizationProto``
-to N dimensions: weights are partitioned into tiles of shape
-``tile_shape`` along the given ``axes``, and each tile is quantized
-independently. Useful for prepack layouts (MatMulNBits) where
-quantization parameters vary along more than one axis.
+Recursive one- or multi-dimensional block quantization. Weights are
+partitioned into tiles along ``axes``. An empty ``axes`` denotes the
+flattened tensor, making classic one-dimensional block quantization a
+special case. If there are more tiles than entries in ``elem_quant``,
+the list is cycled from the beginning
+(``elem_quant[i % len(elem_quant)]``). Nesting supports multi-level
+hierarchies such as K-Quants and MXFP.
 
 .. code-block:: text
 
     message TilingQuantizationProto {
-        repeated int64 tile_shape = 1;                 // block size per axis (0 = full tensor dim)
-        repeated int32 axes = 2;                       // axes being tiled (e.g. [0, 1])
-        QuantizationProto elem_quant = 3;              // quantization scheme (same for all tiles)
+        repeated int64 tile_shape = 1;                 // tile size; one value if axes is empty
+        repeated int32 axes = 2;                       // empty = flattened tensor
+        repeated QuantizationProto elem_quant = 3;     // cycled over tiles
         repeated int32 perm = 4;                       // permutation of axes in memory layout
     }
 
 .. code-block:: python
 
     # Dequantize
-    shape = resolve_tile_shape(q.tile_shape, tensor_shape)
+    shape = resolve_tile_shape(q.tile_shape, q.axes, tensor_shape)
     tiles = split_tiles(data, shape, q.axes, q.perm)
     result = empty(tensor_shape)
-    for coords, tile_data in tiles:
-        result[coords] = dequantize(tile_data, q.elem_quant)
+    for i, (coords, tile_data) in enumerate(tiles):
+        eq = q.elem_quant[i % len(q.elem_quant)]
+        result[coords] = dequantize(tile_data, eq)
     if q.perm:
         result = inverse_permute(result, q.perm)
-
-IdentityProto
-^^^^^^^^^^^^^
-
-No quantization. Data is stored as-is in its original data type.
-Useful with ``TilingQuantizationProto`` to express a pure retiling
-(block layout) without any value transformation.
-The element type is given by ``QuantizationProto.data_type``.
-
-.. code-block:: text
-
-    message IdentityProto {}
-
-.. code-block:: python
-
-    # Dequantize
-    result = interpret(data, quant_proto.data_type)
 
 CastUniformProto
 ^^^^^^^^^^^^^^^^
@@ -521,7 +545,8 @@ CastUniformProto
 Type conversion without quantization. Stores values cast from the
 original type to a different type (e.g. float32 → bfloat16).
 The source type is ``QuantizationProto.data_type``, the target type
-is ``storage_type``.
+is ``storage_type``. Setting ``storage_type`` equal to ``data_type`` is
+the identity operation, useful for pure retiling.
 
 .. code-block:: text
 
@@ -537,56 +562,16 @@ is ``storage_type``.
     # Quantize
     raw_data = cast(tensor, from_type=quant_proto.data_type, to_type=q.storage_type)
 
-PackedLinearUniformProto
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-Block-wise linear quantization where scales, zero points and corrections
-are stored inside ``raw_data`` alongside the quantized weights.
-Used for prepacked formats (CompInt8, QGEMM) where the runtime bakes
-metadata into a single contiguous buffer.
-
-.. code-block:: text
-
-    message PackedLinearUniformProto {
-        int32 storage_type = 1;        // quantized weight element type (e.g. UINT4, INT8)
-        int32 bits = 2;                // bits per weight element
-        bool symmetric = 3;           // true if zero_point is always 0
-        int32 block_size = 4;          // quantization group size
-        int32 axis = 5;                // quantization axis (-1 = per-tensor)
-        int32 scale_type = 6;          // element type of embedded scales (e.g. FLOAT)
-        int32 zero_point_type = 7;     // element type of embedded zero points (0 = absent)
-        int32 correction_type = 8;     // element type of corrections (0 = absent)
-        PackedLayout layout = 9;       // how regions are organized in the blob
-    }
-
-    enum PackedLayout {
-        SEQUENTIAL = 0;               // [weights][scales][zero_points][corrections]
-        INTERLEAVED = 1;              // per-block: [block_weights, scale, zp, correction] repeated
-    }
-
-.. code-block:: python
-
-    # Dequantize
-    if q.layout == SEQUENTIAL:
-        weights, scales, zps, corrections = split_sequential(data, shape, q)
-    else:
-        weights, scales, zps, corrections = split_interleaved(data, shape, q)
-    weights = unpack(weights, q.bits)
-    for block_i in range(n_blocks):
-        s = scales[block_i]
-        zp = zps[block_i] if q.zero_point_type else 0
-        c = corrections[block_i] if q.correction_type else 0
-        result[block_i] = (weights[block_i] - zp) * s + c
-
 StructuredBlockUniformProto
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Generic block quantization with explicit physical layout. Each block
-contains named fields at known bit offsets, an optional codebook, an
-index formula combining fields into codebook indices, and an optional
-scatter pattern for non-contiguous element placement.
-Covers exotic formats (STQ1_0, future formats) while keeping
-dequantization fully deductible from the proto structure.
+contains named fields at known bit offsets. ``VALUES`` can be decoded
+directly for packed linear formats, or an index formula can combine
+fields into codebook indices. Optional scale, zero point, bias, and
+scatter fields cover prepacked linear formats (CompInt8, QGEMM), exotic
+formats (STQ1_0), and future layouts while keeping dequantization fully
+deductible from the proto structure.
 
 .. code-block:: text
 
@@ -603,7 +588,7 @@ dequantization fully deductible from the proto structure.
 
     message BlockFieldProto {
         BlockFieldRole role = 1;       // semantic role of this field
-        int32 bit_offset = 2;          // offset in bits from block start
+        int32 bit_offset = 2;          // offset in block or field record
         int32 bit_width = 3;           // bits per element
         int32 count = 4;               // number of elements
         int32 data_type = 5;           // element type (0 = raw unsigned bits)
@@ -613,6 +598,11 @@ dequantization fully deductible from the proto structure.
         int32 block_size = 1;                  // logical values per block
         int32 bytes_per_block = 2;             // physical bytes per block
         repeated BlockFieldProto fields = 3;   // physical fields in the block
+    }
+
+    enum BlockStorageOrder {
+        INTERLEAVED = 0;       // all fields for block 0, then all fields for block 1
+        SEQUENTIAL = 1;        // one region per field, each containing all blocks
     }
 
     message FieldWeightProto {
@@ -628,29 +618,37 @@ dequantization fully deductible from the proto structure.
 
     message StructuredBlockUniformProto {
         BlockLayoutProto block_layout = 1;             // physical block structure
-        repeated float codebook_data = 2;              // codebook entries (flattened)
+        repeated float codebook_data = 2;              // empty = use VALUES directly
         int32 codebook_vector_size = 3;                // values per codebook entry
         repeated FieldWeightProto index_formula = 4;   // index = sum(field * multiplier)
         optional ScatterProto scatter = 5;             // output element placement (absent = contiguous)
+        BlockStorageOrder storage_order = 6;           // physical organization of block fields
+        optional int32 axis = 7;                       // absent = flattened tensor
     }
 
 .. code-block:: python
 
     # Dequantize
-    blocks = split_blocks(data, q.block_layout.bytes_per_block)
+    blocks = parse_structured_blocks(
+        data, q.block_layout, q.storage_order, q.axis, tensor_shape)
     result = []
     for block in blocks:
         fields = parse_fields(block, q.block_layout.fields)
         scale = fields[SCALE][0] if SCALE in fields else 1.0
         zp = fields[ZERO_POINT][0] if ZERO_POINT in fields else 0.0
-        values = []
-        for i in range(q.block_layout.block_size):
-            idx = sum(fields[fw.field][i] * fw.multiplier for fw in q.index_formula)
-            vec = q.codebook_data[idx * q.codebook_vector_size:][:q.codebook_vector_size]
-            values.extend(vec)
+        if q.codebook_data:
+            values = []
+            n_codes = len(fields[q.index_formula[0].field])
+            for i in range(n_codes):
+                idx = sum(fields[fw.field][i] * fw.multiplier for fw in q.index_formula)
+                begin = idx * q.codebook_vector_size
+                values.extend(q.codebook_data[begin:begin + q.codebook_vector_size])
+        else:
+            values = fields[VALUES]
         if q.scatter:
             values = inverse_scatter(values, q.scatter)
-        result.append((values - zp) * scale)
+        bias = fields[BIAS][0] if BIAS in fields else 0.0
+        result.append((values - zp) * scale + bias)
     result = concat(result)
 
 RotationProto
@@ -695,8 +693,8 @@ For a tensor of 1024 elements (8 groups):
 .. code-block:: text
 
     QuantizationProto {
-        block: BlockQuantizationProto {
-            block_size: 128
+        tiling: TilingQuantizationProto {
+            tile_shape: [128]
             elem_quant: [
                 QuantizationProto { linear: LinearUniformProto {
                     storage_type: INT4, bits: 4,
@@ -717,9 +715,9 @@ NF4 (QLoRA / bitsandbytes)
 .. code-block:: text
 
     QuantizationProto {
-        codebook: CodebookUniformProto {
+        codebook: CodebookProto {
             scale_float: 1.0,
-            codebook: [-1.0, -0.6962, -0.5251, -0.3949, -0.2844,
+            codebook_data: [-1.0, -0.6962, -0.5251, -0.3949, -0.2844,
                        -0.1848, -0.0911, 0.0, 0.0796, 0.1609,
                        0.2461, 0.3379, 0.4407, 0.5626, 0.7230, 1.0],
             packed_count: 2, packed_bytes: 1
@@ -732,8 +730,8 @@ AWQ INT4 (per-group of 128)
 .. code-block:: text
 
     QuantizationProto {
-        block: BlockQuantizationProto {
-            block_size: 128
+        tiling: TilingQuantizationProto {
+            tile_shape: [128]
             elem_quant: [
                 QuantizationProto { linear: LinearUniformProto {
                     storage_type: INT4, bits: 4,
@@ -750,12 +748,12 @@ Q2_K (llama.cpp, nested 256/16)
 .. code-block:: text
 
     QuantizationProto {
-        block: BlockQuantizationProto {
-            block_size: 256
+        tiling: TilingQuantizationProto {
+            tile_shape: [256]
             elem_quant: [
                 QuantizationProto {
-                    block: BlockQuantizationProto {
-                        block_size: 16
+                    tiling: TilingQuantizationProto {
+                        tile_shape: [16]
                         elem_quant: [
                             QuantizationProto { linear: LinearUniformProto {
                                 storage_type: UINT2, bits: 2,
@@ -776,12 +774,12 @@ Q3_K (llama.cpp, nested 256/32)
 .. code-block:: text
 
     QuantizationProto {
-        block: BlockQuantizationProto {
-            block_size: 256
+        tiling: TilingQuantizationProto {
+            tile_shape: [256]
             elem_quant: [
                 QuantizationProto {
-                    block: BlockQuantizationProto {
-                        block_size: 32
+                    tiling: TilingQuantizationProto {
+                        tile_shape: [32]
                         elem_quant: [
                             QuantizationProto { linear: LinearUniformProto {
                                 storage_type: UINT4, bits: 3,
@@ -802,12 +800,12 @@ Q4_K (llama.cpp, nested 256/32)
 .. code-block:: text
 
     QuantizationProto {
-        block: BlockQuantizationProto {
-            block_size: 256
+        tiling: TilingQuantizationProto {
+            tile_shape: [256]
             elem_quant: [
                 QuantizationProto {
-                    block: BlockQuantizationProto {
-                        block_size: 32
+                    tiling: TilingQuantizationProto {
+                        tile_shape: [32]
                         elem_quant: [
                             QuantizationProto { linear: LinearUniformProto {
                                 storage_type: UINT4, bits: 4,
@@ -828,12 +826,12 @@ Q5_K (llama.cpp, nested 256/32)
 .. code-block:: text
 
     QuantizationProto {
-        block: BlockQuantizationProto {
-            block_size: 256
+        tiling: TilingQuantizationProto {
+            tile_shape: [256]
             elem_quant: [
                 QuantizationProto {
-                    block: BlockQuantizationProto {
-                        block_size: 32
+                    tiling: TilingQuantizationProto {
+                        tile_shape: [32]
                         elem_quant: [
                             QuantizationProto { linear: LinearUniformProto {
                                 storage_type: UINT8, bits: 5,
@@ -854,12 +852,12 @@ Q6_K (llama.cpp, nested 256/16)
 .. code-block:: text
 
     QuantizationProto {
-        block: BlockQuantizationProto {
-            block_size: 256
+        tiling: TilingQuantizationProto {
+            tile_shape: [256]
             elem_quant: [
                 QuantizationProto {
-                    block: BlockQuantizationProto {
-                        block_size: 16
+                    tiling: TilingQuantizationProto {
+                        tile_shape: [16]
                         elem_quant: [
                             QuantizationProto { linear: LinearUniformProto {
                                 storage_type: UINT8, bits: 6,
@@ -880,8 +878,8 @@ MXFP4 (OCP Microscaling, shared exponent per group of 32)
 .. code-block:: text
 
     QuantizationProto {
-        block: BlockQuantizationProto {
-            block_size: 32
+        tiling: TilingQuantizationProto {
+            tile_shape: [32]
             elem_quant: [
                 QuantizationProto { floating_point: FloatingPointUniformProto {
                     sign_bits: 1, exponent_bits: 2, mantissa_bits: 1,
@@ -899,8 +897,8 @@ MXFP6 E3M2 (OCP Microscaling, 6-bit float per group of 32)
 .. code-block:: text
 
     QuantizationProto {
-        block: BlockQuantizationProto {
-            block_size: 32
+        tiling: TilingQuantizationProto {
+            tile_shape: [32]
             elem_quant: [
                 QuantizationProto { floating_point: FloatingPointUniformProto {
                     sign_bits: 1, exponent_bits: 3, mantissa_bits: 2,
@@ -922,8 +920,8 @@ Tensor Core alignment.
 .. code-block:: text
 
     QuantizationProto {
-        block: BlockQuantizationProto {
-            block_size: 128
+        tiling: TilingQuantizationProto {
+            tile_shape: [128]
             elem_quant: [
                 QuantizationProto { floating_point: FloatingPointUniformProto {
                     sign_bits: 1, exponent_bits: 3, mantissa_bits: 2,
@@ -953,9 +951,9 @@ INT8 per-channel (classic CNN)
 .. code-block:: text
 
     QuantizationProto {
-        codebook: CodebookUniformProto {
+        codebook: CodebookProto {
             scale_float: 0.5,
-            codebook: [-1.0, 0.0, 1.0],
+            codebook_data: [-1.0, 0.0, 1.0],
             packed_count: 5, packed_bytes: 1
         }
     }
@@ -978,7 +976,7 @@ AQLM 2×8 (Additive Quantization, 2 bits/weight)
 .. code-block:: text
 
     QuantizationProto {
-        vector_codebook: VectorCodebookUniformProto {
+        codebook: CodebookProto {
             num_codebooks: 2,
             codebook_size: 256,
             vector_size: 8,
@@ -997,10 +995,10 @@ Wrapped in a block of 256 for the shared FP16 scale.
 .. code-block:: text
 
     QuantizationProto {
-        block: BlockQuantizationProto {
-            block_size: 256
+        tiling: TilingQuantizationProto {
+            tile_shape: [256]
             elem_quant: [
-                QuantizationProto { vector_codebook: VectorCodebookUniformProto {
+                QuantizationProto { codebook: CodebookProto {
                     num_codebooks: 1,
                     codebook_size: 2048,
                     vector_size: 8,
@@ -1022,8 +1020,8 @@ Outliers (>1% of values) stored in FP16, rest in INT3 per-group.
     QuantizationProto {
         sparse: SparseQuantizationProto {
             base_quant: QuantizationProto {
-                block: BlockQuantizationProto {
-                    block_size: 16
+                tiling: TilingQuantizationProto {
+                    tile_shape: [16]
                     elem_quant: [
                         QuantizationProto { linear: LinearUniformProto {
                             storage_type: INT4, bits: 3,
@@ -1045,7 +1043,7 @@ QuIP# (Vector quantization with Hadamard rotation)
 .. code-block:: text
 
     QuantizationProto {
-        vector_codebook: VectorCodebookUniformProto {
+        codebook: CodebookProto {
             num_codebooks: 1,
             codebook_size: 256,
             vector_size: 8,
@@ -1068,8 +1066,8 @@ important layers and 4-bit for critical ones.
 
     // Layer A (less important): 2-bit per group of 128
     QuantizationProto {
-        block: BlockQuantizationProto {
-            block_size: 128
+        tiling: TilingQuantizationProto {
+            tile_shape: [128]
             elem_quant: [
                 QuantizationProto { linear: LinearUniformProto {
                     storage_type: INT4, bits: 2,
@@ -1082,8 +1080,8 @@ important layers and 4-bit for critical ones.
 
     // Layer B (critical): 4-bit per group of 128
     QuantizationProto {
-        block: BlockQuantizationProto {
-            block_size: 128
+        tiling: TilingQuantizationProto {
+            tile_shape: [128]
             elem_quant: [
                 QuantizationProto { linear: LinearUniformProto {
                     storage_type: INT4, bits: 4,
@@ -1136,10 +1134,10 @@ in memory for cache locality.
         tiling: TilingQuantizationProto {
             tile_shape: [32, 128],
             axes: [0, 1],
-            elem_quant: QuantizationProto { linear: LinearUniformProto {
+            elem_quant: [QuantizationProto { linear: LinearUniformProto {
                 storage_type: UINT4, bits: 4,
                 symmetric: true, scale_float: 0.0, zero_point: 0, axis: -1
-            }},
+            }}],
             perm: [1, 0]   // N-major ordering in memory
         }
     }
@@ -1158,7 +1156,10 @@ that expect block-tiled storage.
         tiling: TilingQuantizationProto {
             tile_shape: [32, 128],
             axes: [0, 1],
-            elem_quant: QuantizationProto { identity: IdentityProto {} }
+            elem_quant: [QuantizationProto {
+                data_type: FLOAT,
+                cast: CastUniformProto { storage_type: FLOAT }
+            }]
         }
     }
 
@@ -1239,7 +1240,10 @@ so ``[0, 0]`` is a single tile covering the whole tensor.
         tiling: TilingQuantizationProto {
             tile_shape: [0, 0],
             axes: [0, 1],
-            elem_quant: QuantizationProto { identity: IdentityProto {} },
+            elem_quant: [QuantizationProto {
+                data_type: FLOAT,
+                cast: CastUniformProto { storage_type: FLOAT }
+            }],
             perm: [1, 0]
         }
     }
@@ -1255,12 +1259,12 @@ into one byte (3⁵ = 243 ≤ 255). One FP16 scale per block of 256 weights.
     // Codebook: [-1, 0, +1], packed 5 per byte
     QuantizationProto {
         data_type: FLOAT16,
-        block: BlockQuantizationProto {
-            block_size: 256,
+        tiling: TilingQuantizationProto {
+            tile_shape: [256],
             elem_quant: [QuantizationProto {
-                codebook: CodebookUniformProto {
+                codebook: CodebookProto {
                     scale_float: 1.0,       // scale is per-block, stored separately
-                    codebook: [-1.0, 0.0, 1.0],
+                    codebook_data: [-1.0, 0.0, 1.0],
                     packed_count: 5,        // 5 ternary values per byte
                     packed_bytes: 1
                 }
@@ -1284,12 +1288,12 @@ Mapping: 0 → -1, 1 → 0, 2 → +1.
     // Codebook: [-1, 0, +1], 2 bits per value
     QuantizationProto {
         data_type: FLOAT16,
-        block: BlockQuantizationProto {
-            block_size: 256,
+        tiling: TilingQuantizationProto {
+            tile_shape: [256],
             elem_quant: [QuantizationProto {
-                codebook: CodebookUniformProto {
+                codebook: CodebookProto {
                     scale_float: 1.0,
-                    codebook: [-1.0, 0.0, 1.0],
+                    codebook_data: [-1.0, 0.0, 1.0],
                     packed_count: 4,        // 4 values per byte (2 bits each)
                     packed_bytes: 1
                 }
@@ -1311,12 +1315,12 @@ The difference is in training (QAT), not in the storage format.
     // Same storage as TQ1_0
     QuantizationProto {
         data_type: FLOAT16,
-        block: BlockQuantizationProto {
-            block_size: 256,
+        tiling: TilingQuantizationProto {
+            tile_shape: [256],
             elem_quant: [QuantizationProto {
-                codebook: CodebookUniformProto {
+                codebook: CodebookProto {
                     scale_float: 1.0,
-                    codebook: [-1.0, 0.0, 1.0],
+                    codebook_data: [-1.0, 0.0, 1.0],
                     packed_count: 5,
                     packed_bytes: 1
                 }
@@ -1338,12 +1342,12 @@ codebook. If the SEQ rounding function is needed at inference, use
     // Ternary variant (same storage as TQ1_0)
     QuantizationProto {
         data_type: FLOAT16,
-        block: BlockQuantizationProto {
-            block_size: 256,
+        tiling: TilingQuantizationProto {
+            tile_shape: [256],
             elem_quant: [QuantizationProto {
-                codebook: CodebookUniformProto {
+                codebook: CodebookProto {
                     scale_float: 1.0,
-                    codebook: [-1.0, 0.0, 1.0],
+                    codebook_data: [-1.0, 0.0, 1.0],
                     packed_count: 5,
                     packed_bytes: 1
                 }
@@ -1354,8 +1358,8 @@ codebook. If the SEQ rounding function is needed at inference, use
     // 2-bit variant (4 levels)
     QuantizationProto {
         data_type: FLOAT16,
-        block: BlockQuantizationProto {
-            block_size: 128,
+        tiling: TilingQuantizationProto {
+            tile_shape: [128],
             elem_quant: [QuantizationProto {
                 linear: LinearUniformProto {
                     storage_type: UINT8,
@@ -1381,12 +1385,12 @@ The deadzone-free quantization function is only used during training.
     // Same storage as TQ1_0 / BitNet b1.58
     QuantizationProto {
         data_type: FLOAT16,
-        block: BlockQuantizationProto {
-            block_size: 256,
+        tiling: TilingQuantizationProto {
+            tile_shape: [256],
             elem_quant: [QuantizationProto {
-                codebook: CodebookUniformProto {
+                codebook: CodebookProto {
                     scale_float: 1.0,
-                    codebook: [-1.0, 0.0, 1.0],
+                    codebook_data: [-1.0, 0.0, 1.0],
                     packed_count: 5,
                     packed_bytes: 1
                 }
@@ -1423,15 +1427,15 @@ EXL3 (improved EXL2, 2–6 bpw)
 
 Successor to EXL2 with improved codebook and mixed-precision per layer.
 Storage is structurally identical to EXL2 (variable bpw per layer using
-nested ``BlockQuantizationProto``).
+nested ``TilingQuantizationProto``).
 
 .. code-block:: text
 
     // Same structure as EXL2, different calibration
     QuantizationProto {
         data_type: FLOAT16,
-        block: BlockQuantizationProto {
-            block_size: 128,
+        tiling: TilingQuantizationProto {
+            tile_shape: [128],
             elem_quant: [QuantizationProto {
                 linear: LinearUniformProto {
                     storage_type: UINT8,
@@ -1457,8 +1461,8 @@ a 2-bit weight with per-group scales.
     // Example: 2-bit weight with group size 64
     QuantizationProto {
         data_type: FLOAT16,
-        block: BlockQuantizationProto {
-            block_size: 64,
+        tiling: TilingQuantizationProto {
+            tile_shape: [64],
             elem_quant: [QuantizationProto {
                 linear: LinearUniformProto {
                     storage_type: UINT8,
@@ -1486,8 +1490,8 @@ block of 16 elements.
 
     QuantizationProto {
         data_type: FLOAT16,
-        block: BlockQuantizationProto {
-            block_size: 16,
+        tiling: TilingQuantizationProto {
+            tile_shape: [16],
             elem_quant: [QuantizationProto {
                 floating_point: FloatingPointUniformProto {
                     sign_bits: 1,
@@ -1522,8 +1526,8 @@ in ``RotationProto``.
             type: HADAMARD,
             dims: [4096]
         },
-        block: BlockQuantizationProto {
-            block_size: 128,
+        tiling: TilingQuantizationProto {
+            tile_shape: [128],
             elem_quant: [QuantizationProto {
                 linear: LinearUniformProto {
                     storage_type: UINT8,
@@ -1586,17 +1590,13 @@ in the corresponding proto section above. The top-level dispatcher is:
 
         match quant.kind:
             case LinearUniformProto as q:     ...  # see LinearUniformProto section
-            case CodebookUniformProto as q:   ...  # see CodebookUniformProto section
-            case VectorCodebookUniformProto:  ...
+            case CodebookProto as q:          ...  # see CodebookProto section
             case FloatingPointUniformProto:   ...
             case SparseQuantizationProto:     ...
             case LogUniformProto:             ...
             case FunctionUniformProto:        ...
-            case BlockQuantizationProto:      ...
             case TilingQuantizationProto:     ...
-            case IdentityProto:              ...
             case CastUniformProto:           ...
-            case PackedLinearUniformProto:    ...
             case StructuredBlockUniformProto: ...
 
         # Apply post-rotation if present

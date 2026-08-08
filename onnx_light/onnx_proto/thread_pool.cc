@@ -2,7 +2,8 @@
 
 namespace ONNX_LIGHT_NAMESPACE::utils {
 
-ThreadPool::ThreadPool() : stop_(false), is_started_(false), requested_threads_(0), pending_jobs_(0) {}
+ThreadPool::ThreadPool()
+    : stop_(false), is_started_(false), requested_threads_(0), pending_jobs_(0) {}
 
 void ThreadPool::Start(int32_t num_threads) {
   EXT_ENFORCE(workers_.size() == 0, "ThreadPool already started");

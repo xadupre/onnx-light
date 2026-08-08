@@ -16,8 +16,8 @@ format creates a closed hierarchy that must grow whenever a new layout is
 introduced.
 
 This proposal assumes that an ``UnstructuredProto`` already exists. It owns
-or references a byte buffer, gives its exact byte size, and references its
-physical type:
+or references a byte buffer and references the physical type from which its
+exact byte size is computed:
 
 .. code-block:: text
 
@@ -35,15 +35,13 @@ specification is to define ``UnstructuredTypeProto``: a portable structure
 that can be overlaid on the bytes of an ``UnstructuredProto``.
 
 ``dims`` is intentionally absent because not every unstructured value is
-tensor-shaped. Physical dimensions are already part of its arrays and tensor
-fields.
+tensor-shaped. Physical dimensions are already part of its arrays.
 
-The type system adds two serialized structural kinds and one type-level
-constant leaf:
+The type system adds two serialized structural kinds and one field property:
 
 * an array of a statically sized ``TypeProto``;
 * a structure containing named, statically sized ``TypeProto`` fields;
-* a constant ``TensorProto`` that consumes no payload bytes.
+* an optional constant value on a structure field, consuming no payload bytes.
 
 Scalars and ordinary tensors continue to use ``TypeProto.Tensor``. Quantized
 values, packed records, custom numeric types, image pixels, and other static
@@ -106,12 +104,12 @@ The serialized size is computed recursively in bits:
 
 .. code-block:: text
 
-    size(scalar(T))       = bit_width(T)
-    size(Array(T, n))     = n * size(T)
-    size(Field(T, constant)) = 0
-    size(Field(T))        = size(T)
-    size(Structure(f...)) = sum(size(f))
-    size(type_index=i)    = size(ModelProto.unstructured_types[i])
+    size(scalar(T))          = bit_width(T)
+    size(Array(T, n))        = n * size(T)
+    size(Field(constant))    = 0
+    size(Field(T))           = size(T)
+    size(Structure(f...))    = sum(size(f))
+    size(type_index=i)       = size(ModelProto.unstructured_types[i])
 
 All arithmetic is checked in ``uint64``. References must be acyclic. The
 concrete root size must be divisible by eight and equal the inline
@@ -135,10 +133,12 @@ messages.
 
         // Names one component of a structure.
         message Field {
-            string name = 1;                 // unique within the structure
-            TypeProto type = 2;              // field type
-            string doc_string = 3;           // field documentation
-            optional TensorProto constant = 4;  // value absent from payload
+            string name = 1;        // unique within the structure
+            oneof content {
+                TypeProto type = 2;        // schema read from the payload
+                TensorProto constant = 4;  // literal value; reads no payload
+            }
+            string doc_string = 3;  // field documentation
         }
 
         // Concatenates fields in declaration order.
@@ -281,27 +281,27 @@ No physical dimension is derived from a decoder output.
 Structure type
 ++++++++++++++
 
-Fields are serialized consecutively in declaration order. The first field
-starts at bit zero and every following field starts immediately after the
-previous one. The structure size is therefore the sum of its field sizes.
-Alignment and padding are represented by ordinary named padding fields, so
-every serialized bit remains explicit.
+Physical fields are serialized consecutively in declaration order. The first
+physical field starts at bit zero and every following physical field starts
+immediately after the previous one. A constant field occupies no range and
+does not change the offset of following fields. The structure size is
+therefore the sum of its non-constant field sizes. Alignment and padding are
+represented by ordinary named padding fields, so every serialized bit remains
+explicit.
 
 Constant fields
 +++++++++++++++
 
-``Structure.Field.constant`` stores a constant without replacing its declared
-``type``. For example, a scalar parameter is written as
-``type: INT32, constant: sign_bits``, not as a distinct constant type. A field
-with ``constant`` contributes a typed leaf but consumes zero bits from the
-``UnstructuredProto`` payload. This keeps codebooks, fixed scales, defaults,
-and other shared decoder inputs explicit without complicating the type tree.
+``Structure.Field`` selects exactly one of ``type`` and ``constant``. A
+physical field uses ``type`` and consumes payload bits. A constant field uses
+an inline ``TensorProto`` and consumes zero payload bits. A scalar constant is
+a rank-zero tensor, represented by an empty ``dims`` list. The tensor must not
+use ``external_data``.
 
-The value is encoded as an inline ``TensorProto`` whose type and concrete
-shape must exactly match ``Field.type``. It must not use ``external_data``.
-Only structure fields may carry values; roots and array elements remain
-physical types. Examples use the concise ``constant: ...`` notation and omit
-the underlying ``TensorProto`` encoding.
+Only structure fields may be constants; roots and array elements remain
+physical types. For readability, examples write
+``tensor(INT32, [], value)`` for a scalar and
+``tensor(FLOAT, shape, values)`` for a non-scalar constant.
 
 Applying a type to a buffer
 +++++++++++++++++++++++++++
@@ -328,11 +328,12 @@ contains an uninterpreted suffix must declare it as a ``UINT8`` array.
 Logical leaf view
 +++++++++++++++++
 
-Every scalar ONNX ``TypeProto`` field and every field with ``constant`` is a
-leaf.
-Unstructured arrays and structures only organize leaves. The canonical leaf
-order is depth-first declaration order. Constant fields occur in that order
-but do not advance the current buffer position.
+Every physical scalar ONNX ``TypeProto`` field and every field with
+``constant`` is a leaf. Unstructured arrays and structures only organize
+leaves. The canonical leaf order is depth-first declaration order. A constant
+field contributes one tensor leaf at its declaration position, does not
+advance the current buffer position, and is not replicated by an enclosing
+array. It is shared by every instance of the declaring type.
 
 When a repeated structure contains an array field, corresponding scalar
 leaves are grouped into one decoder input. For example, an array of ten
@@ -524,6 +525,53 @@ categories, following the existing tensor and sparse-tensor pattern:
 content field is allowed, as for every other attribute category. A
 ``ref_attr_name`` may refer to either new category from a function body; its
 resolved parent attribute must have the same category.
+
+FLOAT6_E3M2 example
++++++++++++++++++++
+
+The following concrete type stores four six-bit floating-point values in
+three bytes. Each value has one sign bit, three exponent bits, and two
+mantissa bits. Format parameters are rank-zero ``TensorProto`` constants and
+therefore consume no payload bytes.
+
+.. code-block:: text
+
+    UnstructuredTypeProto {
+        name: "FLOAT6_E3M2"
+        structure: Structure {
+            field: {
+                name: "packed"
+                type: array(UINT8, dimension=3)
+            }
+            field: { name: "sign_bits", constant: tensor(INT32, [], 1) }
+            field: { name: "exponent_bits", constant: tensor(INT32, [], 3) }
+            field: { name: "mantissa_bits", constant: tensor(INT32, [], 2) }
+            field: { name: "exponent_bias", constant: tensor(INT32, [], 3) }
+            field: { name: "has_inf", constant: tensor(BOOL, [], true) }
+            field: { name: "has_nan", constant: tensor(BOOL, [], true) }
+            field: { name: "packed_count", constant: tensor(INT32, [], 4) }
+        }
+        decoder: FunctionProto {
+            output: "Y"
+            value_info: {
+                name: "Y"
+                type: TypeProto {
+                    tensor_type: Tensor {
+                        elem_type: FLOAT
+                        shape: TensorShapeProto {
+                            dim: { dim_value: 4 }
+                        }
+                    }
+                }
+            }
+            // Unpacks four 6-bit values and decodes E3M2 with bias 3.
+        }
+    }
+
+The physical size is determined without executing the decoder:
+``3 * size(UINT8) = 24 bits``. The seven constant fields contribute zero
+bits. An ``UnstructuredProto`` selecting this declaration must therefore
+contain exactly three payload bytes.
 
 Quantization profile
 ++++++++++++++++++++
@@ -855,8 +903,7 @@ seven fixed-size nodes:
                     }
                     field: {
                         name: "class_ids"
-                        type: array(INT64, dimension=3)
-                        constant: [0, 1, 2]
+                        constant: tensor(INT64, [3], [0, 1, 2])
                     }
                 }
             }
@@ -896,7 +943,7 @@ The three reference cases exercise distinct requirements:
      - 540672 or 1048576 bytes per page
      - Both decoders output the same page type
    * - Decision tree
-     - Array of indexed nodes plus a constant
+     - Array of indexed nodes plus a constant field
      - 231 bytes
      - Child indices are in ``[-1, 6]``
 
@@ -916,9 +963,9 @@ A checker validates:
 * model-level and inline concrete types select exactly one ``array`` or
   ``structure`` kind;
 * ``type_index`` references are in range and do not form cycles;
+* every structure field selects exactly one of ``type`` and ``constant``;
 * valid standard ONNX leaf types;
-* inline, concretely shaped field values without external data and matching
-  their declared field type;
+* constant tensors are inline, concretely shaped, and have no external data;
 * unique field names within each structure;
 * valid concrete physical dimensions;
 * every physical field and array element has a canonical fixed size;

@@ -53,7 +53,7 @@ Format coverage summary
      - ✅
    * - FP8 E4M3
      - 8.0
-     - ``Linear``
+     - ``FloatingPoint``
      - ✅
    * - HQQ (mixed-precision per head)
      - 2–4
@@ -342,6 +342,11 @@ structure, a named constant field, decoder/encoder structure, or metadata. A
 decoder must not hide a profile parameter that was explicit in the
 specialized declaration.
 
+Code blocks containing names such as ``N``, ``K``, ``packed_bytes``, or
+``tile_type`` are translation templates, not valid serialized declarations.
+Every such name is replaced by a concrete value or model type index in an
+``UnstructuredTypeProto``.
+
 LinearUniformProto
 ^^^^^^^^^^^^^^^^^^
 
@@ -375,9 +380,13 @@ serialized array fields when they vary by channel or block.
     UnstructuredTypeProto {
         name: "LINEAR"
         structure: Structure {
-            field: { name: "values",     type: array(INT4, dimension=N) }
-            field: { name: "scale",      type: FLOAT, constant: s }
-            field: { name: "zero_point", type: INT64, constant: z }
+            field: { name: "values",       type: array(INT4, dimension=N) }
+            field: { name: "storage_type", constant: tensor(INT32, [], INT4) }
+            field: { name: "bits",         constant: tensor(INT32, [], 4) }
+            field: { name: "symmetric",    constant: tensor(BOOL, [], symmetric) }
+            field: { name: "scale",        constant: tensor(FLOAT, [], s) }
+            field: { name: "zero_point",   constant: tensor(INT64, [], z) }
+            field: { name: "axis",         constant: tensor(INT32, [], axis) }
         }
         decoder: FunctionProto {
             // Y = (Cast(values) - zero_point) * scale
@@ -385,6 +394,9 @@ serialized array fields when they vary by channel or block.
     }
 
 ``N`` is always replaced by the concrete physical count.
+The displayed ``scale`` field represents ``scale_float``. A declaration using
+``scale_int`` gives that field type ``INT32`` instead, preserving which member
+of the specialized ``oneof`` was selected.
 
 .. code-block:: python
 
@@ -443,15 +455,27 @@ vector entry, sums additive codebooks, and applies the scale.
             field: { name: "indices",  type: array(UINT8, dimension=packed_bytes) }
             field: {
                 name: "codebook"
-                type: array(FLOAT, dimension=codebook_value_count)
-                constant: codebook_data
+                constant: tensor(
+                    FLOAT,
+                    [codebook_value_count],
+                    codebook_data
+                )
             }
-            field: { name: "scale", type: FLOAT, constant: scale }
+            field: { name: "scale", constant: tensor(FLOAT, [], scale) }
+            field: { name: "packed_count", constant: tensor(INT32, [], packed_count) }
+            field: { name: "packed_bytes", constant: tensor(INT32, [], packed_bytes) }
+            field: { name: "num_codebooks", constant: tensor(INT32, [], num_codebooks) }
+            field: { name: "codebook_size", constant: tensor(INT32, [], codebook_size) }
+            field: { name: "vector_size", constant: tensor(INT32, [], vector_size) }
+            field: { name: "index_bits", constant: tensor(INT32, [], index_bits) }
         }
         decoder: FunctionProto {
             // Y = scale * additive_gather(codebook, unpack(indices))
         }
     }
+
+As for linear quantization, the ``scale`` field is ``FLOAT`` for
+``scale_float`` and ``INT32`` for ``scale_int``.
 
 .. code-block:: python
 
@@ -481,7 +505,8 @@ vector entry, sums additive codebooks, and applies the scale.
 FloatingPointUniformProto
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Micro-float quantization: ``value = (-1)^sign * 2^(exp - bias) * (1 + mantissa)``.
+For finite normal values, micro-float quantization uses
+``value = (-1)^sign * 2^(exp - bias) * (1 + mantissa)``.
 Covers FP6, FP4, MXFP and similar reduced-precision floating-point formats.
 
 .. code-block:: text
@@ -510,8 +535,7 @@ decoder implementation.
 
 .. code-block:: text
 
-    UnstructuredTypeProto {
-        name: "FLOATING_POINT_UNIFORM"
+    UnstructuredTypeProto {  // translation template; not serialized as-is
         structure: Structure {
             // Serialized payload.
             field: {
@@ -522,48 +546,39 @@ decoder implementation.
             // Type-level parameters: these consume no payload bytes.
             field: {
                 name: "sign_bits"
-                type: INT32
-                constant: sign_bits
+                constant: tensor(INT32, [], sign_bits)
             }
             field: {
                 name: "exponent_bits"
-                type: INT32
-                constant: exponent_bits
+                constant: tensor(INT32, [], exponent_bits)
             }
             field: {
                 name: "mantissa_bits"
-                type: INT32
-                constant: mantissa_bits
+                constant: tensor(INT32, [], mantissa_bits)
             }
             field: {
                 name: "exponent_bias"
-                type: INT32
-                constant: exponent_bias
+                constant: tensor(INT32, [], exponent_bias)
             }
             field: {
                 name: "has_inf"
-                type: BOOL
-                constant: has_inf
+                constant: tensor(BOOL, [], has_inf)
             }
             field: {
                 name: "has_nan"
-                type: BOOL
-                constant: has_nan
+                constant: tensor(BOOL, [], has_nan)
             }
             field: {
                 name: "split_storage"
-                type: BOOL
-                constant: split_storage
+                constant: tensor(BOOL, [], split_storage)
             }
             field: {
                 name: "packed_count"
-                type: INT32
-                constant: packed_count
+                constant: tensor(INT32, [], packed_count)
             }
             field: {
                 name: "packed_bytes"
-                type: INT32
-                constant: packed_bytes
+                constant: tensor(INT32, [], packed_bytes)
             }
         }
         decoder: FunctionProto {
@@ -580,10 +595,9 @@ be a ``TensorProto.data_type`` or ``TypeProto.Tensor.elem_type`` because it
 does not determine the width or the decoder's standard ONNX output type.
 
 The following concrete ``FLOAT6_E3M2`` declaration packs four 6-bit values
-into three bytes. Its name specifies the physical width as well as the
-exponent and mantissa layout. It uses an IEEE-like exceptional-value policy,
-fixes every profile parameter with ``Field.constant``, and decodes to a
-standard ONNX ``FLOAT`` tensor:
+into three bytes. It uses an IEEE-like exceptional-value policy, fixes every
+profile parameter with ``Field.constant``, and decodes to a standard ONNX
+``FLOAT`` tensor:
 
 .. code-block:: text
 
@@ -594,19 +608,30 @@ standard ONNX ``FLOAT`` tensor:
                 name: "packed"
                 type: array(UINT8, dimension=3)
             }
-            field: { name: "sign_bits",      type: INT32, constant: 1 }
-            field: { name: "exponent_bits",  type: INT32, constant: 3 }
-            field: { name: "mantissa_bits",  type: INT32, constant: 2 }
-            field: { name: "exponent_bias",  type: INT32, constant: 3 }
-            field: { name: "has_inf",        type: BOOL,  constant: true }
-            field: { name: "has_nan",        type: BOOL,  constant: true }
-            field: { name: "split_storage",  type: BOOL,  constant: false }
-            field: { name: "packed_count",   type: INT32, constant: 4 }
-            field: { name: "packed_bytes",   type: INT32, constant: 3 }
+            field: { name: "sign_bits", constant: tensor(INT32, [], 1) }
+            field: { name: "exponent_bits", constant: tensor(INT32, [], 3) }
+            field: { name: "mantissa_bits", constant: tensor(INT32, [], 2) }
+            field: { name: "exponent_bias", constant: tensor(INT32, [], 3) }
+            field: { name: "has_inf", constant: tensor(BOOL, [], true) }
+            field: { name: "has_nan", constant: tensor(BOOL, [], true) }
+            field: { name: "split_storage", constant: tensor(BOOL, [], false) }
+            field: { name: "packed_count", constant: tensor(INT32, [], 4) }
+            field: { name: "packed_bytes", constant: tensor(INT32, [], 3) }
         }
         decoder: FunctionProto {
+            output: "Y"
+            value_info: {
+                name: "Y"
+                type: TypeProto {
+                    tensor_type: Tensor {
+                        elem_type: FLOAT
+                        shape: TensorShapeProto {
+                            dim: { dim_value: 4 }
+                        }
+                    }
+                }
+            }
             // unpack four 6-bit values and decode E3M2 with exponent bias 3
-            // output Y: tensor(FLOAT)[4]
         }
     }
 
@@ -645,8 +670,9 @@ Custom-type translation
 
 The dense/base region is a referenced unstructured physical type. Outlier
 indices and values are concrete arrays in the same root ``Structure``.
+The concrete element type of ``values`` preserves ``outlier_data_type``.
 Threshold and ratio guide the encoder but are not required to decode an
-already serialized value; they may be constants or metadata. The root decoder
+already serialized value; they remain explicit constants. The root decoder
 incorporates the base decoder nodes explicitly; nested decoders are not
 invoked implicitly.
 
@@ -658,6 +684,14 @@ invoked implicitly.
             field: { name: "base",    type: unstructured(type_index=base_type) }
             field: { name: "indices", type: array(INT64, dimension=K) }
             field: { name: "values",  type: array(FLOAT16, dimension=K) }
+            field: {
+                name: "outlier_threshold"
+                constant: tensor(FLOAT, [], outlier_threshold)
+            }
+            field: {
+                name: "outlier_ratio"
+                constant: tensor(FLOAT, [], outlier_ratio)
+            }
         }
         decoder: FunctionProto {
             // Y = scatter(decode(base), indices, values)
@@ -709,13 +743,17 @@ Codes use a native fixed-width ``Array`` when possible and packed
         structure: Structure {
             field: { name: "codes",  type: array(UINT4, dimension=N) }
             field: { name: "signs",  type: array(UINT8, dimension=sign_bytes) }
-            field: { name: "base",   type: FLOAT, constant: base }
-            field: { name: "offset", type: FLOAT, constant: offset }
+            field: { name: "bits", constant: tensor(INT32, [], 4) }
+            field: { name: "base", constant: tensor(FLOAT, [], base) }
+            field: { name: "offset", constant: tensor(FLOAT, [], offset) }
+            field: { name: "has_sign", constant: tensor(BOOL, [], has_sign) }
         }
         decoder: FunctionProto {
             // Y = sign * Pow(base, Cast(codes) + offset)
         }
     }
+
+The ``signs`` physical field is omitted when ``has_sign`` is false.
 
 .. code-block:: python
 
@@ -769,19 +807,33 @@ both can be expressed as deterministic standard-domain ONNX functions.
 
 If either operation requires a custom-domain operator, the physical type
 remains valid but omits that portable function. The consuming custom operator
-is then responsible for interpretation.
+is then responsible for interpretation. The original operator identifiers are
+preserved as ``quantize_op`` and ``dequantize_op`` metadata so the translation
+remains lossless.
 
 .. code-block:: text
 
     UnstructuredTypeProto {
         name: "FUNCTION_QUANTIZED"
-        array: Array {
-            element_type: UINT8
-            dimension: packed_bytes
+        structure: Structure {
+            field: {
+                name: "payload"
+                type: array(UINT8, dimension=packed_bytes)
+            }
+            field: {
+                name: "storage_type"
+                constant: tensor(INT32, [], storage_type)
+            }
+            field: { name: "bits", constant: tensor(INT32, [], bits) }
         }
         decoder: FunctionProto { ... }  // standard-domain form, when available
         encoder: FunctionProto { ... }
+        metadata_props: { key: "quantize_op", value: quantize_op }
+        metadata_props: { key: "dequantize_op", value: dequantize_op }
     }
+
+When ``block_layout`` is present, its concrete fields replace the raw
+``payload`` array and determine the same exact byte size.
 
 .. code-block:: python
 
@@ -823,11 +875,12 @@ hierarchies such as K-Quants and MXFP.
 Custom-type translation
 """""""""""""""""""""""
 
-A homogeneous tiling is a nested ``Array`` whose element references the
-concrete tile type. If tiles cycle through different quantizations, the root
-is a ``Structure`` with one field per concrete tile or per homogeneous tile
-region. The decoder concatenates or scatters tile outputs and applies
-``perm``. It incorporates the tile decoder nodes explicitly. No symbolic tile
+A homogeneous tiling stores a nested ``Array`` whose element references the
+concrete tile type. The root is a ``Structure`` so concrete ``tile_shape``,
+``axes``, and ``perm`` values remain explicit constant fields. If tiles cycle
+through different quantizations, the root has one physical field per concrete
+tile or homogeneous tile region. The decoder concatenates or scatters tile
+outputs and incorporates the tile decoder nodes explicitly. No symbolic tile
 count, modulo rule, or implicit nested-decoder invocation remains in the
 physical type.
 
@@ -835,9 +888,26 @@ physical type.
 
     UnstructuredTypeProto {
         name: "TILED"
-        array: Array {
-            element_type: unstructured(type_index=tile_type)
-            dimension: concrete_tile_count
+        structure: Structure {
+            field: {
+                name: "tiles"
+                type: array(
+                    unstructured(type_index=tile_type),
+                    dimension=concrete_tile_count
+                )
+            }
+            field: {
+                name: "tile_shape"
+                constant: tensor(INT64, [tile_rank], concrete_tile_shape)
+            }
+            field: {
+                name: "axes"
+                constant: tensor(INT32, [axis_count], concrete_axes)
+            }
+            field: {
+                name: "perm"
+                constant: tensor(INT32, [perm_rank], concrete_perm)
+            }
         }
         decoder: FunctionProto {
             // decode each tile, place it at concrete coordinates, inverse perm
@@ -974,7 +1044,8 @@ This profile maps directly to the generic mechanism:
 * field roles become ordinary field names used by the decoder;
 * explicit padding replaces ``bit_offset`` and ``bytes_per_block``;
 * ``codebook_data`` becomes a constant field;
-* ``index_formula`` and ``ScatterProto`` become decoder nodes;
+* ``index_formula`` and ``ScatterProto`` become constant parameters consumed
+  by decoder nodes;
 * ``INTERLEAVED`` is an array of block structures;
 * ``SEQUENTIAL`` is a structure containing one array per field.
 
@@ -982,15 +1053,67 @@ This profile maps directly to the generic mechanism:
 
     UnstructuredTypeProto {
         name: "STRUCTURED_BLOCK"
-        array: Array {
-            element_type: unstructured(type_index=block_type)
-            dimension: concrete_block_count
+        structure: Structure {
+            field: {
+                name: "blocks"
+                type: array(
+                    unstructured(type_index=block_type),
+                    dimension=concrete_block_count
+                )
+            }
+            field: {
+                name: "codebook"
+                constant: tensor(
+                    FLOAT,
+                    [codebook_value_count],
+                    codebook_data
+                )
+            }
+            field: {
+                name: "codebook_vector_size"
+                constant: tensor(INT32, [], codebook_vector_size)
+            }
+            field: {
+                name: "index_fields"
+                constant: tensor(
+                    INT32,
+                    [index_term_count],
+                    concrete_index_fields
+                )
+            }
+            field: {
+                name: "index_multipliers"
+                constant: tensor(
+                    INT32,
+                    [index_term_count],
+                    concrete_index_multipliers
+                )
+            }
+            field: {
+                name: "storage_order"
+                constant: tensor(INT32, [], concrete_storage_order)
+            }
+            field: {
+                name: "block_size"
+                constant: tensor(INT32, [], concrete_block_size)
+            }
+            field: {
+                name: "axis"
+                constant: tensor(INT32, [], concrete_axis)
+            }
         }
         decoder: FunctionProto {
             // index = sum(named_field * multiplier)
             // Y = scatter(codebook[index] * scale + bias)
         }
     }
+
+The ``codebook``, index-formula, and ``axis`` fields are omitted when their
+specialized counterparts are absent. When ``scatter`` is present, its three
+integer members are additional constant fields named ``scatter_group_size``,
+``scatter_vector_size``, and ``scatter_stride``. The concrete block type
+itself preserves ``block_size``, field widths and counts, explicit padding,
+and therefore ``bytes_per_block``.
 
 No separate ``BlockFieldProto``, ``BlockLayoutProto``, ``FieldWeightProto``,
 or ``ScatterProto`` is implemented.
@@ -1059,14 +1182,18 @@ Rotation is not a physical root type. A plain matrix is a field with
 ``constant`` in the quantized type and matrix multiplication is part of the
 decoder or encoder. A Hadamard rotation needs no stored matrix and is expressed
 directly by standard ONNX nodes. ``ModelProto.rotation_matrices`` and
-``matrix_index`` are therefore unnecessary.
+``matrix_index`` are therefore resolved rather than copied into the generic
+type.
 
 .. code-block:: text
 
     field: {
         name: "rotation"
-        type: array(FLOAT, dimensions=rotation_dims)
-        constant: concrete_matrix
+        constant: tensor(FLOAT, concrete_rotation_dims, concrete_matrix)
+    }
+    field: {
+        name: "rotation_type"
+        constant: tensor(INT32, [], PLAIN)
     }
 
     decoder: FunctionProto {

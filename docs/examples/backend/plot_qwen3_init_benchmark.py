@@ -150,10 +150,10 @@ def materialize_random_weights(model, seed: int = 0) -> int:
         # bytes need to be filled in place. ``CopyFrom`` is avoided on purpose
         # because it appends to (rather than replaces) the existing repeated
         # ``dims`` field, which would corrupt the tensor shape.
-        initializer.raw_data = from_array(values, name=initializer.name).raw_data
         if int(initializer.data_location) == int(TensorProto.EXTERNAL):
             initializer.data_location = TensorProto.DEFAULT
             initializer.ClearField("external_data")
+        initializer.raw_data = from_array(values, name=initializer.name).raw_data
         materialized += 1
     return materialized
 

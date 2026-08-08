@@ -5,9 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.15] – Unreleased
 
+### New Features
+
+- Added support for registering custom kernels globally or per session.
+- Gave every kernel a unique device- and library-qualified name, exposed through the session and Python.
+
+### Improvements
+
+- Made dispatch-table overrides order-independent.
+- Spawned the load/save thread-pool workers lazily to fix slow small-model initialization.
+
 ### Documentation & CI
 
 - Bumped the release version to `0.1.15`.
+- Annotated `onnx.h` with the canonical ONNX proto definitions.
+- Added a gallery example benchmarking model initialization (ONNX Runtime vs onnx-light).
+- Added a `register_custom_kernel` example in both C++ and Python.
+- Added quantization and next-steps documentation.
 
 ## [0.1.14] – 2026-08-07
 

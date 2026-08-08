@@ -74,7 +74,8 @@ TEST(OnnxKernelsDispatchTable, DeviceIsPartOfIdentifier) {
 TEST(OnnxKernelsDispatchTable, RegisterKernelFnOverwriteFlagControlsReplacement) {
   const std::string domain = "test.onnxlight.overwrite_flag";
   const std::string key = domain + ":OverwriteOp";
-  int which = 0;
+  static int which = 0;
+  which = 0;
 
   core::runtime::RuntimeContext ctx(core::runtime::KernelContext(core::runtime::DefaultOpset(18)));
   const NodeProto node;

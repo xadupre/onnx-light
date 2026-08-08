@@ -20,6 +20,9 @@ Here the same scenario is expressed in Python:
 * the model runs and the example asserts both that ``y == |x|`` and that the
   custom kernel — bumping a shared run counter on every call — was the one
   dispatched.
+
+It also prints the custom kernel's ``"<library>:<device>:<domain>:<op_type>"``
+identifier next to the official built-in one and checks the two differ.
 """
 
 from __future__ import annotations
@@ -54,11 +57,38 @@ print(model)
 run_count = 0
 
 
+# Built-in kernels expose a ``"<library>:<device>:<domain>:<op_type>"``
+# identifier (see the C++ classes, e.g. the official ``Abs`` kernel is named
+# ``"onnx_kernels:CPU:ai.onnx:Abs"``). The custom kernel below advertises its
+# own name under a distinct ``example`` library prefix so it never collides
+# with — and is clearly distinguishable from — the built-in one.
+OFFICIAL_ABS_KERNEL_NAME = "onnx_kernels:CPU:ai.onnx:Abs"
+CUSTOM_ABS_KERNEL_NAME = "example:CPU:ai.onnx:Abs"
+
+
 def custom_abs(node, x):
     global run_count
     run_count += 1
     return np.abs(x)
 
+
+custom_abs.name = CUSTOM_ABS_KERNEL_NAME
+
+#####################################
+# Show the custom kernel name differs from the official one
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#
+# Both follow the same ``"<library>:<device>:<domain>:<op_type>"`` convention
+# but use different library prefixes, so the override is unmistakably *not* the
+# built-in ``Abs`` kernel.
+
+print(f"official Abs kernel name: {OFFICIAL_ABS_KERNEL_NAME}")
+print(f"custom   Abs kernel name: {custom_abs.name}")
+assert custom_abs.name != OFFICIAL_ABS_KERNEL_NAME, (
+    "the custom kernel name must differ from the official one, otherwise it "
+    "would be indistinguishable from the built-in kernel."
+)
+print("OK: the custom kernel name is different from the official one.")
 
 #####################################
 # Register the override and run

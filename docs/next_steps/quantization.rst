@@ -1523,24 +1523,112 @@ FP6 LLM (DeepSpeed TC-FPn, per-group of 128)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Same FP6 E3M2 quantization as MXFP6 but with split storage
-(2-bit sign+exp and 4-bit mantissa stored separately) for
+(4-bit sign+exponent and 2-bit mantissa stored separately) for
 Tensor Core alignment.
 
-.. code-block:: text
+.. tab-set::
 
-    QuantizationProto {
-        tiling: TilingQuantizationProto {
-            tile_shape: [128]
-            elem_quant: [
-                QuantizationProto { floating_point: FloatingPointUniformProto {
-                    sign_bits: 1, exponent_bits: 3, mantissa_bits: 2,
-                    exponent_bias: 3, has_inf: false, has_nan: false,
-                    split_storage: true, packed_count: 4, packed_bytes: 3
-                }},
-                // ... one per block
-            ]
-        }
-    }
+   .. tab-item:: Specialized proto
+
+      .. code-block:: text
+
+         QuantizationProto {
+             tiling: TilingQuantizationProto {
+                 tile_shape: [128]
+                 elem_quant: [
+                     QuantizationProto {
+                         floating_point: FloatingPointUniformProto {
+                             sign_bits: 1
+                             exponent_bits: 3
+                             mantissa_bits: 2
+                             exponent_bias: 3
+                             has_inf: false
+                             has_nan: false
+                             split_storage: true
+                             packed_count: 4
+                             packed_bytes: 3
+                         }
+                     }
+                 ]
+             }
+         }
+
+   .. tab-item:: Custom types
+
+      .. code-block:: text
+
+         ModelProto {
+             unstructured_types: [
+                 UnstructuredTypeProto {  // index 0: four FLOAT6_E3M2 values
+                     name: "FLOAT6_E3M2"
+                     structure: Structure {
+                         field: {
+                             name: "sign_exponent"
+                             type: array(UINT4, dimension=4)
+                         }
+                         field: {
+                             name: "mantissa"
+                             type: array(UINT2, dimension=4)
+                         }
+                         field: { name: "sign_bits", constant: tensor(INT32, [], 1) }
+                         field: { name: "exponent_bits", constant: tensor(INT32, [], 3) }
+                         field: { name: "mantissa_bits", constant: tensor(INT32, [], 2) }
+                         field: { name: "exponent_bias", constant: tensor(INT32, [], 3) }
+                         field: { name: "has_inf", constant: tensor(BOOL, [], false) }
+                         field: { name: "has_nan", constant: tensor(BOOL, [], false) }
+                         field: { name: "split_storage", constant: tensor(BOOL, [], true) }
+                         field: { name: "packed_count", constant: tensor(INT32, [], 4) }
+                         field: { name: "packed_bytes", constant: tensor(INT32, [], 3) }
+                     }
+                     decoder: FunctionProto {
+                         output: "Y"
+                         value_info: {
+                             name: "Y"
+                             type: TypeProto {
+                                 tensor_type: Tensor {
+                                     elem_type: FLOAT
+                                     shape: TensorShapeProto {
+                                         dim: { dim_value: 4 }
+                                     }
+                                 }
+                             }
+                         }
+                         // Recombines both planes and decodes FLOAT6_E3M2.
+                     }
+                 },
+                 UnstructuredTypeProto {  // index 1: one tile
+                     name: "FP6_LLM_TILE_128"
+                     structure: Structure {
+                         field: {
+                             name: "values"
+                             type: array(
+                                 unstructured(type_index=0),
+                                 dimension=32
+                             )
+                         }
+                         field: {
+                             name: "tile_shape"
+                             constant: tensor(INT64, [1], [128])
+                         }
+                     }
+                     decoder: FunctionProto {
+                         output: "Y"
+                         value_info: {
+                             name: "Y"
+                             type: TypeProto {
+                                 tensor_type: Tensor {
+                                     elem_type: FLOAT
+                                     shape: TensorShapeProto {
+                                         dim: { dim_value: 128 }
+                                     }
+                                 }
+                             }
+                         }
+                         // Applies the FLOAT6_E3M2 decoding nodes to 32 groups.
+                     }
+                 }
+             ]
+         }
 
 INT8 per-channel (classic CNN)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

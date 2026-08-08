@@ -15,13 +15,13 @@ Conversely, adding one protobuf message for every quantization or custom
 format creates a closed hierarchy that must grow whenever a new layout is
 introduced.
 
-This proposal assumes that an ``UnstructuredProto`` already exists. It owns
+This proposal assumes that a ``StructProto`` already exists. It owns
 or references a byte buffer and references the physical type from which its
 exact byte size is computed:
 
 .. code-block:: text
 
-    message UnstructuredProto {
+    message StructProto {
         int32 type = 1;  // model-level index, or -1 when struct_type is present
         optional StructTypeProto struct_type = 2;
         bytes raw_data = 3;
@@ -32,15 +32,16 @@ exact byte size is computed:
 
 The container itself is outside the scope of this page. The purpose of the
 specification is to define ``StructTypeProto``: a portable structure
-that can be overlaid on the bytes of an ``UnstructuredProto``.
+that can be overlaid on the bytes of a ``StructProto``.
 
-``dims`` is intentionally absent because not every unstructured value is
+``dims`` is intentionally absent because not every structured value is
 tensor-shaped. Physical dimensions are already part of its arrays.
 
-The type system adds two serialized structural kinds, named integer enums,
+The type system adds three serialized structural kinds, named integer enums,
 and constant fields:
 
 * an array of a statically sized ``TypeProto``;
+* a packed array of repeated named bit components;
 * a structure containing named, statically sized ``TypeProto`` fields;
 * an enum with a fixed-width integer storage type and named values;
 * a tensor or enum constant consuming no payload bytes.
@@ -53,13 +54,13 @@ additions.
 Requirements
 ++++++++++++
 
-* The buffer size is implied by the physical type and must equal the inline
-  or external payload length.
+* The size implied by the physical type equals the inline or external payload
+  length.
 * Every read performed by the structured view is bounds-checked.
 * Bits and multi-byte values use one canonical ordering convention.
 * A structure may be nested and repeated without introducing a new proto
   for each format.
-* Every array length is a concrete non-negative integer.
+* Every array and packed-array length is a concrete non-negative integer.
 * The physical structure is inspectable without loading a vendor plugin.
 * An optional standard ONNX decoder defines logical semantics such as
   dequantization.
@@ -70,9 +71,10 @@ Stable contract
 The proposal has three valid uses of ``StructTypeProto``:
 
 ``concrete declaration``
-    Selects ``array``, ``structure``, or ``enum_type``. It appears in
+    Selects ``array``, ``packed_array``, ``structure``, or ``enum_type``. It
+    appears in
     ``ModelProto.struct_types`` or in
-    ``UnstructuredProto.struct_type``. It completely determines the
+    ``StructProto.struct_type``. It completely determines the
     payload size.
 
 ``exact static reference``
@@ -81,7 +83,7 @@ The proposal has three valid uses of ``StructTypeProto``:
 
 ``unconstrained static category``
     Leaves ``kind`` unset and appears only inside ``TypeProto``. It accepts
-    any concrete unstructured declaration. This form is used by heterogeneous
+    any concrete structured declaration. This form is used by heterogeneous
     sequences and maps.
 
 ``type_index`` may also occur below a concrete root through
@@ -109,6 +111,7 @@ The serialized size is computed recursively in bits:
     size(scalar(T))             = bit_width(T)
     size(Enum(T))               = bit_width(T)
     size(Array(T, n))           = n * size(T)
+    size(PackedArray(c...), n)  = n * sum(c.bit_width)
     size(Field(constant))       = 0
     size(Field(enum_constant))  = 0
     size(Field(T))              = size(T)
@@ -152,6 +155,17 @@ type message.
             uint64 dimension = 2;        // exact element count
         }
 
+        // Repeats one explicitly decomposed bit pattern.
+        message PackedArray {
+            message Component {
+                string name = 1;       // unique component name
+                uint32 bit_width = 2;  // bits per element
+            }
+
+            repeated Component component = 1;  // bit order within each element
+            uint64 dimension = 2;              // exact element count
+        }
+
         // Names one component of a structure.
         message Field {
             string name = 1;        // unique within the structure
@@ -170,33 +184,34 @@ type message.
 
         // Defines, references, or constrains the structured type.
         oneof kind {
-            Array array = 1;          // repeated elements
-            Structure structure = 2;  // ordered named fields
-            EnumProto enum_type = 3;  // named integer values
-            int32 type_index = 4;     // ModelProto.struct_types index
+            Array array = 1;                // repeated typed elements
+            Structure structure = 2;        // ordered named fields
+            PackedArray packed_array = 3;   // repeated packed bit patterns
+            EnumProto enum_type = 4;        // named integer values
+            int32 type_index = 5;           // ModelProto.struct_types index
         }
 
-        optional FunctionProto decoder = 5;  // structured leaves to ONNX value
-        optional FunctionProto encoder = 6;  // ONNX value to canonical bytes
-        string name = 7;                     // reusable type name
-        string doc_string = 8;               // type documentation
-        repeated StringStringEntryProto metadata_props = 9;  // type metadata
+        optional FunctionProto decoder = 6;  // structured leaves to ONNX value
+        optional FunctionProto encoder = 7;  // ONNX value to canonical bytes
+        string name = 8;                     // reusable type name
+        string doc_string = 9;               // type documentation
+        repeated StringStringEntryProto metadata_props = 10;  // type metadata
     }
 
 ``StructTypeProto`` is itself the new ``TypeProto`` branch; there is no
 intermediate ``Layout`` message. A concrete model-level or inline physical
-type selects exactly one of ``array``, ``structure``, and ``enum_type``. A
-nested or static exact type may select one model-level declaration with
-``type_index``. A static type may leave ``kind`` unset only for the
-unconstrained category defined above.
+type selects exactly one of ``array``, ``packed_array``, ``structure``, and
+``enum_type``. A nested or static exact type may select one model-level
+declaration with ``type_index``. A static type may leave ``kind`` unset only
+for the unconstrained category defined above.
 
-``UnstructuredProto.type`` and ``StructTypeProto.type_index`` are both
+``StructProto.type`` and ``StructTypeProto.type_index`` are both
 model-level indices. The former selects the type of one value; the latter
 references a type from another physical declaration.
 
-The corresponding ``UnstructuredProto`` values may appear in graph values,
+The corresponding ``StructProto`` values may appear in graph values,
 sequences, maps, optionals, and attributes. ``AttributeProto`` adds
-``UNSTRUCTURED`` and ``UNSTRUCTUREDS`` categories for the singular and
+``STRUCT`` and ``STRUCTS`` categories for the singular and
 repeated attribute forms described below.
 
 .. code-block:: text
@@ -232,7 +247,7 @@ The two forms are mutually exclusive:
 * ``type == -1`` requires ``struct_type``;
 * every other negative value is invalid.
 
-As with ``TensorProto``, ``UnstructuredProto.name`` identifies the concrete
+As with ``TensorProto``, ``StructProto.name`` identifies the concrete
 value and its ``doc_string`` documents that value.
 ``StructTypeProto.name`` identifies the type declaration instead. It
 must be non-empty and unique among ``ModelProto.struct_types`` entries;
@@ -253,7 +268,7 @@ not a one-bit storage type.
 
 A non-standard bit field is decomposed into standard ONNX fields and
 interpreted by the decoder rather than introducing another scalar taxonomy.
-A name such as ``FLOAT6_E3M2`` identifies a concrete unstructured physical
+A name such as ``FLOAT6_E3M2`` identifies a concrete structured physical
 declaration; it is not a ``TypeProto.Tensor.elem_type``. In particular, a
 generic ``IEEE_FLOAT`` tensor element type is prohibited: it fixes neither
 the physical width nor the logical standard ONNX element type. The decoder of
@@ -300,6 +315,25 @@ uses a structure element with an explicit final padding field.
 
 No physical dimension is derived from a decoder output.
 ``Array.dimension`` describes physical storage only.
+
+Packed array type
++++++++++++++++++
+
+``PackedArray`` repeats a bit pattern whose components are declared in order.
+For each element, the first component occupies the least-significant bits,
+followed immediately by the remaining components. Elements are consecutive
+with no padding. Its size is the element count multiplied by the sum of the
+component widths.
+
+Every component name is unique and every ``bit_width`` is positive. A parser
+exposes one unsigned integer leaf per component, grouped over
+``PackedArray.dimension``. For readability,
+``packed_array(4, [sign:1, exponent:3, mantissa:2])`` denotes four consecutive
+six-bit patterns.
+
+This is a physical packing construct, not a new ``TensorProto.DataType``.
+Logical interpretation remains the responsibility of the enclosing type's
+decoder.
 
 Structure type
 ++++++++++++++
@@ -375,18 +409,19 @@ physical types. For readability, examples write
 Applying a type to a buffer
 +++++++++++++++++++++++++++
 
-Parsing starts with the selected ``array``, ``structure``, or ``enum_type``
-kind at bit offset zero. A successful parse produces a tree of typed views
-into the original buffer plus the constants embedded in the type.
-Implementations should avoid copying byte-aligned fields and may lazily unpack
-bit fields.
+Parsing starts with the selected ``array``, ``packed_array``, ``structure``,
+or ``enum_type`` kind at bit offset zero. A successful parse produces a tree
+of typed views into the original buffer plus the constants embedded in the
+type. Implementations should avoid copying byte-aligned fields and may lazily
+unpack bit fields.
 
 When ``external_data`` is empty, ``raw_data`` is the payload and may itself be
 empty for a zero-sized physical type. When ``external_data`` is non-empty,
 ``raw_data`` must be empty and the external metadata must provide an exact
 ``length`` entry. The parse succeeds only if:
 
-* the payload length equals the size computed from the physical type;
+* ``raw_data.size()`` or external-data ``length`` equals the size computed
+  from the physical type;
 * the computed physical size is a whole number of bytes;
 * arithmetic on dimensions and element sizes does not overflow ``uint64``;
 * the root physical kind consumes the whole buffer, including explicit
@@ -487,25 +522,25 @@ validates the logical interpretation.
 TypeProto integration
 ++++++++++++++++++++++
 
-``UnstructuredProto`` is a value category, not merely an initializer
+``StructProto`` is a value category, not merely an initializer
 encoding. ``TypeProto`` therefore contains ``StructTypeProto`` directly,
 as shown above. This makes recursion uniform: ``Array.element_type`` and
 ``Field.type`` reuse ``TypeProto`` rather than an intermediate layout
 language. A physical element or field must nevertheless have a canonical
-fixed size; currently this permits standard tensor types and exact
-unstructured array, structure, and enum types, but not sequences, maps, or
+fixed size; currently this permits standard tensor types and exact structured
+array, packed-array, structure, and enum types, but not sequences, maps, or
 optionals.
 
-The concrete ``UnstructuredProto`` selects exactly one
+The concrete ``StructProto`` selects exactly one
 ``StructTypeProto`` declaration. The static type is a constraint:
 
 * when ``StructTypeProto.type_index`` is present, the value must
   reference that exact model-level declaration;
 * when ``kind`` is unset, the explicitly unconstrained static category accepts
-  any concrete unstructured type.
+  any concrete structured type.
 
-Model-level and ``UnstructuredProto.struct_type`` definitions must
-select ``array``, ``structure``, or ``enum_type``. A
+Model-level and ``StructProto.struct_type`` definitions must
+select ``array``, ``packed_array``, ``structure``, or ``enum_type``. A
 ``TypeProto.struct_type`` may instead:
 
 * select a physical kind to define one exact inline type;
@@ -541,26 +576,26 @@ maps:
     message SequenceProto {
         enum DataType {
             ...
-            UNSTRUCTURED = <N>;
+            STRUCT = <N>;
         }
         ...
-        repeated UnstructuredProto unstructured_values = <N>;
+        repeated StructProto struct_values = <N>;
         optional TypeProto value_type = <N+1>;
     }
 
     message OptionalProto {
         enum DataType {
             ...
-            UNSTRUCTURED = <N>;
+            STRUCT = <N>;
         }
         ...
-        optional UnstructuredProto unstructured_value = <N>;
+        optional StructProto struct_value = <N>;
         optional TypeProto value_type = <N+1>;
     }
 
 ``elem_type`` continues to identify the broad value category for compatibility.
 ``value_type`` carries the complete recursive static constraint and must agree
-with it. It is required for ``UNSTRUCTURED`` values. For graph values, it must
+with it. It is required for ``STRUCT`` values. For graph values, it must
 also agree with the corresponding ``ValueInfoProto``. This makes standalone
 sequence/map attributes self-describing rather than relying on surrounding
 graph type information.
@@ -573,7 +608,7 @@ exact physical type.
 AttributeProto integration
 ++++++++++++++++++++++++++
 
-Operators and functions may also need an unstructured value as an attribute.
+Operators and functions may also need an structured value as an attribute.
 ``TYPE_PROTO`` transports only its type and cannot carry the serialized
 payload. ``AttributeProto`` therefore gains singular and repeated value
 categories, following the existing tensor and sparse-tensor pattern:
@@ -583,13 +618,13 @@ categories, following the existing tensor and sparse-tensor pattern:
     message AttributeProto {
         enum AttributeType {
             ...
-            UNSTRUCTURED = 15;
-            UNSTRUCTUREDS = 16;
+            STRUCT = 15;
+            STRUCTS = 16;
         }
 
         ...
-        optional UnstructuredProto unstructured = 24;
-        repeated UnstructuredProto unstructureds = 25;
+        optional StructProto struct = 24;
+        repeated StructProto structs = 25;
     }
 
 ``AttributeProto.type`` must match the populated field. Exactly one attribute
@@ -612,15 +647,14 @@ therefore consume no payload bytes.
         structure: Structure {
             field: {
                 name: "packed"
-                type: array(UINT8, dimension=3)
+                type: packed_array(
+                    dimension=4,
+                    components=[sign:1, exponent:3, mantissa:2]
+                )
             }
-            field: { name: "sign_bits", constant: tensor(INT32, [], 1) }
-            field: { name: "exponent_bits", constant: tensor(INT32, [], 3) }
-            field: { name: "mantissa_bits", constant: tensor(INT32, [], 2) }
             field: { name: "exponent_bias", constant: tensor(INT32, [], 3) }
             field: { name: "has_inf", constant: tensor(BOOL, [], true) }
             field: { name: "has_nan", constant: tensor(BOOL, [], true) }
-            field: { name: "packed_count", constant: tensor(INT32, [], 4) }
         }
         decoder: FunctionProto {
             output: "Y"
@@ -640,9 +674,16 @@ therefore consume no payload bytes.
     }
 
 The physical size is determined without executing the decoder:
-``3 * size(UINT8) = 24 bits``. The seven constant fields contribute zero
-bits. An ``UnstructuredProto`` selecting this declaration must therefore
-contain exactly three payload bytes.
+``4 * (1 + 3 + 2) = 24 bits``. The three constant fields contribute zero
+bits. A ``StructProto`` selecting this declaration must therefore contain
+exactly three payload bytes:
+
+.. code-block:: text
+
+    StructProto {
+        type: <FLOAT6_E3M2 type index>
+        raw_data: <3 bytes>
+    }
 
 Quantization profile
 ++++++++++++++++++++
@@ -676,7 +717,7 @@ quantization families become layout compositions:
      - nested arrays and structures
      - reshape and tile placement
    * - Cast or identity
-     - tensor or unstructured array
+     - tensor or structured array
      - cast or reshape
    * - Structured block
      - explicit block structure
@@ -688,7 +729,7 @@ protobuf ``oneof``.
 Paged KV-cache
 ++++++++++++++
 
-A paged KV-cache is naturally a sequence or map of unstructured pages. Each
+A paged KV-cache is naturally a sequence or map of structured pages. Each
 page may use a different quantization type while satisfying one common static
 constraint:
 
@@ -773,16 +814,16 @@ A concrete sequence may mix page encodings:
     }
 
     SequenceProto {
-        elem_type: UNSTRUCTURED
+        elem_type: STRUCT
         value_type: TypeProto {
             struct_type: StructTypeProto {}
         }
-        unstructured_values: [
-            UnstructuredProto {
+        struct_values: [
+            StructProto {
                 type: 0
                 raw_data: ...
             },
-            UnstructuredProto {
+            StructProto {
                 type: 1
                 raw_data: ...
             }
@@ -797,14 +838,14 @@ The INT4 page contains ``2 * 32 * 128 * 128`` four-bit values
 an exact payload of ``540672`` bytes. The FP8 page contains
 ``2 * 32 * 128 * 128`` one-byte values, for ``1048576`` bytes. The sequence
 accepts both because its static element category is unconstrained, while each
-``UnstructuredProto.type`` still selects one exact physical declaration.
+``StructProto.type`` still selects one exact physical declaration.
 
 For page lookup by identifier, ``MapProto`` uses integer keys and this
 sequence as its values:
 
 .. code-block:: text
 
-    map(int64, unstructured)
+    map(int64, struct)
 
 An attention runtime may dispatch each page by its resolved model type and
 fuse decoding with attention. A generic runtime can invoke each declaration's
@@ -981,7 +1022,7 @@ seven fixed-size nodes:
         ]
     }
 
-    UnstructuredProto {
+    StructProto {
         type: 1
         raw_data: ...                 // exactly 231 bytes
     }
@@ -1031,6 +1072,7 @@ A checker validates:
 
 * non-negative type indices are in range;
 * ``type`` and ``struct_type`` satisfy the -1 sentinel rules;
+* the computed physical size equals the inline or external payload length;
 * model-level and inline concrete types select exactly one ``array``,
   ``structure``, or ``enum_type`` kind;
 * ``type_index`` references are in range and do not form cycles;
@@ -1043,13 +1085,14 @@ A checker validates:
 * valid standard ONNX leaf types;
 * constant tensors are inline, concretely shaped, and have no external data;
 * unique field names within each structure;
+* unique packed-component names and positive component widths;
 * valid concrete physical dimensions;
 * every physical field and array element has a canonical fixed size;
 * the total physical size is divisible by eight bits;
 * exact consumption of the concrete buffer;
 * decoder and encoder signatures;
 * decoder restrictions and represented output type;
-* every unstructured value satisfies its exact or unconstrained static
+* every structured value satisfies its exact or unconstrained static
   category inside graph inputs, outputs, sequences, maps, and optionals.
 
 Implementations must impose configurable limits on nesting depth, field
@@ -1072,7 +1115,7 @@ Comparison with Opaque
      - Model index or inline type
    * - Exact buffer size
      - No
-     - Physical type
+     - Payload length checked against the physical type
    * - Explicit ordered fields
      - No
      - Yes

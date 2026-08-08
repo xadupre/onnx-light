@@ -22,14 +22,14 @@ Stable contract
 
     message CompiledTensorProto {
         string source_name = 1;        // original graph initializer
-        UnstructuredProto value = 2;   // prepacked physical representation
+        StructProto value = 2;   // prepacked physical representation
         int32 device = 3;              // index into ModelProto.devices
         bytes source_digest = 4;       // digest of the canonical source tensor
         string digest_algorithm = 5;   // for example "blake3"
         repeated StringStringEntryProto metadata_props = 6;
     }
 
-``value`` is always an exact unstructured value: it uses either a non-negative
+``value`` is always an exact structured value: it uses either a non-negative
 model-level ``type`` index or an inline concrete ``struct_type``. An
 unconstrained static type is not valid here.
 
@@ -104,13 +104,13 @@ Quantized and tiled tensors
 
 No dependency on ``QuantizedTensorProto`` is needed. A quantized, tiled, or
 otherwise packed cache entry is represented by the same
-``UnstructuredProto`` mechanism:
+``StructProto`` mechanism:
 
 .. code-block:: text
 
     CompiledTensorProto {
         source_name: "decoder.layers.0.attn.weight"
-        value: UnstructuredProto {
+        value: StructProto {
             type: 3                    // model-level packed CUDA type
             raw_data: ...
         }
@@ -119,7 +119,7 @@ otherwise packed cache entry is represented by the same
         digest_algorithm: "blake3"
     }
 
-The referenced unstructured type describes the complete byte layout. Its
+The referenced structured type describes the complete byte layout. Its
 optional decoder describes portable interpretation for inspectable formats.
 A runtime-specific prepack may omit the decoder when only the named runtime
 can consume it; the original initializer still guarantees portability.
@@ -133,8 +133,8 @@ A checker validates:
 * unique ``(source_name, device, physical type)`` cache keys;
 * source initializer existence;
 * non-empty digest and algorithm fields;
-* exact unstructured type resolution and payload size;
-* absence of unconstrained static unstructured types;
+* exact structured type resolution and payload size;
+* absence of unconstrained static structured types;
 * metadata keys are unique.
 
 Digest comparison and runtime compatibility may be deferred until load time,
@@ -144,8 +144,8 @@ Relationship to other proposals
 +++++++++++++++++++++++++++++++
 
 ``CompiledTensorProto`` depends only on the stable physical representation in
-``UnstructuredProto``. The specialized hierarchy in
+``StructProto``. The specialized hierarchy in
 :ref:`l-next-steps-quantization` may remain a format catalogue, but it is not a
 storage dependency. Proto inheritance is likewise unnecessary because the
-compiled value is composed from an ``UnstructuredProto`` rather than derived
+compiled value is composed from a ``StructProto`` rather than derived
 from it.

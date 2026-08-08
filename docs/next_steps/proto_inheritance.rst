@@ -20,7 +20,7 @@ Composition is portable but changes the wire path and the API:
 ``value.name()`` becomes ``value.base().name()``. It is inconvenient when one
 message is a strict specialization of another, for example when
 ``QuantizedTensorProto`` adds quantization semantics to the bytes and metadata
-already carried by ``UnstructuredProto``.
+already carried by ``StructProto``.
 
 onnx-light owns its message classes and parser rather than relying on generated
 Protobuf C++ classes. It can therefore support inheritance in its schema and
@@ -37,7 +37,7 @@ The proposal defines **single inheritance for message fields**. It provides:
 * an equivalent ordinary ``.proto`` schema for other implementations.
 
 It does not define runtime-polymorphic protobuf fields. A field declared as
-``UnstructuredProto`` still contains that wire message; it does not
+``StructProto`` still contains that wire message; it does not
 automatically accept every derived message. Explicit ``oneof`` branches or a
 common value category remain necessary for polymorphic containers.
 
@@ -48,7 +48,7 @@ The conceptual syntax is:
 
 .. code-block:: text
 
-    message UnstructuredProto {
+    message StructProto {
         int32 type = 1;
         optional StructTypeProto struct_type = 2;
         bytes raw_data = 3;
@@ -57,7 +57,7 @@ The conceptual syntax is:
         string doc_string = 6;
     }
 
-    message QuantizedTensorProto extends UnstructuredProto {
+    message QuantizedTensorProto extends StructProto {
         repeated int64 dims = 7;
         int32 quantized_type = 8;
         optional QuantizationProto quantization = 9;
@@ -143,7 +143,7 @@ The desired API uses normal public inheritance:
 
 .. code-block:: cpp
 
-    class QuantizedTensorProto : public UnstructuredProto {
+    class QuantizedTensorProto : public StructProto {
     public:
       // Inherited:
       // name(), doc_string(), raw_data(), external_data(), ...
@@ -173,7 +173,7 @@ The declaration layer can add:
 
 .. code-block:: cpp
 
-    BEGIN_PROTO_DERIVED(QuantizedTensorProto, UnstructuredProto, "...")
+    BEGIN_PROTO_DERIVED(QuantizedTensorProto, StructProto, "...")
     FIELD_REPEATED(int64_t, dims, 7, "Logical tensor shape.")
     FIELD_DEFAULT(int32_t, quantized_type, 8, -1, "Quantization type index.")
     FIELD_OPTIONAL(QuantizationProto, quantization, 9, "Inline quantization type.")
@@ -240,7 +240,7 @@ Python inherits the same accessors:
 
 .. code-block:: cpp
 
-    nb::class_<QuantizedTensorProto, UnstructuredProto>(m, "QuantizedTensorProto");
+    nb::class_<QuantizedTensorProto, StructProto>(m, "QuantizedTensorProto");
 
 The flattened standard-Protobuf Python class will not expose Python
 inheritance, but it will expose the same fields. Behavioral compatibility is
@@ -274,7 +274,7 @@ refactor.
 
 For new messages, inheritance is wire-compatible from the beginning when the
 flattened schema is treated as normative. For existing
-``QuantizedTensorProto`` and ``UnstructuredProto`` proposals, field numbers
+``QuantizedTensorProto`` and ``StructProto`` proposals, field numbers
 should be finalized only after deciding whether inheritance is used.
 
 Recommendation
@@ -291,6 +291,6 @@ and API convenience with explicit flattening. Recommended constraints are:
 * non-virtual C++ messages unless runtime polymorphism is independently
   justified.
 
-Under these rules, ``QuantizedTensorProto extends UnstructuredProto`` removes
+Under these rules, ``QuantizedTensorProto extends StructProto`` removes
 duplicated storage metadata without introducing a new or incompatible wire
 format.

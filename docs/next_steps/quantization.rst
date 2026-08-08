@@ -199,23 +199,22 @@ It carries its own byte size explicitly.
 
       .. code-block:: text
 
-         UnstructuredProto {
+         StructProto {
              type: <quantization-profile type index>
              raw_data: ...
              name: ...
              doc_string: ...
          }
 
-``QuantizedTensorProto`` becomes ``UnstructuredProto``. ``raw_data``,
+``QuantizedTensorProto`` becomes ``StructProto``. ``raw_data``,
 ``external_data``, ``name``, and ``doc_string`` are carried by that generic
 value. Its exact model-level or inline ``StructTypeProto`` replaces
-``quantized_type`` and ``quantization``. The physical type determines the
-payload size, so ``n_bytes`` is not duplicated. Logical dimensions and element
-type belong to the decoder output ``ValueInfoProto``.
+``quantized_type`` and ``quantization``. The size computed from that physical
+type must equal ``raw_data.size()`` or external-data ``length``. Logical
+dimensions and element type belong to the decoder output ``ValueInfoProto``.
 
-In the specialized sketch, ``name`` identifies the concrete quantized value
-and ``doc_string`` documents it. Its ``n_bytes`` field is replaced by the
-size computed from the generic physical type.
+In both forms, ``name`` identifies the concrete value and ``doc_string``
+documents it.
 
 TypeProto and containers
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -275,18 +274,18 @@ if ``QuantizedTensorProto`` remained a distinct value category:
          message SequenceProto {
              enum DataType {
                  ...
-                 UNSTRUCTURED = <N>;
+                 STRUCT = <N>;
              }
-             repeated UnstructuredProto unstructured_values = <N>;
+             repeated StructProto struct_values = <N>;
              optional TypeProto value_type = <N+1>;
          }
 
          message OptionalProto {
              enum DataType {
                  ...
-                 UNSTRUCTURED = <N>;
+                 STRUCT = <N>;
              }
-             optional UnstructuredProto unstructured_value = <N>;
+             optional StructProto struct_value = <N>;
              optional TypeProto value_type = <N+1>;
          }
 
@@ -303,11 +302,11 @@ These specialized branches map to the generic integrations defined by
 
 * ``TypeProto.QuantizedTensor`` becomes
   ``TypeProto.struct_type``;
-* ``QUANTIZED_TENSOR`` becomes the ``UNSTRUCTURED`` value category;
+* ``QUANTIZED_TENSOR`` becomes the ``STRUCT`` value category;
 * ``quantized_tensor_values`` and ``quantized_tensor_value`` become
-  ``unstructured_values`` and ``unstructured_value``;
-* heterogeneous pages use the unconstrained static unstructured category,
-  while each ``UnstructuredProto`` carries its exact physical type.
+  ``struct_values`` and ``struct_value``;
+* heterogeneous pages use the unconstrained static structured category,
+  while each ``StructProto`` carries its exact physical type.
 
 ``MapProto`` inherits support because its values are represented by a
 ``SequenceProto``. Consequently, ``Sequence<QuantizedTensor>`` and
@@ -319,7 +318,7 @@ quantization declaration for each page.
 values self-describing and must agree with any enclosing ``ValueInfoProto``.
 
 The generalized design in :ref:`l-next-steps-custom-types` avoids duplicating
-this machinery: a quantized tensor is an unstructured value with an explicit
+this machinery: a quantized tensor is an structured value with an explicit
 physical type and a decoder with a typed output signature.
 
 QuantizationProto
@@ -587,22 +586,17 @@ Covers FP6, FP4, MXFP and similar reduced-precision floating-point formats.
                  // Serialized payload.
                  field: {
                      name: "packed"
-                     type: array(UINT8, dimension=packed_bytes)
+                     type: packed_array(
+                         dimension=packed_count,
+                         components=[
+                             sign:sign_bits,
+                             exponent:exponent_bits,
+                             mantissa:mantissa_bits
+                         ]
+                     )
                  }
 
                  // Type-level parameters: these consume no payload bytes.
-                 field: {
-                     name: "sign_bits"
-                     constant: tensor(INT32, [], sign_bits)
-                 }
-                 field: {
-                     name: "exponent_bits"
-                     constant: tensor(INT32, [], exponent_bits)
-                 }
-                 field: {
-                     name: "mantissa_bits"
-                     constant: tensor(INT32, [], mantissa_bits)
-                 }
                  field: {
                      name: "exponent_bias"
                      constant: tensor(INT32, [], exponent_bias)
@@ -614,18 +608,6 @@ Covers FP6, FP4, MXFP and similar reduced-precision floating-point formats.
                  field: {
                      name: "has_nan"
                      constant: tensor(BOOL, [], has_nan)
-                 }
-                 field: {
-                     name: "split_storage"
-                     constant: tensor(BOOL, [], split_storage)
-                 }
-                 field: {
-                     name: "packed_count"
-                     constant: tensor(INT32, [], packed_count)
-                 }
-                 field: {
-                     name: "packed_bytes"
-                     constant: tensor(INT32, [], packed_bytes)
                  }
              }
              decoder: FunctionProto {
@@ -640,17 +622,14 @@ Covers FP6, FP4, MXFP and similar reduced-precision floating-point formats.
              structure: Structure {
                  field: {
                      name: "packed"
-                     type: array(UINT8, dimension=3)
+                     type: packed_array(
+                         dimension=4,
+                         components=[sign:1, exponent:3, mantissa:2]
+                     )
                  }
-                 field: { name: "sign_bits", constant: tensor(INT32, [], 1) }
-                 field: { name: "exponent_bits", constant: tensor(INT32, [], 3) }
-                 field: { name: "mantissa_bits", constant: tensor(INT32, [], 2) }
                  field: { name: "exponent_bias", constant: tensor(INT32, [], 3) }
                  field: { name: "has_inf", constant: tensor(BOOL, [], true) }
                  field: { name: "has_nan", constant: tensor(BOOL, [], true) }
-                 field: { name: "split_storage", constant: tensor(BOOL, [], false) }
-                 field: { name: "packed_count", constant: tensor(INT32, [], 4) }
-                 field: { name: "packed_bytes", constant: tensor(INT32, [], 3) }
              }
              decoder: FunctionProto {
                  output: "Y"
@@ -670,11 +649,13 @@ Covers FP6, FP4, MXFP and similar reduced-precision floating-point formats.
          }
 
 A standard ONNX low-precision type such as ``FLOAT4E2M1`` or a float8 type is
-an ordinary physical ``Array``. A non-standard width is an
-``Array(UINT8)`` of packed bytes. Split storage is a ``Structure`` with one
-array field per bit plane or component. Every profile parameter needed by the
-decoder is preserved as a named constant field; none is hidden in the
-decoder implementation.
+an ordinary physical ``Array``. A non-standard width uses ``PackedArray`` so
+the component widths and packed element count remain explicit. Split storage
+is a ``Structure`` with one field per bit plane or component. Parameters not
+already expressed by the physical structure remain named constant fields.
+Thus ``sign_bits``, ``exponent_bits``, ``mantissa_bits``, ``packed_count``,
+``packed_bytes``, and ``split_storage`` are checked from the physical layout
+rather than duplicated as constants.
 
 This is a generic profile template, not a serializable element type:
 ``sign_bits``, ``exponent_bits``, and the other symbolic values are replaced
@@ -745,7 +726,7 @@ a base quantization scheme.
              }
          }
 
-The dense/base region is a referenced unstructured physical type. Outlier
+The dense/base region is a referenced structured physical type. Outlier
 indices and values are concrete arrays in the same root ``Structure``.
 The concrete element type of ``values`` preserves ``outlier_data_type``.
 Threshold and ratio guide the encoder but are not required to decode an
@@ -2165,21 +2146,18 @@ Tensor Core alignment.
                      structure: Structure {
                          field: {
                              name: "sign_exponent"
-                             type: array(UINT4, dimension=4)
+                             type: packed_array(
+                                 dimension=4,
+                                 components=[sign:1, exponent:3]
+                             )
                          }
                          field: {
                              name: "mantissa"
                              type: array(UINT2, dimension=4)
                          }
-                         field: { name: "sign_bits", constant: tensor(INT32, [], 1) }
-                         field: { name: "exponent_bits", constant: tensor(INT32, [], 3) }
-                         field: { name: "mantissa_bits", constant: tensor(INT32, [], 2) }
                          field: { name: "exponent_bias", constant: tensor(INT32, [], 3) }
                          field: { name: "has_inf", constant: tensor(BOOL, [], false) }
                          field: { name: "has_nan", constant: tensor(BOOL, [], false) }
-                         field: { name: "split_storage", constant: tensor(BOOL, [], true) }
-                         field: { name: "packed_count", constant: tensor(INT32, [], 4) }
-                         field: { name: "packed_bytes", constant: tensor(INT32, [], 3) }
                      }
                  },
                  StructTypeProto {  // index 1: one tile

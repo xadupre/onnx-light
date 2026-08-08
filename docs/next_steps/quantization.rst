@@ -642,11 +642,11 @@ deductible from the proto structure.
             n_entries = len(q.codebook_data) // q.codebook_vector_size
             values = []
             n_codes = len(fields[q.index_formula[0].field])
+            for fw in q.index_formula:
+                assert fw.field in fields, f"missing field {fw.field} for index_formula"
+                assert len(fields[fw.field]) == n_codes, (
+                    f"field {fw.field} has inconsistent length")
             for i in range(n_codes):
-                for fw in q.index_formula:
-                    assert fw.field in fields, f"missing field {fw.field} for index_formula"
-                    assert len(fields[fw.field]) == n_codes, (
-                        f"field {fw.field} has inconsistent length")
                 idx = sum(fields[fw.field][i] * fw.multiplier for fw in q.index_formula)
                 assert 0 <= idx < n_entries, f"codebook index {idx} out of range"
                 begin = idx * q.codebook_vector_size

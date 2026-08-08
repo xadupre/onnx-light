@@ -6,10 +6,10 @@ Reducing the ``lib_onnx_proto`` binary size
 Objective
 +++++++++
 
-``liblib_onnx_proto.so`` is the library linked by consumers that only need to
-parse and serialize ONNX models. That dependency should not pull in unrelated
-features or pay for one copy of every convenience wrapper generated for every
-message class.
+The CMake target ``lib_onnx_proto`` produces ``liblib_onnx_proto.so`` (the shared
+library linked by consumers that only need to parse and serialize ONNX models).
+That dependency should not pull in unrelated features or pay for one copy of
+every convenience wrapper generated for every message class.
 
 The primary objective is to reduce both:
 

@@ -573,17 +573,22 @@ decoder implementation.
         }
     }
 
-This is a generic profile template: ``sign_bits``, ``exponent_bits``, and the
-other symbolic values are replaced when the concrete type is declared.
+This is a generic profile template, not a serializable element type:
+``sign_bits``, ``exponent_bits``, and the other symbolic values are replaced
+when the concrete physical type is declared. A generic ``IEEE_FLOAT`` cannot
+be a ``TensorProto.data_type`` or ``TypeProto.Tensor.elem_type`` because it
+does not determine the width or the decoder's standard ONNX output type.
 
-The following concrete ``FLOAT_E3M2`` declaration packs four 6-bit values into
-three bytes. It uses an IEEE-like exceptional-value policy and fixes every
-profile parameter with ``Field.constant``:
+The following concrete ``FLOAT6_E3M2`` declaration packs four 6-bit values
+into three bytes. Its name specifies the physical width as well as the
+exponent and mantissa layout. It uses an IEEE-like exceptional-value policy,
+fixes every profile parameter with ``Field.constant``, and decodes to a
+standard ONNX ``FLOAT`` tensor:
 
 .. code-block:: text
 
     UnstructuredTypeProto {
-        name: "FLOAT_E3M2"
+        name: "FLOAT6_E3M2"
         structure: Structure {
             field: {
                 name: "packed"
@@ -601,6 +606,7 @@ profile parameter with ``Field.constant``:
         }
         decoder: FunctionProto {
             // unpack four 6-bit values and decode E3M2 with exponent bias 3
+            // output Y: tensor(FLOAT)[4]
         }
     }
 

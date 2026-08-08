@@ -230,6 +230,12 @@ not a one-bit storage type.
 
 A non-standard bit field is decomposed into standard ONNX fields and
 interpreted by the decoder rather than introducing another scalar taxonomy.
+A name such as ``FLOAT6_E3M2`` identifies a concrete unstructured physical
+declaration; it is not a ``TypeProto.Tensor.elem_type``. In particular, a
+generic ``IEEE_FLOAT`` tensor element type is prohibited: it fixes neither
+the physical width nor the logical standard ONNX element type. The decoder of
+every custom numeric encoding must declare its output using a standard ONNX
+``elem_type``.
 
 Storage uses one canonical convention:
 

@@ -1277,9 +1277,10 @@ class TestReferenceEvaluatorGlobalCustomKernels(ExtTestCase):
             (y,) = sess.run(None, {"x": x})
             np.testing.assert_array_equal(y, x * x)
         finally:
-            self.assertTrue(
-                ReferenceEvaluator.unregister_custom_kernel_global("my.domain", "Square")
+            unregistered = ReferenceEvaluator.unregister_custom_kernel_global(
+                "my.domain", "Square"
             )
+        self.assertTrue(unregistered)
         # A second unregister finds nothing to remove.
         self.assertFalse(
             ReferenceEvaluator.unregister_custom_kernel_global("my.domain", "Square")
@@ -1303,9 +1304,10 @@ class TestReferenceEvaluatorGlobalCustomKernels(ExtTestCase):
             (y,) = sess.run(None, {"x": x})
             np.testing.assert_array_equal(y, x + 1.0)
         finally:
-            self.assertTrue(
-                ReferenceEvaluator.unregister_custom_kernel_global("my.domain", "Square")
+            unregistered = ReferenceEvaluator.unregister_custom_kernel_global(
+                "my.domain", "Square"
             )
+        self.assertTrue(unregistered)
 
 
 if __name__ == "__main__":

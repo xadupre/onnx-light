@@ -544,6 +544,7 @@ class TestRunNodesBindings(ExtTestCase):
             tp.raw_data = struct.pack("<3f", *(v * 3.0 for v in vals))
             c.put(tp.name, rt.tensor_from_proto(tp), "output")
 
+        triple_ref = weakref.ref(triple)
         rt.register_custom_kernel("my.domain", "Triple", triple)
         try:
             ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
@@ -552,7 +553,12 @@ class TestRunNodesBindings(ExtTestCase):
             self.assertEqual(called, ["Triple"])
             self.assertEqual(_unpack_floats(ctx.get("y")), (3.0, 6.0, 9.0))
         finally:
-            self.assertTrue(rt.unregister_custom_kernel("my.domain", "Triple"))
+            unregistered = rt.unregister_custom_kernel("my.domain", "Triple")
+
+        self.assertTrue(unregistered)
+        del triple
+        gc.collect()
+        self.assertIsNone(triple_ref())
 
         # Once unregistered, the unknown op fails again on a new context.
         self.assertFalse(rt.unregister_custom_kernel("my.domain", "Triple"))

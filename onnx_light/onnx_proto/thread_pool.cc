@@ -2,41 +2,57 @@
 
 namespace ONNX_LIGHT_NAMESPACE::utils {
 
-ThreadPool::ThreadPool() : stop_(false), is_started_(false), pending_jobs_(0) {}
+ThreadPool::ThreadPool()
+    : stop_(false), is_started_(false), requested_threads_(0), pending_jobs_(0) {}
 
 void ThreadPool::Start(int32_t num_threads) {
-  EXT_ENFORCE(workers_.size() == 0, "ThreadPool already started");
   if (num_threads < 0)
     num_threads = static_cast<int32_t>(std::thread::hardware_concurrency());
 
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    stop_ = false;
-    is_started_ = true;
-  }
+  std::lock_guard<std::mutex> lock(mutex_);
+  EXT_ENFORCE(!is_started_, "ThreadPool already started");
+  stop_ = false;
+  is_started_ = true;
+  requested_threads_ = num_threads;
+  // Worker threads are spawned lazily on the first SubmitTask() (see
+  // EnsureWorkersStarted). This keeps load/save of small models fast: when no
+  // delayed block is submitted, Wait() runs the empty queue inline and no
+  // thread is ever created or joined.
+}
 
-  for (int32_t i = 0; i < num_threads; ++i) {
+void ThreadPool::EnsureWorkersStarted() {
+  // Caller must hold mutex_.
+  if (!is_started_ || !workers_.empty() || requested_threads_ <= 0)
+    return;
+  workers_.reserve(static_cast<size_t>(requested_threads_));
+  for (int32_t i = 0; i < requested_threads_; ++i) {
     workers_.emplace_back(&ThreadPool::worker_thread, this);
   }
 }
 
 void ThreadPool::SubmitTask(std::function<void()> &&job) {
+  bool has_workers;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     ++pending_jobs_;
     jobs_.push(std::move(job));
+    EnsureWorkersStarted();
+    has_workers = !workers_.empty();
   }
-  if (!workers_.empty())
+  if (has_workers)
     work_cv_.notify_one();
 }
 
 void ThreadPool::SubmitTask(const std::function<void()> &job) {
+  bool has_workers;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     ++pending_jobs_;
     jobs_.push(job);
+    EnsureWorkersStarted();
+    has_workers = !workers_.empty();
   }
-  if (!workers_.empty())
+  if (has_workers)
     work_cv_.notify_one();
 }
 

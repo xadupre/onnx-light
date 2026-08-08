@@ -33,7 +33,13 @@ public:
   ~ThreadPool();
 
   /**
-   * Starts the pool by launching worker threads.
+   * Starts the pool, deferring worker-thread creation until the first task.
+   *
+   * The pool is marked started immediately, but the worker threads are only
+   * spawned lazily on the first SubmitTask() call. A parse/serialize that never
+   * submits a delayed block (typically a small model whose tensor blocks all
+   * stay below the parallelization threshold) therefore never pays the cost of
+   * creating and joining threads, keeping load/save latency minimal.
    *
    * @param num_threads Number of worker threads to create. Any negative value
    *                    (for example ``-1``) is treated as a request to use the
@@ -62,10 +68,15 @@ public:
    */
   void Wait();
 
-  /** Returns the number of worker threads currently in the pool. */
-  inline size_t GetThreadCount() const { return workers_.size(); }
+  /** Returns the number of worker threads the pool has (or will lazily spawn). */
+  inline size_t GetThreadCount() const {
+    // Once tasks have been submitted the workers exist; before that, report the
+    // number of threads requested by Start() so callers see the logical size.
+    return workers_.empty() && is_started_ ? static_cast<size_t>(requested_threads_)
+                                           : workers_.size();
+  }
 
-  /** Returns whether the pool has been started and workers are running. */
+  /** Returns whether the pool has been started (workers may start lazily). */
   inline bool IsStarted() const { return is_started_; }
 
   /**
@@ -91,8 +102,21 @@ private:
   bool stop_;
   bool is_started_;
 
+  // Number of worker threads requested by Start(), resolved from a negative
+  // value to hardware_concurrency(). Workers are spawned lazily on the first
+  // SubmitTask() so an idle pool costs nothing.
+  int32_t requested_threads_;
+
   // Counts jobs that are queued OR currently executing.
   size_t pending_jobs_;
+
+  /**
+   * Spawns the worker threads if they have not been created yet.
+   *
+   * Must be called while ``mutex_`` is held. Does nothing once the workers
+   * exist or when the pool has not been started.
+   */
+  void EnsureWorkersStarted();
 
   /** Entry point executed by each worker thread. */
   void worker_thread();

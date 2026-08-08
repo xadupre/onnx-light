@@ -31,6 +31,14 @@ Format coverage summary
      - 3.5
      - ``Block`` + ``Linear`` (multiple)
      - ✅
+   * - EETQ (INT8 weight-only)
+     - 8.0
+     - ``Linear``
+     - ✅
+   * - EXL3 (improved EXL2)
+     - 2–6
+     - ``Block`` + ``Linear`` or ``Codebook``
+     - ✅
    * - FP6 LLM (TC-FPn)
      - 6.125
      - ``Block`` + ``FloatingPoint``
@@ -38,6 +46,10 @@ Format coverage summary
    * - FP8 E4M3
      - 8.0
      - ``Linear``
+     - ✅
+   * - HQQ (mixed-precision per head)
+     - 2–4
+     - ``Block`` + ``Linear``
      - ✅
    * - INT4 AWQ (per-group)
      - 4.5
@@ -87,6 +99,10 @@ Format coverage summary
      - 4.5
      - ``Codebook``
      - ✅
+   * - NVFP4 (E2M1 + FP8 scale)
+     - 4.5
+     - ``Block`` + ``FloatingPoint``
+     - ✅
    * - Q2_K
      - 2.625
      - ``Block`` × 2 + ``Linear``
@@ -107,6 +123,10 @@ Format coverage summary
      - 6.6
      - ``Block`` × 2 + ``Linear``
      - ✅
+   * - QuaRot (rotational quantization)
+     - 4.0
+     - ``Linear`` + ``RotationProto``
+     - ✅
    * - QuIP#
      - 2.0
      - ``VectorCodebook`` + rotation
@@ -115,9 +135,33 @@ Format coverage summary
      - 3.4
      - ``Sparse`` + ``Block`` + ``Linear``
      - ✅
+   * - SmoothQuant (W8A8)
+     - 8.0
+     - ``Linear`` + ``RotationProto``
+     - ✅
    * - STQ1_0 (Sherry)
      - 1.3125
      - ``StructuredBlock``
+     - ✅
+   * - TQ1_0
+     - 1.6
+     - ``Codebook``
+     - ✅
+   * - TQ2_0
+     - 2.0
+     - ``Codebook``
+     - ✅
+   * - BitNet b1.58
+     - 1.58
+     - ``Codebook``
+     - ✅
+   * - ParetoQ (SEQ ternary)
+     - 1.58–2.0
+     - ``Function`` or ``Codebook``
+     - ✅
+   * - Tequila (ICLR 2026)
+     - 1.58
+     - ``Codebook``
      - ✅
 
 QuantizedTensorProto
@@ -1199,6 +1243,334 @@ so ``[0, 0]`` is a single tile covering the whole tensor.
             perm: [1, 0]
         }
     }
+
+TQ1_0 (llama.cpp, 1.6 bits/weight, ternary)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Pure ternary: each weight is {-1, 0, +1}. Five ternary values are packed
+into one byte (3⁵ = 243 ≤ 255). One FP16 scale per block of 256 weights.
+
+.. code-block:: text
+
+    // Codebook: [-1, 0, +1], packed 5 per byte
+    QuantizationProto {
+        data_type: FLOAT16,
+        block: BlockQuantizationProto {
+            block_size: 256,
+            elem_quant: [QuantizationProto {
+                codebook: CodebookUniformProto {
+                    scale_float: 1.0,       // scale is per-block, stored separately
+                    codebook: [-1.0, 0.0, 1.0],
+                    packed_count: 5,        // 5 ternary values per byte
+                    packed_bytes: 1
+                }
+            }]
+        }
+    }
+
+    // Dequantize: for each block of 256 weights
+    // indices = unpack_base3(data, 5 values/byte)
+    // result = [codebook[i] * scale for i in indices]
+    //        = [{-1,0,+1}[i] * d for i in indices]
+
+TQ2_0 (llama.cpp, 2 bits/weight, ternary)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Ternary with 2 bits per weight (simpler packing, 1 unused state).
+Mapping: 0 → -1, 1 → 0, 2 → +1.
+
+.. code-block:: text
+
+    // Codebook: [-1, 0, +1], 2 bits per value
+    QuantizationProto {
+        data_type: FLOAT16,
+        block: BlockQuantizationProto {
+            block_size: 256,
+            elem_quant: [QuantizationProto {
+                codebook: CodebookUniformProto {
+                    scale_float: 1.0,
+                    codebook: [-1.0, 0.0, 1.0],
+                    packed_count: 4,        // 4 values per byte (2 bits each)
+                    packed_bytes: 1
+                }
+            }]
+        }
+    }
+
+    // Dequantize: same as TQ1_0 but simpler unpack (2 bits, not base-3)
+
+BitNet b1.58 (Microsoft, 1.58 bits/weight, native ternary)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Model trained natively with ternary weights {-1, 0, +1}.
+Storage is identical to TQ1_0 (5 ternary values per byte).
+The difference is in training (QAT), not in the storage format.
+
+.. code-block:: text
+
+    // Same storage as TQ1_0
+    QuantizationProto {
+        data_type: FLOAT16,
+        block: BlockQuantizationProto {
+            block_size: 256,
+            elem_quant: [QuantizationProto {
+                codebook: CodebookUniformProto {
+                    scale_float: 1.0,
+                    codebook: [-1.0, 0.0, 1.0],
+                    packed_count: 5,
+                    packed_bytes: 1
+                }
+            }]
+        }
+    }
+
+ParetoQ (Meta, 1.58–2 bits/weight, SEQ ternary/2-bit)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Quantization-aware training with Stretched Elastic Quantization (SEQ).
+The storage format is standard ternary or 2-bit; the custom SEQ function
+is used only during training. At inference, the model uses a standard
+codebook. If the SEQ rounding function is needed at inference, use
+``FunctionUniformProto``.
+
+.. code-block:: text
+
+    // Ternary variant (same storage as TQ1_0)
+    QuantizationProto {
+        data_type: FLOAT16,
+        block: BlockQuantizationProto {
+            block_size: 256,
+            elem_quant: [QuantizationProto {
+                codebook: CodebookUniformProto {
+                    scale_float: 1.0,
+                    codebook: [-1.0, 0.0, 1.0],
+                    packed_count: 5,
+                    packed_bytes: 1
+                }
+            }]
+        }
+    }
+
+    // 2-bit variant (4 levels)
+    QuantizationProto {
+        data_type: FLOAT16,
+        block: BlockQuantizationProto {
+            block_size: 128,
+            elem_quant: [QuantizationProto {
+                linear: LinearUniformProto {
+                    storage_type: UINT8,
+                    bits: 2,
+                    symmetric: false,
+                    scale_float: 0.023,
+                    zero_point: 1,
+                    axis: -1
+                }
+            }]
+        }
+    }
+
+Tequila (ICLR 2026, 1.58 bits/weight, deadzone-free ternary)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Improved ternary QAT that removes the dead-zone around zero.
+Storage is identical to TQ1_0/BitNet (ternary codebook).
+The deadzone-free quantization function is only used during training.
+
+.. code-block:: text
+
+    // Same storage as TQ1_0 / BitNet b1.58
+    QuantizationProto {
+        data_type: FLOAT16,
+        block: BlockQuantizationProto {
+            block_size: 256,
+            elem_quant: [QuantizationProto {
+                codebook: CodebookUniformProto {
+                    scale_float: 1.0,
+                    codebook: [-1.0, 0.0, 1.0],
+                    packed_count: 5,
+                    packed_bytes: 1
+                }
+            }]
+        }
+    }
+
+    // Note: the difference with BitNet is in training only.
+    // At inference, both use the same ternary codebook.
+
+EETQ (INT8 weight-only per-channel)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Simple INT8 per-channel weight-only quantization (NetEase FuXi).
+No calibration, no QAT. Uses optimized W8A16 GEMM kernels from
+FasterTransformer / TensorRT-LLM.
+
+.. code-block:: text
+
+    QuantizationProto {
+        data_type: FLOAT16,
+        linear: LinearUniformProto {
+            storage_type: INT8,
+            bits: 8,
+            symmetric: true,
+            scale_float: 0.0042,    // per-channel scale
+            zero_point: 0,
+            axis: 0                 // per output channel (row)
+        }
+    }
+
+EXL3 (improved EXL2, 2–6 bpw)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Successor to EXL2 with improved codebook and mixed-precision per layer.
+Storage is structurally identical to EXL2 (variable bpw per layer using
+nested ``BlockQuantizationProto``).
+
+.. code-block:: text
+
+    // Same structure as EXL2, different calibration
+    QuantizationProto {
+        data_type: FLOAT16,
+        block: BlockQuantizationProto {
+            block_size: 128,
+            elem_quant: [QuantizationProto {
+                linear: LinearUniformProto {
+                    storage_type: UINT8,
+                    bits: 3,               // varies per layer (2–6)
+                    symmetric: false,
+                    scale_float: 0.015,
+                    zero_point: 4,
+                    axis: -1
+                }
+            }]
+        }
+    }
+
+HQQ (Hybrid Quantization, 2–4 bits, mixed-precision per head)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Different bit-widths for Q, K, V projections in attention layers.
+Each tensor gets its own ``QuantizationProto``; the example shows
+a 2-bit weight with per-group scales.
+
+.. code-block:: text
+
+    // Example: 2-bit weight with group size 64
+    QuantizationProto {
+        data_type: FLOAT16,
+        block: BlockQuantizationProto {
+            block_size: 64,
+            elem_quant: [QuantizationProto {
+                linear: LinearUniformProto {
+                    storage_type: UINT8,
+                    bits: 2,
+                    symmetric: false,
+                    scale_float: 0.032,
+                    zero_point: 2,
+                    axis: -1
+                }
+            }]
+        }
+    }
+
+    // In practice, Q proj may use 4-bit while V proj uses 2-bit.
+    // Each tensor simply references a different QuantizationProto index.
+
+NVFP4 (NVIDIA FP4 E2M1 with FP8 scale, 4.5 bpw)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+NVIDIA's block floating-point FP4 format. Each element is E2M1
+(2 exponent bits, 1 mantissa bit), with one FP8 E4M3 scale per
+block of 16 elements.
+
+.. code-block:: text
+
+    QuantizationProto {
+        data_type: FLOAT16,
+        block: BlockQuantizationProto {
+            block_size: 16,
+            elem_quant: [QuantizationProto {
+                floating_point: FloatingPointUniformProto {
+                    sign_bits: 1,
+                    exponent_bits: 2,
+                    mantissa_bits: 1,
+                    exponent_bias: 1,
+                    has_inf: false,
+                    has_nan: false,
+                    packed_count: 2,      // 2 FP4 values per byte
+                    packed_bytes: 1
+                }
+            }]
+        }
+    }
+
+    // Dequantize: for each block of 16 elements
+    // values = [fp_decode(v, 1, 2, 1, bias=1) for v in unpack_fp4(data)]
+    // result = values * scale_fp8
+
+QuaRot (rotational quantization, 4 bits)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Applies a Hadamard rotation before INT4 quantization to spread
+outlier magnitudes evenly across channels. The rotation is stored
+in ``RotationProto``.
+
+.. code-block:: text
+
+    QuantizationProto {
+        data_type: FLOAT16,
+        pre_rotation: RotationProto {
+            type: HADAMARD,
+            dims: [4096]
+        },
+        block: BlockQuantizationProto {
+            block_size: 128,
+            elem_quant: [QuantizationProto {
+                linear: LinearUniformProto {
+                    storage_type: UINT8,
+                    bits: 4,
+                    symmetric: true,
+                    scale_float: 0.018,
+                    zero_point: 0,
+                    axis: -1
+                }
+            }]
+        }
+    }
+
+    // Dequantize:
+    // 1. values = unpack(data, 4 bits)
+    // 2. result = values * scale
+    // 3. result = hadamard_inverse(result)  ← RotationProto
+
+SmoothQuant (W8A8, smoothed INT8)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Shifts quantization difficulty from activations to weights via a
+per-channel scaling transform. The smoothing factor is a diagonal
+matrix stored as a rotation matrix (``PLAIN`` type).
+
+.. code-block:: text
+
+    QuantizationProto {
+        data_type: FLOAT,
+        pre_rotation: RotationProto {
+            type: PLAIN,
+            dims: [4096],
+            matrix_index: 0          // index into ModelProto.rotation_matrices
+        },
+        linear: LinearUniformProto {
+            storage_type: INT8,
+            bits: 8,
+            symmetric: true,
+            scale_float: 0.0042,
+            zero_point: 0,
+            axis: 1                  // per-channel
+        }
+    }
+
+    // Dequantize:
+    // 1. result = int8_values * scale (per-channel)
+    // 2. result = result @ diag(smooth_factors)^(-1)  ← RotationProto
 
 Pseudo-code
 +++++++++++

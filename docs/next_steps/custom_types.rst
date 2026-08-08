@@ -163,8 +163,9 @@ root declaration and the dimension values ``d = StructProto.dims``:
     count(dims_index=k)         = d[k]
     size(scalar(T))             = bit_width(T)
     size(Enum(T))               = bit_width(T)
-    size(Array(T, c))           = count(c) * size(T)
-    size(PackedArray(c..., n))  = count(n) * sum(c.bit_width)
+    size(Array(T, cnt))         = count(cnt) * size(T)
+    size(PackedArray(c..., cnt))
+                                = count(cnt) * sum(c.bit_width)
     size(Field(constant))       = 0
     size(Field(enum_constant))  = 0
     size(Field(T))              = size(T)

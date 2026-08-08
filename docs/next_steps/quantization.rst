@@ -6,11 +6,11 @@ Quantization
 
 .. note::
 
-    This page describes a specialized quantization hierarchy. The more
-    general :ref:`l-next-steps-custom-types` proposal can express the same
-    formats by applying an ``UnstructuredTypeProto`` layout and ONNX decoder
-    to a byte buffer. In that design, the families below are profiles rather
-    than protobuf variants.
+    The structures on this page are descriptive quantization profiles. They
+    should be implemented with :ref:`l-next-steps-custom-types`, not as a
+    parallel protobuf hierarchy. Each specialized structure below is followed
+    by its ``UnstructuredTypeProto`` translation. The families remain useful
+    as format names, validation profiles, and decoder specifications.
 
 Format coverage summary
 +++++++++++++++++++++++
@@ -191,16 +191,35 @@ It carries its own byte size explicitly.
         string doc_string = 7;
     }
 
-``name`` identifies the concrete quantized value and ``doc_string`` documents
-that value. ``n_bytes`` makes the payload size explicit even when the bytes are
-stored out of line (for example via an external-data mechanism).
+Custom-type translation
+^^^^^^^^^^^^^^^^^^^^^^^
+
+``QuantizedTensorProto`` becomes ``UnstructuredProto``. ``raw_data``,
+``external_data``, ``name``, and ``doc_string`` are carried by that generic
+value. Its exact model-level or inline ``UnstructuredTypeProto`` replaces
+``quantized_type`` and ``quantization``. The physical type determines the
+payload size, so ``n_bytes`` is not duplicated. Logical dimensions and element
+type belong to the decoder output ``ValueInfoProto``.
+
+.. code-block:: text
+
+    UnstructuredProto {
+        type: <quantization-profile type index>
+        raw_data: ...
+        name: ...
+        doc_string: ...
+    }
+
+In the specialized sketch, ``name`` identifies the concrete quantized value
+and ``doc_string`` documents it. Its ``n_bytes`` field is replaced by the
+size computed from the generic physical type.
 
 TypeProto and containers
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-If ``QuantizedTensorProto`` remains a distinct value category rather than an
-``UnstructuredProto`` profile, it must be usable everywhere a recursive
-``TypeProto`` is accepted:
+The following specialized container additions are therefore not required by
+the recommended implementation. They document what would be necessary only
+if ``QuantizedTensorProto`` remained a distinct value category:
 
 .. code-block:: text
 
@@ -244,6 +263,20 @@ The corresponding value containers require a new category:
         optional QuantizedTensorProto quantized_tensor_value = <N>;
         optional TypeProto value_type = <N+1>;
     }
+
+Custom-type translation
+^^^^^^^^^^^^^^^^^^^^^^^
+
+These specialized branches map to the generic integrations defined by
+:ref:`l-next-steps-custom-types`:
+
+* ``TypeProto.QuantizedTensor`` becomes
+  ``TypeProto.unstructured_type``;
+* ``QUANTIZED_TENSOR`` becomes the ``UNSTRUCTURED`` value category;
+* ``quantized_tensor_values`` and ``quantized_tensor_value`` become
+  ``unstructured_values`` and ``unstructured_value``;
+* heterogeneous pages use the unconstrained static unstructured category,
+  while each ``UnstructuredProto`` carries its exact physical type.
 
 ``MapProto`` inherits support because its values are represented by a
 ``SequenceProto``. Consequently, ``Sequence<QuantizedTensor>`` and
@@ -289,6 +322,26 @@ QuantizationProto
         optional RotationProto post_rotation = 12;  // rotation applied after dequantization
     }
 
+Custom-type translation
+^^^^^^^^^^^^^^^^^^^^^^^
+
+There is no direct ``QuantizationProto`` message in the recommended schema.
+Each entry becomes one concrete ``UnstructuredTypeProto`` in
+``ModelProto.unstructured_types``:
+
+* the selected profile determines its ``array`` or ``structure``;
+* scalar parameters and lookup tables become fields with ``constant``;
+* ``data_type`` and the logical shape are declared by the decoder output
+  ``ValueInfoProto``;
+* pre/post rotations become decoder or encoder nodes;
+* ``doc_string`` and ``metadata_props`` remain type documentation and
+  metadata.
+
+The translation is lossless: every specialized field must map to serialized
+structure, a named constant field, decoder/encoder structure, or metadata. A
+decoder must not hide a profile parameter that was explicit in the
+specialized declaration.
+
 LinearUniformProto
 ^^^^^^^^^^^^^^^^^^
 
@@ -307,6 +360,31 @@ Classic affine/symmetric: ``value = (q - zero_point) * scale``.
         int64 zero_point = 6;         // quantization zero point
         int32 axis = 7;               // axis for per-channel, -1 if per-tensor
     }
+
+Custom-type translation
+"""""""""""""""""""""""
+
+The physical codes are an ``Array``. When ``bits`` equals the canonical width
+of ``storage_type``, the element type is used directly. Otherwise the packed
+region is an ``Array(UINT8)`` and the decoder extracts exactly ``bits`` per
+logical code. Scale and zero point are constant fields when shared, or
+serialized array fields when they vary by channel or block.
+
+.. code-block:: text
+
+    UnstructuredTypeProto {
+        name: "LINEAR"
+        structure: Structure {
+            field: { name: "values",     type: array(INT4, dimension=N) }
+            field: { name: "scale",      type: FLOAT, constant: s }
+            field: { name: "zero_point", type: INT64, constant: z }
+        }
+        decoder: FunctionProto {
+            // Y = (Cast(values) - zero_point) * scale
+        }
+    }
+
+``N`` is always replaced by the concrete physical count.
 
 .. code-block:: python
 
@@ -347,6 +425,32 @@ each codebook.
         int32 codebook_size = 7;      // entries per codebook; 0 means infer
         int32 vector_size = 8;        // values per entry; 0 means 1
         int32 index_bits = 9;         // bits per index; 0 means base-N packing
+    }
+
+Custom-type translation
+"""""""""""""""""""""""
+
+Packed indices are serialized as an ``Array(UINT8)``. The codebooks and scale
+are constant fields, so they are stored once in the type and consume no
+payload bytes. The decoder unpacks each index, gathers the selected scalar or
+vector entry, sums additive codebooks, and applies the scale.
+
+.. code-block:: text
+
+    UnstructuredTypeProto {
+        name: "CODEBOOK"
+        structure: Structure {
+            field: { name: "indices",  type: array(UINT8, dimension=packed_bytes) }
+            field: {
+                name: "codebook"
+                type: array(FLOAT, dimension=codebook_value_count)
+                constant: codebook_data
+            }
+            field: { name: "scale", type: FLOAT, constant: scale }
+        }
+        decoder: FunctionProto {
+            // Y = scale * additive_gather(codebook, unpack(indices))
+        }
     }
 
 .. code-block:: python
@@ -394,6 +498,117 @@ Covers FP6, FP4, MXFP and similar reduced-precision floating-point formats.
         int32 packed_bytes = 9;       // into this many bytes
     }
 
+Custom-type translation
+"""""""""""""""""""""""
+
+A standard ONNX low-precision type such as ``FLOAT4E2M1`` or a float8 type is
+an ordinary physical ``Array``. A non-standard width is an
+``Array(UINT8)`` of packed bytes. Split storage is a ``Structure`` with one
+array field per bit plane or component. Every profile parameter needed by the
+decoder is preserved as a named constant field; none is hidden in the
+decoder implementation.
+
+.. code-block:: text
+
+    UnstructuredTypeProto {
+        name: "FLOATING_POINT_UNIFORM"
+        structure: Structure {
+            // Serialized payload.
+            field: {
+                name: "packed"
+                type: array(UINT8, dimension=packed_bytes)
+            }
+
+            // Type-level parameters: these consume no payload bytes.
+            field: {
+                name: "sign_bits"
+                type: INT32
+                constant: sign_bits
+            }
+            field: {
+                name: "exponent_bits"
+                type: INT32
+                constant: exponent_bits
+            }
+            field: {
+                name: "mantissa_bits"
+                type: INT32
+                constant: mantissa_bits
+            }
+            field: {
+                name: "exponent_bias"
+                type: INT32
+                constant: exponent_bias
+            }
+            field: {
+                name: "has_inf"
+                type: BOOL
+                constant: has_inf
+            }
+            field: {
+                name: "has_nan"
+                type: BOOL
+                constant: has_nan
+            }
+            field: {
+                name: "split_storage"
+                type: BOOL
+                constant: split_storage
+            }
+            field: {
+                name: "packed_count"
+                type: INT32
+                constant: packed_count
+            }
+            field: {
+                name: "packed_bytes"
+                type: INT32
+                constant: packed_bytes
+            }
+        }
+        decoder: FunctionProto {
+            // unpack packed_count values from packed_bytes bytes
+            // interpret sign/exponent/mantissa using the declared constants
+            // apply exceptional-value policy and reconstruct Y
+        }
+    }
+
+This is a generic profile template: ``sign_bits``, ``exponent_bits``, and the
+other symbolic values are replaced when the concrete type is declared.
+
+The following concrete ``FLOAT_E3M2`` declaration packs four 6-bit values into
+three bytes. It uses an IEEE-like exceptional-value policy and fixes every
+profile parameter with ``Field.constant``:
+
+.. code-block:: text
+
+    UnstructuredTypeProto {
+        name: "FLOAT_E3M2"
+        structure: Structure {
+            field: {
+                name: "packed"
+                type: array(UINT8, dimension=3)
+            }
+            field: { name: "sign_bits",      type: INT32, constant: 1 }
+            field: { name: "exponent_bits",  type: INT32, constant: 3 }
+            field: { name: "mantissa_bits",  type: INT32, constant: 2 }
+            field: { name: "exponent_bias",  type: INT32, constant: 3 }
+            field: { name: "has_inf",        type: BOOL,  constant: true }
+            field: { name: "has_nan",        type: BOOL,  constant: true }
+            field: { name: "split_storage",  type: BOOL,  constant: false }
+            field: { name: "packed_count",   type: INT32, constant: 4 }
+            field: { name: "packed_bytes",   type: INT32, constant: 3 }
+        }
+        decoder: FunctionProto {
+            // unpack four 6-bit values and decode E3M2 with exponent bias 3
+        }
+    }
+
+When ``split_storage`` is true, the serialized ``packed`` field is replaced
+by explicitly named component arrays such as ``sign_exponent`` and
+``mantissa``. The constant remains useful to profiles and validation, while
+the physical structure itself is sufficient to locate the components.
+
 .. code-block:: python
 
     # Dequantize
@@ -418,6 +633,32 @@ a base quantization scheme.
         float outlier_threshold = 3;       // absolute value threshold for outlier detection
         float outlier_ratio = 4;           // fraction of values stored as outliers (e.g. 0.01)
     }
+
+Custom-type translation
+"""""""""""""""""""""""
+
+The dense/base region is a referenced unstructured physical type. Outlier
+indices and values are concrete arrays in the same root ``Structure``.
+Threshold and ratio guide the encoder but are not required to decode an
+already serialized value; they may be constants or metadata. The root decoder
+incorporates the base decoder nodes explicitly; nested decoders are not
+invoked implicitly.
+
+.. code-block:: text
+
+    UnstructuredTypeProto {
+        name: "SPARSE_QUANTIZED"
+        structure: Structure {
+            field: { name: "base",    type: unstructured(type_index=base_type) }
+            field: { name: "indices", type: array(INT64, dimension=K) }
+            field: { name: "values",  type: array(FLOAT16, dimension=K) }
+        }
+        decoder: FunctionProto {
+            // Y = scatter(decode(base), indices, values)
+        }
+    }
+
+``K`` is a concrete outlier count in each physical declaration.
 
 .. code-block:: python
 
@@ -446,6 +687,28 @@ Logarithmic quantization: ``value = sign * base^(q + offset)``.
         float base = 2;              // logarithm base (e.g. 2.0)
         float offset = 3;            // exponent offset
         bool has_sign = 4;           // true if sign bit is stored separately
+    }
+
+Custom-type translation
+"""""""""""""""""""""""
+
+Codes use a native fixed-width ``Array`` when possible and packed
+``Array(UINT8)`` otherwise. A separate sign plane is another array field.
+``base`` and ``offset`` are constants consumed by the decoder.
+
+.. code-block:: text
+
+    UnstructuredTypeProto {
+        name: "LOG_UNIFORM"
+        structure: Structure {
+            field: { name: "codes",  type: array(UINT4, dimension=N) }
+            field: { name: "signs",  type: array(UINT8, dimension=sign_bytes) }
+            field: { name: "base",   type: FLOAT, constant: base }
+            field: { name: "offset", type: FLOAT, constant: offset }
+        }
+        decoder: FunctionProto {
+            // Y = sign * Pow(base, Cast(codes) + offset)
+        }
     }
 
 .. code-block:: python
@@ -490,6 +753,30 @@ the quantize op does the reverse.
         optional BlockLayoutProto block_layout = 5;  // physical block structure (for introspection)
     }
 
+Custom-type translation
+"""""""""""""""""""""""
+
+``storage_type``, ``bits``, and ``block_layout`` become the concrete
+``Array``/``Structure`` schema. ``dequantize_op`` becomes
+``UnstructuredTypeProto.decoder`` and ``quantize_op`` becomes ``encoder`` when
+both can be expressed as deterministic standard-domain ONNX functions.
+
+If either operation requires a custom-domain operator, the physical type
+remains valid but omits that portable function. The consuming custom operator
+is then responsible for interpretation.
+
+.. code-block:: text
+
+    UnstructuredTypeProto {
+        name: "FUNCTION_QUANTIZED"
+        array: Array {
+            element_type: UINT8
+            dimension: packed_bytes
+        }
+        decoder: FunctionProto { ... }  // standard-domain form, when available
+        encoder: FunctionProto { ... }
+    }
+
 .. code-block:: python
 
     # Dequantize
@@ -527,6 +814,30 @@ hierarchies such as K-Quants and MXFP.
         repeated int32 perm = 4;                       // permutation of axes in memory layout
     }
 
+Custom-type translation
+"""""""""""""""""""""""
+
+A homogeneous tiling is a nested ``Array`` whose element references the
+concrete tile type. If tiles cycle through different quantizations, the root
+is a ``Structure`` with one field per concrete tile or per homogeneous tile
+region. The decoder concatenates or scatters tile outputs and applies
+``perm``. It incorporates the tile decoder nodes explicitly. No symbolic tile
+count, modulo rule, or implicit nested-decoder invocation remains in the
+physical type.
+
+.. code-block:: text
+
+    UnstructuredTypeProto {
+        name: "TILED"
+        array: Array {
+            element_type: unstructured(type_index=tile_type)
+            dimension: concrete_tile_count
+        }
+        decoder: FunctionProto {
+            // decode each tile, place it at concrete coordinates, inverse perm
+        }
+    }
+
 .. code-block:: python
 
     # Dequantize
@@ -552,6 +863,26 @@ the identity operation, useful for pure retiling.
 
     message CastUniformProto {
         int32 storage_type = 1;        // target element type (same enum as TensorProto.data_type)
+    }
+
+Custom-type translation
+"""""""""""""""""""""""
+
+The payload is a concrete ``Array`` of ``storage_type``. The decoder output
+``ValueInfoProto`` declares the original type and shape; the decoder contains
+the standard ONNX ``Cast`` and any required reshape.
+
+.. code-block:: text
+
+    UnstructuredTypeProto {
+        name: "CAST"
+        array: Array {
+            element_type: BFLOAT16
+            dimension: N
+        }
+        decoder: FunctionProto {
+            // Y = Cast(values, original_type)
+        }
     }
 
 .. code-block:: python
@@ -626,6 +957,38 @@ deductible from the proto structure.
         optional int32 axis = 7;                       // absent = flattened tensor
     }
 
+Custom-type translation
+"""""""""""""""""""""""
+
+This profile maps directly to the generic mechanism:
+
+* ``BlockFieldProto`` becomes a named ``Structure.Field``;
+* ``count`` becomes ``Array.dimension``;
+* ``data_type`` becomes the scalar array element type;
+* field roles become ordinary field names used by the decoder;
+* explicit padding replaces ``bit_offset`` and ``bytes_per_block``;
+* ``codebook_data`` becomes a constant field;
+* ``index_formula`` and ``ScatterProto`` become decoder nodes;
+* ``INTERLEAVED`` is an array of block structures;
+* ``SEQUENTIAL`` is a structure containing one array per field.
+
+.. code-block:: text
+
+    UnstructuredTypeProto {
+        name: "STRUCTURED_BLOCK"
+        array: Array {
+            element_type: unstructured(type_index=block_type)
+            dimension: concrete_block_count
+        }
+        decoder: FunctionProto {
+            // index = sum(named_field * multiplier)
+            // Y = scatter(codebook[index] * scale + bias)
+        }
+    }
+
+No separate ``BlockFieldProto``, ``BlockLayoutProto``, ``FieldWeightProto``,
+or ``ScatterProto`` is implemented.
+
 .. code-block:: python
 
     # Dequantize
@@ -683,8 +1046,35 @@ Dequantization with rotation: ``values = post_rotation @ dequant(data) @ pre_rot
         optional int32 matrix_index = 3;      // index into ModelProto.rotation_matrices (for PLAIN)
     }
 
+Custom-type translation
+"""""""""""""""""""""""
+
+Rotation is not a physical root type. A plain matrix is a field with
+``constant`` in the quantized type and matrix multiplication is part of the
+decoder or encoder. A Hadamard rotation needs no stored matrix and is expressed
+directly by standard ONNX nodes. ``ModelProto.rotation_matrices`` and
+``matrix_index`` are therefore unnecessary.
+
+.. code-block:: text
+
+    field: {
+        name: "rotation"
+        type: array(FLOAT, dimensions=rotation_dims)
+        constant: concrete_matrix
+    }
+
+    decoder: FunctionProto {
+        // Y = MatMul(rotation, decode_physical_fields(...))
+    }
+
 Known quantization schemes
 +++++++++++++++++++++++++++
+
+The examples below retain the specialized profile notation because it is
+compact and makes comparison with existing formats easy. They are not
+additional wire messages. Each example is implemented by applying the
+corresponding custom-type translation above, with all dimensions and payload
+sizes made concrete.
 
 INT8 symmetric (per-tensor)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^

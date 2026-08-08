@@ -84,10 +84,11 @@ The proposal has three valid uses of ``UnstructuredTypeProto``:
     any concrete unstructured declaration. This form is used by heterogeneous
     sequences and maps.
 
-``Constant`` and ``type_index`` may also occur below a concrete root through
-``Array.element_type`` or ``Structure.Field.type``. A concrete root may not be
-a ``Constant``, a ``type_index``, or an unset ``kind``. Static forms may not
-carry ``decoder``, ``encoder``, ``name``, or metadata.
+``type_index`` may also occur below a concrete root through
+``Array.element_type`` or ``Structure.Field.type``. A constant value is
+attached directly to a ``Structure.Field``. A concrete root may not be a
+``type_index`` or an unset ``kind``. Static forms may not carry ``decoder``,
+``encoder``, ``name``, or metadata.
 
 Only the ``decoder`` and ``encoder`` attached to the selected concrete root
 are invoked. A declaration reached through a nested ``type_index`` contributes
@@ -106,9 +107,10 @@ The serialized size is computed recursively in bits:
 .. code-block:: text
 
     size(scalar(T))       = bit_width(T)
-    size(Constant)        = 0
     size(Array(T, n))     = n * size(T)
-    size(Structure(f...)) = sum(size(f.type))
+    size(Field(T, constant)) = 0
+    size(Field(T))        = size(T)
+    size(Structure(f...)) = sum(size(f))
     size(type_index=i)    = size(ModelProto.unstructured_types[i])
 
 All arithmetic is checked in ``uint64``. References must be acyclic. The
@@ -131,11 +133,12 @@ messages.
             uint64 dimension = 2;        // exact element count
         }
 
-        // Names one physical or constant component of a structure.
+        // Names one component of a structure.
         message Field {
-            string name = 1;        // unique within the structure
-            TypeProto type = 2;     // physical field type
-            string doc_string = 3;  // field documentation
+            string name = 1;                 // unique within the structure
+            TypeProto type = 2;              // field type
+            string doc_string = 3;           // field documentation
+            optional TensorProto constant = 4;  // value absent from payload
         }
 
         // Concatenates fields in declaration order.
@@ -143,16 +146,10 @@ messages.
             repeated Field field = 1;  // serialized in declaration order
         }
 
-        // Supplies a tensor leaf without storing it in the byte buffer.
-        message Constant {
-            TensorProto value = 1;  // embedded in the type, not the buffer
-        }
-
         // Defines, references, or constrains the structured type.
         oneof kind {
             Array array = 1;          // repeated elements
             Structure structure = 2;  // ordered named fields
-            Constant constant = 3;    // zero-byte tensor leaf
             int32 type_index = 4;     // ModelProto.unstructured_types index
         }
 
@@ -284,23 +281,21 @@ previous one. The structure size is therefore the sum of its field sizes.
 Alignment and padding are represented by ordinary named padding fields, so
 every serialized bit remains explicit.
 
-Constant type
-+++++++++++++
+Constant fields
++++++++++++++++
 
-``Constant`` embeds one ``TensorProto`` in the type declaration. It contributes
-a typed leaf to an enclosing array or structure but consumes zero bits from
-the ``UnstructuredProto`` payload. Constants are useful for codebooks, fixed
-scales, default values, and other decoder inputs shared by every value of the
-same type.
+``Structure.Field.constant`` stores a constant without replacing its declared
+``type``. For example, a scalar parameter is written as
+``type: INT32, constant: sign_bits``, not as a distinct constant type. A field
+with ``constant`` contributes a typed leaf but consumes zero bits from the
+``UnstructuredProto`` payload. This keeps codebooks, fixed scales, defaults,
+and other shared decoder inputs explicit without complicating the type tree.
 
-The tensor must be stored inline, have a fixed-width element type and concrete
-dimensions, and must not use ``external_data``. A constant may appear as an
-``Array.element_type`` or ``Structure.Field.type`` through the
-``TypeProto.unstructured_type`` branch. A model-level or inline root type must
-still select ``array`` or ``structure``.
-
-For readability, examples may use ``constant(tensor(TYPE, values...))`` as
-shorthand for the corresponding nested ``UnstructuredTypeProto.Constant``.
+The value is encoded as an inline ``TensorProto`` whose type and concrete
+shape must exactly match ``Field.type``. It must not use ``external_data``.
+Only structure fields may carry values; roots and array elements remain
+physical types. Examples use the concise ``constant: ...`` notation and omit
+the underlying ``TensorProto`` encoding.
 
 Applying a type to a buffer
 +++++++++++++++++++++++++++
@@ -327,10 +322,11 @@ contains an uninterpreted suffix must declare it as a ``UINT8`` array.
 Logical leaf view
 +++++++++++++++++
 
-Every scalar ONNX ``TypeProto`` field and every ``Constant`` is a leaf.
+Every scalar ONNX ``TypeProto`` field and every field with ``constant`` is a
+leaf.
 Unstructured arrays and structures only organize leaves. The canonical leaf
-order is depth-first declaration order. Constants occur in that order but do
-not advance the current buffer position.
+order is depth-first declaration order. Constant fields occur in that order
+but do not advance the current buffer position.
 
 When a repeated structure contains an array field, corresponding scalar
 leaves are grouped into one decoder input. For example, an array of ten
@@ -364,8 +360,8 @@ Leaf inputs follow canonical depth-first order and have mandatory
 * has no captures;
 * calls only deterministic standard-domain ONNX operators;
 * does not call custom or model-local functions;
-* receives shared tensor constants through declared ``Constant`` leaves rather
-  than hidden initializers;
+* receives shared tensor constants through declared fields with ``constant``
+  rather than hidden initializers;
 * does not use external data or graph-valued attributes;
 * has exactly one output whose type is declared by a corresponding
   ``ValueInfoProto`` in the function.
@@ -395,7 +391,7 @@ training policy, or parameter selection. Formats with several valid
 encodings may omit it.
 The encoder input type is declared by its ``ValueInfoProto`` and must equal
 the decoder output type when both functions are present.
-Embedded ``Constant`` leaves are type information and are not written to the
+Fields with ``constant`` are type information and are not written to the
 result buffer.
 
 Static type and static data
@@ -853,7 +849,8 @@ seven fixed-size nodes:
                     }
                     field: {
                         name: "class_ids"
-                        type: constant(tensor(INT64, [0, 1, 2]))
+                        type: array(INT64, dimension=3)
+                        constant: [0, 1, 2]
                     }
                 }
             }
@@ -914,7 +911,8 @@ A checker validates:
   ``structure`` kind;
 * ``type_index`` references are in range and do not form cycles;
 * valid standard ONNX leaf types;
-* inline, concretely shaped ``Constant`` tensors without external data;
+* inline, concretely shaped field values without external data and matching
+  their declared field type;
 * unique field names within each structure;
 * valid concrete physical dimensions;
 * every physical field and array element has a canonical fixed size;

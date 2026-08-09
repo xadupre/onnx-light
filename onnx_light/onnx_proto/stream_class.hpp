@@ -19,7 +19,8 @@
 
 #define NAME_EXIST_VALUE(name) name_exist_value(_name_##name, has_##name(), ptr_##name())
 
-#define IMPLEMENT_PROTO(cls)
+#define IMPLEMENT_PROTO(cls)                                                                       \
+  void cls::CopyFrom(const cls &proto) { CopyProtoFrom(*this, proto); }
 
 ///////////////////////
 // macro serialize size
@@ -181,3 +182,41 @@
                         packed_##name(), options);                                                 \
     DEBUG_PRINT("  - repeat " #name)                                                               \
   }
+
+namespace ONNX_LIGHT_NAMESPACE {
+
+using CopyProtoSizeFunction = SerializeSizeResult (*)(const void *, utils::BinaryWriteStream &,
+                                                      SerializeOptions &);
+using CopyProtoWriteFunction = void (*)(const void *, utils::BinaryWriteStream &,
+                                        SerializeOptions &);
+using CopyProtoParseFunction = bool (*)(void *, utils::BinaryStream &, ParseOptions &);
+
+void CopyProtoThroughWire(void *destination, const void *source,
+                          CopyProtoSizeFunction size_function,
+                          CopyProtoWriteFunction write_function,
+                          CopyProtoParseFunction parse_function) {
+  utils::StringWriteStream stream;
+  SerializeOptions opts;
+  SerializeSizeResult total_size = size_function(source, stream, opts);
+  stream.pre_allocate(total_size.size());
+  write_function(source, stream, opts);
+  utils::StringStream read_stream(stream.data(), stream.size());
+  ParseOptions parse_options;
+  parse_function(destination, read_stream, parse_options);
+}
+
+template <typename T> void CopyProtoFrom(T &destination, const T &source) {
+  CopyProtoThroughWire(
+      &destination, &source,
+      [](const void *proto, utils::BinaryWriteStream &stream, SerializeOptions &options) {
+        return static_cast<const T *>(proto)->SerializeSize(stream, options);
+      },
+      [](const void *proto, utils::BinaryWriteStream &stream, SerializeOptions &options) {
+        static_cast<const T *>(proto)->SerializeToStream(stream, options);
+      },
+      [](void *proto, utils::BinaryStream &stream, ParseOptions &options) {
+        return static_cast<T *>(proto)->ParseFromStream(stream, options);
+      });
+}
+
+} // namespace ONNX_LIGHT_NAMESPACE

@@ -49,14 +49,16 @@ template <typename T> inline const T &default_proto_instance() {
     inline void Clear() {                                                                          \
       this->~cls();                                                                                \
       new (this) cls();                                                                            \
-    }
+    }                                                                                              \
+    void CopyFrom(const cls &proto);
 
 /** Macro for beginning a generated proto class without adding a default constructor. */
 #define BEGIN_PROTO_NOINIT(cls, doc)                                                               \
   class ONNX_LIGHT_PROTO_API cls : public ProtoMessageAdapter<cls> {                               \
   public:                                                                                          \
     using ProtoAdapterBase = ProtoMessageAdapter<cls>;                                             \
-    static inline constexpr const char *DOC = doc;
+    static inline constexpr const char *DOC = doc;                                                 \
+    void CopyFrom(const cls &proto);
 
 /** Macro for ending a generated proto class and injecting the serialization/parsing API. */
 #define END_PROTO()                                                                                \
@@ -390,7 +392,6 @@ public:
  */
 template <typename Derived> class ProtoMessageAdapter : public Message {
 public:
-  void CopyFrom(const Derived &proto);
   SerializeSizeResult SerializeSize() const;
   size_t ByteSizeLong() const;
   bool ParseFromString(const std::string &raw);

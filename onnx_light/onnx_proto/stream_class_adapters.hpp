@@ -14,17 +14,6 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
-template <typename Derived> void ProtoMessageAdapter<Derived>::CopyFrom(const Derived &proto) {
-  utils::StringWriteStream stream;
-  SerializeOptions opts;
-  SerializeSizeResult total_size = proto.SerializeSize(stream, opts);
-  stream.pre_allocate(total_size.size());
-  proto.SerializeToStream(stream, opts);
-  utils::StringStream read_stream(stream.data(), stream.size());
-  ParseOptions parse_options;
-  derived().ParseFromStream(read_stream, parse_options);
-}
-
 template <typename Derived>
 SerializeSizeResult ProtoMessageAdapter<Derived>::SerializeSize() const {
   SerializeOptions opts;

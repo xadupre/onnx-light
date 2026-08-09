@@ -3,6 +3,8 @@
 Reducing the ``lib_onnx_proto`` binary size
 ===========================================
 
+:Date: 2026-08
+
 Objective
 +++++++++
 
@@ -284,7 +286,8 @@ binary-size number.
 Implementation order
 ++++++++++++++++++++
 
-1. Strip the installed Release artifact and add a size report to CI.
+1. **Implemented:** strip the installed Release artifact and report its file,
+   section, text, dynamic-symbol, and dependency sizes in CI.
 2. Introduce hidden visibility and an explicit cross-library export list.
 3. Replace per-message convenience implementations with shared or inline
    adapters.

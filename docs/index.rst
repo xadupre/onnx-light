@@ -150,5 +150,5 @@ on the kernels to produce the expected outputs.
     api/index
     operators/index
     examples
-    next_steps/index
+    next_steps/2026-08_index
     misc/index

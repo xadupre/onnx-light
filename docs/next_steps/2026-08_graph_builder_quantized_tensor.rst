@@ -1,7 +1,7 @@
 .. _l-next-steps-graph-builder-quantized-tensor:
 
-``QuantizedTensorProto`` in ``GraphBuilder``
-============================================
+Quantized values in ``GraphBuilder``
+====================================
 
 :Date: 2026-08
 
@@ -11,90 +11,114 @@ Objective
 ``GraphBuilder`` must preserve quantized initializers without converting them
 to ``TensorProto`` or dequantizing them.
 
+The recommended representation is ``StructProto`` plus ``StructTypeProto``,
+as defined in :ref:`l-next-steps-custom-types`. If
+``QuantizedTensorProto`` is retained, the same design applies with specialized
+names.
+
 Graph storage
 +++++++++++++
 
-``GraphProto`` adds:
+``GraphProto`` needs a field parallel to ``initializer``:
 
 .. code-block:: text
 
-    repeated QuantizedTensorProto quantized_initializer = <N>;
+    repeated StructProto structured_initializer = <N>;
 
-``GraphBuilder`` stores these values unchanged and exposes:
+``GraphBuilder`` stores these protos unchanged and exposes:
 
 .. code-block:: cpp
 
-    const std::string &
-    MakeQuantizedInitializer(const QuantizedTensorProto &value);
-
-    const RepeatedProtoField<QuantizedTensorProto> &
-    QuantizedInitializers() const noexcept;
+    const std::string &MakeStructuredInitializer(const StructProto &value);
+    const RepeatedProtoField<StructProto> &
+    StructuredInitializers() const noexcept;
 
 Names are shared with inputs, ordinary initializers, and node outputs.
-External payloads remain external.
+External data remains external.
 
 ``ShapesContext``
 +++++++++++++++++
 
-``ShapesContext`` is the source of truth for value information. It owns the
-model quantization catalogue and one descriptor per quantized value:
+``ShapesContext`` is the source of truth for value information. It already
+contains tensors, sequences, opsets, functions, constraints, and subgraph
+contexts. Quantized information must be added there, not in a second
+``GraphBuilder`` registry.
+
+Add a symbolic descriptor:
 
 .. code-block:: cpp
 
-    class SymQuantizedTensor {
+    class SymStruct {
     public:
-      QuantizationId QuantizedType() const;
-      const SymShape &Shape() const;
-      TensorType DecodedType() const;
+      const StructTypeRef &PhysicalType() const;
+      const std::vector<uint64_t> &Dims() const;
       uint64_t ByteSize() const;
+      const TypeProto *LogicalType() const;
+      const SymTensor *LogicalTensor() const;
     };
 
-    RepeatedProtoField<QuantizationProto> quantizations_;
-    std::unordered_map<std::string, SymQuantizedTensor> quantized_tensors_;
+``ShapesContext`` then owns:
 
-The context exposes ``AddQuantization``, ``GetQuantization``,
-``SetQuantizedTensor``, ``HasQuantizedTensor``, and
-``GetQuantizedTensor``. A name appears in exactly one value map.
+.. code-block:: cpp
+
+    std::unordered_map<std::string, SymStruct> structs_;
+    RepeatedProtoField<StructTypeProto> struct_types_;
+
+with ``SetStruct``, ``HasStruct``, ``GetStruct``, ``AddStructType``, and
+``GetStructType``.
+
+``SymStruct`` keeps both views of the value:
+
+* physical type, dimensions, and checked byte size;
+* decoded logical type and, when applicable, its ``SymTensor``.
+
+The payload itself remains in ``GraphBuilder``. A value name appears in only
+one context map. Availability checks must cover tensors, sequences, and
+structures.
 
 Inference
 +++++++++
 
-``ComputeShapeModel`` registers ``ModelProto.quantizations`` before processing
-the graph. ``ComputeShapeGraph`` and
-``GraphBuilder::MakeQuantizedInitializer`` use the same helper:
+``ComputeShapeModel`` registers model-level structured types before the graph
+is processed. ``ComputeShapeGraph`` seeds structured initializers through the
+same helper used by ``GraphBuilder::MakeStructuredInitializer``.
 
-1. resolve ``quantized_type`` or the inline quantization;
-2. validate dimensions and payload size;
-3. derive the decoded element type and logical shape;
-4. store ``SymQuantizedTensor`` in ``ShapesContext``.
+For ``StructProto``, the helper:
 
-An ordinary tensor operator cannot consume a quantized value implicitly. It
-must use an explicit decoder or a schema accepting
-``SymQuantizedTensor``. ``SchemaInputValue`` therefore adds this descriptor.
+1. resolves the inline or model-level physical type;
+2. binds ``StructProto.dims``;
+3. validates the payload size;
+4. reads the decoder output type;
+5. creates and stores ``SymStruct``.
+
+A tensor operator must not receive ``LogicalTensor()`` implicitly. It needs an
+explicit decoder, unless its schema accepts the structured value directly.
+``LightOpSchema::SchemaInputValue`` must therefore support ``SymStruct``.
 
 Scopes
 ++++++
 
-Subgraphs inherit visible quantized values and the quantization catalogue.
-Local functions inherit the catalogue but receive values only through formal
-inputs. Input and output binding copies the complete descriptor.
+Subgraph contexts inherit outer structured values and the structured-type
+catalogue. Local functions inherit the catalogue but not outer values.
+Function input and output binding copies the complete ``SymStruct``.
 
 Serialization and passes
 ++++++++++++++++++++++++
 
-``ToModel`` writes referenced quantization declarations and remaps their
-indices. ``ToGraph`` rejects model-level quantization references because a
-standalone graph cannot resolve them.
+``ModelProto -> GraphBuilder -> ModelProto`` must preserve payloads, types,
+dimensions, and model-level references. ``ToModel`` compacts the type
+catalogue and remaps indices. ``ToGraph`` rejects model-level references
+because a standalone graph cannot resolve them.
 
-Initializer passes include quantized initializers. Duplicate removal compares
-the resolved quantization, dimensions, payload, and interpretation metadata;
-equal bytes alone are insufficient.
+Passes handling initializers must include structured initializers. Duplicate
+removal compares the resolved physical type, dimensions, payload, and
+interpretation metadata; equal bytes alone are insufficient.
 
 Implementation order
 ++++++++++++++++++++
 
-1. Add the graph field and ``SymQuantizedTensor``.
+1. Add the proto field and ``SymStruct``.
 2. Extend ``ShapesContext`` and schema validation.
-3. Add ``GraphBuilder`` import and serialization.
+3. Add ``GraphBuilder`` storage, import, and serialization.
 4. Extend subgraphs, functions, and initializer passes.
 5. Test incremental inference and model round-trips.

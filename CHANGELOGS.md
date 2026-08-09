@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Made dispatch-table overrides order-independent.
 - Spawned the load/save thread-pool workers lazily to fix slow small-model initialization.
+- Reduced the stripped `lib_onnx_proto` size by hiding internal symbols and explicitly exporting
+  its public cross-library ABI.
 
 ### Documentation & CI
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "onnx_proto/visibility.h"
 #include <algorithm>
 #include <cstdint>
 #include <float.h>
@@ -19,14 +20,14 @@
 namespace onnx_light_helpers {
 
 /** Returns a version string that exercises the MakeString helpers. */
-std::string Version();
+ONNX_LIGHT_PROTO_API std::string Version();
 
 /**
  * Abstract string builder used by the MakeString helper functions.
  * Concrete subclasses override each typed append method so that the
  * same template-based formatting code can target different output sinks.
  */
-class StringStream {
+class ONNX_LIGHT_PROTO_API StringStream {
 public:
   /** Constructs an empty stream. */
   StringStream();
@@ -61,67 +62,73 @@ public:
 };
 
 /** Splits @p input into substrings at each occurrence of @p delimiter. */
-std::vector<std::string> SplitString(const std::string &input, char delimiter);
+ONNX_LIGHT_PROTO_API std::vector<std::string> SplitString(const std::string &input, char delimiter);
 
 /** Appends a null-terminated C string to @p ss. */
-void MakeStringInternalElement(StringStream &ss, const char *t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const char *t);
 
 /** Appends a standard string to @p ss. */
-void MakeStringInternalElement(StringStream &ss, const std::string &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const std::string &t);
 
 /** Appends a single character to @p ss. */
-void MakeStringInternalElement(StringStream &ss, const char &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const char &t);
 
 /** Appends an unsigned 16-bit integer to @p ss. */
-void MakeStringInternalElement(StringStream &ss, const uint16_t &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const uint16_t &t);
 /** Appends an unsigned 32-bit integer to @p ss. */
-void MakeStringInternalElement(StringStream &ss, const uint32_t &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const uint32_t &t);
 /** Appends an unsigned 64-bit integer to @p ss. */
-void MakeStringInternalElement(StringStream &ss, const uint64_t &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const uint64_t &t);
 
 /** Appends a signed 16-bit integer to @p ss. */
-void MakeStringInternalElement(StringStream &ss, const int16_t &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const int16_t &t);
 /** Appends a signed 32-bit integer to @p ss. */
-void MakeStringInternalElement(StringStream &ss, const int32_t &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const int32_t &t);
 /** Appends a signed 64-bit integer to @p ss. */
-void MakeStringInternalElement(StringStream &ss, const int64_t &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const int64_t &t);
 
 /** Appends a textual description of the const uint64_t pointer reference to @p ss; outputs a null
  * marker when the pointer is null. */
-void MakeStringInternalElement(StringStream &ss, const uint64_t *&t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const uint64_t *&t);
 /** Appends a textual description of the const uint64_t pointer to @p ss; outputs a null marker when
  * the pointer is null. */
-void MakeStringInternalElement(StringStream &ss, const uint64_t *t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const uint64_t *t);
 
 /** Appends a single-precision floating-point value to @p ss. */
-void MakeStringInternalElement(StringStream &ss, const float &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const float &t);
 
 /** Appends a double-precision floating-point value to @p ss. */
-void MakeStringInternalElement(StringStream &ss, const double &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const double &t);
 
 /** Appends each element of a uint16 vector to @p ss, prefixed with "x". */
-void MakeStringInternalElement(StringStream &ss, const std::vector<uint16_t> &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss,
+                                                    const std::vector<uint16_t> &t);
 
 /** Appends each element of a uint32 vector to @p ss, prefixed with "x". */
-void MakeStringInternalElement(StringStream &ss, const std::vector<uint32_t> &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss,
+                                                    const std::vector<uint32_t> &t);
 
 /** Appends each element of a uint64 vector to @p ss, prefixed with "x". */
-void MakeStringInternalElement(StringStream &ss, const std::vector<uint64_t> &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss,
+                                                    const std::vector<uint64_t> &t);
 
 /** Appends each element of an int16 vector to @p ss, prefixed with "x". */
-void MakeStringInternalElement(StringStream &ss, const std::vector<int16_t> &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss,
+                                                    const std::vector<int16_t> &t);
 
 /** Appends each element of an int32 vector to @p ss, prefixed with "x". */
-void MakeStringInternalElement(StringStream &ss, const std::vector<int32_t> &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss,
+                                                    const std::vector<int32_t> &t);
 
 /** Appends each element of an int64 vector to @p ss, prefixed with "x". */
-void MakeStringInternalElement(StringStream &ss, const std::vector<int64_t> &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss,
+                                                    const std::vector<int64_t> &t);
 
 /** Appends each element of a float vector to @p ss, prefixed with "x". */
-void MakeStringInternalElement(StringStream &ss, const std::vector<float> &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const std::vector<float> &t);
 
 /** Appends each element of a double vector to @p ss, prefixed with "x". */
-void MakeStringInternalElement(StringStream &ss, const std::vector<double> &t);
+ONNX_LIGHT_PROTO_API void MakeStringInternalElement(StringStream &ss, const std::vector<double> &t);
 
 /**
  * Catch-all overload for integer types not covered by the explicit declarations above.
@@ -153,7 +160,7 @@ inline void MakeStringInternalElement(StringStream &ss, const T &t) {
 }
 
 /** Base case of MakeStringInternal: does nothing when there are no remaining arguments. */
-void MakeStringInternal(StringStream &ss);
+ONNX_LIGHT_PROTO_API void MakeStringInternal(StringStream &ss);
 
 /**
  * Appends the single value @p t to @p ss.
@@ -332,7 +339,7 @@ inline void ValidateAlignmentOption(int64_t alignment, const char *option_name) 
  *          multiple threads result in undefined behavior.  Callers that require
  *          thread-safe logging must provide their own synchronisation.
  */
-class Logger {
+class ONNX_LIGHT_PROTO_API Logger {
 public:
   /**
    * Constructs a Logger and opens the configured destination.

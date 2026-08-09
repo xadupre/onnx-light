@@ -303,11 +303,35 @@ def _serialize_struct_value(value):
     return b"".join(chunks)
 
 
-def _serialized_raw_data_size(field_number, raw_data, serialized):
-    """Returns the payload byte count of the raw_data field embedded in a serialized message."""
-    segment = _length_delimited(field_number, raw_data)
-    assert segment in serialized
-    return len(segment) - len(_tag(field_number, 2)) - len(_varint(len(raw_data)))
+def _read_varint(data, offset):
+    result = 0
+    shift = 0
+    while True:
+        byte = data[offset]
+        offset += 1
+        result |= (byte & 0x7F) << shift
+        if not byte & 0x80:
+            return result, offset
+        shift += 7
+
+
+def _serialized_raw_data_size(field_number, serialized):
+    """Walks the wire format and returns the decoded length prefix of a length-delimited field."""
+    offset = 0
+    while offset < len(serialized):
+        key, offset = _read_varint(serialized, offset)
+        wire_type = key & 0x7
+        if key >> 3 == field_number and wire_type == 2:
+            length, _ = _read_varint(serialized, offset)
+            return length
+        if wire_type == 0:
+            _, offset = _read_varint(serialized, offset)
+        elif wire_type == 2:
+            length, offset = _read_varint(serialized, offset)
+            offset += length
+        else:
+            raise ValueError(f"Unsupported wire type {wire_type}")
+    raise KeyError(f"Field {field_number} not found")
 
 
 class TestQuantizationCustomTypesSerialization(unittest.TestCase):
@@ -485,12 +509,8 @@ class TestQuantizationCustomTypesSerialization(unittest.TestCase):
         self.assertEqual(tensor["n_bytes"], len(raw_data))
         # The serialized raw_data segment carries exactly the buffer size, with and
         # without custom types.
-        self.assertEqual(
-            _serialized_raw_data_size(2, tensor["raw_data"], serialized_tensor), len(raw_data)
-        )
-        self.assertEqual(
-            _serialized_raw_data_size(3, value["raw_data"], serialized_value), len(raw_data)
-        )
+        self.assertEqual(_serialized_raw_data_size(2, serialized_tensor), len(raw_data))
+        self.assertEqual(_serialized_raw_data_size(3, serialized_value), len(raw_data))
 
     def test_quantized_tensor_serialized_size_matches_buffer(self):
         self._assert_serialized_size_matches_buffer(

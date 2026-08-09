@@ -338,7 +338,7 @@ TEST(SimpleTensorMakeOutput, WithoutAllocator) {
       MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {2}, 2 * sizeof(float), nullptr);
   EXPECT_FALSE(t.has_allocation());
   EXPECT_EQ(t.size_bytes(), 2 * sizeof(float));
-  EXPECT_FLOAT_EQ(t.AsFloat()[0], 0.0f); // zero-initialised
+  EXPECT_FLOAT_EQ(t.AsFloat()[0], 0.0f); // zero-initialised.
 }
 
 TEST(SimpleTensorMakeOutput, WithAllocator) {

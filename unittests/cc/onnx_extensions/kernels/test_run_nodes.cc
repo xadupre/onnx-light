@@ -5528,6 +5528,292 @@ TEST(NodeHelpers, GetAttributeShapeOrDefaultReturnsFallback) {
 }
 
 // ---------------------------------------------------------------------------
+// node_helpers.h exception paths
+// ---------------------------------------------------------------------------
+
+TEST(NodeHelpers, GetInputEmptyNameThrows) {
+  NodeProto node = MakeNode("Abs", {""}, {"y"});
+  TensorMap tensors;
+  EXPECT_THROW(core::runtime::GetInput(node, 0, tensors), std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetInputMissingFromMapThrows) {
+  NodeProto node = MakeNode("Abs", {"x"}, {"y"});
+  TensorMap tensors;
+  EXPECT_THROW(core::runtime::GetInput(node, 0, tensors), std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetInputReturnsTensor) {
+  NodeProto node = MakeNode("Abs", {"x"}, {"y"});
+  TensorMap tensors;
+  tensors["x"] = Tensor::FromFloat("x", {1}, {2.0f});
+  const Tensor &t = core::runtime::GetInput(node, 0, tensors);
+  EXPECT_FLOAT_EQ(t.AsFloat()[0], 2.0f);
+}
+
+TEST(NodeHelpers, GetOptionalInputReturnsNullWhenSlotAbsent) {
+  NodeProto node = MakeNode("Abs", {"x"}, {"y"});
+  TensorMap tensors;
+  EXPECT_EQ(core::runtime::GetOptionalInput(node, 5, tensors), nullptr);
+}
+
+TEST(NodeHelpers, GetOptionalInputReturnsNullWhenNameEmpty) {
+  NodeProto node = MakeNode("Abs", {""}, {"y"});
+  TensorMap tensors;
+  EXPECT_EQ(core::runtime::GetOptionalInput(node, 0, tensors), nullptr);
+}
+
+TEST(NodeHelpers, GetOptionalInputMissingFromMapThrows) {
+  NodeProto node = MakeNode("Abs", {"x"}, {"y"});
+  TensorMap tensors;
+  EXPECT_THROW(core::runtime::GetOptionalInput(node, 0, tensors), std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetOptionalInputReturnsTensor) {
+  NodeProto node = MakeNode("Abs", {"x"}, {"y"});
+  TensorMap tensors;
+  tensors["x"] = Tensor::FromFloat("x", {1}, {3.0f});
+  const Tensor *t = core::runtime::GetOptionalInput(node, 0, tensors);
+  ASSERT_NE(t, nullptr);
+  EXPECT_FLOAT_EQ(t->AsFloat()[0], 3.0f);
+}
+
+TEST(NodeHelpers, SetOutputEmptyNameThrows) {
+  NodeProto node = MakeNode("Abs", {"x"}, {""});
+  TensorMap tensors;
+  EXPECT_THROW(core::runtime::SetOutput(node, 0, Tensor::FromFloat("y", {1}, {1.0f}), tensors),
+               std::invalid_argument);
+}
+
+TEST(NodeHelpers, SetOutputStoresTensor) {
+  NodeProto node = MakeNode("Abs", {"x"}, {"y"});
+  TensorMap tensors;
+  core::runtime::SetOutput(node, 0, Tensor::FromFloat("tmp", {1}, {4.0f}), tensors);
+  ASSERT_TRUE(tensors.count("y"));
+  EXPECT_EQ(tensors["y"].name, "y");
+  EXPECT_FLOAT_EQ(tensors["y"].AsFloat()[0], 4.0f);
+}
+
+TEST(NodeHelpers, SetOutputContextEmptyNameThrows) {
+  NodeProto node = MakeNode("Abs", {"x"}, {""});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  EXPECT_THROW(core::runtime::SetOutput(node, 0, Tensor::FromFloat("y", {1}, {1.0f}), rt),
+               std::invalid_argument);
+}
+
+TEST(NodeHelpers, SetOutputContextStoresTensor) {
+  NodeProto node = MakeNode("Abs", {"x"}, {"y"});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  core::runtime::SetOutput(node, 0, Tensor::FromFloat("tmp", {1}, {5.0f}), rt);
+  ASSERT_TRUE(rt.Has("y"));
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[0], 5.0f);
+}
+
+TEST(NodeHelpers, GetInputSequenceEmptyNameThrows) {
+  NodeProto node = MakeNode("SequenceAt", {""}, {"y"});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  EXPECT_THROW(core::runtime::GetInputSequence(node, 0, rt), std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetInputSequenceMissingThrows) {
+  NodeProto node = MakeNode("SequenceAt", {"seq"}, {"y"});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  EXPECT_THROW(core::runtime::GetInputSequence(node, 0, rt), std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetInputSequenceReturnsSequence) {
+  NodeProto node = MakeNode("SequenceAt", {"seq"}, {"y"});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  Sequence seq;
+  seq.name = "seq";
+  seq.values.push_back(Tensor::FromFloat("e0", {1}, {6.0f}));
+  rt.PutSequence("seq", std::move(seq));
+  const Sequence &got = core::runtime::GetInputSequence(node, 0, rt);
+  ASSERT_EQ(got.size(), static_cast<size_t>(1));
+  EXPECT_FLOAT_EQ(got.at(0).AsFloat()[0], 6.0f);
+}
+
+TEST(NodeHelpers, SetOutputSequenceEmptyNameThrows) {
+  NodeProto node = MakeNode("SequenceEmpty", {}, {""});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  EXPECT_THROW(core::runtime::SetOutputSequence(node, 0, Sequence{}, rt), std::invalid_argument);
+}
+
+TEST(NodeHelpers, SetOutputSequenceStoresSequence) {
+  NodeProto node = MakeNode("SequenceEmpty", {}, {"seq"});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  core::runtime::SetOutputSequence(node, 0, Sequence{}, rt);
+  EXPECT_TRUE(rt.HasSequence("seq"));
+}
+
+TEST(NodeHelpers, RequireInputCountThrowsOnMismatch) {
+  NodeProto node = MakeNode("Add", {"x"}, {"y"});
+  EXPECT_THROW(core::runtime::RequireInputCount(node, 2), std::invalid_argument);
+  EXPECT_NO_THROW(core::runtime::RequireInputCount(node, 1));
+}
+
+TEST(NodeHelpers, RequireMinInputCountThrowsWhenTooFew) {
+  NodeProto node = MakeNode("Add", {"x"}, {"y"});
+  EXPECT_THROW(core::runtime::RequireMinInputCount(node, 2), std::invalid_argument);
+  EXPECT_NO_THROW(core::runtime::RequireMinInputCount(node, 1));
+}
+
+TEST(NodeHelpers, RequireOutputCountThrowsOnMismatch) {
+  NodeProto node = MakeNode("Add", {"a", "b"}, {"y"});
+  EXPECT_THROW(core::runtime::RequireOutputCount(node, 2), std::invalid_argument);
+  EXPECT_NO_THROW(core::runtime::RequireOutputCount(node, 1));
+}
+
+TEST(NodeHelpers, FindAttributeReturnsNullWhenMissing) {
+  NodeProto node = MakeNode("Abs", {"x"}, {"y"});
+  EXPECT_EQ(core::runtime::FindAttribute(node, "nope"), nullptr);
+}
+
+TEST(NodeHelpers, GetRequiredGraphAttributeMissingThrows) {
+  NodeProto node = MakeNode("If", {"cond"}, {"y"});
+  EXPECT_THROW(core::runtime::GetRequiredGraphAttribute(node, "then_branch"),
+               std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetRequiredGraphAttributeWrongTypeThrows) {
+  NodeProto node = MakeNode("If", {"cond"}, {"y"});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("then_branch");
+  attr->set_type(AttributeProto::AttributeType::INT);
+  attr->set_i(1);
+  EXPECT_THROW(core::runtime::GetRequiredGraphAttribute(node, "then_branch"),
+               std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetRequiredGraphAttributeReturnsGraph) {
+  NodeProto node = MakeNode("If", {"cond"}, {"y"});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("then_branch");
+  attr->set_type(AttributeProto::AttributeType::GRAPH);
+  attr->ref_g().set_name("body");
+  const GraphProto &g = core::runtime::GetRequiredGraphAttribute(node, "then_branch");
+  EXPECT_EQ(g.name(), "body");
+}
+
+TEST(NodeHelpers, GetAttributeIntOrDefaultReturnsFallback) {
+  NodeProto node = MakeNode("Op", {}, {});
+  EXPECT_EQ(core::runtime::GetAttributeIntOrDefault(node, "axis", 7), 7);
+}
+
+TEST(NodeHelpers, GetAttributeIntOrDefaultWrongTypeThrows) {
+  NodeProto node = MakeNode("Op", {}, {});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("axis");
+  attr->set_type(AttributeProto::AttributeType::FLOAT);
+  attr->set_f(1.0f);
+  EXPECT_THROW(core::runtime::GetAttributeIntOrDefault(node, "axis", 0), std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetAttributeIntsOrDefaultWrongTypeThrows) {
+  NodeProto node = MakeNode("Op", {}, {});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("axes");
+  attr->set_type(AttributeProto::AttributeType::INT);
+  attr->set_i(1);
+  EXPECT_THROW(core::runtime::GetAttributeIntsOrDefault(node, "axes", {}), std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetAttributeShapeOrDefaultWrongTypeThrows) {
+  NodeProto node = MakeNode("Op", {}, {});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("kernel_shape");
+  attr->set_type(AttributeProto::AttributeType::INT);
+  attr->set_i(1);
+  EXPECT_THROW(core::runtime::GetAttributeShapeOrDefault(node, "kernel_shape", core::runtime::Shape{}),
+               std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetAttributeFloatsOrDefaultWrongTypeThrows) {
+  NodeProto node = MakeNode("Op", {}, {});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("scales");
+  attr->set_type(AttributeProto::AttributeType::INTS);
+  attr->add_ints(1);
+  EXPECT_THROW(core::runtime::GetAttributeFloatsOrDefault(node, "scales", {}),
+               std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetAttributeStringsOrDefaultWrongTypeThrows) {
+  NodeProto node = MakeNode("Op", {}, {});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("mode");
+  attr->set_type(AttributeProto::AttributeType::STRING);
+  attr->set_s("x");
+  EXPECT_THROW(core::runtime::GetAttributeStringsOrDefault(node, "mode", {}),
+               std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetAttributeFloatOrDefaultWrongTypeThrows) {
+  NodeProto node = MakeNode("Op", {}, {});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("alpha");
+  attr->set_type(AttributeProto::AttributeType::INT);
+  attr->set_i(1);
+  EXPECT_THROW(core::runtime::GetAttributeFloatOrDefault(node, "alpha", 0.0f),
+               std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetAttributeStringOrDefaultWrongTypeThrows) {
+  NodeProto node = MakeNode("Op", {}, {});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("mode");
+  attr->set_type(AttributeProto::AttributeType::INT);
+  attr->set_i(1);
+  EXPECT_THROW(core::runtime::GetAttributeStringOrDefault(node, "mode", ""), std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetRequiredAttributeStringMissingThrows) {
+  NodeProto node = MakeNode("Op", {}, {});
+  EXPECT_THROW(core::runtime::GetRequiredAttributeString(node, "mode"), std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetRequiredAttributeStringWrongTypeThrows) {
+  NodeProto node = MakeNode("Op", {}, {});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("mode");
+  attr->set_type(AttributeProto::AttributeType::INT);
+  attr->set_i(1);
+  EXPECT_THROW(core::runtime::GetRequiredAttributeString(node, "mode"), std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetRequiredAttributeStringReturnsValue) {
+  NodeProto node = MakeNode("Op", {}, {});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("mode");
+  attr->set_type(AttributeProto::AttributeType::STRING);
+  attr->set_s("linear");
+  EXPECT_EQ(core::runtime::GetRequiredAttributeString(node, "mode"), "linear");
+}
+
+TEST(NodeHelpers, GetRequiredAttributeIntMissingThrows) {
+  NodeProto node = MakeNode("Op", {}, {});
+  EXPECT_THROW(core::runtime::GetRequiredAttributeInt(node, "axis"), std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetRequiredAttributeIntWrongTypeThrows) {
+  NodeProto node = MakeNode("Op", {}, {});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("axis");
+  attr->set_type(AttributeProto::AttributeType::STRING);
+  attr->set_s("x");
+  EXPECT_THROW(core::runtime::GetRequiredAttributeInt(node, "axis"), std::invalid_argument);
+}
+
+TEST(NodeHelpers, GetRequiredAttributeIntReturnsValue) {
+  NodeProto node = MakeNode("Op", {}, {});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("axis");
+  attr->set_type(AttributeProto::AttributeType::INT);
+  attr->set_i(3);
+  EXPECT_EQ(core::runtime::GetRequiredAttributeInt(node, "axis"), 3);
+}
+
+// ---------------------------------------------------------------------------
 // RuntimeSession concrete-vs-symbolic shape validation (constructor option)
 // ---------------------------------------------------------------------------
 

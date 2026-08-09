@@ -206,7 +206,7 @@ private:
 };
 
 /** Repeated field used by name-like string lists (for example NodeProto inputs/outputs). */
-class RepeatedStringField : public RepeatedField<utils::String> {
+class ONNX_LIGHT_PROTO_API RepeatedStringField : public RepeatedField<utils::String> {
 public:
   using RepeatedField<utils::String>::RepeatedField;
 };

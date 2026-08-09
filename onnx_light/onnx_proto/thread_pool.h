@@ -19,7 +19,7 @@ namespace ONNX_LIGHT_NAMESPACE::utils {
  * The pool can be restarted by calling Start() again after Wait() returns.
  * Clear() resets internal state when the pool is idle (not started).
  */
-class ThreadPool {
+class ONNX_LIGHT_PROTO_API ThreadPool {
 public:
   /** Initializes the thread pool in a stopped, idle state. */
   ThreadPool();

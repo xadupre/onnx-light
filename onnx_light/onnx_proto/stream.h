@@ -95,7 +95,7 @@ std::shared_ptr<uint8_t> mmap_file_as_shared_ptr(const std::string &file_path, i
 class StringStream;
 
 /** Decoded protobuf tag containing the field number and wire type. */
-struct FieldNumber {
+struct ONNX_LIGHT_PROTO_API FieldNumber {
   /** Identifies which field in the message this tag belongs to. */
   uint64_t field_number;
   /** Wire type that describes the on-wire encoding of the field value. */
@@ -134,7 +134,7 @@ struct DelayedWriteBlock {
  *  Concrete subclasses provide byte-level reading from different sources
  *  (memory buffers, files) and expose higher-level helpers for varint,
  *  float, string, and protobuf tag decoding built on top of the primitives. */
-class BinaryStream {
+class ONNX_LIGHT_PROTO_API BinaryStream {
 public:
   /** Initializes a base binary stream with no active limits. */
   explicit inline BinaryStream() {}
@@ -252,7 +252,7 @@ class FileStream;
  *  Concrete subclasses persist bytes to different backends (memory buffers, files).
  *  Higher-level helpers for varint, float, string, and protobuf tag encoding
  *  are implemented on top of the write_raw_bytes() primitive. */
-class BinaryWriteStream {
+class ONNX_LIGHT_PROTO_API BinaryWriteStream {
 public:
   /** Initializes an empty binary write stream. */
   explicit inline BinaryWriteStream() {}
@@ -385,7 +385,7 @@ protected:
 /** Binary reader backed by an in-memory buffer.
  *  Provides fast sequential access to a caller-owned byte range without
  *  copying the underlying data. */
-class StringStream : public BinaryStream {
+class ONNX_LIGHT_PROTO_API StringStream : public BinaryStream {
   friend class FileStream;
 
 public:
@@ -448,7 +448,7 @@ protected:
  *  exposed directly as contiguous memory, eliminating per-byte std::ifstream
  *  bookkeeping and the seek-to-invalidate sequences triggered by large
  *  payload reads. */
-class MmapFileStream : public StringStream {
+class ONNX_LIGHT_PROTO_API MmapFileStream : public StringStream {
 public:
   /** Maps the file at *file_path* and exposes its contents as a binary stream. */
   explicit MmapFileStream(const std::string &file_path);
@@ -477,7 +477,7 @@ protected:
  *  All bytes are accumulated in an internal std::vector<uint8_t>.
  *  Supports optional parallel writes via an internal thread pool after the
  *  buffer has been pre-allocated with pre_allocate(). */
-class StringWriteStream : public BinaryWriteStream {
+class ONNX_LIGHT_PROTO_API StringWriteStream : public BinaryWriteStream {
 public:
   /** Initializes an empty write stream with no pre-allocated storage. */
   explicit inline StringWriteStream() : BinaryWriteStream(), buffer_(), write_pos_(0) {}
@@ -520,7 +520,7 @@ protected:
 /** Binary writer backed by a caller-provided fixed-capacity memory buffer.
  *  Inherits string-writing helpers from StringWriteStream but never reallocates.
  *  Throws std::runtime_error if a write would exceed the initial capacity. */
-class BorrowedStringWriteStream : public StringWriteStream {
+class ONNX_LIGHT_PROTO_API BorrowedStringWriteStream : public StringWriteStream {
 public:
   /** Initializes a write stream that borrows `size` bytes starting at `data`.
    *  The caller must ensure the buffer outlives this stream. */
@@ -550,7 +550,7 @@ protected:
 /** Binary writer backed by externally provided memory.
  *  Wraps a caller-owned byte range and exposes the BinaryWriteStream interface
  *  without owning or copying the underlying storage. */
-class BorrowedWriteStream : public BinaryWriteStream {
+class ONNX_LIGHT_PROTO_API BorrowedWriteStream : public BinaryWriteStream {
 public:
   /** Initializes a write stream that borrows *size* bytes starting at *data*.
    *  The caller must ensure the buffer outlives this stream. */
@@ -577,7 +577,7 @@ protected:
  *  Uses an internal std::ofstream with an optional 4096-byte write buffer.
  *  Also supports parallel offset-based writes via an internal thread pool
  *  after the file has been pre-allocated with pre_allocate(). */
-class FileWriteStream : public BinaryWriteStream {
+class ONNX_LIGHT_PROTO_API FileWriteStream : public BinaryWriteStream {
 public:
   /** Opens the file at *file_path* for writing (creates or truncates). */
   explicit FileWriteStream(const std::string &file_path);
@@ -615,7 +615,7 @@ class TwoFilesStream;
  *  Uses a 4096-byte read-ahead buffer (read_buf_) so that sequential varint
  *  decoding does not issue a system call per byte.  Supports optional parallel
  *  block reads via an internal thread pool. */
-class FileStream : public BinaryStream {
+class ONNX_LIGHT_PROTO_API FileStream : public BinaryStream {
   friend class TwoFilesStream;
 
 public:
@@ -704,7 +704,7 @@ protected:
  *  overhead of many small writes to the main file.
  *  Supports parallel offset-based writes to the weights file via
  *  StartWriteThreadPool(). */
-class TwoFilesWriteStream : public FileWriteStream {
+class ONNX_LIGHT_PROTO_API TwoFilesWriteStream : public FileWriteStream {
 public:
   /** Opens *file_path* for protobuf data and *weights_file* for weight data. */
   explicit TwoFilesWriteStream(const std::string &file_path, const std::string &weights_file);
@@ -796,7 +796,7 @@ protected:
 /** Two-file reader for ONNX models with external tensor data.
  *  Reads the model protobuf from a primary file (inherited from FileStream)
  *  and tensor weight data from a separate weights file on demand. */
-class TwoFilesStream : public FileStream {
+class ONNX_LIGHT_PROTO_API TwoFilesStream : public FileStream {
 public:
   struct SharedWeightsBuffer {
     std::shared_ptr<uint8_t> data;
@@ -869,7 +869,7 @@ protected:
  *  Implements the full BinaryWriteStream interface plus the protobuf
  *  ZeroCopyOutputStream methods (Next / BackUp / ByteCount), so it can back
  *  google::protobuf::io::StringOutputStream as a pure alias. */
-class StdStringWriteStream : public BinaryWriteStream {
+class ONNX_LIGHT_PROTO_API StdStringWriteStream : public BinaryWriteStream {
 public:
   /** Initializes a write stream that appends to *target*.
    *  The caller must ensure *target* outlives this stream. */
@@ -912,7 +912,7 @@ protected:
  *  The whole stream is drained into an owned std::string in the constructor and
  *  exposed through StringStream's zero-copy read interface, so it can back
  *  google::protobuf::io::IstreamInputStream as a pure alias. */
-class IstreamStream : public StringStream {
+class ONNX_LIGHT_PROTO_API IstreamStream : public StringStream {
 public:
   /** Reads the entire contents of *stream* into an owned buffer.
    *  *block_size* is accepted for protobuf API compatibility but ignored. */
@@ -931,7 +931,7 @@ protected:
  *  Implements the BinaryWriteStream interface plus the protobuf
  *  ZeroCopyOutputStream methods (Next / BackUp / ByteCount / Flush), so it can
  *  back google::protobuf::io::OstreamOutputStream as a pure alias. */
-class OstreamWriteStream : public BinaryWriteStream {
+class ONNX_LIGHT_PROTO_API OstreamWriteStream : public BinaryWriteStream {
 public:
   /** Initializes a write stream that writes to *stream* using *block_size* chunks. */
   explicit inline OstreamWriteStream(std::ostream *stream, int block_size = 4096)
@@ -989,7 +989,7 @@ protected:
  *  ZeroCopyOutputStream methods (Next / BackUp / ByteCount / Flush / Close), so
  *  it can back google::protobuf::io::FileOutputStream as a pure alias.
  *  Unlike the previous compat stub this performs real platform writes. */
-class FdWriteStream : public BinaryWriteStream {
+class ONNX_LIGHT_PROTO_API FdWriteStream : public BinaryWriteStream {
 public:
   /** Initializes a write stream over the open file descriptor *fd*. */
   explicit inline FdWriteStream(int fd) : BinaryWriteStream(), fd_(fd), used_(0), written_(0) {}
@@ -1045,7 +1045,7 @@ protected:
  *  memory first.  The file descriptor must support lseek (regular files);
  *  non-seekable descriptors fall back to an INT64_MAX limit and rely on the
  *  eof_ flag for end-of-stream detection. */
-class FdReadStream : public BinaryStream {
+class ONNX_LIGHT_PROTO_API FdReadStream : public BinaryStream {
 public:
   /** Initializes a read stream over the open file descriptor *fd*.
    *  \p block_size is the internal buffer size used for reads. */

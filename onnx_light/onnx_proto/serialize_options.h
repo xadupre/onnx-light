@@ -23,7 +23,7 @@ struct SerializeOptions;
  * returned restorer. Calling :cpp:func:`Restore` (also done automatically on destruction) puts the
  * original state back, keeping the caller's model untouched once the serialized bytes are produced.
  */
-class SerializeCallbackRestorer {
+class ONNX_LIGHT_PROTO_API SerializeCallbackRestorer {
 public:
   SerializeCallbackRestorer() = default;
   SerializeCallbackRestorer(SerializeCallbackRestorer &&) = default;
@@ -47,8 +47,8 @@ private:
   std::vector<std::function<void()>> undo_;
 };
 
-SerializeCallbackRestorer ApplySerializeRawDataCallback(ModelProto &model,
-                                                        const SerializeOptions &options);
+ONNX_LIGHT_PROTO_API SerializeCallbackRestorer
+ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options);
 
 /**
  * Common options shared by tensor buffer operations: in-place consolidation

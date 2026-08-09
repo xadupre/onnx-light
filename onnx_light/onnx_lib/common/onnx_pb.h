@@ -55,13 +55,11 @@
 
 /// @brief Symbol-visibility attribute for the public onnx-light C++ API.
 ///
-/// Defined as empty because onnx-light does not require explicit
-/// ``__declspec(dllexport)`` or ``__attribute__((visibility("default")))``
-/// annotations — visibility is controlled at the shared-library level.
-/// The macro is provided so that vendored ONNX headers that decorate their
-/// declarations with ``ONNX_API`` compile without modification.
+/// Maps the upstream compatibility macro to onnx-light's explicit proto ABI
+/// annotation. This keeps declarations from vendored ONNX headers visible when
+/// ``lib_onnx_proto`` uses hidden visibility by default.
 #ifndef ONNX_API
-#define ONNX_API
+#define ONNX_API ONNX_LIGHT_PROTO_API
 #endif
 
 /// @brief Namespace alias so that ONNX C++ code (and consumers such as

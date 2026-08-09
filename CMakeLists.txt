@@ -290,6 +290,11 @@ if(_lib_onnx_proto_type STREQUAL "SHARED" AND WIN32)
   # without sprinkling __declspec(dllexport) annotations in headers.
   set_target_properties(lib_onnx_proto PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
+if(_lib_onnx_proto_type STREQUAL "SHARED" AND NOT WIN32)
+  set_target_properties(lib_onnx_proto PROPERTIES
+      CXX_VISIBILITY_PRESET hidden
+      VISIBILITY_INLINES_HIDDEN YES)
+endif()
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_HEADERS})
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_PROTO_ALL_SOURCES})
 target_include_directories(lib_onnx_proto PUBLIC

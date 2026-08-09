@@ -4,6 +4,7 @@
 #include "simple_span.h"
 #include "simple_string.h"
 #include "stream.h"
+#include "visibility.h"
 #include <functional>
 #include <sstream>
 #include <type_traits>
@@ -78,7 +79,7 @@ template <typename T> inline const T &default_proto_instance() {
 
 /** Macro for beginning a generated proto class with a default constructor. */
 #define BEGIN_PROTO(cls, doc)                                                                      \
-  class cls : public Message {                                                                     \
+  class ONNX_LIGHT_PROTO_API cls : public Message {                                                \
   public:                                                                                          \
     static inline constexpr const char *DOC = doc;                                                 \
     explicit inline cls() {}                                                                       \
@@ -91,7 +92,7 @@ template <typename T> inline const T &default_proto_instance() {
 
 /** Macro for beginning a generated proto class without adding a default constructor. */
 #define BEGIN_PROTO_NOINIT(cls, doc)                                                               \
-  class cls : public Message {                                                                     \
+  class ONNX_LIGHT_PROTO_API cls : public Message {                                                \
   public:                                                                                          \
     static inline constexpr const char *DOC = doc;                                                 \
     void CopyFrom(const cls &proto);
@@ -411,7 +412,7 @@ template <> inline bool _has_field_(const utils::ByteSpan &field) { return !fiel
 template <typename T> void CopyProtoFrom(T &dest, const T &src);
 
 /** Base class for generated ONNX proto messages. */
-class Message {
+class ONNX_LIGHT_PROTO_API Message {
 public:
   /** Constructs an empty message base object. */
   explicit inline Message() {}

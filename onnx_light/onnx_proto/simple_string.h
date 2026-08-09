@@ -16,7 +16,7 @@ class String;
  * String view used by binary readers.
  * It references existing memory and does not own it.
  */
-class RefString {
+class ONNX_LIGHT_PROTO_API RefString {
 private:
   const char *ptr_;
   size_t size_;
@@ -69,7 +69,7 @@ public:
  * (for example NodeProto inputs/outputs). It is a thin std::string subclass so it is a
  * drop-in std::string with a few protobuf-friendly helpers.
  */
-class String : public std::string {
+class ONNX_LIGHT_PROTO_API String : public std::string {
 public:
   using std::string::string;
   using std::string::operator=;
@@ -116,7 +116,7 @@ public:
  * proto2 ``optional string`` presence semantics. It is a thin std::optional<std::string>
  * subclass with protobuf-friendly read helpers so it behaves like a string when set.
  */
-class OptionalString : public std::optional<std::string> {
+class ONNX_LIGHT_PROTO_API OptionalString : public std::optional<std::string> {
 public:
   using base = std::optional<std::string>;
   /** Initializes an unset (absent) value. */
@@ -334,7 +334,8 @@ inline RefString &RefString::operator=(const String &v) {
 }
 
 /** Concatenates rows with a delimiter. */
-std::string join_string(const std::vector<std::string> &rows, const char *delimiter = "\n");
+ONNX_LIGHT_PROTO_API std::string join_string(const std::vector<std::string> &rows,
+                                             const char *delimiter = "\n");
 
 /** Returns a copy of the text, optionally wrapped in double quotes (used by printers). */
 inline std::string quote_string(std::string_view text, bool quote = true) {

@@ -59,11 +59,12 @@ namespace ONNX_LIGHT_NAMESPACE {
  *                ``"ChaCha20-Poly1305"`` (ONNXCRY2).
  * @throws std::runtime_error on OpenSSL errors or I/O failures.
  */
-void SaveEncryptedModel(ModelProto &model, const std::string &file_path, const std::string &key,
-                        const SerializeOptions &opts = SerializeOptions{},
-                        const std::string &encryption = "AES-256-CBC");
-void SaveEncryptedModel(ModelProto &model, const std::string &file_path, const std::string &key,
-                        const std::string &encryption);
+ONNX_LIGHT_PROTO_API void SaveEncryptedModel(ModelProto &model, const std::string &file_path,
+                                             const std::string &key,
+                                             const SerializeOptions &opts = SerializeOptions{},
+                                             const std::string &encryption = "AES-256-CBC");
+ONNX_LIGHT_PROTO_API void SaveEncryptedModel(ModelProto &model, const std::string &file_path,
+                                             const std::string &key, const std::string &encryption);
 
 /**
  * Loads and decrypts an encrypted ONNX model from *file_path*.
@@ -77,8 +78,9 @@ void SaveEncryptedModel(ModelProto &model, const std::string &file_path, const s
  * @param opts       Parsing options.
  * @throws std::runtime_error on decryption failure, bad magic, or I/O errors.
  */
-void LoadEncryptedModel(ModelProto &model, const std::string &file_path, const std::string &key,
-                        const ParseOptions &opts = ParseOptions{});
+ONNX_LIGHT_PROTO_API void LoadEncryptedModel(ModelProto &model, const std::string &file_path,
+                                             const std::string &key,
+                                             const ParseOptions &opts = ParseOptions{});
 
 /**
  * Serializes *model* to an in-memory encrypted byte string.
@@ -96,11 +98,13 @@ void LoadEncryptedModel(ModelProto &model, const std::string &file_path, const s
  * @return       Raw encrypted bytes in ONNXCRY1 or ONNXCRY2 format.
  * @throws std::runtime_error on OpenSSL errors.
  */
-std::string SaveEncryptedModelToString(ModelProto &model, const std::string &key,
-                                       const SerializeOptions &opts = SerializeOptions{},
-                                       const std::string &encryption = "AES-256-CBC");
-std::string SaveEncryptedModelToString(ModelProto &model, const std::string &key,
-                                       const std::string &encryption);
+ONNX_LIGHT_PROTO_API std::string
+SaveEncryptedModelToString(ModelProto &model, const std::string &key,
+                           const SerializeOptions &opts = SerializeOptions{},
+                           const std::string &encryption = "AES-256-CBC");
+ONNX_LIGHT_PROTO_API std::string SaveEncryptedModelToString(ModelProto &model,
+                                                            const std::string &key,
+                                                            const std::string &encryption);
 
 /**
  * Decrypts and parses an in-memory encrypted byte string into
@@ -115,9 +119,10 @@ std::string SaveEncryptedModelToString(ModelProto &model, const std::string &key
  * @param opts           Parsing options.
  * @throws std::runtime_error on decryption failure or bad magic.
  */
-void LoadEncryptedModelFromString(ModelProto &model, const std::string &encrypted_data,
-                                  const std::string &key,
-                                  const ParseOptions &opts = ParseOptions{});
+ONNX_LIGHT_PROTO_API void LoadEncryptedModelFromString(ModelProto &model,
+                                                       const std::string &encrypted_data,
+                                                       const std::string &key,
+                                                       const ParseOptions &opts = ParseOptions{});
 
 /** @} */
 

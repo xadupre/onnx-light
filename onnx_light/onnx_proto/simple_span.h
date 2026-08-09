@@ -15,7 +15,7 @@ namespace ONNX_LIGHT_NAMESPACE::utils {
  * It references existing memory and never allocates or frees storage.
  * Analogous to RefString but for raw bytes.
  */
-class Span {
+class ONNX_LIGHT_PROTO_API Span {
 protected:
   const uint8_t *ptr_ = nullptr;
   size_t size_ = 0;
@@ -49,7 +49,7 @@ public:
  * Owns a contiguous byte buffer without value-initializing newly allocated bytes.
  * It preserves the existing prefix on resize and grows geometrically for append-heavy use.
  */
-class OwnedByteBuffer {
+class ONNX_LIGHT_PROTO_API OwnedByteBuffer {
 public:
   /** Initializes an empty buffer. */
   OwnedByteBuffer() = default;
@@ -187,7 +187,7 @@ private:
  * accessors delegate to owned_.data() / owned_.size() so there is no risk of
  * stale cached pointers when owned_ reallocates.
  */
-class ByteSpan : public Span {
+class ONNX_LIGHT_PROTO_API ByteSpan : public Span {
 public:
   /** Constructs an empty buffer (owned mode, no allocation). */
   ByteSpan() = default;

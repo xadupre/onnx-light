@@ -36,7 +36,8 @@ namespace ONNX_LIGHT_NAMESPACE {
  *
  * @throws std::invalid_argument Thrown when validation fails.
  */
-void VerifyValueInfo(const ValueInfoProto &value_info, bool is_main_graph = true);
+ONNX_LIGHT_PROTO_API void VerifyValueInfo(const ValueInfoProto &value_info,
+                                          bool is_main_graph = true);
 
 /**
  * Validates a TensorProto: data_type is set, at most one payload field is
@@ -46,7 +47,7 @@ void VerifyValueInfo(const ValueInfoProto &value_info, bool is_main_graph = true
  *
  * @throws std::invalid_argument Thrown when validation fails.
  */
-void VerifyTensor(const TensorProto &tensor);
+ONNX_LIGHT_PROTO_API void VerifyTensor(const TensorProto &tensor);
 
 /**
  * Validates a SparseTensorProto: ``values`` and ``indices`` are individually
@@ -56,7 +57,7 @@ void VerifyTensor(const TensorProto &tensor);
  *
  * @throws std::invalid_argument Thrown when validation fails.
  */
-void VerifySparseTensor(const SparseTensorProto &sparse_tensor);
+ONNX_LIGHT_PROTO_API void VerifySparseTensor(const SparseTensorProto &sparse_tensor);
 
 /**
  * Validates an AttributeProto: exactly one value field is populated and it
@@ -73,8 +74,8 @@ void VerifySparseTensor(const SparseTensorProto &sparse_tensor);
  *
  * @throws std::invalid_argument Thrown when validation fails.
  */
-void VerifyAttribute(const AttributeProto &attribute, bool in_function_body,
-                     const std::unordered_set<std::string> &scope);
+ONNX_LIGHT_PROTO_API void VerifyAttribute(const AttributeProto &attribute, bool in_function_body,
+                                          const std::unordered_set<std::string> &scope);
 
 /**
  * Validates a NodeProto: ``op_type`` is set, the node has at least one input
@@ -87,8 +88,8 @@ void VerifyAttribute(const AttributeProto &attribute, bool in_function_body,
  *
  * @throws std::invalid_argument Thrown when validation fails.
  */
-void VerifyNode(const NodeProto &node, bool in_function_body,
-                const std::unordered_set<std::string> &scope);
+ONNX_LIGHT_PROTO_API void VerifyNode(const NodeProto &node, bool in_function_body,
+                                     const std::unordered_set<std::string> &scope);
 
 /**
  * Validates a GraphProto: inputs/outputs/initializers have unique names, the
@@ -106,8 +107,9 @@ void VerifyNode(const NodeProto &node, bool in_function_body,
  *
  * @throws std::invalid_argument Thrown when validation fails.
  */
-void VerifyGraph(const GraphProto &graph, bool is_main_graph = true, bool in_function_body = false,
-                 const std::unordered_set<std::string> *outer_scope = nullptr);
+ONNX_LIGHT_PROTO_API void VerifyGraph(const GraphProto &graph, bool is_main_graph = true,
+                                      bool in_function_body = false,
+                                      const std::unordered_set<std::string> *outer_scope = nullptr);
 
 /**
  * Validates a FunctionProto: ``name`` is set, inputs are uniquely named,
@@ -118,7 +120,7 @@ void VerifyGraph(const GraphProto &graph, bool is_main_graph = true, bool in_fun
  *
  * @throws std::invalid_argument Thrown when validation fails.
  */
-void VerifyFunction(const FunctionProto &function);
+ONNX_LIGHT_PROTO_API void VerifyFunction(const FunctionProto &function);
 
 /**
  * Validates an in-memory ModelProto without requiring an operator-schema
@@ -134,6 +136,6 @@ void VerifyFunction(const FunctionProto &function);
  *
  * @throws std::invalid_argument Thrown when a structural inconsistency is found.
  */
-void VerifyModel(const ModelProto &model);
+ONNX_LIGHT_PROTO_API void VerifyModel(const ModelProto &model);
 
 } // namespace ONNX_LIGHT_NAMESPACE

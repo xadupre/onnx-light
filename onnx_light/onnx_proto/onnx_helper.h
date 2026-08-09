@@ -41,16 +41,17 @@ inline std::string NormaliseDomain(const std::string &domain) {
  *        the nearest multiple of alignment bytes.  Use 4096 for mmap-friendly page alignment.
  * @return The total number of bytes in the external weights file(s), including any padding.
  */
-offset_t PopulateExternalData(ModelProto &model, size_t threshold,
-                              const std::string &external_data_location,
-                              bool use_external_data_location = true,
-                              int64_t max_external_file_size = 0, int64_t alignment = 0);
+ONNX_LIGHT_PROTO_API offset_t PopulateExternalData(ModelProto &model, size_t threshold,
+                                                   const std::string &external_data_location,
+                                                   bool use_external_data_location = true,
+                                                   int64_t max_external_file_size = 0,
+                                                   int64_t alignment = 0);
 
 /**
  * Clears the external data from the model.
  * @param model Model to update.
  */
-void ClearExternalData(ModelProto &model);
+ONNX_LIGHT_PROTO_API void ClearExternalData(ModelProto &model);
 
 /**
  * Applies :cpp:member:`SerializeOptions::raw_data_callback` and
@@ -63,7 +64,7 @@ void ClearExternalData(ModelProto &model);
  * each visited tensor/node; keep it alive while serializing and let it restore the model
  * afterwards.
  */
-[[nodiscard]] SerializeCallbackRestorer
+[[nodiscard]] ONNX_LIGHT_PROTO_API SerializeCallbackRestorer
 ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options);
 
 /**
@@ -113,10 +114,11 @@ ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options
  *       encounters such a tensor; externalize all big weights first (for
  *       example by saving the model once with ``TwoFilesWriteStream``).
  */
-offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
-                                    const std::string &dst_onnx_path,
-                                    const std::string &dst_weights_path, int64_t alignment,
-                                    int64_t chunk_size = 4 * 1024 * 1024);
+ONNX_LIGHT_PROTO_API offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
+                                                         const std::string &dst_onnx_path,
+                                                         const std::string &dst_weights_path,
+                                                         int64_t alignment,
+                                                         int64_t chunk_size = 4 * 1024 * 1024);
 
 /**
  * Saves a model while reusing already-external weights of any previously saved
@@ -171,8 +173,9 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
  *       fields).  A tensor having both inline ``raw_data`` and an EXTERNAL
  *       ``data_location`` is rejected.
  */
-offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &dst_onnx_path,
-                                         const SerializeOptions &options = SerializeOptions{});
+ONNX_LIGHT_PROTO_API offset_t
+SaveModelWithSharedExternalData(ModelProto &model, const std::string &dst_onnx_path,
+                                const SerializeOptions &options = SerializeOptions{});
 
 /**
  * Transfers all tensor raw_data whose size is >= opts.raw_data_threshold into a single
@@ -191,7 +194,7 @@ offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &d
  * @return      Shared ownership handle for the consolidated buffer, or nullptr if no tensors
  *              qualified.  The buffer lifetime is also managed by the individual tensors.
  */
-std::shared_ptr<uint8_t[]>
+ONNX_LIGHT_PROTO_API std::shared_ptr<uint8_t[]>
 ConsolidateTensorsToBuffer(ModelProto &model,
                            const TensorBufferOptions &opts = TensorBufferOptions{});
 
@@ -200,7 +203,7 @@ ConsolidateTensorsToBuffer(ModelProto &model,
  * exists on disk.  The Python bindings translate this to
  * :class:`FileExistsError`.
  */
-class ExternalDataLocationExistsError : public std::runtime_error {
+class ONNX_LIGHT_PROTO_API ExternalDataLocationExistsError : public std::runtime_error {
 public:
   using std::runtime_error::runtime_error;
   ~ExternalDataLocationExistsError() override;
@@ -233,9 +236,11 @@ public:
  * @throws std::invalid_argument When ``location`` is an absolute path.
  * @throws ExternalDataLocationExistsError When ``location`` already exists.
  */
-void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file = true,
-                                const std::string &location = "", size_t size_threshold = 1024,
-                                bool convert_attribute = false);
+ONNX_LIGHT_PROTO_API void ConvertModelToExternalData(ModelProto &model,
+                                                     bool all_tensors_to_one_file = true,
+                                                     const std::string &location = "",
+                                                     size_t size_threshold = 1024,
+                                                     bool convert_attribute = false);
 
 /**
  * Loads external tensor bytes into *model* in place.
@@ -251,12 +256,12 @@ void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file 
  * @param base_dir Directory that contains the external data files
  *        referenced by the tensors.
  */
-void LoadExternalDataForModel(ModelProto &model, const std::string &base_dir);
+ONNX_LIGHT_PROTO_API void LoadExternalDataForModel(ModelProto &model, const std::string &base_dir);
 
 /**
  * IteratorTensorProto is an iterator that traverses all TensorProto objects.
  */
-class IteratorTensorProto {
+class ONNX_LIGHT_PROTO_API IteratorTensorProto {
 protected:
   /**
    * Tracks traversal indices for one graph level in the DFS stack.
@@ -347,8 +352,10 @@ inline bool SerializeProtoToStream(T &, utils::BinaryWriteStream &, SerializeOpt
  * serialization.
  * @return ``false`` when ``options.max_serialized_size_bytes`` is exceeded.
  */
-bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
-                                 SerializeOptions &options, bool clear_external_data = true);
+ONNX_LIGHT_PROTO_API bool SerializeModelProtoToStream(ModelProto &model,
+                                                      utils::BinaryWriteStream &stream,
+                                                      SerializeOptions &options,
+                                                      bool clear_external_data = true);
 
 /**
  * Returns ``false`` when ``options.max_serialized_size_bytes`` is non-zero and *total_size*
@@ -386,7 +393,8 @@ inline bool SerializeProtoToStream(ModelProto &model, utils::BinaryWriteStream &
  * @return ``true`` on successful extraction, ``false`` when tensor data
  *         is absent or the tensor type/encoding is not supported.
  */
-bool ReadIntegerValues(const TensorProto &tensor_proto, std::vector<int64_t> &out);
+ONNX_LIGHT_PROTO_API bool ReadIntegerValues(const TensorProto &tensor_proto,
+                                            std::vector<int64_t> &out);
 
 /**
  * Extracts floating-point payload values from a TensorProto into ``out``.
@@ -404,7 +412,8 @@ bool ReadIntegerValues(const TensorProto &tensor_proto, std::vector<int64_t> &ou
  * @return ``true`` on successful extraction, ``false`` when tensor data
  *         is absent or the tensor type/encoding is not supported.
  */
-bool ReadFloatingValues(const TensorProto &tensor_proto, std::vector<double> &out);
+ONNX_LIGHT_PROTO_API bool ReadFloatingValues(const TensorProto &tensor_proto,
+                                             std::vector<double> &out);
 
 /**
  * The function reads the ONNX model from a binary stream.
@@ -429,8 +438,9 @@ inline void ParseProtoFromStream(T &, utils::BinaryStream &, ParseOptions &,
  * @param options Parsing options.
  * @param clear_external_data If true, removes temporary external_data metadata after parsing.
  */
-void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
-                               ParseOptions &options, bool clear_external_data = true);
+ONNX_LIGHT_PROTO_API void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
+                                                    ParseOptions &options,
+                                                    bool clear_external_data = true);
 
 /**
  * Specializes ParseProtoFromStream for ModelProto.
@@ -525,9 +535,9 @@ inline void AddOutputs(ProtoT &proto, std::initializer_list<T> names) {
  *                 untouched.
  * @return A populated :class:`NodeProto`.
  */
-NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,
-                   const std::vector<std::string> &outputs, const char *domain = nullptr,
-                   const char *name = nullptr);
+ONNX_LIGHT_PROTO_API NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,
+                                        const std::vector<std::string> &outputs,
+                                        const char *domain = nullptr, const char *name = nullptr);
 
 /**
  * Appends a new node to ``graph`` with the given ``op_type``, input and output
@@ -545,9 +555,10 @@ NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,
  * @param  name    Optional node name.
  * @return Reference to the newly added node, owned by ``graph``.
  */
-NodeProto &AddNode(GraphProto &graph, const char *op_type, const std::vector<std::string> &inputs,
-                   const std::vector<std::string> &outputs, const char *domain = nullptr,
-                   const char *name = nullptr);
+ONNX_LIGHT_PROTO_API NodeProto &AddNode(GraphProto &graph, const char *op_type,
+                                        const std::vector<std::string> &inputs,
+                                        const std::vector<std::string> &outputs,
+                                        const char *domain = nullptr, const char *name = nullptr);
 
 ////////////////////
 // Initializer factory
@@ -580,8 +591,8 @@ NodeProto &AddNode(GraphProto &graph, const char *op_type, const std::vector<std
  * @return A populated :class:`TensorProto`.
  */
 template <typename T>
-TensorProto MakeInitializer(const char *name, const std::vector<int64_t> &dims,
-                            const std::vector<T> &values);
+ONNX_LIGHT_PROTO_API TensorProto MakeInitializer(const char *name, const std::vector<int64_t> &dims,
+                                                 const std::vector<T> &values);
 
 /**
  * Appends a new initializer to ``graph`` built by :ref:`MakeInitializer` and
@@ -599,8 +610,9 @@ TensorProto MakeInitializer(const char *name, const std::vector<int64_t> &dims,
  * @return Reference to the newly added initializer, owned by ``graph``.
  */
 template <typename T>
-TensorProto &AddInitializer(GraphProto &graph, const char *name, const std::vector<int64_t> &dims,
-                            const std::vector<T> &values);
+ONNX_LIGHT_PROTO_API TensorProto &AddInitializer(GraphProto &graph, const char *name,
+                                                 const std::vector<int64_t> &dims,
+                                                 const std::vector<T> &values);
 
 /**
  * Convenience overload of :ref:`MakeInitializer` for 1-D ``INT64`` "shape"
@@ -614,11 +626,12 @@ TensorProto &AddInitializer(GraphProto &graph, const char *name, const std::vect
  *                ``{values.size()}``.
  * @return A populated :class:`TensorProto`.
  */
-TensorProto MakeInitializerShape(const char *name, const std::vector<int64_t> &values);
+ONNX_LIGHT_PROTO_API TensorProto MakeInitializerShape(const char *name,
+                                                      const std::vector<int64_t> &values);
 
 /// Companion of :ref:`MakeInitializerShape` for :ref:`AddInitializer`.
-TensorProto &AddInitializerShape(GraphProto &graph, const char *name,
-                                 const std::vector<int64_t> &values);
+ONNX_LIGHT_PROTO_API TensorProto &AddInitializerShape(GraphProto &graph, const char *name,
+                                                      const std::vector<int64_t> &values);
 
 /**
  * Appends a single FLOAT attribute (``name`` -> ``value``) to ``proto``.
@@ -825,7 +838,7 @@ inline bool GetAttributeInts(const NodeProto &node, const char *name, std::vecto
  * @param context   Optional caller context used as a prefix in error messages.
  * @return Const reference to the GraphProto attribute.
  */
-const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_name,
-                                     const char *context = nullptr);
+ONNX_LIGHT_PROTO_API const GraphProto &
+FindGraphAttribute(const NodeProto &node, const char *attr_name, const char *context = nullptr);
 
 } // namespace ONNX_LIGHT_NAMESPACE

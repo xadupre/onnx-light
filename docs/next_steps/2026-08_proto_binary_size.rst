@@ -211,6 +211,16 @@ only symbols required by public consumers and other onnx-light shared
 libraries. Internal templates, helper functions, and implementation details
 must remain hidden.
 
+This step is now implemented for ELF and Mach-O builds. The shared target uses
+hidden visibility by default, while proto messages, stream types, and the
+documented helper API are explicitly marked with ``ONNX_LIGHT_PROTO_API``.
+Windows retains ``WINDOWS_EXPORT_ALL_SYMBOLS`` until explicit DLL import/export
+annotations are introduced there.
+
+On the local Linux Release baseline, the change reduced the defined dynamic
+symbol count from 2,128 to 1,191. The stripped library decreased from
+1,810,208 to 1,625,024 bytes, a reduction of 185,184 bytes (about 181 KiB).
+
 The existing function/data sections and dead-section elimination should be
 retained. Once visibility is reduced, ``--gc-sections`` can discard code that
 is currently kept alive only because it is exported. Identical code folding
@@ -289,7 +299,9 @@ Implementation order
 1. **Implemented:** strip the installed Release artifact and report its file,
    section, text, dynamic-symbol, and dependency sizes in CI. See
    `PR #4333 <https://github.com/xadupre/onnx-light/pull/4333>`_.
-2. Introduce hidden visibility and an explicit cross-library export list.
+2. **Implemented:** introduce hidden visibility and an explicit
+   ``ONNX_LIGHT_PROTO_API`` cross-library export boundary. See
+   `PR #4344 <https://github.com/xadupre/onnx-light/pull/4344>`_.
 3. Replace per-message convenience implementations with shared or inline
    adapters.
 4. Compare ``MinSizeRel``, LTO, and linker folding after the structural work.
@@ -318,9 +330,9 @@ may eliminate some of the same code.
      - High
    * - 2
      - Hide internal symbols and reduce exports
-     - 150--300 KiB
-     - 1.45--1.60 MiB
-     - Medium
+     - 181 KiB measured
+     - 1.55 MiB
+     - High
    * - 3
      - Share or inline per-message convenience wrappers
      - 300--550 KiB

@@ -20,7 +20,7 @@ namespace ONNX_LIGHT_NAMESPACE::utils {
  * parallel using the BLAKE3 tree structure (see ``blake3/blake3_join.cc``); the
  * digest is identical regardless of how many threads participate.
  */
-class Blake3Hasher {
+class ONNX_LIGHT_PROTO_API Blake3Hasher {
 public:
   /** Initializes an empty hasher. */
   Blake3Hasher();

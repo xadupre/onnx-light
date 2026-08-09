@@ -10,7 +10,7 @@ Objective
 
 ``onnx_core`` already builds and validates a graph through
 ``core::builder::GraphBuilder``. The missing piece is a rewriting
-engine that recognises local subgraphs and replaces them with cheaper
+engine that recognizes local subgraphs and replaces them with cheaper
 equivalents, in the spirit of the Python
 `GraphBuilderPatternOptimization
 <https://github.com/xadupre/yet-another-onnx-builder/blob/main/yobx/xoptim/graph_builder_optim.py>`_.

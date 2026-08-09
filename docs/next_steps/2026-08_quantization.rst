@@ -2983,10 +2983,6 @@ Output positions use a stride-16 scatter within each 64-value chunk.
                              name: "block_size"
                              constant: tensor(INT32, [], 256)
                          }
-                         field: {
-                             name: "bytes_per_block"
-                             constant: tensor(INT32, [], 42)
-                         }
                      }
                  },
                  StructTypeProto {

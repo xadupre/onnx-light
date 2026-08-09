@@ -1372,13 +1372,18 @@ _common_title = (
 )
 
 # Produce one graph with everything, then split the results into a
-# Python-API-only plot and a C++-API-only plot.
+# Python-API-only plot and a C++-API-only plot.  Each graph is rendered in its
+# own figure.
 plot_results(
     df,
     f"onnx vs onnx_light vs ort load/save (s) - all APIs, {_common_title}",
     "plot_onnx_time.png",
 )
 
+# %%
+# Python API only
+# ---------------
+# The second figure keeps only the rows measured through the Python API.
 cpp_mask = [_is_cpp_api(name) for name in df.index]
 df_cpp = df[cpp_mask]
 df_python = df[[not is_cpp for is_cpp in cpp_mask]]
@@ -1389,6 +1394,10 @@ plot_results(
     "plot_onnx_time_python.png",
 )
 
+# %%
+# C++ API only
+# ------------
+# The third figure keeps only the rows measured through the C++ API.
 plot_results(
     df_cpp,
     f"onnx vs onnx_light load/save (s) - C++ API, {_common_title}",

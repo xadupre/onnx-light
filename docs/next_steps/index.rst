@@ -13,4 +13,5 @@ Next Steps
     2026-08_proto_binary_size
     2026-08_proto_inheritance
     2026-08_quantization
+    2026-08_graph_builder_quantized_tensor
     2026-08_compiled_tensor

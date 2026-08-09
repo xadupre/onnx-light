@@ -1094,30 +1094,6 @@ deducible from the proto structure.
       .. code-block:: text
 
          StructTypeProto {
-             name: "BLOCK_FIELD_ROLE"
-             enum_type: EnumProto {
-                 storage_type: UINT8
-                 value: { name: "VALUES", number: 0 }
-                 value: { name: "SIGN", number: 1 }
-                 value: { name: "SCALE", number: 2 }
-                 value: { name: "ZERO_POINT", number: 3 }
-                 value: { name: "BIAS", number: 4 }
-                 value: { name: "EXPONENT", number: 5 }
-                 value: { name: "CODE", number: 6 }
-                 value: { name: "MASK", number: 7 }
-             }
-         }
-
-         StructTypeProto {
-             name: "BLOCK_STORAGE_ORDER"
-             enum_type: EnumProto {
-                 storage_type: UINT8
-                 value: { name: "INTERLEAVED", number: 0 }
-                 value: { name: "SEQUENTIAL", number: 1 }
-             }
-         }
-
-         StructTypeProto {
              name: "STRUCTURED_BLOCK"
              structure: Structure {
                  field: {
@@ -1141,11 +1117,11 @@ deducible from the proto structure.
                  }
                  field: {
                      name: "index_fields"
-                     enum_constant: {
-                         type_index: block_field_role_enum_type
-                         dims: [index_term_count]
-                         number: concrete_index_fields
-                     }
+                     constant: tensor(
+                         INT32,
+                         [index_term_count],
+                         concrete_index_fields
+                     )
                  }
                  field: {
                      name: "index_multipliers"
@@ -1157,10 +1133,7 @@ deducible from the proto structure.
                  }
                  field: {
                      name: "storage_order"
-                     enum_constant: {
-                         type_index: storage_order_enum_type
-                         number: [concrete_storage_order]
-                     }
+                     constant: tensor(INT32, [], concrete_storage_order)
                  }
                  field: {
                      name: "block_size"
@@ -2564,14 +2537,6 @@ QuIP# (Vector quantization with Hadamard rotation)
          ModelProto {
              struct_types: [
                  StructTypeProto {
-                     name: "ROTATION_TYPE"
-                     enum_type: EnumProto {
-                         storage_type: UINT8
-                         value: { name: "HADAMARD", number: 0 }
-                         value: { name: "PLAIN", number: 1 }
-                     }
-                 },
-                 StructTypeProto {
                      name: "QUIP_SHARP"
                      structure: Structure {
                          field: {
@@ -2604,10 +2569,7 @@ QuIP# (Vector quantization with Hadamard rotation)
                          }
                          field: {
                              name: "pre_rotation_type"
-                             enum_constant: {
-                                 type_index: 0
-                                 number: [0]
-                             }
+                             constant: tensor(INT32, [], 0)  // HADAMARD
                          }
                          field: {
                              name: "pre_rotation_dims"
@@ -2615,10 +2577,7 @@ QuIP# (Vector quantization with Hadamard rotation)
                          }
                          field: {
                              name: "post_rotation_type"
-                             enum_constant: {
-                                 type_index: 0
-                                 number: [0]
-                             }
+                             constant: tensor(INT32, [], 0)  // HADAMARD
                          }
                          field: {
                              name: "post_rotation_dims"
@@ -3001,15 +2960,6 @@ Output positions use a stride-16 scatter within each 64-value chunk.
          ModelProto {
              struct_types: [
                  StructTypeProto {
-                     name: "STQ1_0_FIELD_ROLE"
-                     enum_type: EnumProto {
-                         storage_type: UINT8
-                         value: { name: "SIGN", number: 1 }
-                         value: { name: "SCALE", number: 2 }
-                         value: { name: "CODE", number: 6 }
-                     }
-                 },
-                 StructTypeProto {
                      name: "STQ1_0_BLOCK_256"
                      structure: Structure {
                          field: { name: "code", type: array(UINT4, dimension=64) }
@@ -3017,11 +2967,7 @@ Output positions use a stride-16 scatter within each 64-value chunk.
                          field: { name: "scale", type: array(FLOAT16, dimension=1) }
                          field: {
                              name: "field_roles"
-                             enum_constant: {
-                                 type_index: 0
-                                 dims: [3]
-                                 number: [6, 1, 2]
-                             }
+                             constant: tensor(INT32, [3], [6, 1, 2])
                          }
                          field: {
                              name: "sign_bit_width"
@@ -3047,7 +2993,7 @@ Output positions use a stride-16 scatter within each 64-value chunk.
                          field: {
                              name: "blocks"
                              type: array(
-                                 struct(type_index=1),
+                                 struct(type_index=0),
                                  dimension=block_count
                              )
                          }
@@ -3065,11 +3011,7 @@ Output positions use a stride-16 scatter within each 64-value chunk.
                          }
                          field: {
                              name: "index_fields"
-                             enum_constant: {
-                                 type_index: 0
-                                 dims: [2]
-                                 number: [6, 1]
-                             }
+                             constant: tensor(INT32, [2], [6, 1])
                          }
                          field: {
                              name: "index_multipliers"
@@ -3979,14 +3921,6 @@ in ``RotationProto``.
          ModelProto {
              struct_types: [
                  StructTypeProto {
-                     name: "ROTATION_TYPE"
-                     enum_type: EnumProto {
-                         storage_type: UINT8
-                         value: { name: "HADAMARD", number: 0 }
-                         value: { name: "PLAIN", number: 1 }
-                     }
-                 },
-                 StructTypeProto {
                      name: "QUAROT_UINT4_BLOCK_128"
                      structure: Structure {
                          field: { name: "values", type: array(UINT4, dimension=128) }
@@ -4007,7 +3941,7 @@ in ``RotationProto``.
                          field: {
                              name: "blocks"
                              type: array(
-                                 struct(type_index=1),
+                                 struct(type_index=0),
                                  dimension=block_count
                              )
                          }
@@ -4017,10 +3951,7 @@ in ``RotationProto``.
                          }
                          field: {
                              name: "pre_rotation_type"
-                             enum_constant: {
-                                 type_index: 0
-                                 number: [0]
-                             }
+                             constant: tensor(INT32, [], 0)  // HADAMARD
                          }
                          field: {
                              name: "pre_rotation_dims"
@@ -4076,14 +4007,6 @@ matrix stored as a rotation matrix (``PLAIN`` type).
          ModelProto {
              struct_types: [
                  StructTypeProto {
-                     name: "ROTATION_TYPE"
-                     enum_type: EnumProto {
-                         storage_type: UINT8
-                         value: { name: "HADAMARD", number: 0 }
-                         value: { name: "PLAIN", number: 1 }
-                     }
-                 },
-                 StructTypeProto {
                      name: "SMOOTHQUANT_INT8"
                      structure: Structure {
                          field: {
@@ -4101,10 +4024,7 @@ matrix stored as a rotation matrix (``PLAIN`` type).
                          field: { name: "axis", constant: tensor(INT32, [], 1) }
                          field: {
                              name: "pre_rotation_type"
-                             enum_constant: {
-                                 type_index: 0
-                                 number: [1]
-                             }
+                             constant: tensor(INT32, [], 1)  // PLAIN
                          }
                          field: {
                              name: "pre_rotation_dims"

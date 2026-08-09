@@ -209,6 +209,17 @@ TEST(BackendRunModel, GreaterOrEqual) { RunBackendCasesFor("GreaterOrEqual"); }
 TEST(BackendRunModel, Less) { RunBackendCasesFor("Less"); }
 TEST(BackendRunModel, LessOrEqual) { RunBackendCasesFor("LessOrEqual"); }
 TEST(BackendRunModel, Where) { RunBackendCasesFor("Where"); }
+TEST(BackendRunModel, And) { RunBackendCasesFor("And"); }
+TEST(BackendRunModel, Or) { RunBackendCasesFor("Or"); }
+TEST(BackendRunModel, Xor) { RunBackendCasesFor("Xor"); }
+TEST(BackendRunModel, Not) { RunBackendCasesFor("Not"); }
+TEST(BackendRunModel, BitwiseAnd) { RunBackendCasesFor("BitwiseAnd"); }
+TEST(BackendRunModel, BitwiseOr) { RunBackendCasesFor("BitwiseOr"); }
+TEST(BackendRunModel, BitwiseXor) { RunBackendCasesFor("BitwiseXor"); }
+TEST(BackendRunModel, BitwiseNot) { RunBackendCasesFor("BitwiseNot"); }
+TEST(BackendRunModel, BitShift) { RunBackendCasesFor("BitShift"); }
+TEST(BackendRunModel, IsInf) { RunBackendCasesFor("IsInf"); }
+TEST(BackendRunModel, IsNaN) { RunBackendCasesFor("IsNaN"); }
 
 // Variadic element-wise reducers.
 TEST(BackendRunModel, Sum) { RunBackendCasesFor("Sum"); }

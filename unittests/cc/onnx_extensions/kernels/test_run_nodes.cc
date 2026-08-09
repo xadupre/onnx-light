@@ -6040,4 +6040,691 @@ TEST(RunNodes, RuntimeSessionMaterializesBorrowedConstantOutput) {
   EXPECT_FLOAT_EQ(got[2], 3.0f);
 }
 
+// A Scan node whose scan output carries an empty name must be skipped when
+// its results are propagated back to the caller (PropagateOutputsToCaller).
+TEST(RunModel, ScanNodeEmptyScanOutputNameIsSkipped) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *scan = g->add_node();
+  scan->set_op_type("Scan");
+  scan->add_input("state0");
+  scan->add_input("x");
+  scan->add_output("state_final");
+  // The scan output is intentionally unnamed: PropagateOutputsToCaller must
+  // skip it without materialising a tensor.
+  scan->add_output("");
+  AttributeProto *num_attr = scan->add_attribute();
+  num_attr->set_name("num_scan_inputs");
+  num_attr->set_type(AttributeProto::AttributeType::INT);
+  num_attr->set_i(1);
+
+  AttributeProto *body_attr = scan->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *body = body_attr->add_g();
+  body->set_name("scan_body");
+  body->add_input()->set_name("state_in");
+  body->add_input()->set_name("x_in");
+  NodeProto *add = body->add_node();
+  add->set_op_type("Add");
+  add->add_input("state_in");
+  add->add_input("x_in");
+  add->add_output("state_out");
+  body->add_output()->set_name("state_out");
+  body->add_output()->set_name("state_out");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("state0", Tensor::FromFloat("state0", {}, {0.0f}));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+
+  RunModelViaSession(model, rt);
+
+  ASSERT_TRUE(rt.Has("state_final"));
+  EXPECT_FLOAT_EQ(rt.Get("state_final").AsFloat()[0], 6.0f);
+  // No tensor is created for the empty scan-output name.
+  EXPECT_FALSE(rt.Has(""));
+}
+
+// An If node whose (only) output carries an empty name must be skipped by
+// RunIfNode without producing a tensor for the caller.
+TEST(RunModel, IfNodeEmptyOutputNameIsSkipped) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *if_node = g->add_node();
+  if_node->set_op_type("If");
+  if_node->add_input("cond");
+  // The single output is intentionally unnamed.
+  if_node->add_output("");
+
+  AttributeProto *then_attr = if_node->add_attribute();
+  then_attr->set_name("then_branch");
+  then_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*then_attr->add_g(), "then_g", "t", "z", 10.0f);
+
+  AttributeProto *else_attr = if_node->add_attribute();
+  else_attr->set_name("else_branch");
+  else_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*else_attr->add_g(), "else_g", "e", "z", 1.0f);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  RunModelViaSession(model, rt);
+
+  // The branch ran but its output name is empty, so nothing is propagated.
+  EXPECT_FALSE(rt.Has(""));
+  EXPECT_FALSE(rt.Has("z"));
+}
+
+// A sequence-state Loop whose tensor-state and scan outputs carry empty names
+// must skip both when propagating results (RunLoopWithSequenceState).
+TEST(RunLoopWithSequenceState, EmptyTensorStateAndScanOutputNamesSkipped) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.Set("M", Tensor::FromInt64("M", {}, {3}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("acc_init", Tensor::FromFloat("acc_init", {}, {0.0f}));
+  rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
+
+  // Outputs are (acc_final, seq_final, scan); the tensor-state accumulator and
+  // the scan output are left unnamed so both empty-name branches are exercised.
+  RunNode(MakeLoopNode({"M", "cond", "acc_init", "seq_init"}, {"", "seq_final", ""},
+                       BuildMixedSequenceLoopBody()),
+          rt);
+
+  ASSERT_TRUE(rt.HasSequence("seq_final"));
+  const Sequence &seq = rt.GetSequence("seq_final");
+  ASSERT_EQ(seq.size(), 3u);
+  EXPECT_FALSE(rt.Has(""));
+}
+
+// A sequence-state Loop that runs zero iterations produces an empty scan output
+// whose dtype/shape must be recovered from the body's declared output
+// value-info (the zero-trip shape-patch branch of RunLoopWithSequenceState).
+TEST(RunLoopWithSequenceState, ZeroTripScanOutputShapePatchedFromBodyValueInfo) {
+  GraphProto body;
+  body.set_name("zero_trip_body");
+  body.add_input()->set_name("iter");
+  body.add_input()->set_name("cond_in");
+  AddSequenceFloatValueInfo(body.add_input(), "seq_in");
+
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("Identity");
+    n->add_input("cond_in");
+    n->add_output("cond_out");
+  }
+  AddIterAsFloat1D(body, "val");
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("SequenceInsert");
+    n->add_input("seq_in");
+    n->add_input("val");
+    n->add_output("seq_out");
+  }
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("Constant");
+    n->add_output("scan_out");
+    AttributeProto *a = n->add_attribute();
+    a->set_name("value");
+    a->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *t = a->add_t();
+    t->set_data_type(TensorProto::DataType::FLOAT);
+    t->add_dims(2);
+    t->add_float_data(0.0f);
+    t->add_float_data(0.0f);
+  }
+
+  body.add_output()->set_name("cond_out");
+  AddSequenceFloatValueInfo(body.add_output(), "seq_out");
+  // Declare the per-iteration scan output type so the zero-trip path can patch
+  // the stacked tensor's dtype (FLOAT) and trailing shape ([2]).
+  ValueInfoProto *scan_vi = body.add_output();
+  scan_vi->set_name("scan_out");
+  TypeProto::Tensor *tt = scan_vi->add_type()->add_tensor_type();
+  tt->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+  tt->add_shape()->add_dim()->set_dim_value(2);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  // M = 0 forces zero trip iterations.
+  rt.Set("M", Tensor::FromInt64("M", {}, {0}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
+
+  RunNode(MakeLoopNode({"M", "cond", "seq_init"}, {"seq_final", "scan"}, std::move(body)), rt);
+
+  ASSERT_TRUE(rt.Has("scan"));
+  const Tensor &scan = rt.Get("scan");
+  EXPECT_EQ(scan.data_type, static_cast<int32_t>(DataType::FLOAT));
+  EXPECT_EQ(scan.shape, (std::vector<int64_t>{0, 2}));
+  EXPECT_EQ(scan.element_count(), 0);
+}
+
+// Scan opset 8 with a non-empty 'sequence_lens' input is unsupported and must
+// raise an error.
+TEST(RunModel, ScanOpset8NonEmptySequenceLensThrows) {
+  ModelProto model;
+  model.set_ir_version(3);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(8);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *scan = g->add_node();
+  scan->set_op_type("Scan");
+  // Non-empty sequence_lens placeholder triggers the unsupported error.
+  scan->add_input("seq_lens");
+  scan->add_input("initial");
+  scan->add_input("x");
+  scan->add_output("y");
+  scan->add_output("z");
+  AttributeProto *num_attr = scan->add_attribute();
+  num_attr->set_name("num_scan_inputs");
+  num_attr->set_type(AttributeProto::AttributeType::INT);
+  num_attr->set_i(1);
+
+  AttributeProto *body_attr = scan->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *body = body_attr->add_g();
+  body->set_name("scan_body");
+  body->add_input()->set_name("sum_in");
+  body->add_input()->set_name("next");
+  NodeProto *add = body->add_node();
+  add->set_op_type("Add");
+  add->add_input("sum_in");
+  add->add_input("next");
+  add->add_output("sum_out");
+  NodeProto *id = body->add_node();
+  id->set_op_type("Identity");
+  id->add_input("sum_out");
+  id->add_output("scan_out");
+  body->add_output()->set_name("sum_out");
+  body->add_output()->set_name("scan_out");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(8)));
+  rt.Set("seq_lens", Tensor::FromInt32("seq_lens", {1}, {3}));
+  rt.Set("initial", Tensor::FromFloat("initial", {1, 2}, {0.0f, 0.0f}));
+  rt.Set("x", Tensor::FromFloat("x", {1, 3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
+
+  EXPECT_THROW(RunModelViaSession(model, rt), std::invalid_argument);
+}
+
+// Scan opset 8 requires all batched inputs to agree on the leading batch
+// dimension; a mismatch must raise an error.
+TEST(RunModel, ScanOpset8BatchDimMismatchThrows) {
+  ModelProto model;
+  model.set_ir_version(3);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(8);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *scan = g->add_node();
+  scan->set_op_type("Scan");
+  scan->add_input("");
+  scan->add_input("initial");
+  scan->add_input("x");
+  scan->add_output("y");
+  scan->add_output("z");
+  AttributeProto *num_attr = scan->add_attribute();
+  num_attr->set_name("num_scan_inputs");
+  num_attr->set_type(AttributeProto::AttributeType::INT);
+  num_attr->set_i(1);
+
+  AttributeProto *body_attr = scan->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *body = body_attr->add_g();
+  body->set_name("scan_body");
+  body->add_input()->set_name("sum_in");
+  body->add_input()->set_name("next");
+  NodeProto *add = body->add_node();
+  add->set_op_type("Add");
+  add->add_input("sum_in");
+  add->add_input("next");
+  add->add_output("sum_out");
+  NodeProto *id = body->add_node();
+  id->set_op_type("Identity");
+  id->add_input("sum_out");
+  id->add_output("scan_out");
+  body->add_output()->set_name("sum_out");
+  body->add_output()->set_name("scan_out");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(8)));
+  // State has batch dim 1 but the scan input has batch dim 2: disagreement.
+  rt.Set("initial", Tensor::FromFloat("initial", {1, 2}, {0.0f, 0.0f}));
+  rt.Set("x", Tensor::FromFloat(
+                  "x", {2, 3, 2},
+                  {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f}));
+
+  EXPECT_THROW(RunModelViaSession(model, rt), std::invalid_argument);
+}
+
+// A model-local function whose body node references an attribute that is
+// neither supplied at the call-site nor declared as a default must have that
+// referenced attribute dropped (BindRefAttributes erase path), leaving the op
+// to fall back on its schema default.
+TEST(RunModel, ModelLocalFunctionUnresolvedRefAttributeIsDropped) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("Leaky");
+  func->set_domain("custom");
+  func->add_input("x");
+  func->add_output("out");
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("LeakyRelu");
+    n->add_input("x");
+    n->add_output("out");
+    // References a call-site attribute that is never provided; it is dropped so
+    // LeakyRelu uses its default alpha (0.01).
+    AttributeProto *alpha = n->add_attribute();
+    alpha->set_name("alpha");
+    alpha->set_ref_attr_name("missing_alpha");
+    alpha->set_type(AttributeProto::AttributeType::FLOAT);
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *call = g->add_node();
+  call->set_op_type("Leaky");
+  call->set_domain("custom");
+  call->add_input("x");
+  call->add_output("y");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {1}, {-1.0f}));
+  RunModelViaSession(model, rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  // Default alpha 0.01 applied to -1.0.
+  EXPECT_NEAR(rt.Get("y").AsFloat()[0], -0.01f, 1e-6f);
+}
+
+// A model-local function body node with a plain (non-reference) sub-graph
+// attribute containing a nested node that references a call-site attribute
+// exercises the recursion into sub-graph attributes in BindRefAttributes.
+TEST(RunModel, ModelLocalFunctionBindsRefAttributeInsideSubgraph) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("CondLeaky");
+  func->set_domain("custom");
+  func->add_input("cond");
+  func->add_input("x");
+  func->add_output("out");
+  func->add_attribute("alpha");
+  {
+    // If node with concrete (non-ref) branch graphs. The then-branch contains a
+    // LeakyRelu node that references the call-site 'alpha' attribute, so
+    // BindRefAttributes must recurse into the sub-graph to bind it.
+    NodeProto *n = func->add_node();
+    n->set_op_type("If");
+    n->add_input("cond");
+    n->add_output("out");
+
+    AttributeProto *then_attr = n->add_attribute();
+    then_attr->set_name("then_branch");
+    then_attr->set_type(AttributeProto::AttributeType::GRAPH);
+    GraphProto *then_g = then_attr->add_g();
+    then_g->set_name("then_g");
+    NodeProto *leaky = then_g->add_node();
+    leaky->set_op_type("LeakyRelu");
+    leaky->add_input("x");
+    leaky->add_output("z");
+    AttributeProto *alpha_ref = leaky->add_attribute();
+    alpha_ref->set_name("alpha");
+    alpha_ref->set_ref_attr_name("alpha");
+    alpha_ref->set_type(AttributeProto::AttributeType::FLOAT);
+    then_g->add_output()->set_name("z");
+
+    AttributeProto *else_attr = n->add_attribute();
+    else_attr->set_name("else_branch");
+    else_attr->set_type(AttributeProto::AttributeType::GRAPH);
+    GraphProto *else_g = else_attr->add_g();
+    else_g->set_name("else_g");
+    NodeProto *ident = else_g->add_node();
+    ident->set_op_type("Identity");
+    ident->add_input("x");
+    ident->add_output("z");
+    else_g->add_output()->set_name("z");
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *call = g->add_node();
+  call->set_op_type("CondLeaky");
+  call->set_domain("custom");
+  call->add_input("cond");
+  call->add_input("x");
+  call->add_output("y");
+  AttributeProto *alpha = call->add_attribute();
+  alpha->set_name("alpha");
+  alpha->set_type(AttributeProto::AttributeType::FLOAT);
+  alpha->set_f(0.5f);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("x", Tensor::FromFloat("x", {1}, {-2.0f}));
+  RunModelViaSession(model, rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  // Bound alpha 0.5 applied to -2.0 via the then-branch LeakyRelu.
+  EXPECT_NEAR(rt.Get("y").AsFloat()[0], -1.0f, 1e-6f);
+}
+
+// A model-local function call with an empty input name skips binding that
+// formal parameter (the empty-name guard in ModelLocalFunctionKernel::Run).
+// The parameter must be unused by the body for the call to succeed.
+TEST(RunModel, ModelLocalFunctionEmptyInputNameSkipsBinding) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("FirstOnly");
+  func->set_domain("custom");
+  func->add_input("a");
+  func->add_input("b"); // unused
+  func->add_output("out");
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("Identity");
+    n->add_input("a");
+    n->add_output("out");
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *call = g->add_node();
+  call->set_op_type("FirstOnly");
+  call->set_domain("custom");
+  call->add_input("x");
+  call->add_input(""); // empty second input: binding skipped
+  call->add_output("y");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2}, {3.0f, 4.0f}));
+  RunModelViaSession(model, rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  const float *res = rt.Get("y").AsFloat();
+  EXPECT_FLOAT_EQ(res[0], 3.0f);
+  EXPECT_FLOAT_EQ(res[1], 4.0f);
+}
+
+// A model-local function call with an empty output name skips propagating that
+// formal output back to the caller.
+TEST(RunModel, ModelLocalFunctionEmptyOutputNameSkipsPropagation) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("TwoOut");
+  func->set_domain("custom");
+  func->add_input("a");
+  func->add_output("out0");
+  func->add_output("out1");
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("Identity");
+    n->add_input("a");
+    n->add_output("out0");
+  }
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("Identity");
+    n->add_input("a");
+    n->add_output("out1");
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *call = g->add_node();
+  call->set_op_type("TwoOut");
+  call->set_domain("custom");
+  call->add_input("x");
+  call->add_output("y");
+  call->add_output(""); // empty second output: propagation skipped
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2}, {5.0f, 6.0f}));
+  RunModelViaSession(model, rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[0], 5.0f);
+  EXPECT_FALSE(rt.Has(""));
+}
+
+// A model-local function defined in the default (empty) domain is registered
+// under FunctionLookupKey's empty-domain branch (":<name>:<overload>").
+TEST(RunModel, DefaultDomainModelLocalFunctionLookupKey) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("MyDefaultDomainFn");
+  func->set_domain(""); // default (empty) domain
+  func->add_input("a");
+  func->add_output("out");
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("Identity");
+    n->add_input("a");
+    n->add_output("out");
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *node = g->add_node();
+  node->set_op_type("Identity");
+  node->add_input("x");
+  node->add_output("y");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  RegisterModelFunctions(model, rt);
+
+  // FunctionLookupKey formats an empty domain as a leading ':' separator.
+  ASSERT_EQ(rt.functions().count(":MyDefaultDomainFn:"), 1u);
+  EXPECT_EQ(rt.functions().at(":MyDefaultDomainFn:"), func);
+}
+
+// A model-local function body node carrying a repeated GRAPHS attribute whose
+// nested graphs contain reference attributes exercises the ``graphs()``
+// recursion branch of BindRefAttributes. The host node (Identity) ignores the
+// extra attribute at run time.
+TEST(RunModel, ModelLocalFunctionBindsRefAttributeInsideGraphsAttribute) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("GraphsAttr");
+  func->set_domain("custom");
+  func->add_input("a");
+  func->add_output("out");
+  func->add_attribute("alpha");
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("Identity");
+    n->add_input("a");
+    n->add_output("out");
+    // A repeated-graphs attribute whose single graph contains a node that
+    // references the call-site 'alpha' attribute. BindRefAttributes recurses
+    // into every graph of the attribute to bind such references.
+    AttributeProto *graphs_attr = n->add_attribute();
+    graphs_attr->set_name("extra_graphs");
+    graphs_attr->set_type(AttributeProto::AttributeType::GRAPHS);
+    GraphProto *sub = graphs_attr->add_graphs();
+    sub->set_name("sub_g");
+    NodeProto *inner = sub->add_node();
+    inner->set_op_type("LeakyRelu");
+    inner->add_input("a");
+    inner->add_output("z");
+    AttributeProto *alpha_ref = inner->add_attribute();
+    alpha_ref->set_name("alpha");
+    alpha_ref->set_ref_attr_name("alpha");
+    alpha_ref->set_type(AttributeProto::AttributeType::FLOAT);
+    sub->add_output()->set_name("z");
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *call = g->add_node();
+  call->set_op_type("GraphsAttr");
+  call->set_domain("custom");
+  call->add_input("x");
+  call->add_output("y");
+  AttributeProto *alpha = call->add_attribute();
+  alpha->set_name("alpha");
+  alpha->set_type(AttributeProto::AttributeType::FLOAT);
+  alpha->set_f(0.25f);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2}, {1.0f, 2.0f}));
+  RunModelViaSession(model, rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  // Identity passes the input through unchanged.
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[0], 1.0f);
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[1], 2.0f);
+}
+
+// A SequenceMap over a STRING sequence forces the STRING branch of
+// CloneTensor when the body's per-iteration outputs are cloned.
+TEST(RunModel, SequenceMapOverStringSequenceClonesStrings) {
+  GraphProto body;
+  body.set_name("seq_map_body");
+  body.add_input()->set_name("x_in");
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("Identity");
+    n->add_input("x_in");
+    n->add_output("y_out");
+  }
+  body.add_output()->set_name("y_out");
+
+  NodeProto seq_map_node = MakeNode("SequenceMap", {"xs"}, {"ys"});
+  AttributeProto *body_attr = seq_map_node.add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *body_attr->add_g() = body;
+
+  GraphProto graph;
+  graph.set_name("main");
+  ValueInfoProto vi_xs, vi_ys;
+  vi_xs.set_name("xs");
+  vi_ys.set_name("ys");
+  graph.ref_input().push_back(vi_xs);
+  graph.ref_output().push_back(vi_ys);
+  graph.ref_node().push_back(seq_map_node);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.PutSequence("xs", Sequence("xs", static_cast<int32_t>(DataType::STRING),
+                                {Tensor::FromStrings("x0", {1}, {"alpha"}),
+                                 Tensor::FromStrings("x1", {1}, {"beta"})}));
+
+  RunGraphViaSession(graph, rt);
+
+  ASSERT_TRUE(rt.HasSequence("ys"));
+  const Sequence &ys = rt.GetSequence("ys");
+  ASSERT_EQ(ys.size(), 2u);
+  EXPECT_EQ(ys.at(0).AsStrings()[0], "alpha");
+  EXPECT_EQ(ys.at(1).AsStrings()[0], "beta");
+}
+
+// Verbose progress logging while running a sub-graph body node must include the
+// "<attr_name>@<node_index>/" prefix (the subgraph-index branch of
+// PrintNodeProgress).
+TEST(RunModel, VerboseProgressInsideSubgraphLogsAttrIndexPrefix) {
+  const uint64_t time_seed =
+      static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+  const uint64_t thread_seed =
+      static_cast<uint64_t>(std::hash<std::thread::id>{}(std::this_thread::get_id()));
+  std::mt19937_64 rng(time_seed ^ thread_seed);
+  const std::filesystem::path log_path =
+      std::filesystem::temp_directory_path() /
+      ("onnx_light_verbose_subgraph_" + std::to_string(rng()) + ".log");
+  TempFileCleanupGuard cleanup(log_path);
+  EnvVarGuard guard("ONNX_LIGHT_LOG");
+#ifdef _WIN32
+  _putenv_s("ONNX_LIGHT_LOG", log_path.string().c_str());
+#else
+  setenv("ONNX_LIGHT_LOG", log_path.string().c_str(), 1);
+#endif
+
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *if_node = g->add_node();
+  if_node->set_op_type("If");
+  if_node->add_input("cond");
+  if_node->add_output("out");
+
+  AttributeProto *then_attr = if_node->add_attribute();
+  then_attr->set_name("then_branch");
+  then_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*then_attr->add_g(), "then_g", "t", "z", 10.0f);
+
+  AttributeProto *else_attr = if_node->add_attribute();
+  else_attr->set_name("else_branch");
+  else_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*else_attr->add_g(), "else_g", "e", "z", 1.0f);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.verbose = 1});
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  RunModelViaSession(model, rt);
+
+  ASSERT_TRUE(std::filesystem::exists(log_path));
+  std::ifstream in(log_path);
+  ASSERT_TRUE(in.is_open());
+  std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  // The Add node inside the taken then-branch is logged with the subgraph
+  // prefix "then_branch@<index>/".
+  EXPECT_NE(content.find("then_branch@"), std::string::npos);
+}
+
 } // namespace Test

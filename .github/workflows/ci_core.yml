@@ -188,6 +188,13 @@ jobs:
           SCCACHE_GHA_ENABLED: "true"
         run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 
+      - name: Report installed lib_onnx_proto size
+        run: |
+          proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
+          python .github/scripts/report_proto_binary_size.py \
+            "${proto_dir}" \
+            --summary "${GITHUB_STEP_SUMMARY}"
+
       - name: Install ONNX weekly
         run: pip install --upgrade onnx-weekly
 

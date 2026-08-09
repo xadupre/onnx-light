@@ -4,6 +4,8 @@
 Quantization
 ============
 
+:Date: 2026-08
+
 .. note::
 
     The structures on this page are descriptive quantization profiles. They

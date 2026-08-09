@@ -23,6 +23,61 @@ bool TestVersion() {
   return !version.empty() && version.rfind("onnx-light", 0) == 0;
 }
 
+bool TestMakeStringScalarIntegers() {
+  // Exercise the fixed-width scalar overloads: uint16/uint32/uint64/int16/int32/int64.
+  return onnx_light_helpers::MakeString(static_cast<uint16_t>(1), static_cast<uint32_t>(2),
+                                        static_cast<uint64_t>(3), static_cast<int16_t>(-4),
+                                        static_cast<int32_t>(-5),
+                                        static_cast<int64_t>(-6)) == "123-4-5-6";
+}
+
+bool TestMakeStringCatchAllTemplate() {
+  // size_t and (signed) long are distinct from the fixed-width types on POSIX and are
+  // routed through the integral catch-all template overload (unsigned and signed branches).
+  const bool unsigned_branch = onnx_light_helpers::MakeString(static_cast<size_t>(7)) == "7";
+  const bool signed_branch = onnx_light_helpers::MakeString(static_cast<long>(-8)) == "-8";
+  return unsigned_branch && signed_branch;
+}
+
+bool TestMakeStringVectors() {
+  const bool u16 = onnx_light_helpers::MakeString(std::vector<uint16_t>{1, 2}) == "x1x2";
+  const bool u32 = onnx_light_helpers::MakeString(std::vector<uint32_t>{3, 4}) == "x3x4";
+  const bool u64 = onnx_light_helpers::MakeString(std::vector<uint64_t>{5, 6}) == "x5x6";
+  const bool i16 = onnx_light_helpers::MakeString(std::vector<int16_t>{-1, -2}) == "x-1x-2";
+  const bool i32 = onnx_light_helpers::MakeString(std::vector<int32_t>{-3, -4}) == "x-3x-4";
+  const bool i64 = onnx_light_helpers::MakeString(std::vector<int64_t>{-5, -6}) == "x-5x-6";
+  const bool f32 = onnx_light_helpers::MakeString(std::vector<float>{1.0f}) == "x1";
+  const bool f64 = onnx_light_helpers::MakeString(std::vector<double>{2.0}) == "x2";
+  return u16 && u32 && u64 && i16 && i32 && i64 && f32 && f64;
+}
+
+bool TestMakeStringPointerOverloads() {
+  const uint64_t value = 42;
+  const uint64_t *non_null = &value;
+  const uint64_t *null_ptr = nullptr;
+  // const uint64_t* overload, both non-null and null.
+  return onnx_light_helpers::MakeString(non_null) == "(ui64*)" &&
+         onnx_light_helpers::MakeString(null_ptr) == "(ui64*)null";
+}
+
+bool TestStringStreamBaseNoOps() {
+  // The abstract StringStream base provides no-op append methods returning *this and an
+  // empty str(). Exercise them directly for coverage.
+  onnx_light_helpers::StringStream base;
+  base.append_uint16(1)
+      .append_uint32(2)
+      .append_uint64(3)
+      .append_int16(-1)
+      .append_int32(-2)
+      .append_int64(-3)
+      .append_float(1.0f)
+      .append_double(2.0)
+      .append_char('a')
+      .append_string("b")
+      .append_charp("c");
+  return base.str().empty();
+}
+
 bool TestEnforceInvalidPasses() {
   try {
     EXT_ENFORCE_INVALID(1 == 1, "should not throw");
@@ -156,6 +211,15 @@ bool TestLoggerInstanceWithMessage() {
   return captured.str().find("instance msg test") != std::string::npos;
 }
 
+bool TestLoggerInstanceReturnsSameInstance() {
+  // Instance() returns the process-wide static logger. Calling with a message must not throw
+  // even when the static instance is disabled (no ONNX_LIGHT_LOG configured), and it must
+  // return the same object on repeated calls.
+  onnx_light_helpers::Logger &a = onnx_light_helpers::Logger::Instance("instance init");
+  onnx_light_helpers::Logger &b = onnx_light_helpers::Logger::Instance();
+  return &a == &b;
+}
+
 } // namespace
 
 int main() {
@@ -169,6 +233,26 @@ int main() {
   }
   if (!TestVersion()) {
     std::cerr << "TestVersion failed." << std::endl;
+    return 1;
+  }
+  if (!TestMakeStringScalarIntegers()) {
+    std::cerr << "TestMakeStringScalarIntegers failed." << std::endl;
+    return 1;
+  }
+  if (!TestMakeStringCatchAllTemplate()) {
+    std::cerr << "TestMakeStringCatchAllTemplate failed." << std::endl;
+    return 1;
+  }
+  if (!TestMakeStringVectors()) {
+    std::cerr << "TestMakeStringVectors failed." << std::endl;
+    return 1;
+  }
+  if (!TestMakeStringPointerOverloads()) {
+    std::cerr << "TestMakeStringPointerOverloads failed." << std::endl;
+    return 1;
+  }
+  if (!TestStringStreamBaseNoOps()) {
+    std::cerr << "TestStringStreamBaseNoOps failed." << std::endl;
     return 1;
   }
   if (!TestEnforceInvalidPasses()) {
@@ -209,6 +293,10 @@ int main() {
   }
   if (!TestLoggerInstanceWithMessage()) {
     std::cerr << "TestLoggerInstanceWithMessage failed." << std::endl;
+    return 1;
+  }
+  if (!TestLoggerInstanceReturnsSameInstance()) {
+    std::cerr << "TestLoggerInstanceReturnsSameInstance failed." << std::endl;
     return 1;
   }
   return 0;

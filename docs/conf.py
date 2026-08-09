@@ -1,3 +1,4 @@
+import datetime
 import os
 import subprocess
 import sys
@@ -223,7 +224,68 @@ class ToSvgExampleDirective(Directive):
         return [literal, nodes.raw("", svg, format="html")]
 
 
+def _gallery_example_source(docname: str) -> str | None:
+    """Returns the example ``.py`` source path for a generated gallery ``docname``.
+
+    Args:
+        docname: The Sphinx document name (for example
+            ``auto_examples_proto/plot_onnx_time``).
+
+    Returns:
+        The absolute path to the example script, or None when ``docname`` does
+        not correspond to a generated gallery example.
+    """
+    for examples_dir, gallery_dir in zip(
+        sphinx_gallery_conf["examples_dirs"], sphinx_gallery_conf["gallery_dirs"]
+    ):
+        prefix = f"{gallery_dir}/"
+        if docname.startswith(prefix):
+            relative = docname[len(prefix) :]
+            source = os.path.join(examples_dir, f"{relative}.py")
+            return source if os.path.exists(source) else None
+    return None
+
+
+def _example_last_modified_date(path: str) -> str:
+    """Returns the last modification date of ``path`` as an ISO ``YYYY-MM-DD`` string.
+
+    The git commit date is used when available so the displayed date reflects
+    when the example was last updated; it falls back to the file modification
+    time when git information cannot be retrieved.
+
+    Args:
+        path: The absolute path to the example script.
+
+    Returns:
+        The last modification date formatted as ``YYYY-MM-DD``.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%cs", "--", path],
+            cwd=_repo_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        date = result.stdout.strip()
+        if date:
+            return date
+    except (subprocess.SubprocessError, OSError):
+        pass
+    return datetime.date.fromtimestamp(os.path.getmtime(path)).isoformat()
+
+
+def _append_example_date(app, docname: str, source: list[str]) -> None:
+    """Appends the source example's last modification date at the bottom of the page."""
+    example_source = _gallery_example_source(docname)
+    if example_source is None:
+        return
+    date = _example_last_modified_date(example_source)
+    source[0] += f"\n\n.. rubric:: Example last updated\n\n:Date: {date}\n"
+
+
 def setup(app) -> None:
     """Registers Sphinx hooks and custom directives used by this configuration."""
     app.connect("builder-inited", _on_builder_inited)
+    app.connect("source-read", _append_example_date)
     app.add_directive("to-svg-example", ToSvgExampleDirective)

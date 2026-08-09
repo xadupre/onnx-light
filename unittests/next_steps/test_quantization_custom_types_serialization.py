@@ -11,6 +11,13 @@ FLOAT16 = 10
 UINT4 = 21
 INT4 = 22
 
+_BITS_PER_ELEMENT = {UINT4: 4, INT4: 4, UINT8: 8, FLOAT16: 16, FLOAT: 32}
+
+
+def _array_bytes(field):
+    array = field["type"]["array"]
+    return array["dimension"] * _BITS_PER_ELEMENT[array["element_type"]] // 8
+
 
 def _encode(value):
     if isinstance(value, bytes):
@@ -206,7 +213,6 @@ def _make_custom_stq1_0(block_count=2):
                     _constant("sign_bit_width", INT32, 1),
                     _constant("sign_count", INT32, 64),
                     _constant("block_size", INT32, layout["block_size"]),
-                    _constant("bytes_per_block", INT32, layout["bytes_per_block"]),
                 ],
             ),
             _structure(
@@ -441,7 +447,12 @@ class TestQuantizationCustomTypesSerialization(unittest.TestCase):
         self.assertEqual(block_constants["sign_bit_width"], 1)
         self.assertEqual(block_constants["sign_count"], 64)
         self.assertEqual(block_constants["block_size"], layout["block_size"])
-        self.assertEqual(block_constants["bytes_per_block"], layout["bytes_per_block"])
+        # bytes_per_block is not a stored constant of the custom type; it is derived
+        # from the physical array field widths and counts (plus any explicit padding).
+        self.assertEqual(
+            sum(_array_bytes(field) for field in physical_fields), layout["bytes_per_block"]
+        )
+        self.assertNotIn("bytes_per_block", block_constants)
         self.assertEqual(stq_constants["codebook"], structured_block["codebook_data"])
         self.assertEqual(
             stq_constants["codebook_vector_size"], structured_block["codebook_vector_size"]

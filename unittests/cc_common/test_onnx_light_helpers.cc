@@ -33,10 +33,10 @@ bool TestMakeStringScalarIntegers() {
 
 bool TestMakeStringCatchAllTemplate() {
   // size_t and (signed) long are distinct from the fixed-width types on POSIX and are
-  // routed through the integral catch-all template overload.
-  const std::string result =
-      onnx_light_helpers::MakeString(static_cast<size_t>(7), static_cast<long>(-8));
-  return result == "7-8";
+  // routed through the integral catch-all template overload (unsigned and signed branches).
+  const bool unsigned_branch = onnx_light_helpers::MakeString(static_cast<size_t>(7)) == "7";
+  const bool signed_branch = onnx_light_helpers::MakeString(static_cast<long>(-8)) == "-8";
+  return unsigned_branch && signed_branch;
 }
 
 bool TestMakeStringVectors() {

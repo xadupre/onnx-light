@@ -5724,8 +5724,9 @@ TEST(NodeHelpers, GetAttributeShapeOrDefaultWrongTypeThrows) {
   attr->set_name("kernel_shape");
   attr->set_type(AttributeProto::AttributeType::INT);
   attr->set_i(1);
-  EXPECT_THROW(core::runtime::GetAttributeShapeOrDefault(node, "kernel_shape", core::runtime::Shape{}),
-               std::invalid_argument);
+  EXPECT_THROW(
+      core::runtime::GetAttributeShapeOrDefault(node, "kernel_shape", core::runtime::Shape{}),
+      std::invalid_argument);
 }
 
 TEST(NodeHelpers, GetAttributeFloatsOrDefaultWrongTypeThrows) {

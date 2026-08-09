@@ -300,7 +300,8 @@ Implementation order
    section, text, dynamic-symbol, and dependency sizes in CI. See
    `PR #4333 <https://github.com/xadupre/onnx-light/pull/4333>`_.
 2. **Implemented:** introduce hidden visibility and an explicit
-   ``ONNX_LIGHT_PROTO_API`` cross-library export boundary.
+   ``ONNX_LIGHT_PROTO_API`` cross-library export boundary. See
+   `PR #4344 <https://github.com/xadupre/onnx-light/pull/4344>`_.
 3. Replace per-message convenience implementations with shared or inline
    adapters.
 4. Compare ``MinSizeRel``, LTO, and linker folding after the structural work.

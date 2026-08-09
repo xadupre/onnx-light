@@ -26,76 +26,37 @@ template <typename T> inline const T &default_proto_instance() {
 #define FIELD_FIXED_SIZE 2
 #define FIELD_FIXED32 5 // deprecated value but used in old files
 
-/** Serialization/parsing API declaration macro for generated proto classes. */
+/** Serialization/parsing core declaration macro for generated proto classes. */
 #define SERIALIZATION_METHOD()                                                                     \
-  SerializeSizeResult SerializeSize() const;                                                       \
-  size_t ByteSizeLong() const;                                                                     \
-  bool ParseFromString(const std::string &raw);                                                    \
-  bool ParseFromString(const std::string &raw, ParseOptions &opts);                                \
-  /** Parses from a raw byte buffer (protobuf compat). */                                          \
-  inline bool ParseFromArray(const void *data, int size) {                                         \
-    return ParseFromString(                                                                        \
-        std::string(static_cast<const char *>(data), static_cast<size_t>(size)));                  \
-  }                                                                                                \
-  bool ParseFromZeroCopyStream(utils::BinaryStream *stream);                                       \
-  bool ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts);                   \
-  bool ParseFromIstream(std::istream *input);                                                      \
-  std::string SerializeAsString() const;                                                           \
-  bool SerializeToArray(void *data, int size) const;                                               \
-  bool SerializeToOstream(std::ostream *output) const;                                             \
-  bool SerializeToOStream(std::ostream *output) const;                                             \
-  /** Serializes to a zero-copy output stream (protobuf compat). */                                \
-  inline bool SerializeToZeroCopyStream(utils::BinaryWriteStream *output) const {                  \
-    std::string buf;                                                                               \
-    if (!SerializeToString(buf))                                                                   \
-      return false;                                                                                \
-    output->write_raw_bytes(reinterpret_cast<const uint8_t *>(buf.data()), buf.size());            \
-    return true;                                                                                   \
-  }                                                                                                \
-  bool SerializeToString(std::string &out) const;                                                  \
-  /** Pointer overload for protobuf compatibility. */                                              \
-  inline bool SerializeToString(std::string *out) const { return SerializeToString(*out); }        \
-  bool SerializeToString(std::string &out, SerializeOptions &opts) const;                          \
-  bool SerializeToFileDescriptor(int fd) const;                                                    \
-  bool SerializeToFileDescriptor(int fd, SerializeOptions &opts) const;                            \
-  bool SaveToFileDescriptor(int fd) const;                                                         \
-  bool SaveToFileDescriptor(int fd, SerializeOptions &opts) const;                                 \
-  bool ParseFromFileDescriptor(int fd);                                                            \
+  using ProtoAdapterBase::ParseFromStream;                                                         \
+  using ProtoAdapterBase::SerializeSize;                                                           \
+  using ProtoAdapterBase::SerializeToString;                                                       \
+  using ProtoAdapterBase::SerializeToStream;                                                       \
   SerializeSizeResult SerializeSize(utils::BinaryWriteStream &stream, SerializeOptions &opts)      \
       const;                                                                                       \
   bool ParseFromStream(utils::BinaryStream &stream, ParseOptions &options);                        \
-  /** Parses from a BinaryStream with default options. */                                          \
-  inline bool ParseFromStream(utils::BinaryStream &stream) {                                       \
-    ParseOptions opts;                                                                             \
-    return ParseFromStream(stream, opts);                                                          \
-  }                                                                                                \
   void SerializeToStream(utils::BinaryWriteStream &stream, SerializeOptions &options) const;       \
-  /** Serializes to a BinaryWriteStream with default options. */                                   \
-  inline void SerializeToStream(utils::BinaryWriteStream &stream) const {                          \
-    SerializeOptions opts;                                                                         \
-    SerializeToStream(stream, opts);                                                               \
-  }                                                                                                \
   void PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const;
 
 /** Macro for beginning a generated proto class with a default constructor. */
 #define BEGIN_PROTO(cls, doc)                                                                      \
-  class ONNX_LIGHT_PROTO_API cls : public Message {                                                \
+  class ONNX_LIGHT_PROTO_API cls : public ProtoMessageAdapter<cls> {                               \
   public:                                                                                          \
+    using ProtoAdapterBase = ProtoMessageAdapter<cls>;                                             \
     static inline constexpr const char *DOC = doc;                                                 \
     explicit inline cls() {}                                                                       \
     /** Resets this message to default state (protobuf compat). */                                 \
     inline void Clear() {                                                                          \
       this->~cls();                                                                                \
       new (this) cls();                                                                            \
-    }                                                                                              \
-    void CopyFrom(const cls &proto);
+    }
 
 /** Macro for beginning a generated proto class without adding a default constructor. */
 #define BEGIN_PROTO_NOINIT(cls, doc)                                                               \
-  class ONNX_LIGHT_PROTO_API cls : public Message {                                                \
+  class ONNX_LIGHT_PROTO_API cls : public ProtoMessageAdapter<cls> {                               \
   public:                                                                                          \
-    static inline constexpr const char *DOC = doc;                                                 \
-    void CopyFrom(const cls &proto);
+    using ProtoAdapterBase = ProtoMessageAdapter<cls>;                                             \
+    static inline constexpr const char *DOC = doc;
 
 /** Macro for ending a generated proto class and injecting the serialization/parsing API. */
 #define END_PROTO()                                                                                \
@@ -420,6 +381,43 @@ public:
   inline bool operator==(const Message &) const {
     EXT_THROW("operator == not implemented for a Message");
   }
+};
+
+/**
+ * Supplies protobuf-compatible convenience methods without emitting one exported copy per
+ * generated message. Only the wire-format core declared by SERIALIZATION_METHOD remains
+ * type-specific and out of line.
+ */
+template <typename Derived> class ProtoMessageAdapter : public Message {
+public:
+  void CopyFrom(const Derived &proto);
+  SerializeSizeResult SerializeSize() const;
+  size_t ByteSizeLong() const;
+  bool ParseFromString(const std::string &raw);
+  bool ParseFromString(const std::string &raw, ParseOptions &opts);
+  bool ParseFromArray(const void *data, int size);
+  bool ParseFromZeroCopyStream(utils::BinaryStream *stream);
+  bool ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts);
+  bool ParseFromIstream(std::istream *input);
+  bool ParseFromFileDescriptor(int fd);
+  std::string SerializeAsString() const;
+  bool SerializeToArray(void *data, int size) const;
+  bool SerializeToOstream(std::ostream *output) const;
+  bool SerializeToOStream(std::ostream *output) const;
+  bool SerializeToZeroCopyStream(utils::BinaryWriteStream *output) const;
+  bool SerializeToString(std::string &out) const;
+  bool SerializeToString(std::string *out) const;
+  bool SerializeToString(std::string &out, SerializeOptions &opts) const;
+  bool SerializeToFileDescriptor(int fd) const;
+  bool SerializeToFileDescriptor(int fd, SerializeOptions &opts) const;
+  bool SaveToFileDescriptor(int fd) const;
+  bool SaveToFileDescriptor(int fd, SerializeOptions &opts) const;
+  bool ParseFromStream(utils::BinaryStream &stream);
+  void SerializeToStream(utils::BinaryWriteStream &stream) const;
+
+private:
+  Derived &derived() { return static_cast<Derived &>(*this); }
+  const Derived &derived() const { return static_cast<const Derived &>(*this); }
 };
 
 /** ADL-visible swap for generated proto messages so that unqualified

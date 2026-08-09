@@ -15,7 +15,10 @@ class TestProtoVisibility(unittest.TestCase):
         self.assertIn(
             '#define ONNX_LIGHT_PROTO_API __attribute__((visibility("default")))', visibility
         )
-        self.assertIn("class ONNX_LIGHT_PROTO_API cls : public Message", stream_class)
+        self.assertIn(
+            "class ONNX_LIGHT_PROTO_API cls : public ProtoMessageAdapter<cls>", stream_class
+        )
+        self.assertIn("class ProtoMessageAdapter : public Message", stream_class)
         self.assertIn("#define ONNX_API ONNX_LIGHT_PROTO_API", onnx_pb)
 
 

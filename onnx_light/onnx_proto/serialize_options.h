@@ -269,7 +269,8 @@ struct SerializeOptions : TensorBufferOptions {
 };
 
 /** Enforces ``SerializeOptions::max_serialized_size_bytes`` for a computed serialized size. */
-bool EnforceMaxSerializedSize(const SerializeSizeResult &total_size,
-                              const SerializeOptions &options, const char *context);
+ONNX_LIGHT_PROTO_API bool EnforceMaxSerializedSize(const SerializeSizeResult &total_size,
+                                                   const SerializeOptions &options,
+                                                   const char *context);
 
 } // namespace ONNX_LIGHT_NAMESPACE

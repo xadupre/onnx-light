@@ -195,6 +195,18 @@ This refactoring is an ABI change and must be measured separately from
 feature splitting. Wire compatibility does not require preserving every
 out-of-line convenience symbol.
 
+This step is now implemented with ``ProtoMessageAdapter<T>``. Generated
+messages inherit its inline compatibility API, while only
+``ParseFromStream``, ``SerializeToStream``, ``SerializeSize``, and text
+printing remain type-specific out-of-line methods. The Release build no
+longer exports one copy of each string, array, iostream, zero-copy, and
+file-descriptor adapter for every message.
+
+On the same local Linux Release configuration used for step 2, the defined
+dynamic symbol count decreased from 1,191 to 622. The stripped library
+decreased from 1,625,024 to 997,048 bytes, a reduction of 627,976 bytes
+(about 613 KiB).
+
 Visibility and linking
 ++++++++++++++++++++++
 
@@ -302,8 +314,8 @@ Implementation order
 2. **Implemented:** introduce hidden visibility and an explicit
    ``ONNX_LIGHT_PROTO_API`` cross-library export boundary. See
    `PR #4344 <https://github.com/xadupre/onnx-light/pull/4344>`_.
-3. Replace per-message convenience implementations with shared or inline
-   adapters.
+3. **Implemented:** replace per-message convenience implementations with the
+   inline ``ProtoMessageAdapter<T>`` CRTP adapter.
 4. Compare ``MinSizeRel``, LTO, and linker folding after the structural work.
 5. Enforce the selected size budget in CI with a platform-specific baseline.
 
@@ -335,9 +347,9 @@ may eliminate some of the same code.
      - High
    * - 3
      - Share or inline per-message convenience wrappers
-     - 300--550 KiB
-     - 0.95--1.25 MiB
-     - Medium
+     - 613 KiB measured
+     - 0.95 MiB
+     - High
    * - 4
      - ``MinSizeRel``, LTO, and identical-code folding
      - 50--150 KiB
@@ -354,6 +366,6 @@ dependencies such as OpenSSL from parser-only deployments. It is deliberately
 excluded from the cumulative figures because it changes library composition
 rather than optimizing the same target.
 
-The most defensible near-term expectation is therefore approximately
-1.45--1.60 MiB after stripping and visibility work. Reaching
-0.95--1.25 MiB depends mainly on consolidating the generated message API.
+The measured stripped library is now approximately 0.95 MiB after wrapper
+consolidation, meeting the stretch target before the compiler and linker
+experiments in step 4.

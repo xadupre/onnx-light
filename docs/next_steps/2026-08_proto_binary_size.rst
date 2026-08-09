@@ -287,7 +287,8 @@ Implementation order
 ++++++++++++++++++++
 
 1. **Implemented:** strip the installed Release artifact and report its file,
-   section, text, dynamic-symbol, and dependency sizes in CI.
+   section, text, dynamic-symbol, and dependency sizes in CI. See
+   `PR #4333 <https://github.com/xadupre/onnx-light/pull/4333>`_.
 2. Introduce hidden visibility and an explicit cross-library export list.
 3. Replace per-message convenience implementations with shared or inline
    adapters.

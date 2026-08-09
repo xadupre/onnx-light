@@ -122,6 +122,40 @@ No ``CacheProto`` is needed. Dense caches remain ``TensorProto`` values and
 quantized pages are ``QuantizedTensorProto`` values. Capacity and valid length
 are described by shapes or explicit scalar inputs.
 
+Alternative alias designs
++++++++++++++++++++++++++
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 38 38
+
+   * - Design
+     - Advantage
+     - Limitation
+   * - ``NodeProto.output_alias``
+     - Explicit and self-contained in the model.
+     - Repeated on every node.
+   * - Operator-schema alias rule
+     - Declared once for ``CacheUpdate``.
+     - Requires the runtime schema; less suitable for dynamic rules.
+   * - ``FunctionProto`` parameter alias
+     - Preserves aliases through local functions.
+     - Does not describe primitive custom nodes.
+   * - Mutable reference type
+     - Naturally represents persistent state.
+     - Introduces reference semantics into ONNX types.
+   * - Graph state slot
+     - Hides cache threading between graph calls.
+     - Adds state, concurrency, and checkpoint semantics.
+   * - Metadata property
+     - Requires no proto change and is easy to prototype.
+     - Weak contract that generic tools may ignore.
+
+The recommended design combines a schema rule for known operators with
+``NodeProto.output_alias`` as the serialized source of truth. Function aliases
+use the same rule on formal input and output indices. Metadata is suitable
+only for experimentation.
+
 Model example
 +++++++++++++
 
@@ -229,6 +263,118 @@ replacement.
 For a paged cache, only a missing page may be allocated. Existing pages are
 updated in place, and page-table growth must not duplicate page payloads.
 Each quantized page keeps its own ``QuantizedTensorProto.quantized_type``.
+
+Existing implementations
+++++++++++++++++++++++++
+
+ONNX Runtime GenAI
+^^^^^^^^^^^^^^^^^^
+
+ONNX Runtime GenAI exposes the cache as ``past_key_values.*`` inputs and
+``present.*`` outputs. In the basic mode, each ``present`` becomes the next
+iteration's ``past``.
+
+Buffer sharing is requested in ``genai_config.json``:
+
+.. code-block:: json
+
+    {
+      "search": {
+        "past_present_share_buffer": true,
+        "num_beams": 1,
+        "max_length": 4096
+      }
+    }
+
+GenAI then allocates one capacity-sized ``OrtValue`` per K/V layer and binds
+the same object to both names:
+
+.. code-block:: text
+
+    past_key_values.0.key ──┐
+                            ├── OrtValue B
+    present.0.key ──────────┘
+
+The compatible attention operator writes new values at the current position.
+``DefaultKeyValueCache::Update`` returns immediately because neither the
+pointer nor the allocation changes. The ONNX model itself contains no alias
+annotation; GenAI creates the alias while binding session inputs and outputs.
+
+The option is enabled only when requested and when ``num_beams == 1``, except
+for the specialized Whisper case. Graph capture requires shared buffers.
+
+It also supports windowed caches, model-managed state, and paged-attention
+metadata such as ``block_table`` and ``past_sequence_lengths``. Quantized
+caches use a cache-wide or layer-wide representation rather than a different
+type for every page.
+
+Its ``PagedKeyValueCache`` is logically, not physically, paged. For each layer
+it preallocates two contiguous tensors:
+
+.. code-block:: text
+
+    key_cache:   [num_blocks, block_size, num_kv_heads, head_size]
+    value_cache: [num_blocks, block_size, num_kv_heads, head_size]
+
+The ``block_table`` maps each request's logical pages to slices on the
+``num_blocks`` axis. Blocks can be assigned and released independently, but
+the backing tensors never grow after allocation. Once the free block pool is
+empty, no additional cache capacity is available without creating a larger
+cache and copying the old content.
+
+All blocks of one cache tensor have the same element type, layout, and
+physical size. Quantization parameters may differ by layer, but not by page.
+Independent page allocations and heterogeneous page quantization are not
+supported. With one active request, continuous batching provides no batching
+benefit; paging still avoids contiguous cache growth, but it does not reduce
+the preallocated physical pool.
+
+See `kv_cache.cpp
+<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/models/kv_cache.cpp#L531-L564>`_,
+`kv_cache.h
+<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/models/kv_cache.h>`_,
+`paged_key_value_cache.h
+<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/engine/paged_key_value_cache.h>`_,
+the `activation rule
+<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/generators.cpp#L430-L435>`_,
+and the `model builder
+<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/python/py/models/builders/base.py>`_.
+
+llama.cpp
+^^^^^^^^^
+
+llama.cpp keeps the KV-cache in runtime-owned ``llama_kv_cache`` state rather
+than model inputs and outputs. It allocates K/V storage per layer, gives the
+compute graph views over the destination ranges, and writes new values
+directly through ``cpy_k`` and ``cpy_v``. Sequence operations primarily update
+cell metadata; defragmentation moves only required ranges.
+
+The capacity ``kv_size`` is fixed when the context is created. Each layer owns
+K/V tensors covering that capacity, while ``llama_kv_cells`` maps tokens and
+sequences to slots. A sequence may therefore occupy non-contiguous cells, but
+the underlying tensors do not grow. ``find_slot`` reuses free cells;
+context shifting, eviction, and defragmentation recover space. If no suitable
+slot is available, cache preparation fails rather than extending the
+allocation.
+
+``type_k`` and ``type_v`` are selected for the cache as a whole. They may
+differ from each other, but not from cell to cell. Specialized block caches
+exist for some architectures, but there is no generic page table with
+independently allocated or heterogeneously quantized pages.
+
+See `llama-kv-cache.h
+<https://github.com/ggml-org/llama.cpp/blob/7ba604f1cb61cd14898138e9abc0b4ff2601f180/src/llama-kv-cache.h>`_
+and `llama-kv-cache.cpp
+<https://github.com/ggml-org/llama.cpp/blob/7ba604f1cb61cd14898138e9abc0b4ff2601f180/src/llama-kv-cache.cpp>`_.
+
+Design consequence
+^^^^^^^^^^^^^^^^^^
+
+``MUST_ALIAS`` serializes the shared-buffer optimization used by ONNX Runtime
+GenAI instead of leaving it to runtime configuration. A mutable state handle
+would be closer to llama.cpp but would move cache semantics outside the graph.
+``Sequence<QuantizedTensorProto>`` additionally permits each page to select a
+different ``quantized_type``.
 
 Memory planning
 +++++++++++++++

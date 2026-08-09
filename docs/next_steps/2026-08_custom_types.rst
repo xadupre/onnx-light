@@ -3,6 +3,8 @@
 Structured views over byte buffers
 ==================================
 
+:Date: 2026-08
+
 Motivation
 ++++++++++
 

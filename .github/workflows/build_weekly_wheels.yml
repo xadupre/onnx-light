@@ -64,6 +64,11 @@ jobs:
           CIBW_ENVIRONMENT: >
             CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
             CMAKE_ARGS=-DONNX_HARDENING=ON
+      - name: Report packaged lib_onnx_proto size
+        run: |
+          python .github/scripts/report_proto_binary_size.py \
+            wheelhouse/*.whl \
+            --summary "${GITHUB_STEP_SUMMARY}"
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:

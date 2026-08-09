@@ -260,6 +260,56 @@ def _make_struct_value(struct_types, type_index, raw_data=None, logical_dims=(16
     }
 
 
+def _varint(value):
+    encoded = bytearray()
+    while True:
+        chunk = value & 0x7F
+        value >>= 7
+        if value:
+            encoded.append(chunk | 0x80)
+        else:
+            encoded.append(chunk)
+            return bytes(encoded)
+
+
+def _tag(field_number, wire_type):
+    return _varint((field_number << 3) | wire_type)
+
+
+def _length_delimited(field_number, payload):
+    return _tag(field_number, 2) + _varint(len(payload)) + payload
+
+
+def _serialize_quantized_tensor(tensor):
+    """Serializes a QuantizedTensorProto to the onnx-light wire format."""
+    chunks = []
+    for dim in tensor["dims"]:
+        chunks.append(_tag(1, 0) + _varint(dim))
+    chunks.append(_length_delimited(2, tensor["raw_data"]))
+    chunks.append(_tag(3, 0) + _varint(tensor["n_bytes"]))
+    chunks.append(_length_delimited(6, tensor["name"].encode("utf-8")))
+    chunks.append(_length_delimited(7, tensor["doc_string"].encode("utf-8")))
+    return b"".join(chunks)
+
+
+def _serialize_struct_value(value):
+    """Serializes a StructProto value (custom-type form) to the onnx-light wire format."""
+    chunks = [_tag(1, 0) + _varint(value["type"])]
+    for dim in value["dims"]:
+        chunks.append(_tag(2, 0) + _varint(dim))
+    chunks.append(_length_delimited(3, value["raw_data"]))
+    chunks.append(_length_delimited(4, value["name"].encode("utf-8")))
+    chunks.append(_length_delimited(5, value["doc_string"].encode("utf-8")))
+    return b"".join(chunks)
+
+
+def _serialized_raw_data_size(field_number, raw_data, serialized):
+    """Returns the payload byte count of the raw_data field embedded in a serialized message."""
+    segment = _length_delimited(field_number, raw_data)
+    assert segment in serialized
+    return len(segment) - len(_tag(field_number, 2)) - len(_varint(len(raw_data)))
+
+
 class TestQuantizationCustomTypesSerialization(unittest.TestCase):
     def test_linear_uniform_with_and_without_custom_types(self):
         specialized = _round_trip(_make_specialized_linear())
@@ -419,6 +469,49 @@ class TestQuantizationCustomTypesSerialization(unittest.TestCase):
         self._assert_stq1_0_equivalent(
             quantized_tensor["quantization"],
             {"struct_types": struct_value["model"]["struct_types"]},
+        )
+
+    def _assert_serialized_size_matches_buffer(
+        self, specialized_quantization, custom_types, custom_type_index, raw_data
+    ):
+        tensor = _round_trip(_make_quantized_tensor(specialized_quantization, raw_data))
+        struct_value = _round_trip(_make_struct_value(custom_types, custom_type_index, raw_data))
+        value = struct_value["value"]
+
+        serialized_tensor = _serialize_quantized_tensor(tensor)
+        serialized_value = _serialize_struct_value(value)
+
+        # The declared byte size matches the buffer that actually gets serialized.
+        self.assertEqual(tensor["n_bytes"], len(raw_data))
+        # The serialized raw_data segment carries exactly the buffer size, with and
+        # without custom types.
+        self.assertEqual(
+            _serialized_raw_data_size(2, tensor["raw_data"], serialized_tensor), len(raw_data)
+        )
+        self.assertEqual(
+            _serialized_raw_data_size(3, value["raw_data"], serialized_value), len(raw_data)
+        )
+
+    def test_quantized_tensor_serialized_size_matches_buffer(self):
+        self._assert_serialized_size_matches_buffer(
+            _make_specialized_linear(), [_make_custom_linear()], 0, bytes(range(64))
+        )
+        self._assert_serialized_size_matches_buffer(
+            _make_specialized_codebook(),
+            [_make_custom_codebook()],
+            0,
+            bytes(index % 256 for index in range(200)),
+        )
+
+    def test_quantized_tensor_stq1_0_serialized_size_matches_buffer(self):
+        specialized = _make_specialized_stq1_0()
+        custom = _make_custom_stq1_0()
+        block_count = specialized["structured_block"]["block_count"]
+        bytes_per_block = specialized["structured_block"]["block_layout"]["bytes_per_block"]
+        raw_data = bytes(index % 256 for index in range(block_count * bytes_per_block))
+
+        self._assert_serialized_size_matches_buffer(
+            specialized, custom["struct_types"], 1, raw_data
         )
 
 

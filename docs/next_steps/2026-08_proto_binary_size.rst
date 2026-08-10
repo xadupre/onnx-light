@@ -5,6 +5,8 @@ Reducing the ``lib_onnx_proto`` binary size
 
 :Date: 2026-08
 
+**complete**
+
 Objective
 +++++++++
 

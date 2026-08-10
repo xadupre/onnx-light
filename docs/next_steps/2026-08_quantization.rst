@@ -6,6 +6,8 @@ Quantization
 
 :Date: 2026-08
 
+**complete**
+
 .. note::
 
     The structures on this page are descriptive quantization profiles. They
@@ -203,7 +205,6 @@ It carries its own byte size explicitly.
 
          StructProto {
              type: <quantization-profile type index>
-             dims: ...  // one value per declared dimension parameter
              raw_data: ...
              name: ...
              doc_string: ...
@@ -213,11 +214,10 @@ It carries its own byte size explicitly.
 ``external_data``, ``name``, and ``doc_string`` are carried by that generic
 value. Its exact model-level or inline ``StructTypeProto`` replaces
 ``quantized_type`` and ``quantization``. Counts such as a block or tile
-number are either constants of that type or dimension parameters bound by
-``StructProto.dims``, so one declaration serves every tensor size. The size
-computed from the physical type and ``dims`` must equal ``raw_data.size()`` or
-external-data ``length``. Logical
-dimensions and element type belong to the decoder output ``ValueInfoProto``.
+number are concrete dimensions of that type. The size computed from the
+physical type must equal ``raw_data.size()`` or external-data ``length``.
+Logical dimensions and element type belong to the decoder output
+``ValueInfoProto``.
 
 In both forms, ``name`` identifies the concrete value and ``doc_string``
 documents it.
@@ -592,7 +592,7 @@ Covers FP6, FP4, MXFP and similar reduced-precision floating-point formats.
                  // Serialized payload.
                  field: {
                      name: "packed"
-                     type: packed_array(
+                     type: bit_packing(
                          dimension=packed_count,
                          components=[
                              sign:sign_bits,
@@ -628,7 +628,7 @@ Covers FP6, FP4, MXFP and similar reduced-precision floating-point formats.
              structure: Structure {
                  field: {
                      name: "packed"
-                     type: packed_array(
+                     type: bit_packing(
                          dimension=4,
                          components=[sign:1, exponent:3, mantissa:2]
                      )
@@ -655,7 +655,7 @@ Covers FP6, FP4, MXFP and similar reduced-precision floating-point formats.
          }
 
 A standard ONNX low-precision type such as ``FLOAT4E2M1`` or a float8 type is
-an ordinary physical ``Array``. A non-standard width uses ``PackedArray`` so
+an ordinary physical ``Array``. A non-standard width uses ``BitPacking`` so
 the component widths and packed element count remain explicit. Split storage
 is a ``Structure`` with one field per bit plane or component. Parameters not
 already expressed by the physical structure remain named constant fields.
@@ -2125,7 +2125,7 @@ Tensor Core alignment.
                      structure: Structure {
                          field: {
                              name: "sign_exponent"
-                             type: packed_array(
+                             type: bit_packing(
                                  dimension=4,
                                  components=[sign:1, exponent:3]
                              )

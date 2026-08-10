@@ -25,16 +25,16 @@ A pattern must never reuse an existing name: every value it produces is new.
 This invariant keeps the successor and predecessor maps valid between two
 rewrites of the same iteration.
 
-Graph index
-+++++++++++
+Graph structure on Graph
+++++++++++++++++++++++++
 
 The optimizer does not own the graph; it owns an index over the builder nodes,
 rebuilt after each iteration. The Python ``_build`` method becomes a
-``GraphIndex`` class:
+``GraphGraph`` class:
 
 .. code-block:: cpp
 
-    class GraphIndex {
+    class GraphGraph {
     public:
       // Node producing ``name`` (nullptr for inputs and initializers).
       const NodeProto *NodeBefore(const std::string &name) const;
@@ -117,7 +117,7 @@ A pattern is a stateless matcher and rewriter. The two Python classes
             const std::vector<const NodeProto *> &candidates) const = 0;
 
       // Produces the replacement nodes for one match.
-      virtual std::vector<NodeProto>
+      virtual utils::RepeatedProtoField<NodeProto>
       Apply(GraphBuilderPatternOptimization &opt,
             const std::vector<const NodeProto *> &nodes) const = 0;
 
@@ -126,6 +126,12 @@ A pattern is a stateless matcher and rewriter. The two Python classes
 
 ``FastOpType`` lets the driver restrict a pattern to the nodes of one operator
 type, exactly like ``fast_op_type`` gates ``subset_nodes`` in Python.
+
+Replacement nodes use ``utils::RepeatedProtoField<NodeProto>`` because they
+own protobuf messages. Moving that container transfers its pointer-backed
+storage without copying each ``NodeProto`` and matches the node storage used
+by ``GraphProto``. The pointer vectors above remain appropriate for
+non-owning candidate and match views.
 
 Match and apply loop
 +++++++++++++++++++++
@@ -146,14 +152,15 @@ local structure each match relied on stays intact:
 
     for every recorded match:
         replacement = pattern.Apply(match)
-        splice replacement in place of the matched nodes
+        move replacement into the rebuilt node field at the first matched position
 
 A match is skipped when one of its nodes is already claimed by an earlier match
 of the same iteration (the ``marked`` set), or when a ``DoNotRemove`` predicate
 protects it (the port of the Python ``do_not_remove`` guard, driven by node
-name markers). Application splices the new
-nodes at the position of the first removed node, reusing the existing node
-storage of the builder.
+name markers). Application rebuilds the builder node field in order. It moves
+retained node pointers and replacement fields into a new
+``utils::RepeatedProtoField<NodeProto>`` before replacing the old field, so no
+``NodeProto`` needs a deep copy.
 
 Cleanup and convergence
 ++++++++++++++++++++++++
@@ -200,7 +207,7 @@ can profile which patterns fire and how long each phase takes, as the Python
 Implementation order
 ++++++++++++++++++++
 
-1. Add ``GraphIndex`` and the value queries over ``GraphBuilder``.
+1. Add ``GraphGraph`` and the value queries over ``GraphBuilder``.
 2. Add the ``PatternOptimization`` / ``MatchResult`` interfaces and one trivial
    pattern (for example ``Cast(Cast(x))`` collapsing).
 3. Implement the match/apply loop and wire in the existing cleanup passes.

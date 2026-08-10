@@ -5,6 +5,8 @@ Mutable execution cache
 
 :Date: 2026-08
 
+**in progress**
+
 Objective
 +++++++++
 
@@ -25,41 +27,39 @@ names, but two names may identify the same storage:
 ``updated_cache`` must alias ``cache``. The operator changes the valid cache
 content but does not allocate another full buffer.
 
-The cache descriptor separates:
-
-* capacity: allocated shape or number of pages;
-* valid length: portion currently containing values;
-* physical type: dense tensor or ``QuantizedTensorProto`` page;
-* mutability and storage identity.
+The cache remains an ordinary tensor or sequence. Its capacity is part of its
+shape, while its valid length and update position are explicit scalar inputs.
+Mutability and storage aliasing are execution contracts, not new value types.
 
 ``ShapesContext``
 +++++++++++++++++
 
-``ShapesContext`` keeps this information because it already owns value shapes,
-types, and symbolic dimensions. A cache descriptor may wrap a tensor, a
-quantized tensor, or a sequence of quantized pages:
+No ``SymCache`` class is needed. ``ShapesContext`` handles the cache with its
+existing ``SymTensor`` or sequence representation and infers that
+``updated_cache`` has the same type and shape as ``cache``. When the relevant
+dimensions are known, it also checks
+``position + update_length <= capacity``.
 
-.. code-block:: cpp
+``ValueInfoProto.access`` records whether the graph input is mutable.
+``NodeProto.output_alias`` records the relation between operator ports, while
+the output's ``ValueInfoProto.alias_of`` records the same relation by value
+name. The execution plan and runtime track the concrete storage identity and
+verify pointer equality. Subgraphs and local functions propagate the same type
+and alias annotations.
 
-    class SymCache {
-    public:
-      const SymValue &Value() const;
-      const SymDim &Capacity() const;
-      const SymDim &ValidLength() const;
-      CacheStorageId StorageId() const;
-      bool IsMutable() const;
-    };
+Shape inference maintains alias equivalence classes over value names. For each
+alias it:
 
-Shape inference for ``CacheUpdate``:
+1. resolves the node port indices to input and output names;
+2. verifies that ``ValueInfoProto.alias_of`` names the same input;
+3. merges the input and output type and shape constraints;
+4. rejects incompatible element types, ranks, dimensions, or alias cycles;
+5. records the common alias root for memory planning.
 
-1. checks that the input is mutable;
-2. verifies ``position + update_length <= capacity``;
-3. returns a descriptor with the same storage identity;
-4. updates the valid length without changing capacity.
-
-Subgraphs inherit captured caches. Local functions receive and return them
-explicitly. Merging control-flow branches is valid only when both branches
-preserve the same storage identity and compatible valid lengths.
+Type and shape information learned for either name is therefore visible
+through the other. Control-flow branches may merge an aliased output only when
+they resolve it to the same alias root. ``ShapesContext`` stores names and
+constraints only; concrete pointer identity remains a runtime check.
 
 Required alias
 ++++++++++++++
@@ -69,9 +69,9 @@ The execution plan needs a mandatory alias distinct from opportunistic
 
 .. code-block:: text
 
-    output 0 MUST_ALIAS input 0
+    updated_cache.alias_of = "cache"
 
-``MUST_ALIAS`` means:
+``alias_of`` means:
 
 * no output allocation is planned;
 * the kernel receives a writable view of the input storage;
@@ -86,7 +86,7 @@ from the input becoming dead.
 Proto additions
 +++++++++++++++
 
-Two small additions make the contract serializable:
+The port-level and value-level contracts are serialized as follows:
 
 .. code-block:: text
 
@@ -112,11 +112,15 @@ Two small additions make the contract serializable:
         }
         ...
         Access access = <N>;
+        string alias_of = <N+1>;  // empty when the value owns distinct storage
     }
 
-``output_alias`` declares the storage relation independently of the operator
-implementation. ``READ_WRITE`` is valid for a graph input and tells the caller
-that execution may modify its storage.
+``output_alias`` identifies the input and output ports of the producing node.
+``alias_of`` names the value whose storage must be shared and exposes the
+relation at graph or function boundaries. When both annotations describe the
+same output, a checker requires them to identify the same input.
+``READ_WRITE`` is valid for a graph input and tells the caller that execution
+may modify its storage.
 
 No ``CacheProto`` is needed. Dense caches remain ``TensorProto`` values and
 quantized pages are ``QuantizedTensorProto`` values. Capacity and valid length
@@ -132,9 +136,12 @@ Alternative alias designs
    * - Design
      - Advantage
      - Limitation
+   * - ``ValueInfoProto.alias_of``
+     - Relates named values directly and works at graph boundaries.
+     - Requires ``ValueInfoProto`` for every aliased output.
    * - ``NodeProto.output_alias``
-     - Explicit and self-contained in the model.
-     - Repeated on every node.
+     - Describes the operator contract using stable port indices.
+     - Does not alone expose the alias at a graph boundary.
    * - Operator-schema alias rule
      - Declared once for ``CacheUpdate``.
      - Requires the runtime schema; less suitable for dynamic rules.
@@ -151,10 +158,9 @@ Alternative alias designs
      - Requires no proto change and is easy to prototype.
      - Weak contract that generic tools may ignore.
 
-The recommended design combines a schema rule for known operators with
-``NodeProto.output_alias`` as the serialized source of truth. Function aliases
-use the same rule on formal input and output indices. Metadata is suitable
-only for experimentation.
+The recommended design keeps ``NodeProto.output_alias`` for the local operator
+contract and ``ValueInfoProto.alias_of`` for the named graph contract.
+Metadata is suitable only for experimentation.
 
 Model example
 +++++++++++++
@@ -182,6 +188,7 @@ name backed by the same storage:
 
     graph output:
         updated_cache: FLOAT16[2, batch, heads, max_length, head_size]
+            alias_of: "cache"
 
 Before execution, the caller allocates ``cache`` for ``max_length`` and binds
 it as writable storage. The runtime binds ``updated_cache`` to the same
@@ -234,11 +241,12 @@ The update node aliases the page table:
 .. code-block:: text
 
     updated_cache = PagedCacheUpdate(cache, page_id, values, position)
-    updated_cache MUST_ALIAS cache
+    updated_cache.alias_of = "cache"
 
-``ShapesContext`` keeps one ``SymQuantizedTensor`` and one storage identity
-per page. The kernel dispatches from ``quantized_type`` and quantizes the new
-values directly into that page.
+``ShapesContext`` keeps only the common logical page type and shape. The
+runtime owns the page storage identities. The kernel dispatches from
+``quantized_type`` and quantizes the new values directly into the selected
+page.
 
 Updating an existing page allocates nothing. Creating a page allocates only
 that page. Changing a page to a quantization type requiring a different byte
@@ -370,11 +378,11 @@ and `llama-kv-cache.cpp
 Design consequence
 ^^^^^^^^^^^^^^^^^^
 
-``MUST_ALIAS`` serializes the shared-buffer optimization used by ONNX Runtime
-GenAI instead of leaving it to runtime configuration. A mutable state handle
-would be closer to llama.cpp but would move cache semantics outside the graph.
-``Sequence<QuantizedTensorProto>`` additionally permits each page to select a
-different ``quantized_type``.
+``output_alias`` and ``alias_of`` serialize the shared-buffer optimization
+used by ONNX Runtime GenAI instead of leaving it to runtime configuration. A
+mutable state handle would be closer to llama.cpp but would move cache
+semantics outside the graph. ``Sequence<QuantizedTensorProto>`` additionally
+permits each page to select a different ``quantized_type``.
 
 Memory planning
 +++++++++++++++
@@ -387,9 +395,10 @@ it from ordinary release and reuse candidates.
 Implementation order
 ++++++++++++++++++++
 
-1. Add ``SymCache`` and storage identity to ``ShapesContext``.
-2. Add ``MUST_ALIAS`` to schema and execution-plan metadata.
-3. Add mutable caller bindings and writable kernel views.
+1. Add ``NodeProto.output_alias``, ``ValueInfoProto.alias_of``, and
+   execution-plan alias metadata.
+2. Add mutable caller bindings and writable kernel views.
+3. Extend shape inference with alias propagation and cache-capacity checks.
 4. Support dense and heterogeneous quantized paged-cache updates.
 5. Test pointer identity, capacity errors, concurrency rejection, and peak
    memory without a second cache allocation.

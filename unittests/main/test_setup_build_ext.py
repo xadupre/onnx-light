@@ -4,8 +4,10 @@ import sys
 import unittest
 from pathlib import Path
 
+import onnx_light
 from onnx_light import get_cpp_build_info
 from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.onnx_py import _onnxpyprotoop
 
 
 def has_setuptool():
@@ -23,10 +25,17 @@ skip_test = has_setuptool()
 class TestSetupBuildExt(ExtTestCase):
     def test_cpp_build_info_uses_python_runtime_library(self):
         info = get_cpp_build_info()
-        package_dir = Path(__file__).resolve().parents[2] / "onnx_light"
-        self.assertEqual(Path(info["include_dir"]), package_dir)
-        self.assertEqual(Path(info["core_library"]).parent, package_dir / "onnx_py")
-        self.assertEqual(Path(info["proto_library"]).parent, package_dir / "onnx_py")
+        library_dir = Path(_onnxpyprotoop.__file__).resolve().parent
+        self.assertEqual(Path(info["include_dir"]), Path(onnx_light.__file__).resolve().parent)
+        self.assertEqual(Path(info["library_dir"]), library_dir)
+        # lib_onnx_proto is the only runtime library built shared on every platform.
+        self.assertIn("proto_library", info)
+        for key in ("core_library", "proto_library"):
+            if key not in info:
+                continue
+            library = Path(info[key])
+            self.assertEqual(library.parent, library_dir)
+            self.assertExists(library)
 
     def _line_index(self, lines, predicate, description):
         """Returns the index of the first line matching predicate, failing clearly otherwise."""

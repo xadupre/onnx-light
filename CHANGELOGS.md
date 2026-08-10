@@ -3,7 +3,7 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.1.16] – Unreleased
+## [0.1.17] – Unreleased
 
 ### Improvements
 
@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Documentation & CI
 
-- Bumped the release version to `0.1.16`.
+- Bumped the release version to `0.1.17`.
 - Added a next-steps design page for a C++ pattern-based `GraphBuilder` optimizer.
 - Added last-updated dates to the gallery examples and split `plot_onnx_time` into three separate figures.
 - Added backend run-model tests for previously untested logical kernels.

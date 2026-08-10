@@ -61,13 +61,6 @@ Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator) {
   if (static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return Tensor::MakeString(tensor.name, tensor.shape, tensor.AsStrings());
   }
-  if (allocator == nullptr) {
-    std::vector<uint8_t> data(tensor.size_bytes());
-    if (tensor.size_bytes() > 0) {
-      std::memcpy(data.data(), tensor.bytes(), tensor.size_bytes());
-    }
-    return Tensor(tensor.name, tensor.data_type, tensor.shape, std::move(data));
-  }
   Tensor clone = MakeOutputTensor(tensor.data_type, tensor.shape, tensor.size_bytes(), allocator);
   clone.name = tensor.name;
   if (tensor.size_bytes() > 0) {
@@ -158,12 +151,8 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
                                       std::numeric_limits<size_t>::max() / elem_bytes),
       "RunNode: op '", op_name, "' exceeds addressable buffer size.");
   const size_t out_n_bytes = static_cast<size_t>(elements_per_slice) * elem_bytes;
-  Tensor out;
-  if (t.has_allocation()) {
-    out = MakeOutputTensor(t.data_type, out_shape, out_n_bytes, t.allocation_owner());
-  } else {
-    out = Tensor("", t.data_type, out_shape, std::vector<uint8_t>(out_n_bytes));
-  }
+  Tensor out = MakeOutputTensor(t.data_type, out_shape, out_n_bytes,
+                                t.has_allocation() ? t.allocation_owner() : nullptr);
   if (!t.name.empty()) {
     out.name = t.name + "_slice";
   }
@@ -436,7 +425,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
     stacked_shape.push_back(trip_count);
     stacked_shape.insert(stacked_shape.end(), base_shape.begin(), base_shape.end());
 
-    std::vector<uint8_t> stacked_data;
+    RawByteBuffer stacked_data;
     if (trip_count > 0 && elem_bytes > 0 && row[0].size_bytes() > 0) {
       stacked_data.reserve(static_cast<std::size_t>(trip_count) * row[0].size_bytes());
       for (int64_t t = 0; t < trip_count; ++t) {
@@ -444,7 +433,8 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         stacked_data.insert(stacked_data.end(), it.bytes(), it.bytes() + it.size_bytes());
       }
     }
-    Tensor stacked(caller_name, dtype, std::move(stacked_shape), std::move(stacked_data));
+    Tensor stacked =
+        Tensor::FromRawBytes(caller_name, dtype, std::move(stacked_shape), std::move(stacked_data));
 
     // When the loop runs zero iterations the kernel has no template to seed
     // dtype/shape from. Patch using the body's declared output value-info so

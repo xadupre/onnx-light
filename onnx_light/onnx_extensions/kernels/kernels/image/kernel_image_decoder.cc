@@ -24,6 +24,9 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
+using core::runtime::RawBuffer;
+using core::runtime::RawByteBuffer;
+
 void CheckImageDecoderInput(const Tensor &encoded_stream) {
   EXT_ENFORCE_INVALID(encoded_stream.data_type == static_cast<int32_t>(DataType::UINT8),
                       "kernel::ImageDecoder only supports UINT8 input tensors.");
@@ -57,7 +60,7 @@ inline uint32_t ReadU32LE(const uint8_t *p) {
 inline int32_t ReadI32LE(const uint8_t *p) { return static_cast<int32_t>(ReadU32LE(p)); }
 
 bool TryDecodeBmp(const uint8_t *data, size_t size, const std::string &pixel_format,
-                  int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+                  int64_t &out_height, int64_t &out_width, RawByteBuffer &out_pixels) {
   // Minimum BMP file: 14-byte file header + 40-byte BITMAPINFOHEADER = 54 bytes.
   if (size < 54) {
     return false;
@@ -411,7 +414,7 @@ bool DecodeBlock(JpegBitReader &reader, const HuffmanTable &dc_table, const Huff
 }
 
 bool TryDecodeJpeg(const uint8_t *data, size_t size, const std::string &pixel_format,
-                   int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels,
+                   int64_t &out_height, int64_t &out_width, RawByteBuffer &out_pixels,
                    RawBufferAllocator *allocator) {
   // SOI marker.
   if (size < 4 || data[0] != 0xFF || data[1] != 0xD8) {
@@ -1055,7 +1058,7 @@ bool Inflate(DeflateBitReader &br, std::vector<uint8_t> &out) {
 }
 
 bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_format,
-                  int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels,
+                  int64_t &out_height, int64_t &out_width, RawByteBuffer &out_pixels,
                   RawBufferAllocator *allocator) {
   static const uint8_t kSig[8] = {137, 80, 78, 71, 13, 10, 26, 10};
   // 8-byte signature + minimum IHDR (4 len + 4 tag + 13 data + 4 CRC) +
@@ -1301,7 +1304,7 @@ bool PnmReadUint(const uint8_t *data, size_t size, size_t &pos, long &value) {
 }
 
 bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_format,
-                  int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels,
+                  int64_t &out_height, int64_t &out_width, RawByteBuffer &out_pixels,
                   RawBufferAllocator *allocator) {
   if (size < 2 || data[0] != 'P') {
     return false;
@@ -1460,13 +1463,20 @@ Tensor ImageDecoder::operator()(const Tensor &encoded_stream, const std::string 
 
   int64_t height = 0;
   int64_t width = 0;
-  std::vector<uint8_t> pixels;
+  RawByteBuffer pixels;
   RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels, allocator) ||
       TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels, allocator) ||
       TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels, allocator)) {
-    return Tensor::FromUint8("", {height, width, channels}, std::move(pixels), allocator);
+    if (allocator == nullptr) {
+      return Tensor::FromRawBytes("", DataType::UINT8, {height, width, channels},
+                                  std::move(pixels));
+    }
+    Tensor output =
+        MakeOutputTensor(DataType::UINT8, {height, width, channels}, pixels.size(), allocator);
+    std::memcpy(output.mutable_bytes(), pixels.data(), pixels.size());
+    return output;
   }
 
   // Per the ONNX schema, fall back to an empty ``(0, 0, C)`` matrix when
@@ -1495,7 +1505,7 @@ void ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &p
 
   int64_t height = 0;
   int64_t width = 0;
-  std::vector<uint8_t> pixels;
+  RawByteBuffer pixels;
   if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels, nullptr) ||
       TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels, nullptr) ||
@@ -1503,7 +1513,11 @@ void ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &p
     EXT_ENFORCE_INVALID(output.shape[0] == height && output.shape[1] == width,
                         "kernel::ImageDecoder preallocated output shape does not match the decoded "
                         "image dimensions.");
-    output.data = std::move(pixels);
+    if (output.has_allocation()) {
+      std::memcpy(output.mutable_bytes(), pixels.data(), pixels.size());
+    } else {
+      output.data = RawBuffer(std::move(pixels));
+    }
     return;
   }
 

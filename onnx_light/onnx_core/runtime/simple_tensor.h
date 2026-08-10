@@ -454,6 +454,17 @@ struct Tensor {
   Tensor(std::string n, int32_t dt, Shape s, std::vector<uint8_t> d)
       : name(std::move(n)), data_type(dt), shape(std::move(s)), data(std::move(d)) {}
 
+  /// Creates a tensor by adopting canonical raw-byte storage without copying.
+  static Tensor FromRawBytes(std::string name, int32_t data_type, Shape shape,
+                             RawByteBuffer bytes) {
+    Tensor tensor;
+    tensor.name = std::move(name);
+    tensor.data_type = data_type;
+    tensor.shape = std::move(shape);
+    tensor.data = RawBuffer(std::move(bytes));
+    return tensor;
+  }
+
   /// Releases the allocator-backed allocation, if any (no-op for inline or
   /// borrowed storage). Makes ``Tensor`` self-owning so callers no longer
   /// need to manually free the allocation before a ``Tensor`` is destroyed
@@ -614,7 +625,7 @@ struct Tensor {
   ///
   /// When ``allocator`` is non-null the element bytes are acquired from it (via
   /// :cpp:func:`MakeOutputTensor`) and the returned tensor is allocator-backed;
-  /// when null the tensor uses inline ``std::vector`` storage (the legacy path).
+  /// when null the tensor uses inline :cpp:class:`RawBuffer` storage.
   /// Kernels producing a result should pass the runtime context allocator so no
   /// output buffer is allocated outside it.
   template <typename T>
@@ -776,19 +787,12 @@ Tensor Tensor::From(const std::string &name, const Shape &shape, const std::vect
   EXT_ENFORCE_INVALID(static_cast<int64_t>(values.size()) == expected,
                       "Tensor values size does not match the product of shape.");
   const size_t n_bytes = values.size() * sizeof(T);
-  if (allocator != nullptr) {
-    Tensor t = MakeOutputTensor(TensorElementType<T>::value, shape, n_bytes, allocator);
-    t.name = name;
-    if (!values.empty()) {
-      std::memcpy(t.mutable_bytes(), values.data(), n_bytes);
-    }
-    return t;
-  }
-  std::vector<uint8_t> bytes(n_bytes);
+  Tensor t = MakeOutputTensor(TensorElementType<T>::value, shape, n_bytes, allocator);
+  t.name = name;
   if (!values.empty()) {
-    std::memcpy(bytes.data(), values.data(), bytes.size());
+    std::memcpy(t.mutable_bytes(), values.data(), n_bytes);
   }
-  return Tensor(name, TensorElementType<T>::value, shape, std::move(bytes));
+  return t;
 }
 
 template <typename T> const T *Tensor::As() const {
@@ -839,7 +843,7 @@ void FillValueInfo(const Tensor &tensor, ValueInfoProto &vi);
  *
  * For the typed-field path the byte buffer is acquired from ``allocator``
  * when it is non-null (the returned tensor is then allocator-backed); when
- * ``allocator`` is null an inline ``std::vector<uint8_t>`` is used. The
+ * ``allocator`` is null an inline :cpp:class:`RawBuffer` is used. The
  * ``raw_data`` path always returns a borrowed (zero-copy) view and ignores
  * ``allocator``.
  *
@@ -859,8 +863,8 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator = nu
  * When ``allocator`` is non-null the byte buffer is acquired from it via
  * :cpp:func:`RawBufferAllocator::Allocate` and the returned tensor is
  * allocator-backed (``has_allocation()`` returns ``true``). When ``allocator``
- * is null the tensor uses an inline ``std::vector<uint8_t>`` of ``n_bytes``
- * bytes (the legacy path). In both cases the buffer contents are left
+ * is null the tensor uses an inline :cpp:class:`RawBuffer` of ``n_bytes``.
+ * In both cases the buffer contents are left
  * uninitialised: the caller is expected to fully overwrite the result, so no
  * time is spent zero-filling the memory.
  *

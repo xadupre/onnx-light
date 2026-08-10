@@ -136,8 +136,9 @@ void Dropout::Run(RuntimeContext &rt) {
     SetOutput(node, 0, std::move(out.first), rt);
     SetOutput(node, 1, std::move(out.second), rt);
   } else {
-    Tensor mask("", static_cast<int32_t>(DataType::BOOL), data.shape,
-                std::vector<uint8_t>(static_cast<std::size_t>(data.element_count()), 1));
+    Tensor mask =
+        Tensor::FromRawBytes("", static_cast<int32_t>(DataType::BOOL), data.shape,
+                             RawByteBuffer(static_cast<std::size_t>(data.element_count()), 1));
     SetOutput(node, 0, k(data, ratio, training_mode, mask, seed, &rt), rt);
   }
 }

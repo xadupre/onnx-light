@@ -21,6 +21,7 @@ using core::runtime::ElementSize;
 using core::runtime::FillValueInfo;
 using core::runtime::MakeOutputTensor;
 using core::runtime::PackedByteSize;
+using core::runtime::RawByteBuffer;
 using core::runtime::SimpleRawBufferAllocator;
 using core::runtime::Tensor;
 using core::runtime::TensorFromProto;
@@ -286,6 +287,13 @@ TEST(SimpleTensorCopyMove, SelfMoveAssign) {
   Tensor &ref = a;
   a = std::move(ref); // self move assignment is a no-op
   EXPECT_EQ(a.AsInt32()[0], 5);
+}
+
+TEST(SimpleTensorCopyMove, RawByteBufferMoveKeepsStorage) {
+  RawByteBuffer bytes(2 * sizeof(float));
+  uint8_t *original = bytes.data();
+  Tensor tensor = Tensor::FromRawBytes("moved", DataType::FLOAT, {2}, std::move(bytes));
+  EXPECT_EQ(tensor.data.data(), original);
 }
 
 // ---------------------------------------------------------------------------

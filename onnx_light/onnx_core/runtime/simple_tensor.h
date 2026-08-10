@@ -343,6 +343,11 @@ struct RawBuffer {
   explicit RawBuffer(size_t n) { storage_.resize(n); }
 
   RawBuffer(const std::vector<uint8_t> &v) : storage_(v.begin(), v.end()) {}
+  // ``std::vector<uint8_t>`` uses the default allocator, so its storage cannot
+  // be adopted by ``RawByteBuffer`` (different allocator type); this rvalue
+  // overload therefore copies element-by-element like the const-ref one. It is
+  // kept only for source compatibility with callers that pass an rvalue. Prefer
+  // the ``RawByteBuffer&&`` overload below when a genuine move is wanted.
   RawBuffer(std::vector<uint8_t> &&v) : storage_(v.begin(), v.end()) {}
   RawBuffer(RawByteBuffer &&v) noexcept : storage_(std::move(v)) {}
 
@@ -356,6 +361,9 @@ struct RawBuffer {
     return *this;
   }
 
+  // Copies rather than moves: ``std::vector<uint8_t>`` uses a different
+  // allocator than ``RawByteBuffer``, so its storage cannot be adopted. Kept
+  // for source compatibility with callers that assign from an rvalue.
   RawBuffer &operator=(std::vector<uint8_t> &&v) {
     storage_.assign(v.begin(), v.end());
     return *this;

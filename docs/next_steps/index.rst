@@ -17,3 +17,4 @@ Next Steps
     2026-08_graph_builder_optimization
     2026-08_mutable_cache
     2026-08_compiled_tensor
+    2026-08_prepared_execution

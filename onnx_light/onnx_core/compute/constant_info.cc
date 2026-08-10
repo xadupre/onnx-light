@@ -101,12 +101,15 @@ InferConstantsFromNodes(const Nodes &nodes, std::unordered_set<std::string> cons
   return {std::move(constants), std::move(node_constant)};
 }
 
-// Builds the constant seed set for a graph: outer captures plus initializers.
 std::unordered_set<std::string>
 GraphConstantSeed(const GraphProto &graph, const std::unordered_set<std::string> &outer_constants) {
   std::unordered_set<std::string> constants = outer_constants;
   for (int i = 0; i < graph.initializer().size(); ++i) {
     constants.insert(graph.initializer()[i].name());
+  }
+  // Graph inputs are never constant (and this also avoids accidental name collisions).
+  for (int i = 0; i < graph.input().size(); ++i) {
+    constants.erase(graph.input()[i].name());
   }
   return constants;
 }

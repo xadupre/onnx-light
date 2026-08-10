@@ -4,6 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 
+from onnx_light import get_cpp_build_info
 from onnx_light.ext_test_case import ExtTestCase
 
 
@@ -20,6 +21,13 @@ skip_test = has_setuptool()
 
 
 class TestSetupBuildExt(ExtTestCase):
+    def test_cpp_build_info_uses_python_runtime_library(self):
+        info = get_cpp_build_info()
+        package_dir = Path(__file__).resolve().parents[2] / "onnx_light"
+        self.assertEqual(Path(info["include_dir"]), package_dir)
+        self.assertEqual(Path(info["core_library"]).parent, package_dir / "onnx_py")
+        self.assertEqual(Path(info["proto_library"]).parent, package_dir / "onnx_py")
+
     def _line_index(self, lines, predicate, description):
         """Returns the index of the first line matching predicate, failing clearly otherwise."""
         for i, line in enumerate(lines):

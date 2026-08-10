@@ -25,16 +25,16 @@ A pattern must never reuse an existing name: every value it produces is new.
 This invariant keeps the successor and predecessor maps valid between two
 rewrites of the same iteration.
 
-Graph index
-+++++++++++
+Graph structure on Graph
+++++++++++++++++++++++++
 
 The optimizer does not own the graph; it owns an index over the builder nodes,
 rebuilt after each iteration. The Python ``_build`` method becomes a
-``GraphIndex`` class:
+``GraphGraph`` class:
 
 .. code-block:: cpp
 
-    class GraphIndex {
+    class GraphGraph {
     public:
       // Node producing ``name`` (nullptr for inputs and initializers).
       const NodeProto *NodeBefore(const std::string &name) const;
@@ -207,7 +207,7 @@ can profile which patterns fire and how long each phase takes, as the Python
 Implementation order
 ++++++++++++++++++++
 
-1. Add ``GraphIndex`` and the value queries over ``GraphBuilder``.
+1. Add ``GraphGraph`` and the value queries over ``GraphBuilder``.
 2. Add the ``PatternOptimization`` / ``MatchResult`` interfaces and one trivial
    pattern (for example ``Cast(Cast(x))`` collapsing).
 3. Implement the match/apply loop and wire in the existing cleanup passes.

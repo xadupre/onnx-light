@@ -387,8 +387,8 @@ public:
 
 /**
  * Supplies protobuf-compatible convenience methods without emitting one exported copy per
- * generated message. Only the wire-format core declared by SERIALIZATION_METHOD remains
- * type-specific and out of line.
+ * generated message. The wire-format core declared by SERIALIZATION_METHOD and the small CopyFrom
+ * entry point remain type-specific and out of line.
  */
 template <typename Derived> class ProtoMessageAdapter : public Message {
 public:

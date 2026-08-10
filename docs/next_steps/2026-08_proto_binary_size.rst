@@ -198,14 +198,16 @@ out-of-line convenience symbol.
 This step is now implemented with ``ProtoMessageAdapter<T>``. Generated
 messages inherit its inline compatibility API, while only
 ``ParseFromStream``, ``SerializeToStream``, ``SerializeSize``, and text
-printing remain type-specific out-of-line methods. The Release build no
-longer exports one copy of each string, array, iostream, zero-copy, and
-file-descriptor adapter for every message.
+printing remain substantial type-specific out-of-line methods. ``CopyFrom``
+keeps a 30-byte type-specific entry point for ABI compatibility, but delegates
+its serialization/deserialization pipeline to one type-erased shared
+implementation. The Release build no longer exports one copy of each string,
+array, iostream, zero-copy, and file-descriptor adapter for every message.
 
 On the same local Linux Release configuration used for step 2, the defined
-dynamic symbol count decreased from 1,191 to 622. The stripped library
-decreased from 1,625,024 to 997,048 bytes, a reduction of 627,976 bytes
-(about 613 KiB).
+dynamic symbol count decreased from 1,191 to 652. The stripped library
+decreased from 1,625,024 to 1,001,208 bytes, a reduction of 623,816 bytes
+(about 609 KiB).
 
 Visibility and linking
 ++++++++++++++++++++++
@@ -347,7 +349,7 @@ may eliminate some of the same code.
      - High
    * - 3
      - Share or inline per-message convenience wrappers
-     - 613 KiB measured
+     - 609 KiB measured
      - 0.95 MiB
      - High
    * - 4

@@ -135,12 +135,41 @@ def _render(measurements: list[dict[str, object]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _enforce_installed_size_budget(
+    measurements: list[dict[str, object]], maximum_size: int
+) -> None:
+    """Raises an error when an installed library exceeds the size budget."""
+    oversized = [
+        measurement
+        for measurement in measurements
+        if measurement["installed_size"] > maximum_size
+    ]
+    if not oversized:
+        return
+
+    details = ", ".join(
+        f"{measurement['source']}: {measurement['installed_size']:,} bytes"
+        for measurement in oversized
+    )
+    raise RuntimeError(
+        f"lib_onnx_proto installed-size budget exceeded "
+        f"(maximum {maximum_size:,} bytes): {details}"
+    )
+
+
 def main() -> None:
     """Runs the binary-size reporter."""
     parser = argparse.ArgumentParser()
     parser.add_argument("targets", nargs="+", type=pathlib.Path)
     parser.add_argument("--summary", type=pathlib.Path)
+    parser.add_argument(
+        "--max-installed-size",
+        type=int,
+        help="fails when any installed proto library exceeds this number of bytes",
+    )
     arguments = parser.parse_args()
+    if arguments.max_installed_size is not None and arguments.max_installed_size < 0:
+        parser.error("--max-installed-size must be non-negative")
 
     measurements = [
         measurement for target in arguments.targets for measurement in _measure_target(target)
@@ -153,6 +182,8 @@ def main() -> None:
     if arguments.summary is not None:
         with arguments.summary.open("a", encoding="utf-8") as summary:
             summary.write(report)
+    if arguments.max_installed_size is not None:
+        _enforce_installed_size_budget(measurements, arguments.max_installed_size)
 
 
 if __name__ == "__main__":

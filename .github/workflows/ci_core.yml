@@ -193,7 +193,8 @@ jobs:
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
             "${proto_dir}" \
-            --summary "${GITHUB_STEP_SUMMARY}"
+            --summary "${GITHUB_STEP_SUMMARY}" \
+            --max-installed-size 1258291
 
       - name: Install ONNX weekly
         run: pip install --upgrade onnx-weekly

@@ -36,6 +36,12 @@ namespace ONNX_LIGHT_NAMESPACE::core::compute {
 /// is constant (known before inference). The associated value is ``"1"``.
 constexpr const char *kConstantMetadataKey = "onnx_light.constant";
 
+/// Classifies whether a node produces constant outputs.
+enum class ConstantInfo : uint8_t {
+  kNotConstant = 0,
+  kConstant = 1,
+};
+
 /// Returns whether ``op_type`` (in the default ONNX domain) is
 /// non-deterministic and therefore never produces a constant output, even when
 /// all of its inputs are constant (e.g. the random generators).
@@ -52,16 +58,16 @@ bool IsNodeConstant(const NodeProto &node, const std::unordered_set<std::string>
 /// Infers the set of constant value names and the per-node constant flags for
 /// ``graph``. ``outer_constants`` seeds the analysis with values captured from
 /// an enclosing scope (used when recursing into subgraphs). The returned
-/// ``std::vector<char>`` has one entry per node (``1`` when the node is
-/// constant, ``0`` otherwise), aligned with ``graph.node()``.
-std::pair<std::unordered_set<std::string>, std::vector<char>>
+/// ``std::vector<ConstantInfo>`` has one entry per node, aligned with
+/// ``graph.node()``.
+std::pair<std::unordered_set<std::string>, std::vector<ConstantInfo>>
 InferConstants(const GraphProto &graph,
                const std::unordered_set<std::string> &outer_constants = {});
 
 /// Same as :cpp:func:`InferConstants(const GraphProto&, ...)` but for a
 /// ``FunctionProto`` (which carries no initializers; its formal inputs are
 /// never constant).
-std::pair<std::unordered_set<std::string>, std::vector<char>>
+std::pair<std::unordered_set<std::string>, std::vector<ConstantInfo>>
 InferConstants(const FunctionProto &function,
                const std::unordered_set<std::string> &outer_constants = {});
 

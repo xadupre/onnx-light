@@ -15,6 +15,7 @@
 #include <variant>
 #include <vector>
 
+#include "onnx_core/compute/constant_info.h"
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/inplace_reuse_types.h"
 #include "onnx_core/compute/peak_memory.h"
@@ -251,14 +252,16 @@ public:
     return constant_values_.count(name) != 0;
   }
 
-  /// Read-only access to the incremental per-node constant flags (``1`` when the
-  /// node is constant). One entry per appended node, in graph order.
-  const std::vector<char> &NodeConstant() const noexcept { return node_constant_; }
+  /// Read-only access to the incremental per-node constant classifications. One
+  /// entry per appended node, in graph order.
+  const std::vector<ConstantInfo> &NodeConstant() const noexcept { return node_constant_; }
 
   /// Whether the node at ``node_index`` produces constant outputs.
   ///
   /// @throws std::out_of_range when ``node_index`` is out of bounds.
-  bool NodeConstant(std::size_t node_index) const { return node_constant_.at(node_index) != 0; }
+  bool NodeConstant(std::size_t node_index) const {
+    return node_constant_.at(node_index) == ConstantInfo::kConstant;
+  }
 
   /// Sets or updates a value tag and returns ``true`` when the internal map changed.
   /// Returns ``false`` when ``name`` is empty, when ``tag`` is invalid/empty,
@@ -650,7 +653,7 @@ private:
   std::vector<std::string> node_tags_;
   // Incremental constant analysis state (see SeedConstant / AppendNodeConstant).
   std::unordered_set<std::string> constant_values_;
-  std::vector<char> node_constant_;
+  std::vector<ConstantInfo> node_constant_;
   bool custom_value_tags_changed_ = false;
   CustomValueTagMap custom_value_tags_;
   std::vector<std::vector<InPlaceReuse>> reuse_;

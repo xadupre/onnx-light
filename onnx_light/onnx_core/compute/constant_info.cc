@@ -73,21 +73,22 @@ bool NodeSubgraphsHaveNonDeterministicOp(const NodeProto &node) {
 // Shared driver: iterates ``nodes`` to a fixed point (robust to any
 // topological ordering), starting from the already-seeded ``constants`` set.
 template <typename Nodes>
-std::pair<std::unordered_set<std::string>, std::vector<char>>
+std::pair<std::unordered_set<std::string>, std::vector<ConstantInfo>>
 InferConstantsFromNodes(const Nodes &nodes, std::unordered_set<std::string> constants) {
-  std::vector<char> node_constant(static_cast<std::size_t>(nodes.size()), 0);
+  std::vector<ConstantInfo> node_constant(static_cast<std::size_t>(nodes.size()),
+                                          ConstantInfo::kNotConstant);
   bool changed = true;
   while (changed) {
     changed = false;
     for (int i = 0; i < nodes.size(); ++i) {
-      if (node_constant[static_cast<std::size_t>(i)]) {
+      if (node_constant[static_cast<std::size_t>(i)] == ConstantInfo::kConstant) {
         continue;
       }
       const NodeProto &node = nodes[i];
       if (!IsNodeConstant(node, constants)) {
         continue;
       }
-      node_constant[static_cast<std::size_t>(i)] = 1;
+      node_constant[static_cast<std::size_t>(i)] = ConstantInfo::kConstant;
       changed = true;
       for (int o = 0; o < node.output().size(); ++o) {
         const std::string out = node.output()[o];
@@ -133,12 +134,12 @@ void WriteConstantInfoToGraphImpl(GraphProto &graph,
   const auto inferred =
       InferConstantsFromNodes(graph.node(), GraphConstantSeed(graph, outer_constants));
   const std::unordered_set<std::string> &constants = inferred.first;
-  const std::vector<char> &node_constant = inferred.second;
+  const std::vector<ConstantInfo> &node_constant = inferred.second;
 
   const std::size_t node_limit =
       std::min(node_constant.size(), static_cast<std::size_t>(graph.node().size()));
   for (std::size_t i = 0; i < node_limit; ++i) {
-    if (node_constant[i]) {
+    if (node_constant[i] == ConstantInfo::kConstant) {
       SetMetadataValue(*graph.mutable_node(i), kConstantMetadataKey, "1");
     }
   }
@@ -194,12 +195,12 @@ bool IsNodeConstant(const NodeProto &node, const std::unordered_set<std::string>
   return true;
 }
 
-std::pair<std::unordered_set<std::string>, std::vector<char>>
+std::pair<std::unordered_set<std::string>, std::vector<ConstantInfo>>
 InferConstants(const GraphProto &graph, const std::unordered_set<std::string> &outer_constants) {
   return InferConstantsFromNodes(graph.node(), GraphConstantSeed(graph, outer_constants));
 }
 
-std::pair<std::unordered_set<std::string>, std::vector<char>>
+std::pair<std::unordered_set<std::string>, std::vector<ConstantInfo>>
 InferConstants(const FunctionProto &function,
                const std::unordered_set<std::string> &outer_constants) {
   return InferConstantsFromNodes(function.node(), outer_constants);
@@ -210,12 +211,12 @@ void WriteConstantInfoToMetadata(GraphProto &graph) { WriteConstantInfoToGraphIm
 void WriteConstantInfoToMetadata(FunctionProto &function) {
   const auto inferred = InferConstantsFromNodes(function.node(), {});
   const std::unordered_set<std::string> &constants = inferred.first;
-  const std::vector<char> &node_constant = inferred.second;
+  const std::vector<ConstantInfo> &node_constant = inferred.second;
 
   const std::size_t node_limit =
       std::min(node_constant.size(), static_cast<std::size_t>(function.node().size()));
   for (std::size_t i = 0; i < node_limit; ++i) {
-    if (node_constant[i]) {
+    if (node_constant[i] == ConstantInfo::kConstant) {
       SetMetadataValue(*function.mutable_node(i), kConstantMetadataKey, "1");
     }
   }

@@ -201,11 +201,11 @@ void ComputeContext::SeedConstant(const std::string &name) {
 
 void ComputeContext::AppendNodeConstant(const NodeProto &node, std::size_t node_index) {
   if (node_constant_.size() <= node_index) {
-    node_constant_.resize(node_index + 1, 0);
+    node_constant_.resize(node_index + 1, ConstantInfo::kNotConstant);
   }
   const bool is_constant =
       ::ONNX_LIGHT_NAMESPACE::core::compute::IsNodeConstant(node, constant_values_);
-  node_constant_[node_index] = is_constant ? 1 : 0;
+  node_constant_[node_index] = is_constant ? ConstantInfo::kConstant : ConstantInfo::kNotConstant;
   if (is_constant) {
     for (int o = 0; o < node.output().size(); ++o) {
       const std::string &out = node.output(static_cast<std::size_t>(o));

@@ -206,7 +206,11 @@ InferConstants(const GraphProto &graph, const std::unordered_set<std::string> &o
 std::pair<std::unordered_set<std::string>, std::vector<ConstantInfo>>
 InferConstants(const FunctionProto &function,
                const std::unordered_set<std::string> &outer_constants) {
-  return InferConstantsFromNodes(function.node(), outer_constants);
+  std::unordered_set<std::string> constants = outer_constants;
+  for (int i = 0; i < function.input().size(); ++i) {
+    constants.erase(function.input(static_cast<std::size_t>(i)));
+  }
+  return InferConstantsFromNodes(function.node(), std::move(constants));
 }
 
 void WriteConstantInfoToMetadata(GraphProto &graph) { WriteConstantInfoToGraphImpl(graph, {}); }

@@ -258,7 +258,6 @@ def _make_struct_value(struct_types, type_index, raw_data=None, logical_dims=(16
         "model": {"struct_types": struct_types},
         "value": {
             "type": type_index,
-            "dims": [],
             "raw_data": raw_data,
             "name": "weight",
             "doc_string": "Quantized test weight.",
@@ -301,11 +300,9 @@ def _serialize_quantized_tensor(tensor):
 def _serialize_struct_value(value):
     """Serializes a StructProto value (custom-type form) to the onnx-light wire format."""
     chunks = [_tag(1, 0) + _varint(value["type"])]
-    for dim in value["dims"]:
-        chunks.append(_tag(2, 0) + _varint(dim))
     chunks.append(_length_delimited(3, value["raw_data"]))
-    chunks.append(_length_delimited(4, value["name"].encode("utf-8")))
-    chunks.append(_length_delimited(5, value["doc_string"].encode("utf-8")))
+    chunks.append(_length_delimited(5, value["name"].encode("utf-8")))
+    chunks.append(_length_delimited(6, value["doc_string"].encode("utf-8")))
     return b"".join(chunks)
 
 
@@ -338,6 +335,24 @@ def _serialized_raw_data_size(field_number, serialized):
         else:
             raise ValueError(f"Unsupported wire type {wire_type}")
     raise KeyError(f"Field {field_number} not found")
+
+
+def _serialized_field_numbers(serialized):
+    """Returns field numbers in wire order."""
+    field_numbers = []
+    offset = 0
+    while offset < len(serialized):
+        key, offset = _read_varint(serialized, offset)
+        field_numbers.append(key >> 3)
+        wire_type = key & 0x7
+        if wire_type == 0:
+            _, offset = _read_varint(serialized, offset)
+        elif wire_type == 2:
+            length, offset = _read_varint(serialized, offset)
+            offset += length
+        else:
+            raise ValueError(f"Unsupported wire type {wire_type}")
+    return field_numbers
 
 
 class TestQuantizationCustomTypesSerialization(unittest.TestCase):
@@ -522,6 +537,7 @@ class TestQuantizationCustomTypesSerialization(unittest.TestCase):
         # without custom types.
         self.assertEqual(_serialized_raw_data_size(2, serialized_tensor), len(raw_data))
         self.assertEqual(_serialized_raw_data_size(3, serialized_value), len(raw_data))
+        self.assertEqual(_serialized_field_numbers(serialized_value), [1, 3, 5, 6])
 
     def test_quantized_tensor_serialized_size_matches_buffer(self):
         self._assert_serialized_size_matches_buffer(

@@ -361,8 +361,9 @@ ONNX_LIGHT_PROTO_API bool SerializeModelProtoToStream(ModelProto &model,
  * Returns ``false`` when ``options.max_serialized_size_bytes`` is non-zero and *total_size*
  * exceeds the configured limit.
  */
-bool EnforceMaxSerializedSize(const SerializeSizeResult &total_size,
-                              const SerializeOptions &options, const char *context);
+ONNX_LIGHT_PROTO_API bool EnforceMaxSerializedSize(const SerializeSizeResult &total_size,
+                                                   const SerializeOptions &options,
+                                                   const char *context);
 
 /**
  * Specializes SerializeProtoToStream for ModelProto.

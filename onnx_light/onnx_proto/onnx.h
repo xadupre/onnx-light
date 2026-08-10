@@ -1508,6 +1508,7 @@ using OptionalProto_DataType = OptionalProto::DataType;
 } // namespace ONNX_LIGHT_NAMESPACE
 
 #include "fields.hpp"
+#include "stream_class_adapters.hpp"
 
 #if defined(FIELD)
 #undef FIELD

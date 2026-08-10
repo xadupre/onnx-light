@@ -1789,7 +1789,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
 
   shape_mod.def(
       "write_constant_info_to_metadata",
-      [](GraphProto &graph) { onnx_compute::WriteConstantInfoToMetadata(graph); }, nb::arg("graph"),
+      [](GraphProto &graph) { onnx_compute::WriteConstantInfoToMetadata(graph); },
+      nb::arg("graph"),
       "Writes constant-value / constant-node information into graph metadata.");
   shape_mod.def(
       "write_constant_info_to_metadata",

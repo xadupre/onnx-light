@@ -28,7 +28,8 @@ class TestSetupBuildExt(ExtTestCase):
         library_dir = Path(_onnxpyprotoop.__file__).resolve().parent
         self.assertEqual(Path(info["include_dir"]), Path(onnx_light.__file__).resolve().parent)
         self.assertEqual(Path(info["library_dir"]), library_dir)
-        # lib_onnx_proto is the only runtime library built shared on every platform.
+        # lib_onnx_proto is built shared on every platform when the Python
+        # extensions are built, so it is always reported here.
         self.assertIn("proto_library", info)
         for key in ("core_library", "proto_library"):
             if key not in info:

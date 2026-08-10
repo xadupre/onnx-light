@@ -320,11 +320,13 @@ Implementation order
    ``ONNX_LIGHT_PROTO_API`` cross-library export boundary. See
    `PR #4344 <https://github.com/xadupre/onnx-light/pull/4344>`_.
 3. **Implemented:** replace per-message convenience implementations with the
-   inline ``ProtoMessageAdapter<T>`` CRTP adapter.
+   inline ``ProtoMessageAdapter<T>`` CRTP adapter. See
+   `PR #4349 <https://github.com/xadupre/onnx-light/pull/4349>`_.
 4. **Optional:** compare ``MinSizeRel``, LTO, and linker folding if additional
    size headroom becomes necessary.
 5. **Implemented:** enforce a 1.2 MiB installed-size budget in CI for the Linux
-   x86-64 Release build.
+   x86-64 Release build. See
+   `PR #4355 <https://github.com/xadupre/onnx-light/pull/4355>`_.
 
 Expected gain by step
 +++++++++++++++++++++

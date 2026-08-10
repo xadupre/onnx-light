@@ -225,6 +225,41 @@ public:
   /// @throws std::out_of_range when ``node_index`` is out of bounds.
   const std::string &NodeTag(std::size_t node_index) const { return node_tags_.at(node_index); }
 
+  // ── Constant analysis (incremental) ───────────────────────────────────
+  //
+  // A value is *constant* when its content is known before inference (graph
+  // initializers, ``Constant`` outputs, or outputs of a deterministic node
+  // whose inputs are all constant). These helpers maintain that information
+  // incrementally so :cpp:class:`core::builder::GraphBuilder` can track it node
+  // by node, mirroring :cpp:func:`SeedValueTag` / :cpp:func:`AppendNodeTags`.
+  // The whole-graph metadata writer lives in ``constant_info.h``
+  // (:cpp:func:`WriteConstantInfoToMetadata`).
+
+  /// Seeds ``name`` as a constant value (e.g. an initializer) so it
+  /// participates in the incremental constant analysis driven by
+  /// :cpp:func:`AppendNodeConstant`.
+  void SeedConstant(const std::string &name);
+
+  /// Incrementally updates the constant analysis after the node at
+  /// ``node_index`` has been appended: records whether the node is constant and,
+  /// when it is, marks its outputs as constant values. Appends exactly one entry
+  /// to the per-node constant flag list.
+  void AppendNodeConstant(const NodeProto &node, std::size_t node_index);
+
+  /// Whether ``name`` is currently known to be a constant value.
+  bool IsConstantValue(const std::string &name) const noexcept {
+    return constant_values_.count(name) != 0;
+  }
+
+  /// Read-only access to the incremental per-node constant flags (``1`` when the
+  /// node is constant). One entry per appended node, in graph order.
+  const std::vector<char> &NodeConstant() const noexcept { return node_constant_; }
+
+  /// Whether the node at ``node_index`` produces constant outputs.
+  ///
+  /// @throws std::out_of_range when ``node_index`` is out of bounds.
+  bool NodeConstant(std::size_t node_index) const { return node_constant_.at(node_index) != 0; }
+
   /// Sets or updates a value tag and returns ``true`` when the internal map changed.
   /// Returns ``false`` when ``name`` is empty, when ``tag`` is invalid/empty,
   /// or when setting it would not change the map.
@@ -580,6 +615,8 @@ public:
   void Clear() noexcept {
     value_tags_.clear();
     node_tags_.clear();
+    constant_values_.clear();
+    node_constant_.clear();
     reuse_.clear();
     release_after_.clear();
     not_used_after_.clear();
@@ -611,6 +648,9 @@ private:
 
   std::unordered_map<std::string, std::string> value_tags_;
   std::vector<std::string> node_tags_;
+  // Incremental constant analysis state (see SeedConstant / AppendNodeConstant).
+  std::unordered_set<std::string> constant_values_;
+  std::vector<char> node_constant_;
   bool custom_value_tags_changed_ = false;
   CustomValueTagMap custom_value_tags_;
   std::vector<std::vector<InPlaceReuse>> reuse_;

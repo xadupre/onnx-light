@@ -10,6 +10,7 @@
 #include <sstream>
 #include <utility>
 
+#include "onnx_core/compute/constant_info.h"
 #include "onnx_core/compute/value_tags.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_proto/onnx_alias.h"
@@ -169,11 +170,12 @@ const std::string &GraphBuilder::MakeInitializer(const TensorProto &tensor) {
   if (SymTensorFromTensorProto(added, descriptor)) {
     SeedShape(reserved, std::move(descriptor));
   }
-  // Seed the incremental annotations: an initializer is a "weight" and is kept
-  // from in-place reuse.
+  // Seed the incremental annotations: an initializer is a "weight", is kept
+  // from in-place reuse, and is a constant value.
   compute_.SeedValueTag(reserved, "weight");
   compute_.SeedReuseInput(reserved, /*is_graph_input=*/false, /*is_initializer=*/true,
                           /*allow_input_overwrite=*/false);
+  compute_.SeedConstant(reserved);
   // ``reserved`` references the entry stored in ``names_`` and remains valid.
   return reserved;
 }
@@ -592,6 +594,7 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   const std::size_t node_index = nodes_.size() - 1;
   compute_.AppendNodeTags(nodes_, node_index);
   compute_.AppendNodeReuse(stored, node_index, compute_.Shapes());
+  compute_.AppendNodeConstant(stored, node_index);
 
   return resolved_outputs;
 }
@@ -1443,6 +1446,8 @@ void GraphBuilder::Finalize(GraphProto &graph) {
   compute_.WriteToGraph(graph);
   // Additionally records the per-node and per-value tags.
   core::compute::WriteValueAndNodeTagsToMetadata(graph);
+  // Records constant-value / constant-node information.
+  core::compute::WriteConstantInfoToMetadata(graph);
 }
 
 GraphProto GraphBuilder::ToGraph() {

@@ -5,9 +5,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.16] – Unreleased
 
+### Improvements
+
+- Stopped zero-initialising result buffers on allocation, zeroing explicitly only where kernels rely on it.
+- Reduced the binary size of `lib_onnx_proto` further across several passes.
+- Exported `ParseLimitExceeded` in the proto public API.
+- Fixed `get_cpp_build_info` for editable installs and static builds.
+
 ### Documentation & CI
 
 - Bumped the release version to `0.1.16`.
+- Added a next-steps design page for a C++ pattern-based `GraphBuilder` optimizer.
+- Added last-updated dates to the gallery examples and split `plot_onnx_time` into three separate figures.
+- Added backend run-model tests for previously untested logical kernels.
+- Improved test coverage for `run_nodes.cc`, `simple_tensor.cc`, `node_helpers`, and `onnx_light_helpers.cc`.
+- Added a test verifying the serialized `raw_data` size matches the buffer size for `QuantizedTensorProto`.
+- Enabled build caching in CI.
 
 ## [0.1.15] – 2026-08-08
 

@@ -1028,8 +1028,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         // side, so we materialize an owned ``Tensor`` here.
         Tensor t = core::runtime::TensorFromProto(tp);
         if (t.data.empty() && t.size_bytes() > 0) {
-          std::vector<uint8_t> owned(t.bytes(), t.bytes() + t.size_bytes());
-          return Tensor(t.name, t.data_type, t.shape, std::move(owned));
+          core::runtime::RawByteBuffer owned(t.bytes(), t.bytes() + t.size_bytes());
+          return Tensor::FromRawBytes(t.name, t.data_type, t.shape, std::move(owned));
         }
         return t;
       },
@@ -1083,7 +1083,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         // lives, so the borrowed span never dangles.
         //
         // When ``steal=True`` *and* the tensor owns its bytes inline (an
-        // ordinary ``std::vector`` buffer that is neither allocator-backed nor a
+        // canonical raw-byte buffer that is neither allocator-backed nor a
         // borrowed span) the buffer's ownership is transferred to NumPy: the
         // byte vector is moved into a capsule that frees it when the array (and
         // any array derived from it) is garbage-collected. This DLPack-style
@@ -1102,9 +1102,10 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         // resolves to the inline ``data`` buffer (borrowed tensors keep
         // ``data`` empty and read from an external span instead).
         if (steal && !t.has_allocation() && n > 0 && t.bytes() == t.data.data()) {
-          auto *owned = new std::vector<uint8_t>(t.data.release());
-          nb::capsule owner(
-              owned, [](void *p) noexcept { delete static_cast<std::vector<uint8_t> *>(p); });
+          auto *owned = new core::runtime::RawByteBuffer(t.data.release());
+          nb::capsule owner(owned, [](void *p) noexcept {
+            delete static_cast<core::runtime::RawByteBuffer *>(p);
+          });
           return nb::ndarray<nb::numpy, const uint8_t, nb::ndim<1>>(owned->data(), {n}, owner);
         }
         return nb::ndarray<nb::numpy, const uint8_t, nb::ndim<1>>(t.bytes(), {n}, t_obj);
@@ -1135,8 +1136,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         if (!copy) {
           return Tensor::Borrow(std::string(name), data_type, std::move(shape), ptr, n);
         }
-        std::vector<uint8_t> owned(ptr, ptr + n);
-        return Tensor(std::string(name), data_type, std::move(shape), std::move(owned));
+        core::runtime::RawByteBuffer owned(ptr, ptr + n);
+        return Tensor::FromRawBytes(std::string(name), data_type, std::move(shape),
+                                    std::move(owned));
       },
       nb::keep_alive<0, 4>(), nb::arg("name"), nb::arg("data_type"), nb::arg("shape"),
       nb::arg("raw"), nb::arg("copy") = true,

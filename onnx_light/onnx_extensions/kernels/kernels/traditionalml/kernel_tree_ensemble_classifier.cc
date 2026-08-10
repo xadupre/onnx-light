@@ -32,6 +32,9 @@ void ComputeClassifierScores(const ClassicNodeMap &node_map, const ClassicLeafMa
   for (int64_t n = 0; n < sample_count; ++n) {
     const double *x_row = x_values + n * feature_count;
     float *row = scores + n * n_classes;
+    // Allocator-backed output storage is not guaranteed to be zeroed, so the
+    // per-sample score row is cleared before scores are accumulated into it.
+    std::fill(row, row + n_classes, 0.0f);
 
     for (int64_t tree_id : tree_ids) {
       const int64_t leaf_node_id = TraverseClassicTree(node_map, tree_id, x_row, feature_count);

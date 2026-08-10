@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include <algorithm>
 #include <cstdint>
 #include <span>
 #include <stdexcept>
@@ -66,6 +67,10 @@ Tensor DictVectorizer::operator()(std::span<const K> input_keys, std::span<const
   } else {
     Tensor out = MakeOutputTensor(static_cast<int32_t>(TensorElementType<V>::value), shape,
                                   static_cast<size_t>(c) * sizeof(V), ctx_.allocator);
+    // ``Fill`` writes only the vocabulary positions present in the input and
+    // leaves the rest untouched, so the output must start zeroed. Allocator
+    // storage is no longer zero-initialised, so clear it explicitly.
+    std::fill(out.mutable_bytes(), out.mutable_bytes() + out.size_bytes(), uint8_t{0u});
     Fill<K, V>(input_keys, input_values, vocabulary, reinterpret_cast<V *>(out.mutable_bytes()));
     return out;
   }

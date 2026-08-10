@@ -15,8 +15,14 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail {
 
 // Holds temporary typed storage for kernel helpers. Uses the provided
 // allocator when available and falls back to std::vector otherwise.
+//
+// Neither code path zero-initializes the storage: the allocator returns raw,
+// uninitialized memory and the fallback vector uses ``DefaultInitAllocator`` so
+// ``resize`` default-initializes (leaving scalars uninitialized) rather than
+// value-initializing. Kernels that require zeroed scratch must clear it
+// themselves, matching how result buffers are handled.
 template <typename T> struct TemporaryTypedBuffer {
-  std::vector<T> fallback;
+  std::vector<T, DefaultInitAllocator<T>> fallback;
   RawBufferAllocator *allocator = nullptr;
   RawBuffer *buffer = nullptr;
   std::size_t size = 0;

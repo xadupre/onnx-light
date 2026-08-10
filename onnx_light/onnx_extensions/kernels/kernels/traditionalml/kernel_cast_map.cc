@@ -132,6 +132,10 @@ Tensor CastMap::operator()(std::span<const int64_t> input_keys, std::span<const 
   } else {
     Tensor out = MakeOutputTensor(static_cast<int32_t>(TensorElementType<OutT>::value), shape,
                                   static_cast<std::size_t>(n) * sizeof(OutT), ctx_.allocator);
+    // ``FillNumericOutput`` scatters SPARSE entries by key and leaves the
+    // remaining positions untouched, so the output must start zeroed. Allocator
+    // storage is no longer zero-initialised, so clear it explicitly.
+    std::fill(out.mutable_bytes(), out.mutable_bytes() + out.size_bytes(), uint8_t{0u});
     FillNumericOutput<V, OutT>(input_keys, input_values, map_form,
                                reinterpret_cast<OutT *>(out.mutable_bytes()));
     return out;

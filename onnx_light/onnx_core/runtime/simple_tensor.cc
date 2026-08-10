@@ -210,21 +210,14 @@ Tensor Tensor::FromBool(const std::string &name, const Shape &shape,
   }
   EXT_ENFORCE_INVALID(static_cast<int64_t>(values.size()) == expected,
                       "Tensor values size does not match the product of shape.");
-  if (allocator != nullptr) {
-    Tensor t =
-        MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), shape, values.size(), allocator);
-    t.name = name;
-    uint8_t *out = t.mutable_bytes();
-    for (size_t i = 0; i < values.size(); ++i) {
-      out[i] = values[i] ? uint8_t{1} : uint8_t{0};
-    }
-    return t;
-  }
-  std::vector<uint8_t> bytes(values.size());
+  Tensor t =
+      MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), shape, values.size(), allocator);
+  t.name = name;
+  uint8_t *out = t.mutable_bytes();
   for (size_t i = 0; i < values.size(); ++i) {
-    bytes[i] = values[i] ? uint8_t{1} : uint8_t{0};
+    out[i] = values[i] ? uint8_t{1} : uint8_t{0};
   }
-  return Tensor(name, static_cast<int32_t>(DataType::BOOL), shape, std::move(bytes));
+  return t;
 }
 
 Tensor Tensor::FromStrings(const std::string &name, const Shape &shape,
@@ -326,11 +319,12 @@ Tensor Tensor::ToOwned() const {
   if (static_cast<DataType>(data_type) == DataType::STRING) {
     return Tensor::MakeString(name, shape, AsStrings());
   }
-  std::vector<uint8_t> owned(size_bytes());
+  Tensor owned = MakeOutputTensor(data_type, shape, size_bytes(), nullptr);
+  owned.name = name;
   if (size_bytes() > 0) {
-    std::memcpy(owned.data(), bytes(), size_bytes());
+    std::memcpy(owned.mutable_bytes(), bytes(), size_bytes());
   }
-  return Tensor(name, data_type, shape, std::move(owned));
+  return owned;
 }
 
 Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
@@ -480,7 +474,13 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
 Tensor MakeOutputTensor(int32_t data_type, const Shape &shape, size_t n_bytes,
                         RawBufferAllocator *allocator) {
   if (allocator == nullptr) {
-    return Tensor("", data_type, shape, std::vector<uint8_t>(n_bytes, 0));
+    // Leave the inline bytes uninitialised: the caller fully overwrites the
+    // result, so zero-filling here would be wasted work.
+    Tensor t;
+    t.data_type = data_type;
+    t.shape = shape;
+    t.data = RawBuffer(n_bytes);
+    return t;
   }
   Tensor t;
   t.data_type = data_type;

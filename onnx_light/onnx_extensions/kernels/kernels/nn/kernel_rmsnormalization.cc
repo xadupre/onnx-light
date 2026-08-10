@@ -120,19 +120,21 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
 
   // Scratch buffers are drawn from the runtime allocator backing ``output``
   // (when it is allocator-backed), mirroring kernel::QuantizeLinear; they fall
-  // back to inline storage otherwise. ``TemporaryTypedBuffer`` zero-initializes
-  // its storage.
+  // back to inline storage otherwise. ``TemporaryTypedBuffer`` leaves its
+  // storage uninitialized, so any scratch that is read before being written is
+  // cleared explicitly below.
   RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
 
   // Pre-compute the per-element index into ``scale`` for every position in the
   // normalized block. A scalar ``scale`` (scale_rank == 0) broadcasts to index
-  // 0 everywhere, so the zero-initialized buffer is left untouched. The count is
+  // 0 everywhere, so the zeroed buffer is left untouched. The count is
   // clamped to at least 1 to avoid a zero-size allocation when ``norm_size`` is
   // 0 (the index buffer is then never read).
   const std::size_t scale_index_count = static_cast<std::size_t>(norm_size > 0 ? norm_size : 1);
   detail::TemporaryTypedBuffer<int64_t> scale_index_buf(scale_index_count, allocator,
                                                         "kernel::RMSNormalization scale_index");
   int64_t *scale_index = scale_index_buf.data();
+  std::memset(scale_index, 0, scale_index_count * sizeof(int64_t));
 
   if (norm_size > 0 && scale_rank > 0) {
     detail::TemporaryTypedBuffer<int64_t> scale_strides_buf(
@@ -150,6 +152,7 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
     detail::TemporaryTypedBuffer<int64_t> coord_buf(static_cast<std::size_t>(normalized_rank),
                                                     allocator, "kernel::RMSNormalization coord");
     int64_t *coord = coord_buf.data();
+    std::memset(coord, 0, static_cast<std::size_t>(normalized_rank) * sizeof(int64_t));
     for (int64_t flat = 0; flat < norm_size; ++flat) {
       int64_t si = 0;
       for (int64_t i = offset; i < normalized_rank; ++i) {

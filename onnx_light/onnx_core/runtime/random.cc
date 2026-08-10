@@ -181,11 +181,11 @@ template std::vector<uint64_t> RandUint<uint64_t>(int64_t high, const Shape &sha
 
 Tensor RandBool(const Shape &shape, std::optional<uint64_t> seed) {
   const std::vector<double> values = Randn<double>(shape, seed);
-  std::vector<uint8_t> bytes(values.size());
+  RawByteBuffer bytes(values.size());
   for (size_t i = 0; i < values.size(); ++i) {
     bytes[i] = values[i] > 0.0 ? 1 : 0;
   }
-  return Tensor("", static_cast<int32_t>(DataType::BOOL), shape, std::move(bytes));
+  return Tensor::FromRawBytes("", static_cast<int32_t>(DataType::BOOL), shape, std::move(bytes));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -253,7 +253,7 @@ template <typename... Args> inline std::string MakeString(const Args &...args) {
  * catching genuine wire-format corruption and reporting it via a plain
  * `false` return, matching the protobuf API contract.
  */
-class ParseLimitExceeded : public std::runtime_error {
+class ONNX_LIGHT_PROTO_API ParseLimitExceeded : public std::runtime_error {
 public:
   explicit ParseLimitExceeded(const std::string &message) : std::runtime_error(message) {}
 };

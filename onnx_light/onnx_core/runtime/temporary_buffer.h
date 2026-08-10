@@ -42,6 +42,13 @@ template <typename T> struct TemporaryTypedBuffer {
       }
       allocator = buffer_allocator;
       buffer = allocated;
+      // ``RawBufferAllocator::Allocate`` no longer zero-initializes the buffer
+      // it returns (result buffers are fully overwritten by their kernel).
+      // Scratch buffers, however, mirror the ``std::vector`` fallback below,
+      // which value-initializes to zero, and several kernels rely on that
+      // guarantee (e.g. index/coordinate walkers). Zero the storage explicitly
+      // so both code paths behave identically.
+      std::memset(allocated->data(), 0, count * sizeof(T));
       return;
     }
     fallback.resize(count);

@@ -24,7 +24,9 @@ RawBuffer *SimpleRawBufferAllocator::Allocate(size_t n_bytes) {
   }
   const size_t i = free_slots_.back();
   free_slots_.pop_back();
-  buffers_[i].assign(n_bytes, 0);
+  // Size the buffer without zero-filling it: the caller is expected to fully
+  // overwrite the result, so clearing the memory first would be wasted work.
+  buffers_[i].resize(n_bytes);
   index_map_[&buffers_[i]] = i;
   total_allocated_size_ += n_bytes;
   if (total_allocated_size_ > peak_allocated_size_) {

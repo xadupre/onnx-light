@@ -480,7 +480,13 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
 Tensor MakeOutputTensor(int32_t data_type, const Shape &shape, size_t n_bytes,
                         RawBufferAllocator *allocator) {
   if (allocator == nullptr) {
-    return Tensor("", data_type, shape, std::vector<uint8_t>(n_bytes, 0));
+    // Leave the inline bytes uninitialised: the caller fully overwrites the
+    // result, so zero-filling here would be wasted work.
+    Tensor t;
+    t.data_type = data_type;
+    t.shape = shape;
+    t.data = RawBuffer(n_bytes);
+    return t;
   }
   Tensor t;
   t.data_type = data_type;

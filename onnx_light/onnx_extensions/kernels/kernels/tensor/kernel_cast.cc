@@ -420,8 +420,10 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
                         "kernel::Cast preallocated output buffer has unexpected size in bytes.");
     if (to_sub_byte) {
       // Reset trailing padding bytes so the unused nibble / bit-pair stays
-      // zero regardless of the previous buffer contents.
-      if (!output.data.empty()) {
+      // zero regardless of the previous buffer contents. Allocator-backed
+      // tensors keep their bytes outside ``output.data``, so drive the clear
+      // off ``size_bytes()`` / ``mutable_bytes()`` rather than ``data``.
+      if (output.size_bytes() > 0) {
         std::memset(output.mutable_bytes(), 0, output.size_bytes());
       }
       const auto to_dt = static_cast<DataType>(to);

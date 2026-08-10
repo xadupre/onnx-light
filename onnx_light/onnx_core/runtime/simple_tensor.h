@@ -6,12 +6,16 @@
 
 #include "onnx.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <memory>
+#include <new>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -274,26 +278,73 @@ inline bool operator==(const std::vector<int64_t> &v, const Shape &s) noexcept {
 inline bool operator!=(const std::vector<int64_t> &v, const Shape &s) noexcept { return s != v; }
 
 /**
+ * DefaultInitAllocator — allocator that default-initialises elements.
+ *
+ * A drop-in ``std::allocator`` replacement whose only difference is that a
+ * value-initialisation request with no arguments (as issued by
+ * ``std::vector::resize(n)`` or ``std::vector(n)``) performs *default*
+ * initialisation instead. For a trivially constructible element type such as
+ * ``uint8_t`` this leaves the newly created bytes uninitialised rather than
+ * zero-filling them, which avoids a needless ``memset`` when the buffer will be
+ * fully overwritten (for example a kernel result). All other construction (with
+ * explicit arguments) behaves exactly like ``std::allocator``.
+ */
+template <typename T, typename Allocator = std::allocator<T>>
+class DefaultInitAllocator : public Allocator {
+  using traits = std::allocator_traits<Allocator>;
+
+public:
+  template <typename U> struct rebind {
+    using other = DefaultInitAllocator<U, typename traits::template rebind_alloc<U>>;
+  };
+
+  using Allocator::Allocator;
+  DefaultInitAllocator() noexcept = default;
+
+  template <typename U, typename A>
+  explicit DefaultInitAllocator(const DefaultInitAllocator<U, A> &other) noexcept
+      : Allocator(static_cast<const A &>(other)) {}
+
+  /// Default-initialises (leaves uninitialised for scalars) instead of
+  /// value-initialising.
+  template <typename U>
+  void construct(U *ptr) noexcept(std::is_nothrow_default_constructible_v<U>) {
+    ::new (static_cast<void *>(ptr)) U;
+  }
+
+  /// Forwards all other constructions to the wrapped allocator unchanged.
+  template <typename U, typename... Args> void construct(U *ptr, Args &&...args) {
+    traits::construct(static_cast<Allocator &>(*this), ptr, std::forward<Args>(args)...);
+  }
+};
+
+/// Byte storage that skips zero-initialisation on resize/allocation.
+using RawByteBuffer = std::vector<uint8_t, DefaultInitAllocator<uint8_t>>;
+
+/**
  * RawBuffer — an owned byte buffer equivalent to ``std::vector<uint8_t>``.
  *
- * Wraps a ``std::vector<uint8_t>`` under a dedicated type name to make the
- * ownership semantics of raw element bytes explicit in the ``Tensor`` struct
- * and to provide a natural extension point should the storage strategy change
- * in the future.
+ * Wraps a ``std::vector<uint8_t>`` (backed by :cpp:class:`DefaultInitAllocator`)
+ * under a dedicated type name to make the ownership semantics of raw element
+ * bytes explicit in the ``Tensor`` struct and to provide a natural extension
+ * point should the storage strategy change in the future. Because the backing
+ * allocator default-initialises, :cpp:func:`resize` and the size constructor
+ * leave the fresh bytes uninitialised rather than zero-filling them.
  *
  * The full ``std::vector<uint8_t>`` interface subset needed by the codebase
  * is exposed: ``size``, ``empty``, ``data``, ``begin``/``end``, indexed
- * access, and ``assign``.  Implicit conversions to and from
+ * access, ``assign``, and ``resize``.  Implicit conversions to and from
  * ``std::vector<uint8_t>`` are provided for backward compatibility.
  */
 struct RawBuffer {
   RawBuffer() = default;
 
-  /// Constructs a zero-initialised buffer of ``n`` bytes.
-  explicit RawBuffer(size_t n) : storage_(n) {}
+  /// Constructs a buffer of ``n`` bytes whose contents are left uninitialised.
+  explicit RawBuffer(size_t n) { storage_.resize(n); }
 
-  RawBuffer(const std::vector<uint8_t> &v) : storage_(v) {}
-  RawBuffer(std::vector<uint8_t> &&v) noexcept : storage_(std::move(v)) {}
+  RawBuffer(const std::vector<uint8_t> &v) : storage_(v.begin(), v.end()) {}
+  RawBuffer(std::vector<uint8_t> &&v) : storage_(v.begin(), v.end()) {}
+  RawBuffer(RawByteBuffer &&v) noexcept : storage_(std::move(v)) {}
 
   RawBuffer(const RawBuffer &) = default;
   RawBuffer(RawBuffer &&) noexcept = default;
@@ -301,22 +352,24 @@ struct RawBuffer {
   RawBuffer &operator=(RawBuffer &&) noexcept = default;
 
   RawBuffer &operator=(const std::vector<uint8_t> &v) {
-    storage_ = v;
+    storage_.assign(v.begin(), v.end());
     return *this;
   }
 
-  RawBuffer &operator=(std::vector<uint8_t> &&v) noexcept {
-    storage_ = std::move(v);
+  RawBuffer &operator=(std::vector<uint8_t> &&v) {
+    storage_.assign(v.begin(), v.end());
     return *this;
   }
 
   /// Implicitly converts to ``std::vector<uint8_t>`` for backward compatibility.
-  operator std::vector<uint8_t>() const { return storage_; }
+  operator std::vector<uint8_t>() const { return {storage_.begin(), storage_.end()}; }
 
   bool operator==(const RawBuffer &other) const noexcept { return storage_ == other.storage_; }
   bool operator!=(const RawBuffer &other) const noexcept { return storage_ != other.storage_; }
-  bool operator==(const std::vector<uint8_t> &v) const noexcept { return storage_ == v; }
-  bool operator!=(const std::vector<uint8_t> &v) const noexcept { return storage_ != v; }
+  bool operator==(const std::vector<uint8_t> &v) const noexcept {
+    return storage_.size() == v.size() && std::equal(storage_.begin(), storage_.end(), v.begin());
+  }
+  bool operator!=(const std::vector<uint8_t> &v) const noexcept { return !(*this == v); }
 
   size_t size() const noexcept { return storage_.size(); }
   bool empty() const noexcept { return storage_.empty(); }
@@ -334,11 +387,11 @@ struct RawBuffer {
 
   /// Moves the underlying byte storage out of the buffer, leaving it empty.
   ///
-  /// Returns the owned ``std::vector<uint8_t>`` by move so callers can take
+  /// Returns the owned :cpp:type:`RawByteBuffer` by move so callers can take
   /// ownership of the bytes (for example to hand them to NumPy through a
   /// DLPack-style capsule) without copying. After the call the buffer is
   /// empty (``size() == 0``).
-  std::vector<uint8_t> release() noexcept { return std::move(storage_); }
+  RawByteBuffer release() noexcept { return std::move(storage_); }
 
   /// Fills the buffer with ``count`` copies of ``value``, resizing as needed.
   void assign(size_t count, uint8_t value) { storage_.assign(count, value); }
@@ -348,8 +401,13 @@ struct RawBuffer {
     storage_.assign(first, last);
   }
 
+  /// Resizes the buffer to ``count`` bytes. Newly added bytes are left
+  /// uninitialised (the backing allocator default-initialises), so callers must
+  /// fully overwrite the buffer before reading it.
+  void resize(size_t count) { storage_.resize(count); }
+
 private:
-  std::vector<uint8_t> storage_;
+  RawByteBuffer storage_;
 };
 
 class RawBufferAllocator;
@@ -791,11 +849,12 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator = nu
  * ``data_type`` and ``shape``.
  *
  * When ``allocator`` is non-null the byte buffer is acquired from it via
- * :cpp:func:`RawBufferAllocator::Allocate` and initialised to zero, and the
- * returned tensor is allocator-backed (``has_allocation()`` returns
- * ``true``). When ``allocator`` is null the tensor uses an inline
- * ``std::vector<uint8_t>`` of ``n_bytes`` zero-initialised bytes (the
- * legacy path).
+ * :cpp:func:`RawBufferAllocator::Allocate` and the returned tensor is
+ * allocator-backed (``has_allocation()`` returns ``true``). When ``allocator``
+ * is null the tensor uses an inline ``std::vector<uint8_t>`` of ``n_bytes``
+ * bytes (the legacy path). In both cases the buffer contents are left
+ * uninitialised: the caller is expected to fully overwrite the result, so no
+ * time is spent zero-filling the memory.
  *
  * @param data_type   ONNX element type (a ``TensorProto::DataType`` integer).
  * @param shape       Output shape.

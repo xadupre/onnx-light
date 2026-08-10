@@ -338,7 +338,12 @@ TEST(SimpleTensorMakeOutput, WithoutAllocator) {
       MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {2}, 2 * sizeof(float), nullptr);
   EXPECT_FALSE(t.has_allocation());
   EXPECT_EQ(t.size_bytes(), 2 * sizeof(float));
-  EXPECT_FLOAT_EQ(t.AsFloat()[0], 0.0f); // zero-initialised.
+  // The buffer is left uninitialised; callers fully overwrite it. Verify it is
+  // writable and reads back the written values.
+  t.AsFloat()[0] = 1.5f;
+  t.AsFloat()[1] = -2.5f;
+  EXPECT_FLOAT_EQ(t.AsFloat()[0], 1.5f);
+  EXPECT_FLOAT_EQ(t.AsFloat()[1], -2.5f);
 }
 
 TEST(SimpleTensorMakeOutput, WithAllocator) {

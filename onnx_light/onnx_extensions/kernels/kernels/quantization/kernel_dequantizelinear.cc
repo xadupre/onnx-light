@@ -10,6 +10,7 @@
 
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -627,6 +628,11 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_
   RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   Tensor zero_zero_point =
       MakeOutputTensor(x.data_type, x_scale.shape, zero_zero_point_n_bytes, allocator);
+  // Allocator storage is no longer zero-initialised, so clear the synthetic
+  // zero-point buffer explicitly: every supported element type decodes a zero
+  // byte pattern to a zero point of 0.
+  std::fill(zero_zero_point.mutable_bytes(),
+            zero_zero_point.mutable_bytes() + zero_zero_point.size_bytes(), uint8_t{0u});
   (*this)(x, x_scale, zero_zero_point, axis, output);
 }
 

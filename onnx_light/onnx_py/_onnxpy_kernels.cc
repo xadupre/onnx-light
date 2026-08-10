@@ -1102,9 +1102,10 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         // resolves to the inline ``data`` buffer (borrowed tensors keep
         // ``data`` empty and read from an external span instead).
         if (steal && !t.has_allocation() && n > 0 && t.bytes() == t.data.data()) {
-          auto *owned = new std::vector<uint8_t>(t.data.release());
-          nb::capsule owner(
-              owned, [](void *p) noexcept { delete static_cast<std::vector<uint8_t> *>(p); });
+          auto *owned = new core::runtime::RawByteBuffer(t.data.release());
+          nb::capsule owner(owned, [](void *p) noexcept {
+            delete static_cast<core::runtime::RawByteBuffer *>(p);
+          });
           return nb::ndarray<nb::numpy, const uint8_t, nb::ndim<1>>(owned->data(), {n}, owner);
         }
         return nb::ndarray<nb::numpy, const uint8_t, nb::ndim<1>>(t.bytes(), {n}, t_obj);

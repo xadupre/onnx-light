@@ -1,6 +1,18 @@
 """Paths needed to link extensions against the loaded onnx-light runtime."""
 
+import importlib.util
 from pathlib import Path
+
+
+def _extension_directory() -> Path:
+    """Returns the directory holding the compiled extensions and runtime libraries."""
+    spec = importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop")
+    if spec is None or spec.origin is None:
+        raise ImportError(
+            "The compiled extension onnx_light.onnx_py._onnxpyprotoop is missing. "
+            "Build onnx-light before linking another extension against it."
+        )
+    return Path(spec.origin).resolve().parent
 
 
 def _find_runtime_library(library_dir: Path, name: str) -> Path | None:
@@ -38,10 +50,8 @@ def get_cpp_build_info() -> dict[str, str]:
         ``<component>_import_library`` is added when the build tree is
         available.
     """
-    from .onnx_py import _onnxpyprotoop  # noqa: PLC0415
-
     package_dir = Path(__file__).resolve().parent
-    library_dir = Path(_onnxpyprotoop.__file__).resolve().parent
+    library_dir = _extension_directory()
     info = {"include_dir": str(package_dir), "library_dir": str(library_dir)}
     for component in ("core", "proto"):
         name = f"lib_onnx_{component}"

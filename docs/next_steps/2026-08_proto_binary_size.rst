@@ -249,7 +249,8 @@ Release wheels should strip unneeded static symbols. This is an immediate
 reduction of approximately 368 KB in the measured build and does not change
 the runtime ABI.
 
-The following build variants should also be compared:
+The following build variants may optionally be compared if additional size
+headroom becomes necessary:
 
 * ``Release`` versus ``MinSizeRel``;
 * ``-O2`` versus ``-Os``;
@@ -320,8 +321,10 @@ Implementation order
    `PR #4344 <https://github.com/xadupre/onnx-light/pull/4344>`_.
 3. **Implemented:** replace per-message convenience implementations with the
    inline ``ProtoMessageAdapter<T>`` CRTP adapter.
-4. Compare ``MinSizeRel``, LTO, and linker folding after the structural work.
-5. Enforce the selected size budget in CI with a platform-specific baseline.
+4. **Optional:** compare ``MinSizeRel``, LTO, and linker folding if additional
+   size headroom becomes necessary.
+5. **Implemented:** enforce a 1.2 MiB installed-size budget in CI for the Linux
+   x86-64 Release build.
 
 Expected gain by step
 +++++++++++++++++++++
@@ -355,7 +358,7 @@ may eliminate some of the same code.
      - 0.95 MiB
      - High
    * - 4
-     - ``MinSizeRel``, LTO, and identical-code folding
+     - Optional: ``MinSizeRel``, LTO, and identical-code folding
      - 50--150 KiB
      - 0.85--1.15 MiB
      - Low until benchmarked
@@ -371,5 +374,6 @@ excluded from the cumulative figures because it changes library composition
 rather than optimizing the same target.
 
 The measured stripped library is now approximately 0.95 MiB after wrapper
-consolidation, meeting the stretch target before the compiler and linker
-experiments in step 4.
+consolidation, meeting the stretch target without the optional compiler and
+linker experiments in step 4. CI enforces the 1.2 MiB installed-size budget on
+the matching Linux x86-64 Release build.

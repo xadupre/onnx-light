@@ -36,7 +36,7 @@ template <typename T> T ReadRaw(const TensorProto &tensor) {
 }
 
 bool ReadScalarAsDouble(const TensorProto &tensor, double &out) {
-  const bool raw = tensor.is_raw_data() && tensor.raw_data().size() > 0;
+  const bool raw = tensor.is_raw_data() && !tensor.raw_data().empty();
   switch (tensor.data_type()) {
   case TensorProto::DataType::FLOAT:
     if (raw) {
@@ -161,18 +161,17 @@ GraphGraph::GraphGraph(const GraphBuilder &builder) : builder_(builder) {
       }
       std::vector<const NodeProto *> &consumers = successors_[name];
       // Avoid recording the same consumer twice when a node reads the same
-      // value from more than one input slot.
-      if (consumers.empty() || consumers.back() != &node) {
-        bool present = false;
-        for (const NodeProto *consumer : consumers) {
-          if (consumer == &node) {
-            present = true;
-            break;
-          }
+      // value from more than one input slot. Consumer lists are short, so a
+      // linear membership scan is cheap.
+      bool present = false;
+      for (const NodeProto *consumer : consumers) {
+        if (consumer == &node) {
+          present = true;
+          break;
         }
-        if (!present) {
-          consumers.push_back(&node);
-        }
+      }
+      if (!present) {
+        consumers.push_back(&node);
       }
     }
     // Mark every value a referenced subgraph reads from the enclosing scope so
@@ -181,7 +180,7 @@ GraphGraph::GraphGraph(const GraphBuilder &builder) : builder_(builder) {
       std::unordered_set<std::string> captured;
       subgraph->CollectImplicitInputs(captured);
       for (const std::string &name : captured) {
-        used_.insert(name);
+        subgraph_captured_.insert(name);
       }
     }
   }
@@ -199,7 +198,9 @@ const std::vector<const NodeProto *> &GraphGraph::NextNodes(const std::string &n
 
 bool GraphGraph::IsOutput(const std::string &name) const { return output_names_.count(name) != 0; }
 
-bool GraphGraph::IsUsedBySubgraph(const std::string &name) const { return used_.count(name) != 0; }
+bool GraphGraph::IsUsedBySubgraph(const std::string &name) const {
+  return subgraph_captured_.count(name) != 0;
+}
 
 bool GraphGraph::IsUsed(const std::string &name) const {
   return IsUsedBySubgraph(name) || successors_.count(name) != 0 || IsOutput(name);

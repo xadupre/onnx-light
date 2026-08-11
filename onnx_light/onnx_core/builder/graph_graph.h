@@ -154,7 +154,7 @@ private:
   // Declared graph output names.
   std::unordered_set<std::string> output_names_;
   // Values captured by a nested subgraph from the enclosing scope.
-  std::unordered_set<std::string> used_;
+  std::unordered_set<std::string> subgraph_captured_;
   // Initializer name -> initializer tensor.
   std::unordered_map<std::string, const TensorProto *> initializers_;
   // Folded-constant cache keyed by value name.

@@ -14,8 +14,8 @@ For every operator known to either side it reports:
 * whether a shape-inference function is registered on the ``onnx_light`` side
   (in the ``onnx_shapes`` C++ library, see
   :cpp:func:`ComputeShapeNode`);
-* how many backend test cases exercise the operator in each package (a
-  test case is attributed to the operator whose lowercased or
+* how many ordinary and expanded backend test cases exercise the operator in
+  each package (a test case is attributed to the operator whose lowercased or
   ``snake_case`` name matches its ``test_<op>(_<variant>)*`` data-folder
   name — the convention used by ``onnx/backend/test/data/node`` and
   mirrored by ``onnx_light``'s ``test_cc_<op>`` registry).
@@ -289,12 +289,16 @@ class SchemaComparisonRow:
         attributed to the operator (one count per
         ``onnx/backend/test/data/node/test_<op>(_<variant>)*`` subfolder
         whose name starts with the operator's lowercased or ``snake_case``
-        form).
+        form), excluding automatically generated ``*_expanded`` variants.
     :param onnx_light_backend_tests: Number of node backend tests collected by
         :func:`onnx_light.backend.test.case.base.collect_test_case` attributed
         to the operator by the same name-prefix convention (with
         ``test_cc_`` also stripped for cases registered by
-        ``lib_onnx_backend_test``).
+        ``lib_onnx_backend_test``), excluding ``*_expanded`` variants.
+    :param onnx_backend_tests_expanded: Number of automatically expanded ONNX
+        node backend tests attributed to the operator.
+    :param onnx_light_backend_tests_expanded: Number of expanded onnx-light
+        node backend tests attributed to the operator.
     """
 
     domain: str
@@ -305,6 +309,8 @@ class SchemaComparisonRow:
     onnx_light_shape_inference: bool = False
     onnx_backend_tests: int = 0
     onnx_light_backend_tests: int = 0
+    onnx_backend_tests_expanded: int = 0
+    onnx_light_backend_tests_expanded: int = 0
 
 
 @dataclass
@@ -350,6 +356,16 @@ class SchemaComparison:
         """Total number of ``onnx_light`` node backend tests counted."""
         return sum(r.onnx_light_backend_tests for r in self.rows)
 
+    @property
+    def total_onnx_backend_tests_expanded(self) -> int:
+        """Total number of expanded ``onnx`` node backend tests counted."""
+        return sum(r.onnx_backend_tests_expanded for r in self.rows)
+
+    @property
+    def total_onnx_light_backend_tests_expanded(self) -> int:
+        """Total number of expanded ``onnx_light`` node backend tests counted."""
+        return sum(r.onnx_light_backend_tests_expanded for r in self.rows)
+
 
 def _light_schemas_latest() -> dict[tuple[str, str], Any]:
     """Returns ``{(domain, name): schema}`` keeping only the latest version."""
@@ -364,6 +380,11 @@ def _light_schemas_latest() -> dict[tuple[str, str], Any]:
 
 
 _TEST_NAME_PREFIXES: tuple[str, ...] = ("test_cc_", "test_")
+
+
+def _is_expanded_backend_test_name(name: str) -> bool:
+    """Returns whether a backend test is an automatically expanded variant."""
+    return "_expanded" in name
 
 
 def _op_name_forms(op_name: str) -> tuple[str, ...]:
@@ -433,10 +454,10 @@ def _attribute_test_name(
     return None
 
 
-def _count_onnx_light_backend_tests(
+def _count_onnx_light_backend_tests_by_kind(
     op_keys: Iterable[tuple[str, str]] | None = None,
-) -> Counter[tuple[str, str]]:
-    """Counts ``onnx_light`` node backend tests, attributing by test-case name.
+) -> tuple[Counter[tuple[str, str]], Counter[tuple[str, str]]]:
+    """Counts ordinary and expanded ``onnx_light`` node backend tests.
 
     Each test case is attributed to the operator whose lowercased or
     ``snake_case`` name matches the test-case name as the longest prefix
@@ -453,6 +474,7 @@ def _count_onnx_light_backend_tests(
     sorted_forms = _build_op_form_index(op_keys)
 
     counts: Counter[tuple[str, str]] = Counter()
+    expanded_counts: Counter[tuple[str, str]] = Counter()
     for name, tc in collect_test_case().items():
         key = _attribute_test_name(name, sorted_forms)
         if key is None:
@@ -464,14 +486,24 @@ def _count_onnx_light_backend_tests(
                 continue
             n = nodes[0]
             key = (n.domain or "ai.onnx", n.op_type)
-        counts[key] += 1
+        target = expanded_counts if _is_expanded_backend_test_name(name) else counts
+        target[key] += 1
+    return counts, expanded_counts
+
+
+def _count_onnx_light_backend_tests(
+    op_keys: Iterable[tuple[str, str]] | None = None,
+) -> Counter[tuple[str, str]]:
+    """Counts all ``onnx_light`` node backend tests for backward compatibility."""
+    counts, expanded_counts = _count_onnx_light_backend_tests_by_kind(op_keys)
+    counts.update(expanded_counts)
     return counts
 
 
-def _count_onnx_backend_tests(
+def _count_onnx_backend_tests_by_kind(
     op_keys: Iterable[tuple[str, str]] | None = None,
-) -> Counter[tuple[str, str]]:
-    """Counts upstream ``onnx`` node backend tests by data-folder name.
+) -> tuple[Counter[tuple[str, str]], Counter[tuple[str, str]]]:
+    """Counts ordinary and expanded upstream ``onnx`` node backend tests.
 
     Each ``onnx/backend/test/data/node/test_*`` subfolder is attributed to
     the operator whose name (see :func:`_op_name_forms`) matches the
@@ -486,12 +518,12 @@ def _count_onnx_backend_tests(
         import onnx
         from onnx.backend.test.loader import load_model_tests
     except ImportError:
-        return Counter()
+        return Counter(), Counter()
 
     try:
         tests = load_model_tests(kind="node")
     except Exception:  # pragma: no cover - defensive
-        return Counter()
+        return Counter(), Counter()
 
     if op_keys is None:
         # Fall back to the schemas exposed by ``onnx.defs``; this matches the
@@ -506,6 +538,7 @@ def _count_onnx_backend_tests(
     sorted_forms = _build_op_form_index(op_keys)
 
     counts: Counter[tuple[str, str]] = Counter()
+    expanded_counts: Counter[tuple[str, str]] = Counter()
     for t in tests:
         # The backend-test attribution mirrors the data-folder name: each
         # ``test_<op>(_<variant>)*`` subfolder counts as one case for ``<op>``.
@@ -533,7 +566,17 @@ def _count_onnx_backend_tests(
                 continue
             n = m.graph.node[0]
             key = (n.domain or "ai.onnx", n.op_type)
-        counts[key] += 1
+        target = expanded_counts if _is_expanded_backend_test_name(t.name) else counts
+        target[key] += 1
+    return counts, expanded_counts
+
+
+def _count_onnx_backend_tests(
+    op_keys: Iterable[tuple[str, str]] | None = None,
+) -> Counter[tuple[str, str]]:
+    """Counts all upstream ``onnx`` node backend tests for backward compatibility."""
+    counts, expanded_counts = _count_onnx_backend_tests_by_kind(op_keys)
+    counts.update(expanded_counts)
     return counts
 
 
@@ -569,12 +612,17 @@ def compute_schema_comparison() -> SchemaComparison:
     # Build the union of operator keys known to either side, so test-name
     # attribution can match every operator the comparison will display.
     all_op_keys: set[tuple[str, str]] = set(light_schemas) | onnx_all
-    light_tests = _count_onnx_light_backend_tests(all_op_keys)
-    onnx_tests = _count_onnx_backend_tests(all_op_keys)
+    light_tests, light_expanded_tests = _count_onnx_light_backend_tests_by_kind(all_op_keys)
+    onnx_tests, onnx_expanded_tests = _count_onnx_backend_tests_by_kind(all_op_keys)
     onnx_available = bool(onnx_all)
 
     all_keys: set[tuple[str, str]] = (
-        set(light_schemas) | onnx_all | set(light_tests) | set(onnx_tests)
+        set(light_schemas)
+        | onnx_all
+        | set(light_tests)
+        | set(light_expanded_tests)
+        | set(onnx_tests)
+        | set(onnx_expanded_tests)
     )
 
     rows: list[SchemaComparisonRow] = []
@@ -590,6 +638,8 @@ def compute_schema_comparison() -> SchemaComparison:
                 onnx_light_shape_inference=key in ONNX_SHAPES_SHAPE_INFERENCE_OPS,
                 onnx_backend_tests=int(onnx_tests.get(key, 0)),
                 onnx_light_backend_tests=int(light_tests.get(key, 0)),
+                onnx_backend_tests_expanded=int(onnx_expanded_tests.get(key, 0)),
+                onnx_light_backend_tests_expanded=int(light_expanded_tests.get(key, 0)),
             )
         )
     return SchemaComparison(rows=rows, onnx_available=onnx_available)
@@ -687,6 +737,9 @@ def render_rst_summary(comparison: SchemaComparison) -> str:
         "    * - Node backend tests (counted)",
         f"      - {comparison.total_onnx_backend_tests}",
         f"      - {comparison.total_onnx_light_backend_tests}",
+        "    * - Expanded node backend tests (counted separately)",
+        f"      - {comparison.total_onnx_backend_tests_expanded}",
+        f"      - {comparison.total_onnx_light_backend_tests_expanded}",
     ]
     return "\n".join(lines) + "\n"
 

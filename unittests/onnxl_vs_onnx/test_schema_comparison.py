@@ -3,6 +3,8 @@
 import os
 import re
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.tools import schema_comparison as sc
@@ -129,6 +131,38 @@ class TestSchemaComparison(ExtTestCase):
         )
         # No known op matches -> None (caller falls back to first-node op_type).
         self.assertIsNone(_attribute_test_name("test_unknown_op", idx))
+
+    def test_backend_counts_separate_expanded_variants(self):
+        """Expanded decompositions must not inflate the main coverage metric."""
+        op_keys = {("ai.onnx", "Abs")}
+        upstream_tests = [
+            SimpleNamespace(name="test_abs", model=None, model_dir=None),
+            SimpleNamespace(name="test_abs_expanded", model=None, model_dir=None),
+        ]
+        with patch("onnx.backend.test.loader.load_model_tests", return_value=upstream_tests):
+            main, expanded = sc._count_onnx_backend_tests_by_kind(op_keys)
+        self.assertEqual(main, {("ai.onnx", "Abs"): 1})
+        self.assertEqual(expanded, {("ai.onnx", "Abs"): 1})
+
+        light_tests = {
+            "test_cc_abs": SimpleNamespace(model=None),
+            "test_cc_abs_expanded": SimpleNamespace(model=None),
+        }
+        with patch(
+            "onnx_light.onnx_lib.backend.test.case.base.collect_test_case",
+            return_value=light_tests,
+        ):
+            main, expanded = sc._count_onnx_light_backend_tests_by_kind(op_keys)
+        self.assertEqual(main, {("ai.onnx", "Abs"): 1})
+        self.assertEqual(expanded, {("ai.onnx", "Abs"): 1})
+
+    def test_compute_exposes_expanded_backend_totals(self):
+        comparison = sc.compute_schema_comparison()
+        self.assertGreaterEqual(comparison.total_onnx_backend_tests_expanded, 0)
+        self.assertGreaterEqual(comparison.total_onnx_light_backend_tests_expanded, 0)
+        for row in comparison.rows:
+            self.assertGreaterEqual(row.onnx_backend_tests_expanded, 0)
+            self.assertGreaterEqual(row.onnx_light_backend_tests_expanded, 0)
 
     def test_onnx_shapes_shape_inference_list_matches_source(self):
         """Hardcoded list of onnx_shapes shape inference ops must match the

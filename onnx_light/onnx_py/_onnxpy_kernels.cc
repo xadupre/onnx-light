@@ -15,6 +15,7 @@
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
@@ -41,6 +42,7 @@ using core::runtime::RuntimeParameters;
 using core::runtime::RuntimeSession;
 using core::runtime::RuntimeSessionOptions;
 using core::runtime::Sequence;
+using core::runtime::Shape;
 using core::runtime::SimpleRawBufferAllocator;
 using core::runtime::Tensor;
 using core::runtime::Tensors;
@@ -127,10 +129,19 @@ Tensor TensorFromNumpy(const std::string &name, nb::handle value, std::vector<nb
   if (!nb::cast<bool>(array.attr("flags").attr("c_contiguous"))) {
     array = numpy.attr("ascontiguousarray")(array);
   }
-  std::vector<int64_t> shape = nb::cast<std::vector<int64_t>>(array.attr("shape"));
   Py_buffer buffer;
-  if (PyObject_GetBuffer(array.ptr(), &buffer, PyBUF_SIMPLE) != 0)
+  if (PyObject_GetBuffer(array.ptr(), &buffer, PyBUF_ND) != 0)
     throw nb::python_error();
+  if (buffer.ndim > static_cast<int>(Shape::kMaxRank)) {
+    const int ndim = buffer.ndim;
+    PyBuffer_Release(&buffer);
+    throw std::invalid_argument("Tensor rank " + std::to_string(ndim) +
+                                " exceeds the maximum supported rank of " +
+                                std::to_string(Shape::kMaxRank) + ".");
+  }
+  Shape shape;
+  for (int dimension = 0; dimension < buffer.ndim; ++dimension)
+    shape.push_back(static_cast<int64_t>(buffer.shape[dimension]));
   const auto *data = static_cast<const uint8_t *>(buffer.buf);
   const size_t byte_count = static_cast<size_t>(buffer.len);
   if (shape.empty()) {
@@ -262,10 +273,10 @@ nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
         .attr("to_array")(nb::cast(std::move(proto)));
   }
 
-  std::vector<size_t> shape;
-  shape.reserve(tensor.shape.size());
-  for (int64_t dimension : tensor.shape)
-    shape.push_back(static_cast<size_t>(dimension));
+  std::array<size_t, Shape::kMaxRank> shape{};
+  for (size_t index = 0; index < tensor.shape.size(); ++index)
+    shape[index] = static_cast<size_t>(tensor.shape[index]);
+  const size_t rank = tensor.shape.size();
 
   const size_t byte_count = tensor.size_bytes();
   nb::object owner;
@@ -282,13 +293,23 @@ nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
 
   nb::dlpack::dtype dtype = DtypeForTensor(tensor.data_type);
   if (dtype.bits != 0) {
-    nb::ndarray<nb::numpy, nb::ro> array(data, shape.size(), shape.data(), owner, nullptr, dtype);
+    nb::ndarray<nb::numpy, nb::ro> array(data, rank, shape.data(), owner, nullptr, dtype);
     return nb::cast(std::move(array));
   }
 
   nb::ndarray<nb::numpy, const uint8_t> raw(data, {byte_count}, owner);
   nb::object array = nb::cast(std::move(raw)).attr("view")(ExoticDtype(tensor.data_type));
-  return array.attr("reshape")(nb::cast(shape));
+  PyObject *python_shape_pointer = PyTuple_New(static_cast<Py_ssize_t>(rank));
+  if (python_shape_pointer == nullptr)
+    throw nb::python_error();
+  nb::tuple python_shape = nb::steal<nb::tuple>(python_shape_pointer);
+  for (size_t index = 0; index < rank; ++index) {
+    PyObject *dimension = PyLong_FromSize_t(shape[index]);
+    if (dimension == nullptr ||
+        PyTuple_SetItem(python_shape.ptr(), static_cast<Py_ssize_t>(index), dimension) != 0)
+      throw nb::python_error();
+  }
+  return array.attr("reshape")(python_shape);
 }
 
 class ReferenceEvaluatorRunner {

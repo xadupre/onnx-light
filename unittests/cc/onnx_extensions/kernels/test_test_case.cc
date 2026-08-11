@@ -19,6 +19,7 @@
 #include "onnx_extensions/backend_test/cases/text/include_text_cases.h"
 #include "onnx_extensions/backend_test/cases/traditionalml/include_traditionalml_cases.h"
 #include "onnx_extensions/backend_test/cases/training/include_training_cases.h"
+#include "onnx_extensions/backend_test/cases_for_shapes/constant/include_constant_cases.h"
 #include "onnx_extensions/backend_test/cases_for_shapes/empty_shape/include_empty_shape_cases.h"
 #include "onnx_extensions/backend_test/cases_for_shapes/inference/include_inference_cases.h"
 #include "onnx_extensions/backend_test/cases_for_shapes/inplace/include_inplace_cases.h"
@@ -426,6 +427,10 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
   onnx_backend_test::CollectEmptyShapeTestCases(empty_shape_only);
   EXPECT_FALSE(empty_shape_only.empty());
 
+  std::vector<TestCase> constant_only;
+  onnx_backend_test::CollectConstantTestCases(constant_only);
+  EXPECT_FALSE(constant_only.empty());
+
   std::vector<TestCase> shape_inference_only;
   onnx_backend_test::CollectShapeInferenceTestCases(shape_inference_only);
   EXPECT_FALSE(shape_inference_only.empty());
@@ -457,7 +462,7 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
                             preview_only.size() + quantization_only.size() + reduction_only.size() +
                             sequence_only.size() + text_only.size() + traditionalml_only.size() +
                             training_only.size() + nn_only.size() + empty_shape_only.size() +
-                            inplace_only.size() + release_only.size() +
+                            constant_only.size() + inplace_only.size() + release_only.size() +
                             shape_inference_only.size() + nan_inf_only.size() +
                             shape_tag_only.size() + peak_memory_only.size());
 }

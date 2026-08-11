@@ -109,7 +109,7 @@ TEST(KernelClass, AbsClassParallelPathMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Abs abs_kernel{ctx};
 
-  const int64_t n = 4 * core::runtime::kParallelForGrainSize + 7;
+  const int64_t n = 32 * core::runtime::kParallelForGrainSize + 7;
   std::vector<float> values(static_cast<size_t>(n));
   for (int64_t i = 0; i < n; ++i) {
     values[static_cast<size_t>(i)] = (i % 2 == 0) ? -static_cast<float>(i) : static_cast<float>(i);
@@ -139,6 +139,17 @@ TEST(ParallelFor, ReusesPersistentPoolAcrossManyCalls) {
       ASSERT_EQ(out[static_cast<size_t>(i)], 1) << "rep=" << rep << " i=" << i;
     }
   }
+}
+
+TEST(ParallelFor, CustomGrainKeepsSmallRangeInline) {
+  const int64_t n = 2 * core::runtime::kParallelForGrainSize;
+  int calls = 0;
+  core::runtime::ParallelFor(n, n + 1, [&](int64_t begin, int64_t end) {
+    ++calls;
+    EXPECT_EQ(begin, 0);
+    EXPECT_EQ(end, n);
+  });
+  EXPECT_EQ(calls, 1);
 }
 
 TEST(ParallelFor, NestedCallRunsInlineWithoutDeadlock) {

@@ -82,22 +82,23 @@ The core runtime detects one immutable descriptor per process:
     struct CpuDescriptor {
       std::string architecture;       // x86_64, aarch64, ...
       std::string vendor;
-      uint32_t family;
-      uint32_t model;
-      uint32_t stepping;
+      std::optional<uint32_t> family;
+      std::optional<uint32_t> model;
+      std::optional<uint32_t> stepping;
       std::string microarchitecture;  // when known
       CpuFeatureSet features;         // SSE2, AVX2, AVX-512, NEON, SVE, ...
-      size_t cache_line_bytes;
-      size_t l1_data_bytes;
-      size_t l2_bytes;
-      size_t l3_bytes;
-      uint32_t physical_cores;
-      uint32_t logical_cores;
+      std::optional<size_t> cache_line_bytes;
+      std::optional<size_t> l1_data_bytes;
+      std::optional<size_t> l2_bytes;
+      std::optional<size_t> l3_bytes;
+      std::optional<uint32_t> physical_cores;
+      std::optional<uint32_t> logical_cores;
     };
 
 Missing information remains unknown; it must not be replaced by an invented
 value. Detection is platform-specific but the descriptor and matching rules
-belong to ``onnx_core``.
+belong to ``onnx_core``. ``GetCpuDescriptor()`` performs detection once and
+returns the same immutable descriptor for the lifetime of the process.
 
 Runtime properties that may change between sessions are kept separately:
 
@@ -192,6 +193,7 @@ an instruction-set class, or an explicit list of processors:
       std::optional<std::string> vendor;
       std::optional<uint32_t> family;
       std::vector<uint32_t> models;
+      std::optional<std::string> microarchitecture;
       CpuFeatureSet required_features;
       CpuFeatureSet excluded_features;
       std::optional<uint32_t> minimum_threads;

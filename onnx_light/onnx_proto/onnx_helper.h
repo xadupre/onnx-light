@@ -417,6 +417,36 @@ ONNX_LIGHT_PROTO_API bool ReadFloatingValues(const TensorProto &tensor_proto,
                                              std::vector<double> &out);
 
 /**
+ * Reads the first element of ``tensor`` as a ``double``.
+ *
+ * The value is taken from the type-specific repeated field when populated and
+ * otherwise decoded from ``raw_data`` in little-endian order, reading only the
+ * leading element (no whole-tensor allocation). Numeric element types
+ * (FLOAT, DOUBLE, INT8/16/32/64, UINT8/16/32/64 and BOOL) are supported.
+ *
+ * @param tensor Tensor to read the leading scalar from.
+ * @param out Output receiving the decoded value on success; left unchanged
+ *            otherwise.
+ * @return ``true`` when a value was decoded, ``false`` when the tensor is empty
+ *         or its element type is not supported.
+ */
+ONNX_LIGHT_PROTO_API bool ReadScalarAsDouble(const TensorProto &tensor, double &out);
+
+/**
+ * Returns a reference to a shared, permanently empty vector of node pointers.
+ *
+ * Useful as a canonical empty result for lookups that return
+ * ``const std::vector<const NodeProto *> &`` and would otherwise need to
+ * materialise a temporary.
+ *
+ * @return A reference to a static empty vector.
+ */
+inline const std::vector<const NodeProto *> &EmptyNodeList() {
+  static const std::vector<const NodeProto *> empty;
+  return empty;
+}
+
+/**
  * The function reads the ONNX model from a binary stream.
  * If external weights is triggered, the model is modified to add external data.
  * @tparam T ONNX proto type to parse.

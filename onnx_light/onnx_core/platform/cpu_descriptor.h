@@ -18,8 +18,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::platform {
 /**
  * Identifies an instruction-set capability usable by the current process.
  *
- * The numeric values are stable because persisted tuning profiles use the
- * corresponding names returned by CpuFeatureName.
+ * The numeric values are stable to keep CpuFeatureSet::bits() and CpuFeatureName
+ * serialization stable across releases.
  */
 enum class CpuFeature : uint8_t {
   kSse2 = 0,

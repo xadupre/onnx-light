@@ -1439,11 +1439,14 @@ int64_t SignExtend(uint64_t value, size_t n) {
 } // namespace
 
 bool ReadScalarAsDouble(const TensorProto &tensor, double &out) {
-  const bool raw = tensor.is_raw_data() && tensor.ref_raw_data().size() > 0;
-  const uint8_t *bytes = raw ? tensor.ref_raw_data().data() : nullptr;
+  const size_t raw_size = tensor.is_raw_data() ? tensor.ref_raw_data().size() : 0;
+  const uint8_t *bytes = raw_size > 0 ? tensor.ref_raw_data().data() : nullptr;
+  // ``raw(n)`` is ``true`` only when raw_data holds at least ``n`` bytes, so a
+  // truncated buffer never leads to an out-of-bounds read.
+  const auto raw = [&](size_t n) { return raw_size >= n; };
   switch (tensor.data_type()) {
   case TensorProto::DataType::FLOAT:
-    if (raw) {
+    if (raw(4)) {
       const uint32_t u = static_cast<uint32_t>(AssembleLittleEndian(bytes, 4));
       float f;
       std::memcpy(&f, &u, sizeof(float));
@@ -1455,7 +1458,7 @@ bool ReadScalarAsDouble(const TensorProto &tensor, double &out) {
     }
     return true;
   case TensorProto::DataType::DOUBLE:
-    if (raw) {
+    if (raw(8)) {
       const uint64_t u = AssembleLittleEndian(bytes, 8);
       std::memcpy(&out, &u, sizeof(double));
     } else if (tensor.double_data().size() > 0) {
@@ -1465,7 +1468,7 @@ bool ReadScalarAsDouble(const TensorProto &tensor, double &out) {
     }
     return true;
   case TensorProto::DataType::INT64:
-    if (raw) {
+    if (raw(8)) {
       out = static_cast<double>(SignExtend(AssembleLittleEndian(bytes, 8), 8));
     } else if (tensor.int64_data().size() > 0) {
       out = static_cast<double>(tensor.int64_data()[0]);
@@ -1474,7 +1477,7 @@ bool ReadScalarAsDouble(const TensorProto &tensor, double &out) {
     }
     return true;
   case TensorProto::DataType::INT32:
-    if (raw) {
+    if (raw(4)) {
       out = static_cast<double>(SignExtend(AssembleLittleEndian(bytes, 4), 4));
     } else if (tensor.int32_data().size() > 0) {
       out = static_cast<double>(tensor.int32_data()[0]);
@@ -1483,7 +1486,7 @@ bool ReadScalarAsDouble(const TensorProto &tensor, double &out) {
     }
     return true;
   case TensorProto::DataType::INT16:
-    if (raw) {
+    if (raw(2)) {
       out = static_cast<double>(SignExtend(AssembleLittleEndian(bytes, 2), 2));
     } else if (tensor.int32_data().size() > 0) {
       out = static_cast<double>(static_cast<int16_t>(tensor.int32_data()[0]));
@@ -1492,7 +1495,7 @@ bool ReadScalarAsDouble(const TensorProto &tensor, double &out) {
     }
     return true;
   case TensorProto::DataType::INT8:
-    if (raw) {
+    if (raw(1)) {
       out = static_cast<double>(SignExtend(AssembleLittleEndian(bytes, 1), 1));
     } else if (tensor.int32_data().size() > 0) {
       out = static_cast<double>(static_cast<int8_t>(tensor.int32_data()[0]));
@@ -1502,7 +1505,7 @@ bool ReadScalarAsDouble(const TensorProto &tensor, double &out) {
     return true;
   case TensorProto::DataType::UINT8:
   case TensorProto::DataType::BOOL:
-    if (raw) {
+    if (raw(1)) {
       out = static_cast<double>(AssembleLittleEndian(bytes, 1));
     } else if (tensor.int32_data().size() > 0) {
       out = static_cast<double>(static_cast<uint8_t>(tensor.int32_data()[0]));
@@ -1511,7 +1514,7 @@ bool ReadScalarAsDouble(const TensorProto &tensor, double &out) {
     }
     return true;
   case TensorProto::DataType::UINT16:
-    if (raw) {
+    if (raw(2)) {
       out = static_cast<double>(AssembleLittleEndian(bytes, 2));
     } else if (tensor.int32_data().size() > 0) {
       out = static_cast<double>(static_cast<uint16_t>(tensor.int32_data()[0]));
@@ -1520,7 +1523,7 @@ bool ReadScalarAsDouble(const TensorProto &tensor, double &out) {
     }
     return true;
   case TensorProto::DataType::UINT32:
-    if (raw) {
+    if (raw(4)) {
       out = static_cast<double>(AssembleLittleEndian(bytes, 4));
     } else if (tensor.uint64_data().size() > 0) {
       out = static_cast<double>(static_cast<uint32_t>(tensor.uint64_data()[0]));
@@ -1529,7 +1532,7 @@ bool ReadScalarAsDouble(const TensorProto &tensor, double &out) {
     }
     return true;
   case TensorProto::DataType::UINT64:
-    if (raw) {
+    if (raw(8)) {
       out = static_cast<double>(AssembleLittleEndian(bytes, 8));
     } else if (tensor.uint64_data().size() > 0) {
       out = static_cast<double>(tensor.uint64_data()[0]);

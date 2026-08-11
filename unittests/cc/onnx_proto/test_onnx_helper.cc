@@ -2623,12 +2623,21 @@ TEST(onnx_helper, ReadScalarAsDouble_EmptyOrUnsupported) {
   TensorProto empty_float;
   empty_float.set_data_type(TensorProto::DataType::FLOAT);
   EXPECT_FALSE(ReadScalarAsDouble(empty_float, out));
+  EXPECT_DOUBLE_EQ(out, 123.0);
+
+  // A raw_data buffer smaller than the element size must not be read.
+  const uint8_t half[2] = {0, 0};
+  TensorProto truncated;
+  truncated.set_data_type(TensorProto::DataType::FLOAT);
+  truncated.set_raw_data(half, sizeof(half));
+  out = 123.0;
+  EXPECT_FALSE(ReadScalarAsDouble(truncated, out));
+  EXPECT_DOUBLE_EQ(out, 123.0);
 
   TensorProto str;
   str.set_data_type(TensorProto::DataType::STRING);
+  out = 123.0;
   EXPECT_FALSE(ReadScalarAsDouble(str, out));
-
-  // ``out`` must be left unchanged on failure.
   EXPECT_DOUBLE_EQ(out, 123.0);
 }
 

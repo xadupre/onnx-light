@@ -1,5 +1,8 @@
 """Initializes shared nanobind types used by the split extension modules."""
 
+# The extension modules are generated during the native build.
+# pyrefly: ignore-errors
+
 from importlib.util import find_spec
 
 import ml_dtypes

@@ -183,6 +183,17 @@ void PutMapFromDict(RuntimeContext &rt, const std::string &name, nb::dict dictio
   std::vector<std::string> string_key_buffer, string_value_buffer;
   std::vector<int64_t> integer_key_buffer, integer_value_buffer;
   std::vector<float> float_value_buffer;
+  const auto reserve_size = static_cast<size_t>(size);
+  if (string_keys)
+    string_key_buffer.reserve(reserve_size);
+  else
+    integer_key_buffer.reserve(reserve_size);
+  if (string_values)
+    string_value_buffer.reserve(reserve_size);
+  else if (float_values)
+    float_value_buffer.reserve(reserve_size);
+  else
+    integer_value_buffer.reserve(reserve_size);
   for (auto [key, value] : dictionary) {
     if (string_keys)
       string_key_buffer.push_back(nb::cast<std::string>(key));

@@ -78,6 +78,8 @@ public:
   constexpr bool operator==(const CpuFeatureSet &) const = default;
 
 private:
+  static_assert(static_cast<uint8_t>(CpuFeature::kSve2) < 64,
+                "CpuFeatureSet bitmask supports up to 64 CpuFeature values.");
   static constexpr uint64_t FeatureBit(CpuFeature feature) {
     return uint64_t{1} << static_cast<uint8_t>(feature);
   }

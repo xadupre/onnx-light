@@ -30,6 +30,7 @@ INPLACE_REUSE_METADATA_KEY = _C.INPLACE_REUSE_METADATA_KEY
 RELEASE_AFTER_METADATA_KEY = _C.RELEASE_AFTER_METADATA_KEY
 RELEASE_AFTER_SHAPE_TAG_METADATA_KEY = _C.RELEASE_AFTER_SHAPE_TAG_METADATA_KEY
 NODE_TAG_METADATA_KEY = _C.NODE_TAG_METADATA_KEY
+CONSTANT_METADATA_KEY = _C.CONSTANT_METADATA_KEY
 VALUE_TAG_METADATA_KEY = _C.VALUE_TAG_METADATA_KEY
 VALUE_TAGS_METADATA_KEY = _C.VALUE_TAGS_METADATA_KEY
 compute_shape_model = _C.compute_shape_model
@@ -63,6 +64,7 @@ ShapesContext = _C.ShapesContext
 write_inplace_reuse_to_metadata = _C.write_inplace_reuse_to_metadata
 write_peak_memory_to_metadata = _C.write_peak_memory_to_metadata
 write_value_and_node_tags_to_metadata = _C.write_value_and_node_tags_to_metadata
+write_constant_info_to_metadata = _C.write_constant_info_to_metadata
 
 
 def infer_shapes_model(model, prefill_with_value_info_output: bool = False) -> None:

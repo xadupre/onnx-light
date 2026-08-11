@@ -5,6 +5,7 @@
 #include "onnx_extensions/backend_test/cases_for_shapes/inference/include_inference_cases.h"
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/compute/constant_info.h"
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/value_tags.h"
 #include "onnx_proto/onnx_helper.h"
@@ -1202,6 +1203,13 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       set_value_tag(init->add_metadata_props(), init->name());
     }
   }
+
+  // Constant information: mark every build-time-constant node and value
+  // (initializers plus any node whose inputs are all constant). In this graph
+  // every intermediate depends on the runtime inputs, so only the initializers
+  // are constant, but computing it programmatically keeps the golden metadata
+  // correct regardless of the graph's complexity.
+  core::compute::WriteConstantInfoToMetadata(model);
 
   registry.emplace_back(std::move(tc));
 }

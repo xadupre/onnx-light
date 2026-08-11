@@ -28,6 +28,7 @@
 #include "onnx_extensions/backend_test/cases/text/include_text_cases.h"
 #include "onnx_extensions/backend_test/cases/traditionalml/include_traditionalml_cases.h"
 #include "onnx_extensions/backend_test/cases/training/include_training_cases.h"
+#include "onnx_extensions/backend_test/cases_for_shapes/constant/include_constant_cases.h"
 #include "onnx_extensions/backend_test/cases_for_shapes/empty_shape/include_empty_shape_cases.h"
 #include "onnx_extensions/backend_test/cases_for_shapes/inference/include_inference_cases.h"
 #include "onnx_extensions/backend_test/cases_for_shapes/inplace/include_inplace_cases.h"
@@ -107,6 +108,9 @@ namespace {
   });
   RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
     onnx_backend_test::CollectInPlaceTestCases(r, op, m);
+  });
+  RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
+    onnx_backend_test::CollectConstantTestCases(r, op, m);
   });
   RegisterTestCasesCollector([](std::vector<TestCase> &r, const std::string &op, bool, TestMode m) {
     onnx_backend_test::CollectPeakMemoryTestCases(r, op, m);

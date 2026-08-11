@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "onnx_core/compute/constant_info.h"
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/result_lifetime.h"
 #include "onnx_core/compute/value_tags.h"
@@ -190,6 +191,29 @@ bool ComputeContext::SetNodeTag(std::size_t node_index, const std::string &tag) 
 
 void ComputeContext::SeedValueTag(const std::string &name, const std::string &tag) {
   ::ONNX_LIGHT_NAMESPACE::core::compute::TrySetValueTag(value_tags_, name, tag);
+}
+
+void ComputeContext::SeedConstant(const std::string &name) {
+  if (!name.empty()) {
+    constant_values_.insert(name);
+  }
+}
+
+void ComputeContext::AppendNodeConstant(const NodeProto &node, std::size_t node_index) {
+  if (node_constant_.size() <= node_index) {
+    node_constant_.resize(node_index + 1, ConstantInfo::kNotConstant);
+  }
+  const bool is_constant =
+      ::ONNX_LIGHT_NAMESPACE::core::compute::IsNodeConstant(node, constant_values_);
+  node_constant_[node_index] = is_constant ? ConstantInfo::kConstant : ConstantInfo::kNotConstant;
+  if (is_constant) {
+    for (int o = 0; o < node.output().size(); ++o) {
+      const std::string &out = node.output(static_cast<std::size_t>(o));
+      if (!out.empty()) {
+        constant_values_.insert(out);
+      }
+    }
+  }
 }
 
 void ComputeContext::AppendNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes,

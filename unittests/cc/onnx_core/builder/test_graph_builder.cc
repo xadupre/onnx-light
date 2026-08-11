@@ -96,6 +96,29 @@ TEST(GraphBuilder, MakeNodeMaintainsTagsAndReuseIncrementally) {
   EXPECT_EQ(builder.Compute().Size(), builder.Nodes().size());
 }
 
+TEST(GraphBuilder, MaintainsConstantInfoIncrementally) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  TensorProto initializer;
+  initializer.set_name("weight");
+  initializer.set_data_type(TensorProto::DataType::FLOAT);
+  initializer.add_dims(1);
+  initializer.add_float_data(1.0f);
+  builder.MakeInitializer(initializer);
+  EXPECT_TRUE(builder.Compute().IsConstantValue("weight"));
+
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  AttributeProto &value = attributes.add();
+  value.set_name("value_float");
+  value.set_type(AttributeProto::AttributeType::FLOAT);
+  value.set_f(1.0f);
+  const std::vector<std::string> outputs =
+      builder.MakeNode("Constant", {}, {"constant"}, "", "", attributes);
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_TRUE(builder.Compute().IsConstantValue(outputs[0]));
+  EXPECT_TRUE(builder.Compute().NodeConstant(0));
+  EXPECT_EQ(builder.Compute().NodeConstant().at(0), core::compute::ConstantInfo::kConstant);
+}
+
 TEST(GraphBuilder, MakeNodeUsesProvidedOutputName) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));

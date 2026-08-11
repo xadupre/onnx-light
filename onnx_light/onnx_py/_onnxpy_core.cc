@@ -1,4 +1,5 @@
 #include "onnx_core/builder/graph_builder.h"
+#include "onnx_core/compute/constant_info.h"
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/peak_memory.h"
 #include "onnx_core/compute/value_tags.h"
@@ -1212,6 +1213,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.attr("VALUE_TAG_METADATA_KEY") = onnx_compute::kValueTagMetadataKey;
   shape_mod.attr("VALUE_TAGS_METADATA_KEY") = onnx_compute::kValueTagsMetadataKey;
   shape_mod.attr("NODE_TAG_METADATA_KEY") = onnx_compute::kNodeTagMetadataKey;
+  shape_mod.attr("CONSTANT_METADATA_KEY") = onnx_compute::kConstantMetadataKey;
 
   nb::enum_<onnx_compute::InPlaceReuseKind>(
       shape_mod, "InPlaceReuseKind", nb::is_arithmetic(),
@@ -1784,6 +1786,20 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         }
       },
       nb::arg("nodes"), "Writes inferred node tags for a node list.");
+
+  shape_mod.def(
+      "write_constant_info_to_metadata",
+      [](GraphProto &graph) { onnx_compute::WriteConstantInfoToMetadata(graph); }, nb::arg("graph"),
+      "Writes constant-value / constant-node information into graph metadata.");
+  shape_mod.def(
+      "write_constant_info_to_metadata",
+      [](FunctionProto &function) { onnx_compute::WriteConstantInfoToMetadata(function); },
+      nb::arg("function"),
+      "Writes constant-value / constant-node information into function metadata.");
+  shape_mod.def(
+      "write_constant_info_to_metadata",
+      [](ModelProto &model) { onnx_compute::WriteConstantInfoToMetadata(model); }, nb::arg("model"),
+      "Writes constant-value / constant-node information into ``model.graph`` metadata.");
 }
 
 namespace {

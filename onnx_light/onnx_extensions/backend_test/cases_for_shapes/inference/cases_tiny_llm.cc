@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/compute/constant_info.h"
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/value_tags.h"
 #include "onnx_extensions/backend_test/cases_for_shapes/inference/include_inference_cases.h"
@@ -528,6 +529,18 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry, TestMod
     init_meta(13, "weight");
     // initializer[14] mask_neg → "weight"
     init_meta(14, "weight");
+
+    // Constant information: every initializer is a build-time constant. No
+    // intermediate value or node is constant because they all depend on the
+    // runtime graph inputs (input_ids, attention_mask, past_key, past_value).
+    const auto init_const = [&](std::size_t i) {
+      auto *entry = graph->mutable_initializer(i)->add_metadata_props();
+      entry->set_key(ann::kConstantMetadataKey);
+      entry->set_value("1");
+    };
+    for (std::size_t i = 0; i < 15; ++i) {
+      init_const(i);
+    }
   }
 
   registry.emplace_back(std::move(tc));

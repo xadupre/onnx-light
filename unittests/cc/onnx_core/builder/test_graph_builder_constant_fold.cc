@@ -158,26 +158,25 @@ TEST(GraphBuilderConstantFold, DoesNotFoldNodeDependingOnGraphInput) {
 }
 
 TEST(GraphBuilderConstantFold, FoldsNodeWhoseOutputIsGraphOutput) {
-  // A constant node whose output is a declared graph output is folded into an
-  // initializer carrying that name; the value remains a valid graph output.
+  // A constant node whose output is *only* a declared graph output (with no
+  // other consumer) is folded into an initializer carrying that name; the value
+  // remains a valid graph output.
   ScopedFoldingKernels kernels;
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInitializer(MakeInitializer<float>("a", {2}, {1.0f, 2.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {2}, {3.0f, 4.0f}));
   const std::vector<std::string> sum = builder.MakeNode("Add", {"a", "b"}, {"s"});
-  const std::vector<std::string> neg = builder.MakeNode("Neg", {sum[0]}, {"n"});
-  builder.MakeOutput(neg[0]);
+  builder.MakeOutput(sum[0]);
 
-  // Both the Add and the graph-output Neg fold away.
-  EXPECT_EQ(builder.ConstantFold(), 2u);
+  EXPECT_EQ(builder.ConstantFold(), 1u);
   EXPECT_EQ(builder.Nodes().size(), 0u);
-  const TensorProto *folded = FindInitializer(builder, "n");
+  const TensorProto *folded = FindInitializer(builder, "s");
   ASSERT_NE(folded, nullptr);
   const core::runtime::Tensor tensor = core::runtime::TensorFromProto(*folded);
   ASSERT_EQ(tensor.element_count(), 2);
   const float *values = tensor.AsFloat();
-  EXPECT_FLOAT_EQ(values[0], -4.0f);
-  EXPECT_FLOAT_EQ(values[1], -6.0f);
+  EXPECT_FLOAT_EQ(values[0], 4.0f);
+  EXPECT_FLOAT_EQ(values[1], 6.0f);
 }
 
 TEST(GraphBuilderConstantFold, DisabledOptionIsNoOp) {

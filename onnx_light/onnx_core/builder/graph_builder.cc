@@ -1252,13 +1252,15 @@ std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
   // Constant tensors already materialized: the graph initializers plus every
   // output folded so far in this pass. The initializer pointers stay valid
   // because ``initializers_`` is only appended to at the very end; the folded
-  // outputs live in ``folded`` (a node-based map, so its element addresses are
-  // stable across inserts).
+  // outputs live in ``folded``, whose element addresses are stable across
+  // inserts because ``std::unordered_map`` never invalidates pointers or
+  // references to existing elements (only iterators) on rehash.
   std::unordered_map<std::string, const TensorProto *> const_tensors;
   for (const TensorProto &initializer : initializers_) {
     const_tensors.emplace(initializer.name().value(), &initializer);
   }
   std::unordered_map<std::string, TensorProto> folded;
+  folded.reserve(num_nodes);
   std::vector<std::string> folded_order;
 
   const std::string device_suffix = core::symbolic::DeviceKeySuffix(device_);

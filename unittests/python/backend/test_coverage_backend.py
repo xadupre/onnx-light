@@ -97,20 +97,22 @@ class TestCoverage(ExtTestCase):
             set(counts),
         )
 
-    def test_no_feature_metadata_on_graph(self):
+    def test_no_feature_metadata_on_model_or_graph(self):
         # Feature metadata (inplace / shape_tag / release) must be attached to
         # the NodeProto or ValueInfoProto/TensorProto it describes, never to the
-        # graph-level ``metadata_props``. Enforce this for every backend case.
+        # model- or graph-level ``metadata_props``. Enforce this for every
+        # backend case.
         cases = collect_test_case(include_big=True)
         for name, tc in cases.items():
             with self.subTest(tag=tc.tag, name=name):
-                keys = {it.key for it in tc.model.graph.metadata_props}
-                leaked = keys & _ALL_FEATURE_METADATA_KEYS
+                model_keys = {it.key for it in tc.model.metadata_props}
+                graph_keys = {it.key for it in tc.model.graph.metadata_props}
+                leaked = (model_keys | graph_keys) & _ALL_FEATURE_METADATA_KEYS
                 self.assertFalse(
                     leaked,
                     msg=lambda leaked=leaked: (
                         f"{name=} {tc.tag=} stores feature metadata "
-                        f"{sorted(leaked)} on the graph metadata_props"
+                        f"{sorted(leaked)} on model/graph metadata_props"
                     ),
                 )
 

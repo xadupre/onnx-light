@@ -453,5 +453,46 @@ class TestGraphBuilder(ExtTestCase):
             )
 
 
+    def test_constant_folding_options_are_exposed(self):
+        from onnx_light.onnx_core.graph_builder import ConstantFoldingOptions
+
+        options = ConstantFoldingOptions()
+        # Defaults mirror the C++ ConstantFoldingOptions struct.
+        self.assertTrue(options.enabled)
+        self.assertEqual(options.max_element_count, -1)
+        self.assertTrue(options.fold_weights)
+        self.assertFalse(options.raise_on_missing_weight_kernel)
+        self.assertEqual(options.excluded_ops, set())
+
+        # Every field is writable from Python.
+        options.enabled = False
+        options.max_element_count = 1024
+        options.fold_weights = False
+        options.raise_on_missing_weight_kernel = True
+        options.excluded_ops = {("", "RandomNormal")}
+        self.assertFalse(options.enabled)
+        self.assertEqual(options.max_element_count, 1024)
+        self.assertFalse(options.fold_weights)
+        self.assertTrue(options.raise_on_missing_weight_kernel)
+        self.assertEqual(options.excluded_ops, {("", "RandomNormal")})
+
+    def test_constant_fold_is_callable(self):
+        from onnx_light.onnx_core.graph_builder import ConstantFoldingOptions
+
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 3])
+        builder.make_input("y", FLOAT, [2, 3])
+        (z,) = builder.make_node("Add", ["x", "y"])
+        builder.make_output(z)
+
+        # Nothing is constant here, so folding is a no-op regardless of the
+        # kernels linked into this build variant.
+        self.assertEqual(builder.constant_fold(), 0)
+        # A disabled pass is always a no-op and accepts an explicit options object.
+        options = ConstantFoldingOptions()
+        options.enabled = False
+        self.assertEqual(builder.constant_fold(options), 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -17,6 +17,7 @@
 #include <nanobind/stl/function.h>
 #include <nanobind/stl/map.h>
 #include <nanobind/stl/pair.h>
+#include <nanobind/stl/set.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/unordered_set.h>
@@ -1879,6 +1880,7 @@ std::vector<AttributeProto> PyAttributesToVector(nb::handle attributes) {
 
 void AddOnnxPyBuilder(nb::module_ &m) {
   using core::builder::BuilderError;
+  using core::builder::ConstantFoldingOptions;
   using core::builder::GraphBuilder;
   using ::onnx_light::core::symbolic::Device;
   using ::onnx_light::core::symbolic::SymTensor;
@@ -1896,6 +1898,30 @@ void AddOnnxPyBuilder(nb::module_ &m) {
       PyErr_SetString(PyExc_ValueError, e.what());
     }
   });
+
+  nb::class_<ConstantFoldingOptions>(builder_mod, "ConstantFoldingOptions",
+                                     "Options controlling GraphBuilder.constant_fold.")
+      .def(nb::init<>())
+      .def_rw("enabled", &ConstantFoldingOptions::enabled,
+              "Master switch: when False constant_fold is a no-op and returns 0 without "
+              "touching the graph.")
+      .def_rw("max_element_count", &ConstantFoldingOptions::max_element_count,
+              "Skips folding a node when any of its outputs would hold strictly more than this "
+              "many elements. A negative value (the default) means no limit.")
+      .def_rw("excluded_ops", &ConstantFoldingOptions::excluded_ops,
+              "Set of ``(domain, op_type)`` tuples that must never be folded. An empty domain "
+              "matches every domain and an empty op_type matches every operator, so an "
+              "empty-empty pair disables folding for every node.")
+      .def_rw("fold_weights", &ConstantFoldingOptions::fold_weights,
+              "Controls whether nodes whose results are tagged ``\"weight\"`` (or untagged) are "
+              "folded. Shape-tagged results are always foldable; when False only shape-tagged "
+              "results are folded, so a caller can fold shapes early and defer weight folding to "
+              "a final pass.")
+      .def_rw("raise_on_missing_weight_kernel",
+              &ConstantFoldingOptions::raise_on_missing_weight_kernel,
+              "When True a weight/untagged node for which no runtime kernel is registered raises "
+              "instead of being left untouched. Shape-tagged results always raise when their "
+              "kernel is missing, regardless of this flag.");
 
   // The built-in ONNX operator schemas live in the ``onnx_op`` library, which
   // this extension deliberately does not link against. When the caller wants
@@ -2072,6 +2098,15 @@ void AddOnnxPyBuilder(nb::module_ &m) {
            "functions are inlined; when ``exclude`` is non-empty every function except the matched "
            "ones is inlined; passing both raises an error. Returns the total number of call nodes "
            "inlined.")
+      .def("constant_fold", &GraphBuilder::ConstantFold,
+           nb::arg("options") = ConstantFoldingOptions{},
+           "Evaluates every constant node (initializers and, transitively, the outputs of "
+           "deterministic nodes fed only by constants) once through the runtime kernel registry "
+           "and replaces it with the resulting initializers. Shape-tagged results must fold (a "
+           "missing kernel raises); weight/untagged results fold best-effort unless "
+           "``options.raise_on_missing_weight_kernel`` is set. Control-flow (subgraph-carrying) "
+           "nodes are skipped, and the pass descends into nested subgraphs and local functions. "
+           "Returns the total number of nodes folded away.")
       .def(
           "build_graph", [](const GraphBuilder &self) { return self.BuildGraph(); },
           "Assembles the accumulated inputs, initializers, nodes and outputs into a "

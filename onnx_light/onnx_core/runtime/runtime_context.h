@@ -680,6 +680,14 @@ public:
     return it->second;
   }
 
+  Sequence &GetSequence(const std::string &name) {
+    auto it = sequences_.find(name);
+    if (it == sequences_.end()) {
+      throw std::out_of_range("RuntimeContext::GetSequence: no sequence named '" + name + "'.");
+    }
+    return it->second;
+  }
+
   /// In/out map store shared across every node in a chain. Only
   /// map-typed graph edges are stored here; tensor-typed edges
   /// live in :cpp:func:`tensors`.

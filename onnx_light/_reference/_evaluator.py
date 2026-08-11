@@ -4,13 +4,12 @@
 
 """Implementation of :class:`ReferenceEvaluator`.
 
-The evaluator wraps the ``RuntimeSession`` / ``ExecutionPlan`` execution
-machinery exposed by :mod:`onnx_light.onnx_py._onnxpykernels` (re-exported
-through the ``runtime`` submodule). All operator implementations come from
-the C++ ``KernelDispatchTable``; this Python class only handles input/output
-conversion between :class:`numpy.ndarray` and the runtime ``Tensor`` type and
-the bookkeeping required to expose an
-``onnx.reference.ReferenceEvaluator``-compatible API.
+The evaluator delegates input conversion, execution, and output conversion to
+the native ``ReferenceEvaluatorRunner`` exposed by
+:mod:`onnx_light.onnx_py._onnxpykernels`. All operator implementations come
+from the C++ ``KernelDispatchTable``; this Python class provides the
+``onnx.reference.ReferenceEvaluator``-compatible API and custom-kernel
+wrapping.
 """
 
 from __future__ import annotations
@@ -196,63 +195,6 @@ def _make_numpy_custom_kernel(domain: str, op_type: str, fn: Any) -> Any:
     return _wrapper
 
 
-def _run_via_session(
-    graph_or_function: Any, ctx: Any, sessions: dict[int, Any] | None = None
-) -> None:
-    """Runs ``graph_or_function`` by building (or reusing) its cached
-    :class:`~onnx_light.onnx_py._onnxpykernels.runtime.ExecutionPlan` and
-    driving it through a (reused)
-    :class:`~onnx_light.onnx_py._onnxpykernels.runtime.RuntimeSession`.
-
-    When ``graph_or_function`` is a ``GraphProto``, every declared
-    initializer is seeded into ``ctx`` first (names ``ctx`` already carries
-    are left as-is). ``FunctionProto`` has no initializers, so nothing is
-    seeded in that case. For a full model, call
-    :func:`_runtime.register_model_functions` first so nodes referring to
-    model-local functions resolve, then call this on ``model.graph``.
-
-    ``sessions`` is an optional cache mapping a plan's identity to the
-    ``(plan, RuntimeSession)`` pair built for it. Reusing the session across
-    calls keeps the per-node kernel resolution that :cpp:func:`RuntimeSession::Run`
-    performs on its first run instead of rediscovering (and rebuilding) every
-    node's kernel on each call. When ``sessions`` is ``None`` a fresh session
-    is built for this single run.
-    """
-    initializers = getattr(graph_or_function, "initializer", None)
-    if initializers is not None:
-        for init in initializers:
-            if not ctx.has(init.name):
-                ctx.set(init.name, _runtime.tensor_from_proto(init), "initializer")
-    plan = ctx.get_execution_plan(graph_or_function)
-    if sessions is None:
-        session = _runtime.RuntimeSession(plan)
-        _record_graph_outputs(session, graph_or_function)
-        session.run(ctx)
-        return
-    entry = sessions.get(id(plan))
-    if entry is None:
-        # Cache the plan alongside the session so the plan (and therefore its
-        # identity) stays alive for as long as the session that wraps it.
-        session = _runtime.RuntimeSession(plan)
-        _record_graph_outputs(session, graph_or_function)
-        entry = (plan, session)
-        sessions[id(plan)] = entry
-    entry[1].run(ctx)
-
-
-def _record_graph_outputs(session: Any, graph_or_function: Any) -> None:
-    """Records a ``GraphProto``'s declared outputs on a plan-built
-    ``RuntimeSession`` so :cpp:func:`RuntimeSession::Run` can detach any graph
-    output borrowing into the model (e.g. a ``Constant`` reading its value's
-    ``raw_data``) into an owned buffer before returning. A session built from a
-    bare :class:`ExecutionPlan` does not know the graph's output names, so
-    without this it would leave such outputs borrowing into the model.
-    ``FunctionProto`` carries no shaped outputs, so it is skipped.
-    """
-    if isinstance(graph_or_function, GraphProto):
-        session.set_declared_shapes(graph_or_function)
-
-
 # ---------------------------------------------------------------------------
 # Evaluator
 # ---------------------------------------------------------------------------
@@ -398,7 +340,6 @@ class ReferenceEvaluator:
             inputs = list(self._function.input)
 
         self._input_names: list[str] = inputs
-        self._input_names_set: frozenset[str] = frozenset(self._input_names)
         self._output_names: list[str] = list(outputs)
 
         # Pre-compute the opset version and KernelContext once at construction
@@ -425,6 +366,8 @@ class ReferenceEvaluator:
         # buffer storage through it and records its live / peak memory on every
         # event.
         self._allocator = allocator
+        if self._model is not None:
+            _runtime.register_model_functions(self._model, self._ctx)
 
         # Mapping ``"<domain>:<op_type>" -> low-level callback``. A
         # low-level callback has the signature
@@ -435,13 +378,20 @@ class ReferenceEvaluator:
         # user-provided callable.
         self._custom_kernels: dict[str, Any] = {}
 
-        # Cache of ``id(plan) -> (plan, RuntimeSession)`` so the RuntimeSession
-        # is reused across :meth:`run` calls. The first run of a session
-        # resolves and builds every node's kernel once; reusing the session
-        # keeps that work instead of redoing the per-node dispatch on every
-        # call. Registering a custom kernel clears the cache so the next run
-        # rebuilds the sessions and picks the new kernel up.
-        self._sessions: dict[int, Any] = {}
+        if self._model is not None:
+            execution_root = self._model.graph
+        elif self._function is not None:
+            execution_root = self._function
+        else:
+            execution_root = self._graph
+        self._runner = _runtime.ReferenceEvaluatorRunner(
+            execution_root,
+            self._input_names,
+            self._map_inputs,
+            self._sequence_inputs | self._optional_sequence_inputs,
+            self._output_names,
+        )
+        self._last_ctx = self._ctx
 
     # -- custom kernels -----------------------------------------------------
 
@@ -489,7 +439,7 @@ class ReferenceEvaluator:
         self._ctx.register_custom_kernel(domain, op_type, _wrapper)
         # Drop any cached RuntimeSession: its kernels were resolved before this
         # custom kernel existed, so the next run must rebuild them to pick it up.
-        self._sessions.clear()
+        self._runner.reset()
 
     def unregister_custom_kernel(self, domain: str, op_type: str) -> bool:
         """Removes a custom kernel previously registered for ``(domain, op_type)``.
@@ -534,7 +484,7 @@ class ReferenceEvaluator:
         # Drop any cached RuntimeSession: its kernels were resolved while the
         # custom kernel existed, so the next run must rebuild them to pick up
         # the restored built-in kernel.
-        self._sessions.clear()
+        self._runner.reset()
         return True
 
     @staticmethod
@@ -685,99 +635,4 @@ class ReferenceEvaluator:
             outputs are returned as a ``list`` of :class:`numpy.ndarray`
             (one array per sequence element).
         """
-        if output_names is None:
-            output_names = self._output_names
-
-        if not isinstance(feed_inputs, dict):
-            raise TypeError(
-                "feed_inputs must be a dict[name -> numpy.ndarray], not "
-                f"{type(feed_inputs).__name__}."
-            )
-
-        # Fast missing-input check using frozenset difference.
-        missing = self._input_names_set - feed_inputs.keys()
-        if missing:
-            raise ValueError(
-                f"Missing input(s) for ReferenceEvaluator.run: {sorted(missing)}. "
-                f"Expected: {self._input_names}, got: {list(feed_inputs)}."
-            )
-
-        ctx = self._ctx
-        # Reset the per-invocation tensor / sequence / event state from any
-        # previous run while preserving the cached execution plans, registered
-        # custom kernels, kernel context and the ``events_enabled`` setting.
-        ctx.clear()
-        # Releasing intermediates would drop any requested output that is
-        # not a declared graph/function output before the caller can fetch
-        # it. Disable the per-run release in that case so callers can still
-        # observe arbitrary intermediate values via ``run([name], ...)``.
-        declared_outputs = frozenset(self._output_names)
-        release = self._release_intermediates and all(
-            name in declared_outputs for name in output_names
-        )
-        ctx.release_intermediates = release
-
-        for name, value in feed_inputs.items():
-            is_optional_sequence_input = name in self._optional_sequence_inputs
-            if name in self._map_inputs:
-                # ``map(K, V)`` inputs are fed as a Python ``dict`` and stored
-                # in the runtime's map store via ``put_map``.  A size-1 numpy
-                # object array wrapping the dict (e.g. produced by
-                # ``np.asarray(some_dict, dtype=object)``) is unwrapped first.
-                if isinstance(value, np.ndarray) and value.dtype == object and value.size == 1:
-                    unwrapped = value.item()
-                    if isinstance(unwrapped, dict):
-                        value = unwrapped
-                if not isinstance(value, dict):
-                    raise TypeError(
-                        f"Map input {name!r} must be fed as a Python dict, "
-                        f"not {type(value).__name__}."
-                    )
-                ctx.put_map(name, value)
-            elif name in self._sequence_inputs or is_optional_sequence_input:
-                # ``seq(T)`` graph inputs are fed as a list/tuple of arrays (one
-                # per sequence element) and stored through ``put_sequence``.
-                if not isinstance(value, (list, tuple)):
-                    input_type_description = (
-                        "optional sequence" if is_optional_sequence_input else "sequence"
-                    )
-                    raise TypeError(
-                        f"{input_type_description.capitalize()} input {name!r} must be fed as a "
-                        f"list/tuple of arrays, not {type(value).__name__}."
-                    )
-                elements = [
-                    _numpy_to_cpp_tensor(f"{name}_{i}", element)
-                    for i, element in enumerate(value)
-                ]
-                ctx.put_sequence(name, elements)
-            else:
-                ctx.set(name, _numpy_to_cpp_tensor(name, value, copy=False))
-
-        if self._model is not None:
-            _runtime.register_model_functions(self._model, ctx)
-            _run_via_session(self._model.graph, ctx, self._sessions)
-        elif self._function is not None:
-            _run_via_session(self._function, ctx, self._sessions)
-        else:
-            _run_via_session(self._graph, ctx, self._sessions)
-
-        self._last_ctx = ctx
-
-        results: list[np.ndarray | list[np.ndarray]] = []
-        for name in output_names:
-            if ctx.has(name):
-                # ``name`` is a terminal graph output: steal the buffer (when
-                # owned inline) so the array owns the bytes and the runtime
-                # tensor can be released.
-                results.append(_cpp_tensor_to_numpy(ctx.get(name), steal=True))
-            elif ctx.has_sequence(name):
-                results.append(
-                    [_cpp_tensor_to_numpy(t, steal=True) for t in ctx.get_sequence(name)]
-                )
-            else:
-                all_names = sorted(ctx.names() + ctx.sequence_names())
-                raise RuntimeError(
-                    f"Output {name!r} was not produced by the graph. "
-                    f"Available names after execution: {all_names}."
-                )
-        return results
+        return self._runner.run(self._ctx, output_names, feed_inputs, self._release_intermediates)

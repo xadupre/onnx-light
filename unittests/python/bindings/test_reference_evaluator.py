@@ -923,14 +923,11 @@ sess.run(
         # which the allocator reuses on the next run(); copies the first run's
         # outputs so they survive the second run() before comparing.
         first = [np.array(out, copy=True) for out in sess.run(None, inputs)]
-        # A single session is cached after the first run.
-        self.assertEqual(len(sess._sessions), 1)
-        cached = next(iter(sess._sessions.values()))
+        cached_runner = sess._runner
 
         second = sess.run(None, inputs)
-        # The same (plan, session) entry is reused, not rebuilt.
-        self.assertEqual(len(sess._sessions), 1)
-        self.assertIs(next(iter(sess._sessions.values())), cached)
+        # The native runner and its internal plan/session are reused.
+        self.assertIs(sess._runner, cached_runner)
         for expected, actual in zip(first, second):
             np.testing.assert_array_equal(expected, actual)
 

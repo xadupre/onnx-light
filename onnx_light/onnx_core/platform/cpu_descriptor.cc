@@ -343,12 +343,17 @@ std::optional<uint32_t> ParseUnsignedValue(std::string_view text, int base) {
   while (!text.empty() && std::isspace(static_cast<unsigned char>(text.front())) != 0) {
     text.remove_prefix(1);
   }
+  while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())) != 0) {
+    text.remove_suffix(1);
+  }
   if (text.starts_with("0x") || text.starts_with("0X")) {
     text.remove_prefix(2);
   }
   uint32_t value = 0;
-  auto result = std::from_chars(text.data(), text.data() + text.size(), value, base);
-  if (result.ec != std::errc{}) {
+  const char *begin = text.data();
+  const char *end = begin + text.size();
+  auto result = std::from_chars(begin, end, value, base);
+  if (result.ec != std::errc{} || result.ptr != end) {
     return std::nullopt;
   }
   return value;

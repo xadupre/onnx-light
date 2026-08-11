@@ -72,6 +72,15 @@ public:
   /// Returns a reference to a shared empty vector when ``name`` is unused.
   const std::vector<const NodeProto *> &NextNodes(const std::string &name) const;
 
+  /// Returns the nodes producing the inputs of ``node`` (its immediate
+  /// predecessors in the data-flow graph), deduplicated and in input order.
+  /// Inputs that are graph inputs or initializers contribute no predecessor.
+  std::vector<const NodeProto *> Predecessors(const NodeProto &node) const;
+
+  /// Returns the nodes consuming the outputs of ``node`` (its immediate
+  /// successors in the data-flow graph), deduplicated and in output order.
+  std::vector<const NodeProto *> Successors(const NodeProto &node) const;
+
   /// Returns ``true`` when ``name`` is a declared graph output.
   bool IsOutput(const std::string &name) const;
 

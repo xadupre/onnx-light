@@ -60,6 +60,24 @@ TEST(GraphGraph, IndexesPredecessorsAndSuccessors) {
   // Positions follow the insertion order of the nodes.
   EXPECT_EQ(graph.Position(*graph.NodeBefore("z")), 0u);
   EXPECT_EQ(graph.Position(*graph.NodeBefore("out2")), 2u);
+
+  // Node-level neighbours: the Add node has no predecessor (both inputs are
+  // graph inputs) and is followed by both Mul and Sub.
+  const NodeProto *add = graph.NodeBefore("z");
+  const NodeProto *mul = graph.NodeBefore("out1");
+  const NodeProto *sub = graph.NodeBefore("out2");
+  EXPECT_TRUE(graph.Predecessors(*add).empty());
+  const std::vector<const NodeProto *> add_succ = graph.Successors(*add);
+  ASSERT_EQ(add_succ.size(), 2u);
+  EXPECT_EQ(add_succ[0], mul);
+  EXPECT_EQ(add_succ[1], sub);
+
+  // Mul reads "z" and "x"; only "z" has a producing node, so Add is its single
+  // predecessor and it has no successor.
+  const std::vector<const NodeProto *> mul_pred = graph.Predecessors(*mul);
+  ASSERT_EQ(mul_pred.size(), 1u);
+  EXPECT_EQ(mul_pred[0], add);
+  EXPECT_TRUE(graph.Successors(*mul).empty());
 }
 
 TEST(GraphGraph, UsageQueries) {

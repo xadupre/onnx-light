@@ -4,6 +4,7 @@
 
 #include "onnx_core/builder/graph_graph.h"
 
+#include <algorithm>
 #include <cstring>
 
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
@@ -194,6 +195,40 @@ const NodeProto *GraphGraph::NodeBefore(const std::string &name) const {
 const std::vector<const NodeProto *> &GraphGraph::NextNodes(const std::string &name) const {
   auto it = successors_.find(name);
   return it == successors_.end() ? EmptyNodeList() : it->second;
+}
+
+std::vector<const NodeProto *> GraphGraph::Predecessors(const NodeProto &node) const {
+  std::vector<const NodeProto *> result;
+  for (int in = 0; in < node.input().size(); ++in) {
+    std::string name(node.input(static_cast<std::size_t>(in)));
+    if (name.empty()) {
+      continue;
+    }
+    const NodeProto *producer = NodeBefore(name);
+    if (producer == nullptr) {
+      continue;
+    }
+    if (std::find(result.begin(), result.end(), producer) == result.end()) {
+      result.push_back(producer);
+    }
+  }
+  return result;
+}
+
+std::vector<const NodeProto *> GraphGraph::Successors(const NodeProto &node) const {
+  std::vector<const NodeProto *> result;
+  for (int o = 0; o < node.output().size(); ++o) {
+    std::string name(node.output(static_cast<std::size_t>(o)));
+    if (name.empty()) {
+      continue;
+    }
+    for (const NodeProto *consumer : NextNodes(name)) {
+      if (std::find(result.begin(), result.end(), consumer) == result.end()) {
+        result.push_back(consumer);
+      }
+    }
+  }
+  return result;
 }
 
 bool GraphGraph::IsOutput(const std::string &name) const { return output_names_.count(name) != 0; }

@@ -24,6 +24,89 @@ Size reduction must preserve the ONNX wire format, parser and serializer
 behavior, external-data support required by ordinary models, and the ability
 to exchange proto objects across onnx-light shared libraries.
 
+Post-mortem
++++++++++++
+
+The work was delivered as a sequence of small pull requests.  Each one made
+the next step easier to measure or safer to deploy:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 27 34 24
+
+   * - Pull request
+     - Change
+     - Result
+     - Role in the sequence
+   * - `PR #4204 <https://github.com/xadupre/onnx-light/pull/4204>`_
+     - Enabled function and data sections plus linker garbage collection on
+       GNU/Clang, Apple, and MSVC builds.
+     - Allowed unused code to be discarded, but no isolated size measurement
+       was recorded.
+     - Established the linker foundation used by the later reductions.
+   * - `PR #4333 <https://github.com/xadupre/onnx-light/pull/4333>`_
+     - Added a cross-platform size reporter to CI and stripped Release wheel
+       artifacts explicitly.
+     - Reduced the installed Linux library from 2,178,120 to 1,810,208 bytes,
+       a saving of 367,912 bytes (16.9%).
+     - Turned binary size into an observable release metric before changing
+       the ABI surface.
+   * - `PR #4344 <https://github.com/xadupre/onnx-light/pull/4344>`_
+     - Hid symbols by default on ELF and Mach-O and introduced
+       ``ONNX_LIGHT_PROTO_API`` for the required public and cross-library ABI.
+     - Reduced the stripped library from 1,810,208 to 1,625,024 bytes and
+       defined dynamic symbols from 2,128 to 1,191.
+     - Let ``--gc-sections`` discard implementation details that had previously
+       been retained only because they were exported.
+   * - `PR #4349 <https://github.com/xadupre/onnx-light/pull/4349>`_
+     - Replaced per-message out-of-line convenience wrappers with the
+       ``ProtoMessageAdapter<T>`` CRTP adapter and shared the ``CopyFrom`` wire
+       pipeline through a type-erased implementation.
+     - Reduced the stripped library from 1,625,024 to 1,001,208 bytes and
+       defined dynamic symbols from 1,191 to 652.
+     - Removed the structural source of duplication rather than relying on
+       compiler flags to fold it.
+   * - `PR #4355 <https://github.com/xadupre/onnx-light/pull/4355>`_
+     - Added a tested 1.2 MiB installed-size budget to Linux CI.
+     - Produced no immediate size reduction.
+     - Converted the achieved size into a regression guard.
+
+The comparable stripped baseline therefore decreased from 1,810,208 to
+1,001,208 bytes: 809,000 bytes, or 44.7%.  Including Release stripping, the
+installed artifact decreased by 1,176,912 bytes (54.0%).  The defined dynamic
+symbol count fell by 69.4%, from 2,128 to 652.  The largest individual gain
+came from removing duplicated generated wrappers, not from a more aggressive
+optimization level.
+
+What worked
+^^^^^^^^^^^
+
+* Measuring the packaged library, ELF sections, exported symbols, and shared
+  dependencies prevented file-size changes from being mistaken for code-size
+  changes.  Stripping reduced the installed artifact but did not reduce mapped
+  executable code.
+* Reducing symbol visibility before consolidating wrappers separated two
+  overlapping effects: dead-code elimination at link time and elimination of
+  duplicated source-level implementations.
+* Keeping the type-specific wire-format core unchanged limited the refactoring
+  risk.  Compatibility entry points moved to an inline CRTP adapter, while
+  parsing, serialization, size computation, and printing remained explicit
+  per-message operations.
+* The sequence ``measure -> constrain exports -> remove duplication -> enforce
+  budget`` kept every pull request reviewable and left a measurement after each
+  architectural change.
+
+What remains
+^^^^^^^^^^^^
+
+The 1.00 MiB stretch target was reached without ``MinSizeRel``, LTO, or
+identical-code-folding experiments beyond the existing linker configuration.
+Those options were not pursued because their expected gain was smaller and
+more toolchain-dependent.  Splitting verification, crypto, hashing, external
+data tools, and text printing into optional libraries may still save
+100--300 KiB for parser-only consumers, but it changes target composition and
+dependency ownership and should be treated as a separate project.
+
 Measured baseline
 +++++++++++++++++
 
@@ -328,12 +411,13 @@ Implementation order
    x86-64 Release build. See
    `PR #4355 <https://github.com/xadupre/onnx-light/pull/4355>`_.
 
-Expected gain by step
-+++++++++++++++++++++
+Outcome by step
++++++++++++++++
 
-The following estimates use the 2.08 MiB unstripped Linux baseline. They are
-not additive: visibility, wrapper consolidation, garbage collection, and LTO
-may eliminate some of the same code.
+The following measured results and optional projection use the 2.08 MiB
+unstripped Linux baseline. They are presented in implementation order;
+visibility, wrapper consolidation, and garbage collection may eliminate some
+of the same code.
 
 .. list-table::
    :header-rows: 1
@@ -342,33 +426,33 @@ may eliminate some of the same code.
    * - Step
      - Change
      - Direct gain
-     - Expected resulting size
-     - Confidence
+     - Resulting size
+     - Status
    * - 1
      - Strip Release artifacts
      - 359 KiB measured
      - 1.73 MiB
-     - High
+     - Measured
    * - 2
      - Hide internal symbols and reduce exports
      - 181 KiB measured
      - 1.55 MiB
-     - High
+     - Measured
    * - 3
      - Share or inline per-message convenience wrappers
      - 609 KiB measured
      - 0.95 MiB
-     - High
+     - Measured
    * - 4
      - Optional: ``MinSizeRel``, LTO, and identical-code folding
      - 50--150 KiB
      - 0.85--1.15 MiB
-     - Low until benchmarked
+     - Not pursued
    * - 5
      - Enforce the CI budget
      - No immediate reduction
      - Prevents regressions
-     - High
+     - Implemented
 
 The optional feature split could save a further 100--300 KiB and remove
 dependencies such as OpenSSL from parser-only deployments. It is deliberately

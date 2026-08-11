@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <set>
 #include <sstream>
 #include <utility>
 
@@ -104,23 +105,6 @@ TensorProto ProtoFromRuntimeTensor(const core::runtime::Tensor &tensor, const st
     proto.set_raw_data(tensor.bytes(), tensor.size_bytes());
   }
   return proto;
-}
-
-// Returns true when ``node`` carries a control-flow subgraph, either inline
-// (GRAPH / GRAPHS attribute) or through a builder ``*_ref`` reference. Such
-// nodes are never folded.
-bool NodeCarriesSubgraph(const NodeProto &node) {
-  for (const auto &attribute : node.attribute()) {
-    if (attribute.type() == AttributeProto::AttributeType::GRAPH ||
-        attribute.type() == AttributeProto::AttributeType::GRAPHS) {
-      return true;
-    }
-    const std::string &attr_name = attribute.name().value();
-    if (attr_name.size() >= 4 && attr_name.compare(attr_name.size() - 4, 4, "_ref") == 0) {
-      return true;
-    }
-  }
-  return false;
 }
 
 } // namespace
@@ -312,6 +296,17 @@ bool GraphBuilder::HasGraphReferenceSuffix(const std::string &name) {
   const std::size_t suffix_len = 4;
   return name.size() >= suffix_len &&
          name.compare(name.size() - suffix_len, suffix_len, kSuffix) == 0;
+}
+
+bool GraphBuilder::NodeCarriesSubgraph(const NodeProto &node) {
+  for (const auto &attribute : node.attribute()) {
+    if (attribute.type() == AttributeProto::AttributeType::GRAPH ||
+        attribute.type() == AttributeProto::AttributeType::GRAPHS ||
+        HasGraphReferenceSuffix(attribute.name().value())) {
+      return true;
+    }
+  }
+  return false;
 }
 
 utils::RepeatedProtoField<AttributeProto> GraphBuilder::ImportAttributes(const NodeProto &node) {
@@ -1239,14 +1234,20 @@ std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
   const auto [constant_values, node_constant] = core::compute::InferConstants(graph);
 
   // ``(domain, op_type)`` blacklist: an empty component matches everything.
+  // Normalise every excluded domain once up front so the per-node check is a
+  // handful of logarithmic set lookups instead of a linear scan: a node is
+  // excluded when the exact pair, either wildcard, or the empty-empty pair is
+  // present.
+  std::set<std::pair<std::string, std::string>> excluded_ops;
+  for (const auto &entry : options.excluded_ops) {
+    excluded_ops.emplace(entry.first.empty() ? std::string() : NormaliseDomain(entry.first),
+                         entry.second);
+  }
   const auto is_excluded = [&](const std::string &normalised_domain, const std::string &op_type) {
-    for (const auto &entry : options.excluded_ops) {
-      if ((entry.first.empty() || NormaliseDomain(entry.first) == normalised_domain) &&
-          (entry.second.empty() || entry.second == op_type)) {
-        return true;
-      }
-    }
-    return false;
+    return excluded_ops.count({normalised_domain, op_type}) != 0 ||
+           excluded_ops.count({normalised_domain, std::string()}) != 0 ||
+           excluded_ops.count({std::string(), op_type}) != 0 ||
+           excluded_ops.count({std::string(), std::string()}) != 0;
   };
 
   // Constant tensors already materialized: the graph initializers plus every
@@ -1309,6 +1310,14 @@ std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
         is_shape_result = true;
         break;
       }
+    }
+
+    // Shape results can be folded at any time; weight (or untagged) results are
+    // only folded when the caller opts in, so they can be deferred to a final
+    // pass.
+    if (!is_shape_result && !options.fold_weights) {
+      kept.push_back(std::move(node));
+      continue;
     }
 
     const std::string dispatch_key = normalised_domain + ":" + op_type;

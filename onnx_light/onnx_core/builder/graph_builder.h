@@ -40,6 +40,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -102,8 +103,17 @@ struct ConstantFoldingOptions {
   /// ``(domain, op_type)`` pairs that must never be folded. An empty domain
   /// matches every domain and an empty op_type matches every operator, so an
   /// empty-empty pair disables folding for every node. The domain is matched
-  /// after normalisation (``""`` and ``"ai.onnx"`` compare equal).
-  std::vector<std::pair<std::string, std::string>> excluded_ops;
+  /// after normalisation (``""`` and ``"ai.onnx"`` compare equal). A ``std::set``
+  /// is used so exclusion lookups stay logarithmic instead of scanning a vector.
+  std::set<std::pair<std::string, std::string>> excluded_ops;
+
+  /// Controls whether nodes whose results are tagged ``"weight"`` (or untagged)
+  /// are folded. Shape-tagged results are always foldable and can be folded at
+  /// any point in an optimization pipeline; weight results are usually better
+  /// folded only at the end (after other passes have run), so this switch lets a
+  /// caller fold shapes early and defer weight folding to a final pass. When
+  /// ``false`` only shape-tagged results are folded.
+  bool fold_weights = true;
 
   /// When ``true`` a node whose outputs are tagged ``"weight"`` (or untagged)
   /// but for which no runtime kernel is registered raises a
@@ -621,6 +631,10 @@ private:
 
   // Returns ``true`` when ``name`` ends with ``"_ref"``.
   static bool HasGraphReferenceSuffix(const std::string &name);
+
+  // Returns ``true`` when ``node`` carries a control-flow subgraph, either
+  // inline (GRAPH / GRAPHS attribute) or through a builder ``*_ref`` reference.
+  static bool NodeCarriesSubgraph(const NodeProto &node);
 
   // Runs the whole-graph compute analyses and writes their result into
   // ``graph`` (shapes, in-place / release-after / value-tag metadata and

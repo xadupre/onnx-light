@@ -221,6 +221,35 @@ TEST(GraphBuilderConstantFold, ExcludedOperatorIsNotFolded) {
   EXPECT_EQ(builder.Nodes().size(), 1u);
 }
 
+TEST(GraphBuilderConstantFold, WeightResultIsNotFoldedWhenFoldWeightsDisabled) {
+  ScopedFoldingKernels kernels;
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInitializer(MakeInitializer<float>("a", {2}, {1.0f, 2.0f}));
+  builder.MakeInitializer(MakeInitializer<float>("b", {2}, {3.0f, 4.0f}));
+  const std::vector<std::string> sum = builder.MakeNode("Add", {"a", "b"}, {"s"});
+  builder.MakeOutput(sum[0]);
+
+  core::builder::ConstantFoldingOptions options;
+  options.fold_weights = false;
+  EXPECT_EQ(builder.ConstantFold(options), 0u);
+  EXPECT_EQ(builder.Nodes().size(), 1u);
+}
+
+TEST(GraphBuilderConstantFold, ShapeResultIsFoldedWhenFoldWeightsDisabled) {
+  ScopedFoldingKernels kernels;
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInitializer(
+      MakeInitializer<float>("a", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
+  const std::vector<std::string> shape = builder.MakeNode("Shape", {"a"}, {"sh"});
+  builder.MakeOutput(shape[0]);
+
+  core::builder::ConstantFoldingOptions options;
+  options.fold_weights = false;
+  EXPECT_EQ(builder.ConstantFold(options), 1u);
+  EXPECT_EQ(builder.Nodes().size(), 0u);
+  ASSERT_NE(FindInitializer(builder, "sh"), nullptr);
+}
+
 TEST(GraphBuilderConstantFold, MissingWeightKernelIsSkippedByDefault) {
   // No custom kernels installed: the weight-tagged Add has no runtime kernel.
   core::builder::GraphBuilder builder("g", SchemaLookup());

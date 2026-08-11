@@ -8,6 +8,12 @@ Next Steps
 
 .. toctree::
     :maxdepth: 1
+    :caption: In progress
+
+    2026-08_processor_aware_kernel_thresholds
+
+.. toctree::
+    :maxdepth: 1
     :caption: Discussion
 
     2026-08_custom_types
@@ -18,7 +24,6 @@ Next Steps
     2026-08_mutable_cache
     2026-08_compiled_tensor
     2026-08_prepared_execution
-    2026-08_processor_aware_kernel_thresholds
 
 .. toctree::
     :maxdepth: 1

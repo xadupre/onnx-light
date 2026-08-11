@@ -14,6 +14,7 @@
 #include <mutex>
 #include <thread>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 /**
@@ -233,34 +234,39 @@ inline ThreadPool &GlobalThreadPool() {
  *
  * Blocks are processed on the shared :cpp:func:`GlobalThreadPool` (up to
  * :cpp:func:`ParallelForThreadCount` participants, including the calling
- * thread). When ``total`` is below :cpp:var:`kParallelForGrainSize` or only one
- * thread is available the whole range is processed inline on the calling
- * thread, so ``fn`` must be safe to call once with the full range. Every block
- * is disjoint and covers the range exactly once, so the observable result is
- * independent of the number of threads: kernels that only map input elements to
- * output elements (no cross-element accumulation) stay bit-exact.
+ * thread). When ``total`` is below ``grain_size`` or only one thread is
+ * available the whole range is processed inline on the calling thread, so
+ * ``fn`` must be safe to call once with the full range. The three-argument
+ * overload accepts a kernel-specific ``grain_size``; the two-argument overload
+ * below uses :cpp:var:`kParallelForGrainSize`. Every
+ * block is disjoint and covers the range exactly once, so the observable result
+ * is independent of the number of threads: kernels that only map input
+ * elements to output elements (no cross-element accumulation) stay bit-exact.
  *
  * ``fn`` is invoked concurrently from several threads and must therefore only
  * touch data disjoint per block (typically writing ``output[begin, end)`` from
  * ``input[begin, end)``). It must not throw.
  *
- * @param total Number of iterations. Values ``<= 0`` are a no-op.
- * @param fn    Callable invoked as ``fn(int64_t begin, int64_t end)`` for each
- *              block, covering the half-open sub-range ``[begin, end)``.
+ * @param total      Number of iterations. Values ``<= 0`` are a no-op.
+ * @param grain_size Minimum iterations per parallel block. Must be positive.
+ * @param fn         Callable invoked as ``fn(int64_t begin, int64_t end)`` for
+ *                   each block, covering ``[begin, end)``.
  */
-template <typename Fn> void ParallelFor(int64_t total, Fn fn) {
+template <typename Fn> void ParallelFor(int64_t total, int64_t grain_size, Fn fn) {
   if (total <= 0) {
     return;
   }
+  EXT_ENFORCE_INVALID(grain_size > 0, "ParallelFor grain_size must be positive, got ", grain_size,
+                      ".");
   const int64_t max_threads = ParallelForThreadCount();
-  if (total < kParallelForGrainSize || max_threads <= 1) {
+  if (total < grain_size || max_threads <= 1) {
     fn(static_cast<int64_t>(0), total);
     return;
   }
 
   // Use as many blocks as participants, but never so many that a block would
-  // hold fewer than kParallelForGrainSize iterations.
-  const int64_t max_useful_blocks = (total + kParallelForGrainSize - 1) / kParallelForGrainSize;
+  // hold fewer than grain_size iterations.
+  const int64_t max_useful_blocks = (total + grain_size - 1) / grain_size;
   const int64_t num_blocks = std::min(max_threads, max_useful_blocks);
   if (num_blocks <= 1) {
     fn(static_cast<int64_t>(0), total);
@@ -276,6 +282,11 @@ template <typename Fn> void ParallelFor(int64_t total, Fn fn) {
     const int64_t end = std::min(begin + block, total);
     fn(begin, end);
   });
+}
+
+/// Runs ``fn`` over ``[0, total)`` using the default grain size.
+template <typename Fn> void ParallelFor(int64_t total, Fn fn) {
+  ParallelFor(total, kParallelForGrainSize, std::move(fn));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

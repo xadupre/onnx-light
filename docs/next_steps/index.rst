@@ -18,6 +18,7 @@ Next Steps
     2026-08_mutable_cache
     2026-08_compiled_tensor
     2026-08_prepared_execution
+    2026-08_processor_aware_kernel_thresholds
 
 .. toctree::
     :maxdepth: 1

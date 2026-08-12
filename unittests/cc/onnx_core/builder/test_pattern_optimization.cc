@@ -48,6 +48,7 @@ TEST(PatternOptimization, CastCastCollapsesRedundantOuterCast) {
 
   core::builder::GraphBuilderPatternOptimization optimizer(builder);
   core::builder::CastCastPattern pattern;
+  EXPECT_EQ(pattern.priority, 1);
   EXPECT_EQ(pattern.FastOpType(), std::set<std::string>({"Cast"}));
 
   const core::builder::MatchResult match = pattern.Match(optimizer, builder.Nodes()[1]);
@@ -63,6 +64,11 @@ TEST(PatternOptimization, CastCastCollapsesRedundantOuterCast) {
   ASSERT_NE(FindAttribute(replacements[0], "to"), nullptr);
   EXPECT_EQ(FindAttribute(replacements[0], "to")->i(),
             static_cast<int64_t>(TensorProto::DataType::FLOAT));
+}
+
+TEST(PatternOptimization, AcceptsCustomPriority) {
+  core::builder::CastCastPattern pattern(3);
+  EXPECT_EQ(pattern.priority, 3);
 }
 
 TEST(PatternOptimization, CastCastUsesIdentityForSafeRoundTrip) {

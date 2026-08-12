@@ -12,6 +12,9 @@ namespace ONNX_LIGHT_NAMESPACE::core::builder {
 /// Collapses consecutive Cast nodes when a single conversion is equivalent.
 class CastCastPattern final : public PatternOptimization {
 public:
+  /// Creates the pattern with the given optimization priority.
+  explicit CastCastPattern(int priority = 1) : PatternOptimization(priority) {}
+
   /// Returns ``Cast`` as the only possible root operator.
   std::set<std::string> FastOpType() const override;
 

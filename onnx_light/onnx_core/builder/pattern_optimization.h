@@ -28,6 +28,9 @@ struct MatchResult {
 /// Stateless interface implemented by graph-rewriting patterns.
 class PatternOptimization {
 public:
+  /// Creates a pattern with the given optimization priority.
+  explicit PatternOptimization(int priority = 1) : priority(priority) {}
+
   virtual ~PatternOptimization() = default;
 
   /// Returns operator types from which this pattern can start.
@@ -43,7 +46,7 @@ public:
         const std::vector<const NodeProto *> &nodes) const = 0;
 
   /// Priority used by the optimization driver.
-  int priority = 1;
+  int priority;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::builder

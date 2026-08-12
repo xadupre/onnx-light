@@ -1,0 +1,50 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include <set>
+#include <string>
+#include <vector>
+
+#include "onnx_proto/onnx.h"
+
+namespace ONNX_LIGHT_NAMESPACE::core::builder {
+
+class GraphBuilderPatternOptimization;
+class PatternOptimization;
+
+/// Describes one subgraph recognized by an optimization pattern.
+struct MatchResult {
+  /// Pattern that produced this match.
+  const PatternOptimization *pattern = nullptr;
+  /// Nodes involved in the rewrite, in the order expected by Apply.
+  std::vector<const NodeProto *> nodes;
+  /// Optional node before which the replacement should be inserted.
+  const NodeProto *insert_at = nullptr;
+};
+
+/// Stateless interface implemented by graph-rewriting patterns.
+class PatternOptimization {
+public:
+  virtual ~PatternOptimization() = default;
+
+  /// Returns operator types from which this pattern can start.
+  virtual std::set<std::string> FastOpType() const { return {}; }
+
+  /// Returns every match rooted in the supplied candidate nodes.
+  virtual std::vector<MatchResult>
+  Match(GraphBuilderPatternOptimization &opt,
+        const std::vector<const NodeProto *> &candidates) const = 0;
+
+  /// Builds the replacement nodes for one match.
+  virtual utils::RepeatedProtoField<NodeProto>
+  Apply(GraphBuilderPatternOptimization &opt,
+        const std::vector<const NodeProto *> &nodes) const = 0;
+
+  /// Priority used by the optimization driver.
+  int priority = 1;
+};
+
+} // namespace ONNX_LIGHT_NAMESPACE::core::builder

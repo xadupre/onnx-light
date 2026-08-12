@@ -106,7 +106,7 @@ ONNX_OPERATOR_SET_SCHEMA(
                         "The type of the input `y_zero_point` and the output `y`.")
         .SetDoc(QuantizeLinear_ver25_doc)
         .TypeAndShapeInferenceFunction([](ONNX_LIGHT_NAMESPACE::InferenceContext &ctx) {
-          // y_zero_point's type is known only if it is present as an input *and* its type could
+          // The type of y_zero_point is known only if it is present as an input and its type could
           // be inferred (e.g. it is not simply an unresolved formal parameter of an enclosing
           // function).
           auto const zp_type = ctx.hasInput(2) ? ctx.getInputType(2) : nullptr;

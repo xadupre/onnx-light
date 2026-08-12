@@ -1554,6 +1554,30 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "as long as ``rt``, since ``rt`` stores non-owning pointers into it.");
 
   rt_mod.def(
+      "run_model",
+      [](const ModelProto &model, std::vector<Tensor> inputs, int verbose) {
+        Tensors tensors;
+        tensors.reserve(inputs.size());
+        for (Tensor &t : inputs)
+          tensors.push_back(std::move(t));
+        Tensors outputs = core::runtime::RunModel(model, std::move(tensors), verbose);
+        std::vector<Tensor> results;
+        results.reserve(outputs.size());
+        for (Tensor &t : outputs)
+          results.push_back(std::move(t));
+        return results;
+      },
+      nb::arg("model"), nb::arg("inputs"), nb::arg("verbose") = 0,
+      "Runs ``model``'s graph end-to-end and returns its outputs as :class:`Tensor` "
+      "objects, in the graph's declared output order. ``inputs`` is a list of "
+      ":class:`Tensor` objects, each stored under its ``name``, so the caller must "
+      "set that name to the graph input the tensor feeds. This convenience helper "
+      "derives the default-domain opset from ``model.opset_import``, registers every "
+      "model-local function, seeds the graph's initializers, builds a "
+      ":class:`RuntimeSession` over ``model.graph`` and runs it once. The returned "
+      "tensors own their bytes, so they remain valid after ``model`` is released.");
+
+  rt_mod.def(
       "tensor_from_proto",
       [](const TensorProto &tp) {
         // ``TensorFromProto`` returns a borrowed (zero-copy) view into

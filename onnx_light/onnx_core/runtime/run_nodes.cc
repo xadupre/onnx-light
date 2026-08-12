@@ -1175,4 +1175,56 @@ void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {
   }
 }
 
+Tensors RunModel(const ModelProto &model, Tensors inputs, int verbose) {
+  EXT_ENFORCE_INVALID(model.has_graph(), "RunModel: the ModelProto does not contain a graph.");
+  const GraphProto &graph = model.graph();
+
+  // Derive the default-domain (ai.onnx) opset version from the model's imports
+  // so kernels resolve against the operator versions the model targets.
+  int64_t opset_version = 0;
+  const auto &imports = model.opset_import();
+  for (size_t i = 0; i < imports.size(); ++i) {
+    const OperatorSetIdProto &osi = imports[i];
+    if (osi.domain().empty()) {
+      opset_version = osi.version();
+      break;
+    }
+  }
+
+  RuntimeContext rt(KernelContext(DefaultOpset(opset_version)),
+                    RuntimeContextOptions{.verbose = verbose});
+  RegisterModelFunctions(model, rt);
+
+  // Seed the external inputs (keyed by tensor name), then the graph's
+  // initializers for any name an input did not already supply.
+  for (Tensor &input : inputs) {
+    const std::string name = input.name;
+    rt.Set(name, std::move(input), RuntimeEventKind::kInput);
+  }
+  const auto &initializers = graph.initializer();
+  for (size_t i = 0; i < initializers.size(); ++i) {
+    const TensorProto &tp = initializers[i];
+    if (!rt.Has(tp.name())) {
+      rt.Set(tp.name(), TensorFromProto(tp), RuntimeEventKind::kInitializer);
+    }
+  }
+
+  RuntimeSession session(model, verbose);
+  session.Run(rt);
+
+  // Collect the graph's declared outputs in declaration order. ``Run`` already
+  // detached borrowed graph outputs from the model, so the stored tensors own
+  // their bytes and can be moved out safely.
+  Tensors outputs;
+  const auto &declared_outputs = graph.output();
+  outputs.reserve(declared_outputs.size());
+  for (size_t i = 0; i < declared_outputs.size(); ++i) {
+    const std::string &name = declared_outputs[i].name();
+    EXT_ENFORCE_INVALID(rt.Has(name), "RunModel: graph output '", name,
+                        "' was not produced by the model.");
+    outputs.push_back(std::move(rt.Get(name)));
+  }
+  return outputs;
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

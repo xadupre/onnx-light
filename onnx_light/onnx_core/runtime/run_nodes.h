@@ -129,6 +129,35 @@ void RunNode(const NodeProto &node, RuntimeContext &rt);
 void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt);
 
 /**
+ * Runs ``model``'s graph end-to-end and returns its outputs as named
+ * :cpp:class:`Tensor` objects.
+ *
+ * Convenience wrapper that performs, in one call, the full sequence a caller
+ * would otherwise assemble by hand to run a whole model: it derives the
+ * default-domain opset version from ``model.opset_import()``, builds a
+ * :cpp:class:`RuntimeContext`, registers every model-local function
+ * (:cpp:func:`RegisterModelFunctions`), seeds the supplied ``inputs`` and the
+ * graph's initializers, builds a :cpp:class:`RuntimeSession` over
+ * ``model.graph()`` and runs it once. The returned tensors own their bytes, so
+ * they remain valid after ``model`` is released.
+ *
+ * Each entry of ``inputs`` is stored under its :cpp:member:`Tensor::name`, so
+ * the caller must set that name to the graph input the tensor feeds. Inputs are
+ * consumed (moved) by this call.
+ *
+ * @param model   Model whose graph is executed. Must contain a graph.
+ * @param inputs  External input tensors keyed by their :cpp:member:`Tensor::name`.
+ * @param verbose Verbosity level forwarded to the :cpp:class:`RuntimeContext`
+ *                and :cpp:class:`RuntimeSession` (``0`` disables progress output).
+ *
+ * @return The graph's declared outputs, in declaration order, as owned tensors.
+ *
+ * @throws std::invalid_argument if ``model`` has no graph, if a required input
+ *         is missing, or if a declared output is not produced by the run.
+ */
+Tensors RunModel(const ModelProto &model, Tensors inputs, int verbose = 0);
+
+/**
  * Reusable driver for a control-flow subgraph (``Loop`` / ``Scan`` /
  * ``SequenceMap`` body, ``FlexAttention``'s ``score_mod`` / ``prob_mod``)
  * that separates one-time setup from the repeated per-iteration run, mirroring

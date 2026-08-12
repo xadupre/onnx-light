@@ -153,6 +153,12 @@ if(ONNX_LIGHT_BUILD_PYTHON)
     OUTPUT_VARIABLE NB_DIR)
   list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
   find_package(nanobind CONFIG REQUIRED)
+
+  execute_process(
+    COMMAND "${Python_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    OUTPUT_VARIABLE NumPy_INCLUDE_DIR
+    COMMAND_ERROR_IS_FATAL ANY)
 endif()
 
 # Find OpenMP (optional)
@@ -198,7 +204,9 @@ set(ONNX_PY_PROTOOP_SOURCES
 )
 set(ONNX_PY_PROTOLIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_lib.cc")
 set(ONNX_PY_CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_core.cc")
-set(ONNX_PY_KERNELS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_kernels.cc")
+set(ONNX_PY_KERNELS_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_kernels.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_numpy_api.cc")
 set(ONNX_PY_BACKEND_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend_test.cc")
 set(ONNX_PY_GRADIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_gradient.cc")
 
@@ -692,8 +700,25 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # runtime or backend-test helpers are requested.
   if(ONNX_LIGHT_BUILD_KERNELS)
   nanobind_add_module(_onnxpykernels STABLE_ABI ${ONNX_PY_KERNELS_SOURCES})
-  target_include_directories(_onnxpykernels PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
+  # Only the NumPy C-API bridge needs full CPython declarations. Keeping the
+  # binding translation unit limited preserves the extension's abi3 contract.
+  if(MSVC)
+    set_source_files_properties(
+        "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_numpy_api.cc"
+        PROPERTIES
+          COMPILE_OPTIONS /UPy_LIMITED_API)
+  else()
+    set_source_files_properties(
+        "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_numpy_api.cc"
+        PROPERTIES COMPILE_OPTIONS -UPy_LIMITED_API)
+  endif()
+  target_include_directories(_onnxpykernels PRIVATE
+      "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}" "${NumPy_INCLUDE_DIR}")
   target_link_libraries(_onnxpykernels PRIVATE lib_onnx_kernels)
+  if(MSVC)
+    target_link_options(_onnxpykernels PRIVATE
+        "/NODEFAULTLIB:python${Python_VERSION_MAJOR}${Python_VERSION_MINOR}.lib")
+  endif()
 
   # _onnxpybackend: backend-test case utilities. Links lib_onnx_backend_test
   # (which publicly depends on lib_onnx_kernels and lib_onnx_proto so that

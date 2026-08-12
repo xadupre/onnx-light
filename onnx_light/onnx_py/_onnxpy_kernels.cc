@@ -3,10 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "_onnxpy_node_list.h"
+#include "_onnxpy_numpy_api.h"
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/compute/execute_action.h"
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/cast_sub_byte.h"
 #include "onnx_core/runtime/random.h"
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
@@ -14,7 +16,11 @@
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 
+#include <algorithm>
+#include <array>
+#include <complex>
 #include <cstdint>
+#include <cstring>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/function.h>
@@ -24,6 +30,7 @@
 #include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/vector.h>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -39,6 +46,7 @@ using core::runtime::RuntimeParameters;
 using core::runtime::RuntimeSession;
 using core::runtime::RuntimeSessionOptions;
 using core::runtime::Sequence;
+using core::runtime::Shape;
 using core::runtime::SimpleRawBufferAllocator;
 using core::runtime::Tensor;
 using core::runtime::Tensors;
@@ -63,26 +71,507 @@ core::runtime::RuntimeEventKind ParseRuntimeEventKind(const std::string &kind) {
                     "' (expected one of: unknown, initializer, input, intermediate, output).");
 }
 
+int32_t OnnxTypeFromNumpyDtype(OnnxLightNumpyDtype *dtype) {
+  const char kind = OnnxLightNumpyDtypeKind(dtype);
+  const std::ptrdiff_t item_size = OnnxLightNumpyDtypeSize(dtype);
+  if (kind == 'b' && item_size == 1)
+    return static_cast<int32_t>(TensorProto::BOOL);
+  if (kind == 'i') {
+    if (item_size == 1)
+      return static_cast<int32_t>(TensorProto::INT8);
+    if (item_size == 2)
+      return static_cast<int32_t>(TensorProto::INT16);
+    if (item_size == 4)
+      return static_cast<int32_t>(TensorProto::INT32);
+    if (item_size == 8)
+      return static_cast<int32_t>(TensorProto::INT64);
+  }
+  if (kind == 'u') {
+    if (item_size == 1)
+      return static_cast<int32_t>(TensorProto::UINT8);
+    if (item_size == 2)
+      return static_cast<int32_t>(TensorProto::UINT16);
+    if (item_size == 4)
+      return static_cast<int32_t>(TensorProto::UINT32);
+    if (item_size == 8)
+      return static_cast<int32_t>(TensorProto::UINT64);
+  }
+  if (kind == 'f') {
+    if (item_size == 2)
+      return static_cast<int32_t>(TensorProto::FLOAT16);
+    if (item_size == 4)
+      return static_cast<int32_t>(TensorProto::FLOAT);
+    if (item_size == 8)
+      return static_cast<int32_t>(TensorProto::DOUBLE);
+  }
+  if (kind == 'c') {
+    if (item_size == 8)
+      return static_cast<int32_t>(TensorProto::COMPLEX64);
+    if (item_size == 16)
+      return static_cast<int32_t>(TensorProto::COMPLEX128);
+  }
+  if (kind == 'O' || kind == 'S' || kind == 'U')
+    return static_cast<int32_t>(TensorProto::STRING);
+
+  const std::string dtype_name =
+      nb::cast<std::string>(nb::str(nb::handle(OnnxLightNumpyDtypeObject(dtype))));
+  if (dtype_name == "bfloat16")
+    return static_cast<int32_t>(TensorProto::BFLOAT16);
+  if (dtype_name == "float8_e4m3fn")
+    return static_cast<int32_t>(TensorProto::FLOAT8E4M3FN);
+  if (dtype_name == "float8_e4m3fnuz")
+    return static_cast<int32_t>(TensorProto::FLOAT8E4M3FNUZ);
+  if (dtype_name == "float8_e5m2")
+    return static_cast<int32_t>(TensorProto::FLOAT8E5M2);
+  if (dtype_name == "float8_e5m2fnuz")
+    return static_cast<int32_t>(TensorProto::FLOAT8E5M2FNUZ);
+  if (dtype_name == "float8_e8m0fnu")
+    return static_cast<int32_t>(TensorProto::FLOAT8E8M0);
+  if (dtype_name == "int4")
+    return static_cast<int32_t>(TensorProto::INT4);
+  if (dtype_name == "uint4")
+    return static_cast<int32_t>(TensorProto::UINT4);
+  if (dtype_name == "float4_e2m1fn")
+    return static_cast<int32_t>(TensorProto::FLOAT4E2M1);
+  if (dtype_name == "int2")
+    return static_cast<int32_t>(TensorProto::INT2);
+  if (dtype_name == "uint2")
+    return static_cast<int32_t>(TensorProto::UINT2);
+  return static_cast<int32_t>(TensorProto::UNDEFINED);
+}
+
+bool IsSubByteType(int32_t data_type) {
+  switch (static_cast<TensorProto::DataType>(data_type)) {
+  case TensorProto::INT4:
+  case TensorProto::UINT4:
+  case TensorProto::FLOAT4E2M1:
+  case TensorProto::INT2:
+  case TensorProto::UINT2:
+    return true;
+  default:
+    return false;
+  }
+}
+
+std::string StringFromNumpyElement(OnnxLightNumpyArray *array, char *pointer) {
+  PyObject *item_pointer = OnnxLightNumpyArrayGetItem(array, pointer);
+  if (item_pointer == nullptr)
+    throw nb::python_error();
+  nb::object item = nb::steal<nb::object>(item_pointer);
+  if (PyUnicode_Check(item.ptr()))
+    return nb::cast<std::string>(item);
+  if (PyBytes_Check(item.ptr())) {
+    char *data = nullptr;
+    Py_ssize_t size = 0;
+    if (PyBytes_AsStringAndSize(item.ptr(), &data, &size) != 0)
+      throw nb::python_error();
+    return std::string(data, static_cast<size_t>(size));
+  }
+  throw nb::type_error("String tensors require NumPy string, bytes, or object arrays of strings.");
+}
+
+Tensor TensorFromNumpy(const std::string &name, nb::handle value, std::vector<nb::object> &owners) {
+  PyObject *array_pointer = OnnxLightNumpyFromAny(value.ptr());
+  if (array_pointer == nullptr)
+    throw nb::python_error();
+  nb::object array_owner = nb::steal<nb::object>(array_pointer);
+  auto *array = OnnxLightNumpyArrayCast(array_pointer);
+  const int32_t data_type = OnnxTypeFromNumpyDtype(OnnxLightNumpyArrayDtype(array));
+  if (data_type == static_cast<int32_t>(TensorProto::UNDEFINED))
+    throw nb::type_error("Unsupported NumPy dtype for an ONNX tensor.");
+
+  const int rank = OnnxLightNumpyArrayRank(array);
+  if (rank > static_cast<int>(Shape::kMaxRank)) {
+    throw std::invalid_argument("Tensor rank " + std::to_string(rank) +
+                                " exceeds the maximum supported rank of " +
+                                std::to_string(Shape::kMaxRank) + ".");
+  }
+  Shape shape;
+  for (int dimension = 0; dimension < rank; ++dimension)
+    shape.push_back(static_cast<int64_t>(OnnxLightNumpyArrayDimension(array, dimension)));
+  const int64_t element_count = static_cast<int64_t>(OnnxLightNumpyArraySize(array));
+
+  if (static_cast<TensorProto::DataType>(data_type) == TensorProto::STRING) {
+    std::vector<std::string> values;
+    values.reserve(static_cast<size_t>(element_count));
+    char *data = static_cast<char *>(OnnxLightNumpyArrayData(array));
+    const std::ptrdiff_t stride = OnnxLightNumpyArrayItemSize(array);
+    for (int64_t index = 0; index < element_count; ++index)
+      values.push_back(StringFromNumpyElement(array, data + index * stride));
+    return Tensor::FromStrings(name, shape, values);
+  }
+
+  const auto *data = static_cast<const uint8_t *>(OnnxLightNumpyArrayData(array));
+  if (IsSubByteType(data_type)) {
+    core::runtime::RawByteBuffer packed(core::runtime::PackedByteSize(data_type, element_count),
+                                        uint8_t{0});
+    const int bits = static_cast<TensorProto::DataType>(data_type) == TensorProto::INT2 ||
+                             static_cast<TensorProto::DataType>(data_type) == TensorProto::UINT2
+                         ? 2
+                         : 4;
+    for (int64_t index = 0; index < element_count; ++index) {
+      if (bits == 2)
+        core::runtime::Write2BitElement(packed.data(), index, data[index]);
+      else
+        core::runtime::Write4BitElement(packed.data(), index, data[index]);
+    }
+    return Tensor::FromRawBytes(name, data_type, std::move(shape), std::move(packed));
+  }
+
+  const size_t byte_count = static_cast<size_t>(OnnxLightNumpyArrayByteSize(array));
+  if (shape.empty()) {
+    core::runtime::RawByteBuffer owned(data, data + byte_count);
+    return Tensor::FromRawBytes(name, data_type, std::move(shape), std::move(owned));
+  }
+  owners.push_back(std::move(array_owner));
+  return Tensor::Borrow(name, data_type, std::move(shape), data, byte_count);
+}
+
+void PutMapFromDict(RuntimeContext &rt, const std::string &name, nb::dict dictionary) {
+  int64_t size = static_cast<int64_t>(dictionary.size());
+  if (size == 0) {
+    rt.PutMap(name, Map(name, Tensor{}, Tensor{}));
+    return;
+  }
+  auto iterator = dictionary.begin();
+  nb::handle first_key = (*iterator).first;
+  nb::handle first_value = (*iterator).second;
+  bool string_keys = nb::isinstance<nb::str>(first_key);
+  bool integer_keys = nb::isinstance<nb::int_>(first_key) &&
+                      !nb::isinstance<nb::bool_>(first_key) &&
+                      !nb::isinstance<nb::float_>(first_key);
+  bool string_values = nb::isinstance<nb::str>(first_value);
+  bool float_values = nb::isinstance<nb::float_>(first_value);
+  bool integer_values = nb::isinstance<nb::int_>(first_value) &&
+                        !nb::isinstance<nb::bool_>(first_value) &&
+                        !nb::isinstance<nb::float_>(first_value);
+  if (!string_keys && !integer_keys) {
+    throw std::invalid_argument("put_map: unsupported key type in dict - keys must be int or str.");
+  }
+  if (!string_values && !float_values && !integer_values) {
+    throw std::invalid_argument(
+        "put_map: unsupported value type in dict - values must be int, float, or str.");
+  }
+
+  std::vector<std::string> string_key_buffer, string_value_buffer;
+  std::vector<int64_t> integer_key_buffer, integer_value_buffer;
+  std::vector<float> float_value_buffer;
+  const auto reserve_size = static_cast<size_t>(size);
+  if (string_keys)
+    string_key_buffer.reserve(reserve_size);
+  else
+    integer_key_buffer.reserve(reserve_size);
+  if (string_values)
+    string_value_buffer.reserve(reserve_size);
+  else if (float_values)
+    float_value_buffer.reserve(reserve_size);
+  else
+    integer_value_buffer.reserve(reserve_size);
+  for (auto [key, value] : dictionary) {
+    if (string_keys)
+      string_key_buffer.push_back(nb::cast<std::string>(key));
+    else
+      integer_key_buffer.push_back(nb::cast<int64_t>(key));
+    if (string_values)
+      string_value_buffer.push_back(nb::cast<std::string>(value));
+    else if (float_values)
+      float_value_buffer.push_back(nb::cast<float>(value));
+    else
+      integer_value_buffer.push_back(nb::cast<int64_t>(value));
+  }
+  Tensor keys = string_keys ? Tensor::FromStrings(name, {size}, string_key_buffer)
+                            : Tensor::FromInt64(name, {size}, integer_key_buffer);
+  Tensor values = string_values  ? Tensor::FromStrings(name, {size}, string_value_buffer)
+                  : float_values ? Tensor::FromFloat(name, {size}, float_value_buffer)
+                                 : Tensor::FromInt64(name, {size}, integer_value_buffer);
+  rt.PutMap(name, Map(name, std::move(keys), std::move(values)));
+}
+
+const char *NumpyDtypeName(int32_t data_type) {
+  switch (static_cast<TensorProto::DataType>(data_type)) {
+  case TensorProto::BFLOAT16:
+    return "bfloat16";
+  case TensorProto::FLOAT8E4M3FN:
+    return "float8_e4m3fn";
+  case TensorProto::FLOAT8E4M3FNUZ:
+    return "float8_e4m3fnuz";
+  case TensorProto::FLOAT8E5M2:
+    return "float8_e5m2";
+  case TensorProto::FLOAT8E5M2FNUZ:
+    return "float8_e5m2fnuz";
+  case TensorProto::FLOAT8E8M0:
+    return "float8_e8m0fnu";
+  case TensorProto::INT4:
+    return "int4";
+  case TensorProto::UINT4:
+    return "uint4";
+  case TensorProto::FLOAT4E2M1:
+    return "float4_e2m1fn";
+  case TensorProto::INT2:
+    return "int2";
+  case TensorProto::UINT2:
+    return "uint2";
+  default:
+    return nullptr;
+  }
+}
+
+OnnxLightNumpyDtype *NumpyDtype(int32_t data_type) {
+  if (const char *name = NumpyDtypeName(data_type)) {
+    OnnxLightNumpyDtype *dtype = OnnxLightNumpyDtypeFromName(name);
+    if (dtype == nullptr)
+      throw nb::python_error();
+    return dtype;
+  }
+
+  OnnxLightNumpyType numpy_type;
+  switch (static_cast<TensorProto::DataType>(data_type)) {
+  case TensorProto::FLOAT:
+    numpy_type = OnnxLightNumpyType::kFloat32;
+    break;
+  case TensorProto::DOUBLE:
+    numpy_type = OnnxLightNumpyType::kFloat64;
+    break;
+  case TensorProto::FLOAT16:
+    numpy_type = OnnxLightNumpyType::kFloat16;
+    break;
+  case TensorProto::INT8:
+    numpy_type = OnnxLightNumpyType::kInt8;
+    break;
+  case TensorProto::INT16:
+    numpy_type = OnnxLightNumpyType::kInt16;
+    break;
+  case TensorProto::INT32:
+    numpy_type = OnnxLightNumpyType::kInt32;
+    break;
+  case TensorProto::INT64:
+    numpy_type = OnnxLightNumpyType::kInt64;
+    break;
+  case TensorProto::UINT8:
+    numpy_type = OnnxLightNumpyType::kUint8;
+    break;
+  case TensorProto::UINT16:
+    numpy_type = OnnxLightNumpyType::kUint16;
+    break;
+  case TensorProto::UINT32:
+    numpy_type = OnnxLightNumpyType::kUint32;
+    break;
+  case TensorProto::UINT64:
+    numpy_type = OnnxLightNumpyType::kUint64;
+    break;
+  case TensorProto::BOOL:
+    numpy_type = OnnxLightNumpyType::kBool;
+    break;
+  case TensorProto::COMPLEX64:
+    numpy_type = OnnxLightNumpyType::kComplex64;
+    break;
+  case TensorProto::COMPLEX128:
+    numpy_type = OnnxLightNumpyType::kComplex128;
+    break;
+  default:
+    throw std::invalid_argument("Unsupported ONNX tensor data type " + std::to_string(data_type) +
+                                " for NumPy conversion.");
+  }
+  OnnxLightNumpyDtype *dtype = OnnxLightNumpyDtypeFromType(numpy_type);
+  if (dtype == nullptr)
+    throw nb::python_error();
+  return dtype;
+}
+
+nb::object NewNumpyArray(OnnxLightNumpyDtype *dtype, const Shape &shape, void *data,
+                         nb::object owner = nb::object()) {
+  std::vector<int64_t> dimensions(shape.begin(), shape.end());
+  PyObject *owner_pointer = owner.is_valid() ? owner.release().ptr() : nullptr;
+  PyObject *array_pointer = OnnxLightNumpyNewArray(dtype, dimensions, data, owner_pointer);
+  if (array_pointer == nullptr)
+    throw nb::python_error();
+  return nb::steal<nb::object>(array_pointer);
+}
+
+nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
+  if (static_cast<TensorProto::DataType>(tensor.data_type) == TensorProto::STRING) {
+    OnnxLightNumpyDtype *object_dtype = OnnxLightNumpyDtypeFromType(OnnxLightNumpyType::kObject);
+    if (object_dtype == nullptr)
+      throw nb::python_error();
+    nb::object array = NewNumpyArray(object_dtype, tensor.shape, nullptr);
+    auto *numpy_array = OnnxLightNumpyArrayCast(array.ptr());
+    const std::vector<std::string> values = tensor.AsStrings();
+    for (size_t index = 0; index < values.size(); ++index) {
+      PyObject *value = PyUnicode_DecodeUTF8(
+          values[index].data(), static_cast<Py_ssize_t>(values[index].size()), "surrogateescape");
+      if (value == nullptr)
+        throw nb::python_error();
+      if (OnnxLightNumpyArraySetItem(numpy_array,
+                                     static_cast<char *>(OnnxLightNumpyArrayData(numpy_array)) +
+                                         static_cast<std::ptrdiff_t>(index) *
+                                             OnnxLightNumpyArrayItemSize(numpy_array),
+                                     value) != 0) {
+        Py_DECREF(value);
+        throw nb::python_error();
+      }
+      Py_DECREF(value);
+    }
+    return array;
+  }
+
+  if (IsSubByteType(tensor.data_type)) {
+    nb::object array = NewNumpyArray(NumpyDtype(tensor.data_type), tensor.shape, nullptr);
+    auto *data =
+        static_cast<uint8_t *>(OnnxLightNumpyArrayData(OnnxLightNumpyArrayCast(array.ptr())));
+    const uint8_t *packed = tensor.bytes();
+    const int64_t element_count = tensor.element_count();
+    const bool two_bit =
+        static_cast<TensorProto::DataType>(tensor.data_type) == TensorProto::INT2 ||
+        static_cast<TensorProto::DataType>(tensor.data_type) == TensorProto::UINT2;
+    for (int64_t index = 0; index < element_count; ++index)
+      data[index] = two_bit ? core::runtime::Read2BitElement(packed, index)
+                            : core::runtime::Read4BitElement(packed, index);
+    return array;
+  }
+
+  nb::object owner;
+  uint8_t *data = const_cast<uint8_t *>(tensor.bytes());
+  if (!tensor.has_allocation() && data == tensor.data.data()) {
+    auto *owned = new core::runtime::RawByteBuffer(tensor.data.release());
+    data = owned->data();
+    owner = nb::capsule(owned, [](void *pointer) noexcept {
+      delete static_cast<core::runtime::RawByteBuffer *>(pointer);
+    });
+  } else {
+    owner = nb::cast(&rt, nb::rv_policy::reference);
+  }
+
+  return NewNumpyArray(NumpyDtype(tensor.data_type), tensor.shape, data, std::move(owner));
+}
+
+class ReferenceEvaluatorRunner {
+public:
+  ReferenceEvaluatorRunner(const GraphProto &graph, std::vector<std::string> input_names,
+                           std::unordered_set<std::string> map_inputs,
+                           std::unordered_set<std::string> sequence_inputs,
+                           std::vector<std::string> output_names)
+      : graph_(&graph), input_names_(std::move(input_names)), map_inputs_(std::move(map_inputs)),
+        sequence_inputs_(std::move(sequence_inputs)), output_names_(std::move(output_names)),
+        output_names_set_(output_names_.begin(), output_names_.end()) {}
+
+  ReferenceEvaluatorRunner(const FunctionProto &function, std::vector<std::string> input_names,
+                           std::unordered_set<std::string> map_inputs,
+                           std::unordered_set<std::string> sequence_inputs,
+                           std::vector<std::string> output_names)
+      : function_(&function), input_names_(std::move(input_names)),
+        map_inputs_(std::move(map_inputs)), sequence_inputs_(std::move(sequence_inputs)),
+        output_names_(std::move(output_names)),
+        output_names_set_(output_names_.begin(), output_names_.end()) {}
+
+  void Reset() {
+    session_.reset();
+    plan_.reset();
+  }
+
+  nb::list Run(RuntimeContext &rt, nb::object requested_outputs, nb::dict feeds,
+               bool release_intermediates) {
+    std::vector<std::string> outputs = requested_outputs.is_none()
+                                           ? output_names_
+                                           : nb::cast<std::vector<std::string>>(requested_outputs);
+    for (const std::string &name : input_names_) {
+      if (!feeds.contains(name.c_str())) {
+        throw std::invalid_argument("Missing input '" + name + "' for ReferenceEvaluator.run.");
+      }
+    }
+
+    bool outputs_are_declared =
+        std::all_of(outputs.begin(), outputs.end(),
+                    [this](const std::string &name) { return output_names_set_.contains(name); });
+    rt.Clear();
+    rt.set_release_intermediates(release_intermediates && outputs_are_declared);
+    std::vector<nb::object> input_owners;
+
+    for (auto [key, value] : feeds) {
+      std::string name = nb::cast<std::string>(key);
+      if (map_inputs_.contains(name)) {
+        nb::object map_value = nb::borrow<nb::object>(value);
+        if (!nb::isinstance<nb::dict>(map_value) && nb::hasattr(map_value, "dtype") &&
+            nb::cast<size_t>(map_value.attr("size")) == 1) {
+          map_value = map_value.attr("item")();
+        }
+        if (!nb::isinstance<nb::dict>(map_value))
+          throw nb::type_error(("Map input '" + name + "' must be a Python dict.").c_str());
+        PutMapFromDict(rt, name, nb::cast<nb::dict>(map_value));
+      } else if (sequence_inputs_.contains(name)) {
+        if (!nb::isinstance<nb::list>(value) && !nb::isinstance<nb::tuple>(value))
+          throw nb::type_error(("Sequence input '" + name + "' must be a list or tuple.").c_str());
+        Tensors tensors;
+        for (nb::handle element : nb::borrow<nb::sequence>(value))
+          tensors.push_back(TensorFromNumpy(name, element, input_owners));
+        int32_t element_type =
+            tensors.empty() ? 0 : static_cast<int32_t>(tensors.front().data_type);
+        rt.PutSequence(name, Sequence(name, element_type, std::move(tensors)));
+      } else {
+        rt.Set(name, TensorFromNumpy(name, value, input_owners));
+      }
+    }
+
+    if (graph_ != nullptr) {
+      for (const TensorProto &initializer : graph_->initializer()) {
+        if (!rt.Has(initializer.name()))
+          rt.Set(initializer.name().value(), core::runtime::TensorFromProto(initializer),
+                 core::runtime::RuntimeEventKind::kInitializer);
+      }
+    }
+    EnsureSession();
+    session_->Run(rt);
+
+    nb::list results;
+    for (const std::string &name : outputs) {
+      if (rt.Has(name)) {
+        results.append(TensorToNumpy(rt.Get(name), rt));
+      } else if (rt.HasSequence(name)) {
+        nb::list sequence;
+        for (Tensor &tensor : rt.GetSequence(name).values)
+          sequence.append(TensorToNumpy(tensor, rt));
+        results.append(std::move(sequence));
+      } else {
+        throw std::runtime_error("Output '" + name + "' was not produced by the graph.");
+      }
+    }
+    return results;
+  }
+
+private:
+  void EnsureSession() {
+    if (session_)
+      return;
+    if (graph_ != nullptr) {
+      plan_ = std::make_unique<ExecutionPlan>(*graph_);
+      session_ = std::make_unique<RuntimeSession>(*plan_);
+      session_->SetDeclaredShapes(*graph_);
+    } else {
+      plan_ = std::make_unique<ExecutionPlan>(*function_);
+      session_ = std::make_unique<RuntimeSession>(*plan_);
+    }
+  }
+
+  const GraphProto *graph_ = nullptr;
+  const FunctionProto *function_ = nullptr;
+  std::vector<std::string> input_names_;
+  std::unordered_set<std::string> map_inputs_;
+  std::unordered_set<std::string> sequence_inputs_;
+  std::vector<std::string> output_names_;
+  std::unordered_set<std::string> output_names_set_;
+  std::unique_ptr<ExecutionPlan> plan_;
+  std::unique_ptr<RuntimeSession> session_;
+};
+
 } // namespace
 
 NB_MODULE(_onnxpykernels, m) {
+  if (OnnxLightImportNumpy() < 0)
+    throw nb::python_error();
+
   m.doc() = "onnx_light kernels bindings: deterministic pseudo-random helpers "
             "backing _onnxpybackend_test, plus the RunNode dispatcher "
             "(and the RuntimeSession every node list, including a whole model, is run "
             "through) and its supporting RuntimeContext/KernelContext types.";
-
-  // The ``runtime`` submodule exposes :cpp:func:`RunNode` and
-  // :cpp:class:`RuntimeSession` (used to run any node list: a bare graph, a
-  // function body, or a whole model's graph, paired with
-  // :cpp:func:`RegisterModelFunctions` for model-local functions). These
-  // take/return ``Tensor`` and proto types whose
-  // ``nb::class_`` bindings live in sibling extensions. Importing those
-  // extensions here guarantees the cross-module typeid registry has the
-  // necessary entries by the time we register the ``runtime`` callables and
-  // makes the runtime submodule usable even when consumers import
-  // ``_onnxpykernels`` directly (bypassing the ``_onnxpy.py`` shim).
-  nb::module_::import_("onnx_light.onnx_py._onnxpyprotoop");
-  nb::module_::import_("onnx_light.onnx_py._onnxpybackend");
 
   AddOnnxPyKernels(m);
   AddOnnxPyRuntime(m);
@@ -620,6 +1109,41 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_prop_ro("required_inputs", &RuntimeSession::required_inputs,
                    "Returns the external input names the scheduled nodes read. Populated "
                    "during kernel initialization; empty until the first :func:`run`.");
+
+  nb::class_<ReferenceEvaluatorRunner>(
+      rt_mod, "ReferenceEvaluatorRunner",
+      "Native hot path used by ReferenceEvaluator.run to adapt Python values, execute a "
+      "cached RuntimeSession, and expose its outputs in one Python-to-C++ call.")
+      .def(
+          "__init__",
+          [](ReferenceEvaluatorRunner *self, const GraphProto &graph,
+             std::vector<std::string> input_names, std::unordered_set<std::string> map_inputs,
+             std::unordered_set<std::string> sequence_inputs,
+             std::vector<std::string> output_names) {
+            new (self)
+                ReferenceEvaluatorRunner(graph, std::move(input_names), std::move(map_inputs),
+                                         std::move(sequence_inputs), std::move(output_names));
+          },
+          nb::arg("graph"), nb::arg("input_names"), nb::arg("map_inputs"),
+          nb::arg("sequence_inputs"), nb::arg("output_names"), nb::keep_alive<1, 2>())
+      .def(
+          "__init__",
+          [](ReferenceEvaluatorRunner *self, const FunctionProto &function,
+             std::vector<std::string> input_names, std::unordered_set<std::string> map_inputs,
+             std::unordered_set<std::string> sequence_inputs,
+             std::vector<std::string> output_names) {
+            new (self)
+                ReferenceEvaluatorRunner(function, std::move(input_names), std::move(map_inputs),
+                                         std::move(sequence_inputs), std::move(output_names));
+          },
+          nb::arg("function"), nb::arg("input_names"), nb::arg("map_inputs"),
+          nb::arg("sequence_inputs"), nb::arg("output_names"), nb::keep_alive<1, 2>())
+      .def("run", &ReferenceEvaluatorRunner::Run, nb::arg("runtime_context"),
+           nb::arg("output_names").none() = nb::none(), nb::arg("feed_inputs"),
+           nb::arg("release_intermediates") = true,
+           "Runs one inference entirely through the native input/execution/output path.")
+      .def("reset", &ReferenceEvaluatorRunner::Reset,
+           "Drops the cached execution plan and RuntimeSession so kernels resolve again.");
 
   // RuntimeParameters — model-independent execution knobs (parallelism, ...).
   nb::class_<RuntimeParameters>(

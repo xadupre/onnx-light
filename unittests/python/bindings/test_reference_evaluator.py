@@ -923,14 +923,11 @@ sess.run(
         # which the allocator reuses on the next run(); copies the first run's
         # outputs so they survive the second run() before comparing.
         first = [np.array(out, copy=True) for out in sess.run(None, inputs)]
-        # A single session is cached after the first run.
-        self.assertEqual(len(sess._sessions), 1)
-        cached = next(iter(sess._sessions.values()))
+        cached_runner = sess._runner
 
         second = sess.run(None, inputs)
-        # The same (plan, session) entry is reused, not rebuilt.
-        self.assertEqual(len(sess._sessions), 1)
-        self.assertIs(next(iter(sess._sessions.values())), cached)
+        # The native runner and its internal plan/session are reused.
+        self.assertIs(sess._runner, cached_runner)
         for expected, actual in zip(first, second):
             np.testing.assert_array_equal(expected, actual)
 
@@ -989,6 +986,71 @@ class TestReferenceEvaluatorTensorConversion(ExtTestCase):
         tp.dims.extend(array.shape)
         tp.raw_data = array.tobytes()
         return self._rt.tensor_from_proto(tp)
+
+    @staticmethod
+    def _identity_evaluator(dtype_enum, shape):
+        node = helper.make_node("Identity", ["x"], ["y"])
+        graph = helper.make_graph(
+            [node],
+            "native_conversion",
+            [helper.make_tensor_value_info("x", dtype_enum, shape)],
+            [helper.make_tensor_value_info("y", dtype_enum, shape)],
+        )
+        model = helper.make_model(graph, opset_imports=[helper.make_operatorsetid("", 25)])
+        return ReferenceEvaluator(model)
+
+    def test_native_runner_conversion_types(self):
+        ml_dtypes = import_or_skip("ml_dtypes")
+        cases = [
+            (TensorProto.FLOAT, np.array([1.5, -2.0], dtype=np.float32)),
+            (TensorProto.INT64, np.array([1, -2], dtype=np.int64)),
+            (TensorProto.COMPLEX64, np.array([1 + 2j, -3j], dtype=np.complex64)),
+            (TensorProto.COMPLEX128, np.array([1 - 2j, 4j], dtype=np.complex128)),
+            (TensorProto.STRING, np.array(["alpha", "café"], dtype=object)),
+            (TensorProto.BFLOAT16, np.array([1.5, -2], dtype=ml_dtypes.bfloat16)),
+            (TensorProto.FLOAT8E4M3FN, np.array([1, -2], dtype=ml_dtypes.float8_e4m3fn)),
+            (TensorProto.FLOAT8E4M3FNUZ, np.array([1, -2], dtype=ml_dtypes.float8_e4m3fnuz)),
+            (TensorProto.FLOAT8E5M2, np.array([1, -2], dtype=ml_dtypes.float8_e5m2)),
+            (TensorProto.FLOAT8E5M2FNUZ, np.array([1, -2], dtype=ml_dtypes.float8_e5m2fnuz)),
+            (TensorProto.FLOAT8E8M0, np.array([1, 2], dtype=ml_dtypes.float8_e8m0fnu)),
+            (TensorProto.INT4, np.array([-8, -1, 0, 7], dtype=ml_dtypes.int4)),
+            (TensorProto.UINT4, np.array([0, 1, 8, 15], dtype=ml_dtypes.uint4)),
+            (TensorProto.FLOAT4E2M1, np.array([0, 0.5, -1, 6], dtype=ml_dtypes.float4_e2m1fn)),
+            (TensorProto.INT2, np.array([-2, -1, 0, 1], dtype=ml_dtypes.int2)),
+            (TensorProto.UINT2, np.array([0, 1, 2, 3], dtype=ml_dtypes.uint2)),
+        ]
+        for dtype_enum, expected in cases:
+            with self.subTest(dtype=dtype_enum):
+                (actual,) = self._identity_evaluator(dtype_enum, list(expected.shape)).run(
+                    None, {"x": expected}
+                )
+                self.assertEqual(actual.dtype, expected.dtype)
+                np.testing.assert_array_equal(actual, expected)
+
+    def test_native_runner_does_not_call_python_numpy_helpers(self):
+        ml_dtypes = import_or_skip("ml_dtypes")
+        cases = [
+            (TensorProto.STRING, np.array(["a", "b"], dtype=object)),
+            (TensorProto.INT4, np.array([-8, 7], dtype=ml_dtypes.int4)),
+        ]
+        with (
+            unittest.mock.patch.object(
+                self._evaluator.numpy_helper,
+                "from_array",
+                side_effect=AssertionError("Python input helper was called"),
+            ),
+            unittest.mock.patch.object(
+                self._evaluator.numpy_helper,
+                "to_array",
+                side_effect=AssertionError("Python output helper was called"),
+            ),
+        ):
+            for dtype_enum, expected in cases:
+                with self.subTest(dtype=dtype_enum):
+                    (actual,) = self._identity_evaluator(dtype_enum, list(expected.shape)).run(
+                        None, {"x": expected}
+                    )
+                    np.testing.assert_array_equal(actual, expected)
 
     def test_dlpack_dtypes_exclude_subbyte_and_string(self):
         # Sub-byte packed types, STRING, and bfloat16/float8 must not be routed

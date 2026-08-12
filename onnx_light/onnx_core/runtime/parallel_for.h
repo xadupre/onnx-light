@@ -39,8 +39,11 @@ inline constexpr int64_t kParallelForGrainSize = 1 << 15; // 32768 elements
 /// Returns:
 ///   The effective participant count, always at least ``1``.
 inline int64_t ParallelForThreadCount() noexcept {
-  const unsigned int cores = std::thread::hardware_concurrency();
-  return cores == 0 ? 1 : static_cast<int64_t>(cores);
+  static const int64_t thread_count = []() {
+    const unsigned int cores = std::thread::hardware_concurrency();
+    return cores == 0 ? int64_t{1} : static_cast<int64_t>(cores);
+  }();
+  return thread_count;
 }
 
 /**

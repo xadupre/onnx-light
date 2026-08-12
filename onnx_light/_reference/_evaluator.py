@@ -643,6 +643,53 @@ class ReferenceEvaluator:
         """
         return dict(self._opsets)
 
+    def used_kernels(self) -> set[str]:
+        """Returns the operator names (kernels) used by the model.
+
+        The result is the set of distinct ``NodeProto.op_type`` values
+        found in the graph or function backing the evaluator, including
+        the ones used inside nested control-flow subgraphs (the ``g`` and
+        ``graphs`` attributes of nodes such as ``If``, ``Loop`` or
+        ``Scan``).
+
+        Returns:
+            A set with the operator names used anywhere in the model,
+            subgraphs included.
+        """
+        names: set[str] = set()
+        if self._graph is not None:
+            self._collect_used_kernels(self._graph, names)
+        elif self._function is not None:
+            self._collect_used_kernels(self._function, names)
+        return names
+
+    @classmethod
+    def _collect_used_kernels(cls, graph: Any, names: set[str]) -> None:
+        """Adds the op_type of every node in ``graph`` to ``names``.
+
+        ``graph`` is a :class:`GraphProto` or a :class:`FunctionProto`;
+        both expose an iterable ``node`` field. Nested subgraphs carried
+        by node attributes are handled by
+        :meth:`_collect_used_kernels_from_subgraphs`.
+        """
+        for node in graph.node:
+            names.add(node.op_type)
+            cls._collect_used_kernels_from_subgraphs(node, names)
+
+    @classmethod
+    def _collect_used_kernels_from_subgraphs(cls, node: Any, names: set[str]) -> None:
+        """Adds the op_type of nodes nested in ``node``'s subgraphs to ``names``.
+
+        Walks the ``g`` (single graph) and ``graphs`` (repeated graph)
+        attributes of ``node`` and recurses into
+        :meth:`_collect_used_kernels` for each one.
+        """
+        for attr in node.attribute:
+            if len(attr.g.node):
+                cls._collect_used_kernels(attr.g, names)
+            for subgraph in attr.graphs:
+                cls._collect_used_kernels(subgraph, names)
+
     # -- evaluation ---------------------------------------------------------
 
     def events(self) -> list[Any]:

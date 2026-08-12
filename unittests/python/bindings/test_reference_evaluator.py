@@ -71,6 +71,46 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(sess.output_names, ["y"])
         self.assertEqual(sess.opsets, {"": 18})
 
+    def test_used_kernels(self):
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess = ReferenceEvaluator(model)
+        self.assertEqual(sess.used_kernels(), {"Abs", "Add"})
+
+    def test_used_kernels_from_graph(self):
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess = ReferenceEvaluator(model.graph)
+        self.assertEqual(sess.used_kernels(), {"Abs", "Add"})
+
+    def test_used_kernels_includes_subgraphs(self):
+        then_branch = helper.make_graph(
+            [helper.make_node("Neg", ["x"], ["ty"])],
+            "then",
+            [],
+            [helper.make_tensor_value_info("ty", TensorProto.FLOAT, [3])],
+        )
+        else_branch = helper.make_graph(
+            [helper.make_node("Abs", ["x"], ["ey"])],
+            "else",
+            [],
+            [helper.make_tensor_value_info("ey", TensorProto.FLOAT, [3])],
+        )
+        node = helper.make_node(
+            "If", ["cond"], ["y"], then_branch=then_branch, else_branch=else_branch
+        )
+        graph = helper.make_graph(
+            [node],
+            "g",
+            [
+                helper.make_tensor_value_info("cond", TensorProto.BOOL, []),
+                helper.make_tensor_value_info("x", TensorProto.FLOAT, [3]),
+            ],
+            [helper.make_tensor_value_info("y", TensorProto.FLOAT, [3])],
+        )
+        model = helper.make_model(graph, opset_imports=[helper.make_operatorsetid("", 18)])
+        model.ir_version = 10
+        sess = ReferenceEvaluator(model)
+        self.assertEqual(sess.used_kernels(), {"If", "Neg", "Abs"})
+
     def test_run_default_output_names(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         sess = ReferenceEvaluator(model)

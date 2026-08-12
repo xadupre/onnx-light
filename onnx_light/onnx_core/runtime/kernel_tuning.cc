@@ -12,8 +12,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
 
 void HashCombine(size_t &seed, size_t value) noexcept {
-  constexpr size_t kHashCombine =
-      sizeof(size_t) == 8 ? size_t{0x9e3779b97f4a7c15ULL} : size_t{0x9e3779b9UL};
+  constexpr size_t kHashCombine = sizeof(size_t) == 8 ? static_cast<size_t>(0x9e3779b97f4a7c15ULL)
+                                                      : static_cast<size_t>(0x9e3779b9UL);
   seed ^= value + kHashCombine + (seed << 6) + (seed >> 2);
 }
 

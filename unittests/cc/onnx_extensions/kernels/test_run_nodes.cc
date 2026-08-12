@@ -10,6 +10,7 @@
 #include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/kernel_dispatch_table.h"
+#include "onnx_core/runtime/kernel_tuning.h"
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_session.h"
@@ -133,6 +134,33 @@ public:
 
 private:
   Fn fn_;
+};
+
+class TestTunableKernel : public core::runtime::KernelBase {
+public:
+  TestTunableKernel(const NodeProto &node, core::runtime::KernelTuningKey key)
+      : core::runtime::KernelBase(core::runtime::KernelContext{}), key_(std::move(key)) {
+    set_node(node);
+  }
+
+  core::runtime::KernelTuningKey TuningKey(int32_t element_type) const override {
+    core::runtime::KernelTuningKey key = key_;
+    key.element_type = element_type;
+    return key;
+  }
+
+  void Configure(const core::runtime::KernelTuningParameters &parameters) override {
+    configured_value_ = parameters.Get<int64_t>("algorithm.threshold");
+  }
+
+  void Run(RuntimeContext &rt) override {
+    rt.Set(node_->output(0),
+           Tensor::FromInt64(node_->output(0), {1}, std::vector<int64_t>{configured_value_}));
+  }
+
+private:
+  core::runtime::KernelTuningKey key_;
+  int64_t configured_value_ = -1;
 };
 
 } // namespace
@@ -4680,6 +4708,67 @@ TEST(RuntimeSession, ConstructsExactlyOneKernelPerNodeAcrossMultipleRuns) {
   session.Run(rt);
   EXPECT_EQ(construct_count, 1);
   EXPECT_EQ(invoke_count, 3);
+}
+
+TEST(RuntimeSession, KeepsResolvedKernelTuningImmutable) {
+  using core::runtime::KernelTuningKey;
+  using core::runtime::KernelTuningParameters;
+  using core::runtime::KernelTuningSchema;
+  using core::runtime::RegisterKernelFn;
+
+  const std::string domain = "test.onnxlight.tunable_kernel";
+  const KernelTuningKey key{
+      "runtime_session_test", "TunableOp", "test", 0, core::symbolic::Device::kCPU, 1};
+  KernelTuningParameters defaults{
+      KernelTuningKey{key.library, key.kernel, key.implementation,
+                      static_cast<int32_t>(TensorProto::DataType::FLOAT), key.device,
+                      key.tuning_abi},
+      {{"algorithm.threshold", int64_t{10}}}};
+  core::runtime::RegisterKernelTuningSchema(KernelTuningSchema(defaults));
+  RegisterKernelFn(
+      domain, "TunableOp", core::symbolic::Device::kCPU,
+      [key](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+        return std::make_unique<TestTunableKernel>(node, key);
+      });
+
+  KernelTuningParameters first = defaults;
+  first.values["algorithm.threshold"] = int64_t{20};
+  core::runtime::GetKernelTuningRegistry().PublishProfiles(
+      std::span<const KernelTuningParameters>(&first, 1));
+
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("TunableOp", {"x"}, {"y"}, domain));
+
+  RuntimeContext first_rt(KernelContext(DefaultOpset(18)));
+  first_rt.Set("x", Tensor::FromFloat("x", {1}, {1.0f}));
+  RuntimeSession first_session(first_rt.GetExecutionPlan(graph));
+  first_session.Run(first_rt);
+  const uint64_t first_generation = first_session.tuning_generation();
+  EXPECT_GT(first_generation, 0);
+  EXPECT_EQ(first_rt.Get("y").AsInt64()[0], 20);
+
+  KernelTuningParameters second = defaults;
+  second.values["algorithm.threshold"] = int64_t{30};
+  core::runtime::GetKernelTuningRegistry().PublishProfiles(
+      std::span<const KernelTuningParameters>(&second, 1));
+
+  first_rt.Remove("y");
+  first_session.Run(first_rt);
+  EXPECT_EQ(first_session.tuning_generation(), first_generation);
+  EXPECT_EQ(first_rt.Get("y").AsInt64()[0], 20);
+
+  RuntimeContext second_rt(KernelContext(DefaultOpset(18)));
+  second_rt.Set("x", Tensor::FromFloat("x", {1}, {1.0f}));
+  RuntimeSession second_session(second_rt.GetExecutionPlan(graph));
+  second_session.Run(second_rt);
+  EXPECT_GT(second_session.tuning_generation(), first_generation);
+  EXPECT_EQ(second_rt.Get("y").AsInt64()[0], 30);
 }
 
 TEST(RuntimeSession, ConstructsIfBranchKernelOnceAcrossMultipleRuns) {

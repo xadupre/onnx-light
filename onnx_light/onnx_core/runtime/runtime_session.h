@@ -5,12 +5,14 @@
 #pragma once
 
 #include "onnx_core/runtime/kernel_dispatch_table.h"
+#include "onnx_core/runtime/kernel_tuning.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_parameters.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -189,6 +191,12 @@ public:
   /// empty until the first :cpp:func:`Run` initializes the kernels.
   std::vector<std::string> used_kernels() const;
 
+  /// Returns the immutable tuning-registry generation captured while kernels
+  /// were initialized, or ``0`` before the first :cpp:func:`Run`.
+  uint64_t tuning_generation() const noexcept {
+    return tuning_snapshot_.has_value() ? tuning_snapshot_->generation() : 0;
+  }
+
   /// Enables or disables concrete-shape validation. When enabled, :cpp:func:`Run`
   /// checks that the concrete shape of every tensor carrying a declared
   /// (possibly symbolic) shape — the graph inputs, outputs and ``value_info``
@@ -310,6 +318,10 @@ private:
   ExecutionPlan default_plan_;
   const ExecutionPlan &plan_;
   std::vector<PreparedKernel> kernels_;
+  /// One immutable registry generation shared by every kernel in this session.
+  /// Kernels copy resolved values during initialization; retaining the snapshot
+  /// also makes the generation available for diagnostics.
+  std::optional<KernelTuningRegistrySnapshot> tuning_snapshot_;
   std::vector<std::string> required_inputs_;
   /// Declared (possibly symbolic) shapes keyed by tensor name, populated by
   /// :cpp:func:`SetDeclaredShapes` and consulted by :cpp:func:`Run` when

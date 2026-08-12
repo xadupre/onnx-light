@@ -183,6 +183,12 @@ public:
   /// :cpp:func:`Run`.
   const std::vector<std::string> &required_inputs() const noexcept { return required_inputs_; }
 
+  /// Returns the normalized ``"<domain>:<op_type>"`` identifiers of the kernels
+  /// resolved by this session, in execution order. Repeated operators are
+  /// preserved because each node owns a distinct kernel instance. The list is
+  /// empty until the first :cpp:func:`Run` initializes the kernels.
+  std::vector<std::string> used_kernels() const;
+
   /// Enables or disables concrete-shape validation. When enabled, :cpp:func:`Run`
   /// checks that the concrete shape of every tensor carrying a declared
   /// (possibly symbolic) shape — the graph inputs, outputs and ``value_info``

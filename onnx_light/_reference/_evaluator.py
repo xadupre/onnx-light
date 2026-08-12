@@ -609,6 +609,16 @@ class ReferenceEvaluator:
             return []
         return self._last_ctx.events()
 
+    def used_kernels(self) -> list[str]:
+        """Returns the kernel identifiers used by the evaluator.
+
+        Identifiers use the normalized ``"<domain>:<op_type>"`` form and
+        follow execution order. Repeated operators are preserved because each
+        node has its own kernel instance. Returns an empty list before the first
+        :meth:`run`.
+        """
+        return self._runner.used_kernels()
+
     def run(
         self, output_names: list[str] | None, feed_inputs: dict[str, Any]
     ) -> list[np.ndarray | list[np.ndarray]]:

@@ -74,10 +74,12 @@ class TestReferenceEvaluator(ExtTestCase):
     def test_run_default_output_names(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         sess = ReferenceEvaluator(model)
+        self.assertEqual(sess.used_kernels(), [])
         x = np.array([-1.0, 2.0, -3.5], dtype=np.float32)
         z = np.array([10.0, 20.0, 30.0], dtype=np.float32)
         (y,) = sess.run(None, {"x": x, "z": z})
         np.testing.assert_array_equal(y, np.array([11.0, 22.0, 33.5], dtype=np.float32))
+        self.assertEqual(sess.used_kernels(), ["ai.onnx:Abs", "ai.onnx:Add"])
 
     def test_run_explicit_output_names(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)

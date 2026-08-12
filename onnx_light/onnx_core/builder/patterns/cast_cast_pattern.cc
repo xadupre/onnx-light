@@ -5,8 +5,7 @@
 #include "onnx_core/builder/patterns/cast_cast_pattern.h"
 
 #include "onnx_core/builder/graph_builder_pattern_optimization.h"
-#include "onnx_helper.h"
-
+#include "onnx_proto/onnx_helper.h"
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
 namespace {

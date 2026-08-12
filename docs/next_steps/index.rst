@@ -29,4 +29,6 @@ Next Steps
     :maxdepth: 1
     :caption: Completed
 
+    2025-07_onnx_proto
+    2026-07_onnxruntime_onnx_light
     2026-08_proto_binary_size

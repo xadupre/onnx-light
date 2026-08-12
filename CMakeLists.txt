@@ -704,13 +704,9 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # binding translation unit limited preserves the extension's abi3 contract.
   if(MSVC)
     set_source_files_properties(
-        "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_kernels.cc"
-        PROPERTIES COMPILE_DEFINITIONS Py_NO_LINK_LIB)
-    set_source_files_properties(
         "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_numpy_api.cc"
         PROPERTIES
-          COMPILE_OPTIONS /UPy_LIMITED_API
-          COMPILE_DEFINITIONS Py_NO_LINK_LIB)
+          COMPILE_OPTIONS /UPy_LIMITED_API)
   else()
     set_source_files_properties(
         "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_numpy_api.cc"
@@ -719,6 +715,10 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   target_include_directories(_onnxpykernels PRIVATE
       "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}" "${NumPy_INCLUDE_DIR}")
   target_link_libraries(_onnxpykernels PRIVATE lib_onnx_kernels)
+  if(MSVC)
+    target_link_options(_onnxpykernels PRIVATE
+        "/NODEFAULTLIB:python${Python_VERSION_MAJOR}${Python_VERSION_MINOR}.lib")
+  endif()
 
   # _onnxpybackend: backend-test case utilities. Links lib_onnx_backend_test
   # (which publicly depends on lib_onnx_kernels and lib_onnx_proto so that

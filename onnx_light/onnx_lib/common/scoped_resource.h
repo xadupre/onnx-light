@@ -37,46 +37,53 @@ namespace ONNX_LIGHT_NAMESPACE {
 /**
  * @brief RAII wrapper that owns a single OS resource value.
  *
- * Holds a value of type `decltype(Invalid)` and calls @p Close on it when the
+ * Holds a value of type `Traits::type` and calls `Traits::close` on it when the
  * wrapper is destroyed, unless ownership has been transferred via release().
  * Copying is disabled; move semantics are intentionally omitted to keep the
  * API minimal.
  *
- * @tparam Invalid Sentinel value that represents "no resource". The destructor
- *         skips the @p Close call when the held value compares equal to this.
- * @tparam Close   Function invoked with the held value on destruction.
+ * The sentinel is obtained through `Traits::invalid()` rather than a non-type
+ * template argument because some platform sentinels (e.g. Windows'
+ * INVALID_HANDLE_VALUE, which reinterpret-casts -1 to a pointer) are not valid
+ * converted constant expressions for a pointer-typed non-type template
+ * parameter, even though permissive compilers accept them.
+ *
+ * @tparam Traits Type supplying `using type`, `static type invalid()` and
+ *         `static void close(type)`. The destructor skips the `close` call
+ *         when the held value compares equal to `invalid()`.
  */
-template <auto Invalid, void (*Close)(decltype(Invalid))> class ScopedResource {
-  using T = decltype(Invalid);
+template <typename Traits> class ScopedResource {
+  using T = typename Traits::type;
   T val_;
 
 public:
   /// Constructs a ScopedResource that takes ownership of @p v.
-  /// @param v Resource value to manage; must compare equal to @p Invalid to be treated as empty.
+  /// @param v Resource value to manage; must compare equal to Traits::invalid() to be treated as
+  /// empty.
   explicit ScopedResource(T v) : val_(v) {}
 
-  /// Destroys the resource by calling @p Close, unless the value equals @p Invalid.
+  /// Destroys the resource by calling Traits::close, unless the value equals Traits::invalid().
   ~ScopedResource() {
-    if (val_ != Invalid) {
-      Close(val_);
+    if (val_ != Traits::invalid()) {
+      Traits::close(val_);
     }
   }
 
   /// Returns the held resource value without releasing ownership.
-  /// @returns The current resource value; equals @p Invalid when no resource is owned.
+  /// @returns The current resource value; equals Traits::invalid() when no resource is owned.
   T get() const { return val_; }
 
   /**
    * @brief Releases ownership and returns the held value.
    *
-   * After the call the internal value is set to @p Invalid so the destructor
-   * will not invoke @p Close.
+   * After the call the internal value is set to Traits::invalid() so the
+   * destructor will not invoke Traits::close.
    *
    * @returns The resource value that was held before the call.
    */
   T release() {
     T tmp = val_;
-    val_ = Invalid;
+    val_ = Traits::invalid();
     return tmp;
   }
 
@@ -85,28 +92,30 @@ public:
 };
 
 #ifdef _WIN32
-/// Closes a Win32 HANDLE by calling CloseHandle().
-inline void close_handle(HANDLE h) { CloseHandle(h); }
+/// Traits describing how to close a Win32 HANDLE and its invalid sentinel.
+struct HandleTraits {
+  using type = HANDLE;
+  static HANDLE invalid() { return INVALID_HANDLE_VALUE; }
+  static void close(HANDLE h) { CloseHandle(h); }
+};
 /// RAII wrapper for a Win32 HANDLE; calls CloseHandle() on destruction.
-using ScopedHandle = ScopedResource<INVALID_HANDLE_VALUE, close_handle>;
+using ScopedHandle = ScopedResource<HandleTraits>;
 #endif
 
-/**
- * @brief Closes a POSIX file descriptor (or its Win32 equivalent).
- *
- * Calls `_close` on Windows and `close` on POSIX platforms.
- *
- * @param fd File descriptor to close.
- */
-inline void close_fd(int fd) {
+/// Traits describing how to close a file descriptor and its invalid sentinel.
+struct FdTraits {
+  using type = int;
+  static constexpr int invalid() { return -1; }
+  static void close(int fd) {
 #ifdef _WIN32
-  _close(fd);
+    _close(fd);
 #else
-  close(fd);
+    ::close(fd);
 #endif
-}
-/// RAII wrapper for a file descriptor; calls close_fd() on destruction.
-using ScopedFd = ScopedResource<-1, close_fd>;
+  }
+};
+/// RAII wrapper for a file descriptor; calls FdTraits::close() on destruction.
+using ScopedFd = ScopedResource<FdTraits>;
 
 /**
  * @brief Runs a callable unconditionally when the guard goes out of scope.

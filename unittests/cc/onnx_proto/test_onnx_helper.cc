@@ -2551,3 +2551,99 @@ TEST(onnx_alignment, SaveModelWithSharedExternalDataReusesFirstModelWeights) {
     std::remove(p.c_str());
   }
 }
+
+TEST(onnx_helper, ReadScalarAsDouble_TypedFields) {
+  double out = 0.0;
+
+  TensorProto f;
+  f.set_data_type(TensorProto::DataType::FLOAT);
+  f.add_float_data(2.5f);
+  ASSERT_TRUE(ReadScalarAsDouble(f, out));
+  EXPECT_DOUBLE_EQ(out, 2.5);
+
+  TensorProto d;
+  d.set_data_type(TensorProto::DataType::DOUBLE);
+  d.add_double_data(-3.25);
+  ASSERT_TRUE(ReadScalarAsDouble(d, out));
+  EXPECT_DOUBLE_EQ(out, -3.25);
+
+  TensorProto i64;
+  i64.set_data_type(TensorProto::DataType::INT64);
+  i64.add_int64_data(-7);
+  ASSERT_TRUE(ReadScalarAsDouble(i64, out));
+  EXPECT_DOUBLE_EQ(out, -7.0);
+
+  TensorProto i8;
+  i8.set_data_type(TensorProto::DataType::INT8);
+  i8.add_int32_data(-5);
+  ASSERT_TRUE(ReadScalarAsDouble(i8, out));
+  EXPECT_DOUBLE_EQ(out, -5.0);
+
+  TensorProto u8;
+  u8.set_data_type(TensorProto::DataType::UINT8);
+  u8.add_int32_data(200);
+  ASSERT_TRUE(ReadScalarAsDouble(u8, out));
+  EXPECT_DOUBLE_EQ(out, 200.0);
+
+  TensorProto u64;
+  u64.set_data_type(TensorProto::DataType::UINT64);
+  u64.add_uint64_data(42);
+  ASSERT_TRUE(ReadScalarAsDouble(u64, out));
+  EXPECT_DOUBLE_EQ(out, 42.0);
+}
+
+TEST(onnx_helper, ReadScalarAsDouble_RawData) {
+  double out = 0.0;
+
+  const float fval = 1.5f;
+  TensorProto f;
+  f.set_data_type(TensorProto::DataType::FLOAT);
+  f.set_raw_data(&fval, sizeof(fval));
+  ASSERT_TRUE(ReadScalarAsDouble(f, out));
+  EXPECT_DOUBLE_EQ(out, 1.5);
+
+  const int16_t ival = -258;
+  TensorProto i16;
+  i16.set_data_type(TensorProto::DataType::INT16);
+  i16.set_raw_data(&ival, sizeof(ival));
+  ASSERT_TRUE(ReadScalarAsDouble(i16, out));
+  EXPECT_DOUBLE_EQ(out, -258.0);
+
+  const int64_t lval = -9000000000LL;
+  TensorProto i64;
+  i64.set_data_type(TensorProto::DataType::INT64);
+  i64.set_raw_data(&lval, sizeof(lval));
+  ASSERT_TRUE(ReadScalarAsDouble(i64, out));
+  EXPECT_DOUBLE_EQ(out, static_cast<double>(lval));
+}
+
+TEST(onnx_helper, ReadScalarAsDouble_EmptyOrUnsupported) {
+  double out = 123.0;
+
+  TensorProto empty_float;
+  empty_float.set_data_type(TensorProto::DataType::FLOAT);
+  EXPECT_FALSE(ReadScalarAsDouble(empty_float, out));
+  EXPECT_DOUBLE_EQ(out, 123.0);
+
+  // A raw_data buffer smaller than the element size must not be read.
+  const uint8_t half[2] = {0, 0};
+  TensorProto truncated;
+  truncated.set_data_type(TensorProto::DataType::FLOAT);
+  truncated.set_raw_data(half, sizeof(half));
+  out = 123.0;
+  EXPECT_FALSE(ReadScalarAsDouble(truncated, out));
+  EXPECT_DOUBLE_EQ(out, 123.0);
+
+  TensorProto str;
+  str.set_data_type(TensorProto::DataType::STRING);
+  out = 123.0;
+  EXPECT_FALSE(ReadScalarAsDouble(str, out));
+  EXPECT_DOUBLE_EQ(out, 123.0);
+}
+
+TEST(onnx_helper, EmptyNodeList) {
+  const std::vector<const NodeProto *> &a = EmptyNodeList();
+  const std::vector<const NodeProto *> &b = EmptyNodeList();
+  EXPECT_TRUE(a.empty());
+  EXPECT_EQ(&a, &b);
+}

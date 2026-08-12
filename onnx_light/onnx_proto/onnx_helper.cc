@@ -1409,6 +1409,142 @@ bool ReadFloatingValues(const TensorProto &tensor_proto, std::vector<double> &ou
   }
 }
 
+namespace {
+
+// Assembles a little-endian scalar of ``n`` bytes starting at ``bytes`` into an
+// unsigned accumulator. Reading byte-wise avoids unaligned access without
+// copying the underlying buffer, and matches the little-endian layout ONNX
+// mandates for raw_data.
+uint64_t AssembleLittleEndian(const uint8_t *bytes, size_t n) {
+  uint64_t value = 0;
+  for (size_t b = 0; b < n; ++b) {
+    value |= static_cast<uint64_t>(bytes[b]) << (8 * b);
+  }
+  return value;
+}
+
+// Sign-extends the low ``n`` bytes of ``value`` to a 64-bit signed integer.
+int64_t SignExtend(uint64_t value, size_t n) {
+  if (n >= 8) {
+    return static_cast<int64_t>(value);
+  }
+  const uint64_t sign_bit = uint64_t{1} << (n * 8 - 1);
+  if (value & sign_bit) {
+    const uint64_t high_mask = ~((uint64_t{1} << (n * 8)) - 1);
+    return static_cast<int64_t>(value | high_mask);
+  }
+  return static_cast<int64_t>(value);
+}
+
+} // namespace
+
+bool ReadScalarAsDouble(const TensorProto &tensor, double &out) {
+  const size_t raw_size = tensor.is_raw_data() ? tensor.ref_raw_data().size() : 0;
+  const uint8_t *bytes = raw_size > 0 ? tensor.ref_raw_data().data() : nullptr;
+  // ``raw(n)`` is ``true`` only when raw_data holds at least ``n`` bytes, so a
+  // truncated buffer never leads to an out-of-bounds read.
+  const auto raw = [&](size_t n) { return raw_size >= n; };
+  switch (tensor.data_type()) {
+  case TensorProto::DataType::FLOAT:
+    if (raw(4)) {
+      const uint32_t u = static_cast<uint32_t>(AssembleLittleEndian(bytes, 4));
+      float f;
+      std::memcpy(&f, &u, sizeof(float));
+      out = static_cast<double>(f);
+    } else if (tensor.float_data().size() > 0) {
+      out = static_cast<double>(tensor.float_data()[0]);
+    } else {
+      return false;
+    }
+    return true;
+  case TensorProto::DataType::DOUBLE:
+    if (raw(8)) {
+      const uint64_t u = AssembleLittleEndian(bytes, 8);
+      std::memcpy(&out, &u, sizeof(double));
+    } else if (tensor.double_data().size() > 0) {
+      out = tensor.double_data()[0];
+    } else {
+      return false;
+    }
+    return true;
+  case TensorProto::DataType::INT64:
+    if (raw(8)) {
+      out = static_cast<double>(SignExtend(AssembleLittleEndian(bytes, 8), 8));
+    } else if (tensor.int64_data().size() > 0) {
+      out = static_cast<double>(tensor.int64_data()[0]);
+    } else {
+      return false;
+    }
+    return true;
+  case TensorProto::DataType::INT32:
+    if (raw(4)) {
+      out = static_cast<double>(SignExtend(AssembleLittleEndian(bytes, 4), 4));
+    } else if (tensor.int32_data().size() > 0) {
+      out = static_cast<double>(tensor.int32_data()[0]);
+    } else {
+      return false;
+    }
+    return true;
+  case TensorProto::DataType::INT16:
+    if (raw(2)) {
+      out = static_cast<double>(SignExtend(AssembleLittleEndian(bytes, 2), 2));
+    } else if (tensor.int32_data().size() > 0) {
+      out = static_cast<double>(static_cast<int16_t>(tensor.int32_data()[0]));
+    } else {
+      return false;
+    }
+    return true;
+  case TensorProto::DataType::INT8:
+    if (raw(1)) {
+      out = static_cast<double>(SignExtend(AssembleLittleEndian(bytes, 1), 1));
+    } else if (tensor.int32_data().size() > 0) {
+      out = static_cast<double>(static_cast<int8_t>(tensor.int32_data()[0]));
+    } else {
+      return false;
+    }
+    return true;
+  case TensorProto::DataType::UINT8:
+  case TensorProto::DataType::BOOL:
+    if (raw(1)) {
+      out = static_cast<double>(AssembleLittleEndian(bytes, 1));
+    } else if (tensor.int32_data().size() > 0) {
+      out = static_cast<double>(static_cast<uint8_t>(tensor.int32_data()[0]));
+    } else {
+      return false;
+    }
+    return true;
+  case TensorProto::DataType::UINT16:
+    if (raw(2)) {
+      out = static_cast<double>(AssembleLittleEndian(bytes, 2));
+    } else if (tensor.int32_data().size() > 0) {
+      out = static_cast<double>(static_cast<uint16_t>(tensor.int32_data()[0]));
+    } else {
+      return false;
+    }
+    return true;
+  case TensorProto::DataType::UINT32:
+    if (raw(4)) {
+      out = static_cast<double>(AssembleLittleEndian(bytes, 4));
+    } else if (tensor.uint64_data().size() > 0) {
+      out = static_cast<double>(static_cast<uint32_t>(tensor.uint64_data()[0]));
+    } else {
+      return false;
+    }
+    return true;
+  case TensorProto::DataType::UINT64:
+    if (raw(8)) {
+      out = static_cast<double>(AssembleLittleEndian(bytes, 8));
+    } else if (tensor.uint64_data().size() > 0) {
+      out = static_cast<double>(tensor.uint64_data()[0]);
+    } else {
+      return false;
+    }
+    return true;
+  default:
+    return false;
+  }
+}
+
 const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_name,
                                      const char *context) {
   const std::string prefix =

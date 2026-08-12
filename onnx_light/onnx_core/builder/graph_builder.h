@@ -63,6 +63,10 @@ using ::onnx_light::core::symbolic::SymShape;
 using ::onnx_light::core::symbolic::SymTensor;
 using ::onnx_light::core::symbolic::TensorType;
 
+/// Read-only index over a :cpp:class:`GraphBuilder` used by the pattern
+/// optimizer (declared in ``graph_graph.h``).
+class GraphGraph;
+
 /// Selects which ONNX proto :cpp:func:`GraphBuilder::ToOnnx` produces.
 enum class ProtoKind {
   /// Produce a :cpp:class:`ModelProto` (the default).
@@ -92,6 +96,11 @@ public:
  */
 class GraphBuilder {
 public:
+  // The pattern optimizer's read-only index needs access to the private
+  // subgraph-reference helpers (ReferencedSubgraphs / CollectImplicitInputs)
+  // to compute the set of values captured by nested subgraphs.
+  friend class GraphGraph;
+
   /// Signature of the optional callback used to resolve the versioned schema
   /// history of an operator. Given an ``op_type`` it returns every
   /// :cpp:class:`core::schema::LightOpSchema` registered for that operator

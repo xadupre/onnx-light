@@ -41,6 +41,10 @@ rebuilt after each iteration. The Python ``_build`` method becomes a
       // Nodes consuming ``name`` (in insertion order, deduplicated).
       const std::vector<const NodeProto *> &NextNodes(const std::string &name) const;
 
+      // Node-level neighbours in the data-flow graph.
+      std::vector<const NodeProto *> Predecessors(const NodeProto &node) const;
+      std::vector<const NodeProto *> Successors(const NodeProto &node) const;
+
       bool IsOutput(const std::string &name) const;
       bool IsUsed(const std::string &name) const;
       bool IsUsedMoreThanOnce(const std::string &name) const;

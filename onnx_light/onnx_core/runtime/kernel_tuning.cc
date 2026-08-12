@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/kernel_tuning.h"
 
 #include <cctype>
+#include <mutex>
 #include <stdexcept>
 #include <utility>
 
@@ -154,6 +155,111 @@ void KernelTuningSchema::ValidateValues(const KernelTuningParameters &parameters
     }
     (void)value;
   }
+}
+
+struct KernelTuningRegistrySnapshot::State {
+  uint64_t generation = 0;
+  std::unordered_map<KernelTuningKey, KernelTuningParameters, KernelTuningKeyHash> profiles;
+};
+
+struct KernelTuningRegistry::Impl {
+  mutable std::mutex mutex;
+  std::unordered_map<KernelTuningKey, std::shared_ptr<const KernelTuningSchema>,
+                     KernelTuningKeyHash>
+      schemas;
+  std::shared_ptr<const KernelTuningRegistrySnapshot::State> state;
+
+  Impl() : state(std::make_shared<const KernelTuningRegistrySnapshot::State>()) {}
+};
+
+uint64_t KernelTuningRegistrySnapshot::generation() const noexcept { return state_->generation; }
+
+const KernelTuningParameters *
+KernelTuningRegistrySnapshot::Find(const KernelTuningKey &key) const noexcept {
+  auto found = state_->profiles.find(key);
+  return found == state_->profiles.end() ? nullptr : &found->second;
+}
+
+KernelTuningRegistry::KernelTuningRegistry() : impl_(std::make_unique<Impl>()) {}
+
+KernelTuningRegistry::~KernelTuningRegistry() = default;
+
+void KernelTuningRegistry::RegisterSchema(KernelTuningSchema schema) {
+  auto shared_schema = std::make_shared<const KernelTuningSchema>(std::move(schema));
+  std::lock_guard lock(impl_->mutex);
+  if (impl_->schemas.contains(shared_schema->key())) {
+    throw std::invalid_argument("Kernel tuning schema is already registered for '" +
+                                KeyDescription(shared_schema->key()) + "'.");
+  }
+
+  auto current = impl_->state;
+  auto next = std::make_shared<KernelTuningRegistrySnapshot::State>(*current);
+  ++next->generation;
+  next->profiles.emplace(shared_schema->key(), shared_schema->portable_defaults());
+  impl_->schemas.emplace(shared_schema->key(), std::move(shared_schema));
+  impl_->state = std::move(next);
+}
+
+KernelTuningRegistrySnapshot KernelTuningRegistry::Snapshot() const noexcept {
+  std::lock_guard lock(impl_->mutex);
+  return KernelTuningRegistrySnapshot(impl_->state);
+}
+
+void KernelTuningRegistry::PublishProfiles(std::span<const KernelTuningParameters> profiles,
+                                           std::span<const KernelTuningKey> reset_keys) {
+  std::lock_guard lock(impl_->mutex);
+  for (const KernelTuningKey &key : reset_keys) {
+    if (!impl_->schemas.contains(key)) {
+      throw std::invalid_argument("Cannot reset unregistered kernel tuning key '" +
+                                  KeyDescription(key) + "'.");
+    }
+  }
+  for (const KernelTuningParameters &profile : profiles) {
+    auto schema = impl_->schemas.find(profile.key);
+    if (schema == impl_->schemas.end()) {
+      throw std::invalid_argument("Cannot publish unregistered kernel tuning key '" +
+                                  KeyDescription(profile.key) + "'.");
+    }
+    schema->second->Validate(profile);
+  }
+
+  auto current = impl_->state;
+  auto next = std::make_shared<KernelTuningRegistrySnapshot::State>(*current);
+  for (const KernelTuningKey &key : reset_keys) {
+    next->profiles[key] = impl_->schemas.at(key)->portable_defaults();
+  }
+  for (const KernelTuningParameters &profile : profiles) {
+    next->profiles[profile.key] = profile;
+  }
+  ++next->generation;
+  impl_->state = std::move(next);
+}
+
+std::vector<KernelTuningKey> KernelTuningRegistry::RegisteredKeys() const {
+  std::lock_guard lock(impl_->mutex);
+  std::vector<KernelTuningKey> keys;
+  keys.reserve(impl_->schemas.size());
+  for (const auto &[key, schema] : impl_->schemas) {
+    keys.push_back(key);
+    (void)schema;
+  }
+  return keys;
+}
+
+std::shared_ptr<const KernelTuningSchema>
+KernelTuningRegistry::FindSchema(const KernelTuningKey &key) const {
+  std::lock_guard lock(impl_->mutex);
+  auto found = impl_->schemas.find(key);
+  return found == impl_->schemas.end() ? nullptr : found->second;
+}
+
+KernelTuningRegistry &GetKernelTuningRegistry() {
+  static KernelTuningRegistry registry;
+  return registry;
+}
+
+void RegisterKernelTuningSchema(KernelTuningSchema schema) {
+  GetKernelTuningRegistry().RegisterSchema(std::move(schema));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

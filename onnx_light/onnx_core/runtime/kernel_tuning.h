@@ -10,6 +10,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -144,5 +146,84 @@ private:
   KernelTuningParameters portable_defaults_;
   KernelTuningValidationHook validation_hook_;
 };
+
+class KernelTuningRegistry;
+
+/**
+ * Holds one immutable generation of resolved kernel tuning parameters.
+ *
+ * A snapshot remains valid after later registrations or cache loads publish a
+ * newer generation.
+ */
+class KernelTuningRegistrySnapshot {
+public:
+  /** Returns the registry generation captured by this snapshot. */
+  uint64_t generation() const noexcept;
+
+  /**
+   * Finds the resolved parameters for an exact tuning key.
+   *
+   * Returns:
+   *   The parameters, or ``nullptr`` when the key is not registered.
+   */
+  const KernelTuningParameters *Find(const KernelTuningKey &key) const noexcept;
+
+private:
+  struct State;
+  explicit KernelTuningRegistrySnapshot(std::shared_ptr<const State> state)
+      : state_(std::move(state)) {}
+
+  std::shared_ptr<const State> state_;
+
+  friend class KernelTuningRegistry;
+};
+
+/**
+ * Registers tuning schemas and atomically publishes immutable parameter sets.
+ *
+ * Publication validates the complete batch before making any value visible.
+ */
+class KernelTuningRegistry {
+public:
+  KernelTuningRegistry();
+  ~KernelTuningRegistry();
+  KernelTuningRegistry(const KernelTuningRegistry &) = delete;
+  KernelTuningRegistry &operator=(const KernelTuningRegistry &) = delete;
+
+  /**
+   * Registers one schema and its portable defaults.
+   *
+   * @throws std::invalid_argument if its key is already registered.
+   */
+  void RegisterSchema(KernelTuningSchema schema);
+
+  /** Returns the current immutable registry generation. */
+  KernelTuningRegistrySnapshot Snapshot() const noexcept;
+
+  /**
+   * Publishes a validated batch and resets selected keys to portable defaults.
+   *
+   * Every replacement and reset key must be registered. Validation failure
+   * leaves the current generation unchanged.
+   */
+  void PublishProfiles(std::span<const KernelTuningParameters> profiles,
+                       std::span<const KernelTuningKey> reset_keys = {});
+
+  /** Returns the registered keys. */
+  std::vector<KernelTuningKey> RegisteredKeys() const;
+
+  /** Returns the schema for a registered key, or ``nullptr``. */
+  std::shared_ptr<const KernelTuningSchema> FindSchema(const KernelTuningKey &key) const;
+
+private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+};
+
+/** Returns the process-wide tuning registry. */
+KernelTuningRegistry &GetKernelTuningRegistry();
+
+/** Registers a schema in the process-wide tuning registry. */
+void RegisterKernelTuningSchema(KernelTuningSchema schema);
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

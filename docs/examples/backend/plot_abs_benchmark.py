@@ -14,6 +14,11 @@ lightweight, but that does not imply that each inference is faster. The
 execution benchmark warms both runtimes, alternates their measurement order,
 and reports median durations so the comparison does not confuse startup cost
 with steady-state inference cost.
+
+The benchmark also exercises the low-level
+:func:`onnx_light.onnx_py._onnxpykernels.runtime.run_model` entry point, which
+runs a whole model end-to-end from :class:`Tensor` inputs to :class:`Tensor`
+outputs, to show how it compares with the higher-level ``ReferenceEvaluator``.
 """
 
 from __future__ import annotations
@@ -26,6 +31,9 @@ import numpy
 import onnxruntime
 from onnx_light.onnx import TensorProto, checker, helper
 from onnx_light.onnx.reference import ReferenceEvaluator
+from onnx_light.onnx_py import _onnxpykernels
+
+runtime = _onnxpykernels.runtime
 
 
 def make_abs_model():
@@ -100,6 +108,21 @@ def run_onnx_light(values):
     return onnx_light_session.run(None, {"X": values})[0]
 
 
+def run_onnx_light_run_model(values):
+    """Runs the whole model through the low-level ``runtime.run_model`` API.
+
+    The input array is wrapped in a :class:`Tensor` named after the graph input
+    it feeds (``"X"``), the model is executed end-to-end, and the single declared
+    output is reinterpreted back into a ``float32`` NumPy array.
+    """
+
+    tensor = runtime.tensor_from_numpy(
+        "X", int(TensorProto.FLOAT), list(values.shape), values.view(numpy.uint8)
+    )
+    (output,) = runtime.run_model(model, [tensor])
+    return runtime.tensor_to_numpy(output).view(numpy.float32).reshape(values.shape)
+
+
 def run_onnxruntime(values):
     """Runs the ONNX Runtime Abs kernel."""
 
@@ -137,13 +160,18 @@ for size in size_grid:
         repeat,
         warmup,
     )
+    run_model_time = measure(
+        lambda values=values: run_onnx_light_run_model(values), repeat, warmup
+    )
 
     numpy.testing.assert_array_equal(run_onnx_light(values), expected)
     numpy.testing.assert_array_equal(run_onnxruntime(values), expected)
-    rows.append((size, numpy_time, onnx_light_time, ort_time))
+    numpy.testing.assert_array_equal(run_onnx_light_run_model(values), expected)
+    rows.append((size, numpy_time, onnx_light_time, ort_time, run_model_time))
     print(
         f"size={size:>9} | numpy={numpy_time * 1e6:10.2f} us | "
         f"onnx-light={onnx_light_time * 1e6:10.2f} us | "
+        f"onnx-light run_model={run_model_time * 1e6:10.2f} us | "
         f"onnxruntime={ort_time * 1e6:10.2f} us | "
         f"onnx-light / onnxruntime={onnx_light_time / ort_time:5.2f}x"
     )
@@ -152,6 +180,7 @@ sizes = numpy.array([row[0] for row in rows])
 numpy_times = numpy.array([row[1] for row in rows])
 onnx_light_times = numpy.array([row[2] for row in rows])
 ort_times = numpy.array([row[3] for row in rows])
+run_model_times = numpy.array([row[4] for row in rows])
 
 # %%
 # Plot execution time and relative speed
@@ -165,6 +194,7 @@ figure, (time_axis, speedup_axis) = matplotlib.pyplot.subplots(1, 2, figsize=(12
 
 time_axis.plot(sizes, numpy_times * 1e6, "o--", label="numpy", color="#9b7ec8")
 time_axis.plot(sizes, onnx_light_times * 1e6, "o-", label="onnx-light", color="#5cb85c")
+time_axis.plot(sizes, run_model_times * 1e6, "o:", label="onnx-light run_model", color="#2e7d32")
 time_axis.plot(sizes, ort_times * 1e6, "o-", label="onnxruntime", color="#f4a259")
 time_axis.set_xscale("log")
 time_axis.set_yscale("log")
@@ -186,6 +216,9 @@ for size, speedup in zip(sizes, onnx_light_speedups, strict=True):
         fontsize=7,
         color="#3d803d",
     )
+speedup_axis.plot(
+    sizes, ort_times / run_model_times, "o:", label="onnx-light run_model", color="#2e7d32"
+)
 speedup_axis.plot(sizes, ort_times / ort_times, "o-", label="onnxruntime", color="#f4a259")
 speedup_axis.axhline(1.0, color="grey", linewidth=0.8, linestyle=":")
 speedup_axis.set_xscale("log")

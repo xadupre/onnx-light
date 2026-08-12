@@ -25,6 +25,7 @@ Next Steps
     2026-08_compiled_tensor
     2026-08_prepared_execution
     2026-08_buffer_reuse_arena
+    2026-08_split_wheels
 
 .. toctree::
     :maxdepth: 1

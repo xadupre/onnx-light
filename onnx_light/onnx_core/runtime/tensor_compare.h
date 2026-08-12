@@ -33,7 +33,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
  * ``max |actual - expected| / |expected|`` (an element with ``expected == 0``
  * and ``actual != 0`` contributes an infinite relative error).
  * ``max_abs_error_index`` and ``max_rel_error_index`` are the flat element
- * indices where those maxima occur, or ``-1`` when no finite pair was compared.
+ * indices where those maxima occur (the first occurrence wins on ties), or
+ * ``-1`` when no finite pair was compared.
  */
 struct TensorComparison {
   /// Whether the tensors match within tolerance.

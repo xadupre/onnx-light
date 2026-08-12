@@ -50,6 +50,10 @@ separate pull requests:
      - Pattern interfaces
      - Added ``PatternOptimization``, ``MatchResult``, the optimizer context,
        and the first ``Cast(Cast(x))`` pattern.
+   * - Current
+     - Match/apply loop and cleanup
+     - Applies disjoint matches by priority and runs duplicate, identity, and
+       unused-node cleanup passes until convergence.
 
 Graph structure on Graph
 ++++++++++++++++++++++++

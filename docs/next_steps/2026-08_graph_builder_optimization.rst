@@ -12,12 +12,12 @@ Objective
 ``core::builder::GraphBuilder``. The missing piece is a rewriting
 engine that recognizes local subgraphs and replaces them with cheaper
 equivalents, in the spirit of the Python
-`GraphBuilderPatternOptimization
+`pattern optimizer
 <https://github.com/xadupre/yet-another-onnx-builder/blob/main/yobx/xoptim/graph_builder_optim.py>`_.
 
-The goal is a C++ ``GraphBuilderPatternOptimization`` that runs entirely on an
-existing ``GraphBuilder``. It reuses the builder's shape and type inference,
-its constant knowledge, and its existing cleanup passes
+The C++ optimizer is implemented directly by ``GraphGraph`` over an existing
+``GraphBuilder``. It reuses the builder's shape and type inference, its
+constant knowledge, and its existing cleanup passes
 (``RemoveIdentityNodes``, ``RemoveUnusedNodes``,
 ``RemoveDuplicateNodes``) instead of duplicating them.
 
@@ -50,6 +50,10 @@ separate pull requests:
      - Pattern interfaces
      - Added ``PatternOptimization``, ``MatchResult``, the optimizer context,
        and the first ``Cast(Cast(x))`` pattern.
+   * - Current
+     - Match/apply loop and cleanup
+     - Applies disjoint matches by priority and runs duplicate, identity, and
+       unused-node cleanup passes until convergence.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -144,12 +148,12 @@ A pattern is a stateless matcher and rewriter. The two Python classes
 
       // Returns the match rooted at a candidate node (empty when none).
       virtual MatchResult
-      Match(GraphBuilderPatternOptimization &opt,
+      Match(GraphGraph &graph,
             const NodeProto &candidate) const = 0;
 
       // Produces the replacement nodes for one match.
       virtual utils::RepeatedProtoField<NodeProto>
-      Apply(GraphBuilderPatternOptimization &opt,
+      Apply(GraphGraph &graph,
             const std::vector<const NodeProto *> &nodes) const = 0;
 
       int priority;

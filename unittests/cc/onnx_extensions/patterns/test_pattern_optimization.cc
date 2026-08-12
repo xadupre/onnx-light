@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/builder/graph_builder_pattern_optimization.h"
+#include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/builder/pattern_registry.h"
 #include "onnx_extensions/patterns/cast_cast_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
@@ -51,17 +51,17 @@ TEST(PatternOptimization, CastCastCollapsesRedundantOuterCast) {
   AddCast(builder, "middle", "y", TensorProto::DataType::FLOAT);
   builder.MakeOutput("y");
 
-  core::builder::GraphBuilderPatternOptimization optimizer(builder);
+  core::builder::GraphGraph graph(builder);
   onnx_patterns::CastCastPattern pattern;
   EXPECT_EQ(pattern.priority, 1);
   EXPECT_EQ(pattern.FastOpType(), std::set<std::string>({"Cast"}));
 
-  const core::builder::MatchResult match = pattern.Match(optimizer, builder.Nodes()[1]);
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
   EXPECT_EQ(match.pattern, &pattern);
   ASSERT_EQ(match.nodes.size(), 2u);
   EXPECT_EQ(match.insert_at, match.nodes[1]);
 
-  utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(optimizer, match.nodes);
+  utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
   ASSERT_EQ(replacements.size(), 1u);
   EXPECT_EQ(replacements[0].op_type().value(), "Cast");
   EXPECT_EQ(replacements[0].input()[0].value(), "x");
@@ -83,12 +83,12 @@ TEST(PatternOptimization, CastCastUsesIdentityForSafeRoundTrip) {
   AddCast(builder, "middle", "y", TensorProto::DataType::FLOAT16);
   builder.MakeOutput("y");
 
-  core::builder::GraphBuilderPatternOptimization optimizer(builder);
+  core::builder::GraphGraph graph(builder);
   onnx_patterns::CastCastPattern pattern;
-  const core::builder::MatchResult match = pattern.Match(optimizer, builder.Nodes()[1]);
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
   ASSERT_EQ(match.pattern, &pattern);
 
-  utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(optimizer, match.nodes);
+  utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
   ASSERT_EQ(replacements.size(), 1u);
   EXPECT_EQ(replacements[0].op_type().value(), "Identity");
   EXPECT_TRUE(replacements[0].attribute().empty());
@@ -103,13 +103,13 @@ TEST(PatternOptimization, CastCastKeepsSharedInnerCast) {
   builder.MakeOutput("y");
   builder.MakeOutput("other");
 
-  core::builder::GraphBuilderPatternOptimization optimizer(builder);
+  core::builder::GraphGraph graph(builder);
   onnx_patterns::CastCastPattern pattern;
-  const core::builder::MatchResult match = pattern.Match(optimizer, builder.Nodes()[1]);
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
   ASSERT_EQ(match.pattern, &pattern);
   EXPECT_EQ(match.insert_at, nullptr);
 
-  utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(optimizer, match.nodes);
+  utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
   ASSERT_EQ(replacements.size(), 2u);
   EXPECT_EQ(replacements[0].output()[0].value(), "middle");
   EXPECT_EQ(replacements[1].input()[0].value(), "x");
@@ -122,11 +122,88 @@ TEST(PatternOptimization, CastCastRejectsLossyRoundTrip) {
   AddCast(builder, "middle", "y", TensorProto::DataType::FLOAT);
   builder.MakeOutput("y");
 
-  core::builder::GraphBuilderPatternOptimization optimizer(builder);
+  core::builder::GraphGraph graph(builder);
   onnx_patterns::CastCastPattern pattern;
-  const core::builder::MatchResult match = pattern.Match(optimizer, builder.Nodes()[1]);
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
   EXPECT_EQ(match.pattern, nullptr);
   EXPECT_TRUE(match.nodes.empty());
+}
+
+TEST(PatternOptimization, OptimizeAppliesPatternAndCleanupPasses) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
+  AddCast(builder, "x", "middle", TensorProto::DataType::FLOAT);
+  AddCast(builder, "middle", "y", TensorProto::DataType::FLOAT);
+  builder.MakeNode("Identity", {"x"}, {"unused"});
+  builder.MakeOutput("y");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+
+  EXPECT_EQ(graph.Optimize(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Cast");
+  EXPECT_EQ(builder.Nodes()[0].input()[0].value(), "x");
+  EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "y");
+}
+
+TEST(PatternOptimization, OptimizeAppliesDisjointMatchesInOneIteration) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x1", core::symbolic::TensorType::kFloat16, Shape());
+  builder.MakeInput("x2", core::symbolic::TensorType::kFloat16, Shape());
+  AddCast(builder, "x1", "middle1", TensorProto::DataType::FLOAT);
+  AddCast(builder, "middle1", "y1", TensorProto::DataType::FLOAT);
+  AddCast(builder, "x2", "middle2", TensorProto::DataType::FLOAT);
+  AddCast(builder, "middle2", "y2", TensorProto::DataType::FLOAT);
+  builder.MakeOutput("y1");
+  builder.MakeOutput("y2");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+
+  EXPECT_EQ(graph.Optimize(1), 2u);
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.Nodes()[0].input()[0].value(), "x1");
+  EXPECT_EQ(builder.Nodes()[1].input()[0].value(), "x2");
+}
+
+TEST(PatternOptimization, OptimizeKeepsSharedInnerCastInTopologicalOrder) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
+  AddCast(builder, "x", "middle", TensorProto::DataType::FLOAT);
+  builder.MakeNode("Neg", {"middle"}, {"other"});
+  AddCast(builder, "middle", "y", TensorProto::DataType::FLOAT);
+  builder.MakeOutput("y");
+  builder.MakeOutput("other");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+
+  EXPECT_EQ(graph.Optimize(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 3u);
+  EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "middle");
+  EXPECT_EQ(builder.Nodes()[1].output()[0].value(), "y");
+  EXPECT_EQ(builder.Nodes()[2].op_type().value(), "Neg");
+}
+
+TEST(PatternOptimization, OptimizeHonorsDoNotRemovePredicate) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
+  AddCast(builder, "x", "middle", TensorProto::DataType::FLOAT);
+  AddCast(builder, "middle", "y", TensorProto::DataType::FLOAT);
+  builder.MakeOutput("y");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns), [](const NodeProto &node) {
+    return node.output()[0].value() == "middle";
+  });
+
+  EXPECT_EQ(graph.Optimize(), 0u);
+  EXPECT_EQ(builder.Nodes().size(), 2u);
 }
 
 TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {

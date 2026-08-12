@@ -4,14 +4,12 @@
 
 /**
  * @file graph_graph.h
- * @brief Read-only index over a :cpp:class:`core::builder::GraphBuilder`,
- *        the first building block of the C++ ``GraphBuilderPatternOptimization``.
+ * @brief Graph index and pattern-rewrite driver over a
+ *        :cpp:class:`core::builder::GraphBuilder`.
  *
- * :cpp:class:`core::builder::GraphGraph` mirrors the ``_build`` method of the
- * Python ``GraphBuilderPatternOptimization``: it does not own the graph, it
- * owns an index over the builder nodes. A pattern optimizer rebuilds one
- * :cpp:class:`GraphGraph` after every iteration and queries it to reason about
- * the local structure of the graph without mutating the builder.
+ * :cpp:class:`core::builder::GraphGraph` owns an index over the builder nodes
+ * and applies graph-rewrite patterns directly to that builder. It rebuilds its
+ * index after every optimization iteration.
  *
  * Nodes are identified by their address, so the index stores
  * ``const NodeProto *`` and maps each to its position in
@@ -35,12 +33,15 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "onnx_core/builder/graph_builder.h"
+#include "onnx_core/builder/pattern_optimization.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
@@ -50,17 +51,41 @@ using ::onnx_light::core::symbolic::SymTensor;
 using ::onnx_light::core::symbolic::TensorType;
 
 /**
- * Read-only index over the nodes of a :cpp:class:`GraphBuilder`.
+ * Index and rewrite driver over the nodes of a :cpp:class:`GraphBuilder`.
  *
- * A :cpp:class:`GraphGraph` is a snapshot: it reflects the builder as it was
- * when the index was constructed. Mutating the builder afterwards invalidates
- * the stored node pointers, so callers rebuild the index after each rewrite.
- * The referenced :cpp:class:`GraphBuilder` must outlive the index.
+ * The referenced :cpp:class:`GraphBuilder` must outlive this object. Mutating
+ * the builder outside :cpp:func:`Optimize` invalidates the index.
  */
 class GraphGraph {
 public:
+  /// Predicate that protects matching nodes from removal.
+  using DoNotRemovePredicate = std::function<bool(const NodeProto &)>;
+
   /// Builds the index from ``builder``. The builder must outlive the index.
-  explicit GraphGraph(const GraphBuilder &builder);
+  explicit GraphGraph(GraphBuilder &builder);
+
+  /// Builds the index and uses the supplied patterns in their given order.
+  GraphGraph(GraphBuilder &builder, std::vector<std::unique_ptr<PatternOptimization>> patterns,
+             DoNotRemovePredicate do_not_remove = {});
+
+  /// Returns the builder being indexed and optimized.
+  GraphBuilder &Builder() noexcept { return builder_; }
+
+  /**
+   * Applies patterns and cleanup passes until convergence.
+   *
+   * Patterns are considered in ascending priority order. A negative
+   * ``max_iter`` selects ``max(node_count, 10) * priority_count``.
+   *
+   * Returns:
+   *   The number of pattern matches applied.
+   */
+  std::size_t Optimize(int max_iter = -1);
+
+  /// Returns the patterns owned by this graph optimizer.
+  const std::vector<std::unique_ptr<PatternOptimization>> &Patterns() const noexcept {
+    return patterns_;
+  }
 
   // ── Structural queries ───────────────────────────────────────────────
 
@@ -145,6 +170,9 @@ public:
   void SetComputedConstant(const std::string &name, TensorProto value);
 
 private:
+  void Rebuild();
+  void RebuildSuccessors();
+
   // Returns the concrete dims of the constant ``name`` (empty vector for a
   // scalar) into ``dims``, or ``false`` when the shape cannot be determined.
   bool ConstantShape(const std::string &name, std::vector<int64_t> &dims) const;
@@ -153,7 +181,9 @@ private:
   // or returns ``false`` when it cannot be read.
   bool ConstantScalarValue(const std::string &name, double &out) const;
 
-  const GraphBuilder &builder_;
+  GraphBuilder &builder_;
+  std::vector<std::unique_ptr<PatternOptimization>> patterns_;
+  DoNotRemovePredicate do_not_remove_;
   // Value name -> producing node (mirrors Python ``predecessors_``).
   std::unordered_map<std::string, const NodeProto *> predecessors_;
   // Value name -> consuming nodes, deduplicated, in insertion order.

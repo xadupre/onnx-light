@@ -704,6 +704,9 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # binding translation unit limited preserves the extension's abi3 contract.
   if(MSVC)
     set_source_files_properties(
+        "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_kernels.cc"
+        PROPERTIES COMPILE_DEFINITIONS Py_NO_LINK_LIB)
+    set_source_files_properties(
         "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_numpy_api.cc"
         PROPERTIES
           COMPILE_OPTIONS /UPy_LIMITED_API

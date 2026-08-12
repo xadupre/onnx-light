@@ -597,6 +597,12 @@ TEST(onnx_shape_inference, GetValueCaseString_SparseTensorType) {
   EXPECT_EQ(shape_inference::GetValueCaseString(type), "sparse_tensor_type");
 }
 
+TEST(onnx_shape_inference, GetValueCaseString_OpaqueType) {
+  TypeProto type;
+  type.add_opaque_type();
+  EXPECT_EQ(shape_inference::GetValueCaseString(type), "opaque_type");
+}
+
 TEST(onnx_shape_inference, GetValueCaseString_NotSet) {
   TypeProto type;
   EXPECT_EQ(shape_inference::GetValueCaseString(type), "NOT_SET");
@@ -857,6 +863,51 @@ TEST(CheckTensorShapesAndTypes, checkShapesAndTypes_TypeCaseMismatch) {
   TypeProto existing = MakeSparseTensorTypeProto(TensorProto::DataType::FLOAT);
   EXPECT_THROW(shape_inference::checkShapesAndTypes(inferred, existing),
                ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
+// Opaque: matching domain and name passes without error.
+TEST(CheckTensorShapesAndTypes, Opaque_NoError_MatchingDomainAndName) {
+  TypeProto inferred;
+  inferred.mutable_opaque_type()->set_domain("d");
+  inferred.mutable_opaque_type()->set_name("n");
+  TypeProto existing;
+  existing.mutable_opaque_type()->set_domain("d");
+  existing.mutable_opaque_type()->set_name("n");
+  EXPECT_NO_THROW(shape_inference::checkShapesAndTypes(inferred, existing));
+}
+
+// Opaque: mismatched domain throws InferenceError.
+TEST(CheckTensorShapesAndTypes, Opaque_DomainMismatch) {
+  TypeProto inferred;
+  inferred.mutable_opaque_type()->set_domain("d1");
+  inferred.mutable_opaque_type()->set_name("n");
+  TypeProto existing;
+  existing.mutable_opaque_type()->set_domain("d2");
+  existing.mutable_opaque_type()->set_name("n");
+  EXPECT_THROW(shape_inference::checkShapesAndTypes(inferred, existing),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
+// Opaque: mismatched name throws InferenceError.
+TEST(CheckTensorShapesAndTypes, Opaque_NameMismatch) {
+  TypeProto inferred;
+  inferred.mutable_opaque_type()->set_name("n1");
+  TypeProto existing;
+  existing.mutable_opaque_type()->set_name("n2");
+  EXPECT_THROW(shape_inference::checkShapesAndTypes(inferred, existing),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
+// Opaque: mergeShapesAndTypes fills in missing domain and name from inferred.
+TEST(CheckTensorShapesAndTypes, Opaque_MergeFillsDomainAndName) {
+  TypeProto inferred;
+  inferred.mutable_opaque_type()->set_domain("d");
+  inferred.mutable_opaque_type()->set_name("n");
+  TypeProto existing;
+  existing.mutable_opaque_type(); // create the branch with domain/name unset
+  shape_inference::mergeShapesAndTypes(inferred, &existing);
+  EXPECT_EQ(existing.ref_opaque_type().str_domain(), "d");
+  EXPECT_EQ(existing.ref_opaque_type().str_name(), "n");
 }
 
 namespace {

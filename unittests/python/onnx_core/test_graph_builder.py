@@ -452,7 +452,6 @@ class TestGraphBuilder(ExtTestCase):
                 include=[("custom", "Keep")], exclude=[("custom", "Drop")]
             )
 
-
     def test_constant_folding_options_are_exposed(self):
         from onnx_light.onnx_core.graph_builder import ConstantFoldingOptions
 

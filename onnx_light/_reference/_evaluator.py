@@ -662,6 +662,8 @@ class ReferenceEvaluator:
         if self._model is not None:
             _runtime.register_model_functions(self._model, self._ctx)
             return set(_runtime.used_kernels(self._model.graph, self._ctx))
+        # A bare GraphProto / FunctionProto carries no model-local functions,
+        # so (as in :meth:`run`) only the model path registers them.
         if self._graph is not None:
             return set(_runtime.used_kernels(self._graph, self._ctx))
         assert self._function is not None

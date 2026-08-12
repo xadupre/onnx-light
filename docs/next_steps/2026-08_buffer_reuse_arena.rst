@@ -58,9 +58,9 @@ close to fixed, but memory *materialization* is proportional to the touched
 size. ``malloc(400 MB)`` mostly reserves a virtual-address range; physical
 pages are attached lazily on first access (demand paging):
 
-1. the kernel writes into a fresh page;
+1. the operator kernel writes into a fresh page;
 2. the CPU raises a minor page fault;
-3. the kernel allocates a physical page and zeroes it;
+3. the OS kernel allocates a physical page and zeroes it;
 4. the page table is updated and execution resumes.
 
 For 400 MB this is roughly 100000 four-kilobyte pages faulted, attributed and

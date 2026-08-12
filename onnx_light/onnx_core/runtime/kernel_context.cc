@@ -4,6 +4,7 @@
 
 #include "onnx_core/runtime/kernel_context.h"
 
+#include "onnx_core/runtime/kernel_tuning.h"
 #include "onnx_light_helpers.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -13,6 +14,12 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 // dispatch-registered kernel overrides this.
 void KernelBase::Run(RuntimeContext & /*rt*/) {
   EXT_THROW_INVALID("KernelBase::Run: this kernel does not implement Run().");
+}
+
+KernelTuningKey KernelBase::TuningKey(int32_t) const { return {}; }
+
+void KernelBase::Configure(const KernelTuningParameters &) {
+  EXT_THROW_INVALID("KernelBase::Configure is not implemented for this tunable kernel.");
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -32,6 +32,8 @@ using ::onnx_light::core::runtime::RawBufferAllocator;
 // reference, so a forward declaration is sufficient and avoids a circular
 // include (``runtime_context.h`` includes this header).
 class RuntimeContext;
+struct KernelTuningKey;
+struct KernelTuningParameters;
 
 /**
  * Lightweight opset identifier used by the backend test library.
@@ -126,6 +128,24 @@ public:
   /// writes the outputs back. Safe to call repeatedly. The default throws;
   /// every dispatch-registered kernel overrides it.
   virtual void Run(RuntimeContext &rt);
+
+  /**
+   * Returns the tuning key for this implementation and ``element_type``.
+   *
+   * The default returns an undefined key, indicating that the kernel has no
+   * tuning schema. Tunable kernels override this together with
+   * :cpp:func:`Configure`.
+   */
+  virtual KernelTuningKey TuningKey(int32_t element_type) const;
+
+  /**
+   * Validates and copies resolved parameters into this kernel's typed,
+   * immutable configuration.
+   *
+   * Called at most once, while a :cpp:class:`RuntimeSession` initializes the
+   * kernel and before its first :cpp:func:`Run`.
+   */
+  virtual void Configure(const KernelTuningParameters &parameters);
 
 protected:
   KernelContext ctx_;

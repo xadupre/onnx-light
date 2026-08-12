@@ -515,11 +515,15 @@ Implementation order
 ++++++++++++++++++++
 
 1. Add ``CpuDescriptor`` detection and stable processor matching in
-   ``onnx_core``.
+   ``onnx_core`` (`PR #4367
+   <https://github.com/xadupre/onnx-light/pull/4367>`_).
 2. Add tuning keys, named parameter sets, validation hooks, and hard-coded
-   portable defaults for every tunable value.
-3. Add ``LoadKernelTuningCache`` and immutable profile publication.
-4. Resolve an immutable profile while ``RuntimeSession`` initializes a kernel.
+   portable defaults for every tunable value (`PR #4380
+   <https://github.com/xadupre/onnx-light/pull/4380>`_).
+3. Add ``LoadKernelTuningCache`` and immutable profile publication (`PR #4390
+   <https://github.com/xadupre/onnx-light/pull/4390>`_).
+4. Resolve an immutable profile while ``RuntimeSession`` initializes a kernel
+   (implemented).
 5. Migrate ``Abs`` algorithm and parallel grains to typed tuning parameters.
 6. Migrate ``Gemm`` tiling, packing, task, and conversion thresholds.
 7. Add exact, processor-list, and instruction-set profile registration.

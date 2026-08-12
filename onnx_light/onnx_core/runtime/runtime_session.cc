@@ -134,6 +134,36 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
     prepared.key = domain + ":" + op_type;
     prepared.instance = ResolveNodeKernel(node, rt, domain, op_type);
   }
+
+  // Capture exactly one immutable registry generation after all factories have
+  // run, then configure every tunable kernel from that generation.
+  tuning_snapshot_ = GetKernelTuningRegistry().Snapshot();
+  for (const ExecuteAction &action : plan_.actions()) {
+    if (action.kind() != ExecuteActionKind::kExecuteNode) {
+      continue;
+    }
+    const size_t index = action.node_index();
+    const NodeProto &node = *nodes[index];
+    int32_t element_type = static_cast<int32_t>(DataType::UNDEFINED);
+    for (int input_index = 0; input_index < node.input_size(); ++input_index) {
+      const std::string &input = node.input(input_index);
+      if (!input.empty() && rt.Has(input)) {
+        element_type = rt.Get(input).data_type;
+        break;
+      }
+    }
+
+    PreparedKernel &prepared = kernels_[index];
+    const KernelTuningKey tuning_key = prepared.instance->TuningKey(element_type);
+    if (tuning_key.device == Device::kUndefined) {
+      continue;
+    }
+    const KernelTuningParameters *parameters = tuning_snapshot_->Find(tuning_key);
+    if (parameters != nullptr) {
+      prepared.instance->Configure(*parameters);
+    }
+  }
+
   // Record the external inputs the scheduled nodes read (names not produced by
   // any node in the plan, including values captured by subgraph attributes) so
   // :cpp:func:`Run` can verify the RuntimeContext supplies them before it

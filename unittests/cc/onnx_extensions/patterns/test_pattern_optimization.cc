@@ -3,10 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/builder/graph_builder_pattern_optimization.h"
-#include "onnx_core/builder/patterns/cast_cast_pattern.h"
+#include "onnx_core/builder/pattern_registry.h"
+#include "onnx_extensions/patterns/cast_cast_pattern.h"
+#include "onnx_extensions/patterns/dispatch_table.h"
 
 #include "onnx_helper.h"
 #include "onnx_op/operator_sets.h"
+
+#include <algorithm>
+#include <memory>
 
 #include <gtest/gtest.h>
 
@@ -47,7 +52,7 @@ TEST(PatternOptimization, CastCastCollapsesRedundantOuterCast) {
   builder.MakeOutput("y");
 
   core::builder::GraphBuilderPatternOptimization optimizer(builder);
-  core::builder::CastCastPattern pattern;
+  onnx_patterns::CastCastPattern pattern;
   EXPECT_EQ(pattern.priority, 1);
   EXPECT_EQ(pattern.FastOpType(), std::set<std::string>({"Cast"}));
 
@@ -67,7 +72,7 @@ TEST(PatternOptimization, CastCastCollapsesRedundantOuterCast) {
 }
 
 TEST(PatternOptimization, AcceptsCustomPriority) {
-  core::builder::CastCastPattern pattern(3);
+  onnx_patterns::CastCastPattern pattern(3);
   EXPECT_EQ(pattern.priority, 3);
 }
 
@@ -79,7 +84,7 @@ TEST(PatternOptimization, CastCastUsesIdentityForSafeRoundTrip) {
   builder.MakeOutput("y");
 
   core::builder::GraphBuilderPatternOptimization optimizer(builder);
-  core::builder::CastCastPattern pattern;
+  onnx_patterns::CastCastPattern pattern;
   const core::builder::MatchResult match = pattern.Match(optimizer, builder.Nodes()[1]);
   ASSERT_EQ(match.pattern, &pattern);
 
@@ -99,7 +104,7 @@ TEST(PatternOptimization, CastCastKeepsSharedInnerCast) {
   builder.MakeOutput("other");
 
   core::builder::GraphBuilderPatternOptimization optimizer(builder);
-  core::builder::CastCastPattern pattern;
+  onnx_patterns::CastCastPattern pattern;
   const core::builder::MatchResult match = pattern.Match(optimizer, builder.Nodes()[1]);
   ASSERT_EQ(match.pattern, &pattern);
   EXPECT_EQ(match.insert_at, nullptr);
@@ -118,10 +123,26 @@ TEST(PatternOptimization, CastCastRejectsLossyRoundTrip) {
   builder.MakeOutput("y");
 
   core::builder::GraphBuilderPatternOptimization optimizer(builder);
-  core::builder::CastCastPattern pattern;
+  onnx_patterns::CastCastPattern pattern;
   const core::builder::MatchResult match = pattern.Match(optimizer, builder.Nodes()[1]);
   EXPECT_EQ(match.pattern, nullptr);
   EXPECT_TRUE(match.nodes.empty());
+}
+
+TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
+  onnx_patterns::RegisterPatterns();
+  const std::vector<std::string> names = core::builder::RegisteredPatternNames();
+  EXPECT_EQ(std::count(names.begin(), names.end(), "CastCast"), 1);
+
+  onnx_patterns::RegisterPatterns();
+  EXPECT_EQ(core::builder::RegisteredPatternNames(), names);
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns =
+      core::builder::CreateRegisteredPatterns();
+  const bool found = std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
+    return dynamic_cast<onnx_patterns::CastCastPattern *>(pattern.get()) != nullptr;
+  });
+  EXPECT_TRUE(found);
 }
 
 } // namespace Test

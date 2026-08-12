@@ -2,13 +2,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/builder/patterns/cast_cast_pattern.h"
+#include "onnx_extensions/patterns/cast_cast_pattern.h"
 
 #include "onnx_core/builder/graph_builder_pattern_optimization.h"
 #include "onnx_proto/onnx_helper.h"
-namespace ONNX_LIGHT_NAMESPACE::core::builder {
+
+namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
 namespace {
+
+using core::builder::BuilderError;
+using core::builder::GraphGraph;
+using core::symbolic::TensorType;
 
 bool IsDefaultCast(const NodeProto &node) {
   return node.op_type().value() == "Cast" &&
@@ -21,7 +26,7 @@ bool CastTarget(const NodeProto &node, TensorType &type) {
   if (attribute == nullptr || attribute->type() != AttributeProto::AttributeType::INT) {
     return false;
   }
-  type = symbolic::DataTypeToTensorType(static_cast<TensorProto::DataType>(attribute->i()));
+  type = core::symbolic::DataTypeToTensorType(static_cast<TensorProto::DataType>(attribute->i()));
   return type != TensorType::kUndefined;
 }
 
@@ -52,8 +57,9 @@ TensorType CastCastPattern::OneCastType(TensorType input_type, TensorType middle
   return TensorType::kUndefined;
 }
 
-MatchResult CastCastPattern::Match(GraphBuilderPatternOptimization &opt,
-                                   const NodeProto &candidate) const {
+core::builder::MatchResult
+CastCastPattern::Match(core::builder::GraphBuilderPatternOptimization &opt,
+                       const NodeProto &candidate) const {
   const GraphGraph &graph = opt.Graph();
   if (!IsDefaultCast(candidate)) {
     return {};
@@ -70,13 +76,14 @@ MatchResult CastCastPattern::Match(GraphBuilderPatternOptimization &opt,
           TensorType::kUndefined) {
     return {};
   }
-  return MatchResult{this,
-                     {inner, &candidate},
-                     graph.IsUsedMoreThanOnce(inner->output()[0].value()) ? nullptr : &candidate};
+  return core::builder::MatchResult{
+      this,
+      {inner, &candidate},
+      graph.IsUsedMoreThanOnce(inner->output()[0].value()) ? nullptr : &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
-CastCastPattern::Apply(GraphBuilderPatternOptimization &opt,
+CastCastPattern::Apply(core::builder::GraphBuilderPatternOptimization &opt,
                        const std::vector<const NodeProto *> &nodes) const {
   if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr ||
       !IsDefaultCast(*nodes[0]) || !IsDefaultCast(*nodes[1])) {
@@ -106,11 +113,12 @@ CastCastPattern::Apply(GraphBuilderPatternOptimization &opt,
       MakeNode(replacement_type == input_type ? "Identity" : "Cast", {inner.input()[0].value()},
                {outer.output()[0].value()}, "", "CastCastPattern");
   if (replacement_type != input_type) {
-    AddAttribute<int64_t>(replacement, "to",
-                          static_cast<int64_t>(symbolic::TensorTypeToDataType(replacement_type)));
+    AddAttribute<int64_t>(
+        replacement, "to",
+        static_cast<int64_t>(core::symbolic::TensorTypeToDataType(replacement_type)));
   }
   replacements.add() = std::move(replacement);
   return replacements;
 }
 
-} // namespace ONNX_LIGHT_NAMESPACE::core::builder
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_patterns

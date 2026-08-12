@@ -5,6 +5,7 @@
 #include "onnx_lib/shape_inference/implementation.h"
 
 #include <algorithm>
+#include <cassert>
 #include <fstream>
 #include <list>
 #include <string>
@@ -463,7 +464,8 @@ public:
     auto domain_version = dit->second;
     const auto *const schema = schema_registry->GetSchema(n.op_type(), domain_version, n.domain());
     InferenceContextImpl ctx(n, value_types_by_name, input_data_by_name, input_sparse_data_by_name,
-                             options, generated_shape_data_by_name, &graph_inference_context);
+                             options, generated_shape_data_by_name, &graph_inference_context,
+                             &unbound_value_names);
 
     ONNX_TRY {
       if (schema) {
@@ -602,6 +604,12 @@ public:
   }
 
   void Process(const FunctionProto &func_proto, InferenceContext &ctx) {
+    // This method processes a single function-body invocation. A fresh ShapeInferenceImplBase
+    // instance is created for each such invocation, so unbound_value_names must still be in its
+    // initial, empty state at this point (it is populated below, exclusively for the formal
+    // parameters of this invocation's own callee).
+    assert(unbound_value_names.empty());
+
     // Ensure Constant node tensor-attributes are copied
     bool old_reuse_constant_tensors = reuse_constant_tensors;
     reuse_constant_tensors = false;
@@ -613,8 +621,13 @@ public:
     types_cache.resize(num_func_inputs);
     for (int i = 0; i < num_func_inputs; ++i) {
       const auto &parameter_name = func_proto.input().Get(i);
-      const auto *const type_ptr = (i < num_actual_inputs) ? ctx.getInputType(i) : nullptr;
-      // nullptr is valid, and indicates a missing optional input
+      // A formal parameter is considered "provided" by the caller only if the caller's own
+      // hasInput() reports it as present. This correctly distinguishes a genuinely omitted
+      // optional argument (recorded in unbound_value_names, below) from an argument that is
+      // provided but whose type happens to be unknown (nullptr is valid here, and simply
+      // indicates that the type could not be determined).
+      const bool caller_has_input = (i < num_actual_inputs) && ctx.hasInput(i);
+      const auto *const type_ptr = caller_has_input ? ctx.getInputType(i) : nullptr;
       if (type_ptr != nullptr) {
         // Use a temporary copy of original type.
         // TODO(ONNX): investigate whether we can eliminate use of temporary copy
@@ -622,6 +635,11 @@ public:
         value_types_by_name[parameter_name] = &types_cache[i];
       } else {
         value_types_by_name[parameter_name] = nullptr;
+      }
+      if (!caller_has_input) {
+        // unbound_value_names starts out empty (see assert above) and each parameter_name is
+        // visited at most once (function inputs have unique names), so a plain insert suffices.
+        unbound_value_names.insert(std::string(parameter_name));
       }
     }
 
@@ -746,6 +764,17 @@ private:
   // reuse_constant_tensors: controls whether we need to copy tensors occurring as attributes
   // in Constant nodes. We avoid it for inference for graphs, but must make a copy for functions.
   bool reuse_constant_tensors = true;
+
+  // Names of function-formal-parameters that were not provided (structurally) by the caller of
+  // the function currently being processed (empty when processing a top-level graph). A function
+  // body's nodes reference formal parameters by name unconditionally, so hasInput()/hasOutput(),
+  // which check structural presence in the NodeProto, cannot by themselves distinguish "argument
+  // genuinely omitted by the caller" from "argument provided but its type happens to be unknown".
+  // This set lets InferenceContextImpl::hasInput() correctly report false for the former case,
+  // while still reporting true (with a null type) for the latter.
+  //
+  // Populated exactly once, by Process(const FunctionProto&, ...), starting from empty.
+  std::unordered_set<std::string> unbound_value_names;
 };
 
 void InferShapesImpl(
@@ -871,6 +900,12 @@ void InferShapeForFunctionNode(
 
 namespace {
 
+// Note: input_types plays a dual role for this context: an entry with
+// value_case() == TypeProto::ValueCase::VALUE_NOT_SET indicates that the corresponding
+// (optional) input is absent, while any other value indicates that the input is present
+// with that type. Consequently, hasInput() (inherited, unmodified, from the base
+// InferenceContext) cannot distinguish an input that is present but has an unknown type
+// from one that is simply absent -- both are represented identically here.
 struct FunctionInferenceContext : public InferenceContext {
   FunctionInferenceContext(const FunctionProto &func_proto,
                            const utils::RepeatedProtoField<TypeProto> &input_types,
@@ -961,6 +996,9 @@ utils::RepeatedProtoField<TypeProto>
 InferFunctionOutputTypes(const FunctionProto &function_proto,
                          const utils::RepeatedProtoField<TypeProto> &input_types,
                          const std::vector<AttributeProto> &attributes) {
+  // See the doc-comment on the declaration (in implementation.h) for a description of the dual
+  // role played by input_types: it indicates both which inputs are present/absent and, for
+  // those that are present, their types.
   // TODO(ONNX): if it is desirable for infer_function_output_types to provide check_type,
   // strict_mode, data_prop, we can add them to the Python API. For now we just assume the default
   // options.

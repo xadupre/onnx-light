@@ -4,7 +4,6 @@
 
 #include "onnx_core/runtime/kernel_tuning.h"
 
-#include <atomic>
 #include <cctype>
 #include <mutex>
 #include <stdexcept>
@@ -193,17 +192,17 @@ void KernelTuningRegistry::RegisterSchema(KernelTuningSchema schema) {
                                 KeyDescription(shared_schema->key()) + "'.");
   }
 
-  auto current = std::atomic_load(&impl_->state);
+  auto current = impl_->state;
   auto next = std::make_shared<KernelTuningRegistrySnapshot::State>(*current);
   ++next->generation;
   next->profiles.emplace(shared_schema->key(), shared_schema->portable_defaults());
   impl_->schemas.emplace(shared_schema->key(), std::move(shared_schema));
-  std::shared_ptr<const KernelTuningRegistrySnapshot::State> published = std::move(next);
-  std::atomic_store(&impl_->state, std::move(published));
+  impl_->state = std::move(next);
 }
 
 KernelTuningRegistrySnapshot KernelTuningRegistry::Snapshot() const noexcept {
-  return KernelTuningRegistrySnapshot(std::atomic_load(&impl_->state));
+  std::lock_guard lock(impl_->mutex);
+  return KernelTuningRegistrySnapshot(impl_->state);
 }
 
 void KernelTuningRegistry::PublishProfiles(std::span<const KernelTuningParameters> profiles,
@@ -224,7 +223,7 @@ void KernelTuningRegistry::PublishProfiles(std::span<const KernelTuningParameter
     schema->second->Validate(profile);
   }
 
-  auto current = std::atomic_load(&impl_->state);
+  auto current = impl_->state;
   auto next = std::make_shared<KernelTuningRegistrySnapshot::State>(*current);
   for (const KernelTuningKey &key : reset_keys) {
     next->profiles[key] = impl_->schemas.at(key)->portable_defaults();
@@ -233,8 +232,7 @@ void KernelTuningRegistry::PublishProfiles(std::span<const KernelTuningParameter
     next->profiles[profile.key] = profile;
   }
   ++next->generation;
-  std::shared_ptr<const KernelTuningRegistrySnapshot::State> published = std::move(next);
-  std::atomic_store(&impl_->state, std::move(published));
+  impl_->state = std::move(next);
 }
 
 std::vector<KernelTuningKey> KernelTuningRegistry::RegisteredKeys() const {

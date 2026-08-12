@@ -629,7 +629,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "session owns (the concrete kernels actually dispatched, e.g. "
           "``'onnx_kernels:CPU:ai.onnx:Abs'``), resolving them once against ``rt`` if "
           "they have not been initialized yet. Kernels used inside nested control-flow "
-          "subgraphs and model-local function bodies are included. The names are in "
+          "subgraphs are included. The names are in "
           "first-seen order without duplicates.");
 
   // RuntimeParameters — model-independent execution knobs (parallelism, ...).

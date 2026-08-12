@@ -192,9 +192,8 @@ public:
   /// ``rt`` (exactly as the first :cpp:func:`Run` would), so a node overridden
   /// by a model-local function or a custom kernel reports that kernel's
   /// identity. Kernels used inside nested control-flow subgraphs (the sessions
-  /// owned by ``If`` / ``Loop`` / ``Scan`` handlers and model-local function
-  /// adapters) are included via their kernels'
-  /// :cpp:func:`KernelBase::CollectUsedKernels`. The result preserves
+  /// owned by ``If`` / ``Loop`` / ``Scan`` handlers) are included via their
+  /// kernels' :cpp:func:`KernelBase::CollectUsedKernels`. The result preserves
   /// first-seen order and contains no duplicates.
   ///
   /// @param rt Runtime context used to resolve the kernels when they are not

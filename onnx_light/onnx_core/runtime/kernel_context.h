@@ -146,12 +146,12 @@ public:
   /// skipping any already present in ``seen``. The default records this
   /// kernel's own :cpp:func:`kernel_name` (falling back to nothing when the
   /// kernel was constructed outside the dispatch path and has no name).
-  /// Kernels that own nested sessions (the control-flow handlers and the
-  /// model-local function adapter) override this to also recurse into the
-  /// subgraph kernels they instantiated, resolving them against ``rt`` the same
-  /// way :cpp:func:`RuntimeSession::UsedKernels` does. This is how nested
-  /// control-flow subgraphs (``If`` / ``Loop`` / ``Scan`` bodies) contribute
-  /// their kernels to :cpp:func:`RuntimeSession::UsedKernels`.
+  /// Control-flow kernels (``If`` / ``Loop`` / ``Scan`` / ``SequenceMap``)
+  /// override this to also recurse into the subgraph kernels their owned
+  /// sessions instantiated, resolving them against ``rt`` the same way
+  /// :cpp:func:`RuntimeSession::UsedKernels` does. This is how nested
+  /// control-flow subgraphs contribute their kernels to
+  /// :cpp:func:`RuntimeSession::UsedKernels`.
   virtual void CollectUsedKernels(RuntimeContext &rt, std::vector<std::string> &out,
                                   std::unordered_set<std::string> &seen) const;
 

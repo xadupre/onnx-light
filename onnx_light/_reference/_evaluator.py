@@ -651,8 +651,9 @@ class ReferenceEvaluator:
         function, read from the per-node kernel instances the session owns (so a
         node overridden by a model-local function or a custom kernel reports that
         kernel, not the plain operator). Kernels used inside nested control-flow
-        subgraphs (the bodies of nodes such as ``If``, ``Loop`` or ``Scan``) and
-        model-local function bodies are included.
+        subgraphs (the bodies of nodes such as ``If``, ``Loop`` or ``Scan``) are
+        included; a node calling a model-local function reports the
+        model-local-function kernel's identity.
 
         Returns:
             A set with the kernel identity strings (e.g.

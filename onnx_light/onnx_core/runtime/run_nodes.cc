@@ -831,9 +831,9 @@ namespace detail {
 namespace {
 
 // Appends the kernel identity strings in ``extra`` to ``out``, skipping any
-// already recorded in ``seen``. Used by the control-flow / model-local function
-// kernels to fold the kernels their owned subgraph sessions report into the
-// caller's deduplicated, first-seen-ordered list.
+// already recorded in ``seen``. Used by the control-flow kernels to fold the
+// kernels their owned subgraph sessions report into the caller's deduplicated,
+// first-seen-ordered list.
 void MergeUsedKernels(const std::vector<std::string> &extra, std::vector<std::string> &out,
                       std::unordered_set<std::string> &seen) {
   for (const std::string &name : extra) {
@@ -924,16 +924,6 @@ public:
       result.name = caller_name;
       rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
     }
-  }
-
-  void CollectUsedKernels(RuntimeContext &rt, std::vector<std::string> &out,
-                          std::unordered_set<std::string> &seen) const override {
-    KernelBase::CollectUsedKernels(rt, out, seen);
-    // Report the kernels the bound function body would instantiate. A fresh
-    // session over the already-bound plan resolves them the same way the run
-    // path does, so the caller sees the body's kernels too.
-    RuntimeSession body_session(*plan_);
-    MergeUsedKernels(body_session.UsedKernels(rt), out, seen);
   }
 
 private:

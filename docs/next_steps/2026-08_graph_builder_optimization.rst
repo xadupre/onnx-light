@@ -253,6 +253,55 @@ retained node pointers and replacement fields into a new
 ``utils::RepeatedProtoField<NodeProto>`` before replacing the old field, so no
 ``NodeProto`` needs a deep copy.
 
+Rewrites as data: ``LocalRewriting`` and replay
++++++++++++++++++++++++++++++++++++++++++++++++
+
+A ``MatchResult`` only describes a match in terms of the transient
+``const NodeProto *`` pointers of one ``GraphGraph``; those pointers become
+invalid as soon as the builder node field is rebuilt. To make rewrites
+reusable, ``optimize`` is refactored so that it returns the list of applied
+matches instead of only mutating the builder in place:
+
+.. code-block:: cpp
+
+    std::vector<MatchResult>
+    GraphBuilderPatternOptimization::Optimize(...);
+
+Each applied ``MatchResult`` is converted into a self-contained
+``LocalRewriting`` object. A ``LocalRewriting`` no longer refers to live node
+pointers: it records, by value name and node content, which nodes a rewrite
+removes and which nodes (and initializers) it adds. It therefore survives the
+index rebuild and can be serialized, logged, or stored:
+
+.. code-block:: cpp
+
+    struct LocalRewriting {
+      std::string pattern;                        // pattern that produced it
+      std::vector<std::string> removed_nodes;     // outputs of removed nodes
+      utils::RepeatedProtoField<NodeProto> added_nodes;   // replacement nodes
+      std::size_t insert_at = 0;                  // position of the first match
+    };
+
+Because a pattern never reuses an existing name, a ``LocalRewriting`` is fully
+determined by the names it consumes and the new names it produces, so it does
+not depend on the order in which other rewrites are applied within the same
+iteration.
+
+Given a ``ModelProto`` and an ordered list of ``LocalRewriting``, the final
+optimized graph can be reconstructed by replaying the rewrites, without
+re-running the matching phase:
+
+.. code-block:: cpp
+
+    GraphProto Replay(const ModelProto &model,
+                      const std::vector<LocalRewriting> &rewrites);
+
+Replay applies each ``LocalRewriting`` in order: it drops the removed nodes and
+splices the added nodes in at ``insert_at``, then runs the same cleanup passes
+as the live loop. This gives a cheap, deterministic way to cache and reproduce
+an optimization, to audit exactly which rewrites fired, and to apply a captured
+sequence to a fresh ``ModelProto`` without paying the cost of matching again.
+
 Cleanup and convergence
 ++++++++++++++++++++++++
 
@@ -295,6 +344,26 @@ instances, elapsed time). The records are returned from ``Optimize`` so callers
 can profile which patterns fire and how long each phase takes, as the Python
 ``statistics`` list does.
 
+Logging and phase timing
+++++++++++++++++++++++++
+
+At the very end of ``Optimize``, the collected records are summarized into a
+report the user can print. The report breaks the total time down per phase, so
+a caller can tell how long was spent:
+
+* matching candidate nodes against the registered patterns;
+* rewriting, that is applying the matches and rebuilding the node field;
+* removing dead-end branches and other cleanup
+  (``RemoveDuplicateNodes``, ``RemoveIdentityNodes``, ``RemoveUnusedNodes``);
+* constant folding of all-constant rewrites;
+* optimizing subgraphs of control-flow nodes.
+
+Each ``LocalRewriting`` also carries the pattern name and its own match/apply
+durations, so the summary can attribute time both per phase and per pattern.
+The report is returned alongside the rewrites and is opt-in: it is only
+assembled when the caller asks for it, keeping the hot loop free of formatting
+work.
+
 Implementation order
 ++++++++++++++++++++
 
@@ -307,9 +376,14 @@ Implementation order
    concrete pattern out of ``onnx_core``, and add the explicit core registry
    plus ``onnx_patterns::RegisterPatterns``.
 4. Implement the match/apply loop and wire in the existing cleanup passes.
-5. Add constant folding of all-constant rewrites.
-6. Extend to subgraphs and add the statistics output.
-7. Document the core/extension boundary, registration and selection APIs,
+5. Refactor ``Optimize`` to return the list of applied ``MatchResult``, add the
+   ``LocalRewriting`` representation, and add ``Replay`` so a captured list of
+   rewrites reconstructs the final graph from a ``ModelProto``.
+6. Add logging with per-phase timing (match, rewrite, dead-branch removal,
+   constant folding, subgraph optimization) reported at the end of ``Optimize``.
+7. Add constant folding of all-constant rewrites.
+8. Extend to subgraphs and add the statistics output.
+9. Document the core/extension boundary, registration and selection APIs,
    linking requirements, and a custom-pattern example.
-8. Port the pattern library incrementally, one pattern per change, each with a
-   C++ test that checks the rewritten graph against the expected one.
+10. Port the pattern library incrementally, one pattern per change, each with a
+    C++ test that checks the rewritten graph against the expected one.

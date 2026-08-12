@@ -29,6 +29,12 @@ int &CloseCounter() {
 
 void CountClose(int value) { CloseCounter() += value; }
 
+struct CountCloseTraits {
+  using type = int;
+  static constexpr int invalid() { return -1; }
+  static void close(int value) { CountClose(value); }
+};
+
 } // namespace
 
 TEST(onnx_common, NamespaceAliases) {
@@ -98,14 +104,14 @@ TEST(onnx_common, PathScopedResourceAndEndianHelpers) {
 
   CloseCounter() = 0;
   {
-    ONNX_LIGHT_NAMESPACE::ScopedResource<-1, CountClose> scoped(3);
+    ONNX_LIGHT_NAMESPACE::ScopedResource<CountCloseTraits> scoped(3);
     EXPECT_EQ(scoped.get(), 3);
     EXPECT_EQ(scoped.release(), 3);
     EXPECT_EQ(CloseCounter(), 0);
   }
   EXPECT_EQ(CloseCounter(), 0);
   {
-    ONNX_LIGHT_NAMESPACE::ScopedResource<-1, CountClose> scoped(4);
+    ONNX_LIGHT_NAMESPACE::ScopedResource<CountCloseTraits> scoped(4);
     EXPECT_EQ(scoped.get(), 4);
   }
   EXPECT_EQ(CloseCounter(), 4);

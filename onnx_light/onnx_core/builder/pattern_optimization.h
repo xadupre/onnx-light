@@ -12,7 +12,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
-class GraphBuilderPatternOptimization;
+class GraphGraph;
 class PatternOptimization;
 
 /// Describes one subgraph recognized by an optimization pattern.
@@ -37,13 +37,11 @@ public:
   virtual std::set<std::string> FastOpType() const { return {}; }
 
   /// Returns the match rooted at ``candidate``. A null pattern means no match.
-  virtual MatchResult Match(GraphBuilderPatternOptimization &opt,
-                            const NodeProto &candidate) const = 0;
+  virtual MatchResult Match(GraphGraph &graph, const NodeProto &candidate) const = 0;
 
   /// Builds the replacement nodes for one match.
   virtual utils::RepeatedProtoField<NodeProto>
-  Apply(GraphBuilderPatternOptimization &opt,
-        const std::vector<const NodeProto *> &nodes) const = 0;
+  Apply(GraphGraph &graph, const std::vector<const NodeProto *> &nodes) const = 0;
 
   /// Priority used by the optimization driver.
   int priority;

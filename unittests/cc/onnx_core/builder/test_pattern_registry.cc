@@ -15,14 +15,12 @@ namespace {
 
 class CustomPattern final : public core::builder::PatternOptimization {
 public:
-  core::builder::MatchResult Match(core::builder::GraphBuilderPatternOptimization &,
-                                   const NodeProto &) const override {
+  core::builder::MatchResult Match(core::builder::GraphGraph &, const NodeProto &) const override {
     return {};
   }
 
   utils::RepeatedProtoField<NodeProto>
-  Apply(core::builder::GraphBuilderPatternOptimization &,
-        const std::vector<const NodeProto *> &) const override {
+  Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &) const override {
     return utils::RepeatedProtoField<NodeProto>();
   }
 };

@@ -19,12 +19,12 @@ public:
   std::set<std::string> FastOpType() const override;
 
   /// Finds a safe consecutive-Cast rewrite rooted at ``candidate``.
-  core::builder::MatchResult Match(core::builder::GraphBuilderPatternOptimization &opt,
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;
 
   /// Replaces a matched Cast pair with one Cast or Identity node.
   utils::RepeatedProtoField<NodeProto>
-  Apply(core::builder::GraphBuilderPatternOptimization &opt,
+  Apply(core::builder::GraphGraph &graph,
         const std::vector<const NodeProto *> &nodes) const override;
 
 private:

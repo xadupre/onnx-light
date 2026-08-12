@@ -67,7 +67,6 @@ using ::onnx_light::core::symbolic::TensorType;
 /// Read-only index over a :cpp:class:`GraphBuilder` used by the pattern
 /// optimizer (declared in ``graph_graph.h``).
 class GraphGraph;
-class GraphBuilderPatternOptimization;
 
 /// Selects which ONNX proto :cpp:func:`GraphBuilder::ToOnnx` produces.
 enum class ProtoKind {
@@ -143,7 +142,6 @@ public:
   // subgraph-reference helpers (ReferencedSubgraphs / CollectImplicitInputs)
   // to compute the set of values captured by nested subgraphs.
   friend class GraphGraph;
-  friend class GraphBuilderPatternOptimization;
 
   /// Signature of the optional callback used to resolve the versioned schema
   /// history of an operator. Given an ``op_type`` it returns every

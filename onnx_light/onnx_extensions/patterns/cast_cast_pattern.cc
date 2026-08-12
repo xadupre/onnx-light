@@ -4,7 +4,7 @@
 
 #include "onnx_extensions/patterns/cast_cast_pattern.h"
 
-#include "onnx_core/builder/graph_builder_pattern_optimization.h"
+#include "onnx_core/builder/graph_graph.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
@@ -57,10 +57,8 @@ TensorType CastCastPattern::OneCastType(TensorType input_type, TensorType middle
   return TensorType::kUndefined;
 }
 
-core::builder::MatchResult
-CastCastPattern::Match(core::builder::GraphBuilderPatternOptimization &opt,
-                       const NodeProto &candidate) const {
-  const GraphGraph &graph = opt.Graph();
+core::builder::MatchResult CastCastPattern::Match(core::builder::GraphGraph &graph,
+                                                  const NodeProto &candidate) const {
   if (!IsDefaultCast(candidate)) {
     return {};
   }
@@ -83,7 +81,7 @@ CastCastPattern::Match(core::builder::GraphBuilderPatternOptimization &opt,
 }
 
 utils::RepeatedProtoField<NodeProto>
-CastCastPattern::Apply(core::builder::GraphBuilderPatternOptimization &opt,
+CastCastPattern::Apply(core::builder::GraphGraph &graph,
                        const std::vector<const NodeProto *> &nodes) const {
   if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr ||
       !IsDefaultCast(*nodes[0]) || !IsDefaultCast(*nodes[1])) {
@@ -91,7 +89,6 @@ CastCastPattern::Apply(core::builder::GraphBuilderPatternOptimization &opt,
   }
   const NodeProto &inner = *nodes[0];
   const NodeProto &outer = *nodes[1];
-  const GraphGraph &graph = opt.Graph();
   TensorType middle_type;
   TensorType final_type;
   if (!graph.HasType(inner.input()[0].value()) || !CastTarget(inner, middle_type) ||

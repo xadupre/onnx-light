@@ -1,0 +1,148 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include "onnx_core/symbolic/sym_tensor.h"
+#include "onnx_light_helpers.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <unordered_map>
+#include <variant>
+
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
+
+using symbolic::Device;
+
+/**
+ * Identifies one tunable kernel implementation and element type.
+ *
+ * ``tuning_abi`` must change whenever persisted parameters for the
+ * implementation become incompatible.
+ */
+struct KernelTuningKey {
+  std::string library;
+  std::string kernel;
+  std::string implementation;
+  int32_t element_type = 0;
+  Device device = Device::kUndefined;
+  uint32_t tuning_abi = 0;
+
+  bool operator==(const KernelTuningKey &) const = default;
+};
+
+/** Hashes every field of a :cpp:class:`KernelTuningKey`. */
+struct KernelTuningKeyHash {
+  size_t operator()(const KernelTuningKey &key) const noexcept;
+};
+
+/** Stores one portable scalar tuning value. */
+using TuningValue = std::variant<int64_t, double, bool, std::string>;
+
+/**
+ * Returns the stable type name of a tuning value.
+ *
+ * Returns:
+ *   One of ``"int64"``, ``"double"``, ``"bool"``, or ``"string"``.
+ */
+std::string_view TuningValueTypeName(const TuningValue &value) noexcept;
+
+/** Stores the named values associated with an exact tuning key. */
+struct KernelTuningParameters {
+  KernelTuningKey key;
+  std::unordered_map<std::string, TuningValue> values;
+
+  /** Returns whether a named value is present. */
+  bool Contains(std::string_view name) const;
+
+  /**
+   * Returns a named value with its exact scalar type.
+   *
+   * @throws std::invalid_argument if the name is absent or has another type.
+   *
+   * Returns:
+   *   The requested value.
+   */
+  template <typename T> const T &Get(std::string_view name) const {
+    static_assert(std::is_same_v<T, int64_t> || std::is_same_v<T, double> ||
+                      std::is_same_v<T, bool> || std::is_same_v<T, std::string>,
+                  "T must be one of the TuningValue alternatives.");
+    auto found = values.find(std::string(name));
+    if (found == values.end()) {
+      ThrowMissingValue(name);
+    }
+    const T *value = std::get_if<T>(&found->second);
+    if (value == nullptr) {
+      ThrowWrongType(name, TuningTypeName<T>(), TuningValueTypeName(found->second));
+    }
+    return *value;
+  }
+
+private:
+  template <typename T> static constexpr std::string_view TuningTypeName() {
+    if constexpr (std::is_same_v<T, int64_t>) {
+      return "int64";
+    } else if constexpr (std::is_same_v<T, double>) {
+      return "double";
+    } else if constexpr (std::is_same_v<T, bool>) {
+      return "bool";
+    } else {
+      return "string";
+    }
+  }
+
+  [[noreturn]] static void ThrowMissingValue(std::string_view name);
+  [[noreturn]] static void ThrowWrongType(std::string_view name, std::string_view expected,
+                                          std::string_view actual);
+};
+
+/**
+ * Validates kernel-specific value ranges and relationships.
+ *
+ * A hook throws ``std::invalid_argument`` when the complete parameter set is
+ * invalid. Generic name, key, presence, and type checks run before the hook.
+ */
+using KernelTuningValidationHook = std::function<void(const KernelTuningParameters &)>;
+
+/**
+ * Defines one kernel's portable defaults and validation contract.
+ *
+ * Construction validates the key, names, and portable defaults immediately.
+ * Every subsequently validated parameter set must contain exactly the same
+ * names and scalar types, so no tunable value can exist without a compiled
+ * portable fallback.
+ */
+class KernelTuningSchema {
+public:
+  explicit KernelTuningSchema(KernelTuningParameters portable_defaults,
+                              KernelTuningValidationHook validation_hook = {});
+
+  /** Returns the exact kernel key described by this schema. */
+  const KernelTuningKey &key() const noexcept { return portable_defaults_.key; }
+
+  /** Returns the validated, hard-coded portable parameter set. */
+  const KernelTuningParameters &portable_defaults() const noexcept { return portable_defaults_; }
+
+  /**
+   * Validates a complete parameter set against this schema.
+   *
+   * @throws std::invalid_argument for a mismatched key, unknown or missing
+   * name, wrong scalar type, or a kernel-specific validation failure.
+   */
+  void Validate(const KernelTuningParameters &parameters) const;
+
+private:
+  void ValidateValues(const KernelTuningParameters &parameters) const;
+
+  KernelTuningParameters portable_defaults_;
+  KernelTuningValidationHook validation_hook_;
+};
+
+} // namespace ONNX_LIGHT_NAMESPACE::core::runtime

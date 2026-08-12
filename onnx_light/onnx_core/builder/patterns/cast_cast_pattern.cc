@@ -53,33 +53,27 @@ TensorType CastCastPattern::OneCastType(TensorType input_type, TensorType middle
   return TensorType::kUndefined;
 }
 
-std::vector<MatchResult>
-CastCastPattern::Match(GraphBuilderPatternOptimization &opt,
-                       const std::vector<const NodeProto *> &candidates) const {
-  std::vector<MatchResult> matches;
+MatchResult CastCastPattern::Match(GraphBuilderPatternOptimization &opt,
+                                   const NodeProto &candidate) const {
   const GraphGraph &graph = opt.Graph();
-  for (const NodeProto *outer : candidates) {
-    if (outer == nullptr || !IsDefaultCast(*outer)) {
-      continue;
-    }
-    const NodeProto *inner = graph.NodeBefore(outer->input()[0].value());
-    if (inner == nullptr || !IsDefaultCast(*inner) || !graph.HasType(inner->input()[0].value())) {
-      continue;
-    }
-
-    TensorType middle_type;
-    TensorType final_type;
-    if (!CastTarget(*inner, middle_type) || !CastTarget(*outer, final_type) ||
-        OneCastType(graph.GetType(inner->input()[0].value()), middle_type, final_type) ==
-            TensorType::kUndefined) {
-      continue;
-    }
-    matches.push_back(
-        MatchResult{this,
-                    {inner, outer},
-                    graph.IsUsedMoreThanOnce(inner->output()[0].value()) ? nullptr : outer});
+  if (!IsDefaultCast(candidate)) {
+    return {};
   }
-  return matches;
+  const NodeProto *inner = graph.NodeBefore(candidate.input()[0].value());
+  if (inner == nullptr || !IsDefaultCast(*inner) || !graph.HasType(inner->input()[0].value())) {
+    return {};
+  }
+
+  TensorType middle_type;
+  TensorType final_type;
+  if (!CastTarget(*inner, middle_type) || !CastTarget(candidate, final_type) ||
+      OneCastType(graph.GetType(inner->input()[0].value()), middle_type, final_type) ==
+          TensorType::kUndefined) {
+    return {};
+  }
+  return MatchResult{this,
+                     {inner, &candidate},
+                     graph.IsUsedMoreThanOnce(inner->output()[0].value()) ? nullptr : &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>

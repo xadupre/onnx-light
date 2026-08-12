@@ -15,9 +15,9 @@ public:
   /// Returns ``Cast`` as the only possible root operator.
   std::set<std::string> FastOpType() const override;
 
-  /// Finds safe consecutive-Cast rewrites among ``candidates``.
-  std::vector<MatchResult> Match(GraphBuilderPatternOptimization &opt,
-                                 const std::vector<const NodeProto *> &candidates) const override;
+  /// Finds a safe consecutive-Cast rewrite rooted at ``candidate``.
+  MatchResult Match(GraphBuilderPatternOptimization &opt,
+                    const NodeProto &candidate) const override;
 
   /// Replaces a matched Cast pair with one Cast or Identity node.
   utils::RepeatedProtoField<NodeProto>

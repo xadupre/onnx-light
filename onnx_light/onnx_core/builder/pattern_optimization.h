@@ -33,10 +33,9 @@ public:
   /// Returns operator types from which this pattern can start.
   virtual std::set<std::string> FastOpType() const { return {}; }
 
-  /// Returns every match rooted in the supplied candidate nodes.
-  virtual std::vector<MatchResult>
-  Match(GraphBuilderPatternOptimization &opt,
-        const std::vector<const NodeProto *> &candidates) const = 0;
+  /// Returns the match rooted at ``candidate``. A null pattern means no match.
+  virtual MatchResult Match(GraphBuilderPatternOptimization &opt,
+                            const NodeProto &candidate) const = 0;
 
   /// Builds the replacement nodes for one match.
   virtual utils::RepeatedProtoField<NodeProto>

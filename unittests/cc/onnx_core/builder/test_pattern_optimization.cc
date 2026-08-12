@@ -37,14 +37,6 @@ void AddCast(core::builder::GraphBuilder &builder, const std::string &input,
   builder.MakeNode("Cast", {input}, {output}, "", "", attributes);
 }
 
-std::vector<const NodeProto *> Candidates(const core::builder::GraphBuilder &builder) {
-  std::vector<const NodeProto *> candidates;
-  for (const NodeProto &node : builder.Nodes()) {
-    candidates.push_back(&node);
-  }
-  return candidates;
-}
-
 } // namespace
 
 TEST(PatternOptimization, CastCastCollapsesRedundantOuterCast) {
@@ -58,14 +50,12 @@ TEST(PatternOptimization, CastCastCollapsesRedundantOuterCast) {
   core::builder::CastCastPattern pattern;
   EXPECT_EQ(pattern.FastOpType(), std::set<std::string>({"Cast"}));
 
-  const std::vector<core::builder::MatchResult> matches =
-      pattern.Match(optimizer, Candidates(builder));
-  ASSERT_EQ(matches.size(), 1u);
-  EXPECT_EQ(matches[0].pattern, &pattern);
-  ASSERT_EQ(matches[0].nodes.size(), 2u);
-  EXPECT_EQ(matches[0].insert_at, matches[0].nodes[1]);
+  const core::builder::MatchResult match = pattern.Match(optimizer, builder.Nodes()[1]);
+  EXPECT_EQ(match.pattern, &pattern);
+  ASSERT_EQ(match.nodes.size(), 2u);
+  EXPECT_EQ(match.insert_at, match.nodes[1]);
 
-  utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(optimizer, matches[0].nodes);
+  utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(optimizer, match.nodes);
   ASSERT_EQ(replacements.size(), 1u);
   EXPECT_EQ(replacements[0].op_type().value(), "Cast");
   EXPECT_EQ(replacements[0].input()[0].value(), "x");
@@ -84,11 +74,10 @@ TEST(PatternOptimization, CastCastUsesIdentityForSafeRoundTrip) {
 
   core::builder::GraphBuilderPatternOptimization optimizer(builder);
   core::builder::CastCastPattern pattern;
-  const std::vector<core::builder::MatchResult> matches =
-      pattern.Match(optimizer, Candidates(builder));
-  ASSERT_EQ(matches.size(), 1u);
+  const core::builder::MatchResult match = pattern.Match(optimizer, builder.Nodes()[1]);
+  ASSERT_EQ(match.pattern, &pattern);
 
-  utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(optimizer, matches[0].nodes);
+  utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(optimizer, match.nodes);
   ASSERT_EQ(replacements.size(), 1u);
   EXPECT_EQ(replacements[0].op_type().value(), "Identity");
   EXPECT_TRUE(replacements[0].attribute().empty());
@@ -105,12 +94,11 @@ TEST(PatternOptimization, CastCastKeepsSharedInnerCast) {
 
   core::builder::GraphBuilderPatternOptimization optimizer(builder);
   core::builder::CastCastPattern pattern;
-  const std::vector<core::builder::MatchResult> matches =
-      pattern.Match(optimizer, Candidates(builder));
-  ASSERT_EQ(matches.size(), 1u);
-  EXPECT_EQ(matches[0].insert_at, nullptr);
+  const core::builder::MatchResult match = pattern.Match(optimizer, builder.Nodes()[1]);
+  ASSERT_EQ(match.pattern, &pattern);
+  EXPECT_EQ(match.insert_at, nullptr);
 
-  utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(optimizer, matches[0].nodes);
+  utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(optimizer, match.nodes);
   ASSERT_EQ(replacements.size(), 2u);
   EXPECT_EQ(replacements[0].output()[0].value(), "middle");
   EXPECT_EQ(replacements[1].input()[0].value(), "x");
@@ -125,7 +113,9 @@ TEST(PatternOptimization, CastCastRejectsLossyRoundTrip) {
 
   core::builder::GraphBuilderPatternOptimization optimizer(builder);
   core::builder::CastCastPattern pattern;
-  EXPECT_TRUE(pattern.Match(optimizer, Candidates(builder)).empty());
+  const core::builder::MatchResult match = pattern.Match(optimizer, builder.Nodes()[1]);
+  EXPECT_EQ(match.pattern, nullptr);
+  EXPECT_TRUE(match.nodes.empty());
 }
 
 } // namespace Test

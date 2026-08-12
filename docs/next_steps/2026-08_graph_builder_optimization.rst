@@ -110,22 +110,23 @@ A pattern is a stateless matcher and rewriter. The two Python classes
 
     class PatternOptimization {
     public:
+      explicit PatternOptimization(int priority = 1) : priority(priority) {}
       virtual ~PatternOptimization() = default;
 
       // Fast pre-filter: operator types this pattern can start from.
       virtual std::set<std::string> FastOpType() const { return {}; }
 
-      // Yields every match rooted at a candidate node.
-      virtual std::vector<MatchResult>
+      // Returns the match rooted at a candidate node (empty when none).
+      virtual MatchResult
       Match(GraphBuilderPatternOptimization &opt,
-            const std::vector<const NodeProto *> &candidates) const = 0;
+            const NodeProto &candidate) const = 0;
 
       // Produces the replacement nodes for one match.
       virtual utils::RepeatedProtoField<NodeProto>
       Apply(GraphBuilderPatternOptimization &opt,
             const std::vector<const NodeProto *> &nodes) const = 0;
 
-      int priority = 1;
+      int priority;
     };
 
 ``FastOpType`` lets the driver restrict a pattern to the nodes of one operator

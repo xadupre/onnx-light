@@ -8,6 +8,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <unordered_set>
+#include <vector>
 
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/run_nodes_internal.h"
@@ -140,6 +142,24 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
   // starts executing kernels.
   required_inputs_ = ::ONNX_LIGHT_NAMESPACE::core::graph::CollectExternalInputs(nodes);
   kernels_initialized_ = true;
+}
+
+std::vector<std::string> RuntimeSession::UsedKernels(RuntimeContext &rt) {
+  // Resolve the per-node kernels once (if a previous Run has not already done
+  // so) so the reported names come from the kernel instances the session has
+  // actually allocated, not from a separate re-derivation.
+  if (!kernels_initialized_) {
+    InitializeKernels(rt);
+  }
+  std::vector<std::string> out;
+  std::unordered_set<std::string> seen;
+  for (const PreparedKernel &prepared : kernels_) {
+    if (prepared.instance == nullptr) {
+      continue;
+    }
+    prepared.instance->CollectUsedKernels(rt, out, seen);
+  }
+  return out;
 }
 
 void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const {

@@ -516,21 +516,23 @@ TEST(RunNodes, RunNodeSingleAdd) {
   EXPECT_FLOAT_EQ(got[2], 33.0f);
 }
 
-TEST(RunNodes, CollectUsedKernelNamesReportsInstantiatedKernels) {
+TEST(RunNodes, UsedKernelsReportsInstantiatedKernels) {
   // A bare graph of two elementwise ops reports the concrete kernel class
-  // names actually dispatched for each node, not the raw op_type.
+  // names actually allocated for each node, not the raw op_type.
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   GraphProto graph;
   *graph.add_node() = MakeNode("Abs", {"x"}, {"t"});
   *graph.add_node() = MakeNode("Add", {"t", "z"}, {"y"});
-  const std::vector<std::string> names = core::runtime::CollectUsedKernelNames(graph, rt);
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+  const std::vector<std::string> names = session.UsedKernels(rt);
   EXPECT_EQ(names, std::vector<std::string>(
                        {"onnx_kernels:CPU:ai.onnx:Abs", "onnx_kernels:CPU:ai.onnx:Add"}));
 }
 
-TEST(RunNodes, CollectUsedKernelNamesRecursesIntoSubgraphs) {
-  // An ``If`` node reports the control-flow kernel plus the kernels used by
-  // each branch subgraph, deduplicated and in first-seen order.
+TEST(RunNodes, UsedKernelsRecursesIntoSubgraphs) {
+  // An ``If`` node reports the control-flow kernel plus the kernels the session
+  // allocated for each branch subgraph, deduplicated and in first-seen order.
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   GraphProto then_branch;
   *then_branch.add_node() = MakeNode("Neg", {"x"}, {"ty"});
@@ -551,7 +553,9 @@ TEST(RunNodes, CollectUsedKernelNamesRecursesIntoSubgraphs) {
 
   GraphProto graph;
   *graph.add_node() = std::move(if_node);
-  const std::vector<std::string> names = core::runtime::CollectUsedKernelNames(graph, rt);
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan);
+  const std::vector<std::string> names = session.UsedKernels(rt);
   EXPECT_EQ(names,
             std::vector<std::string>({"onnx_core:CPU:ai.onnx:If", "onnx_kernels:CPU:ai.onnx:Neg",
                                       "onnx_kernels:CPU:ai.onnx:Abs"}));

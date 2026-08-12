@@ -647,27 +647,32 @@ class ReferenceEvaluator:
         """Returns the kernel classes (operator implementations) used by the model.
 
         Each entry is the identity string of a concrete kernel class the
-        C++ runtime would instantiate to execute the backing graph or
-        function, resolved node by node exactly as a run would (so a node
-        overridden by a model-local function or a custom kernel reports that
-        kernel, not the plain operator). Kernels used inside nested
-        control-flow subgraphs (the ``g`` and ``graphs`` attributes of nodes
-        such as ``If``, ``Loop`` or ``Scan``) are included.
+        C++ :class:`RuntimeSession` allocates to execute the backing graph or
+        function, read from the per-node kernel instances the session owns (so a
+        node overridden by a model-local function or a custom kernel reports that
+        kernel, not the plain operator). Kernels used inside nested control-flow
+        subgraphs (the bodies of nodes such as ``If``, ``Loop`` or ``Scan``) and
+        model-local function bodies are included.
 
         Returns:
             A set with the kernel identity strings (e.g.
             ``"onnx_kernels:CPU:ai.onnx:Abs"``) used anywhere in the model,
             subgraphs included.
         """
+        ctx = self._ctx
         if self._model is not None:
-            _runtime.register_model_functions(self._model, self._ctx)
-            return set(_runtime.used_kernels(self._model.graph, self._ctx))
-        # A bare GraphProto / FunctionProto carries no model-local functions,
-        # so (as in :meth:`run`) only the model path registers them.
-        if self._graph is not None:
-            return set(_runtime.used_kernels(self._graph, self._ctx))
-        assert self._function is not None
-        return set(_runtime.used_kernels(self._function, self._ctx))
+            _runtime.register_model_functions(self._model, ctx)
+            graph_or_function: Any = self._model.graph
+        elif self._graph is not None:
+            # A bare GraphProto / FunctionProto carries no model-local functions,
+            # so (as in :meth:`run`) only the model path registers them.
+            graph_or_function = self._graph
+        else:
+            assert self._function is not None
+            graph_or_function = self._function
+        plan = ctx.get_execution_plan(graph_or_function)
+        session = _runtime.RuntimeSession(plan)
+        return set(session.used_kernels(ctx))
 
     # -- evaluation ---------------------------------------------------------
 

@@ -15,7 +15,9 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 
@@ -139,6 +141,19 @@ public:
   /// writes the outputs back. Safe to call repeatedly. The default throws;
   /// every dispatch-registered kernel overrides it.
   virtual void Run(RuntimeContext &rt);
+
+  /// Appends the identity strings of the kernels this instance uses to ``out``,
+  /// skipping any already present in ``seen``. The default records this
+  /// kernel's own :cpp:func:`kernel_name` (falling back to nothing when the
+  /// kernel was constructed outside the dispatch path and has no name).
+  /// Kernels that own nested sessions (the control-flow handlers and the
+  /// model-local function adapter) override this to also recurse into the
+  /// subgraph kernels they instantiated, resolving them against ``rt`` the same
+  /// way :cpp:func:`RuntimeSession::UsedKernels` does. This is how nested
+  /// control-flow subgraphs (``If`` / ``Loop`` / ``Scan`` bodies) contribute
+  /// their kernels to :cpp:func:`RuntimeSession::UsedKernels`.
+  virtual void CollectUsedKernels(RuntimeContext &rt, std::vector<std::string> &out,
+                                  std::unordered_set<std::string> &seen) const;
 
 protected:
   KernelContext ctx_;

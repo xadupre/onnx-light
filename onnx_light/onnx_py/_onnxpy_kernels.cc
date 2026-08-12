@@ -619,7 +619,18 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                    "lines without mutating the context itself.")
       .def_prop_ro("required_inputs", &RuntimeSession::required_inputs,
                    "Returns the external input names the scheduled nodes read. Populated "
-                   "during kernel initialization; empty until the first :func:`run`.");
+                   "during kernel initialization; empty until the first :func:`run`.")
+      .def(
+          "used_kernels",
+          [](RuntimeSession &self, RuntimeContext &rt) { return self.UsedKernels(rt); },
+          nb::arg("rt"),
+          "Returns the identity strings of the kernel instances this session has "
+          "allocated for its scheduled nodes, read from the per-node kernels the "
+          "session owns (the concrete kernels actually dispatched, e.g. "
+          "``'onnx_kernels:CPU:ai.onnx:Abs'``), resolving them once against ``rt`` if "
+          "they have not been initialized yet. Kernels used inside nested control-flow "
+          "subgraphs and model-local function bodies are included. The names are in "
+          "first-seen order without duplicates.");
 
   // RuntimeParameters — model-independent execution knobs (parallelism, ...).
   nb::class_<RuntimeParameters>(
@@ -1018,29 +1029,6 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "once before building ``model.graph``'s :class:`ExecutionPlan` and driving "
       "it through a :class:`RuntimeSession`. Keeps ``model`` alive for at least "
       "as long as ``rt``, since ``rt`` stores non-owning pointers into it.");
-
-  rt_mod.def(
-      "used_kernels",
-      [](const GraphProto &graph, RuntimeContext &rt) {
-        return core::runtime::CollectUsedKernelNames(graph, rt);
-      },
-      nb::arg("graph"), nb::arg("rt"),
-      "Returns the identity strings of the kernel classes that would be "
-      "instantiated to run ``graph``'s nodes, resolving each node against ``rt`` "
-      "the same way a :class:`RuntimeSession` does (honoring model-local "
-      "functions and custom kernels). Nested control-flow subgraphs are "
-      "traversed recursively. The names are the concrete kernels dispatched "
-      "(e.g. ``'onnx_kernels:CPU:ai.onnx:Abs'``), in first-seen order without "
-      "duplicates.");
-
-  rt_mod.def(
-      "used_kernels",
-      [](const FunctionProto &func, RuntimeContext &rt) {
-        return core::runtime::CollectUsedKernelNames(func, rt);
-      },
-      nb::arg("func"), nb::arg("rt"),
-      "``FunctionProto`` overload of :func:`used_kernels`: returns the kernel "
-      "identity strings used by the function body's nodes (subgraphs included).");
 
   rt_mod.def(
       "tensor_from_proto",

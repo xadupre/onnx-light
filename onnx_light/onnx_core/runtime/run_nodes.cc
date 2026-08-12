@@ -830,6 +830,19 @@ namespace detail {
 
 namespace {
 
+// Appends the kernel identity strings in ``extra`` to ``out``, skipping any
+// already recorded in ``seen``. Used by the control-flow / model-local function
+// kernels to fold the kernels their owned subgraph sessions report into the
+// caller's deduplicated, first-seen-ordered list.
+void MergeUsedKernels(const std::vector<std::string> &extra, std::vector<std::string> &out,
+                      std::unordered_set<std::string> &seen) {
+  for (const std::string &name : extra) {
+    if (seen.insert(name).second) {
+      out.push_back(name);
+    }
+  }
+}
+
 // Kernel that dispatches a node to a model-local ``FunctionProto`` body.
 // The bound function (with resolved attribute references) is computed once at
 // construction time, and the execution plan + per-node kernel instances are
@@ -913,6 +926,16 @@ public:
     }
   }
 
+  void CollectUsedKernels(RuntimeContext &rt, std::vector<std::string> &out,
+                          std::unordered_set<std::string> &seen) const override {
+    KernelBase::CollectUsedKernels(rt, out, seen);
+    // Report the kernels the bound function body would instantiate. A fresh
+    // session over the already-bound plan resolves them the same way the run
+    // path does, so the caller sees the body's kernels too.
+    RuntimeSession body_session(*plan_);
+    MergeUsedKernels(body_session.UsedKernels(rt), out, seen);
+  }
+
 private:
   const FunctionProto &func_;
   FunctionProto bound_func_;
@@ -933,6 +956,13 @@ public:
   }
   void Run(RuntimeContext &rt) override { RunIfNode(*node_, rt, *then_session_, *else_session_); }
 
+  void CollectUsedKernels(RuntimeContext &rt, std::vector<std::string> &out,
+                          std::unordered_set<std::string> &seen) const override {
+    KernelBase::CollectUsedKernels(rt, out, seen);
+    MergeUsedKernels(then_session_->UsedKernels(rt), out, seen);
+    MergeUsedKernels(else_session_->UsedKernels(rt), out, seen);
+  }
+
 private:
   std::shared_ptr<SubgraphSession> then_session_;
   std::shared_ptr<SubgraphSession> else_session_;
@@ -947,6 +977,12 @@ public:
   }
   void Run(RuntimeContext &rt) override { RunLoopNode(*node_, rt, *body_session_); }
 
+  void CollectUsedKernels(RuntimeContext &rt, std::vector<std::string> &out,
+                          std::unordered_set<std::string> &seen) const override {
+    KernelBase::CollectUsedKernels(rt, out, seen);
+    MergeUsedKernels(body_session_->UsedKernels(rt), out, seen);
+  }
+
 private:
   std::shared_ptr<SubgraphSession> body_session_;
 };
@@ -960,6 +996,12 @@ public:
   }
   void Run(RuntimeContext &rt) override { RunScanNode(*node_, rt, *body_session_); }
 
+  void CollectUsedKernels(RuntimeContext &rt, std::vector<std::string> &out,
+                          std::unordered_set<std::string> &seen) const override {
+    KernelBase::CollectUsedKernels(rt, out, seen);
+    MergeUsedKernels(body_session_->UsedKernels(rt), out, seen);
+  }
+
 private:
   std::shared_ptr<SubgraphSession> body_session_;
 };
@@ -972,6 +1014,12 @@ public:
     set_kernel_name("onnx_core:CPU:ai.onnx:SequenceMap");
   }
   void Run(RuntimeContext &rt) override { RunSequenceMapNode(*node_, rt, *body_session_); }
+
+  void CollectUsedKernels(RuntimeContext &rt, std::vector<std::string> &out,
+                          std::unordered_set<std::string> &seen) const override {
+    KernelBase::CollectUsedKernels(rt, out, seen);
+    MergeUsedKernels(body_session_->UsedKernels(rt), out, seen);
+  }
 
 private:
   std::shared_ptr<SubgraphSession> body_session_;
@@ -1180,62 +1228,6 @@ void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {
     const std::string key = FunctionLookupKey(f.domain(), f.name(), f.overload());
     rt.functions()[key] = &f;
   }
-}
-
-namespace {
-
-// Recursively collects the identity strings of the kernels instantiated for
-// every node in ``nodes`` (subgraphs included), resolving each node against
-// ``rt`` exactly as :cpp:func:`RuntimeSession::InitializeKernels` does. This
-// is the "separated method" that walks nested subgraphs: for every node it
-// records the resolved kernel's :cpp:func:`KernelBase::kernel_name` and then
-// recurses into the node's ``GRAPH`` / ``GRAPHS`` attributes.
-void CollectUsedKernelNamesImpl(const utils::RepeatedProtoField<NodeProto> &nodes,
-                                RuntimeContext &rt, std::vector<std::string> &out,
-                                std::unordered_set<std::string> &seen) {
-  for (size_t n = 0; n < nodes.size(); ++n) {
-    const NodeProto &node = nodes[n];
-    const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
-    const std::string op_type = node.op_type().value();
-    // Resolve the node to the concrete kernel that would actually run it, so
-    // the reported name reflects the instantiated kernel class (honoring
-    // model-local functions, custom kernels and control-flow handlers) rather
-    // than a guess from ``op_type``.
-    std::unique_ptr<KernelBase> instance =
-        detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
-    const char *kname = instance->kernel_name();
-    std::string name = kname != nullptr ? std::string(kname) : op_type;
-    if (seen.insert(name).second) {
-      out.push_back(std::move(name));
-    }
-    // Recurse into control-flow subgraphs carried by the node's attributes.
-    for (size_t a = 0; a < node.attribute().size(); ++a) {
-      const AttributeProto &attr = node.attribute()[a];
-      if (attr.has_g()) {
-        CollectUsedKernelNamesImpl(attr.g().node(), rt, out, seen);
-      }
-      const auto &graphs = attr.graphs();
-      for (size_t gi = 0; gi < graphs.size(); ++gi) {
-        CollectUsedKernelNamesImpl(graphs[gi].node(), rt, out, seen);
-      }
-    }
-  }
-}
-
-} // namespace
-
-std::vector<std::string> CollectUsedKernelNames(const GraphProto &graph, RuntimeContext &rt) {
-  std::vector<std::string> out;
-  std::unordered_set<std::string> seen;
-  CollectUsedKernelNamesImpl(graph.node(), rt, out, seen);
-  return out;
-}
-
-std::vector<std::string> CollectUsedKernelNames(const FunctionProto &func, RuntimeContext &rt) {
-  std::vector<std::string> out;
-  std::unordered_set<std::string> seen;
-  CollectUsedKernelNamesImpl(func.node(), rt, out, seen);
-  return out;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

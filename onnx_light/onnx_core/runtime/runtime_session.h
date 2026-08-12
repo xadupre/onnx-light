@@ -183,6 +183,25 @@ public:
   /// :cpp:func:`Run`.
   const std::vector<std::string> &required_inputs() const noexcept { return required_inputs_; }
 
+  /// Returns the identity strings of the kernel instances this session has
+  /// allocated for its scheduled nodes — the concrete kernel classes actually
+  /// dispatched (e.g. ``"onnx_kernels:CPU:ai.onnx:Abs"``,
+  /// ``"onnx_core:CPU:ai.onnx:If"``), read straight from the per-node kernels
+  /// the session owns rather than re-derived from each node's ``op_type``. If
+  /// the kernels have not been resolved yet, they are initialized once against
+  /// ``rt`` (exactly as the first :cpp:func:`Run` would), so a node overridden
+  /// by a model-local function or a custom kernel reports that kernel's
+  /// identity. Kernels used inside nested control-flow subgraphs (the sessions
+  /// owned by ``If`` / ``Loop`` / ``Scan`` handlers and model-local function
+  /// adapters) are included via their kernels'
+  /// :cpp:func:`KernelBase::CollectUsedKernels`. The result preserves
+  /// first-seen order and contains no duplicates.
+  ///
+  /// @param rt Runtime context used to resolve the kernels when they are not
+  ///           yet initialized (its registered model-local functions and custom
+  ///           kernels are honored). Not mutated with any tensor state.
+  std::vector<std::string> UsedKernels(RuntimeContext &rt);
+
   /// Enables or disables concrete-shape validation. When enabled, :cpp:func:`Run`
   /// checks that the concrete shape of every tensor carrying a declared
   /// (possibly symbolic) shape — the graph inputs, outputs and ``value_info``

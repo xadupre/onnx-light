@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <sstream>
 #include <string>
 
@@ -144,39 +145,75 @@ TensorComparison CompareTensors(const Tensor &actual, const Tensor &expected, do
   const int64_t count = expected.element_count();
   const uint8_t *ap = actual.bytes();
   const uint8_t *ep = expected.bytes();
+  TensorComparison result;
+  result.close = true;
   for (int64_t i = 0; i < count; ++i) {
     const double a = ReadElementAsDouble(actual.data_type, ap, i);
     const double b = ReadElementAsDouble(expected.data_type, ep, i);
-    if (std::isnan(a) || std::isnan(b)) {
-      if (equal_nan && std::isnan(a) && std::isnan(b)) {
-        continue;
+
+    const bool a_nan = std::isnan(a);
+    const bool b_nan = std::isnan(b);
+    if (a_nan || b_nan) {
+      if (a_nan != b_nan) {
+        result.close = false;
+        if (result.message.empty()) {
+          std::ostringstream oss;
+          oss << "NaN position mismatch at index " << i << ": actual=" << a << " expected=" << b;
+          result.message = oss.str();
+        }
+      } else if (!equal_nan) {
+        // Both NaN, but equal_nan is false: unequal by policy.
+        result.close = false;
+        if (result.message.empty()) {
+          std::ostringstream oss;
+          oss << "NaN mismatch at index " << i << ": both values are NaN but equal_nan is false";
+          result.message = oss.str();
+        }
       }
-      std::ostringstream oss;
-      if (std::isnan(a) && std::isnan(b)) {
-        oss << "NaN mismatch at index " << i << ": both values are NaN but equal_nan is false";
-      } else {
-        oss << "NaN mismatch at index " << i << ": actual=" << a << " expected=" << b;
-      }
-      return Mismatch(oss.str());
+      continue;
     }
-    if (std::isinf(a) || std::isinf(b)) {
-      if (a == b) {
-        continue;
+
+    const bool a_inf = std::isinf(a);
+    const bool b_inf = std::isinf(b);
+    if (a_inf || b_inf) {
+      // Infinities must occur at the same position and share value and sign.
+      if (a != b) {
+        result.close = false;
+        if (result.message.empty()) {
+          std::ostringstream oss;
+          oss << "infinity mismatch at index " << i << ": actual=" << a << " expected=" << b;
+          result.message = oss.str();
+        }
       }
-      std::ostringstream oss;
-      oss << "infinity mismatch at index " << i << ": actual=" << a << " expected=" << b;
-      return Mismatch(oss.str());
+      continue;
     }
-    const double diff = std::fabs(a - b);
-    if (diff > atol + rtol * std::fabs(b)) {
-      std::ostringstream oss;
-      oss << "value mismatch at index " << i << ": actual=" << a << " expected=" << b
-          << " (|diff|=" << diff << " > atol=" << atol << " + rtol=" << rtol
-          << " * |expected|=" << std::fabs(b) << ")";
-      return Mismatch(oss.str());
+
+    const double abs_error = std::fabs(a - b);
+    if (abs_error > result.max_abs_error || result.max_abs_error_index == -1) {
+      result.max_abs_error = abs_error;
+      result.max_abs_error_index = i;
+    }
+    const double denom = std::fabs(b);
+    const double rel_error =
+        denom != 0.0 ? abs_error / denom
+                     : (abs_error == 0.0 ? 0.0 : std::numeric_limits<double>::infinity());
+    if (rel_error > result.max_rel_error || result.max_rel_error_index == -1) {
+      result.max_rel_error = rel_error;
+      result.max_rel_error_index = i;
+    }
+
+    if (abs_error > atol + rtol * denom) {
+      result.close = false;
+      if (result.message.empty()) {
+        std::ostringstream oss;
+        oss << "value mismatch at index " << i << ": actual=" << a << " expected=" << b
+            << " (|diff|=" << abs_error << " > atol=" << atol << " + rtol=" << rtol
+            << " * |expected|=" << denom << ")";
+        result.message = oss.str();
+      }
     }
   }
-  return TensorComparison{true, ""};
+  return result;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

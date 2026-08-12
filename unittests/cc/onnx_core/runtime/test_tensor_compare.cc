@@ -58,6 +58,34 @@ TEST(CompareTensors, OutsideTolerance) {
   const TensorComparison result = CompareTensors(a, b);
   EXPECT_FALSE(result.close);
   EXPECT_NE(result.message.find("value mismatch at index 1"), std::string::npos) << result.message;
+  EXPECT_EQ(result.max_abs_error_index, 1);
+  EXPECT_NEAR(result.max_abs_error, 0.5, 1e-6);
+  EXPECT_EQ(result.max_rel_error_index, 1);
+  EXPECT_NEAR(result.max_rel_error, 0.5 / 2.5, 1e-6);
+}
+
+TEST(CompareTensors, ErrorStatsAcrossElements) {
+  // Largest absolute error at index 2 (|30-33|=3), largest relative error at
+  // index 0 (|1-1.5|/1.5 = 0.333 > 3/33 = 0.0909).
+  Tensor a = Tensor::FromFloat("", {3}, {1.0f, 20.0f, 30.0f});
+  Tensor b = Tensor::FromFloat("", {3}, {1.5f, 20.0f, 33.0f});
+  const TensorComparison result = CompareTensors(a, b);
+  EXPECT_FALSE(result.close);
+  EXPECT_EQ(result.max_abs_error_index, 2);
+  EXPECT_NEAR(result.max_abs_error, 3.0, 1e-5);
+  EXPECT_EQ(result.max_rel_error_index, 0);
+  EXPECT_NEAR(result.max_rel_error, 0.5 / 1.5, 1e-5);
+}
+
+TEST(CompareTensors, IdenticalReportsZeroError) {
+  Tensor a = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  Tensor b = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  const TensorComparison result = CompareTensors(a, b);
+  EXPECT_TRUE(result.close);
+  EXPECT_EQ(result.max_abs_error, 0.0);
+  EXPECT_EQ(result.max_rel_error, 0.0);
+  EXPECT_EQ(result.max_abs_error_index, 0);
+  EXPECT_EQ(result.max_rel_error_index, 0);
 }
 
 TEST(CompareTensors, CustomTolerance) {
@@ -91,6 +119,16 @@ TEST(CompareTensors, NanUnequalByDefault) {
   EXPECT_TRUE(CompareTensors(a, b, 1e-5, 1e-8, /*equal_nan=*/true).close);
 }
 
+TEST(CompareTensors, NanPositionMismatch) {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  Tensor a = Tensor::FromFloat("", {2}, {nan, 2.0f});
+  Tensor b = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  const TensorComparison result = CompareTensors(a, b, 1e-5, 1e-8, /*equal_nan=*/true);
+  EXPECT_FALSE(result.close);
+  EXPECT_NE(result.message.find("NaN position mismatch at index 0"), std::string::npos)
+      << result.message;
+}
+
 TEST(CompareTensors, InfinityMatches) {
   const float inf = std::numeric_limits<float>::infinity();
   Tensor a = Tensor::FromFloat("", {2}, {inf, -inf});
@@ -98,6 +136,16 @@ TEST(CompareTensors, InfinityMatches) {
   EXPECT_TRUE(CompareTensors(a, b).close);
   Tensor c = Tensor::FromFloat("", {2}, {inf, inf});
   EXPECT_FALSE(CompareTensors(a, c).close);
+}
+
+TEST(CompareTensors, InfinityPositionMismatch) {
+  const float inf = std::numeric_limits<float>::infinity();
+  Tensor a = Tensor::FromFloat("", {2}, {inf, 2.0f});
+  Tensor b = Tensor::FromFloat("", {2}, {3.0f, 2.0f});
+  const TensorComparison result = CompareTensors(a, b);
+  EXPECT_FALSE(result.close);
+  EXPECT_NE(result.message.find("infinity mismatch at index 0"), std::string::npos)
+      << result.message;
 }
 
 TEST(CompareTensors, IntegerExact) {

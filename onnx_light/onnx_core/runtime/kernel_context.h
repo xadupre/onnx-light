@@ -121,6 +121,19 @@ public:
   /// time; the node outlives the kernel.
   void set_node(const NodeProto &node) { node_ = &node; }
 
+  /// Records the identity string of the concrete kernel class this instance
+  /// implements (e.g. ``"onnx_kernels:CPU:ai.onnx:Abs"``). Set once, at
+  /// kernel-resolution time, by the factory that instantiates the kernel (the
+  /// dispatch-table factory forwards the kernel class's ``static constexpr
+  /// name``; control-flow, model-local-function and custom-kernel adapters set
+  /// their own identity). ``name`` must have static storage duration.
+  void set_kernel_name(const char *name) noexcept { kernel_name_ = name; }
+
+  /// Returns the identity string of the concrete kernel class this instance
+  /// implements, or ``nullptr`` when the kernel was constructed directly
+  /// (e.g. in tests) without being resolved through the dispatch path.
+  const char *kernel_name() const noexcept { return kernel_name_; }
+
   /// Runs the kernel for its node (see :cpp:func:`set_node`) against the
   /// current state of ``rt``: reads the node's current inputs, computes and
   /// writes the outputs back. Safe to call repeatedly. The default throws;
@@ -133,6 +146,10 @@ protected:
   /// The node this kernel was built for, or ``nullptr`` when the kernel is used
   /// directly (e.g. in tests) without being resolved through the dispatch path.
   const NodeProto *node_ = nullptr;
+
+  /// Identity string of the concrete kernel class, set by the instantiating
+  /// factory (see :cpp:func:`set_kernel_name`); ``nullptr`` until then.
+  const char *kernel_name_ = nullptr;
 };
 
 } // namespace core::runtime

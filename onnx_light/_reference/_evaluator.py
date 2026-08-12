@@ -644,51 +644,28 @@ class ReferenceEvaluator:
         return dict(self._opsets)
 
     def used_kernels(self) -> set[str]:
-        """Returns the operator names (kernels) used by the model.
+        """Returns the kernel classes (operator implementations) used by the model.
 
-        The result is the set of distinct ``NodeProto.op_type`` values
-        found in the graph or function backing the evaluator, including
-        the ones used inside nested control-flow subgraphs (the ``g`` and
-        ``graphs`` attributes of nodes such as ``If``, ``Loop`` or
-        ``Scan``).
+        Each entry is the identity string of a concrete kernel class the
+        C++ runtime would instantiate to execute the backing graph or
+        function, resolved node by node exactly as a run would (so a node
+        overridden by a model-local function or a custom kernel reports that
+        kernel, not the plain operator). Kernels used inside nested
+        control-flow subgraphs (the ``g`` and ``graphs`` attributes of nodes
+        such as ``If``, ``Loop`` or ``Scan``) are included.
 
         Returns:
-            A set with the operator names used anywhere in the model,
+            A set with the kernel identity strings (e.g.
+            ``"onnx_kernels:CPU:ai.onnx:Abs"``) used anywhere in the model,
             subgraphs included.
         """
-        names: set[str] = set()
+        if self._model is not None:
+            _runtime.register_model_functions(self._model, self._ctx)
+            return set(_runtime.used_kernels(self._model.graph, self._ctx))
         if self._graph is not None:
-            self._collect_used_kernels(self._graph, names)
-        elif self._function is not None:
-            self._collect_used_kernels(self._function, names)
-        return names
-
-    @classmethod
-    def _collect_used_kernels(cls, graph: Any, names: set[str]) -> None:
-        """Adds the op_type of every node in ``graph`` to ``names``.
-
-        ``graph`` is a :class:`GraphProto` or a :class:`FunctionProto`;
-        both expose an iterable ``node`` field. Nested subgraphs carried
-        by node attributes are handled by
-        :meth:`_collect_used_kernels_from_subgraphs`.
-        """
-        for node in graph.node:
-            names.add(node.op_type)
-            cls._collect_used_kernels_from_subgraphs(node, names)
-
-    @classmethod
-    def _collect_used_kernels_from_subgraphs(cls, node: Any, names: set[str]) -> None:
-        """Adds the op_type of nodes nested in ``node``'s subgraphs to ``names``.
-
-        Walks the ``g`` (single graph) and ``graphs`` (repeated graph)
-        attributes of ``node`` and recurses into
-        :meth:`_collect_used_kernels` for each one.
-        """
-        for attr in node.attribute:
-            if len(attr.g.node):
-                cls._collect_used_kernels(attr.g, names)
-            for subgraph in attr.graphs:
-                cls._collect_used_kernels(subgraph, names)
+            return set(_runtime.used_kernels(self._graph, self._ctx))
+        assert self._function is not None
+        return set(_runtime.used_kernels(self._function, self._ctx))
 
     # -- evaluation ---------------------------------------------------------
 

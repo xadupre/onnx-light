@@ -129,6 +129,38 @@ void RunNode(const NodeProto &node, RuntimeContext &rt);
 void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt);
 
 /**
+ * Returns the identity strings of the kernel classes that would be
+ * instantiated to execute ``graph``, resolving every node against ``rt``
+ * exactly as :cpp:class:`RuntimeSession` does at kernel-initialization time.
+ * The returned names are the concrete kernel classes actually dispatched
+ * (e.g. ``"onnx_kernels:CPU:ai.onnx:Abs"``), not an estimation derived from
+ * the node ``op_type``: a node overridden by a model-local function, a custom
+ * kernel or a control-flow handler reports that kernel's identity instead.
+ *
+ * Nested control-flow subgraphs (the ``GRAPH`` / ``GRAPHS`` attributes of
+ * nodes such as ``If`` / ``Loop`` / ``Scan``) are traversed recursively so
+ * the kernels they use are included too. The result preserves first-seen
+ * order and contains no duplicates.
+ *
+ * @param graph Graph whose nodes' kernels are resolved.
+ * @param rt    Runtime context used to resolve each node's kernel (its
+ *              registered model-local functions and custom kernels are
+ *              honored); not mutated with any tensor state.
+ *
+ * @throws std::invalid_argument if a node cannot be dispatched (e.g. an
+ *         unsupported operator), matching :cpp:func:`RuntimeSession::Run`.
+ */
+std::vector<std::string> CollectUsedKernelNames(const GraphProto &graph, RuntimeContext &rt);
+
+/**
+ * :cpp:class:`FunctionProto` overload of
+ * :cpp:func:`CollectUsedKernelNames(const GraphProto&, RuntimeContext&)`,
+ * resolving the kernels used by the function body's nodes (subgraphs
+ * included).
+ */
+std::vector<std::string> CollectUsedKernelNames(const FunctionProto &func, RuntimeContext &rt);
+
+/**
  * Reusable driver for a control-flow subgraph (``Loop`` / ``Scan`` /
  * ``SequenceMap`` body, ``FlexAttention``'s ``score_mod`` / ``prob_mod``)
  * that separates one-time setup from the repeated per-iteration run, mirroring

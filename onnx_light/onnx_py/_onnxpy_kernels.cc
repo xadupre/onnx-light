@@ -1020,6 +1020,29 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "as long as ``rt``, since ``rt`` stores non-owning pointers into it.");
 
   rt_mod.def(
+      "used_kernels",
+      [](const GraphProto &graph, RuntimeContext &rt) {
+        return core::runtime::CollectUsedKernelNames(graph, rt);
+      },
+      nb::arg("graph"), nb::arg("rt"),
+      "Returns the identity strings of the kernel classes that would be "
+      "instantiated to run ``graph``'s nodes, resolving each node against ``rt`` "
+      "the same way a :class:`RuntimeSession` does (honoring model-local "
+      "functions and custom kernels). Nested control-flow subgraphs are "
+      "traversed recursively. The names are the concrete kernels dispatched "
+      "(e.g. ``'onnx_kernels:CPU:ai.onnx:Abs'``), in first-seen order without "
+      "duplicates.");
+
+  rt_mod.def(
+      "used_kernels",
+      [](const FunctionProto &func, RuntimeContext &rt) {
+        return core::runtime::CollectUsedKernelNames(func, rt);
+      },
+      nb::arg("func"), nb::arg("rt"),
+      "``FunctionProto`` overload of :func:`used_kernels`: returns the kernel "
+      "identity strings used by the function body's nodes (subgraphs included).");
+
+  rt_mod.def(
       "tensor_from_proto",
       [](const TensorProto &tp) {
         // ``TensorFromProto`` returns a borrowed (zero-copy) view into

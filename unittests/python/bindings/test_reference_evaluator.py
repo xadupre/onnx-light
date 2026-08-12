@@ -74,12 +74,16 @@ class TestReferenceEvaluator(ExtTestCase):
     def test_used_kernels(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         sess = ReferenceEvaluator(model)
-        self.assertEqual(sess.used_kernels(), {"Abs", "Add"})
+        self.assertEqual(
+            sess.used_kernels(), {"onnx_kernels:CPU:ai.onnx:Abs", "onnx_kernels:CPU:ai.onnx:Add"}
+        )
 
     def test_used_kernels_from_graph(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         sess = ReferenceEvaluator(model.graph)
-        self.assertEqual(sess.used_kernels(), {"Abs", "Add"})
+        self.assertEqual(
+            sess.used_kernels(), {"onnx_kernels:CPU:ai.onnx:Abs", "onnx_kernels:CPU:ai.onnx:Add"}
+        )
 
     def test_used_kernels_includes_subgraphs(self):
         then_branch = helper.make_graph(
@@ -109,7 +113,16 @@ class TestReferenceEvaluator(ExtTestCase):
         model = helper.make_model(graph, opset_imports=[helper.make_operatorsetid("", 18)])
         model.ir_version = 10
         sess = ReferenceEvaluator(model)
-        self.assertEqual(sess.used_kernels(), {"If", "Neg", "Abs"})
+        # The instantiated kernels are the control-flow ``If`` kernel plus the
+        # kernels resolved for each branch's nodes.
+        self.assertEqual(
+            sess.used_kernels(),
+            {
+                "onnx_core:CPU:ai.onnx:If",
+                "onnx_kernels:CPU:ai.onnx:Neg",
+                "onnx_kernels:CPU:ai.onnx:Abs",
+            },
+        )
 
     def test_run_default_output_names(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)

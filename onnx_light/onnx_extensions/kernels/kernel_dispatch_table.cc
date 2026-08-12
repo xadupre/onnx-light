@@ -61,6 +61,7 @@ template <class KernelT> NodeKernelFn MakeKernel() {
   return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
     auto kernel = std::make_unique<KernelT>(rt.kernel_ctx());
     kernel->set_node(node);
+    kernel->set_kernel_name(KernelT::name);
     return kernel;
   };
 }

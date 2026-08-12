@@ -13,6 +13,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -838,6 +839,7 @@ public:
   ModelLocalFunctionKernel(const NodeProto &node, const FunctionProto &func)
       : KernelBase(KernelContext{}), func_(func) {
     set_node(node);
+    set_kernel_name("onnx_core:CPU:ModelLocalFunction");
     // Pre-bind attribute references at construction time (the call-site
     // node and function body are both fixed for this kernel's lifetime).
     std::unordered_map<std::string, const AttributeProto *> attr_map;
@@ -927,6 +929,7 @@ public:
       : KernelBase(KernelContext{}), then_session_(std::move(then_session)),
         else_session_(std::move(else_session)) {
     set_node(node);
+    set_kernel_name("onnx_core:CPU:ai.onnx:If");
   }
   void Run(RuntimeContext &rt) override { RunIfNode(*node_, rt, *then_session_, *else_session_); }
 
@@ -940,6 +943,7 @@ public:
   LoopKernel(const NodeProto &node, std::shared_ptr<SubgraphSession> body_session)
       : KernelBase(KernelContext{}), body_session_(std::move(body_session)) {
     set_node(node);
+    set_kernel_name("onnx_core:CPU:ai.onnx:Loop");
   }
   void Run(RuntimeContext &rt) override { RunLoopNode(*node_, rt, *body_session_); }
 
@@ -952,6 +956,7 @@ public:
   ScanKernel(const NodeProto &node, std::shared_ptr<SubgraphSession> body_session)
       : KernelBase(KernelContext{}), body_session_(std::move(body_session)) {
     set_node(node);
+    set_kernel_name("onnx_core:CPU:ai.onnx:Scan");
   }
   void Run(RuntimeContext &rt) override { RunScanNode(*node_, rt, *body_session_); }
 
@@ -964,6 +969,7 @@ public:
   SequenceMapKernel(const NodeProto &node, std::shared_ptr<SubgraphSession> body_session)
       : KernelBase(KernelContext{}), body_session_(std::move(body_session)) {
     set_node(node);
+    set_kernel_name("onnx_core:CPU:ai.onnx:SequenceMap");
   }
   void Run(RuntimeContext &rt) override { RunSequenceMapNode(*node_, rt, *body_session_); }
 
@@ -978,6 +984,7 @@ public:
   CustomKernelAdapter(const NodeProto &node, CustomKernelFn fn)
       : KernelBase(KernelContext{}), fn_(std::move(fn)) {
     set_node(node);
+    set_kernel_name("onnx_core:CPU:CustomKernel");
   }
   void Run(RuntimeContext &rt) override { fn_(*node_, rt); }
 
@@ -1173,6 +1180,62 @@ void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {
     const std::string key = FunctionLookupKey(f.domain(), f.name(), f.overload());
     rt.functions()[key] = &f;
   }
+}
+
+namespace {
+
+// Recursively collects the identity strings of the kernels instantiated for
+// every node in ``nodes`` (subgraphs included), resolving each node against
+// ``rt`` exactly as :cpp:func:`RuntimeSession::InitializeKernels` does. This
+// is the "separated method" that walks nested subgraphs: for every node it
+// records the resolved kernel's :cpp:func:`KernelBase::kernel_name` and then
+// recurses into the node's ``GRAPH`` / ``GRAPHS`` attributes.
+void CollectUsedKernelNamesImpl(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                RuntimeContext &rt, std::vector<std::string> &out,
+                                std::unordered_set<std::string> &seen) {
+  for (size_t n = 0; n < nodes.size(); ++n) {
+    const NodeProto &node = nodes[n];
+    const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
+    const std::string op_type = node.op_type().value();
+    // Resolve the node to the concrete kernel that would actually run it, so
+    // the reported name reflects the instantiated kernel class (honoring
+    // model-local functions, custom kernels and control-flow handlers) rather
+    // than a guess from ``op_type``.
+    std::unique_ptr<KernelBase> instance =
+        detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
+    const char *kname = instance->kernel_name();
+    std::string name = kname != nullptr ? std::string(kname) : op_type;
+    if (seen.insert(name).second) {
+      out.push_back(std::move(name));
+    }
+    // Recurse into control-flow subgraphs carried by the node's attributes.
+    for (size_t a = 0; a < node.attribute().size(); ++a) {
+      const AttributeProto &attr = node.attribute()[a];
+      if (attr.has_g()) {
+        CollectUsedKernelNamesImpl(attr.g().node(), rt, out, seen);
+      }
+      const auto &graphs = attr.graphs();
+      for (size_t gi = 0; gi < graphs.size(); ++gi) {
+        CollectUsedKernelNamesImpl(graphs[gi].node(), rt, out, seen);
+      }
+    }
+  }
+}
+
+} // namespace
+
+std::vector<std::string> CollectUsedKernelNames(const GraphProto &graph, RuntimeContext &rt) {
+  std::vector<std::string> out;
+  std::unordered_set<std::string> seen;
+  CollectUsedKernelNamesImpl(graph.node(), rt, out, seen);
+  return out;
+}
+
+std::vector<std::string> CollectUsedKernelNames(const FunctionProto &func, RuntimeContext &rt) {
+  std::vector<std::string> out;
+  std::unordered_set<std::string> seen;
+  CollectUsedKernelNamesImpl(func.node(), rt, out, seen);
+  return out;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

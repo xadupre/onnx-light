@@ -516,6 +516,47 @@ TEST(RunNodes, RunNodeSingleAdd) {
   EXPECT_FLOAT_EQ(got[2], 33.0f);
 }
 
+TEST(RunNodes, CollectUsedKernelNamesReportsInstantiatedKernels) {
+  // A bare graph of two elementwise ops reports the concrete kernel class
+  // names actually dispatched for each node, not the raw op_type.
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  GraphProto graph;
+  *graph.add_node() = MakeNode("Abs", {"x"}, {"t"});
+  *graph.add_node() = MakeNode("Add", {"t", "z"}, {"y"});
+  const std::vector<std::string> names = core::runtime::CollectUsedKernelNames(graph, rt);
+  EXPECT_EQ(names, std::vector<std::string>(
+                       {"onnx_kernels:CPU:ai.onnx:Abs", "onnx_kernels:CPU:ai.onnx:Add"}));
+}
+
+TEST(RunNodes, CollectUsedKernelNamesRecursesIntoSubgraphs) {
+  // An ``If`` node reports the control-flow kernel plus the kernels used by
+  // each branch subgraph, deduplicated and in first-seen order.
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  GraphProto then_branch;
+  *then_branch.add_node() = MakeNode("Neg", {"x"}, {"ty"});
+  then_branch.add_output()->set_name("ty");
+  GraphProto else_branch;
+  *else_branch.add_node() = MakeNode("Abs", {"x"}, {"ey"});
+  else_branch.add_output()->set_name("ey");
+
+  NodeProto if_node = MakeNode("If", {"cond"}, {"y"});
+  AttributeProto *then_attr = if_node.add_attribute();
+  then_attr->set_name("then_branch");
+  then_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *then_attr->add_g() = std::move(then_branch);
+  AttributeProto *else_attr = if_node.add_attribute();
+  else_attr->set_name("else_branch");
+  else_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *else_attr->add_g() = std::move(else_branch);
+
+  GraphProto graph;
+  *graph.add_node() = std::move(if_node);
+  const std::vector<std::string> names = core::runtime::CollectUsedKernelNames(graph, rt);
+  EXPECT_EQ(names,
+            std::vector<std::string>({"onnx_core:CPU:ai.onnx:If", "onnx_kernels:CPU:ai.onnx:Neg",
+                                      "onnx_kernels:CPU:ai.onnx:Abs"}));
+}
+
 TEST(RunNodes, RunNodeNonCpuDeviceWithoutKernelThrows) {
   // The C++ ReferenceEvaluator only ships CPU kernels. Selecting a non-CPU
   // device makes the device-qualified dispatch key miss so RunNode fails with

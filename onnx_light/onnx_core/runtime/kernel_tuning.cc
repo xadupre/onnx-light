@@ -168,7 +168,7 @@ struct KernelTuningRegistry::Impl {
   std::unordered_map<KernelTuningKey, std::shared_ptr<const KernelTuningSchema>,
                      KernelTuningKeyHash>
       schemas;
-  std::atomic<std::shared_ptr<const KernelTuningRegistrySnapshot::State>> state;
+  std::shared_ptr<const KernelTuningRegistrySnapshot::State> state;
 
   Impl() : state(std::make_shared<const KernelTuningRegistrySnapshot::State>()) {}
 };
@@ -193,16 +193,17 @@ void KernelTuningRegistry::RegisterSchema(KernelTuningSchema schema) {
                                 KeyDescription(shared_schema->key()) + "'.");
   }
 
-  auto current = impl_->state.load();
+  auto current = std::atomic_load(&impl_->state);
   auto next = std::make_shared<KernelTuningRegistrySnapshot::State>(*current);
   ++next->generation;
   next->profiles.emplace(shared_schema->key(), shared_schema->portable_defaults());
   impl_->schemas.emplace(shared_schema->key(), std::move(shared_schema));
-  impl_->state.store(std::move(next));
+  std::shared_ptr<const KernelTuningRegistrySnapshot::State> published = std::move(next);
+  std::atomic_store(&impl_->state, std::move(published));
 }
 
 KernelTuningRegistrySnapshot KernelTuningRegistry::Snapshot() const noexcept {
-  return KernelTuningRegistrySnapshot(impl_->state.load());
+  return KernelTuningRegistrySnapshot(std::atomic_load(&impl_->state));
 }
 
 void KernelTuningRegistry::PublishProfiles(std::span<const KernelTuningParameters> profiles,
@@ -223,7 +224,7 @@ void KernelTuningRegistry::PublishProfiles(std::span<const KernelTuningParameter
     schema->second->Validate(profile);
   }
 
-  auto current = impl_->state.load();
+  auto current = std::atomic_load(&impl_->state);
   auto next = std::make_shared<KernelTuningRegistrySnapshot::State>(*current);
   for (const KernelTuningKey &key : reset_keys) {
     next->profiles[key] = impl_->schemas.at(key)->portable_defaults();
@@ -232,7 +233,8 @@ void KernelTuningRegistry::PublishProfiles(std::span<const KernelTuningParameter
     next->profiles[profile.key] = profile;
   }
   ++next->generation;
-  impl_->state.store(std::move(next));
+  std::shared_ptr<const KernelTuningRegistrySnapshot::State> published = std::move(next);
+  std::atomic_store(&impl_->state, std::move(published));
 }
 
 std::vector<KernelTuningKey> KernelTuningRegistry::RegisteredKeys() const {

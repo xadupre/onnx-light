@@ -152,7 +152,11 @@ TensorComparison CompareTensors(const Tensor &actual, const Tensor &expected, do
         continue;
       }
       std::ostringstream oss;
-      oss << "NaN mismatch at index " << i << ": actual=" << a << " expected=" << b;
+      if (std::isnan(a) && std::isnan(b)) {
+        oss << "NaN mismatch at index " << i << ": both values are NaN but equal_nan is false";
+      } else {
+        oss << "NaN mismatch at index " << i << ": actual=" << a << " expected=" << b;
+      }
       return Mismatch(oss.str());
     }
     if (std::isinf(a) || std::isinf(b)) {

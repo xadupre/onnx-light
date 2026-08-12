@@ -55,7 +55,7 @@ struct TensorComparison {
  * @param atol Absolute tolerance (default ``1e-8``).
  * @param equal_nan When true, ``NaN`` values in matching positions compare
  *                  equal (default ``false``).
- * @returns A :cpp:class:`TensorComparison` describing the outcome.
+ * @return A :cpp:class:`TensorComparison` describing the outcome.
  */
 TensorComparison CompareTensors(const Tensor &actual, const Tensor &expected, double rtol = 1e-5,
                                 double atol = 1e-8, bool equal_nan = false);

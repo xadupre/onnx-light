@@ -108,6 +108,11 @@ void check_value_info(const ValueInfoProto &value_info, const CheckerContext &ct
     enforce_has_field(type, shape);
   } break;
 
+  case TypeProto::kOpaqueType: {
+    const auto &type = value_info.type().opaque_type();
+    enforce_non_empty_field(type, name);
+  } break;
+
   default:
     fail_check("Unrecognized type value case (value_info name: ", value_info.name(),
                "): ", value_case);

@@ -35,6 +35,8 @@ std::string GetValueCaseString(const TypeProto &type) {
     return "optional_type";
   case TypeProto::ValueCase::kSparseTensorType:
     return "sparse_tensor_type";
+  case TypeProto::ValueCase::kOpaqueType:
+    return "opaque_type";
   default:
     return "NOT_SET";
   }
@@ -144,6 +146,21 @@ void checkShapesAndTypes(const TypeProto &inferred_type, const TypeProto &existi
     }
     checkShapesAndTypes(inferred_type.map_type().value_type(),
                         existing_type.map_type().value_type());
+  } else if (inferred_value_case == TypeProto::kOpaqueType &&
+             existing_value_case == TypeProto::kOpaqueType) {
+    const auto &inferred_opaque = inferred_type.opaque_type();
+    const auto &existing_opaque = existing_type.opaque_type();
+    if (existing_opaque.has_domain() && inferred_opaque.has_domain() &&
+        NormalizeDomain(existing_opaque.str_domain()) !=
+            NormalizeDomain(inferred_opaque.str_domain())) {
+      fail_type_inference("domain mismatch for opaque type: existing=",
+                          existing_opaque.str_domain(), " inferred=", inferred_opaque.str_domain());
+    }
+    if (existing_opaque.has_name() && inferred_opaque.has_name() &&
+        existing_opaque.str_name() != inferred_opaque.str_name()) {
+      fail_type_inference("name mismatch for opaque type: existing=", existing_opaque.str_name(),
+                          " inferred=", inferred_opaque.str_name());
+    }
   } else {
     fail_type_inference("type case unsupported. existing=", existing_value_case,
                         " inferred=", inferred_value_case);
@@ -220,6 +237,15 @@ void mergeShapesAndTypes(const TypeProto &inferred_type, TypeProto *existing_typ
     }
     mergeShapesAndTypes(inferred_type.map_type().value_type(),
                         existing_type->mutable_map_type()->mutable_value_type());
+  } else if (inferred_val_case == TypeProto::kOpaqueType) {
+    auto *existing_opaque = existing_type->mutable_opaque_type();
+    const auto &inferred_opaque = inferred_type.opaque_type();
+    if (!existing_opaque->has_domain() && inferred_opaque.has_domain()) {
+      existing_opaque->set_domain(inferred_opaque.str_domain());
+    }
+    if (!existing_opaque->has_name() && inferred_opaque.has_name()) {
+      existing_opaque->set_name(inferred_opaque.str_name());
+    }
   }
 }
 
@@ -256,6 +282,9 @@ void MaterializeSymbolicShape(TypeProto *inferred_type, SymbolTable &symbol_tabl
                              symbol_table);
   } else if (inferred_val_case == TypeProto::kMapType) {
     MaterializeSymbolicShape(inferred_type->mutable_map_type()->mutable_value_type(), symbol_table);
+  } else if (inferred_val_case == TypeProto::kOpaqueType) {
+    // Opaque types have no shape to materialize.
+    return;
   } else {
     fail_shape_inference("type case unsupported for symbolic shape inference. inferred=",
                          inferred_val_case);

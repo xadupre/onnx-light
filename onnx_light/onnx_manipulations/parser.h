@@ -193,6 +193,7 @@ public:
     MAP_TYPE,
     OPTIONAL_TYPE,
     SPARSE_TENSOR_TYPE,
+    OPAQUE_TYPE,
     OVERLOAD_KW
   };
 
@@ -210,6 +211,7 @@ public:
     map_["map"] = KeyWord::MAP_TYPE;
     map_["optional"] = KeyWord::OPTIONAL_TYPE;
     map_["sparse_tensor"] = KeyWord::SPARSE_TENSOR_TYPE;
+    map_["opaque"] = KeyWord::OPAQUE_TYPE;
     map_["overload"] = KeyWord::OVERLOAD_KW;
   }
 

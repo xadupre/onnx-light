@@ -143,6 +143,23 @@ TEST(CHECKER_COVERAGE, ValueInfoSparseTensorMissingShapeRejected) {
   EXPECT_THROW(checker::check_value_info(vi, MakeCtx()), ValidationError);
 }
 
+TEST(CHECKER_COVERAGE, ValueInfoOpaqueOK) {
+  ValueInfoProto vi;
+  vi.set_name("o");
+  auto *op = vi.mutable_type()->mutable_opaque_type();
+  op->set_domain("com.microsoft.test");
+  op->set_name("ComplexOpaqueType");
+  EXPECT_NO_THROW(checker::check_value_info(vi, MakeCtx()));
+}
+
+TEST(CHECKER_COVERAGE, ValueInfoOpaqueMissingNameRejected) {
+  ValueInfoProto vi;
+  vi.set_name("o");
+  // mutable_opaque_type() with no name set
+  vi.mutable_type()->mutable_opaque_type();
+  EXPECT_THROW(checker::check_value_info(vi, MakeCtx()), ValidationError);
+}
+
 // ---------------------------------------------------------------------------
 // check_tensor
 // ---------------------------------------------------------------------------

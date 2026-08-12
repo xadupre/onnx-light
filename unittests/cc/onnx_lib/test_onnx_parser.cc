@@ -140,6 +140,46 @@ TEST(onnx_defs, Parser_TypeProto_SparseTensor) {
   EXPECT_EQ(type.ref_sparse_tensor_type().ref_shape().ref_dim().size(), 1u);
 }
 
+TEST(onnx_defs, Parser_TypeProto_Opaque_DomainAndName) {
+  TypeProto type;
+  ParseIt(type, "opaque(com.microsoft.test, ComplexOpaqueType)");
+  ASSERT_TRUE(type.has_opaque_type());
+  EXPECT_EQ(type.ref_opaque_type().str_domain(), "com.microsoft.test");
+  EXPECT_EQ(type.ref_opaque_type().str_name(), "ComplexOpaqueType");
+}
+
+TEST(onnx_defs, Parser_TypeProto_Opaque_NameOnly) {
+  TypeProto type;
+  ParseIt(type, "opaque(ComplexOpaqueType)");
+  ASSERT_TRUE(type.has_opaque_type());
+  EXPECT_FALSE(type.ref_opaque_type().has_domain());
+  EXPECT_EQ(type.ref_opaque_type().str_name(), "ComplexOpaqueType");
+}
+
+TEST(onnx_defs, Parser_TypeProto_Opaque_Empty) {
+  TypeProto type;
+  ParseIt(type, "opaque()");
+  ASSERT_TRUE(type.has_opaque_type());
+  EXPECT_FALSE(type.ref_opaque_type().has_domain());
+  EXPECT_FALSE(type.ref_opaque_type().has_name());
+}
+
+TEST(onnx_defs, Printer_TypeProto_Opaque_RoundTrip) {
+  TypeProto type;
+  type.ref_opaque_type().set_domain("com.microsoft.test");
+  type.ref_opaque_type().set_name("ComplexOpaqueType");
+
+  std::ostringstream oss;
+  oss << type;
+  EXPECT_EQ(oss.str(), "opaque(com.microsoft.test,ComplexOpaqueType)");
+
+  TypeProto reparsed;
+  ParseIt(reparsed, oss.str());
+  ASSERT_TRUE(reparsed.has_opaque_type());
+  EXPECT_EQ(reparsed.ref_opaque_type().str_domain(), "com.microsoft.test");
+  EXPECT_EQ(reparsed.ref_opaque_type().str_name(), "ComplexOpaqueType");
+}
+
 TEST(onnx_defs, Parser_TypeProto_QuotedSymbolicDim) {
   TypeProto type;
   ParseIt(type, R"(float["M + N"])");

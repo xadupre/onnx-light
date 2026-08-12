@@ -25,6 +25,32 @@ A pattern must never reuse an existing name: every value it produces is new.
 This invariant keeps the successor and predecessor maps valid between two
 rewrites of the same iteration.
 
+Progress
+++++++++
+
+The initial design and the first two implementation steps were delivered in
+separate pull requests:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 30 52
+
+   * - Pull request
+     - Step
+     - Result
+   * - `PR #4351 <https://github.com/xadupre/onnx-light/pull/4351>`_
+     - Initial plan
+     - Defined the graph index, pattern API, rewrite loop, cleanup,
+       constant-folding, subgraph, and statistics design.
+   * - `PR #4369 <https://github.com/xadupre/onnx-light/pull/4369>`_
+     - Graph index and value queries
+     - Added ``GraphGraph`` over ``GraphBuilder`` with structural, shape, type,
+       and constant queries.
+   * - `PR #4389 <https://github.com/xadupre/onnx-light/pull/4389>`_
+     - Pattern interfaces
+     - Added ``PatternOptimization``, ``MatchResult``, the optimizer context,
+       and the first ``Cast(Cast(x))`` pattern.
+
 Graph structure on Graph
 ++++++++++++++++++++++++
 
@@ -132,6 +158,62 @@ A pattern is a stateless matcher and rewriter. The two Python classes
 ``FastOpType`` lets the driver restrict a pattern to the nodes of one operator
 type, exactly like ``fast_op_type`` gates ``subset_nodes`` in Python.
 
+Pattern library and registration
+++++++++++++++++++++++++++++++++
+
+The optimization engine and generic pattern interfaces belong to
+``onnx_core``. Concrete ONNX rewrite patterns do not: they live under
+``onnx_extensions/patterns`` and are built as a separate
+``lib_onnx_patterns`` library. This follows the existing shape-inference
+split:
+
+* ``onnx_core`` owns the optimizer, ``PatternOptimization``, ``MatchResult``,
+  and the pattern registry;
+* ``onnx_extensions/patterns`` owns implementations such as
+  ``CastCastPattern`` and depends on ``onnx_core``;
+* ``onnx_core`` never depends on ``lib_onnx_patterns``.
+
+The pattern currently introduced under ``onnx_core/builder/patterns`` is moved
+to ``onnx_extensions/patterns`` as part of this separation.
+
+As with ``onnx_shapes::RegisterShapeFunctions``, registration is explicit so a
+static archive cannot discard an otherwise unreferenced translation unit:
+
+.. code-block:: cpp
+
+    namespace core::builder {
+
+    using PatternFactory =
+        std::function<std::unique_ptr<PatternOptimization>()>;
+
+    void RegisterPattern(
+        const std::string& name,
+        PatternFactory factory);
+
+    std::vector<std::unique_ptr<PatternOptimization>>
+    CreateRegisteredPatterns();
+
+    }  // namespace core::builder
+
+    namespace onnx_patterns {
+
+    void RegisterPatterns();
+
+    }  // namespace onnx_patterns
+
+``onnx_patterns::RegisterPatterns`` registers every built-in ONNX pattern once
+and is idempotent. Entry points that want the standard pattern set call it
+before constructing the optimizer; applications linking only ``onnx_core`` may
+instead register their own patterns. Pattern names are stable diagnostic and
+selection identifiers. Registering two different factories under the same name
+is rejected rather than silently changing optimization behavior.
+
+The public headers, CMake target, explicit registration requirement, pattern
+selection, and an example custom pattern must be documented alongside the C++
+API. Tests cover an ``onnx_core`` optimizer with no extension library, explicit
+built-in registration, duplicate registration, and a custom application
+pattern.
+
 Replacement nodes use ``utils::RepeatedProtoField<NodeProto>`` because they
 own protobuf messages. Moving that container transfers its pointer-backed
 storage without copying each ``NodeProto`` and matches the node storage used
@@ -212,11 +294,18 @@ can profile which patterns fire and how long each phase takes, as the Python
 Implementation order
 ++++++++++++++++++++
 
-1. Add ``GraphGraph`` and the value queries over ``GraphBuilder``.
+1. Add ``GraphGraph`` and the value queries over ``GraphBuilder``
+   (`PR #4369 <https://github.com/xadupre/onnx-light/pull/4369>`_).
 2. Add the ``PatternOptimization`` / ``MatchResult`` interfaces and one trivial
-   pattern (for example ``Cast(Cast(x))`` collapsing).
-3. Implement the match/apply loop and wire in the existing cleanup passes.
-4. Add constant folding of all-constant rewrites.
-5. Extend to subgraphs and add the statistics output.
-6. Port the pattern library incrementally, one pattern per change, each with a
+   pattern, ``Cast(Cast(x))`` collapsing
+   (`PR #4389 <https://github.com/xadupre/onnx-light/pull/4389>`_).
+3. Create ``lib_onnx_patterns`` under ``onnx_extensions/patterns``, move the
+   concrete pattern out of ``onnx_core``, and add the explicit core registry
+   plus ``onnx_patterns::RegisterPatterns``.
+4. Implement the match/apply loop and wire in the existing cleanup passes.
+5. Add constant folding of all-constant rewrites.
+6. Extend to subgraphs and add the statistics output.
+7. Document the core/extension boundary, registration and selection APIs,
+   linking requirements, and a custom-pattern example.
+8. Port the pattern library incrementally, one pattern per change, each with a
    C++ test that checks the rewritten graph against the expected one.

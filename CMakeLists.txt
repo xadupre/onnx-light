@@ -180,6 +180,7 @@ set(ONNX_CORE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_core")
 set(ONNX_MANIPULATIONS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_manipulations")
 set(ONNX_OP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_op")
 set(ONNX_SHAPE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/shapes")
+set(ONNX_PATTERNS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/patterns")
 set(ONNX_BACKEND_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/backend_test")
 set(ONNX_KERNELS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/kernels")
 set(ONNX_GRADIENT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/gradient")
@@ -213,6 +214,7 @@ set(ONNX_PY_GRADIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_on
 file(GLOB_RECURSE ONNX_CORE_SOURCES CONFIGURE_DEPENDS "${ONNX_CORE_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_SHAPE_SOURCES CONFIGURE_DEPENDS "${ONNX_SHAPE_PATH}/*.cc")
+file(GLOB_RECURSE ONNX_PATTERNS_SOURCES CONFIGURE_DEPENDS "${ONNX_PATTERNS_PATH}/*.cc")
 # Kernel sources (operator implementations) and the small runtime
 # infrastructure they rely on (``TestCase``, ``Tensor``, ``RunNodes``,
 # pseudo-random helpers, ...) live in their own ``onnx_light/onnx_extensions/kernels``
@@ -261,7 +263,8 @@ set(ONNX_LIGHT_LIB_ALL_SOURCES
 )
 
 # Build the core C++ libraries (lib_onnx_proto / lib_onnx_lib / lib_onnx_op /
-# lib_onnx_shape / lib_onnx_kernels / lib_onnx_backend_test) as SHARED when
+# lib_onnx_shape / lib_onnx_patterns / lib_onnx_kernels /
+# lib_onnx_backend_test) as SHARED when
 # ONNX_LIGHT_BUILD_PYTHON=ON so that all Python extensions (_onnxpyprotoop,
 # _onnxpyprotolib, _onnxpycore, _onnxpykernels and _onnxpybackend) share a
 # single copy of every library's compiled code (vtables, typeid, out-of-line
@@ -458,6 +461,26 @@ target_include_directories(lib_onnx_shape PUBLIC
 set_property(TARGET lib_onnx_shape PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_shape PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_shape PUBLIC lib_onnx_core)
+
+# Builds the concrete graph-rewriting pattern library. The generic optimizer
+# interfaces and registry remain in lib_onnx_core; this extension target
+# registers the standard ONNX patterns explicitly through RegisterPatterns().
+add_library(lib_onnx_patterns ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS}
+    ${ONNX_PATTERNS_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
+  set_target_properties(lib_onnx_patterns PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files"
+    FILES ${ONNX_PATTERNS_SOURCES})
+target_include_directories(lib_onnx_patterns PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
+    $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
+    $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
+)
+set_property(TARGET lib_onnx_patterns PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_compile_features(lib_onnx_patterns PUBLIC cxx_std_20)
+target_link_libraries(lib_onnx_patterns PUBLIC lib_onnx_core)
 
 # Builds onnx_kernels library.
 # This library is the runtime/operator-kernel layer extracted from the
@@ -762,7 +785,8 @@ if(ONNX_LIGHT_BUILD_PYTHON)
     list(APPEND _onnxpy_rpath_targets lib_onnx_proto)
   endif()
   if(_onnx_light_lib_type STREQUAL "SHARED")
-    list(APPEND _onnxpy_rpath_targets lib_onnx_lib lib_onnx_manipulations lib_onnx_op lib_onnx_shape)
+    list(APPEND _onnxpy_rpath_targets lib_onnx_lib lib_onnx_manipulations lib_onnx_op
+        lib_onnx_shape lib_onnx_patterns)
     if(ONNX_LIGHT_BUILD_KERNELS)
       list(APPEND _onnxpy_rpath_targets lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient)
     endif()
@@ -786,9 +810,13 @@ if(ONNX_LIGHT_BUILD_TESTS)
   file(GLOB_RECURSE ONNX_CPP_LIB_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_lib/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_OP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_op/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_SHAPE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/shapes/test_*.cc")
+  file(GLOB_RECURSE ONNX_CPP_PATTERNS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/patterns/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_KERNELS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/kernels/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_BACKEND_TEST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/backend_test/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_GRADIENT_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/gradient/test_*.cc")
+  set(ONNX_CPP_PATTERN_REGISTRY_CORE_TEST
+      "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_core/builder/test_pattern_registry.cc")
+  list(REMOVE_ITEM ONNX_CPP_CORE_TEST_SOURCES "${ONNX_CPP_PATTERN_REGISTRY_CORE_TEST}")
   set(ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST
       "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_stream_class_print.cc")
   list(REMOVE_ITEM ONNX_CPP_PROTO_TEST_SOURCES "${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}")
@@ -798,6 +826,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
       ${ONNX_CPP_LIB_TEST_SOURCES}
       ${ONNX_CPP_OP_TEST_SOURCES}
       ${ONNX_CPP_SHAPE_TEST_SOURCES}
+      ${ONNX_CPP_PATTERNS_TEST_SOURCES}
   )
   if(ONNX_LIGHT_BUILD_KERNELS)
     list(APPEND ONNX_CPP_TEST_SOURCES
@@ -806,7 +835,8 @@ if(ONNX_LIGHT_BUILD_TESTS)
         ${ONNX_CPP_GRADIENT_TEST_SOURCES}
     )
   endif()
-  set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES} ${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST})
+  set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES}
+      ${ONNX_CPP_PATTERN_REGISTRY_CORE_TEST} ${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST})
 
   enable_testing()
 
@@ -839,9 +869,12 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_COMMON_PATH}"
   )
   if(ONNX_LIGHT_BUILD_KERNELS)
-    target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_shape lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient GTest::gtest_main)
+    target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_shape
+        lib_onnx_patterns lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient
+        GTest::gtest_main)
   else()
-    target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_shape GTest::gtest_main)
+    target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_shape
+        lib_onnx_patterns GTest::gtest_main)
   endif()
   # Precompile the heaviest headers shared across virtually every translation
   # unit in unittests/cc. ``<gtest/gtest.h>`` is by far the dominant cost
@@ -864,6 +897,17 @@ if(ONNX_LIGHT_BUILD_TESTS)
   )
   gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 120)
 
+  # This executable deliberately links only lib_onnx_core. It verifies that the
+  # generic registry works without, and does not pull in, lib_onnx_patterns.
+  add_executable(test_pattern_registry_core ${ONNX_CPP_PATTERN_REGISTRY_CORE_TEST})
+  target_include_directories(test_pattern_registry_core PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light"
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_pattern_registry_core PRIVATE lib_onnx_core GTest::gtest_main)
+  gtest_discover_tests(test_pattern_registry_core DISCOVERY_TIMEOUT 120)
+
   add_executable(test_stream_class_print "${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}")
   target_include_directories(test_stream_class_print PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light"
@@ -883,6 +927,8 @@ if(ONNX_LIGHT_BUILD_TESTS)
                FILES ${ONNX_CPP_OP_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/shapes" PREFIX "Source Files/cc/onnx_shapes"
                FILES ${ONNX_CPP_SHAPE_TEST_SOURCES})
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/patterns" PREFIX "Source Files/cc/onnx_patterns"
+               FILES ${ONNX_CPP_PATTERNS_TEST_SOURCES})
   if(ONNX_LIGHT_BUILD_KERNELS)
     source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/kernels" PREFIX "Source Files/cc/onnx_kernels"
                  FILES ${ONNX_CPP_KERNELS_TEST_SOURCES})
@@ -1055,6 +1101,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
         lib_onnx_lib
         lib_onnx_op
         lib_onnx_shape
+        lib_onnx_patterns
         LIBRARY DESTINATION onnx_light/onnx_py
         RUNTIME DESTINATION onnx_light/onnx_py)
     if(ONNX_LIGHT_BUILD_KERNELS)
@@ -1075,7 +1122,8 @@ if(ONNX_LIGHT_INSTALL)
   # Splitting into two install(TARGETS) calls keeps the same exported
   # ``onnx_lightTargets`` set when ONNX_LIGHT_BUILD_KERNELS=OFF while
   # avoiding references to targets that were never created.
-  install(TARGETS lib_onnx_proto lib_onnx_core lib_onnx_manipulations lib_onnx_lib lib_onnx_op lib_onnx_shape
+  install(TARGETS lib_onnx_proto lib_onnx_core lib_onnx_manipulations lib_onnx_lib
+      lib_onnx_op lib_onnx_shape lib_onnx_patterns
     EXPORT onnx_lightTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -1171,6 +1219,12 @@ if(ONNX_LIGHT_INSTALL)
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 
+  # Install public headers from onnx_light/onnx_extensions/patterns
+  install(DIRECTORY "${ONNX_PATTERNS_PATH}/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_extensions/patterns"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+  )
+
   # Install public headers from onnx_light/onnx_core
   install(DIRECTORY "${ONNX_CORE_PATH}/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_core"
@@ -1244,6 +1298,7 @@ set(_onnx_light_hardening_targets
     lib_onnx_lib
     lib_onnx_op
     lib_onnx_shape
+    lib_onnx_patterns
 )
 if(ONNX_LIGHT_BUILD_KERNELS)
   list(APPEND _onnx_light_hardening_targets lib_onnx_kernels lib_onnx_backend_test)
@@ -1256,7 +1311,8 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   endif()
 endif()
 if(ONNX_LIGHT_BUILD_TESTS)
-  list(APPEND _onnx_light_hardening_targets test_onnx_light_helpers test_onnx_light)
+  list(APPEND _onnx_light_hardening_targets test_onnx_light_helpers test_onnx_light
+      test_pattern_registry_core)
 endif()
 foreach(_t IN LISTS _onnx_light_hardening_targets)
   if(TARGET ${_t})

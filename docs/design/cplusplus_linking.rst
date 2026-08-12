@@ -130,8 +130,9 @@ configure time to skip building and installing them:
 
 The exported CMake package then provides only the kernel-free targets —
 ``onnx_light::lib_onnx_lib``, ``onnx_light::lib_onnx_manipulations``,
-``onnx_light::lib_onnx_op``, ``onnx_light::lib_onnx_shape`` and
-``onnx_light::lib_onnx_proto``.  ``onnx_light::lib_onnx_kernels`` and
+``onnx_light::lib_onnx_op``, ``onnx_light::lib_onnx_shape``,
+``onnx_light::lib_onnx_patterns`` and ``onnx_light::lib_onnx_proto``.
+``onnx_light::lib_onnx_kernels`` and
 ``onnx_light::lib_onnx_backend_test`` are not built and not part of the package.
 
 ``ONNX_LIGHT_BUILD_KERNELS=OFF`` is incompatible with
@@ -155,7 +156,8 @@ From the repository root, install the C++ library with CMake:
 When downstream code only needs the schema / checker / shape-inference /
 version-converter / proto layer (``onnx_light::lib_onnx_lib``,
 ``onnx_light::lib_onnx_manipulations``, ``onnx_light::lib_onnx_op``,
-``onnx_light::lib_onnx_shape``, ``onnx_light::lib_onnx_proto``), pass
+``onnx_light::lib_onnx_shape``, ``onnx_light::lib_onnx_patterns``,
+``onnx_light::lib_onnx_proto``), pass
 ``-DONNX_LIGHT_BUILD_KERNELS=OFF`` at configure time to skip building and
 installing the much larger ``lib_onnx_kernels`` (operator-kernel runtime)
 and ``lib_onnx_backend_test`` (backend-test case registry) libraries.
@@ -202,15 +204,34 @@ link the manipulations target, which only depends on ``lib_onnx_proto``:
     find_package(onnx_light REQUIRED)
     target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_manipulations)
 
-When shape inference dispatch and graph optimization passes are also needed
-(without pulling in the full ``onnx_light::lib_onnx_lib`` checker/inliner/version
-converter), link the optim target instead, which transitively pulls in
-``lib_onnx_op`` and ``lib_onnx_proto``:
+When the standalone shape-inference dispatch is needed without the full
+``onnx_light::lib_onnx_lib`` checker/inliner/version converter, link:
 
 .. code-block:: cmake
 
     find_package(onnx_light REQUIRED)
     target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_shape)
+
+The generic graph optimizer and custom-pattern registry are part of
+``onnx_light::lib_onnx_core``. To use the standard ONNX rewrite patterns, link
+the extension library and register its patterns explicitly:
+
+.. code-block:: cmake
+
+    find_package(onnx_light REQUIRED)
+    target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_patterns)
+
+.. code-block:: cpp
+
+    #include "onnx_core/builder/pattern_registry.h"
+    #include "onnx_extensions/patterns/dispatch_table.h"
+
+    onnx_patterns::RegisterPatterns();
+    auto patterns = core::builder::CreateRegisteredPatterns();
+
+Applications that provide only custom patterns can instead link
+``onnx_light::lib_onnx_core`` and call
+``core::builder::RegisterPattern`` directly.
 
 To evaluate ONNX nodes / graphs / models in-process using the bundled C++
 **reference implementation** of the ONNX operators (runtime
@@ -276,8 +297,8 @@ For monorepos or local development, a downstream CMake project can also include
 
 Use the in-tree ``lib_onnx_proto`` target instead when only proto
 parsing/serialization is needed, or ``lib_onnx_op``, ``lib_onnx_manipulations``,
-``lib_onnx_shape``, ``lib_onnx_kernels``, ``lib_onnx_backend_test`` or
-``lib_onnx_gradient`` for the
+``lib_onnx_shape``, ``lib_onnx_patterns``, ``lib_onnx_kernels``,
+``lib_onnx_backend_test`` or ``lib_onnx_gradient`` for the
 corresponding feature subset.  This uses the
 in-tree build targets directly instead of ``find_package``.
 

@@ -29,6 +29,7 @@ base dependency)::
         └── lib_onnx_core
                 ├── lib_onnx_op
                 ├── lib_onnx_shape
+                ├── lib_onnx_patterns
                 ├── lib_onnx_kernels
                 │       └── lib_onnx_backend_test
                 ├── lib_onnx_gradient
@@ -48,8 +49,9 @@ them depending on each other.  The ``TensorType`` enumeration and the
 ``ToTypeString`` converter live one level lower, in ``lib_onnx_proto``
 (``onnx_proto/type_helper.h``), so that ``lib_onnx_core`` itself can use
 them.
-``lib_onnx_op``, ``lib_onnx_manipulations``, ``lib_onnx_shape``, and
-``lib_onnx_kernels`` are siblings that each depend on ``lib_onnx_core``
+``lib_onnx_op``, ``lib_onnx_manipulations``, ``lib_onnx_shape``,
+``lib_onnx_patterns``, and ``lib_onnx_kernels`` are siblings that each depend
+on ``lib_onnx_core``
 (and transitively on ``lib_onnx_proto``).  ``lib_onnx_shape`` depends on
 ``lib_onnx_core`` only (it does **not** pull in ``lib_onnx_op`` or
 ``lib_onnx_lib``).  ``lib_onnx_kernels`` depends on ``lib_onnx_core``
@@ -106,6 +108,12 @@ the concrete ONNX operator implementations live in sibling libraries
       - ``onnx_extensions/kernels/kernel_dispatch_table.cc`` builds
         ``BuiltinKernelFunctions()`` and registers them through
         ``RegisterKernelFunctions()``.
+    * - Graph optimization patterns
+      - ``onnx_core/builder/pattern_registry.h`` defines
+        ``PatternFactory`` + ``RegisterPattern`` /
+        ``CreateRegisteredPatterns``.
+      - ``onnx_extensions/patterns/dispatch_table.cc`` registers the concrete
+        patterns through ``RegisterPatterns()``.
     * - Backend tests
       - ``onnx_core/backend_test/test_case_registry.h/.cc`` defines
         ``TestCasesCollectorFn`` + ``RegisterTestCasesCollector`` /
@@ -119,7 +127,7 @@ the concrete ONNX operator implementations live in sibling libraries
         and ``onnx_op/operator_sets.cc`` aggregates them through
         ``GetAllOnnxOpSchemasWithHistory``.
 
-For the first three rows above, explicit registration keeps ``onnx_core``
+For the first four rows above, explicit registration keeps ``onnx_core``
 independent from the extension libraries:
 
 .. code-block:: cpp
@@ -131,9 +139,13 @@ independent from the extension libraries:
     // runtime kernels
     onnx_kernels::RegisterKernelFunctions();
 
+    // graph optimization patterns
+    onnx_patterns::RegisterPatterns();
+
 This means a downstream binary can keep linking minimal. If it never calls
-shape inference, peak-memory estimation, runtime execution, or backend-test
-collection, it does not need to link the corresponding extension library.
+shape inference, peak-memory estimation, runtime execution, graph-pattern
+registration, or backend-test collection, it does not need to link the
+corresponding extension library.
 
 When installed (``cmake --install``) all libraries are exported under the
 ``onnx_light::`` namespace and can be consumed individually through
@@ -168,13 +180,16 @@ Summary of each library
         runtime execution engine, and the (initially empty) kernel and
         shape-inference **dispatch tables** so that ``lib_onnx_op``,
         ``lib_onnx_manipulations``, ``lib_onnx_shape``, and
-        ``lib_onnx_kernels`` can share them without depending on each other.
+        ``lib_onnx_patterns`` and ``lib_onnx_kernels`` can share them without
+        depending on each other.
         It implements *all* the generic mechanisms but registers **no**
-        concrete operators. The actual schemas, kernels, shape-inference and
-        peak-memory functions are **registered** into those shared dispatch
-        tables by the extension libraries through their
+        concrete operators or optimization patterns. The actual schemas,
+        kernels, shape-inference functions, peak-memory functions, and graph
+        patterns are **registered** into those shared registries by the
+        extension libraries through their
         ``Register*Functions()`` entry points (``RegisterKernelFunctions``,
-        ``RegisterShapeFunctions``, ``RegisterPeakMemoryFunctions``, ...).
+        ``RegisterShapeFunctions``, ``RegisterPeakMemoryFunctions``,
+        ``RegisterPatterns``, ...).
         Depends publicly on ``lib_onnx_proto`` (which owns the
         ``TensorType`` enumeration and ``ToTypeString`` converter).
     * - ``onnx_light::lib_onnx_op``:``onnx_light/onnx_op/``
@@ -217,6 +232,14 @@ Summary of each library
         optimization helpers.  Depends publicly on ``lib_onnx_core``
         (and transitively on ``lib_onnx_proto``).  Does **not** depend
         on ``lib_onnx_op``.
+    * - ``onnx_light::lib_onnx_patterns`` (in-tree target
+        ``lib_onnx_patterns``):
+        ``onnx_light/onnx_extensions/patterns/``
+      - Concrete ONNX graph-rewriting patterns and the explicit
+        ``onnx_patterns::RegisterPatterns`` entry point. The generic
+        ``PatternOptimization`` interface, registry, and optimizer context
+        remain in ``lib_onnx_core``. Depends publicly on ``lib_onnx_core`` and
+        is not linked back into it.
     * - ``onnx_light::lib_onnx_kernels`` (in-tree target ``lib_onnx_kernels``):
         ``onnx_light/onnx_extensions/kernels/``
       - C++ **reference implementation** of the ONNX operators used to
@@ -272,9 +295,14 @@ smallest set** that covers its needs.  The most common scenarios are:
   schemas — link ``onnx_light::lib_onnx_manipulations``.
 * **Full ONNX feature set** (schemas with history, checker, inliner,
   shape inference, version conversion) — link ``onnx_light::lib_onnx_lib``.
-* **Shape inference and graph optimization passes** — link
+* **Shape inference** — link
   ``onnx_light::lib_onnx_shape`` (which transitively pulls
   ``lib_onnx_core`` and ``lib_onnx_proto``).
+* **Use the standard graph-rewriting patterns** — link
+  ``onnx_light::lib_onnx_patterns`` and call
+  ``onnx_patterns::RegisterPatterns()`` before creating the registered
+  pattern instances. Custom-only optimizers can link ``lib_onnx_core`` and
+  call ``core::builder::RegisterPattern`` directly.
 * **Evaluate ONNX nodes / graphs / models in C++** using the bundled
   reference kernels (runtime ``struct Tensor``, ``RunGraph`` /
   ``RunFunction`` / ``RunModel``, ``SplitMix64`` RNG, ...) without

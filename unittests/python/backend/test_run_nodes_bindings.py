@@ -98,6 +98,7 @@ class TestRunNodesBindings(ExtTestCase):
             "tensor_to_proto",
             "tensor_to_numpy",
             "run_node",
+            "run_model",
             "register_model_functions",
             "register_custom_kernel",
             "unregister_custom_kernel",
@@ -401,6 +402,40 @@ class TestRunNodesBindings(ExtTestCase):
         ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
         _run_model(model, ctx)
         self.assertEqual(_unpack_floats(ctx.get("y")), (11.0, 22.0, 33.5))
+
+    def test_run_model_binding_tensor_inputs(self):
+        # The ``run_model`` binding runs a whole model given named ``Tensor``
+        # inputs and returns its declared outputs as ``Tensor`` objects.
+        model = parser.parse_model(_MODEL_SRC)
+        x = _make_float_tensor("x", [-1.0, 2.0, -3.5])
+        z = _make_float_tensor("z", [10.0, 20.0, 30.0])
+        outputs = rt.run_model(model, [x, z])
+        self.assertEqual(len(outputs), 1)
+        self.assertEqual(outputs[0].name, "y")
+        self.assertEqual(_unpack_floats(outputs[0]), (11.0, 22.0, 33.5))
+
+    def test_run_model_binding_seeds_initializers(self):
+        # ``run_model`` seeds the graph's initializers, so only the
+        # non-initializer inputs need to be supplied.
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "agraph (float[2] x) => (float[2] y) <float[2] w = {2.0, 3.0}>\n"
+            "{\n"
+            "  y = Add(x, w)\n"
+            "}\n"
+        )
+        x = _make_float_tensor("x", [1.0, 1.0])
+        outputs = rt.run_model(model, [x])
+        self.assertEqual(len(outputs), 1)
+        self.assertEqual(_unpack_floats(outputs[0]), (3.0, 4.0))
+
+    def test_run_model_binding_without_graph_raises(self):
+        from onnx_light.onnx import ModelProto
+
+        empty = ModelProto()
+        empty.ir_version = 10
+        with self.assertRaises((ValueError, RuntimeError)):
+            rt.run_model(empty, [])
 
     def test_run_graph_matches_run_model(self):
         model = parser.parse_model(_MODEL_SRC)

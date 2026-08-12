@@ -50,6 +50,7 @@ using core::runtime::DataType;
 using core::runtime::ExecutionPlan;
 using core::runtime::KernelDispatchTable;
 using core::runtime::RegisterModelFunctions;
+using core::runtime::RunModel;
 using core::runtime::RunNode;
 using core::runtime::RuntimeContext;
 using core::runtime::RuntimeParameters;
@@ -60,6 +61,7 @@ using core::runtime::SliceTensorAlongAxis;
 using core::runtime::Tensor;
 using core::runtime::TensorFromProto;
 using core::runtime::TensorMap;
+using core::runtime::Tensors;
 using onnx_kernels::kernel::KernelContext;
 
 namespace {
@@ -6814,6 +6816,95 @@ TEST(RunModel, VerboseProgressInsideSubgraphLogsAttrIndexPrefix) {
   // The Add node inside the taken then-branch is logged with the subgraph
   // prefix "then_branch@<index>/".
   EXPECT_NE(content.find("then_branch@"), std::string::npos);
+}
+
+// The convenience ``RunModel`` helper runs a whole model given named input
+// tensors and returns its declared outputs, seeding both external inputs and
+// the graph's initializers automatically.
+TEST(RunModel, RunModelTensorInputsReturnsOutputs) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_domain("");
+  os->set_version(18);
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name("main");
+  graph->add_input()->set_name("x");
+  graph->add_input()->set_name("z");
+  graph->add_output()->set_name("y");
+
+  // y = Abs(x) + z, mirroring the shared model used by the Python tests.
+  NodeProto *abs_node = graph->add_node();
+  abs_node->set_op_type("Abs");
+  abs_node->add_input("x");
+  abs_node->add_output("t");
+  NodeProto *add_node = graph->add_node();
+  add_node->set_op_type("Add");
+  add_node->add_input("t");
+  add_node->add_input("z");
+  add_node->add_output("y");
+
+  Tensors inputs;
+  inputs.push_back(Tensor::FromFloat("x", {3}, {1.0f, -2.0f, 3.0f}));
+  inputs.push_back(Tensor::FromFloat("z", {3}, {10.0f, 20.0f, 30.0f}));
+
+  Tensors outputs = RunModel(model, std::move(inputs));
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_EQ(outputs[0].name, "y");
+  EXPECT_FALSE(outputs[0].is_borrowed());
+  ASSERT_EQ(outputs[0].element_count(), 3);
+  const float *got = outputs[0].AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 11.0f);
+  EXPECT_FLOAT_EQ(got[1], 22.0f);
+  EXPECT_FLOAT_EQ(got[2], 33.0f);
+}
+
+// ``RunModel`` seeds the graph's initializers so a model needs only its
+// non-initializer inputs supplied.
+TEST(RunModel, RunModelSeedsInitializers) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_domain("");
+  os->set_version(18);
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name("main");
+  graph->add_input()->set_name("x");
+  graph->add_output()->set_name("y");
+
+  // ``w`` is an initializer, only ``x`` is supplied at run time.
+  const float weights[2] = {2.0f, 3.0f};
+  TensorProto *init = graph->add_initializer();
+  init->set_name("w");
+  init->set_data_type(TensorProto::DataType::FLOAT);
+  init->add_dims(2);
+  std::vector<uint8_t> raw(sizeof(weights));
+  std::memcpy(raw.data(), weights, sizeof(weights));
+  init->set_raw_data(utils::ByteSpan(raw));
+
+  NodeProto *node = graph->add_node();
+  node->set_op_type("Add");
+  node->add_input("x");
+  node->add_input("w");
+  node->add_output("y");
+
+  Tensors inputs;
+  inputs.push_back(Tensor::FromFloat("x", {2}, {1.0f, 1.0f}));
+  Tensors outputs = RunModel(model, std::move(inputs));
+  ASSERT_EQ(outputs.size(), 1u);
+  ASSERT_EQ(outputs[0].element_count(), 2);
+  const float *got = outputs[0].AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 3.0f);
+  EXPECT_FLOAT_EQ(got[1], 4.0f);
+}
+
+// ``RunModel`` rejects a model without a graph.
+TEST(RunModel, RunModelWithoutGraphThrows) {
+  ModelProto model;
+  model.set_ir_version(10);
+  EXPECT_THROW(RunModel(model, Tensors{}), std::invalid_argument);
 }
 
 } // namespace Test

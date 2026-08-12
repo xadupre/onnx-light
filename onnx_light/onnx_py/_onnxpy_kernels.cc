@@ -468,6 +468,10 @@ public:
     plan_.reset();
   }
 
+  std::vector<std::string> UsedKernels() const {
+    return session_ == nullptr ? std::vector<std::string>() : session_->used_kernels();
+  }
+
   nb::list Run(RuntimeContext &rt, nb::object requested_outputs, nb::dict feeds,
                bool release_intermediates) {
     std::vector<std::string> outputs = requested_outputs.is_none()
@@ -1108,7 +1112,11 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                    "lines without mutating the context itself.")
       .def_prop_ro("required_inputs", &RuntimeSession::required_inputs,
                    "Returns the external input names the scheduled nodes read. Populated "
-                   "during kernel initialization; empty until the first :func:`run`.");
+                   "during kernel initialization; empty until the first :func:`run`.")
+      .def("used_kernels", &RuntimeSession::used_kernels,
+           "Returns the normalized ``'<domain>:<op_type>'`` identifiers of the resolved "
+           "kernels in execution order. Repeated operators are preserved. Returns an "
+           "empty list until the first :func:`run`.");
 
   nb::class_<ReferenceEvaluatorRunner>(
       rt_mod, "ReferenceEvaluatorRunner",
@@ -1142,6 +1150,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            nb::arg("output_names").none() = nb::none(), nb::arg("feed_inputs"),
            nb::arg("release_intermediates") = true,
            "Runs one inference entirely through the native input/execution/output path.")
+      .def("used_kernels", &ReferenceEvaluatorRunner::UsedKernels,
+           "Returns the normalized identifiers of the kernels used by the cached session.")
       .def("reset", &ReferenceEvaluatorRunner::Reset,
            "Drops the cached execution plan and RuntimeSession so kernels resolve again.");
 

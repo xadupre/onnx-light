@@ -142,6 +142,20 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
   kernels_initialized_ = true;
 }
 
+std::vector<std::string> RuntimeSession::used_kernels() const {
+  std::vector<std::string> result;
+  if (!kernels_initialized_) {
+    return result;
+  }
+  result.reserve(kernels_.size());
+  for (const ExecuteAction &action : plan_.actions()) {
+    if (action.kind() == ExecuteActionKind::kExecuteNode) {
+      result.push_back(kernels_[action.node_index()].key);
+    }
+  }
+  return result;
+}
+
 void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const {
   for (int i = 0; i < node.output_size(); ++i) {
     const std::string &name = node.output(i);

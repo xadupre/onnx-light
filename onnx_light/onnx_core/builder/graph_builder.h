@@ -40,6 +40,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -83,6 +84,47 @@ class BuilderError : public std::runtime_error {
 public:
   /// Constructs a BuilderError with the given diagnostic message.
   explicit BuilderError(const std::string &message) : std::runtime_error(message) {}
+};
+
+/// Options controlling :cpp:func:`GraphBuilder::ConstantFold`.
+///
+/// Constant folding evaluates every node whose outputs are known before
+/// inference (initializers and, transitively, the outputs of deterministic
+/// nodes fed only by constants) and replaces the node with the resulting
+/// initializers. The evaluation uses the process-wide runtime kernel registry
+/// (:cpp:func:`core::runtime::KernelDispatchTable`), which must be populated by
+/// a kernel library (``onnx_kernels``) for folding to happen.
+struct ConstantFoldingOptions {
+  /// Master switch: when ``false`` :cpp:func:`ConstantFold` is a no-op and
+  /// returns ``0`` without touching the graph.
+  bool enabled = true;
+
+  /// Skips folding a node when any of its outputs would hold strictly more than
+  /// ``max_element_count`` elements. A negative value (the default) means no
+  /// limit, so results of any size are folded.
+  int64_t max_element_count = -1;
+
+  /// ``(domain, op_type)`` pairs that must never be folded. An empty domain
+  /// matches every domain and an empty op_type matches every operator, so an
+  /// empty-empty pair disables folding for every node. The domain is matched
+  /// after normalisation (``""`` and ``"ai.onnx"`` compare equal). A ``std::set``
+  /// is used so exclusion lookups stay logarithmic instead of scanning a vector.
+  std::set<std::pair<std::string, std::string>> excluded_ops;
+
+  /// Controls whether nodes whose results are tagged ``"weight"`` (or untagged)
+  /// are folded. Shape-tagged results are always foldable and can be folded at
+  /// any point in an optimization pipeline; weight results are usually better
+  /// folded only at the end (after other passes have run), so this switch lets a
+  /// caller fold shapes early and defer weight folding to a final pass. When
+  /// ``false`` only shape-tagged results are folded.
+  bool fold_weights = true;
+
+  /// When ``true`` a node whose outputs are tagged ``"weight"`` (or untagged)
+  /// but for which no runtime kernel is registered raises a
+  /// :cpp:class:`BuilderError` instead of being left untouched. Nodes whose
+  /// outputs are tagged ``"shape"`` always raise when their kernel is missing,
+  /// regardless of this flag.
+  bool raise_on_missing_weight_kernel = false;
 };
 
 /**
@@ -373,6 +415,46 @@ public:
   InlineLocalFunctions(const std::vector<std::pair<std::string, std::string>> &include = {},
                        const std::vector<std::pair<std::string, std::string>> &exclude = {});
 
+  /// Folds constant subgraphs into initializers.
+  ///
+  /// A node is *constant* when every value it reads is constant (a graph
+  /// initializer or, transitively, the output of an earlier constant node) and
+  /// its operator is deterministic. Every such node is evaluated once through
+  /// the process-wide runtime kernel registry
+  /// (:cpp:func:`core::runtime::KernelDispatchTable`, populated by
+  /// ``onnx_kernels``) and replaced by initializers carrying its computed
+  /// outputs; the freshly materialized constants let the nodes that only fed it
+  /// fold in the same pass.
+  ///
+  /// A node's outputs are classified by their inferred value tag. Outputs
+  /// tagged ``"shape"`` (shape-carrying values, e.g. the output of
+  /// :onnx:`Shape` or a :onnx:`Concat` of shapes) *must* be foldable: when no
+  /// kernel is registered for such a node a :cpp:class:`BuilderError` is thrown.
+  /// Every other constant node (``"weight"`` or untagged) is folded only when a
+  /// kernel is available; otherwise it is left untouched, unless
+  /// :cpp:member:`ConstantFoldingOptions::raise_on_missing_weight_kernel` asks
+  /// for a :cpp:class:`BuilderError` instead.
+  ///
+  /// Folding is skipped for a node when it is listed in
+  /// :cpp:member:`ConstantFoldingOptions::excluded_ops`, when any of its outputs
+  /// would exceed :cpp:member:`ConstantFoldingOptions::max_element_count`
+  /// elements, or when it carries a control-flow subgraph. A node whose output
+  /// is a declared graph output is still folded: the computed constant is
+  /// materialized as an initializer carrying that name, which remains a valid
+  /// graph output. Setting :cpp:member:`ConstantFoldingOptions::enabled` to
+  /// ``false`` turns the whole pass into a no-op.
+  ///
+  /// The pass is recursive: it descends into nested subgraphs and local
+  /// functions to fold their own constants as well. Values a subgraph captures
+  /// from the enclosing scope are not seeded as constants there, so a subgraph
+  /// node reading such a capture is left untouched.
+  ///
+  /// @param options Folding options (enable flag, size threshold, op blacklist,
+  ///                strictness for missing weight kernels).
+  /// @return The total number of nodes folded away, including those folded in
+  ///         nested subgraphs and local functions.
+  std::size_t ConstantFold(const ConstantFoldingOptions &options = {});
+
   // ── Local functions / subgraphs ──────────────────────────────────────
 
   /// Creates and returns a nested builder for a local function named ``name``.
@@ -558,6 +640,10 @@ private:
 
   // Returns ``true`` when ``name`` ends with ``"_ref"``.
   static bool HasGraphReferenceSuffix(const std::string &name);
+
+  // Returns ``true`` when ``node`` carries a control-flow subgraph, either
+  // inline (GRAPH / GRAPHS attribute) or through a builder ``*_ref`` reference.
+  static bool NodeCarriesSubgraph(const NodeProto &node);
 
   // Runs the whole-graph compute analyses and writes their result into
   // ``graph`` (shapes, in-place / release-after / value-tag metadata and

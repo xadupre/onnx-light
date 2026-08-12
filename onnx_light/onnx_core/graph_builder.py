@@ -33,6 +33,8 @@ from typing import Any
 from ..onnx_op import GetAllOnnxOpSchemasWithHistory
 from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
 
+ConstantFoldingOptions = _C.ConstantFoldingOptions
+
 
 def _default_schema_lookup(op_type: str) -> list:
     """Returns the built-in ONNX schema history for ``op_type``.
@@ -57,4 +59,4 @@ class GraphBuilder(_C.GraphBuilder):
         super().__init__(name, schema_lookup)
 
 
-__all__ = ["GraphBuilder"]
+__all__ = ["ConstantFoldingOptions", "GraphBuilder"]

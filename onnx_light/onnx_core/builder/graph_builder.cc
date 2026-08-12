@@ -7,11 +7,13 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <set>
 #include <sstream>
 #include <utility>
 
 #include "onnx_core/compute/constant_info.h"
 #include "onnx_core/compute/value_tags.h"
+#include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_proto/onnx_alias.h"
 #include "onnx_proto/onnx_helper.h"
@@ -82,6 +84,27 @@ bool SameInitializerContent(const TensorProto &lhs, const TensorProto &rhs) {
     return false;
   }
   return SameExternalData(lhs, rhs);
+}
+
+// Materializes an initializer ``TensorProto`` (owning its payload) from a
+// runtime tensor produced by constant folding. Non-STRING tensors copy their
+// little-endian byte buffer into ``raw_data``; STRING tensors copy their
+// elements into ``string_data``.
+TensorProto ProtoFromRuntimeTensor(const core::runtime::Tensor &tensor, const std::string &name) {
+  TensorProto proto;
+  proto.set_name(name);
+  proto.set_data_type(tensor.data_type);
+  for (int64_t dim : tensor.shape) {
+    proto.add_dims(dim);
+  }
+  if (static_cast<TensorProto::DataType>(tensor.data_type) == TensorProto::DataType::STRING) {
+    for (const std::string &value : tensor.string_data) {
+      proto.add_string_data(utils::String(value));
+    }
+  } else {
+    proto.set_raw_data(tensor.bytes(), tensor.size_bytes());
+  }
+  return proto;
 }
 
 } // namespace
@@ -273,6 +296,17 @@ bool GraphBuilder::HasGraphReferenceSuffix(const std::string &name) {
   const std::size_t suffix_len = 4;
   return name.size() >= suffix_len &&
          name.compare(name.size() - suffix_len, suffix_len, kSuffix) == 0;
+}
+
+bool GraphBuilder::NodeCarriesSubgraph(const NodeProto &node) {
+  for (const auto &attribute : node.attribute()) {
+    if (attribute.type() == AttributeProto::AttributeType::GRAPH ||
+        attribute.type() == AttributeProto::AttributeType::GRAPHS ||
+        HasGraphReferenceSuffix(attribute.name().value())) {
+      return true;
+    }
+  }
+  return false;
 }
 
 utils::RepeatedProtoField<AttributeProto> GraphBuilder::ImportAttributes(const NodeProto &node) {
@@ -1168,6 +1202,199 @@ std::size_t GraphBuilder::InlineLocalFunctions(
     }
   }
   return inlined;
+}
+
+std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
+  if (!options.enabled) {
+    return 0;
+  }
+
+  // Fold nested builders first so a subgraph or local function shrinks before
+  // this scope is folded, mirroring the other recursive passes.
+  std::size_t removed = 0;
+  for (const auto &function : local_functions_) {
+    removed += function->ConstantFold(options);
+  }
+  for (const auto &subgraph : subgraphs_) {
+    removed += subgraph->ConstantFold(options);
+  }
+
+  const std::size_t num_nodes = nodes_.size();
+  if (num_nodes == 0) {
+    return removed;
+  }
+
+  // Recompute the constant classification and value tags over the current node
+  // list rather than relying on the incremental state maintained by MakeNode,
+  // which the other mutating passes (RemoveUnusedNodes, ...) do not keep up to
+  // date. Both analyses are aligned with ``nodes_`` because BuildGraph emits
+  // the nodes in insertion order.
+  const GraphProto graph = BuildGraph();
+  const auto [value_tags, node_tags] = compute_.ComputeValueAndNodeTags(graph);
+  const auto [constant_values, node_constant] = core::compute::InferConstants(graph);
+
+  // ``(domain, op_type)`` blacklist: an empty component matches everything.
+  // Normalise every excluded domain once up front so the per-node check is a
+  // handful of logarithmic set lookups instead of a linear scan: a node is
+  // excluded when the exact pair, either wildcard, or the empty-empty pair is
+  // present.
+  std::set<std::pair<std::string, std::string>> excluded_ops;
+  for (const auto &entry : options.excluded_ops) {
+    excluded_ops.emplace(entry.first.empty() ? std::string() : NormaliseDomain(entry.first),
+                         entry.second);
+  }
+  const auto is_excluded = [&](const std::string &normalised_domain, const std::string &op_type) {
+    return excluded_ops.count({normalised_domain, op_type}) != 0 ||
+           excluded_ops.count({normalised_domain, std::string()}) != 0 ||
+           excluded_ops.count({std::string(), op_type}) != 0 ||
+           excluded_ops.count({std::string(), std::string()}) != 0;
+  };
+
+  // Constant tensors already materialized: the graph initializers plus every
+  // output folded so far in this pass. The initializer pointers stay valid
+  // because ``initializers_`` is only appended to at the very end; the folded
+  // outputs live in ``folded``, whose element addresses are stable across
+  // inserts because ``std::unordered_map`` never invalidates pointers or
+  // references to existing elements (only iterators) on rehash.
+  std::unordered_map<std::string, const TensorProto *> const_tensors;
+  for (const TensorProto &initializer : initializers_) {
+    const_tensors.emplace(initializer.name().value(), &initializer);
+  }
+  std::unordered_map<std::string, TensorProto> folded;
+  folded.reserve(num_nodes);
+  std::vector<std::string> folded_order;
+
+  const std::string device_suffix = core::symbolic::DeviceKeySuffix(device_);
+  const auto &kernel_table = core::runtime::KernelDispatchTable();
+  const auto &global_custom_kernels = core::runtime::GlobalCustomKernels();
+
+  utils::RepeatedProtoField<NodeProto> kept;
+  kept.reserve(num_nodes);
+  std::size_t local_removed = 0;
+  for (std::size_t idx = 0; idx < num_nodes; ++idx) {
+    NodeProto &node = nodes_[idx];
+    const std::string op_type = node.op_type().value();
+    const std::string domain = node.domain().empty() ? std::string() : node.domain().value();
+    const std::string normalised_domain = NormaliseDomain(domain);
+
+    // A node is a fold candidate when the analysis flagged it constant and it is
+    // neither blacklisted nor a control-flow node. A node whose output is a
+    // declared graph output is still folded: the result is materialized as an
+    // initializer carrying that name, which remains a valid graph output.
+    bool candidate = node_constant[idx] == core::compute::ConstantInfo::kConstant &&
+                     !is_excluded(normalised_domain, op_type) && !NodeCarriesSubgraph(node);
+    // Every non-empty input must already be available as a materialized
+    // constant; otherwise the data needed to evaluate the node is missing (for
+    // example a predecessor that was left unfolded).
+    if (candidate) {
+      for (int i = 0; i < node.input().size(); ++i) {
+        const std::string input(node.input(static_cast<std::size_t>(i)));
+        if (!input.empty() && const_tensors.find(input) == const_tensors.end()) {
+          candidate = false;
+          break;
+        }
+      }
+    }
+    if (!candidate) {
+      kept.push_back(std::move(node));
+      continue;
+    }
+
+    // Classify the node by the value tag of its outputs. A shape-carrying result
+    // must be foldable; a weight (or untagged) result is folded best-effort.
+    bool is_shape_result = false;
+    for (int i = 0; i < node.output().size(); ++i) {
+      const std::string output(node.output(static_cast<std::size_t>(i)));
+      const auto tag_it = value_tags.find(output);
+      if (tag_it != value_tags.end() && tag_it->second == "shape") {
+        is_shape_result = true;
+        break;
+      }
+    }
+
+    // Shape results can be folded at any time; weight (or untagged) results are
+    // only folded when the caller opts in, so they can be deferred to a final
+    // pass.
+    if (!is_shape_result && !options.fold_weights) {
+      kept.push_back(std::move(node));
+      continue;
+    }
+
+    const std::string dispatch_key = normalised_domain + ":" + op_type;
+    const bool have_kernel =
+        kernel_table.find(dispatch_key + device_suffix) != kernel_table.end() ||
+        global_custom_kernels.find(dispatch_key) != global_custom_kernels.end();
+    if (!have_kernel) {
+      if (is_shape_result) {
+        throw BuilderError("GraphBuilder: constant folding requires a kernel for the shape-tagged "
+                           "node '" +
+                           op_type + "' in domain '" + normalised_domain +
+                           "', but no runtime kernel is registered.");
+      }
+      if (options.raise_on_missing_weight_kernel) {
+        throw BuilderError("GraphBuilder: constant folding requires a kernel for the node '" +
+                           op_type + "' in domain '" + normalised_domain +
+                           "', but no runtime kernel is registered.");
+      }
+      kept.push_back(std::move(node));
+      continue;
+    }
+
+    // Evaluate the node in isolation: seed its inputs from the materialized
+    // constants and run the registered kernel.
+    const int opset = OpsetVersion(domain);
+    core::runtime::RuntimeContext rt(core::runtime::KernelContext(core::runtime::DefaultOpset(
+                                         opset > 0 ? static_cast<int64_t>(opset) : 0)),
+                                     core::runtime::RuntimeContextOptions{.device = device_});
+    for (int i = 0; i < node.input().size(); ++i) {
+      const std::string input(node.input(static_cast<std::size_t>(i)));
+      if (input.empty()) {
+        continue;
+      }
+      rt.tensors()[input] = core::runtime::TensorFromProto(*const_tensors.at(input));
+    }
+    core::runtime::RunNode(node, rt);
+
+    // Reject the fold when any output exceeds the size threshold; the node is
+    // then kept untouched.
+    bool within_threshold = true;
+    if (options.max_element_count >= 0) {
+      for (int i = 0; i < node.output().size(); ++i) {
+        const std::string output(node.output(static_cast<std::size_t>(i)));
+        if (output.empty()) {
+          continue;
+        }
+        if (rt.tensors().at(output).element_count() > options.max_element_count) {
+          within_threshold = false;
+          break;
+        }
+      }
+    }
+    if (!within_threshold) {
+      kept.push_back(std::move(node));
+      continue;
+    }
+
+    // Materialize every output as a constant available to later folds.
+    for (int i = 0; i < node.output().size(); ++i) {
+      const std::string output(node.output(static_cast<std::size_t>(i)));
+      if (output.empty()) {
+        continue;
+      }
+      TensorProto proto = ProtoFromRuntimeTensor(rt.tensors().at(output), output);
+      const auto inserted = folded.emplace(output, std::move(proto));
+      const_tensors[output] = &inserted.first->second;
+      folded_order.push_back(output);
+    }
+    ++local_removed;
+  }
+
+  nodes_ = std::move(kept);
+  // Append the folded results as initializers, in fold order.
+  for (const std::string &name : folded_order) {
+    initializers_.push_back(std::move(folded.at(name)));
+  }
+  return removed + local_removed;
 }
 
 std::size_t GraphBuilder::RemoveDuplicateInitializers() {

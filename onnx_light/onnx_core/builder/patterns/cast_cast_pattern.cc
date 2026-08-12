@@ -12,8 +12,8 @@ namespace {
 
 bool IsDefaultCast(const NodeProto &node) {
   return node.op_type().value() == "Cast" &&
-         NormaliseDomain(node.domain().value()) == kDefaultOnnxDomain && node.input_size() == 1 &&
-         node.output_size() == 1;
+         NormaliseDomain(node.domain().value()) == kDefaultOnnxDomain &&
+         node.input_size() == 1 && node.output_size() == 1;
 }
 
 bool CastTarget(const NodeProto &node, TensorType &type) {

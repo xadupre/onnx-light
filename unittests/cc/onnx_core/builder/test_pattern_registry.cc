@@ -15,6 +15,8 @@ namespace {
 
 class CustomPattern final : public core::builder::PatternOptimization {
 public:
+  CustomPattern() : PatternOptimization(1, "test.CustomPattern") {}
+
   core::builder::MatchResult Match(core::builder::GraphGraph &, const NodeProto &) const override {
     return {};
   }

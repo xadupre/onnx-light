@@ -78,12 +78,12 @@ public:
    * ``max_iter`` selects ``max(node_count, 10) * priority_count``.
    *
    * Returns:
-   *   The number of pattern matches applied.
+   *   Self-contained records of the applied rewrites, in application order.
    */
-  std::size_t Optimize(int max_iter = -1);
+  std::vector<LocalRewriting> Optimize(int max_iter = -1);
 
-  /// Returns the patterns owned by this graph optimizer.
-  const std::vector<std::unique_ptr<PatternOptimization>> &Patterns() const noexcept {
+  /// Returns the patterns shared by this graph optimizer and its rewrites.
+  const std::vector<std::shared_ptr<PatternOptimization>> &Patterns() const noexcept {
     return patterns_;
   }
 
@@ -170,8 +170,14 @@ public:
   void SetComputedConstant(const std::string &name, TensorProto value);
 
 private:
+  friend GraphProto Replay(const ModelProto &model, const std::vector<LocalRewriting> &rewrites,
+                           GraphBuilder::SchemaLookupFn schema_lookup);
+
   void Rebuild();
   void RebuildSuccessors();
+  std::size_t Cleanup();
+  void ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites, std::size_t begin,
+                           std::size_t end);
 
   // Returns the concrete dims of the constant ``name`` (empty vector for a
   // scalar) into ``dims``, or ``false`` when the shape cannot be determined.
@@ -182,7 +188,7 @@ private:
   bool ConstantScalarValue(const std::string &name, double &out) const;
 
   GraphBuilder &builder_;
-  std::vector<std::unique_ptr<PatternOptimization>> patterns_;
+  std::vector<std::shared_ptr<PatternOptimization>> patterns_;
   DoNotRemovePredicate do_not_remove_;
   // Value name -> producing node (mirrors Python ``predecessors_``).
   std::unordered_map<std::string, const NodeProto *> predecessors_;
@@ -199,5 +205,14 @@ private:
   // Folded-constant cache keyed by value name.
   std::unordered_map<std::string, TensorProto> computed_constants_;
 };
+
+/**
+ * Reconstructs an optimized graph by replaying captured rewrites.
+ *
+ * Rewrites must be ordered as returned by :cpp:func:`GraphGraph::Optimize`.
+ * Cleanup passes run at the same iteration boundaries as the live optimizer.
+ */
+GraphProto Replay(const ModelProto &model, const std::vector<LocalRewriting> &rewrites,
+                  GraphBuilder::SchemaLookupFn schema_lookup = {});
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::builder

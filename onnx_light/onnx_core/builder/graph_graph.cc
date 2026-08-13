@@ -20,6 +20,7 @@ namespace {
 struct PendingReplacement {
   std::size_t position;
   utils::RepeatedProtoField<NodeProto> nodes;
+  LocalRewriting rewriting;
 };
 
 } // namespace
@@ -29,11 +30,16 @@ GraphGraph::GraphGraph(GraphBuilder &builder) : GraphGraph(builder, CreateRegist
 GraphGraph::GraphGraph(GraphBuilder &builder,
                        std::vector<std::unique_ptr<PatternOptimization>> patterns,
                        DoNotRemovePredicate do_not_remove)
-    : builder_(builder), patterns_(std::move(patterns)), do_not_remove_(std::move(do_not_remove)) {
-  for (const std::unique_ptr<PatternOptimization> &pattern : patterns_) {
+    : builder_(builder), do_not_remove_(std::move(do_not_remove)) {
+  patterns_.reserve(patterns.size());
+  for (std::unique_ptr<PatternOptimization> &pattern : patterns) {
     if (pattern == nullptr) {
       throw BuilderError("GraphGraph: a pattern must not be null.");
     }
+    if (pattern->Name().empty()) {
+      throw BuilderError("GraphGraph: a pattern must have a stable diagnostic name.");
+    }
+    patterns_.push_back(std::move(pattern));
   }
   std::stable_sort(patterns_.begin(), patterns_.end(), [](const auto &left, const auto &right) {
     return left->priority < right->priority;
@@ -71,14 +77,14 @@ void GraphGraph::Rebuild() {
   RebuildSuccessors();
 }
 
-std::size_t GraphGraph::Optimize(int max_iter) {
+std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter) {
   if (max_iter < -1) {
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   }
 
   std::vector<int> priorities;
   priorities.reserve(patterns_.size());
-  for (const std::unique_ptr<PatternOptimization> &pattern : patterns_) {
+  for (const std::shared_ptr<PatternOptimization> &pattern : patterns_) {
     if (priorities.empty() || priorities.back() != pattern->priority) {
       priorities.push_back(pattern->priority);
     }
@@ -92,14 +98,14 @@ std::size_t GraphGraph::Optimize(int max_iter) {
         static_cast<int>(std::max<std::size_t>(builder_.nodes_.size(), 10) * priorities.size());
   }
 
-  std::size_t applied = 0;
+  std::vector<LocalRewriting> applied;
   std::size_t priority_index = 0;
   for (int iteration = 0; iteration < max_iter; ++iteration) {
     const int current_priority = priorities[priority_index];
     std::unordered_set<const NodeProto *> marked;
     std::vector<MatchResult> matches;
 
-    for (const std::unique_ptr<PatternOptimization> &pattern : patterns_) {
+    for (const std::shared_ptr<PatternOptimization> &pattern : patterns_) {
       if (pattern->priority > current_priority) {
         break;
       }
@@ -155,8 +161,31 @@ std::size_t GraphGraph::Optimize(int max_iter) {
           position = std::min(position, Position(*node));
         }
       }
+      const std::size_t initializers_before = builder_.initializers_.size();
+      utils::RepeatedProtoField<NodeProto> replacement_nodes =
+          match.pattern->Apply(*this, match.nodes);
+      LocalRewriting rewriting;
+      const auto pattern_owner =
+          std::find_if(patterns_.begin(), patterns_.end(),
+                       [&match](const std::shared_ptr<PatternOptimization> &candidate) {
+                         return candidate.get() == match.pattern;
+                       });
+      if (pattern_owner == patterns_.end()) {
+        throw BuilderError("GraphGraph::Optimize: matched pattern has no owner.");
+      }
+      rewriting.pattern = *pattern_owner;
+      rewriting.insert_at = static_cast<std::ptrdiff_t>(position);
+      rewriting.iteration = static_cast<std::size_t>(iteration);
+      rewriting.added_nodes = replacement_nodes;
+      rewriting.matched_nodes.reserve(match.nodes.size());
+      for (const NodeProto *node : match.nodes) {
+        rewriting.matched_nodes.push_back(Position(*node));
+      }
+      for (std::size_t i = initializers_before; i < builder_.initializers_.size(); ++i) {
+        rewriting.added_initializers.push_back(builder_.initializers_[i]);
+      }
       replacements.push_back(
-          PendingReplacement{position, match.pattern->Apply(*this, match.nodes)});
+          PendingReplacement{position, std::move(replacement_nodes), std::move(rewriting)});
       removed.insert(match.nodes.begin(), match.nodes.end());
     }
 
@@ -186,13 +215,12 @@ std::size_t GraphGraph::Optimize(int max_iter) {
         }
       }
       builder_.nodes_ = std::move(rebuilt);
-      applied += matches.size();
+      for (PendingReplacement &replacement : replacements) {
+        applied.push_back(std::move(replacement.rewriting));
+      }
     }
 
-    std::size_t cleaned = builder_.RemoveDuplicateNodes();
-    cleaned += builder_.RemoveIdentityNodes();
-    cleaned += builder_.RemoveUnusedNodes();
-    Rebuild();
+    const std::size_t cleaned = Cleanup();
 
     if (!matches.empty() || cleaned != 0) {
       continue;
@@ -203,6 +231,102 @@ std::size_t GraphGraph::Optimize(int max_iter) {
     ++priority_index;
   }
   return applied;
+}
+
+std::size_t GraphGraph::Cleanup() {
+  std::size_t cleaned = builder_.RemoveDuplicateNodes();
+  cleaned += builder_.RemoveIdentityNodes();
+  cleaned += builder_.RemoveUnusedNodes();
+  Rebuild();
+  return cleaned;
+}
+
+void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites, std::size_t begin,
+                                     std::size_t end) {
+  std::unordered_set<const NodeProto *> removed;
+  std::unordered_map<std::size_t, std::vector<std::size_t>> insertions;
+  std::size_t replacement_nodes = 0;
+  for (std::size_t i = begin; i < end; ++i) {
+    const LocalRewriting &rewrite = rewrites[i];
+    if (rewrite.pattern == nullptr) {
+      throw BuilderError("Replay: a rewrite must link to its pattern.");
+    }
+    if (rewrite.matched_nodes.empty()) {
+      throw BuilderError("Replay: a rewrite must match at least one node.");
+    }
+    std::size_t first_matched = builder_.nodes_.size();
+    for (const std::size_t position : rewrite.matched_nodes) {
+      if (position >= builder_.nodes_.size()) {
+        throw BuilderError("Replay: matched node position " + std::to_string(position) +
+                           " is outside the graph.");
+      }
+      if (!removed.insert(&builder_.nodes_[position]).second) {
+        throw BuilderError("Replay: rewrites in one iteration overlap at node position " +
+                           std::to_string(position) + ".");
+      }
+      first_matched = std::min(first_matched, position);
+    }
+    if (rewrite.insert_at < -1) {
+      throw BuilderError("Replay: insertion position must be at least -1.");
+    }
+    const std::size_t insertion_position =
+        rewrite.insert_at == -1 ? first_matched : static_cast<std::size_t>(rewrite.insert_at);
+    if (insertion_position >= builder_.nodes_.size()) {
+      throw BuilderError("Replay: insertion position is outside the graph.");
+    }
+    for (const TensorProto &initializer : rewrite.added_initializers) {
+      builder_.MakeInitializer(initializer);
+    }
+    insertions[insertion_position].push_back(i);
+    replacement_nodes += rewrite.added_nodes.size();
+  }
+
+  utils::RepeatedProtoField<NodeProto> rebuilt;
+  rebuilt.reserve(builder_.nodes_.size() - removed.size() + replacement_nodes);
+  for (std::size_t i = 0; i < builder_.nodes_.size(); ++i) {
+    const auto insertion = insertions.find(i);
+    if (insertion != insertions.end()) {
+      for (const std::size_t rewrite_index : insertion->second) {
+        rebuilt.extend(rewrites[rewrite_index].added_nodes);
+      }
+    }
+    if (removed.find(&builder_.nodes_[i]) == removed.end()) {
+      rebuilt.add();
+      rebuilt.get(rebuilt.size() - 1) = builder_.nodes_.shared_at(i);
+    }
+  }
+  builder_.nodes_ = std::move(rebuilt);
+  Rebuild();
+}
+
+GraphProto Replay(const ModelProto &model, const std::vector<LocalRewriting> &rewrites,
+                  GraphBuilder::SchemaLookupFn schema_lookup) {
+  GraphBuilder builder(model, std::move(schema_lookup));
+  GraphGraph graph(builder, std::vector<std::unique_ptr<PatternOptimization>>{});
+
+  std::size_t next_iteration = 0;
+  std::size_t begin = 0;
+  while (begin < rewrites.size()) {
+    const std::size_t iteration = rewrites[begin].iteration;
+    if (iteration < next_iteration) {
+      throw BuilderError("Replay: rewrites must be ordered by optimization iteration.");
+    }
+    while (next_iteration < iteration) {
+      graph.Cleanup();
+      ++next_iteration;
+    }
+    std::size_t end = begin + 1;
+    while (end < rewrites.size() && rewrites[end].iteration == iteration) {
+      ++end;
+    }
+    graph.ApplyRewritingBatch(rewrites, begin, end);
+    graph.Cleanup();
+    next_iteration = iteration + 1;
+    begin = end;
+  }
+  while (graph.Cleanup() != 0) {
+  }
+  return builder.BuildGraph();
 }
 
 void GraphGraph::RebuildSuccessors() {

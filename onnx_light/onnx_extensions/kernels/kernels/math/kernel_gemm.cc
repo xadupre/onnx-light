@@ -92,6 +92,8 @@ void GemmCompute(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
       const int64_t j_end = j_begin + std::min(tuning.tile_n, n - j_begin);
       for (int64_t i = i_begin; i < i_end; ++i) {
         for (int64_t j = j_begin; j < j_end; ++j) {
+          // A task owns complete output elements. Keep every K reduction on one
+          // thread and in increasing index order so tuning cannot change rounding.
           T sum = T{0};
           for (int64_t l_begin = 0; l_begin < k; l_begin += tuning.tile_k) {
             const int64_t l_end = l_begin + std::min(tuning.tile_k, k - l_begin);

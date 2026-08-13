@@ -2644,6 +2644,44 @@ TEST(KernelClass, GemmUsesTypedTilingPackingTaskAndConversionTuning) {
   EXPECT_THROW(gemm_kernel.Configure(tuned), std::invalid_argument);
 }
 
+TEST(KernelClass, GemmParallelTilesPreserveSerialReductionBits) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Gemm serial_kernel{ctx};
+  Gemm parallel_kernel{ctx};
+  const auto key = serial_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(key);
+  ASSERT_NE(schema, nullptr);
+
+  core::runtime::KernelTuningParameters serial = schema->portable_defaults();
+  serial.values["algorithm.tile_m"] = int64_t{1};
+  serial.values["algorithm.tile_n"] = int64_t{2};
+  serial.values["algorithm.tile_k"] = int64_t{2};
+  serial.values["algorithm.pack_b_minimum_elements"] = int64_t{1};
+  serial.values["algorithm.skinny_m_limit"] = int64_t{1};
+  serial.values["parallel.fmas_per_work_unit"] = int64_t{1};
+  serial.values["parallel.minimum_tasks"] = std::numeric_limits<int64_t>::max();
+  serial_kernel.Configure(serial);
+
+  core::runtime::KernelTuningParameters parallel = serial;
+  parallel.values["parallel.minimum_tasks"] = int64_t{1};
+  parallel_kernel.Configure(parallel);
+
+  const Tensor a = Tensor::FromFloat(
+      "", {4, 7},
+      {1e20f, 1.0f,   -1e20f, 3.0f,   1e-10f,  -2.0f,    7.0f,      -1e20f,    5.0f, 1e20f,
+       -3.0f, 2e-10f, 4.0f,   -9.0f,  1.0f,    -2.0f,    3.0f,      -4.0f,     5.0f, -6.0f,
+       7.0f,  0.5f,   0.25f,  0.125f, 0.0625f, 0.03125f, 0.015625f, 0.0078125f});
+  const Tensor b = Tensor::FromFloat("", {7, 4}, {1.0f, -1.0f, 0.5f,  2.0f, 2.0f,   0.5f,  -1.0f,
+                                                  3.0f, -1.0f, 2.0f,  1.5f, -0.5f,  0.25f, -2.0f,
+                                                  4.0f, 1.0f,  3.0f,  1.0f, -0.25f, 2.0f,  -2.0f,
+                                                  3.0f, 0.75f, -1.0f, 1.5f, -0.5f,  2.0f,  0.25f});
+
+  const Tensor expected = serial_kernel(a, b, nullptr, 1.0f, 0.0f, 0, 0);
+  const Tensor actual = parallel_kernel(a, b, nullptr, 1.0f, 0.0f, 0, 0);
+  ASSERT_EQ(actual.size_bytes(), expected.size_bytes());
+  EXPECT_EQ(std::memcmp(actual.bytes(), expected.bytes(), actual.size_bytes()), 0);
+}
+
 // Verifies that ``kernel::MatMul`` produces FLOAT16 / BFLOAT16 outputs that
 // numerically match the FLOAT computation rounded through the same dtype.
 TEST(KernelClass, MatMulHalfPrecisionMatchesFloatReference) {

@@ -94,7 +94,7 @@ by a training loop, grouped like the kernels:
 
 Each rule expresses the backward pass purely in terms of existing ONNX
 operators.  ``MatMul`` (``C = A @ B``) is representative: it emits the
-``Transpose`` and ``MatMul`` nodes for ``dA = dC @ Bᵀ`` and ``dB = Aᵀ @ dC`` and
+``Transpose`` and ``MatMul`` nodes for ``dA = dC @ B^T`` and ``dB = A^T @ dC`` and
 accumulates each into the corresponding variable.
 
 What worked

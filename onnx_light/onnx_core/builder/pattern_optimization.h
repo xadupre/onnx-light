@@ -48,7 +48,7 @@ struct OptimizationReport {
   int64_t rewriting_time_ns = 0;
   /// Total time spent in graph cleanup passes, in nanoseconds.
   int64_t cleanup_time_ns = 0;
-  /// Reserved for the constant-folding phase added by a later step.
+  /// Total time spent folding all-constant replacement nodes, in nanoseconds.
   int64_t constant_folding_time_ns = 0;
   /// Reserved for recursive subgraph optimization added by a later step.
   int64_t subgraph_optimization_time_ns = 0;

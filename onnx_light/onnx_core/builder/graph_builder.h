@@ -551,6 +551,11 @@ public:
   FunctionProto ToFunction(const std::string &domain = "");
 
 private:
+  std::size_t ConstantFoldNodes(const ConstantFoldingOptions &options,
+                                const std::unordered_set<std::string> &included_outputs);
+  std::size_t ConstantFoldImpl(const ConstantFoldingOptions &options,
+                               const std::unordered_set<std::string> *included_outputs);
+
   // Resolves and records the opset version to use for a node of ``domain``,
   // given the domain-filtered schema history ``schemas``.
   int ResolveNodeOpset(const std::string &domain, const std::vector<LightOpSchema> &schemas);

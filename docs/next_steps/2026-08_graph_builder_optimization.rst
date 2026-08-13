@@ -65,9 +65,9 @@ separate pull requests:
      - Returns persistent rewrite records from optimization and deterministically
        replays them over a fresh model.
    * - Current
-     - Logging and phase timing
-     - Collects optional per-phase and per-pattern timing statistics and records
-       match/apply durations on each local rewrite.
+     - Constant folding
+     - Folds all-constant replacement nodes into initializers and stores the
+       materialized results in the persistent rewrite records.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -349,10 +349,14 @@ bound.
 Constant folding
 ++++++++++++++++
 
-When ``Apply`` creates a node whose inputs are all constant, the optimizer
-records the new outputs as constants, so a later pattern can read them through
-``GetComputedConstant``. This reuses the builder constant machinery; the
-optimizer only caches computed values keyed by name.
+When ``Apply`` creates a node whose inputs are all materialized constants, the
+optimizer folds that node through the builder's constant-folding machinery.
+Only nodes introduced by the current rewrite batch are eligible, so unrelated
+constant branches are not changed as a side effect. Folded outputs become
+initializers and are stored in ``LocalRewriting::added_initializers`` while the
+folded nodes are removed from ``LocalRewriting::added_nodes``. A later pattern
+can therefore read the value through ``GetComputedConstant``, and replay does
+not need to execute runtime kernels again.
 
 Subgraphs
 +++++++++

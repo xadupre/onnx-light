@@ -26,8 +26,8 @@
  * On top of the structural index the class also exposes the read-only value
  * queries a pattern needs -- shapes, element types and constants -- drawing on
  * the builder's inferred information and constant analysis rather than
- * re-implementing them. Constant-folding results (added by later steps) are
- * cached by value name because a name is assigned once and never reused.
+ * re-implementing them. Constant-folding results are cached by value name
+ * because a name is assigned once and never reused.
  */
 
 #pragma once
@@ -76,6 +76,8 @@ public:
    *
    * Patterns are considered in ascending priority order. A negative
    * ``max_iter`` selects ``max(node_count, 10) * priority_count``.
+   * Replacement nodes whose inputs are all materialized constants are folded
+   * into initializers before cleanup.
    *
    * Returns:
    *   Self-contained records of the applied rewrites, in application order.

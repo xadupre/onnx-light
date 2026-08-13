@@ -1205,6 +1205,18 @@ std::size_t GraphBuilder::InlineLocalFunctions(
 }
 
 std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
+  return ConstantFoldImpl(options, nullptr);
+}
+
+std::size_t
+GraphBuilder::ConstantFoldNodes(const ConstantFoldingOptions &options,
+                                const std::unordered_set<std::string> &included_outputs) {
+  return ConstantFoldImpl(options, &included_outputs);
+}
+
+std::size_t
+GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
+                               const std::unordered_set<std::string> *included_outputs) {
   if (!options.enabled) {
     return 0;
   }
@@ -1212,11 +1224,13 @@ std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
   // Fold nested builders first so a subgraph or local function shrinks before
   // this scope is folded, mirroring the other recursive passes.
   std::size_t removed = 0;
-  for (const auto &function : local_functions_) {
-    removed += function->ConstantFold(options);
-  }
-  for (const auto &subgraph : subgraphs_) {
-    removed += subgraph->ConstantFold(options);
+  if (included_outputs == nullptr) {
+    for (const auto &function : local_functions_) {
+      removed += function->ConstantFold(options);
+    }
+    for (const auto &subgraph : subgraphs_) {
+      removed += subgraph->ConstantFold(options);
+    }
   }
 
   const std::size_t num_nodes = nodes_.size();
@@ -1283,6 +1297,15 @@ std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
     // initializer carrying that name, which remains a valid graph output.
     bool candidate = node_constant[idx] == core::compute::ConstantInfo::kConstant &&
                      !is_excluded(normalised_domain, op_type) && !NodeCarriesSubgraph(node);
+    if (candidate && included_outputs != nullptr) {
+      for (int i = 0; i < node.output().size(); ++i) {
+        const std::string output(node.output(static_cast<std::size_t>(i)));
+        if (!output.empty() && included_outputs->find(output) == included_outputs->end()) {
+          candidate = false;
+          break;
+        }
+      }
+    }
     // Every non-empty input must already be available as a materialized
     // constant; otherwise the data needed to evaluate the node is missing (for
     // example a predecessor that was left unfolded).

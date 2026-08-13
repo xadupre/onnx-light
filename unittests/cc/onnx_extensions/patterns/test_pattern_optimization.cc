@@ -4,6 +4,9 @@
 
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/builder/pattern_registry.h"
+#include "onnx_core/runtime/kernel_dispatch_table.h"
+#include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_extensions/patterns/cast_cast_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 
@@ -41,6 +44,58 @@ void AddCast(core::builder::GraphBuilder &builder, const std::string &input,
   attribute.set_i(static_cast<int64_t>(to));
   builder.MakeNode("Cast", {input}, {output}, "", "", attributes);
 }
+
+class ReplaceIdentityWithConstantAddPattern final : public core::builder::PatternOptimization {
+public:
+  ReplaceIdentityWithConstantAddPattern()
+      : PatternOptimization(1, "ReplaceIdentityWithConstantAdd") {}
+
+  std::set<std::string> FastOpType() const override { return {"Identity"}; }
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override {
+    if (candidate.op_type().value() != "Identity" || candidate.output_size() != 1 ||
+        !graph.IsConstant("a") || !graph.IsConstant("b")) {
+      return {};
+    }
+    return core::builder::MatchResult{this, {&candidate}, &candidate};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &nodes) const override {
+    utils::RepeatedProtoField<NodeProto> replacements;
+    replacements.push_back(MakeNode("Add", {"a", "b"}, {nodes[0]->output()[0].value()}));
+    return replacements;
+  }
+};
+
+class ScopedAddKernel {
+public:
+  ScopedAddKernel() {
+    const auto existing = core::runtime::GlobalCustomKernels().find(kDefaultOnnxDomain + ":Add");
+    if (existing != core::runtime::GlobalCustomKernels().end()) {
+      previous_ = existing->second;
+    }
+    core::runtime::RegisterGlobalCustomKernel(
+        "", "Add", [](const NodeProto &node, core::runtime::RuntimeContext &runtime) {
+          const core::runtime::Tensor &left = runtime.tensors().at(node.input()[0].value());
+          const core::runtime::Tensor &right = runtime.tensors().at(node.input()[1].value());
+          runtime.tensors()[node.output()[0].value()] = core::runtime::Tensor::FromFloat(
+              node.output()[0].value(), left.shape, {left.AsFloat()[0] + right.AsFloat()[0]});
+        });
+  }
+
+  ~ScopedAddKernel() {
+    if (previous_) {
+      core::runtime::RegisterGlobalCustomKernel("", "Add", std::move(previous_));
+    } else {
+      core::runtime::UnregisterGlobalCustomKernel("", "Add");
+    }
+  }
+
+private:
+  core::runtime::CustomKernelFn previous_;
+};
 
 } // namespace
 
@@ -187,18 +242,57 @@ TEST(PatternOptimization, OptimizeReportsPhaseAndPatternTimings) {
   EXPECT_GE(report.matching_time_ns, rewrites[0].match_time_ns);
   EXPECT_GE(report.rewriting_time_ns, rewrites[0].apply_time_ns);
   EXPECT_GE(report.cleanup_time_ns, 0);
-  EXPECT_EQ(report.constant_folding_time_ns, 0);
+  EXPECT_GE(report.constant_folding_time_ns, 0);
   EXPECT_EQ(report.subgraph_optimization_time_ns, 0);
-  EXPECT_EQ(report.TotalTimeNs(),
-            report.matching_time_ns + report.rewriting_time_ns + report.cleanup_time_ns);
   ASSERT_EQ(report.patterns.size(), 1u);
   EXPECT_EQ(report.patterns[0].pattern_name, "CastCast");
   EXPECT_EQ(report.patterns[0].attempts, 3u);
   EXPECT_EQ(report.patterns[0].matches, 1u);
   EXPECT_GE(report.patterns[0].match_time_ns, rewrites[0].match_time_ns);
   EXPECT_EQ(report.patterns[0].apply_time_ns, rewrites[0].apply_time_ns);
+  EXPECT_EQ(report.TotalTimeNs(), report.matching_time_ns + report.rewriting_time_ns +
+                                      report.cleanup_time_ns + report.constant_folding_time_ns);
   EXPECT_NE(report.ToString().find("phases={matching:"), std::string::npos);
   EXPECT_NE(report.ToString().find("CastCast(attempts=3, matches=1"), std::string::npos);
+}
+
+TEST(PatternOptimization, OptimizeFoldsConstantReplacementAndReplaysInitializer) {
+  ScopedAddKernel kernel;
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInitializer(MakeInitializer<float>("a", {1}, {1.0f}));
+  builder.MakeInitializer(MakeInitializer<float>("b", {1}, {2.0f}));
+  builder.MakeNode("Add", {"a", "b"}, {"untouched"});
+  builder.MakeNode("Identity", {"a"}, {"y"});
+  builder.MakeOutput("untouched");
+  builder.MakeOutput("y");
+
+  ModelProto original;
+  *original.mutable_graph() = builder.BuildGraph();
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<ReplaceIdentityWithConstantAddPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  core::builder::OptimizationReport report;
+
+  const std::vector<core::builder::LocalRewriting> rewrites = graph.Optimize(-1, &report);
+  ASSERT_EQ(rewrites.size(), 1u);
+  EXPECT_TRUE(rewrites[0].added_nodes.empty());
+  ASSERT_EQ(rewrites[0].added_initializers.size(), 1u);
+  EXPECT_EQ(rewrites[0].added_initializers[0].name().value(), "y");
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "untouched");
+  EXPECT_TRUE(graph.IsConstant("y"));
+  const TensorProto *folded = graph.GetComputedConstant("y");
+  ASSERT_NE(folded, nullptr);
+  EXPECT_FLOAT_EQ(core::runtime::TensorFromProto(*folded).AsFloat()[0], 3.0f);
+  EXPECT_GT(report.constant_folding_time_ns, 0);
+
+  const GraphProto replayed = core::builder::Replay(original, rewrites, SchemaLookup());
+  ASSERT_EQ(replayed.node_size(), 1);
+  EXPECT_EQ(replayed.node(0).output()[0].value(), "untouched");
+  ASSERT_EQ(replayed.initializer_size(), 3);
+  EXPECT_EQ(replayed.initializer(2).name().value(), "y");
+  EXPECT_FLOAT_EQ(core::runtime::TensorFromProto(replayed.initializer(2)).AsFloat()[0], 3.0f);
 }
 
 TEST(PatternOptimization, OptimizeAppliesDisjointMatchesInOneIteration) {

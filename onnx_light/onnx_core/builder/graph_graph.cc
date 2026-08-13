@@ -196,6 +196,7 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter, OptimizationRepor
     }
     std::unordered_set<const NodeProto *> removed;
     std::vector<PendingReplacement> replacements;
+    int64_t constant_folding_time_ns = 0;
     replacements.reserve(matches.size());
     for (const TimedMatch &timed_match : matches) {
       const MatchResult &match = timed_match.match;
@@ -268,12 +269,63 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter, OptimizationRepor
         }
       }
       builder_.nodes_ = std::move(rebuilt);
+
+      std::unordered_map<std::string, std::size_t> output_owners;
+      std::unordered_set<std::string> replacement_outputs;
+      for (std::size_t i = 0; i < replacements.size(); ++i) {
+        for (const NodeProto &node : replacements[i].rewriting.added_nodes) {
+          for (int o = 0; o < node.output().size(); ++o) {
+            const std::string output(node.output(static_cast<std::size_t>(o)));
+            if (!output.empty()) {
+              output_owners.emplace(output, i);
+              replacement_outputs.insert(output);
+            }
+          }
+        }
+      }
+
+      const std::size_t initializers_before_folding = builder_.initializers_.size();
+      const auto constant_folding_start = std::chrono::steady_clock::now();
+      builder_.ConstantFoldNodes(ConstantFoldingOptions{}, replacement_outputs);
+      constant_folding_time_ns = ElapsedNanoseconds(constant_folding_start);
+      if (report != nullptr) {
+        report->constant_folding_time_ns += constant_folding_time_ns;
+      }
+
+      std::unordered_set<std::string> folded_outputs;
+      for (std::size_t i = initializers_before_folding; i < builder_.initializers_.size(); ++i) {
+        const TensorProto &initializer = builder_.initializers_[i];
+        const std::string name = initializer.name().value();
+        const auto owner = output_owners.find(name);
+        if (owner != output_owners.end()) {
+          replacements[owner->second].rewriting.added_initializers.push_back(initializer);
+          folded_outputs.insert(name);
+        }
+      }
+      for (PendingReplacement &replacement : replacements) {
+        utils::RepeatedProtoField<NodeProto> unfolded_nodes;
+        for (const NodeProto &node : replacement.rewriting.added_nodes) {
+          bool folded = !node.output().empty();
+          for (int o = 0; o < node.output().size(); ++o) {
+            const std::string output(node.output(static_cast<std::size_t>(o)));
+            if (!output.empty() && folded_outputs.find(output) == folded_outputs.end()) {
+              folded = false;
+              break;
+            }
+          }
+          if (!folded) {
+            unfolded_nodes.push_back(node);
+          }
+        }
+        replacement.rewriting.added_nodes = std::move(unfolded_nodes);
+      }
+
       for (PendingReplacement &replacement : replacements) {
         applied.push_back(std::move(replacement.rewriting));
       }
     }
     if (report != nullptr) {
-      report->rewriting_time_ns += ElapsedNanoseconds(rewriting_start);
+      report->rewriting_time_ns += ElapsedNanoseconds(rewriting_start) - constant_folding_time_ns;
       report->rewrites = applied.size();
     }
 
@@ -339,7 +391,24 @@ void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites
       throw BuilderError("Replay: insertion position is outside the graph.");
     }
     for (const TensorProto &initializer : rewrite.added_initializers) {
-      builder_.MakeInitializer(initializer);
+      bool replaces_matched_output = false;
+      for (const std::size_t position : rewrite.matched_nodes) {
+        const NodeProto &matched = builder_.nodes_[position];
+        for (int o = 0; o < matched.output().size(); ++o) {
+          if (matched.output(static_cast<std::size_t>(o)) == initializer.name()) {
+            replaces_matched_output = true;
+            break;
+          }
+        }
+        if (replaces_matched_output) {
+          break;
+        }
+      }
+      if (replaces_matched_output) {
+        builder_.initializers_.push_back(initializer);
+      } else {
+        builder_.MakeInitializer(initializer);
+      }
     }
     insertions[insertion_position].push_back(i);
     replacement_nodes += rewrite.added_nodes.size();
@@ -513,7 +582,9 @@ TensorType GraphGraph::GetType(const std::string &name) const {
 }
 
 bool GraphGraph::IsConstant(const std::string &name) const {
-  return builder_.Compute().IsConstantValue(name);
+  return initializers_.find(name) != initializers_.end() ||
+         computed_constants_.find(name) != computed_constants_.end() ||
+         builder_.Compute().IsConstantValue(name);
 }
 
 const TensorProto *GraphGraph::GetComputedConstant(const std::string &name) const {

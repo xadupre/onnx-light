@@ -551,6 +551,14 @@ public:
   FunctionProto ToFunction(const std::string &domain = "");
 
 private:
+  std::size_t RemoveUnusedNodesImpl(bool recursive);
+  std::size_t
+  RemoveIdentityNodesImpl(bool recursive,
+                          std::unordered_map<std::string, std::string> *applied_renames = nullptr);
+  std::size_t
+  RemoveDuplicateNodesImpl(bool recursive,
+                           std::unordered_map<std::string, std::string> *applied_renames = nullptr);
+
   std::size_t ConstantFoldNodes(const ConstantFoldingOptions &options,
                                 const std::unordered_set<std::string> &included_outputs);
   std::size_t ConstantFoldImpl(const ConstantFoldingOptions &options,
@@ -588,6 +596,7 @@ private:
   // given by ``rename`` (dropped name -> kept name). The rewrite descends into
   // nested subgraphs, whose bodies capture values from the enclosing scope.
   void RewriteInitializerReferences(const std::unordered_map<std::string, std::string> &rename);
+  void RewriteCapturedReferences(const std::unordered_map<std::string, std::string> &rename);
 
   // Inlines every call (in this builder's nodes and, recursively, in its nested
   // subgraphs) to one of ``functions``, expanding matches to a fixed point.
@@ -619,7 +628,9 @@ private:
   // initializers visible from enclosing graphs) and recurses into subgraphs
   // (passing down the augmented index) and local functions (with a fresh,
   // isolated index). Returns the number of initializers removed.
-  std::size_t DeduplicateInitializers(const InitializerContentIndex &inherited);
+  std::size_t
+  DeduplicateInitializers(const InitializerContentIndex &inherited, bool recursive,
+                          std::unordered_map<std::string, std::string> *applied_renames = nullptr);
 
   // Seeds the incremental annotation state (value tag + in-place-reuse
   // lifetime) for a declared graph input named ``name``.

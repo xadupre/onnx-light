@@ -177,7 +177,7 @@ private:
 
   void Rebuild();
   void RebuildSuccessors();
-  std::size_t Cleanup();
+  std::size_t Cleanup(std::vector<LocalRewriting> &rewrites, std::size_t &rewrite_batch);
   void ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites, std::size_t begin,
                            std::size_t end);
 
@@ -212,7 +212,8 @@ private:
  * Reconstructs an optimized graph by replaying captured rewrites.
  *
  * Rewrites must be ordered as returned by :cpp:func:`GraphGraph::Optimize`.
- * Cleanup passes run at the same iteration boundaries as the live optimizer.
+ * Pattern and cleanup records are both applied from that sequence; replay does
+ * not rerun matching or cleanup algorithms.
  */
 GraphProto Replay(const ModelProto &model, const std::vector<LocalRewriting> &rewrites,
                   GraphBuilder::SchemaLookupFn schema_lookup = {});

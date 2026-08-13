@@ -69,9 +69,9 @@ struct LocalRewriting {
   /**
    * Positions of the nodes selected by the match.
    *
-   * Positions refer to the graph at the start of ``iteration``, not to the
-   * original model: a later iteration may match nodes added by an earlier one.
-   * This iteration-local coordinate system is also the one used by
+   * Positions refer to the graph at the start of the rewrite batch identified
+   * by ``iteration``, not to the original model: a later batch may match nodes
+   * added by an earlier one. This batch-local coordinate system is also used by
    * :cpp:var:`insert_at`.
    */
   std::vector<std::size_t> matched_nodes;
@@ -79,9 +79,15 @@ struct LocalRewriting {
   utils::RepeatedProtoField<NodeProto> added_nodes;
   /// Initializers created while applying the pattern.
   utils::RepeatedProtoField<TensorProto> added_initializers;
-  /// Insertion position in the iteration-local graph; ``-1`` means the first matched position.
+  /// Positions occupied by added initializers after this rewrite batch.
+  std::vector<std::size_t> added_initializer_positions;
+  /// Positions of initializers removed by this rewrite.
+  std::vector<std::size_t> removed_initializers;
+  /// Value-name replacements applied to node inputs and nested captures.
+  std::vector<std::pair<std::string, std::string>> value_renames;
+  /// Insertion position in the batch-local graph; ``-1`` means the first matched position.
   std::ptrdiff_t insert_at = -1;
-  /// Optimization iteration in which this rewrite was applied.
+  /// Ordered rewrite batch; records with the same value are applied together.
   std::size_t iteration = 0;
   /// Time spent recognizing this match, in nanoseconds.
   int64_t match_time_ns = 0;

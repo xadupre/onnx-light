@@ -121,6 +121,7 @@ class TestSetupBuildExt(ExtTestCase):
         python_build_index = self._line_index(
             lines, lambda line: "--target _onnxpyprotoop" in line, "the Python extension build"
         )
+        self.assertIn("lib_onnx_patterns", lines[python_build_index])
         install_index = self._line_index(
             lines, lambda line: "cmake --install" in line, "cmake --install"
         )
@@ -231,6 +232,7 @@ class TestSetupBuildExt(ExtTestCase):
         python_build_index = self._line_index(
             lines, lambda line: "--target _onnxpyprotoop" in line, "the Python extension build"
         )
+        self.assertIn("lib_onnx_patterns", lines[python_build_index])
         install_index = self._line_index(
             lines, lambda line: "cmake --install" in line, "cmake --install"
         )

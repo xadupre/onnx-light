@@ -48,23 +48,24 @@ def _default_parallel_jobs():
     return os.cpu_count() or 1
 
 
-def _python_extension_targets(no_kernels):
-    """Returns the CMake targets for the Python extension modules.
+def _python_install_targets(no_kernels):
+    """Returns the CMake targets required to install the Python package.
 
     These mirror the ``install(TARGETS ...)`` rules in ``CMakeLists.txt`` so the
     Python package can be built and installed inplace independently of the C++
     unit tests. When ``--cpp-tests`` is passed the C++ tests are built as well;
     building the Python extensions on their own first guarantees the package is
-    installed inplace even if a C++ test fails to build.
+    installed inplace even if a C++ test fails to build. ``lib_onnx_patterns``
+    is included explicitly because no Python extension links it transitively.
 
     Args:
         no_kernels: Whether the kernel-runtime extensions are disabled
             (``-DONNX_LIGHT_BUILD_KERNELS=OFF``).
 
     Returns:
-        list[str]: The Python extension module target names to build.
+        list[str]: The CMake target names needed by the Python package install.
     """
-    targets = ["_onnxpyprotoop", "_onnxpyprotolib", "_onnxpycore"]
+    targets = ["_onnxpyprotoop", "_onnxpyprotolib", "_onnxpycore", "lib_onnx_patterns"]
     if not no_kernels:
         targets += ["_onnxpykernels", "_onnxpybackend", "_onnxpygradient"]
     return targets
@@ -267,7 +268,7 @@ except ModuleNotFoundError:
                         "--config",
                         "Release",
                         "--target",
-                        *_python_extension_targets(no_kernels),
+                        *_python_install_targets(no_kernels),
                     ]
                     if parallel is not None:
                         python_build_cmd += ["--parallel", str(parallel)]
@@ -402,7 +403,7 @@ class BuildExt(Command):
                 "--config",
                 "Release",
                 "--target",
-                *_python_extension_targets(self.no_kernels),
+                *_python_install_targets(self.no_kernels),
             ]
             if self.parallel is not None:
                 python_build_cmd += ["--parallel", str(self.parallel)]

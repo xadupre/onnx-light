@@ -30,6 +30,25 @@ KernelTuningParameters MakeDefaults() {
            {"algorithm.mode", std::string("blocked")}}};
 }
 
+CpuExecutionDescriptor MakeExecution() {
+  CpuExecutionDescriptor execution;
+  execution.processor.architecture = "x86_64";
+  execution.processor.vendor = "intel";
+  execution.processor.family = 6;
+  execution.processor.model = 0x97;
+  execution.processor.microarchitecture = "alder_lake";
+  execution.processor.features.Add(platform::CpuFeature::kSse2);
+  execution.processor.features.Add(platform::CpuFeature::kAvx2);
+  execution.effective_threads = 8;
+  return execution;
+}
+
+KernelTuningParameters WithTileM(int64_t tile_m) {
+  KernelTuningParameters parameters = MakeDefaults();
+  parameters.values["algorithm.tile_m"] = tile_m;
+  return parameters;
+}
+
 std::string OptionalValue(const auto &value) {
   return value.has_value() ? std::to_string(*value) : "-";
 }
@@ -212,6 +231,91 @@ TEST(KernelTuningRegistry, RejectsBatchWithoutPartialPublication) {
   KernelTuningRegistrySnapshot after = registry.Snapshot();
   EXPECT_EQ(before.generation(), after.generation());
   EXPECT_EQ(after.Find(MakeKey())->Get<int64_t>("algorithm.tile_m"), 64);
+}
+
+TEST(KernelTuningRegistry, ResolvesExactListAndInstructionSetPrecedence) {
+  KernelTuningRegistry registry;
+  registry.RegisterSchema(KernelTuningSchema(MakeDefaults()));
+
+  platform::CpuSelector instruction_set;
+  instruction_set.required_features.Add(platform::CpuFeature::kAvx2);
+  registry.RegisterProfile(MakeKey(), instruction_set, WithTileM(80));
+
+  platform::CpuSelector processor_list;
+  processor_list.vendor = "intel";
+  processor_list.family = 6;
+  processor_list.models = {0x8E, 0x97};
+  registry.RegisterProfile(MakeKey(), processor_list, WithTileM(96));
+
+  platform::CpuSelector exact;
+  exact.vendor = "GenuineIntel";
+  exact.family = 6;
+  exact.models = {0x97};
+  registry.RegisterProfile(MakeKey(), exact, WithTileM(128));
+
+  const KernelTuningRegistrySnapshot snapshot = registry.Snapshot();
+  CpuExecutionDescriptor execution = MakeExecution();
+  ASSERT_NE(snapshot.Resolve(MakeKey(), execution), nullptr);
+  EXPECT_EQ(snapshot.Resolve(MakeKey(), execution)->Get<int64_t>("algorithm.tile_m"), 128);
+
+  execution.processor.model = 0x8E;
+  EXPECT_EQ(snapshot.Resolve(MakeKey(), execution)->Get<int64_t>("algorithm.tile_m"), 96);
+
+  execution.processor.vendor = "amd";
+  execution.processor.family = 25;
+  execution.processor.model = 0x21;
+  EXPECT_EQ(snapshot.Resolve(MakeKey(), execution)->Get<int64_t>("algorithm.tile_m"), 80);
+
+  execution.processor.features = {};
+  EXPECT_EQ(snapshot.Resolve(MakeKey(), execution)->Get<int64_t>("algorithm.tile_m"), 64);
+}
+
+TEST(KernelTuningRegistry, UsesPriorityOnlyAtEqualSpecificity) {
+  KernelTuningRegistry registry;
+  registry.RegisterSchema(KernelTuningSchema(MakeDefaults()));
+  platform::CpuSelector avx2;
+  avx2.required_features.Add(platform::CpuFeature::kAvx2);
+
+  registry.RegisterProfile(MakeKey(), avx2, WithTileM(80), 0);
+  registry.RegisterProfile(MakeKey(), avx2, WithTileM(112), 1);
+
+  const KernelTuningParameters *resolved = registry.Snapshot().Resolve(MakeKey(), MakeExecution());
+  ASSERT_NE(resolved, nullptr);
+  EXPECT_EQ(resolved->Get<int64_t>("algorithm.tile_m"), 112);
+}
+
+TEST(KernelTuningRegistry, RejectsInvalidAndAmbiguousSelectors) {
+  KernelTuningRegistry registry;
+  registry.RegisterSchema(KernelTuningSchema(MakeDefaults()));
+  platform::CpuSelector empty;
+  EXPECT_THROW(registry.RegisterProfile(MakeKey(), empty, MakeDefaults()), std::invalid_argument);
+
+  platform::CpuSelector avx2;
+  avx2.required_features.Add(platform::CpuFeature::kAvx2);
+  registry.RegisterProfile(MakeKey(), avx2, WithTileM(80));
+  EXPECT_THROW(registry.RegisterProfile(MakeKey(), avx2, WithTileM(96)), std::invalid_argument);
+
+  platform::CpuSelector impossible;
+  impossible.required_features.Add(platform::CpuFeature::kAvx2);
+  impossible.excluded_features.Add(platform::CpuFeature::kAvx2);
+  EXPECT_THROW(registry.RegisterProfile(MakeKey(), impossible, WithTileM(96)),
+               std::invalid_argument);
+}
+
+TEST(KernelTuningRegistry, PublishedProfileOverridesProcessorProfile) {
+  KernelTuningRegistry registry;
+  registry.RegisterSchema(KernelTuningSchema(MakeDefaults()));
+  platform::CpuSelector avx2;
+  avx2.required_features.Add(platform::CpuFeature::kAvx2);
+  registry.RegisterProfile(MakeKey(), avx2, WithTileM(80));
+  KernelTuningRegistrySnapshot before = registry.Snapshot();
+  KernelTuningParameters published = WithTileM(160);
+
+  registry.PublishProfiles(std::span<const KernelTuningParameters>(&published, 1));
+  KernelTuningRegistrySnapshot after = registry.Snapshot();
+
+  EXPECT_EQ(before.Resolve(MakeKey(), MakeExecution())->Get<int64_t>("algorithm.tile_m"), 80);
+  EXPECT_EQ(after.Resolve(MakeKey(), MakeExecution())->Get<int64_t>("algorithm.tile_m"), 160);
 }
 
 TEST(KernelTuningCache, LoadsCompatibleProfileAndPreservesOldSnapshot) {

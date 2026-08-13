@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "onnx_core/platform/cpu_descriptor.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_light_helpers.h"
 
@@ -18,6 +19,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <variant>
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
@@ -43,6 +45,14 @@ struct KernelTuningKey {
 /** Hashes every field of a :cpp:class:`KernelTuningKey`. */
 struct KernelTuningKeyHash {
   size_t operator()(const KernelTuningKey &key) const noexcept;
+};
+
+/** Describes the stable execution properties used to resolve a processor profile. */
+struct CpuExecutionDescriptor {
+  platform::CpuDescriptor processor;
+  uint32_t effective_threads = 0;
+
+  bool operator==(const CpuExecutionDescriptor &) const = default;
 };
 
 /** Stores one portable scalar tuning value. */
@@ -168,6 +178,18 @@ public:
    */
   const KernelTuningParameters *Find(const KernelTuningKey &key) const noexcept;
 
+  /**
+   * Resolves the highest-precedence profile matching an execution descriptor.
+   *
+   * Explicitly published parameters take precedence over registered processor
+   * profiles, which in turn take precedence over portable defaults.
+   *
+   * Returns:
+   *   The resolved parameters, or ``nullptr`` when the key is not registered.
+   */
+  const KernelTuningParameters *Resolve(const KernelTuningKey &key,
+                                        const CpuExecutionDescriptor &execution) const noexcept;
+
 private:
   struct State;
   explicit KernelTuningRegistrySnapshot(std::shared_ptr<const State> state)
@@ -197,6 +219,19 @@ public:
    */
   void RegisterSchema(KernelTuningSchema schema);
 
+  /**
+   * Registers one validated processor-specific profile.
+   *
+   * Exact vendor/family/model selectors outrank processor-list and
+   * microarchitecture selectors, which outrank instruction-set selectors.
+   * Priority only distinguishes profiles at the same specificity.
+   *
+   * @throws std::invalid_argument for an invalid selector, parameters that do
+   * not match the schema, or a selector ambiguous with an existing profile.
+   */
+  void RegisterProfile(const KernelTuningKey &key, platform::CpuSelector processors,
+                       KernelTuningParameters parameters, int priority = 0);
+
   /** Returns the current immutable registry generation. */
   KernelTuningRegistrySnapshot Snapshot() const noexcept;
 
@@ -225,5 +260,9 @@ KernelTuningRegistry &GetKernelTuningRegistry();
 
 /** Registers a schema in the process-wide tuning registry. */
 void RegisterKernelTuningSchema(KernelTuningSchema schema);
+
+/** Registers a processor-specific profile in the process-wide tuning registry. */
+void RegisterKernelTuningProfile(const KernelTuningKey &key, platform::CpuSelector processors,
+                                 KernelTuningParameters parameters, int priority = 0);
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

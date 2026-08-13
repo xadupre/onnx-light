@@ -12,6 +12,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <string>
 #include <vector>
@@ -37,12 +38,62 @@ template <typename T> T SignedAbs(T value) {
   return value < 0 ? static_cast<T>(-value) : value;
 }
 
-template <typename T, typename Generator, typename Transform>
+template <typename T, typename Generator>
+void FillAbsCalibrationInput(Tensor &input, int64_t elements, Generator generate) {
+  T *values = reinterpret_cast<T *>(input.mutable_bytes());
+  for (int64_t i = 0; i < elements; ++i) {
+    values[i] = generate(i);
+  }
+}
+
+Tensor MakeAbsCalibrationInput(int32_t element_type, int64_t elements) {
+  Tensor input = MakeOutputTensor(
+      element_type, {elements}, static_cast<size_t>(elements) * ElementSize(element_type), nullptr);
+  switch (static_cast<DataType>(element_type)) {
+  case DataType::FLOAT:
+    FillAbsCalibrationInput<float>(
+        input, elements, [](int64_t i) { return static_cast<float>((i % 257) - 128) / 17.0f; });
+    break;
+  case DataType::DOUBLE:
+    FillAbsCalibrationInput<double>(
+        input, elements, [](int64_t i) { return static_cast<double>((i % 257) - 128) / 17.0; });
+    break;
+  case DataType::FLOAT16:
+    FillAbsCalibrationInput<uint16_t>(input, elements, [](int64_t i) {
+      return FloatToFloat16Bits(static_cast<float>((i % 257) - 128) / 17.0f);
+    });
+    break;
+  case DataType::BFLOAT16:
+    FillAbsCalibrationInput<uint16_t>(input, elements, [](int64_t i) {
+      return FloatToBfloat16Bits(static_cast<float>((i % 257) - 128) / 17.0f);
+    });
+    break;
+  case DataType::INT8:
+    FillAbsCalibrationInput<int8_t>(input, elements,
+                                    [](int64_t i) { return static_cast<int8_t>((i % 255) - 127); });
+    break;
+  case DataType::INT16:
+    FillAbsCalibrationInput<int16_t>(
+        input, elements, [](int64_t i) { return static_cast<int16_t>((i % 65535) - 32767); });
+    break;
+  case DataType::INT32:
+    FillAbsCalibrationInput<int32_t>(
+        input, elements, [](int64_t i) { return static_cast<int32_t>((i % 65535) - 32767); });
+    break;
+  case DataType::INT64:
+    FillAbsCalibrationInput<int64_t>(input, elements,
+                                     [](int64_t i) { return (i % 65535) - 32767; });
+    break;
+  default:
+    throw std::invalid_argument("Abs calibration received an unsupported element type.");
+  }
+  return input;
+}
+
 int64_t CalibrateAbsParallelMinimumElements(const KernelTuningKey &key,
                                             const CpuExecutionDescriptor &execution,
                                             const CalibrationOptions &options,
-                                            CalibrationReporter &reporter, Generator generate,
-                                            Transform transform) {
+                                            CalibrationReporter &reporter) {
   const int64_t portable_minimum = 32 * core::runtime::kParallelForGrainSize;
   const uint32_t actual_threads = static_cast<uint32_t>(core::runtime::ParallelForThreadCount());
   if (execution.effective_threads != actual_threads) {
@@ -61,8 +112,8 @@ int64_t CalibrateAbsParallelMinimumElements(const KernelTuningKey &key,
   constexpr int kRepetitions = 5;
   const uint64_t memory_budget =
       options.maximum_memory_bytes == 0 ? uint64_t{64} << 20 : options.maximum_memory_bytes;
-  const int64_t budget_elements =
-      static_cast<int64_t>(memory_budget / (3 * static_cast<uint64_t>(sizeof(T))));
+  const int64_t budget_elements = static_cast<int64_t>(
+      memory_budget / (3 * static_cast<uint64_t>(ElementSize(key.element_type))));
   const int64_t maximum_elements = std::min(kMaximumElements, budget_elements);
   if (maximum_elements < kFirstElements) {
     reporter.AddDiagnostic(
@@ -71,6 +122,12 @@ int64_t CalibrateAbsParallelMinimumElements(const KernelTuningKey &key,
   }
   const uint64_t duration_ms = options.maximum_duration_ms == 0 ? 250 : options.maximum_duration_ms;
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(duration_ms);
+
+  const KernelContext context{DefaultOpset(13)};
+  Abs serial_kernel{context};
+  Abs parallel_kernel{context};
+  serial_kernel.Configure(
+      {key, {{std::string(tuning::kParallelMinimumElements), kMaximumElements + 1}}});
 
   const auto median = [](std::vector<int64_t> samples) {
     std::sort(samples.begin(), samples.end());
@@ -87,28 +144,17 @@ int64_t CalibrateAbsParallelMinimumElements(const KernelTuningKey &key,
   int64_t first_winning_elements = 0;
   int consecutive_wins = 0;
   for (int64_t elements = kFirstElements; elements <= maximum_elements; elements *= 2) {
-    std::vector<T> input(static_cast<size_t>(elements));
-    std::vector<T> serial(static_cast<size_t>(elements));
-    std::vector<T> parallel(static_cast<size_t>(elements));
-    for (int64_t i = 0; i < elements; ++i) {
-      input[static_cast<size_t>(i)] = generate(i);
-    }
-    const auto run_range = [&](T *output, int64_t begin, int64_t end) {
-      for (int64_t i = begin; i < end; ++i) {
-        output[i] = transform(input[static_cast<size_t>(i)]);
-      }
-    };
-    const auto run_serial = [&]() { run_range(serial.data(), 0, elements); };
+    const Tensor input = MakeAbsCalibrationInput(key.element_type, elements);
+    Tensor serial = MakeOutputTensor(key.element_type, {elements}, input.size_bytes(), nullptr);
+    Tensor parallel = MakeOutputTensor(key.element_type, {elements}, input.size_bytes(), nullptr);
+    const auto run_serial = [&]() { serial_kernel(input, serial); };
     const int64_t grain = (elements + 1) / 2;
-    const auto run_parallel = [&]() {
-      core::runtime::ParallelFor(elements, grain, [&](int64_t begin, int64_t end) {
-        run_range(parallel.data(), begin, end);
-      });
-    };
+    parallel_kernel.Configure({key, {{std::string(tuning::kParallelMinimumElements), grain}}});
+    const auto run_parallel = [&]() { parallel_kernel(input, parallel); };
 
     run_serial();
     run_parallel();
-    if (serial != parallel) {
+    if (std::memcmp(serial.bytes(), parallel.bytes(), serial.size_bytes()) != 0) {
       throw std::runtime_error("Abs calibration parallel result differs from the serial result.");
     }
 
@@ -151,58 +197,8 @@ KernelTuningParameters CalibrateAbs(const KernelTuningKey &key,
                                     const CpuExecutionDescriptor &execution,
                                     const CalibrationOptions &options,
                                     CalibrationReporter &reporter) {
-  int64_t minimum_elements = 0;
-  switch (static_cast<DataType>(key.element_type)) {
-  case DataType::FLOAT:
-    minimum_elements = CalibrateAbsParallelMinimumElements<float>(
-        key, execution, options, reporter,
-        [](int64_t i) { return static_cast<float>((i % 257) - 128) / 17.0f; },
-        [](float value) { return std::fabs(value); });
-    break;
-  case DataType::DOUBLE:
-    minimum_elements = CalibrateAbsParallelMinimumElements<double>(
-        key, execution, options, reporter,
-        [](int64_t i) { return static_cast<double>((i % 257) - 128) / 17.0; },
-        [](double value) { return std::fabs(value); });
-    break;
-  case DataType::FLOAT16:
-    minimum_elements = CalibrateAbsParallelMinimumElements<uint16_t>(
-        key, execution, options, reporter,
-        [](int64_t i) { return FloatToFloat16Bits(static_cast<float>((i % 257) - 128) / 17.0f); },
-        [](uint16_t value) { return FloatToFloat16Bits(std::fabs(Float16BitsToFloat(value))); });
-    break;
-  case DataType::BFLOAT16:
-    minimum_elements = CalibrateAbsParallelMinimumElements<uint16_t>(
-        key, execution, options, reporter,
-        [](int64_t i) { return FloatToBfloat16Bits(static_cast<float>((i % 257) - 128) / 17.0f); },
-        [](uint16_t value) { return FloatToBfloat16Bits(std::fabs(Bfloat16BitsToFloat(value))); });
-    break;
-  case DataType::INT8:
-    minimum_elements = CalibrateAbsParallelMinimumElements<int8_t>(
-        key, execution, options, reporter,
-        [](int64_t i) { return static_cast<int8_t>((i % 255) - 127); },
-        [](int8_t value) { return SignedAbs(value); });
-    break;
-  case DataType::INT16:
-    minimum_elements = CalibrateAbsParallelMinimumElements<int16_t>(
-        key, execution, options, reporter,
-        [](int64_t i) { return static_cast<int16_t>((i % 65535) - 32767); },
-        [](int16_t value) { return SignedAbs(value); });
-    break;
-  case DataType::INT32:
-    minimum_elements = CalibrateAbsParallelMinimumElements<int32_t>(
-        key, execution, options, reporter,
-        [](int64_t i) { return static_cast<int32_t>((i % 65535) - 32767); },
-        [](int32_t value) { return SignedAbs(value); });
-    break;
-  case DataType::INT64:
-    minimum_elements = CalibrateAbsParallelMinimumElements<int64_t>(
-        key, execution, options, reporter, [](int64_t i) { return (i % 65535) - 32767; },
-        [](int64_t value) { return SignedAbs(value); });
-    break;
-  default:
-    throw std::invalid_argument("Abs calibration received an unsupported element type.");
-  }
+  const int64_t minimum_elements =
+      CalibrateAbsParallelMinimumElements(key, execution, options, reporter);
   return {key, {{std::string(tuning::kParallelMinimumElements), minimum_elements}}};
 }
 

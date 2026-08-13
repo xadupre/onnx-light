@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels {
 // Re-exports the runtime types moved to ``onnx_core::runtime`` so
@@ -92,12 +93,22 @@ public:
 class Not : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Not";
+  explicit Not(const KernelContext &ctx);
+  /// Registers the portable BOOL tuning schema.
+  static void RegisterTuningSchemas();
+  KernelTuningKey TuningKey(int32_t element_type) const override;
+  void Configure(const KernelTuningParameters &parameters) override;
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
+  /// Returns the immutable configuration used by the execution path.
+  const tuning::ParallelTuning &tuning() const noexcept { return tuning_; }
+
   static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  tuning::ParallelTuning tuning_;
 };
 
 /// Element-wise ``IsNaN``: returns a BOOL tensor with the same shape as the

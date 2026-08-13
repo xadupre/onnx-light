@@ -7,7 +7,7 @@
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
-#include "onnx_extensions/kernels/portable_kernel_tuning.h"
+#include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
 #include <memory>
 #include <string>

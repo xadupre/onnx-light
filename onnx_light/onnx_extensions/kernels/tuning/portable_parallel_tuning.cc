@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_extensions/kernels/portable_kernel_tuning.h"
+#include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
 #include <algorithm>
 #include <stdexcept>

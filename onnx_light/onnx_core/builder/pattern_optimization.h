@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
 #include <set>
 #include <string>
 #include <utility>
@@ -19,16 +20,25 @@ class PatternOptimization;
 
 /// Persistent description of one applied local graph rewrite.
 struct LocalRewriting {
-  /// Stable diagnostic name of the pattern that produced the rewrite.
-  std::string pattern;
-  /// One output name identifying each removed node.
-  std::vector<std::string> removed_nodes;
+  /// Shared link to the pattern that produced the rewrite.
+  std::shared_ptr<const PatternOptimization> pattern;
+  /// Stable diagnostic name retained for logging and serialization.
+  std::string pattern_name;
+  /**
+   * Positions of the nodes selected by the match.
+   *
+   * Positions refer to the graph at the start of ``iteration``, not to the
+   * original model: a later iteration may match nodes added by an earlier one.
+   * This iteration-local coordinate system is also the one used by
+   * :cpp:var:`insert_at`.
+   */
+  std::vector<std::size_t> matched_nodes;
   /// Replacement nodes owned by this record.
   utils::RepeatedProtoField<NodeProto> added_nodes;
   /// Initializers created while applying the pattern.
   utils::RepeatedProtoField<TensorProto> added_initializers;
-  /// Position of the replacement in the graph before this iteration.
-  std::size_t insert_at = 0;
+  /// Insertion position in the iteration-local graph; ``-1`` means the first matched position.
+  std::ptrdiff_t insert_at = -1;
   /// Optimization iteration in which this rewrite was applied.
   std::size_t iteration = 0;
 };

@@ -23,16 +23,6 @@ struct PendingReplacement {
   LocalRewriting rewriting;
 };
 
-std::string NodeIdentifier(const NodeProto &node) {
-  for (int i = 0; i < node.output_size(); ++i) {
-    const std::string name = node.output(static_cast<std::size_t>(i));
-    if (!name.empty()) {
-      return name;
-    }
-  }
-  throw BuilderError("GraphGraph: a rewritten node must have a non-empty output.");
-}
-
 } // namespace
 
 GraphGraph::GraphGraph(GraphBuilder &builder) : GraphGraph(builder, CreateRegisteredPatterns()) {}
@@ -40,14 +30,16 @@ GraphGraph::GraphGraph(GraphBuilder &builder) : GraphGraph(builder, CreateRegist
 GraphGraph::GraphGraph(GraphBuilder &builder,
                        std::vector<std::unique_ptr<PatternOptimization>> patterns,
                        DoNotRemovePredicate do_not_remove)
-    : builder_(builder), patterns_(std::move(patterns)), do_not_remove_(std::move(do_not_remove)) {
-  for (const std::unique_ptr<PatternOptimization> &pattern : patterns_) {
+    : builder_(builder), do_not_remove_(std::move(do_not_remove)) {
+  patterns_.reserve(patterns.size());
+  for (std::unique_ptr<PatternOptimization> &pattern : patterns) {
     if (pattern == nullptr) {
       throw BuilderError("GraphGraph: a pattern must not be null.");
     }
     if (pattern->Name().empty()) {
       throw BuilderError("GraphGraph: a pattern must have a stable diagnostic name.");
     }
+    patterns_.push_back(std::move(pattern));
   }
   std::stable_sort(patterns_.begin(), patterns_.end(), [](const auto &left, const auto &right) {
     return left->priority < right->priority;
@@ -92,7 +84,7 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter) {
 
   std::vector<int> priorities;
   priorities.reserve(patterns_.size());
-  for (const std::unique_ptr<PatternOptimization> &pattern : patterns_) {
+  for (const std::shared_ptr<PatternOptimization> &pattern : patterns_) {
     if (priorities.empty() || priorities.back() != pattern->priority) {
       priorities.push_back(pattern->priority);
     }
@@ -113,7 +105,7 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter) {
     std::unordered_set<const NodeProto *> marked;
     std::vector<MatchResult> matches;
 
-    for (const std::unique_ptr<PatternOptimization> &pattern : patterns_) {
+    for (const std::shared_ptr<PatternOptimization> &pattern : patterns_) {
       if (pattern->priority > current_priority) {
         break;
       }
@@ -173,13 +165,22 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter) {
       utils::RepeatedProtoField<NodeProto> replacement_nodes =
           match.pattern->Apply(*this, match.nodes);
       LocalRewriting rewriting;
-      rewriting.pattern = match.pattern->Name();
-      rewriting.insert_at = position;
+      const auto pattern_owner =
+          std::find_if(patterns_.begin(), patterns_.end(),
+                       [&match](const std::shared_ptr<PatternOptimization> &candidate) {
+                         return candidate.get() == match.pattern;
+                       });
+      if (pattern_owner == patterns_.end()) {
+        throw BuilderError("GraphGraph::Optimize: matched pattern has no owner.");
+      }
+      rewriting.pattern = *pattern_owner;
+      rewriting.pattern_name = match.pattern->Name();
+      rewriting.insert_at = static_cast<std::ptrdiff_t>(position);
       rewriting.iteration = static_cast<std::size_t>(iteration);
       rewriting.added_nodes = replacement_nodes;
-      rewriting.removed_nodes.reserve(match.nodes.size());
+      rewriting.matched_nodes.reserve(match.nodes.size());
       for (const NodeProto *node : match.nodes) {
-        rewriting.removed_nodes.push_back(NodeIdentifier(*node));
+        rewriting.matched_nodes.push_back(Position(*node));
       }
       for (std::size_t i = initializers_before; i < builder_.initializers_.size(); ++i) {
         rewriting.added_initializers.push_back(builder_.initializers_[i]);
@@ -243,48 +244,45 @@ std::size_t GraphGraph::Cleanup() {
 
 void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites, std::size_t begin,
                                      std::size_t end) {
-  std::unordered_map<std::string, const NodeProto *> identifiers;
-  identifiers.reserve(builder_.nodes_.size());
-  for (const NodeProto &node : builder_.nodes_) {
-    for (int i = 0; i < node.output_size(); ++i) {
-      const std::string identifier = node.output(static_cast<std::size_t>(i));
-      if (identifier.empty()) {
-        continue;
-      }
-      if (!identifiers.emplace(identifier, &node).second) {
-        throw BuilderError("Replay: duplicate node identifier '" + identifier + "'.");
-      }
-    }
-  }
-
   std::unordered_set<const NodeProto *> removed;
   std::unordered_map<std::size_t, std::vector<std::size_t>> insertions;
   std::size_t replacement_nodes = 0;
   for (std::size_t i = begin; i < end; ++i) {
     const LocalRewriting &rewrite = rewrites[i];
-    if (rewrite.pattern.empty()) {
+    if (rewrite.pattern_name.empty() && rewrite.pattern == nullptr) {
       throw BuilderError("Replay: a rewrite must have a pattern name.");
     }
-    if (rewrite.insert_at >= builder_.nodes_.size()) {
+    if (rewrite.pattern != nullptr && !rewrite.pattern_name.empty() &&
+        rewrite.pattern->Name() != rewrite.pattern_name) {
+      throw BuilderError("Replay: the linked pattern does not match the recorded pattern name.");
+    }
+    if (rewrite.matched_nodes.empty()) {
+      throw BuilderError("Replay: a rewrite must match at least one node.");
+    }
+    std::size_t first_matched = builder_.nodes_.size();
+    for (const std::size_t position : rewrite.matched_nodes) {
+      if (position >= builder_.nodes_.size()) {
+        throw BuilderError("Replay: matched node position " + std::to_string(position) +
+                           " is outside the graph.");
+      }
+      if (!removed.insert(&builder_.nodes_[position]).second) {
+        throw BuilderError("Replay: rewrites in one iteration overlap at node position " +
+                           std::to_string(position) + ".");
+      }
+      first_matched = std::min(first_matched, position);
+    }
+    if (rewrite.insert_at < -1) {
+      throw BuilderError("Replay: insertion position must be at least -1.");
+    }
+    const std::size_t insertion_position =
+        rewrite.insert_at == -1 ? first_matched : static_cast<std::size_t>(rewrite.insert_at);
+    if (insertion_position >= builder_.nodes_.size()) {
       throw BuilderError("Replay: insertion position is outside the graph.");
-    }
-    if (rewrite.removed_nodes.empty()) {
-      throw BuilderError("Replay: a rewrite must remove at least one node.");
-    }
-    for (const std::string &identifier : rewrite.removed_nodes) {
-      const auto found = identifiers.find(identifier);
-      if (found == identifiers.end()) {
-        throw BuilderError("Replay: removed node '" + identifier + "' was not found.");
-      }
-      if (!removed.insert(found->second).second) {
-        throw BuilderError("Replay: rewrites in one iteration overlap at node '" + identifier +
-                           "'.");
-      }
     }
     for (const TensorProto &initializer : rewrite.added_initializers) {
       builder_.MakeInitializer(initializer);
     }
-    insertions[rewrite.insert_at].push_back(i);
+    insertions[insertion_position].push_back(i);
     replacement_nodes += rewrite.added_nodes.size();
   }
 

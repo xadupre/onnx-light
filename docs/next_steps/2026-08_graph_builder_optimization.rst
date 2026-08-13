@@ -274,19 +274,25 @@ instead of only mutating the builder in place:
 
     std::vector<LocalRewriting> GraphGraph::Optimize(...);
 
-A ``LocalRewriting`` no longer refers to live node pointers: it records, by
-value name and node content, which nodes a rewrite removes and which nodes and
-initializers it adds. It therefore survives the index rebuild and can be
-serialized, logged, or stored:
+A ``LocalRewriting`` no longer refers to live node pointers: it records the
+positions selected by the match and owns the nodes and initializers it adds.
+Positions are relative to the graph at the start of the recorded iteration,
+not to the original model, because earlier iterations may create nodes that a
+later pattern matches. It also shares ownership of the stateless pattern that
+produced it, so callers can inspect that pattern after ``GraphGraph`` is
+destroyed. The stable name remains available for logging and serialization:
 
 .. code-block:: cpp
 
     struct LocalRewriting {
-      std::string pattern;                        // pattern that produced it
-      std::vector<std::string> removed_nodes;     // outputs of removed nodes
+      std::shared_ptr<const PatternOptimization> pattern;
+      std::string pattern_name;                   // stable serialized identity
+      // Positions in the graph at the start of this iteration. They cannot be
+      // positions in the original model because prior rewrites may add nodes.
+      std::vector<std::size_t> matched_nodes;
       utils::RepeatedProtoField<NodeProto> added_nodes;   // replacement nodes
       utils::RepeatedProtoField<TensorProto> added_initializers;
-      std::size_t insert_at = 0;                  // position of the first match
+      std::ptrdiff_t insert_at = -1;              // -1 means first matched node
       std::size_t iteration = 0;                  // cleanup/replay boundary
     };
 
@@ -304,7 +310,7 @@ re-running the matching phase:
     GraphProto Replay(const ModelProto &model,
                       const std::vector<LocalRewriting> &rewrites);
 
-Replay groups consecutive records from the same iteration, drops their removed
+Replay groups consecutive records from the same iteration, drops their matched
 nodes and splices their additions at ``insert_at`` in one rebuild, then runs the
 same cleanup passes as the live loop. This preserves simultaneous disjoint
 rewrites and gives a cheap, deterministic way to cache and reproduce an

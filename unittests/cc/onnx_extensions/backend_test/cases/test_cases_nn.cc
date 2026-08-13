@@ -15,9 +15,11 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectNNTestCases;
 
 namespace {
-std::vector<core::backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
+std::vector<core::backend_test::TestCase>
+CollectTestCases(const std::string &op_type = "",
+                 core::backend_test::TestMode mode = core::backend_test::TestMode::TEST) {
   std::vector<core::backend_test::TestCase> registry;
-  CollectNNTestCases(registry, op_type);
+  CollectNNTestCases(registry, op_type, mode);
   return registry;
 }
 } // namespace
@@ -504,6 +506,32 @@ TEST(BackendTestCase, AttentionCasesArePresent) {
   EXPECT_EQ(basic->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{1, 2, 2, 2}));
   // GQA case output shape (B, Hq, Lq, Dv).
   EXPECT_EQ(gqa->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{1, 4, 2, 2}));
+}
+
+TEST(BackendTestCase, AttentionBenchmarkCorpusIsLazyAndCoversPrefillAndDecode) {
+  auto cases = CollectTestCases("Attention", core::backend_test::TestMode::BENCHMARK);
+  ASSERT_EQ(cases.size(), 6u);
+
+  bool has_prefill = false;
+  bool has_decode = false;
+  bool has_mha = false;
+  bool has_gqa = false;
+  bool has_mqa = false;
+  for (const TestCase &test_case : cases) {
+    EXPECT_TRUE(test_case.is_lazy());
+    EXPECT_FALSE(test_case.materialized());
+    EXPECT_TRUE(test_case.name.ends_with("_benchmark"));
+    has_prefill |= test_case.name.find("prefill") != std::string::npos;
+    has_decode |= test_case.name.find("decode") != std::string::npos;
+    has_mha |= test_case.name.find("_mha_") != std::string::npos;
+    has_gqa |= test_case.name.find("_gqa_") != std::string::npos;
+    has_mqa |= test_case.name.find("_mqa_") != std::string::npos;
+  }
+  EXPECT_TRUE(has_prefill);
+  EXPECT_TRUE(has_decode);
+  EXPECT_TRUE(has_mha);
+  EXPECT_TRUE(has_gqa);
+  EXPECT_TRUE(has_mqa);
 }
 
 TEST(BackendTestCase, DropoutCasesArePresent) {

@@ -82,8 +82,8 @@ public:
    */
   std::vector<LocalRewriting> Optimize(int max_iter = -1);
 
-  /// Returns the patterns owned by this graph optimizer.
-  const std::vector<std::unique_ptr<PatternOptimization>> &Patterns() const noexcept {
+  /// Returns the patterns shared by this graph optimizer and its rewrites.
+  const std::vector<std::shared_ptr<PatternOptimization>> &Patterns() const noexcept {
     return patterns_;
   }
 
@@ -188,7 +188,7 @@ private:
   bool ConstantScalarValue(const std::string &name, double &out) const;
 
   GraphBuilder &builder_;
-  std::vector<std::unique_ptr<PatternOptimization>> patterns_;
+  std::vector<std::shared_ptr<PatternOptimization>> patterns_;
   DoNotRemovePredicate do_not_remove_;
   // Value name -> producing node (mirrors Python ``predecessors_``).
   std::unordered_map<std::string, const NodeProto *> predecessors_;

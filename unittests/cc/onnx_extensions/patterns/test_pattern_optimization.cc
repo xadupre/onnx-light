@@ -143,8 +143,10 @@ TEST(PatternOptimization, OptimizeAppliesPatternAndCleanupPasses) {
 
   const std::vector<core::builder::LocalRewriting> rewrites = graph.Optimize();
   ASSERT_EQ(rewrites.size(), 1u);
-  EXPECT_EQ(rewrites[0].pattern, "CastCast");
-  EXPECT_EQ(rewrites[0].removed_nodes, std::vector<std::string>({"middle", "y"}));
+  ASSERT_NE(rewrites[0].pattern, nullptr);
+  EXPECT_EQ(rewrites[0].pattern->Name(), "CastCast");
+  EXPECT_EQ(rewrites[0].pattern_name, "CastCast");
+  EXPECT_EQ(rewrites[0].matched_nodes, std::vector<std::size_t>({0, 1}));
   EXPECT_EQ(rewrites[0].added_nodes.size(), 1u);
   EXPECT_TRUE(rewrites[0].added_initializers.empty());
   EXPECT_EQ(rewrites[0].insert_at, 1u);
@@ -199,9 +201,8 @@ TEST(PatternOptimization, ReplayRestoresAddedInitializers) {
   *original.mutable_graph() = builder.BuildGraph();
 
   core::builder::LocalRewriting rewrite;
-  rewrite.pattern = "AddWeight";
-  rewrite.removed_nodes = {"y"};
-  rewrite.insert_at = 0;
+  rewrite.pattern_name = "AddWeight";
+  rewrite.matched_nodes = {0};
   TensorProto &weight = rewrite.added_initializers.add();
   weight.set_name("weight");
   weight.set_data_type(TensorProto::DataType::FLOAT);
@@ -217,6 +218,26 @@ TEST(PatternOptimization, ReplayRestoresAddedInitializers) {
   ASSERT_EQ(replayed.node_size(), 1);
   EXPECT_EQ(replayed.node(0).op_type().value(), "Add");
   EXPECT_EQ(replayed.node(0).input()[1].value(), "weight");
+}
+
+TEST(PatternOptimization, LocalRewritingKeepsPatternAlive) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
+  AddCast(builder, "x", "middle", TensorProto::DataType::FLOAT);
+  AddCast(builder, "middle", "y", TensorProto::DataType::FLOAT);
+  builder.MakeOutput("y");
+
+  std::vector<core::builder::LocalRewriting> rewrites;
+  {
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    rewrites = graph.Optimize();
+  }
+
+  ASSERT_EQ(rewrites.size(), 1u);
+  ASSERT_NE(rewrites[0].pattern, nullptr);
+  EXPECT_EQ(rewrites[0].pattern->Name(), "CastCast");
 }
 
 TEST(PatternOptimization, OptimizeKeepsSharedInnerCastInTopologicalOrder) {

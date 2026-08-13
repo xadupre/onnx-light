@@ -41,6 +41,35 @@ void AppendNodes(std::ostringstream &os, const utils::RepeatedProtoField<NodePro
 
 } // namespace
 
+std::string PatternOptimizationStatistics::ToString() const {
+  std::ostringstream os;
+  os << pattern_name << "(attempts=" << attempts << ", matches=" << matches
+     << ", match_time_ns=" << match_time_ns << ", apply_time_ns=" << apply_time_ns << ")";
+  return os.str();
+}
+
+int64_t OptimizationReport::TotalTimeNs() const noexcept {
+  return matching_time_ns + rewriting_time_ns + cleanup_time_ns + constant_folding_time_ns +
+         subgraph_optimization_time_ns;
+}
+
+std::string OptimizationReport::ToString() const {
+  std::ostringstream os;
+  os << "OptimizationReport(iterations=" << iterations << ", rewrites=" << rewrites
+     << ", total_time_ns=" << TotalTimeNs() << ", phases={matching: " << matching_time_ns
+     << ", rewriting: " << rewriting_time_ns << ", cleanup: " << cleanup_time_ns
+     << ", constant_folding: " << constant_folding_time_ns
+     << ", subgraph_optimization: " << subgraph_optimization_time_ns << "}, patterns=[";
+  for (std::size_t i = 0; i < patterns.size(); ++i) {
+    if (i != 0) {
+      os << ", ";
+    }
+    os << patterns[i].ToString();
+  }
+  os << "])";
+  return os.str();
+}
+
 std::string LocalRewriting::ToString() const {
   std::ostringstream os;
   os << "LocalRewriting(pattern=" << (pattern == nullptr ? "<null>" : pattern->Name())
@@ -60,7 +89,8 @@ std::string LocalRewriting::ToString() const {
     }
     os << added_initializers[i].name().value();
   }
-  os << "], insert_at=" << insert_at << ", iteration=" << iteration << ")";
+  os << "], insert_at=" << insert_at << ", iteration=" << iteration
+     << ", match_time_ns=" << match_time_ns << ", apply_time_ns=" << apply_time_ns << ")";
   return os.str();
 }
 

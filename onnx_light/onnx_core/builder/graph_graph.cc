@@ -5,6 +5,7 @@
 #include "onnx_core/builder/graph_graph.h"
 
 #include <algorithm>
+#include <chrono>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
@@ -22,6 +23,18 @@ struct PendingReplacement {
   utils::RepeatedProtoField<NodeProto> nodes;
   LocalRewriting rewriting;
 };
+
+struct TimedMatch {
+  MatchResult match;
+  std::size_t pattern_index;
+  int64_t match_time_ns;
+};
+
+int64_t ElapsedNanoseconds(std::chrono::steady_clock::time_point start) {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
+                                                              start)
+      .count();
+}
 
 } // namespace
 
@@ -77,9 +90,16 @@ void GraphGraph::Rebuild() {
   RebuildSuccessors();
 }
 
-std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter) {
+std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter, OptimizationReport *report) {
   if (max_iter < -1) {
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
+  }
+  if (report != nullptr) {
+    *report = OptimizationReport{};
+    report->patterns.reserve(patterns_.size());
+    for (const std::shared_ptr<PatternOptimization> &pattern : patterns_) {
+      report->patterns.push_back(PatternOptimizationStatistics{.pattern_name = pattern->Name()});
+    }
   }
 
   std::vector<int> priorities;
@@ -101,11 +121,19 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter) {
   std::vector<LocalRewriting> applied;
   std::size_t priority_index = 0;
   for (int iteration = 0; iteration < max_iter; ++iteration) {
+    if (report != nullptr) {
+      ++report->iterations;
+    }
     const int current_priority = priorities[priority_index];
     std::unordered_set<const NodeProto *> marked;
-    std::vector<MatchResult> matches;
+    std::vector<TimedMatch> matches;
+    std::chrono::steady_clock::time_point matching_start;
+    if (report != nullptr) {
+      matching_start = std::chrono::steady_clock::now();
+    }
 
-    for (const std::shared_ptr<PatternOptimization> &pattern : patterns_) {
+    for (std::size_t pattern_index = 0; pattern_index < patterns_.size(); ++pattern_index) {
+      const std::shared_ptr<PatternOptimization> &pattern = patterns_[pattern_index];
       if (pattern->priority > current_priority) {
         break;
       }
@@ -116,7 +144,14 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter) {
           continue;
         }
 
+        const auto match_start = std::chrono::steady_clock::now();
         MatchResult match = pattern->Match(*this, candidate);
+        const int64_t match_time_ns = ElapsedNanoseconds(match_start);
+        if (report != nullptr) {
+          PatternOptimizationStatistics &statistics = report->patterns[pattern_index];
+          ++statistics.attempts;
+          statistics.match_time_ns += match_time_ns;
+        }
         if (match.pattern == nullptr) {
           continue;
         }
@@ -145,14 +180,25 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter) {
           Position(*match.insert_at);
         }
         marked.insert(match.nodes.begin(), match.nodes.end());
-        matches.push_back(std::move(match));
+        if (report != nullptr) {
+          ++report->patterns[pattern_index].matches;
+        }
+        matches.push_back(TimedMatch{std::move(match), pattern_index, match_time_ns});
       }
     }
+    if (report != nullptr) {
+      report->matching_time_ns += ElapsedNanoseconds(matching_start);
+    }
 
+    std::chrono::steady_clock::time_point rewriting_start;
+    if (report != nullptr) {
+      rewriting_start = std::chrono::steady_clock::now();
+    }
     std::unordered_set<const NodeProto *> removed;
     std::vector<PendingReplacement> replacements;
     replacements.reserve(matches.size());
-    for (const MatchResult &match : matches) {
+    for (const TimedMatch &timed_match : matches) {
+      const MatchResult &match = timed_match.match;
       std::size_t position = builder_.nodes_.size();
       if (match.insert_at != nullptr) {
         position = Position(*match.insert_at);
@@ -162,8 +208,10 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter) {
         }
       }
       const std::size_t initializers_before = builder_.initializers_.size();
+      const auto apply_start = std::chrono::steady_clock::now();
       utils::RepeatedProtoField<NodeProto> replacement_nodes =
           match.pattern->Apply(*this, match.nodes);
+      const int64_t apply_time_ns = ElapsedNanoseconds(apply_start);
       LocalRewriting rewriting;
       const auto pattern_owner =
           std::find_if(patterns_.begin(), patterns_.end(),
@@ -176,6 +224,8 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter) {
       rewriting.pattern = *pattern_owner;
       rewriting.insert_at = static_cast<std::ptrdiff_t>(position);
       rewriting.iteration = static_cast<std::size_t>(iteration);
+      rewriting.match_time_ns = timed_match.match_time_ns;
+      rewriting.apply_time_ns = apply_time_ns;
       rewriting.added_nodes = replacement_nodes;
       rewriting.matched_nodes.reserve(match.nodes.size());
       for (const NodeProto *node : match.nodes) {
@@ -187,6 +237,9 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter) {
       replacements.push_back(
           PendingReplacement{position, std::move(replacement_nodes), std::move(rewriting)});
       removed.insert(match.nodes.begin(), match.nodes.end());
+      if (report != nullptr) {
+        report->patterns[timed_match.pattern_index].apply_time_ns += apply_time_ns;
+      }
     }
 
     if (!matches.empty()) {
@@ -219,8 +272,19 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter) {
         applied.push_back(std::move(replacement.rewriting));
       }
     }
+    if (report != nullptr) {
+      report->rewriting_time_ns += ElapsedNanoseconds(rewriting_start);
+      report->rewrites = applied.size();
+    }
 
+    std::chrono::steady_clock::time_point cleanup_start;
+    if (report != nullptr) {
+      cleanup_start = std::chrono::steady_clock::now();
+    }
     const std::size_t cleaned = Cleanup();
+    if (report != nullptr) {
+      report->cleanup_time_ns += ElapsedNanoseconds(cleanup_start);
+    }
 
     if (!matches.empty() || cleaned != 0) {
       continue;

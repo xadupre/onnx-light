@@ -4,6 +4,7 @@
 
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_core/runtime/parallel_for.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/node_helpers.h"
@@ -38,56 +39,29 @@ template <typename T> T SignedAbs(T value) {
   return value < 0 ? static_cast<T>(-value) : value;
 }
 
-template <typename T, typename Generator>
-void FillAbsCalibrationInput(Tensor &input, int64_t elements, Generator generate) {
-  T *values = reinterpret_cast<T *>(input.mutable_bytes());
-  for (int64_t i = 0; i < elements; ++i) {
-    values[i] = generate(i);
-  }
-}
-
 Tensor MakeAbsCalibrationInput(int32_t element_type, int64_t elements) {
-  Tensor input = MakeOutputTensor(
-      element_type, {elements}, static_cast<size_t>(elements) * ElementSize(element_type), nullptr);
+  const Shape shape{elements};
+  constexpr uint64_t kSeed = 5;
   switch (static_cast<DataType>(element_type)) {
   case DataType::FLOAT:
-    FillAbsCalibrationInput<float>(
-        input, elements, [](int64_t i) { return static_cast<float>((i % 257) - 128) / 17.0f; });
-    break;
+    return Tensor::FromFloat("", shape, Randn<float>(shape, kSeed));
   case DataType::DOUBLE:
-    FillAbsCalibrationInput<double>(
-        input, elements, [](int64_t i) { return static_cast<double>((i % 257) - 128) / 17.0; });
-    break;
+    return Tensor::FromDouble("", shape, Randn<double>(shape, kSeed));
   case DataType::FLOAT16:
-    FillAbsCalibrationInput<uint16_t>(input, elements, [](int64_t i) {
-      return FloatToFloat16Bits(static_cast<float>((i % 257) - 128) / 17.0f);
-    });
-    break;
+    return MakeFloat16Tensor("", shape, Randn<float>(shape, kSeed));
   case DataType::BFLOAT16:
-    FillAbsCalibrationInput<uint16_t>(input, elements, [](int64_t i) {
-      return FloatToBfloat16Bits(static_cast<float>((i % 257) - 128) / 17.0f);
-    });
-    break;
+    return MakeBfloat16Tensor("", shape, Randn<float>(shape, kSeed));
   case DataType::INT8:
-    FillAbsCalibrationInput<int8_t>(input, elements,
-                                    [](int64_t i) { return static_cast<int8_t>((i % 255) - 127); });
-    break;
+    return Tensor::FromInt8("", shape, RandnInt<int8_t>(shape, kSeed));
   case DataType::INT16:
-    FillAbsCalibrationInput<int16_t>(
-        input, elements, [](int64_t i) { return static_cast<int16_t>((i % 65535) - 32767); });
-    break;
+    return Tensor::FromInt16("", shape, RandnInt<int16_t>(shape, kSeed));
   case DataType::INT32:
-    FillAbsCalibrationInput<int32_t>(
-        input, elements, [](int64_t i) { return static_cast<int32_t>((i % 65535) - 32767); });
-    break;
+    return Tensor::FromInt32("", shape, RandnInt<int32_t>(shape, kSeed));
   case DataType::INT64:
-    FillAbsCalibrationInput<int64_t>(input, elements,
-                                     [](int64_t i) { return (i % 65535) - 32767; });
-    break;
+    return Tensor::FromInt64("", shape, RandnInt<int64_t>(shape, kSeed));
   default:
     throw std::invalid_argument("Abs calibration received an unsupported element type.");
   }
-  return input;
 }
 
 int64_t CalibrateAbsParallelMinimumElements(const KernelTuningKey &key,

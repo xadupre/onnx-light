@@ -4,8 +4,12 @@
 
 #include "onnx_core/runtime/random.h"
 
+#include "onnx_core/compute/raw_buffer_allocator.h"
+
 #include <gtest/gtest.h>
 
+#include <array>
+#include <cstring>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -84,6 +88,38 @@ TEST(BackendRandomTest, NegativeShapeRejected) {
 TEST(BackendRandomTest, EmptyShapeReturnsSingleValue) {
   EXPECT_EQ(core::runtime::Rand({}).size(), 1u);
   EXPECT_EQ(core::runtime::Randn({}).size(), 1u);
+}
+
+TEST(BackendRandomTest, RandnTensorSupportsNumericElementTypes) {
+  constexpr std::array<int32_t, 8> element_types = {
+      core::runtime::DataType::FLOAT,   core::runtime::DataType::DOUBLE,
+      core::runtime::DataType::FLOAT16, core::runtime::DataType::BFLOAT16,
+      core::runtime::DataType::INT8,    core::runtime::DataType::INT16,
+      core::runtime::DataType::INT32,   core::runtime::DataType::INT64,
+  };
+  for (int32_t element_type : element_types) {
+    const core::runtime::Tensor first =
+        core::runtime::RandnTensor(element_type, {2, 3}, /*seed=*/7);
+    const core::runtime::Tensor second =
+        core::runtime::RandnTensor(element_type, {2, 3}, /*seed=*/7);
+    EXPECT_EQ(first.data_type, element_type);
+    EXPECT_EQ(first.shape, (core::runtime::Shape{2, 3}));
+    ASSERT_EQ(first.size_bytes(), second.size_bytes());
+    EXPECT_EQ(std::memcmp(first.bytes(), second.bytes(), first.size_bytes()), 0);
+  }
+}
+
+TEST(BackendRandomTest, RandnTensorUsesAllocator) {
+  core::runtime::SimpleRawBufferAllocator allocator(1);
+  const core::runtime::Tensor tensor =
+      core::runtime::RandnTensor(core::runtime::DataType::FLOAT16, {4}, /*seed=*/7, &allocator);
+  EXPECT_TRUE(tensor.has_allocation());
+  EXPECT_EQ(tensor.allocation_owner(), &allocator);
+}
+
+TEST(BackendRandomTest, RandnTensorRejectsUnsupportedElementType) {
+  EXPECT_THROW(core::runtime::RandnTensor(core::runtime::DataType::STRING, {2}),
+               std::invalid_argument);
 }
 
 } // namespace Test

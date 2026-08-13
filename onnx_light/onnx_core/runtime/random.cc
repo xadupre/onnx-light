@@ -4,6 +4,8 @@
 
 #include "onnx_core/runtime/random.h"
 
+#include "onnx_core/runtime/cast_helper.h"
+
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
@@ -106,6 +108,32 @@ template <typename T> std::vector<T> Randn(const Shape &shape, std::optional<uin
 
 template std::vector<double> Randn<double>(const Shape &shape, std::optional<uint64_t> seed);
 template std::vector<float> Randn<float>(const Shape &shape, std::optional<uint64_t> seed);
+
+Tensor RandnTensor(int32_t element_type, const Shape &shape, std::optional<uint64_t> seed,
+                   RawBufferAllocator *allocator) {
+  const uint64_t resolved_seed = seed.value_or(kDefaultSeed);
+  switch (static_cast<DataType>(element_type)) {
+  case DataType::FLOAT:
+    return Tensor::FromFloat("", shape, Randn<float>(shape, resolved_seed), allocator);
+  case DataType::DOUBLE:
+    return Tensor::FromDouble("", shape, Randn<double>(shape, resolved_seed), allocator);
+  case DataType::FLOAT16:
+    return MakeFloat16Tensor("", shape, Randn<float>(shape, resolved_seed), allocator);
+  case DataType::BFLOAT16:
+    return MakeBfloat16Tensor("", shape, Randn<float>(shape, resolved_seed), allocator);
+  case DataType::INT8:
+    return Tensor::FromInt8("", shape, RandnInt<int8_t>(shape, resolved_seed), allocator);
+  case DataType::INT16:
+    return Tensor::FromInt16("", shape, RandnInt<int16_t>(shape, resolved_seed), allocator);
+  case DataType::INT32:
+    return Tensor::FromInt32("", shape, RandnInt<int32_t>(shape, resolved_seed), allocator);
+  case DataType::INT64:
+    return Tensor::FromInt64("", shape, RandnInt<int64_t>(shape, resolved_seed), allocator);
+  default:
+    throw std::invalid_argument("RandnTensor does not support element type " +
+                                std::to_string(element_type) + ".");
+  }
+}
 
 template <typename T>
 void RandUniformInto(T *dst, int64_t count, double low, double high, std::optional<uint64_t> seed) {

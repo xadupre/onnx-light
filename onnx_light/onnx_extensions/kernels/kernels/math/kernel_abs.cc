@@ -39,31 +39,6 @@ template <typename T> T SignedAbs(T value) {
   return value < 0 ? static_cast<T>(-value) : value;
 }
 
-Tensor MakeAbsCalibrationInput(int32_t element_type, int64_t elements) {
-  const Shape shape{elements};
-  constexpr uint64_t kSeed = 5;
-  switch (static_cast<DataType>(element_type)) {
-  case DataType::FLOAT:
-    return Tensor::FromFloat("", shape, Randn<float>(shape, kSeed));
-  case DataType::DOUBLE:
-    return Tensor::FromDouble("", shape, Randn<double>(shape, kSeed));
-  case DataType::FLOAT16:
-    return MakeFloat16Tensor("", shape, Randn<float>(shape, kSeed));
-  case DataType::BFLOAT16:
-    return MakeBfloat16Tensor("", shape, Randn<float>(shape, kSeed));
-  case DataType::INT8:
-    return Tensor::FromInt8("", shape, RandnInt<int8_t>(shape, kSeed));
-  case DataType::INT16:
-    return Tensor::FromInt16("", shape, RandnInt<int16_t>(shape, kSeed));
-  case DataType::INT32:
-    return Tensor::FromInt32("", shape, RandnInt<int32_t>(shape, kSeed));
-  case DataType::INT64:
-    return Tensor::FromInt64("", shape, RandnInt<int64_t>(shape, kSeed));
-  default:
-    throw std::invalid_argument("Abs calibration received an unsupported element type.");
-  }
-}
-
 int64_t CalibrateAbsParallelMinimumElements(const KernelTuningKey &key,
                                             const CpuExecutionDescriptor &execution,
                                             const CalibrationOptions &options,
@@ -118,7 +93,7 @@ int64_t CalibrateAbsParallelMinimumElements(const KernelTuningKey &key,
   int64_t first_winning_elements = 0;
   int consecutive_wins = 0;
   for (int64_t elements = kFirstElements; elements <= maximum_elements; elements *= 2) {
-    const Tensor input = MakeAbsCalibrationInput(key.element_type, elements);
+    const Tensor input = RandnTensor(key.element_type, {elements}, /*seed=*/5);
     Tensor serial = MakeOutputTensor(key.element_type, {elements}, input.size_bytes(), nullptr);
     Tensor parallel = MakeOutputTensor(key.element_type, {elements}, input.size_bytes(), nullptr);
     const auto run_serial = [&]() { serial_kernel(input, serial); };

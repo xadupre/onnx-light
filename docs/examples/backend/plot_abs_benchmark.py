@@ -18,10 +18,8 @@ with steady-state inference cost.
 The benchmark also exercises the low-level
 :func:`onnx_light.onnx_py._onnxpykernels.runtime.run_model` entry point, which
 runs a whole model end-to-end from :class:`Tensor` inputs to :class:`Tensor`
-outputs. It is measured two ways: ``run_model (numpy)`` starts and ends with
-NumPy arrays (so the timing includes the NumPy <-> :class:`Tensor` conversions),
-while ``run_model (Tensor)`` reuses a pre-built input :class:`Tensor` and keeps
-the output as a :class:`Tensor`, isolating the raw model-execution cost.
+outputs. ``run_model (Tensor)`` reuses a pre-built input :class:`Tensor` and
+keeps the output as a :class:`Tensor`, isolating the raw model-execution cost.
 """
 
 from __future__ import annotations
@@ -111,23 +109,6 @@ def run_onnx_light(values):
     return onnx_light_session.run(None, {"X": values})[0]
 
 
-def run_onnx_light_run_model_numpy(values):
-    """Runs the whole model through the low-level ``runtime.run_model`` API,
-    starting and ending with NumPy arrays.
-
-    The input array is wrapped in a :class:`Tensor` named after the graph input
-    it feeds (``"X"``), the model is executed end-to-end, and the single declared
-    output is reinterpreted back into a ``float32`` NumPy array. The timing
-    therefore includes the NumPy <-> :class:`Tensor` conversions on both ends.
-    """
-
-    tensor = runtime.tensor_from_numpy(
-        "X", int(TensorProto.FLOAT), list(values.shape), values.view(numpy.uint8)
-    )
-    (output,) = runtime.run_model(model, [tensor])
-    return runtime.tensor_to_numpy(output).view(numpy.float32).reshape(values.shape)
-
-
 def make_input_tensor(values):
     """Builds the named input :class:`Tensor` fed to ``runtime.run_model``."""
 
@@ -140,10 +121,9 @@ def run_onnx_light_run_model_tensor(tensor):
     """Runs the whole model through ``runtime.run_model`` with a pre-built
     :class:`Tensor` input and returns the output :class:`Tensor` directly.
 
-    Unlike :func:`run_onnx_light_run_model_numpy`, no NumPy conversion happens
-    inside the timed region: the input tensor is constructed once beforehand and
-    the output is left as a :class:`Tensor`, so the measurement reflects the raw
-    model-execution cost of the API.
+    No NumPy conversion happens inside the timed region: the input tensor is
+    constructed once beforehand and the output is left as a :class:`Tensor`, so
+    the measurement reflects the raw model-execution cost of the API.
     """
 
     (output,) = runtime.run_model(model, [tensor])
@@ -187,9 +167,6 @@ for size in size_grid:
         repeat,
         warmup,
     )
-    run_model_numpy_time = measure(
-        lambda values=values: run_onnx_light_run_model_numpy(values), repeat, warmup
-    )
     input_tensor = make_input_tensor(values)
     run_model_tensor_time = measure(
         lambda tensor=input_tensor: run_onnx_light_run_model_tensor(tensor), repeat, warmup
@@ -197,18 +174,14 @@ for size in size_grid:
 
     numpy.testing.assert_array_equal(run_onnx_light(values), expected)
     numpy.testing.assert_array_equal(run_onnxruntime(values), expected)
-    numpy.testing.assert_array_equal(run_onnx_light_run_model_numpy(values), expected)
     tensor_output = run_onnx_light_run_model_tensor(input_tensor)
     numpy.testing.assert_array_equal(
         runtime.tensor_to_numpy(tensor_output).view(numpy.float32).reshape(values.shape), expected
     )
-    rows.append(
-        (size, numpy_time, onnx_light_time, ort_time, run_model_numpy_time, run_model_tensor_time)
-    )
+    rows.append((size, numpy_time, onnx_light_time, ort_time, run_model_tensor_time))
     print(
         f"size={size:>9} | numpy={numpy_time * 1e6:10.2f} us | "
         f"onnx-light={onnx_light_time * 1e6:10.2f} us | "
-        f"run_model(numpy)={run_model_numpy_time * 1e6:10.2f} us | "
         f"run_model(Tensor)={run_model_tensor_time * 1e6:10.2f} us | "
         f"onnxruntime={ort_time * 1e6:10.2f} us | "
         f"onnx-light / onnxruntime={onnx_light_time / ort_time:5.2f}x"
@@ -218,8 +191,7 @@ sizes = numpy.array([row[0] for row in rows])
 numpy_times = numpy.array([row[1] for row in rows])
 onnx_light_times = numpy.array([row[2] for row in rows])
 ort_times = numpy.array([row[3] for row in rows])
-run_model_numpy_times = numpy.array([row[4] for row in rows])
-run_model_tensor_times = numpy.array([row[5] for row in rows])
+run_model_tensor_times = numpy.array([row[4] for row in rows])
 
 # %%
 # Plot execution time and relative speed
@@ -233,9 +205,6 @@ figure, (time_axis, speedup_axis) = matplotlib.pyplot.subplots(1, 2, figsize=(12
 
 time_axis.plot(sizes, numpy_times * 1e6, "o--", label="numpy", color="#9b7ec8")
 time_axis.plot(sizes, onnx_light_times * 1e6, "o-", label="onnx-light", color="#5cb85c")
-time_axis.plot(
-    sizes, run_model_numpy_times * 1e6, "o:", label="run_model (numpy)", color="#2e7d32"
-)
 time_axis.plot(
     sizes, run_model_tensor_times * 1e6, "s:", label="run_model (Tensor)", color="#1b5e20"
 )
@@ -264,9 +233,6 @@ for size, speedup in zip(sizes, onnx_light_speedups, strict=True):
         fontsize=7,
         color="#3d803d",
     )
-speedup_axis.plot(
-    sizes, ort_times / run_model_numpy_times, "o:", label="run_model (numpy)", color="#2e7d32"
-)
 speedup_axis.plot(
     sizes, ort_times / run_model_tensor_times, "s:", label="run_model (Tensor)", color="#1b5e20"
 )

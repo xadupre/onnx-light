@@ -9,11 +9,16 @@
 #include <limits>
 #include <mutex>
 #include <stdexcept>
+#include <tuple>
 #include <unordered_set>
 #include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
+
+template <typename T> bool Contains(const std::vector<T> &values, const T &value) {
+  return values.empty() || std::find(values.begin(), values.end(), value) != values.end();
+}
 
 void HashCombine(size_t &seed, size_t value) noexcept {
   constexpr size_t kHashCombine = sizeof(size_t) == 8 ? static_cast<size_t>(0x9e3779b97f4a7c15ULL)
@@ -215,6 +220,17 @@ std::string_view TuningValueTypeName(const TuningValue &value) noexcept {
   }
 }
 
+bool KernelCalibrationSelection::Matches(const KernelTuningKey &key) const {
+  return (!library.has_value() || key.library == *library) && Contains(kernels, key.kernel) &&
+         Contains(implementations, key.implementation) &&
+         Contains(element_types, key.element_type) &&
+         (!device.has_value() || key.device == *device);
+}
+
+void CalibrationReporter::AddDiagnostic(std::string message) {
+  diagnostics_.push_back(std::move(message));
+}
+
 bool KernelTuningParameters::Contains(std::string_view name) const {
   return values.find(std::string(name)) != values.end();
 }
@@ -289,9 +305,15 @@ struct KernelTuningRegistrySnapshot::State {
     uint32_t specificity = 0;
   };
 
+  struct PublishedExecutionProfile {
+    KernelTuningParameters parameters;
+    CpuExecutionDescriptor execution;
+  };
+
   uint64_t generation = 0;
   std::unordered_map<KernelTuningKey, KernelTuningParameters, KernelTuningKeyHash> profiles;
   std::unordered_set<KernelTuningKey, KernelTuningKeyHash> published_keys;
+  std::vector<PublishedExecutionProfile> published_execution_profiles;
   std::vector<RegisteredProfile> registered_profiles;
 };
 
@@ -300,6 +322,8 @@ struct KernelTuningRegistry::Impl {
   std::unordered_map<KernelTuningKey, std::shared_ptr<const KernelTuningSchema>,
                      KernelTuningKeyHash>
       schemas;
+  std::unordered_map<KernelTuningKey, KernelCalibrationFunction, KernelTuningKeyHash>
+      calibration_functions;
   std::shared_ptr<const KernelTuningRegistrySnapshot::State> state;
 
   Impl() : state(std::make_shared<const KernelTuningRegistrySnapshot::State>()) {}
@@ -313,12 +337,31 @@ KernelTuningRegistrySnapshot::Find(const KernelTuningKey &key) const noexcept {
   return found == state_->profiles.end() ? nullptr : &found->second;
 }
 
+bool KernelTuningRegistrySnapshot::HasPublishedProfile(
+    const KernelTuningKey &key, const CpuExecutionDescriptor &execution) const noexcept {
+  return state_->published_keys.contains(key) ||
+         std::any_of(state_->published_execution_profiles.begin(),
+                     state_->published_execution_profiles.end(),
+                     [&](const State::PublishedExecutionProfile &profile) {
+                       return profile.parameters.key == key && profile.execution == execution;
+                     });
+}
+
 const KernelTuningParameters *
 KernelTuningRegistrySnapshot::Resolve(const KernelTuningKey &key,
                                       const CpuExecutionDescriptor &execution) const noexcept {
   auto portable = state_->profiles.find(key);
   if (portable == state_->profiles.end() || state_->published_keys.contains(key)) {
     return portable == state_->profiles.end() ? nullptr : &portable->second;
+  }
+
+  auto calibrated = std::find_if(
+      state_->published_execution_profiles.rbegin(), state_->published_execution_profiles.rend(),
+      [&](const State::PublishedExecutionProfile &profile) {
+        return profile.parameters.key == key && profile.execution == execution;
+      });
+  if (calibrated != state_->published_execution_profiles.rend()) {
+    return &calibrated->parameters;
   }
 
   const State::RegisteredProfile *selected = nullptr;
@@ -386,6 +429,22 @@ void KernelTuningRegistry::RegisterProfile(const KernelTuningKey &key,
   impl_->state = std::move(next);
 }
 
+void KernelTuningRegistry::RegisterCalibrationFunction(const KernelTuningKey &key,
+                                                       KernelCalibrationFunction function) {
+  if (!function) {
+    throw std::invalid_argument("Kernel calibration function must not be empty.");
+  }
+  std::lock_guard lock(impl_->mutex);
+  if (!impl_->schemas.contains(key)) {
+    throw std::invalid_argument("Cannot register calibration for unregistered kernel tuning key '" +
+                                KeyDescription(key) + "'.");
+  }
+  if (!impl_->calibration_functions.emplace(key, std::move(function)).second) {
+    throw std::invalid_argument("Kernel calibration function is already registered for '" +
+                                KeyDescription(key) + "'.");
+  }
+}
+
 KernelTuningRegistrySnapshot KernelTuningRegistry::Snapshot() const noexcept {
   std::lock_guard lock(impl_->mutex);
   return KernelTuningRegistrySnapshot(impl_->state);
@@ -423,6 +482,46 @@ void KernelTuningRegistry::PublishProfiles(std::span<const KernelTuningParameter
   impl_->state = std::move(next);
 }
 
+void KernelTuningRegistry::PublishCalibratedProfiles(
+    std::span<const KernelTuningParameters> profiles, const CpuExecutionDescriptor &execution,
+    std::span<const KernelTuningKey> reset_keys) {
+  if (execution.effective_threads == 0) {
+    throw std::invalid_argument("Published calibration effective_threads must be positive.");
+  }
+  std::lock_guard lock(impl_->mutex);
+  for (const KernelTuningKey &key : reset_keys) {
+    if (!impl_->schemas.contains(key)) {
+      throw std::invalid_argument("Cannot reset unregistered kernel tuning key '" +
+                                  KeyDescription(key) + "'.");
+    }
+  }
+  for (const KernelTuningParameters &profile : profiles) {
+    auto schema = impl_->schemas.find(profile.key);
+    if (schema == impl_->schemas.end()) {
+      throw std::invalid_argument("Cannot publish unregistered kernel tuning key '" +
+                                  KeyDescription(profile.key) + "'.");
+    }
+    schema->second->Validate(profile);
+  }
+
+  std::unordered_set<KernelTuningKey, KernelTuningKeyHash> replaced(reset_keys.begin(),
+                                                                    reset_keys.end());
+  for (const KernelTuningParameters &profile : profiles) {
+    replaced.emplace(profile.key);
+  }
+  auto next = std::make_shared<KernelTuningRegistrySnapshot::State>(*impl_->state);
+  std::erase_if(next->published_execution_profiles,
+                [&](const KernelTuningRegistrySnapshot::State::PublishedExecutionProfile &profile) {
+                  return profile.execution == execution &&
+                         replaced.contains(profile.parameters.key);
+                });
+  for (const KernelTuningParameters &profile : profiles) {
+    next->published_execution_profiles.push_back({profile, execution});
+  }
+  ++next->generation;
+  impl_->state = std::move(next);
+}
+
 std::vector<KernelTuningKey> KernelTuningRegistry::RegisteredKeys() const {
   std::lock_guard lock(impl_->mutex);
   std::vector<KernelTuningKey> keys;
@@ -441,6 +540,13 @@ KernelTuningRegistry::FindSchema(const KernelTuningKey &key) const {
   return found == impl_->schemas.end() ? nullptr : found->second;
 }
 
+KernelCalibrationFunction
+KernelTuningRegistry::FindCalibrationFunction(const KernelTuningKey &key) const {
+  std::lock_guard lock(impl_->mutex);
+  auto found = impl_->calibration_functions.find(key);
+  return found == impl_->calibration_functions.end() ? KernelCalibrationFunction{} : found->second;
+}
+
 KernelTuningRegistry &GetKernelTuningRegistry() {
   static KernelTuningRegistry registry;
   return registry;
@@ -454,6 +560,79 @@ void RegisterKernelTuningProfile(const KernelTuningKey &key, platform::CpuSelect
                                  KernelTuningParameters parameters, int priority) {
   GetKernelTuningRegistry().RegisterProfile(key, std::move(processors), std::move(parameters),
                                             priority);
+}
+
+void RegisterKernelCalibrationFunction(const KernelTuningKey &key,
+                                       KernelCalibrationFunction function) {
+  GetKernelTuningRegistry().RegisterCalibrationFunction(key, std::move(function));
+}
+
+CalibrationBatchReport CalibrateRegisteredKernels(const KernelCalibrationSelection &selection,
+                                                  const CalibrationOptions &options) {
+  CalibrationBatchReport report;
+  KernelTuningRegistry &registry = GetKernelTuningRegistry();
+  const KernelTuningRegistrySnapshot before = registry.Snapshot();
+  const platform::CpuDescriptor &processor = platform::GetCpuDescriptor();
+  CpuExecutionDescriptor execution = options.execution.value_or(
+      CpuExecutionDescriptor{processor, processor.logical_cores.value_or(uint32_t{1})});
+  if (options.maximum_threads.has_value()) {
+    if (*options.maximum_threads == 0) {
+      throw std::invalid_argument("Calibration maximum_threads must be positive.");
+    }
+    execution.effective_threads = std::min(execution.effective_threads, *options.maximum_threads);
+  }
+  if (execution.effective_threads == 0) {
+    throw std::invalid_argument("Calibration effective thread count must be positive.");
+  }
+  if (selection.device.has_value() && *selection.device != Device::kCPU) {
+    throw std::invalid_argument("Kernel calibration currently supports only the CPU device.");
+  }
+
+  std::vector<KernelTuningKey> keys = registry.RegisteredKeys();
+  std::sort(keys.begin(), keys.end(),
+            [](const KernelTuningKey &left, const KernelTuningKey &right) {
+              return std::tie(left.library, left.kernel, left.implementation, left.element_type,
+                              left.device, left.tuning_abi) <
+                     std::tie(right.library, right.kernel, right.implementation, right.element_type,
+                              right.device, right.tuning_abi);
+            });
+  for (const KernelTuningKey &key : keys) {
+    if (!selection.Matches(key) || (!selection.device.has_value() && key.device != Device::kCPU)) {
+      continue;
+    }
+    if (selection.only_missing && before.HasPublishedProfile(key, execution)) {
+      report.skipped.push_back(key);
+      continue;
+    }
+    KernelCalibrationFunction function = registry.FindCalibrationFunction(key);
+    if (!function) {
+      report.unsupported.push_back(key);
+      continue;
+    }
+
+    CalibrationReporter reporter;
+    try {
+      KernelTuningParameters parameters = function(key, execution, options, reporter);
+      std::shared_ptr<const KernelTuningSchema> schema = registry.FindSchema(key);
+      if (schema == nullptr) {
+        throw std::invalid_argument("Kernel tuning schema disappeared during calibration.");
+      }
+      schema->Validate(parameters);
+      report.calibrated.push_back(std::move(parameters));
+    } catch (const std::exception &exception) {
+      report.failed.push_back(key);
+      report.diagnostics.push_back({key, exception.what()});
+    }
+    for (const std::string &diagnostic : reporter.diagnostics()) {
+      report.diagnostics.push_back({key, diagnostic});
+    }
+  }
+
+  if (!report.calibrated.empty()) {
+    registry.PublishCalibratedProfiles(report.calibrated, execution);
+  }
+  report.published_generation = registry.Snapshot().generation();
+  return report;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

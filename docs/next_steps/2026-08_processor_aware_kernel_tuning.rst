@@ -1,7 +1,7 @@
-.. _l-next-steps-processor-aware-kernel-thresholds:
+.. _l-next-steps-processor-aware-kernel-tuning:
 
-Processor-aware kernel thresholds
-=================================
+Processor-aware kernel tuning
+=============================
 
 :Date: 2026-08
 

@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -115,6 +116,66 @@ private:
                                           std::string_view actual);
 };
 
+/** Filters tuning keys. Non-empty fields combine with logical AND. */
+struct KernelCalibrationSelection {
+  std::optional<std::string> library;
+  std::vector<std::string> kernels;
+  std::vector<std::string> implementations;
+  std::vector<int32_t> element_types;
+  std::optional<Device> device;
+  bool only_missing = false;
+
+  /** Returns whether an exact key satisfies this selection. */
+  bool Matches(const KernelTuningKey &key) const;
+};
+
+/** Bounds one explicit calibration request. Zero means callback-defined. */
+struct CalibrationOptions {
+  std::optional<CpuExecutionDescriptor> execution;
+  uint64_t maximum_duration_ms = 0;
+  uint64_t maximum_memory_bytes = 0;
+  std::optional<uint32_t> maximum_threads;
+};
+
+/** Collects diagnostics emitted by one calibration callback. */
+class CalibrationReporter {
+public:
+  /** Appends one diagnostic message. */
+  void AddDiagnostic(std::string message);
+
+  /** Returns callback diagnostics in emission order. */
+  const std::vector<std::string> &diagnostics() const noexcept { return diagnostics_; }
+
+private:
+  std::vector<std::string> diagnostics_;
+};
+
+/** Calibrates one exact, registered kernel tuning key. */
+using KernelCalibrationFunction =
+    std::function<KernelTuningParameters(const KernelTuningKey &, const CpuExecutionDescriptor &,
+                                         const CalibrationOptions &, CalibrationReporter &)>;
+
+/** Associates one calibration diagnostic with its exact key. */
+struct KernelCalibrationDiagnostic {
+  KernelTuningKey key;
+  std::string message;
+};
+
+/** Reports one explicit batch calibration and its atomic publication. */
+struct CalibrationBatchReport {
+  uint64_t published_generation = 0;
+  std::vector<KernelTuningParameters> calibrated;
+  std::vector<KernelTuningKey> skipped;
+  std::vector<KernelTuningKey> unsupported;
+  std::vector<KernelTuningKey> failed;
+  std::vector<KernelCalibrationDiagnostic> diagnostics;
+
+  /** Returns successfully validated profiles. */
+  std::span<const KernelTuningParameters> successful_profiles() const noexcept {
+    return calibrated;
+  }
+};
+
 /**
  * Validates kernel-specific value ranges and relationships.
  *
@@ -173,10 +234,17 @@ public:
   /**
    * Finds the resolved parameters for an exact tuning key.
    *
+   * This lookup does not select an execution-specific calibrated profile; use
+   * :cpp:func:`Resolve` when an execution descriptor is available.
+   *
    * Returns:
    *   The parameters, or ``nullptr`` when the key is not registered.
    */
   const KernelTuningParameters *Find(const KernelTuningKey &key) const noexcept;
+
+  /** Returns whether a compatible cached, calibrated, or override profile exists. */
+  bool HasPublishedProfile(const KernelTuningKey &key,
+                           const CpuExecutionDescriptor &execution) const noexcept;
 
   /**
    * Resolves the highest-precedence profile matching an execution descriptor.
@@ -232,6 +300,14 @@ public:
   void RegisterProfile(const KernelTuningKey &key, platform::CpuSelector processors,
                        KernelTuningParameters parameters, int priority = 0);
 
+  /**
+   * Registers one trusted native calibration callback.
+   *
+   * @throws std::invalid_argument when the key has no schema, the callback is
+   * empty, or another callback is already registered for the key.
+   */
+  void RegisterCalibrationFunction(const KernelTuningKey &key, KernelCalibrationFunction function);
+
   /** Returns the current immutable registry generation. */
   KernelTuningRegistrySnapshot Snapshot() const noexcept;
 
@@ -244,11 +320,23 @@ public:
   void PublishProfiles(std::span<const KernelTuningParameters> profiles,
                        std::span<const KernelTuningKey> reset_keys = {});
 
+  /**
+   * Publishes profiles scoped to one exact execution descriptor.
+   *
+   * Other execution descriptors and universal overrides remain unchanged.
+   */
+  void PublishCalibratedProfiles(std::span<const KernelTuningParameters> profiles,
+                                 const CpuExecutionDescriptor &execution,
+                                 std::span<const KernelTuningKey> reset_keys = {});
+
   /** Returns the registered keys. */
   std::vector<KernelTuningKey> RegisteredKeys() const;
 
   /** Returns the schema for a registered key, or ``nullptr``. */
   std::shared_ptr<const KernelTuningSchema> FindSchema(const KernelTuningKey &key) const;
+
+  /** Returns the callback registered for a key, or an empty function. */
+  KernelCalibrationFunction FindCalibrationFunction(const KernelTuningKey &key) const;
 
 private:
   struct Impl;
@@ -264,5 +352,19 @@ void RegisterKernelTuningSchema(KernelTuningSchema schema);
 /** Registers a processor-specific profile in the process-wide tuning registry. */
 void RegisterKernelTuningProfile(const KernelTuningKey &key, platform::CpuSelector processors,
                                  KernelTuningParameters parameters, int priority = 0);
+
+/** Registers a trusted calibration callback in the process-wide registry. */
+void RegisterKernelCalibrationFunction(const KernelTuningKey &key,
+                                       KernelCalibrationFunction function);
+
+/**
+ * Runs selected registered callbacks and atomically publishes successful profiles.
+ *
+ * Unsupported keys have a tuning schema but no callback. ``only_missing``
+ * skips keys with an explicitly published profile. Callback or validation
+ * failures are reported without discarding successful keys.
+ */
+CalibrationBatchReport CalibrateRegisteredKernels(const KernelCalibrationSelection &selection = {},
+                                                  const CalibrationOptions &options = {});
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

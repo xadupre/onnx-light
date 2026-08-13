@@ -350,6 +350,16 @@ It finds the scalar/SIMD crossover and the serial/parallel crossover
 separately. The current fixed ``32 * kParallelForGrainSize`` policy becomes a
 portable default rather than a universal decision.
 
+The portable ``onnx_light`` implementation registers a concrete calibration
+callback for every element type supported by ``Abs``. It generates
+deterministic inputs, checks the parallel result against the serial loop, takes
+the median of five measurements per candidate size, and requires two
+consecutive wins of at least five percent before selecting a parallel grain.
+If no stable crossover is found within the requested time and memory budgets,
+it retains ``32 * kParallelForGrainSize``. SIMD crossover calibration remains
+the responsibility of an implementation such as ``onnx-light-cpu`` that owns
+the SIMD algorithm.
+
 Example: ``Gemm``
 +++++++++++++++++
 

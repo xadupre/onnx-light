@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_extensions/kernels/tuning/portable_gemm_tuning.h"
 #include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
 #include <memory>
@@ -937,15 +938,25 @@ public:
 class Gemm : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Gemm";
+  explicit Gemm(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
+  KernelTuningKey TuningKey(int32_t element_type) const override;
+  void Configure(const KernelTuningParameters &parameters) override;
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
                     int64_t transA, int64_t transB, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
                   int64_t transA, int64_t transB, Tensor &output) const;
 
+  /// Returns the immutable configuration used by the execution path.
+  const tuning::GemmTuning &tuning() const noexcept { return tuning_; }
+
   /// Gemm produces a new matrix that cannot alias any input.
   static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  tuning::GemmTuning tuning_;
 };
 
 /// Matrix product that behaves like NumPy/ONNX ``matmul``.

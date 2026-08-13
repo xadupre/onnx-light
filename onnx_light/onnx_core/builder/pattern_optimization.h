@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <set>
 #include <string>
@@ -17,6 +18,49 @@ namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
 class GraphGraph;
 class PatternOptimization;
+
+/// Aggregated timing and activity counters for one optimization pattern.
+struct PatternOptimizationStatistics {
+  /// Stable diagnostic pattern name.
+  std::string pattern_name;
+  /// Number of candidate nodes passed to the pattern matcher.
+  std::size_t attempts = 0;
+  /// Number of accepted, disjoint matches.
+  std::size_t matches = 0;
+  /// Total time spent matching candidates, in nanoseconds.
+  int64_t match_time_ns = 0;
+  /// Total time spent building replacement nodes, in nanoseconds.
+  int64_t apply_time_ns = 0;
+
+  /// Returns a concise summary of these statistics.
+  std::string ToString() const;
+};
+
+/// Optional timing report populated by :cpp:func:`GraphGraph::Optimize`.
+struct OptimizationReport {
+  /// Number of optimization iterations executed.
+  std::size_t iterations = 0;
+  /// Number of local rewrites applied.
+  std::size_t rewrites = 0;
+  /// Total time spent matching candidate nodes, in nanoseconds.
+  int64_t matching_time_ns = 0;
+  /// Total time spent applying matches and rebuilding nodes, in nanoseconds.
+  int64_t rewriting_time_ns = 0;
+  /// Total time spent in graph cleanup passes, in nanoseconds.
+  int64_t cleanup_time_ns = 0;
+  /// Reserved for the constant-folding phase added by a later step.
+  int64_t constant_folding_time_ns = 0;
+  /// Reserved for recursive subgraph optimization added by a later step.
+  int64_t subgraph_optimization_time_ns = 0;
+  /// Activity and timing counters in pattern evaluation order.
+  std::vector<PatternOptimizationStatistics> patterns;
+
+  /// Returns the sum of all phase durations, in nanoseconds.
+  int64_t TotalTimeNs() const noexcept;
+
+  /// Returns a concise, printable optimization report.
+  std::string ToString() const;
+};
 
 /// Persistent description of one applied local graph rewrite.
 struct LocalRewriting {
@@ -39,6 +83,10 @@ struct LocalRewriting {
   std::ptrdiff_t insert_at = -1;
   /// Optimization iteration in which this rewrite was applied.
   std::size_t iteration = 0;
+  /// Time spent recognizing this match, in nanoseconds.
+  int64_t match_time_ns = 0;
+  /// Time spent building its replacement nodes, in nanoseconds.
+  int64_t apply_time_ns = 0;
 
   /// Returns a concise summary of this rewrite.
   std::string ToString() const;

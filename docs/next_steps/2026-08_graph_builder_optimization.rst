@@ -60,10 +60,14 @@ separate pull requests:
      - Match/apply loop and cleanup
      - Applies disjoint matches by priority and runs duplicate, identity, and
        unused-node cleanup passes until convergence.
-   * - Current
+   * - `PR #4412 <https://github.com/xadupre/onnx-light/pull/4412>`_
      - Local rewriting and replay
      - Returns persistent rewrite records from optimization and deterministically
        replays them over a fresh model.
+   * - Current
+     - Logging and phase timing
+     - Collects optional per-phase and per-pattern timing statistics and records
+       match/apply durations on each local rewrite.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -383,9 +387,14 @@ a caller can tell how long was spent:
 
 Each ``LocalRewriting`` also carries the pattern name and its own match/apply
 durations, so the summary can attribute time both per phase and per pattern.
-The report is returned alongside the rewrites and is opt-in: it is only
-assembled when the caller asks for it, keeping the hot loop free of formatting
-work.
+The report is opt-in and populated through an optional output parameter,
+keeping aggregation and formatting out of the default path:
+
+.. code-block:: cpp
+
+    OptimizationReport report;
+    std::vector<LocalRewriting> rewrites = graph.Optimize(-1, &report);
+    std::cout << report.ToString() << std::endl;
 
 Implementation order
 ++++++++++++++++++++
@@ -401,7 +410,8 @@ Implementation order
 4. Implement the match/apply loop and wire in the existing cleanup passes.
 5. Refactor ``Optimize`` to return the applied ``LocalRewriting`` records and
    add ``Replay`` so a captured list of rewrites reconstructs the final graph
-   from a ``ModelProto``.
+   from a ``ModelProto``
+   (`PR #4412 <https://github.com/xadupre/onnx-light/pull/4412>`_).
 6. Add logging with per-phase timing (match, rewrite, dead-branch removal,
    constant folding, subgraph optimization) reported at the end of ``Optimize``.
 7. Add constant folding of all-constant rewrites.

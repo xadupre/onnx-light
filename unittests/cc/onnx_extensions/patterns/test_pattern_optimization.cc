@@ -154,13 +154,51 @@ TEST(PatternOptimization, OptimizeAppliesPatternAndCleanupPasses) {
   EXPECT_TRUE(rewrites[0].added_initializers.empty());
   EXPECT_EQ(rewrites[0].insert_at, 1u);
   EXPECT_EQ(rewrites[0].iteration, 0u);
-  EXPECT_EQ(rewrites[0].ToString(), "LocalRewriting(pattern=CastCast, matched_nodes=[0, 1], "
-                                    "added_nodes=[Cast(outputs=[y])], added_initializers=[], "
-                                    "insert_at=1, iteration=0)");
+  EXPECT_GE(rewrites[0].match_time_ns, 0);
+  EXPECT_GE(rewrites[0].apply_time_ns, 0);
+  EXPECT_EQ(rewrites[0].ToString(),
+            "LocalRewriting(pattern=CastCast, matched_nodes=[0, 1], "
+            "added_nodes=[Cast(outputs=[y])], added_initializers=[], "
+            "insert_at=1, iteration=0, match_time_ns=" +
+                std::to_string(rewrites[0].match_time_ns) +
+                ", apply_time_ns=" + std::to_string(rewrites[0].apply_time_ns) + ")");
   ASSERT_EQ(builder.Nodes().size(), 1u);
   EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Cast");
   EXPECT_EQ(builder.Nodes()[0].input()[0].value(), "x");
   EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "y");
+}
+
+TEST(PatternOptimization, OptimizeReportsPhaseAndPatternTimings) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
+  AddCast(builder, "x", "middle", TensorProto::DataType::FLOAT);
+  AddCast(builder, "middle", "y", TensorProto::DataType::FLOAT);
+  builder.MakeOutput("y");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  core::builder::OptimizationReport report;
+
+  const std::vector<core::builder::LocalRewriting> rewrites = graph.Optimize(-1, &report);
+  ASSERT_EQ(rewrites.size(), 1u);
+  EXPECT_EQ(report.rewrites, 1u);
+  EXPECT_EQ(report.iterations, 2u);
+  EXPECT_GE(report.matching_time_ns, rewrites[0].match_time_ns);
+  EXPECT_GE(report.rewriting_time_ns, rewrites[0].apply_time_ns);
+  EXPECT_GE(report.cleanup_time_ns, 0);
+  EXPECT_EQ(report.constant_folding_time_ns, 0);
+  EXPECT_EQ(report.subgraph_optimization_time_ns, 0);
+  EXPECT_EQ(report.TotalTimeNs(),
+            report.matching_time_ns + report.rewriting_time_ns + report.cleanup_time_ns);
+  ASSERT_EQ(report.patterns.size(), 1u);
+  EXPECT_EQ(report.patterns[0].pattern_name, "CastCast");
+  EXPECT_EQ(report.patterns[0].attempts, 3u);
+  EXPECT_EQ(report.patterns[0].matches, 1u);
+  EXPECT_GE(report.patterns[0].match_time_ns, rewrites[0].match_time_ns);
+  EXPECT_EQ(report.patterns[0].apply_time_ns, rewrites[0].apply_time_ns);
+  EXPECT_NE(report.ToString().find("phases={matching:"), std::string::npos);
+  EXPECT_NE(report.ToString().find("CastCast(attempts=3, matches=1"), std::string::npos);
 }
 
 TEST(PatternOptimization, OptimizeAppliesDisjointMatchesInOneIteration) {

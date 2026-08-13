@@ -80,7 +80,7 @@ public:
    * Returns:
    *   Self-contained records of the applied rewrites, in application order.
    */
-  std::vector<LocalRewriting> Optimize(int max_iter = -1);
+  std::vector<LocalRewriting> Optimize(int max_iter = -1, OptimizationReport *report = nullptr);
 
   /// Returns the patterns shared by this graph optimizer and its rewrites.
   const std::vector<std::shared_ptr<PatternOptimization>> &Patterns() const noexcept {

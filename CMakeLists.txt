@@ -850,6 +850,11 @@ if(ONNX_LIGHT_BUILD_TESTS)
       GIT_TAG v1.14.0
     )
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    # Only GTest is used (no GMock), so avoid building GMock. Also disable the
+    # googletest install rules: otherwise `cmake --install` tries to install
+    # libgmock.a (which is never built) and fails.
+    set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
   endif()
   include(GoogleTest)

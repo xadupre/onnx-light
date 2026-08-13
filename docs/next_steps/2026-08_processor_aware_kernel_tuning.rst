@@ -364,22 +364,22 @@ measurements per candidate size, and requires two consecutive wins of at least
 five percent before selecting a parallel grain. It does not duplicate the
 element-wise absolute-value implementation.
 
-The crossover search, resource budgets, warm-up, correctness comparison, and
-timing policy are implemented by shared portable-parallel calibration helpers,
-not by an ``Abs``-specific intermediate calibration function. If no stable
-crossover is found within the requested time and memory budgets, calibration
-retains ``32 * kParallelForGrainSize``. SIMD crossover calibration remains the
-responsibility of an implementation such as ``onnx-light-cpu`` that owns the
-SIMD algorithm.
+The first callback keeps the crossover search, resource budgets, warm-up,
+correctness comparison, and timing policy directly in ``CalibrateAbs``. This
+is intentional: a common calibration API should not be extracted from unary
+kernels alone. If no stable crossover is found within the requested time and
+memory budgets, calibration retains ``32 * kParallelForGrainSize``. SIMD
+crossover calibration remains the responsibility of an implementation such as
+``onnx-light-cpu`` that owns the SIMD algorithm.
 
 Example: ``Not``
 ++++++++++++++++
 
-``Not`` uses the same shared portable-parallel calibration policy as ``Abs``.
 ``RandnTensor`` supports ``BOOL`` inputs, and two configured ``Not`` instances
-measure the real serial and parallel kernel paths. This second integration
-ensures that input generation and calibration policy are reusable kernel
-infrastructure rather than special handling embedded in ``Abs``.
+measure the real serial and parallel kernel paths. ``CalibrateNot`` initially
+keeps its own search and measurement policy. The deliberate duplication makes
+the requirements of more than one callback visible without prematurely
+publishing an API specialized for unary kernels.
 
 Example: ``Gemm``
 +++++++++++++++++
@@ -565,9 +565,17 @@ Implementation order
    transactional publication of execution-specific calibrated profiles
    (`PR #4415 <https://github.com/xadupre/onnx-light/pull/4415>`_).
 8. Add calibration callbacks and ``CalibrateRegisteredKernels`` selection,
-   initially integrating ``Abs`` and ``Not`` through shared random-tensor and
-   portable-parallel calibration helpers (`PR #4418
+   initially integrating ``Abs`` and ``Not`` through the shared random-tensor
+   helper while keeping their calibration searches local (`PR #4418
    <https://github.com/xadupre/onnx-light/pull/4418>`_).
-9. Add atomic ``UpdateKernelTuningCache`` and deployment-profile import.
-10. Benchmark cold resolution separately from steady-state kernel execution and
+9. Add typed parallel tuning to representative binary kernels, including
+   arithmetic kernels such as ``Add`` and ``Mul``, logical kernels such as
+   ``And``, and both equal-shape and broadcasting execution paths.
+10. Design and add one calibration API that supports unary and binary kernels,
+    input generation for every operand, broadcasting shapes, output
+    validation, resource accounting, and kernel-specific benchmark cases.
+    Replace the local ``Abs`` and ``Not`` search loops only after this API has
+    been exercised by both unary and binary integrations.
+11. Add atomic ``UpdateKernelTuningCache`` and deployment-profile import.
+12. Benchmark cold resolution separately from steady-state kernel execution and
     verify that the hot path performs no registry access.

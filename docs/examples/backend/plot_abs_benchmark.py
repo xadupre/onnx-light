@@ -249,8 +249,8 @@ time_axis.legend()
 
 speedup_axis.plot(sizes, ort_times / numpy_times, "o--", label="numpy", color="#9b7ec8")
 onnx_light_speedups = ort_times / onnx_light_times
-assert onnx_light_speedups[0] < 1.0, (
-    "onnx-light is expected to be slower than onnxruntime for the first (smallest) size, "
+assert onnx_light_speedups[0] > 1.0, (
+    "onnx-light is expected to be faster than onnxruntime for the first (smallest) size, "
     f"got a speed-up of {onnx_light_speedups[0]:.2f}x for size {sizes[0]}"
 )
 speedup_axis.plot(sizes, onnx_light_speedups, "o-", label="onnx-light", color="#5cb85c")

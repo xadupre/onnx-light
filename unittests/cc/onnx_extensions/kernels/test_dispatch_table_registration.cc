@@ -74,6 +74,29 @@ TEST(OnnxKernelsDispatchTable, RegistersAbsCalibrationFunctions) {
   EXPECT_FALSE(reporter.diagnostics().empty());
 }
 
+TEST(OnnxKernelsDispatchTable, RegistersNotCalibrationFunction) {
+  ::onnx_light::onnx_kernels::RegisterKernelFunctions();
+  const core::runtime::KernelTuningKey key = onnx_kernels::tuning::MakePortableTuningKey(
+      "Not", static_cast<int32_t>(TensorProto::DataType::BOOL));
+  core::runtime::KernelCalibrationFunction calibrate =
+      core::runtime::GetKernelTuningRegistry().FindCalibrationFunction(key);
+  ASSERT_TRUE(calibrate);
+
+  core::runtime::CpuExecutionDescriptor execution{
+      core::platform::GetCpuDescriptor(),
+      static_cast<uint32_t>(core::runtime::ParallelForThreadCount())};
+  core::runtime::CalibrationOptions options;
+  options.maximum_duration_ms = 1;
+  options.maximum_memory_bytes = 1 << 20;
+  core::runtime::CalibrationReporter reporter;
+  const core::runtime::KernelTuningParameters parameters =
+      calibrate(key, execution, options, reporter);
+
+  EXPECT_EQ(parameters.key, key);
+  EXPECT_GT(parameters.Get<int64_t>(onnx_kernels::tuning::kParallelMinimumElements), 0);
+  EXPECT_FALSE(reporter.diagnostics().empty());
+}
+
 // The device is part of a kernel's identifier: a factory registered for a GPU
 // device is keyed separately from the CPU/default entry so both can coexist.
 TEST(OnnxKernelsDispatchTable, DeviceIsPartOfIdentifier) {

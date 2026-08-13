@@ -129,6 +129,8 @@ Tensor RandnTensor(int32_t element_type, const Shape &shape, std::optional<uint6
     return Tensor::FromInt32("", shape, RandnInt<int32_t>(shape, resolved_seed), allocator);
   case DataType::INT64:
     return Tensor::FromInt64("", shape, RandnInt<int64_t>(shape, resolved_seed), allocator);
+  case DataType::BOOL:
+    return RandBool(shape, resolved_seed, allocator);
   default:
     throw std::invalid_argument("RandnTensor does not support element type " +
                                 std::to_string(element_type) + ".");
@@ -207,13 +209,14 @@ template std::vector<uint16_t> RandUint<uint16_t>(int64_t high, const Shape &sha
 template std::vector<uint32_t> RandUint<uint32_t>(int64_t high, const Shape &shape, uint64_t seed);
 template std::vector<uint64_t> RandUint<uint64_t>(int64_t high, const Shape &shape, uint64_t seed);
 
-Tensor RandBool(const Shape &shape, std::optional<uint64_t> seed) {
+Tensor RandBool(const Shape &shape, std::optional<uint64_t> seed, RawBufferAllocator *allocator) {
   const std::vector<double> values = Randn<double>(shape, seed);
-  RawByteBuffer bytes(values.size());
+  Tensor tensor = MakeOutputTensor(DataType::BOOL, shape, values.size(), allocator);
+  uint8_t *bytes = tensor.mutable_bytes();
   for (size_t i = 0; i < values.size(); ++i) {
     bytes[i] = values[i] > 0.0 ? 1 : 0;
   }
-  return Tensor::FromRawBytes("", static_cast<int32_t>(DataType::BOOL), shape, std::move(bytes));
+  return tensor;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -91,11 +91,12 @@ TEST(BackendRandomTest, EmptyShapeReturnsSingleValue) {
 }
 
 TEST(BackendRandomTest, RandnTensorSupportsNumericElementTypes) {
-  constexpr std::array<int32_t, 8> element_types = {
+  constexpr std::array<int32_t, 9> element_types = {
       core::runtime::DataType::FLOAT,   core::runtime::DataType::DOUBLE,
       core::runtime::DataType::FLOAT16, core::runtime::DataType::BFLOAT16,
       core::runtime::DataType::INT8,    core::runtime::DataType::INT16,
       core::runtime::DataType::INT32,   core::runtime::DataType::INT64,
+      core::runtime::DataType::BOOL,
   };
   for (int32_t element_type : element_types) {
     const core::runtime::Tensor first =

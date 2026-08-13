@@ -6,10 +6,14 @@
 
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/parallel_for.h"
+#include "onnx_core/runtime/random.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <array>
 #include <cstdint>
+#include <cstring>
+#include <limits>
 #include <stdexcept>
+#include <string>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
@@ -18,6 +22,36 @@ namespace {
 constexpr uint32_t kTuningAbi = 1;
 constexpr std::array<int32_t, 1> kSupportedElementTypes = {static_cast<int32_t>(DataType::BOOL)};
 
+KernelTuningParameters CalibrateNot(const KernelTuningKey &key,
+                                    const CpuExecutionDescriptor &execution,
+                                    const CalibrationOptions &options,
+                                    CalibrationReporter &reporter) {
+  const int64_t portable_minimum = core::runtime::kParallelForGrainSize;
+  const KernelContext context{DefaultOpset(1)};
+  Not serial_kernel{context};
+  Not parallel_kernel{context};
+  serial_kernel.Configure(
+      {key,
+       {{std::string(tuning::kParallelMinimumElements), std::numeric_limits<int64_t>::max()}}});
+
+  const int64_t minimum_elements = tuning::CalibrateUnaryParallelMinimumElements(
+      "Not", execution, options, reporter, portable_minimum, ElementSize(key.element_type),
+      [&](int64_t elements, int64_t parallel_minimum, int repetitions) {
+        const Tensor input = RandnTensor(key.element_type, {elements}, /*seed=*/5);
+        Tensor serial = MakeOutputTensor(DataType::BOOL, {elements}, input.size_bytes(), nullptr);
+        Tensor parallel = MakeOutputTensor(DataType::BOOL, {elements}, input.size_bytes(), nullptr);
+        parallel_kernel.Configure(
+            {key, {{std::string(tuning::kParallelMinimumElements), parallel_minimum}}});
+        return tuning::MeasureParallelCalibrationRuns(
+            "Not", repetitions, [&]() { serial_kernel(input, serial); },
+            [&]() { parallel_kernel(input, parallel); },
+            [&]() {
+              return std::memcmp(serial.bytes(), parallel.bytes(), serial.size_bytes()) == 0;
+            });
+      });
+  return {key, {{std::string(tuning::kParallelMinimumElements), minimum_elements}}};
+}
+
 } // namespace
 
 Not::Not(const KernelContext &ctx) : KernelBase(ctx), tuning_(kParallelForGrainSize) {}
@@ -25,6 +59,9 @@ Not::Not(const KernelContext &ctx) : KernelBase(ctx), tuning_(kParallelForGrainS
 void Not::RegisterTuningSchemas() {
   tuning::RegisterParallelTuningSchemas("Not", kSupportedElementTypes, kParallelForGrainSize,
                                         kTuningAbi);
+  const KernelTuningKey key =
+      tuning::MakePortableTuningKey("Not", static_cast<int32_t>(DataType::BOOL), kTuningAbi);
+  core::runtime::RegisterKernelCalibrationFunction(key, CalibrateNot);
 }
 
 KernelTuningKey Not::TuningKey(int32_t element_type) const {

@@ -32,5 +32,8 @@ Next Steps
     :caption: Completed
 
     2025-07_onnx_proto
+    2026-06_lib_onnx
+    2026-06_kernels_backend_tests
+    2026-06_gradient
     2026-07_onnxruntime_onnx_light
     2026-08_proto_binary_size

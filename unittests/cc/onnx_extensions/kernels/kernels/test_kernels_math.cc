@@ -2591,6 +2591,97 @@ TEST(KernelClass, GemmHalfPrecisionMatchesFloatReference) {
   EXPECT_EQ(y_h.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
 }
 
+TEST(KernelClass, GemmUsesTypedTilingPackingTaskAndConversionTuning) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Gemm gemm_kernel{ctx};
+  const auto float_key = gemm_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  const auto half_key = gemm_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT16));
+
+  EXPECT_EQ(float_key.library, "onnx_light");
+  EXPECT_EQ(float_key.kernel, "Gemm");
+  EXPECT_EQ(float_key.implementation, "portable");
+  EXPECT_NE(float_key, half_key);
+  EXPECT_EQ(gemm_kernel.TuningKey(static_cast<int32_t>(DataType::STRING)).device,
+            core::symbolic::Device::kUndefined);
+
+  const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(float_key);
+  ASSERT_NE(schema, nullptr);
+  const auto &defaults = schema->portable_defaults();
+  EXPECT_EQ(defaults.Get<int64_t>("algorithm.tile_m"), 64);
+  EXPECT_EQ(defaults.Get<int64_t>("algorithm.tile_n"), 256);
+  EXPECT_EQ(defaults.Get<int64_t>("algorithm.tile_k"), 256);
+  EXPECT_EQ(defaults.Get<int64_t>("algorithm.pack_b_minimum_elements"), 16384);
+  EXPECT_EQ(defaults.Get<int64_t>("algorithm.skinny_m_limit"), 8);
+  EXPECT_EQ(defaults.Get<int64_t>("parallel.fmas_per_work_unit"), 256);
+  EXPECT_EQ(defaults.Get<int64_t>("parallel.minimum_tasks"), 2);
+  EXPECT_EQ(defaults.Get<int64_t>("conversion.parallel_minimum_elements"), 1048576);
+
+  core::runtime::KernelTuningParameters tuned = defaults;
+  tuned.values["algorithm.tile_m"] = int64_t{2};
+  tuned.values["algorithm.tile_n"] = int64_t{2};
+  tuned.values["algorithm.tile_k"] = int64_t{2};
+  tuned.values["algorithm.pack_b_minimum_elements"] = int64_t{1};
+  tuned.values["algorithm.skinny_m_limit"] = int64_t{1};
+  tuned.values["parallel.fmas_per_work_unit"] = int64_t{1};
+  tuned.values["parallel.minimum_tasks"] = int64_t{1};
+  tuned.values["conversion.parallel_minimum_elements"] = int64_t{1};
+  gemm_kernel.Configure(tuned);
+
+  const Tensor a = Tensor::FromFloat("", {3, 2}, {1, 4, 2, 5, 3, 6});
+  const Tensor b = Tensor::FromFloat("", {3, 2}, {7, 8, 9, 10, 11, 12});
+  const Tensor y = gemm_kernel(a, b, nullptr, 1.0f, 0.0f, 1, 0);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 58.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], 64.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[2], 139.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[3], 154.0f);
+
+  EXPECT_EQ(gemm_kernel.tuning().pack_b_minimum_elements, 1);
+  tuned.values["algorithm.tile_k"] = int64_t{0};
+  EXPECT_THROW(gemm_kernel.Configure(tuned), std::invalid_argument);
+  tuned.values["algorithm.tile_k"] = int64_t{2};
+  tuned.key.library = "other_library";
+  EXPECT_THROW(gemm_kernel.Configure(tuned), std::invalid_argument);
+}
+
+TEST(KernelClass, GemmParallelTilesPreserveSerialReductionBits) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Gemm serial_kernel{ctx};
+  Gemm parallel_kernel{ctx};
+  const auto key = serial_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(key);
+  ASSERT_NE(schema, nullptr);
+
+  core::runtime::KernelTuningParameters serial = schema->portable_defaults();
+  serial.values["algorithm.tile_m"] = int64_t{1};
+  serial.values["algorithm.tile_n"] = int64_t{2};
+  serial.values["algorithm.tile_k"] = int64_t{2};
+  serial.values["algorithm.pack_b_minimum_elements"] = int64_t{1};
+  serial.values["algorithm.skinny_m_limit"] = int64_t{1};
+  serial.values["parallel.fmas_per_work_unit"] = int64_t{1};
+  serial.values["parallel.minimum_tasks"] = std::numeric_limits<int64_t>::max();
+  serial_kernel.Configure(serial);
+
+  core::runtime::KernelTuningParameters parallel = serial;
+  parallel.values["parallel.minimum_tasks"] = int64_t{1};
+  parallel_kernel.Configure(parallel);
+
+  const Tensor a = Tensor::FromFloat(
+      "", {4, 7},
+      {1e20f, 1.0f,   -1e20f, 3.0f,   1e-10f,  -2.0f,    7.0f,      -1e20f,    5.0f, 1e20f,
+       -3.0f, 2e-10f, 4.0f,   -9.0f,  1.0f,    -2.0f,    3.0f,      -4.0f,     5.0f, -6.0f,
+       7.0f,  0.5f,   0.25f,  0.125f, 0.0625f, 0.03125f, 0.015625f, 0.0078125f});
+  const Tensor b = Tensor::FromFloat("", {7, 4}, {1.0f, -1.0f, 0.5f,  2.0f, 2.0f,   0.5f,  -1.0f,
+                                                  3.0f, -1.0f, 2.0f,  1.5f, -0.5f,  0.25f, -2.0f,
+                                                  4.0f, 1.0f,  3.0f,  1.0f, -0.25f, 2.0f,  -2.0f,
+                                                  3.0f, 0.75f, -1.0f, 1.5f, -0.5f,  2.0f,  0.25f});
+
+  const Tensor expected = serial_kernel(a, b, nullptr, 1.0f, 0.0f, 0, 0);
+  const Tensor actual = parallel_kernel(a, b, nullptr, 1.0f, 0.0f, 0, 0);
+  ASSERT_EQ(actual.size_bytes(), expected.size_bytes());
+  EXPECT_EQ(std::memcmp(actual.bytes(), expected.bytes(), actual.size_bytes()), 0);
+}
+
 // Verifies that ``kernel::MatMul`` produces FLOAT16 / BFLOAT16 outputs that
 // numerically match the FLOAT computation rounded through the same dtype.
 TEST(KernelClass, MatMulHalfPrecisionMatchesFloatReference) {

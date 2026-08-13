@@ -27,10 +27,17 @@ inline bool IsHalfPrecision(int32_t data_type) {
 /// If the input is already FLOAT or DOUBLE, returns a copy unchanged (no conversion).
 Tensor PromoteToFloat32(const Tensor &src, RuntimeContext *rt = nullptr);
 
+/// Converts a half-precision tensor to FLOAT32 with a kernel-specific parallel threshold.
+Tensor PromoteToFloat32(const Tensor &src, RuntimeContext *rt, int64_t parallel_minimum_elements);
+
 /// Demotes a FLOAT32 tensor back to FLOAT16 or BFLOAT16.
 /// @param src The float32 tensor to demote.
 /// @param target_dtype The target data type (FLOAT16 or BFLOAT16).
 /// @return A new Tensor with data_type == target_dtype and the same shape/name.
 Tensor DemoteFromFloat32(const Tensor &src, int32_t target_dtype, RuntimeContext *rt = nullptr);
+
+/// Demotes FLOAT32 with a kernel-specific parallel threshold.
+Tensor DemoteFromFloat32(const Tensor &src, int32_t target_dtype, RuntimeContext *rt,
+                         int64_t parallel_minimum_elements);
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

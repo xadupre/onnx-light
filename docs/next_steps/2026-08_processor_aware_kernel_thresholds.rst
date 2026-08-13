@@ -528,7 +528,8 @@ Implementation order
    tuning parameters (`PR #4409
    <https://github.com/xadupre/onnx-light/pull/4409>`_). SIMD algorithm
    selection remains owned by ``onnx-light-cpu``.
-6. Migrate ``Gemm`` tiling, packing, task, and conversion thresholds.
+6. Migrate ``Gemm`` tiling, packing, task, and conversion thresholds (`PR #4413
+   <https://github.com/xadupre/onnx-light/pull/4413>`_).
 7. Add exact, processor-list, and instruction-set profile registration.
 8. Add calibration callbacks and ``CalibrateRegisteredKernels`` selection.
 9. Add atomic ``UpdateKernelTuningCache`` and deployment-profile import.

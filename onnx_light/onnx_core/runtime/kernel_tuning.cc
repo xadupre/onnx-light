@@ -4,9 +4,12 @@
 
 #include "onnx_core/runtime/kernel_tuning.h"
 
+#include <algorithm>
 #include <cctype>
+#include <limits>
 #include <mutex>
 #include <stdexcept>
+#include <unordered_set>
 #include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -63,6 +66,118 @@ void ValidateKey(const KernelTuningKey &key) {
 
 std::string KeyDescription(const KernelTuningKey &key) {
   return key.library + "/" + key.kernel + "/" + key.implementation;
+}
+
+std::string CanonicalSelectorValue(std::string_view value) {
+  std::string canonical;
+  for (unsigned char character : value) {
+    if (std::isalnum(character) != 0) {
+      canonical.push_back(static_cast<char>(std::tolower(character)));
+    }
+  }
+  if (canonical == "amd64" || canonical == "x64") {
+    return "x8664";
+  }
+  if (canonical == "arm64") {
+    return "aarch64";
+  }
+  if (canonical == "genuineintel") {
+    return "intel";
+  }
+  if (canonical == "authenticamd") {
+    return "amd";
+  }
+  return canonical;
+}
+
+bool OptionalStringsConflict(const std::optional<std::string> &left,
+                             const std::optional<std::string> &right) {
+  return left.has_value() && right.has_value() &&
+         CanonicalSelectorValue(*left) != CanonicalSelectorValue(*right);
+}
+
+bool OptionalIntegersConflict(const std::optional<uint32_t> &left,
+                              const std::optional<uint32_t> &right) {
+  return left.has_value() && right.has_value() && left != right;
+}
+
+bool ModelsOverlap(const std::vector<uint32_t> &left, const std::vector<uint32_t> &right) {
+  if (left.empty() || right.empty()) {
+    return true;
+  }
+  return std::any_of(left.begin(), left.end(), [&](uint32_t model) {
+    return std::find(right.begin(), right.end(), model) != right.end();
+  });
+}
+
+bool SelectorsCanOverlap(const platform::CpuSelector &left, const platform::CpuSelector &right) {
+  if (OptionalStringsConflict(left.architecture, right.architecture) ||
+      OptionalStringsConflict(left.vendor, right.vendor) ||
+      OptionalIntegersConflict(left.family, right.family) ||
+      OptionalStringsConflict(left.microarchitecture, right.microarchitecture) ||
+      !ModelsOverlap(left.models, right.models) ||
+      left.required_features.Intersects(right.excluded_features) ||
+      right.required_features.Intersects(left.excluded_features)) {
+    return false;
+  }
+  const uint32_t minimum =
+      std::max(left.minimum_threads.value_or(0), right.minimum_threads.value_or(0));
+  const uint32_t maximum =
+      std::min(left.maximum_threads.value_or(std::numeric_limits<uint32_t>::max()),
+               right.maximum_threads.value_or(std::numeric_limits<uint32_t>::max()));
+  return minimum <= maximum;
+}
+
+uint32_t SelectorSpecificity(const platform::CpuSelector &selector) {
+  const bool exact =
+      selector.vendor.has_value() && selector.family.has_value() && selector.models.size() == 1;
+  const bool processor = selector.vendor.has_value() || selector.family.has_value() ||
+                         !selector.models.empty() || selector.microarchitecture.has_value();
+  uint32_t specificity = exact ? 3000 : (processor ? 2000 : 1000);
+  specificity += selector.architecture.has_value();
+  specificity += selector.vendor.has_value();
+  specificity += selector.family.has_value();
+  specificity += selector.microarchitecture.has_value();
+  specificity += selector.required_features.bits() != 0;
+  specificity += selector.excluded_features.bits() != 0;
+  specificity += selector.minimum_threads.has_value();
+  specificity += selector.maximum_threads.has_value();
+  if (!selector.models.empty()) {
+    specificity += 100 / static_cast<uint32_t>(selector.models.size());
+  }
+  return specificity;
+}
+
+void ValidateSelector(const platform::CpuSelector &selector) {
+  const bool empty = !selector.architecture.has_value() && !selector.vendor.has_value() &&
+                     !selector.family.has_value() && selector.models.empty() &&
+                     !selector.microarchitecture.has_value() &&
+                     selector.required_features.bits() == 0 &&
+                     selector.excluded_features.bits() == 0 &&
+                     !selector.minimum_threads.has_value() && !selector.maximum_threads.has_value();
+  if (empty) {
+    throw std::invalid_argument("Kernel tuning processor selector must not be empty.");
+  }
+  if (selector.required_features.Intersects(selector.excluded_features)) {
+    throw std::invalid_argument(
+        "Kernel tuning processor selector cannot require and exclude the same feature.");
+  }
+  if (selector.minimum_threads.has_value() && *selector.minimum_threads == 0) {
+    throw std::invalid_argument("Kernel tuning minimum_threads must be positive.");
+  }
+  if (selector.maximum_threads.has_value() && *selector.maximum_threads == 0) {
+    throw std::invalid_argument("Kernel tuning maximum_threads must be positive.");
+  }
+  if (selector.minimum_threads.has_value() && selector.maximum_threads.has_value() &&
+      *selector.minimum_threads > *selector.maximum_threads) {
+    throw std::invalid_argument("Kernel tuning minimum_threads must not exceed maximum_threads.");
+  }
+  std::unordered_set<uint32_t> models;
+  for (uint32_t model : selector.models) {
+    if (!models.emplace(model).second) {
+      throw std::invalid_argument("Kernel tuning processor selector contains duplicate models.");
+    }
+  }
 }
 
 } // namespace
@@ -158,8 +273,18 @@ void KernelTuningSchema::ValidateValues(const KernelTuningParameters &parameters
 }
 
 struct KernelTuningRegistrySnapshot::State {
+  struct RegisteredProfile {
+    KernelTuningKey key;
+    platform::CpuSelector processors;
+    KernelTuningParameters parameters;
+    int priority = 0;
+    uint32_t specificity = 0;
+  };
+
   uint64_t generation = 0;
   std::unordered_map<KernelTuningKey, KernelTuningParameters, KernelTuningKeyHash> profiles;
+  std::unordered_set<KernelTuningKey, KernelTuningKeyHash> published_keys;
+  std::vector<RegisteredProfile> registered_profiles;
 };
 
 struct KernelTuningRegistry::Impl {
@@ -180,6 +305,28 @@ KernelTuningRegistrySnapshot::Find(const KernelTuningKey &key) const noexcept {
   return found == state_->profiles.end() ? nullptr : &found->second;
 }
 
+const KernelTuningParameters *
+KernelTuningRegistrySnapshot::Resolve(const KernelTuningKey &key,
+                                      const CpuExecutionDescriptor &execution) const noexcept {
+  auto portable = state_->profiles.find(key);
+  if (portable == state_->profiles.end() || state_->published_keys.contains(key)) {
+    return portable == state_->profiles.end() ? nullptr : &portable->second;
+  }
+
+  const State::RegisteredProfile *selected = nullptr;
+  for (const State::RegisteredProfile &profile : state_->registered_profiles) {
+    if (profile.key != key ||
+        !profile.processors.Matches(execution.processor, execution.effective_threads)) {
+      continue;
+    }
+    if (selected == nullptr || profile.specificity > selected->specificity ||
+        (profile.specificity == selected->specificity && profile.priority > selected->priority)) {
+      selected = &profile;
+    }
+  }
+  return selected == nullptr ? &portable->second : &selected->parameters;
+}
+
 KernelTuningRegistry::KernelTuningRegistry() : impl_(std::make_unique<Impl>()) {}
 
 KernelTuningRegistry::~KernelTuningRegistry() = default;
@@ -197,6 +344,37 @@ void KernelTuningRegistry::RegisterSchema(KernelTuningSchema schema) {
   ++next->generation;
   next->profiles.emplace(shared_schema->key(), shared_schema->portable_defaults());
   impl_->schemas.emplace(shared_schema->key(), std::move(shared_schema));
+  impl_->state = std::move(next);
+}
+
+void KernelTuningRegistry::RegisterProfile(const KernelTuningKey &key,
+                                           platform::CpuSelector processors,
+                                           KernelTuningParameters parameters, int priority) {
+  ValidateSelector(processors);
+  if (parameters.key != key) {
+    throw std::invalid_argument("Kernel tuning profile parameters have a mismatched key.");
+  }
+  const uint32_t specificity = SelectorSpecificity(processors);
+
+  std::lock_guard lock(impl_->mutex);
+  auto schema = impl_->schemas.find(key);
+  if (schema == impl_->schemas.end()) {
+    throw std::invalid_argument("Cannot register profile for unregistered kernel tuning key '" +
+                                KeyDescription(key) + "'.");
+  }
+  schema->second->Validate(parameters);
+  for (const auto &registered : impl_->state->registered_profiles) {
+    if (registered.key == key && registered.specificity == specificity &&
+        registered.priority == priority && SelectorsCanOverlap(registered.processors, processors)) {
+      throw std::invalid_argument("Ambiguous kernel tuning profile for '" + KeyDescription(key) +
+                                  "': matching selectors have equal specificity and priority.");
+    }
+  }
+
+  auto next = std::make_shared<KernelTuningRegistrySnapshot::State>(*impl_->state);
+  next->registered_profiles.push_back(
+      {key, std::move(processors), std::move(parameters), priority, specificity});
+  ++next->generation;
   impl_->state = std::move(next);
 }
 
@@ -227,9 +405,11 @@ void KernelTuningRegistry::PublishProfiles(std::span<const KernelTuningParameter
   auto next = std::make_shared<KernelTuningRegistrySnapshot::State>(*current);
   for (const KernelTuningKey &key : reset_keys) {
     next->profiles[key] = impl_->schemas.at(key)->portable_defaults();
+    next->published_keys.erase(key);
   }
   for (const KernelTuningParameters &profile : profiles) {
     next->profiles[profile.key] = profile;
+    next->published_keys.emplace(profile.key);
   }
   ++next->generation;
   impl_->state = std::move(next);
@@ -260,6 +440,12 @@ KernelTuningRegistry &GetKernelTuningRegistry() {
 
 void RegisterKernelTuningSchema(KernelTuningSchema schema) {
   GetKernelTuningRegistry().RegisterSchema(std::move(schema));
+}
+
+void RegisterKernelTuningProfile(const KernelTuningKey &key, platform::CpuSelector processors,
+                                 KernelTuningParameters parameters, int priority) {
+  GetKernelTuningRegistry().RegisterProfile(key, std::move(processors), std::move(parameters),
+                                            priority);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

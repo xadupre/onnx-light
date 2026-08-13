@@ -138,6 +138,8 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
   // Capture exactly one immutable registry generation after all factories have
   // run, then configure every tunable kernel from that generation.
   tuning_snapshot_ = GetKernelTuningRegistry().Snapshot();
+  const CpuExecutionDescriptor tuning_execution{
+      platform::GetCpuDescriptor(), static_cast<uint32_t>(parameters_.EffectiveNumThreads())};
   for (const ExecuteAction &action : plan_.actions()) {
     if (action.kind() != ExecuteActionKind::kExecuteNode) {
       continue;
@@ -158,7 +160,8 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
     if (tuning_key.device == Device::kUndefined) {
       continue;
     }
-    const KernelTuningParameters *parameters = tuning_snapshot_->Find(tuning_key);
+    const KernelTuningParameters *parameters =
+        tuning_snapshot_->Resolve(tuning_key, tuning_execution);
     if (parameters != nullptr) {
       prepared.instance->Configure(*parameters);
     }

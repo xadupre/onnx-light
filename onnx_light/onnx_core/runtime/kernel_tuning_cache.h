@@ -14,14 +14,6 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
-/** Describes the stable execution properties used to match a calibrated profile. */
-struct CpuExecutionDescriptor {
-  platform::CpuDescriptor processor;
-  uint32_t effective_threads = 0;
-
-  bool operator==(const CpuExecutionDescriptor &) const = default;
-};
-
 /** Filters cache entries. Non-empty fields combine with logical AND. */
 struct KernelCalibrationSelection {
   std::optional<std::string> library;

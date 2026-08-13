@@ -36,10 +36,10 @@ template <typename T> T SignedAbs(T value) {
   return value < 0 ? static_cast<T>(-value) : value;
 }
 
-int64_t CalibrateAbsParallelMinimumElements(const KernelTuningKey &key,
-                                            const CpuExecutionDescriptor &execution,
-                                            const CalibrationOptions &options,
-                                            CalibrationReporter &reporter) {
+KernelTuningParameters CalibrateAbs(const KernelTuningKey &key,
+                                    const CpuExecutionDescriptor &execution,
+                                    const CalibrationOptions &options,
+                                    CalibrationReporter &reporter) {
   const int64_t portable_minimum = 32 * core::runtime::kParallelForGrainSize;
   const KernelContext context{DefaultOpset(13)};
   Abs serial_kernel{context};
@@ -48,7 +48,7 @@ int64_t CalibrateAbsParallelMinimumElements(const KernelTuningKey &key,
       {key,
        {{std::string(tuning::kParallelMinimumElements), std::numeric_limits<int64_t>::max()}}});
 
-  return tuning::CalibrateUnaryParallelMinimumElements(
+  const int64_t minimum_elements = tuning::CalibrateUnaryParallelMinimumElements(
       "Abs", execution, options, reporter, portable_minimum, ElementSize(key.element_type),
       [&](int64_t elements, int64_t parallel_minimum, int repetitions) {
         const Tensor input = RandnTensor(key.element_type, {elements}, /*seed=*/5);
@@ -64,14 +64,6 @@ int64_t CalibrateAbsParallelMinimumElements(const KernelTuningKey &key,
               return std::memcmp(serial.bytes(), parallel.bytes(), serial.size_bytes()) == 0;
             });
       });
-}
-
-KernelTuningParameters CalibrateAbs(const KernelTuningKey &key,
-                                    const CpuExecutionDescriptor &execution,
-                                    const CalibrationOptions &options,
-                                    CalibrationReporter &reporter) {
-  const int64_t minimum_elements =
-      CalibrateAbsParallelMinimumElements(key, execution, options, reporter);
   return {key, {{std::string(tuning::kParallelMinimumElements), minimum_elements}}};
 }
 

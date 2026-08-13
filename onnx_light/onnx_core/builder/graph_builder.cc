@@ -710,15 +710,19 @@ void GraphBuilder::CollectNodeReferences(const NodeProto &node,
   }
 }
 
-std::size_t GraphBuilder::RemoveUnusedNodes() {
+std::size_t GraphBuilder::RemoveUnusedNodes() { return RemoveUnusedNodesImpl(true); }
+
+std::size_t GraphBuilder::RemoveUnusedNodesImpl(bool recursive) {
   // Prune nested builders first: a leaner subgraph or local function may stop
   // referencing outer values, which can in turn make an owning node unused.
   std::size_t removed = 0;
-  for (const auto &function : local_functions_) {
-    removed += function->RemoveUnusedNodes();
-  }
-  for (const auto &subgraph : subgraphs_) {
-    removed += subgraph->RemoveUnusedNodes();
+  if (recursive) {
+    for (const auto &function : local_functions_) {
+      removed += function->RemoveUnusedNodes();
+    }
+    for (const auto &subgraph : subgraphs_) {
+      removed += subgraph->RemoveUnusedNodes();
+    }
   }
 
   const std::size_t num_nodes = nodes_.size();
@@ -810,15 +814,20 @@ bool CanReuseOutputs(const NodeProto &node, const std::vector<std::string> &surv
 
 } // namespace
 
-std::size_t GraphBuilder::RemoveIdentityNodes() {
+std::size_t GraphBuilder::RemoveIdentityNodes() { return RemoveIdentityNodesImpl(true, nullptr); }
+
+std::size_t GraphBuilder::RemoveIdentityNodesImpl(
+    bool recursive, std::unordered_map<std::string, std::string> *applied_renames) {
   // Prune nested builders first so a collapsed identity inside a subgraph or
   // local function is handled in its own scope.
   std::size_t removed = 0;
-  for (const auto &function : local_functions_) {
-    removed += function->RemoveIdentityNodes();
-  }
-  for (const auto &subgraph : subgraphs_) {
-    removed += subgraph->RemoveIdentityNodes();
+  if (recursive) {
+    for (const auto &function : local_functions_) {
+      removed += function->RemoveIdentityNodes();
+    }
+    for (const auto &subgraph : subgraphs_) {
+      removed += subgraph->RemoveIdentityNodes();
+    }
   }
 
   const std::size_t num_nodes = nodes_.size();
@@ -866,18 +875,26 @@ std::size_t GraphBuilder::RemoveIdentityNodes() {
   // Rewrite every consumer of a dropped identity output, descending into
   // subgraphs whose bodies capture values from this enclosing scope.
   RewriteInitializerReferences(rename);
+  if (applied_renames != nullptr) {
+    *applied_renames = rename;
+  }
 
   return removed + local_removed;
 }
 
-std::size_t GraphBuilder::RemoveDuplicateNodes() {
+std::size_t GraphBuilder::RemoveDuplicateNodes() { return RemoveDuplicateNodesImpl(true, nullptr); }
+
+std::size_t GraphBuilder::RemoveDuplicateNodesImpl(
+    bool recursive, std::unordered_map<std::string, std::string> *applied_renames) {
   // Prune nested builders first so each scope collapses its own duplicates.
   std::size_t removed = 0;
-  for (const auto &function : local_functions_) {
-    removed += function->RemoveDuplicateNodes();
-  }
-  for (const auto &subgraph : subgraphs_) {
-    removed += subgraph->RemoveDuplicateNodes();
+  if (recursive) {
+    for (const auto &function : local_functions_) {
+      removed += function->RemoveDuplicateNodes();
+    }
+    for (const auto &subgraph : subgraphs_) {
+      removed += subgraph->RemoveDuplicateNodes();
+    }
   }
 
   const std::size_t num_nodes = nodes_.size();
@@ -959,7 +976,9 @@ std::size_t GraphBuilder::RemoveDuplicateNodes() {
   // Rewrite every consumer of a dropped node's output, descending into
   // subgraphs whose bodies capture values from this enclosing scope.
   RewriteInitializerReferences(rename);
-
+  if (applied_renames != nullptr) {
+    *applied_renames = rename;
+  }
   return removed + local_removed;
 }
 
@@ -1205,6 +1224,18 @@ std::size_t GraphBuilder::InlineLocalFunctions(
 }
 
 std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
+  return ConstantFoldImpl(options, nullptr);
+}
+
+std::size_t
+GraphBuilder::ConstantFoldNodes(const ConstantFoldingOptions &options,
+                                const std::unordered_set<std::string> &included_outputs) {
+  return ConstantFoldImpl(options, &included_outputs);
+}
+
+std::size_t
+GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
+                               const std::unordered_set<std::string> *included_outputs) {
   if (!options.enabled) {
     return 0;
   }
@@ -1212,11 +1243,13 @@ std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
   // Fold nested builders first so a subgraph or local function shrinks before
   // this scope is folded, mirroring the other recursive passes.
   std::size_t removed = 0;
-  for (const auto &function : local_functions_) {
-    removed += function->ConstantFold(options);
-  }
-  for (const auto &subgraph : subgraphs_) {
-    removed += subgraph->ConstantFold(options);
+  if (included_outputs == nullptr) {
+    for (const auto &function : local_functions_) {
+      removed += function->ConstantFold(options);
+    }
+    for (const auto &subgraph : subgraphs_) {
+      removed += subgraph->ConstantFold(options);
+    }
   }
 
   const std::size_t num_nodes = nodes_.size();
@@ -1283,6 +1316,15 @@ std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
     // initializer carrying that name, which remains a valid graph output.
     bool candidate = node_constant[idx] == core::compute::ConstantInfo::kConstant &&
                      !is_excluded(normalised_domain, op_type) && !NodeCarriesSubgraph(node);
+    if (candidate && included_outputs != nullptr) {
+      for (int i = 0; i < node.output().size(); ++i) {
+        const std::string output(node.output(static_cast<std::size_t>(i)));
+        if (!output.empty() && included_outputs->find(output) == included_outputs->end()) {
+          candidate = false;
+          break;
+        }
+      }
+    }
     // Every non-empty input must already be available as a materialized
     // constant; otherwise the data needed to evaluate the node is missing (for
     // example a predecessor that was left unfolded).
@@ -1398,10 +1440,12 @@ std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
 }
 
 std::size_t GraphBuilder::RemoveDuplicateInitializers() {
-  return DeduplicateInitializers(InitializerContentIndex{});
+  return DeduplicateInitializers(InitializerContentIndex{}, true, nullptr);
 }
 
-std::size_t GraphBuilder::DeduplicateInitializers(const InitializerContentIndex &inherited) {
+std::size_t GraphBuilder::DeduplicateInitializers(
+    const InitializerContentIndex &inherited, bool recursive,
+    std::unordered_map<std::string, std::string> *applied_renames) {
   // Declared graph outputs must keep their own name; they are never dropped as
   // duplicates (but can still act as the survivor for a later duplicate).
   std::unordered_set<std::string> output_names;
@@ -1446,14 +1490,19 @@ std::size_t GraphBuilder::DeduplicateInitializers(const InitializerContentIndex 
   initializers_ = std::move(kept);
 
   RewriteInitializerReferences(rename);
+  if (applied_renames != nullptr) {
+    *applied_renames = rename;
+  }
 
   // Subgraph bodies see the enclosing scope, so pass the augmented index down.
   // Local functions have an isolated scope and start from a fresh index.
-  for (const auto &subgraph : subgraphs_) {
-    removed += subgraph->DeduplicateInitializers(index);
-  }
-  for (const auto &function : local_functions_) {
-    removed += function->DeduplicateInitializers(InitializerContentIndex{});
+  if (recursive) {
+    for (const auto &subgraph : subgraphs_) {
+      removed += subgraph->DeduplicateInitializers(index, true, nullptr);
+    }
+    for (const auto &function : local_functions_) {
+      removed += function->DeduplicateInitializers(InitializerContentIndex{}, true, nullptr);
+    }
   }
   return removed;
 }
@@ -1475,7 +1524,47 @@ void GraphBuilder::RewriteInitializerReferences(
   // initializer they reference must be rewritten here too. Local functions have
   // an isolated scope and cannot see this builder's initializers.
   for (const auto &subgraph : subgraphs_) {
-    subgraph->RewriteInitializerReferences(rename);
+    std::unordered_set<std::string> captured;
+    subgraph->CollectImplicitInputs(captured);
+    std::unordered_map<std::string, std::string> captured_renames;
+    for (const auto &entry : rename) {
+      if (captured.find(entry.first) != captured.end()) {
+        captured_renames.emplace(entry);
+      }
+    }
+    subgraph->RewriteCapturedReferences(captured_renames);
+  }
+}
+
+void GraphBuilder::RewriteCapturedReferences(
+    const std::unordered_map<std::string, std::string> &rename) {
+  if (rename.empty()) {
+    return;
+  }
+  for (NodeProto &node : nodes_) {
+    for (int i = 0; i < node.input().size(); ++i) {
+      auto it = rename.find(node.input(static_cast<std::size_t>(i)));
+      if (it != rename.end()) {
+        node.mutable_input(static_cast<std::size_t>(i))->assign(it->second);
+      }
+    }
+  }
+  for (ValueInfoProto &output : outputs_) {
+    auto it = rename.find(output.name().value());
+    if (it != rename.end()) {
+      output.set_name(it->second);
+    }
+  }
+  for (const auto &subgraph : subgraphs_) {
+    std::unordered_set<std::string> captured;
+    subgraph->CollectImplicitInputs(captured);
+    std::unordered_map<std::string, std::string> captured_renames;
+    for (const auto &entry : rename) {
+      if (captured.find(entry.first) != captured.end()) {
+        captured_renames.emplace(entry);
+      }
+    }
+    subgraph->RewriteCapturedReferences(captured_renames);
   }
 }
 

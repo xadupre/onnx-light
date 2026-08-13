@@ -89,6 +89,27 @@ std::string LocalRewriting::ToString() const {
     }
     os << added_initializers[i].name().value();
   }
+  os << "], added_initializer_positions=[";
+  for (std::size_t i = 0; i < added_initializer_positions.size(); ++i) {
+    if (i != 0) {
+      os << ", ";
+    }
+    os << added_initializer_positions[i];
+  }
+  os << "], removed_initializers=[";
+  for (std::size_t i = 0; i < removed_initializers.size(); ++i) {
+    if (i != 0) {
+      os << ", ";
+    }
+    os << removed_initializers[i];
+  }
+  os << "], value_renames=[";
+  for (std::size_t i = 0; i < value_renames.size(); ++i) {
+    if (i != 0) {
+      os << ", ";
+    }
+    os << value_renames[i].first << "->" << value_renames[i].second;
+  }
   os << "], insert_at=" << insert_at << ", iteration=" << iteration
      << ", match_time_ns=" << match_time_ns << ", apply_time_ns=" << apply_time_ns << ")";
   return os.str();

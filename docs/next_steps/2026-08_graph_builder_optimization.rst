@@ -65,9 +65,9 @@ separate pull requests:
      - Returns persistent rewrite records from optimization and deterministically
        replays them over a fresh model.
    * - Current
-     - Logging and phase timing
-     - Collects optional per-phase and per-pattern timing statistics and records
-       match/apply durations on each local rewrite.
+     - Constant folding
+     - Folds all-constant replacement nodes into initializers and stores the
+       materialized results in the persistent rewrite records.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -281,13 +281,14 @@ instead of only mutating the builder in place:
     std::vector<LocalRewriting> GraphGraph::Optimize(...);
 
 A ``LocalRewriting`` no longer refers to live node pointers: it records the
-positions selected by the match and owns the nodes and initializers it adds.
-Positions are relative to the graph at the start of the recorded iteration,
-not to the original model, because earlier iterations may create nodes that a
-later pattern matches. It also shares ownership of the stateless pattern that
-produced it, so callers can inspect that pattern after ``GraphGraph`` is
-destroyed. Its stable name remains available through ``pattern->Name()`` for
-logging or serialization without storing a redundant copy:
+positions selected by the match and owns the nodes and initializers it adds,
+as well as the initializer positions it removes. Positions are relative to the
+graph at the start of the recorded rewrite batch, not to the original model,
+because earlier batches may create or remove nodes. It also shares ownership
+of the stateless pattern or cleanup operation that produced it, so callers can
+inspect that operation after ``GraphGraph`` is destroyed. Its stable name
+remains available through ``pattern->Name()`` for logging or serialization
+without storing a redundant copy:
 
 .. code-block:: cpp
 
@@ -298,8 +299,11 @@ logging or serialization without storing a redundant copy:
       std::vector<std::size_t> matched_nodes;
       utils::RepeatedProtoField<NodeProto> added_nodes;   // replacement nodes
       utils::RepeatedProtoField<TensorProto> added_initializers;
+      std::vector<std::size_t> added_initializer_positions;
+      std::vector<std::size_t> removed_initializers;
+      std::vector<std::pair<std::string, std::string>> value_renames;
       std::ptrdiff_t insert_at = -1;              // -1 means first matched node
-      std::size_t iteration = 0;                  // cleanup/replay boundary
+      std::size_t iteration = 0;                  // ordered rewrite batch
 
       std::string ToString() const;
     };
@@ -322,12 +326,13 @@ re-running the matching phase:
     GraphProto Replay(const ModelProto &model,
                       const std::vector<LocalRewriting> &rewrites);
 
-Replay groups consecutive records from the same iteration, drops their matched
-nodes and splices their additions at ``insert_at`` in one rebuild, then runs the
-same cleanup passes as the live loop. This preserves simultaneous disjoint
-rewrites and gives a cheap, deterministic way to cache and reproduce an
-optimization, to audit exactly which rewrites fired, and to apply a captured
-sequence to a fresh ``ModelProto`` without paying the cost of matching again.
+Replay groups consecutive records from the same rewrite batch, drops their
+matched nodes and removed initializers, and splices their additions at
+``insert_at`` in one rebuild. Cleanup passes are records in the sequence too;
+replay does not rerun them. This preserves simultaneous disjoint rewrites and
+gives a cheap, deterministic way to cache and reproduce an optimization, to
+audit exactly which rewrites fired, and to apply a captured sequence to a fresh
+``ModelProto`` without paying the cost of matching or cleanup again.
 
 Cleanup and convergence
 ++++++++++++++++++++++++
@@ -339,6 +344,16 @@ that already exist in C++:
 * ``RemoveIdentityNodes`` for the ``Identity`` nodes patterns introduce
   to avoid duplicating constants;
 * ``RemoveUnusedNodes`` for the values a rewrite made dead.
+* ``RemoveDuplicateInitializers`` for constants with identical contents.
+
+Every effective cleanup pass appends a ``LocalRewriting`` under its stable
+operation name. Since duplicate and identity removal may rewire many consumers,
+the cleanup record replaces the complete node field before and after that pass.
+Initializer deduplication similarly records the removed initializer positions
+and the surviving initializer field. Identity, node deduplication and
+initializer deduplication also persist their value renames so replay updates
+consumers and values captured by nested subgraphs. These records form separate
+ordered batches, so the returned sequence alone reconstructs the final graph.
 
 If any pattern matched, or any cleanup pass removed a node, the loop continues.
 When no pattern matches at the current priority, the driver raises the priority
@@ -349,10 +364,14 @@ bound.
 Constant folding
 ++++++++++++++++
 
-When ``Apply`` creates a node whose inputs are all constant, the optimizer
-records the new outputs as constants, so a later pattern can read them through
-``GetComputedConstant``. This reuses the builder constant machinery; the
-optimizer only caches computed values keyed by name.
+When ``Apply`` creates a node whose inputs are all materialized constants, the
+optimizer folds that node through the builder's constant-folding machinery.
+Only nodes introduced by the current rewrite batch are eligible, so unrelated
+constant branches are not changed as a side effect. Folded outputs become
+initializers and are stored in ``LocalRewriting::added_initializers`` while the
+folded nodes are removed from ``LocalRewriting::added_nodes``. A later pattern
+can therefore read the value through ``GetComputedConstant``, and replay does
+not need to execute runtime kernels again.
 
 Subgraphs
 +++++++++

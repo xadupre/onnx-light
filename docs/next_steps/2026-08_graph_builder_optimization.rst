@@ -280,13 +280,13 @@ Positions are relative to the graph at the start of the recorded iteration,
 not to the original model, because earlier iterations may create nodes that a
 later pattern matches. It also shares ownership of the stateless pattern that
 produced it, so callers can inspect that pattern after ``GraphGraph`` is
-destroyed. The stable name remains available for logging and serialization:
+destroyed. Its stable name remains available through ``pattern->Name()`` for
+logging or serialization without storing a redundant copy:
 
 .. code-block:: cpp
 
     struct LocalRewriting {
       std::shared_ptr<const PatternOptimization> pattern;
-      std::string pattern_name;                   // stable serialized identity
       // Positions in the graph at the start of this iteration. They cannot be
       // positions in the original model because prior rewrites may add nodes.
       std::vector<std::size_t> matched_nodes;
@@ -294,7 +294,13 @@ destroyed. The stable name remains available for logging and serialization:
       utils::RepeatedProtoField<TensorProto> added_initializers;
       std::ptrdiff_t insert_at = -1;              // -1 means first matched node
       std::size_t iteration = 0;                  // cleanup/replay boundary
+
+      std::string ToString() const;
     };
+
+``LocalRewriting``, ``MatchResult`` and ``PatternOptimization`` expose
+``ToString()`` summaries for diagnostics without requiring callers to inspect
+protobuf fields or transient node pointers.
 
 Because a pattern never reuses an existing name, a ``LocalRewriting`` is fully
 determined by the names it consumes and the new names it produces, so it does

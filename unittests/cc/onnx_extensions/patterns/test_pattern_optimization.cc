@@ -55,11 +55,15 @@ TEST(PatternOptimization, CastCastCollapsesRedundantOuterCast) {
   onnx_patterns::CastCastPattern pattern;
   EXPECT_EQ(pattern.priority, 1);
   EXPECT_EQ(pattern.FastOpType(), std::set<std::string>({"Cast"}));
+  EXPECT_EQ(pattern.ToString(),
+            "PatternOptimization(name=CastCast, priority=1, fast_op_types=[Cast])");
 
   const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
   EXPECT_EQ(match.pattern, &pattern);
   ASSERT_EQ(match.nodes.size(), 2u);
   EXPECT_EQ(match.insert_at, match.nodes[1]);
+  EXPECT_EQ(match.ToString(), "MatchResult(pattern=CastCast, nodes=[Cast(outputs=[middle]), "
+                              "Cast(outputs=[y])], insert_at=Cast(outputs=[y]))");
 
   utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
   ASSERT_EQ(replacements.size(), 1u);
@@ -145,12 +149,14 @@ TEST(PatternOptimization, OptimizeAppliesPatternAndCleanupPasses) {
   ASSERT_EQ(rewrites.size(), 1u);
   ASSERT_NE(rewrites[0].pattern, nullptr);
   EXPECT_EQ(rewrites[0].pattern->Name(), "CastCast");
-  EXPECT_EQ(rewrites[0].pattern_name, "CastCast");
   EXPECT_EQ(rewrites[0].matched_nodes, std::vector<std::size_t>({0, 1}));
   EXPECT_EQ(rewrites[0].added_nodes.size(), 1u);
   EXPECT_TRUE(rewrites[0].added_initializers.empty());
   EXPECT_EQ(rewrites[0].insert_at, 1u);
   EXPECT_EQ(rewrites[0].iteration, 0u);
+  EXPECT_EQ(rewrites[0].ToString(), "LocalRewriting(pattern=CastCast, matched_nodes=[0, 1], "
+                                    "added_nodes=[Cast(outputs=[y])], added_initializers=[], "
+                                    "insert_at=1, iteration=0)");
   ASSERT_EQ(builder.Nodes().size(), 1u);
   EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Cast");
   EXPECT_EQ(builder.Nodes()[0].input()[0].value(), "x");
@@ -201,7 +207,7 @@ TEST(PatternOptimization, ReplayRestoresAddedInitializers) {
   *original.mutable_graph() = builder.BuildGraph();
 
   core::builder::LocalRewriting rewrite;
-  rewrite.pattern_name = "AddWeight";
+  rewrite.pattern = std::make_shared<onnx_patterns::CastCastPattern>();
   rewrite.matched_nodes = {0};
   TensorProto &weight = rewrite.added_initializers.add();
   weight.set_name("weight");

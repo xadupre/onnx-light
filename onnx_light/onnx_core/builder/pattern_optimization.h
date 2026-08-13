@@ -22,8 +22,6 @@ class PatternOptimization;
 struct LocalRewriting {
   /// Shared link to the pattern that produced the rewrite.
   std::shared_ptr<const PatternOptimization> pattern;
-  /// Stable diagnostic name retained for logging and serialization.
-  std::string pattern_name;
   /**
    * Positions of the nodes selected by the match.
    *
@@ -41,6 +39,9 @@ struct LocalRewriting {
   std::ptrdiff_t insert_at = -1;
   /// Optimization iteration in which this rewrite was applied.
   std::size_t iteration = 0;
+
+  /// Returns a concise summary of this rewrite.
+  std::string ToString() const;
 };
 
 /// Describes one subgraph recognized by an optimization pattern.
@@ -51,6 +52,9 @@ struct MatchResult {
   std::vector<const NodeProto *> nodes;
   /// Optional node before which the replacement should be inserted.
   const NodeProto *insert_at = nullptr;
+
+  /// Returns a concise summary of this match.
+  std::string ToString() const;
 };
 
 /// Stateless interface implemented by graph-rewriting patterns.
@@ -67,6 +71,9 @@ public:
 
   /// Assigns the registry name, rejecting a conflicting intrinsic name.
   void SetRegisteredName(const std::string &name);
+
+  /// Returns a concise summary of this pattern.
+  std::string ToString() const;
 
   /// Returns operator types from which this pattern can start.
   virtual std::set<std::string> FastOpType() const { return {}; }

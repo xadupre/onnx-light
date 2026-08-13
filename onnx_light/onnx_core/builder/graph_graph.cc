@@ -174,7 +174,6 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter) {
         throw BuilderError("GraphGraph::Optimize: matched pattern has no owner.");
       }
       rewriting.pattern = *pattern_owner;
-      rewriting.pattern_name = match.pattern->Name();
       rewriting.insert_at = static_cast<std::ptrdiff_t>(position);
       rewriting.iteration = static_cast<std::size_t>(iteration);
       rewriting.added_nodes = replacement_nodes;
@@ -249,12 +248,8 @@ void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites
   std::size_t replacement_nodes = 0;
   for (std::size_t i = begin; i < end; ++i) {
     const LocalRewriting &rewrite = rewrites[i];
-    if (rewrite.pattern_name.empty() && rewrite.pattern == nullptr) {
-      throw BuilderError("Replay: a rewrite must have a pattern name.");
-    }
-    if (rewrite.pattern != nullptr && !rewrite.pattern_name.empty() &&
-        rewrite.pattern->Name() != rewrite.pattern_name) {
-      throw BuilderError("Replay: the linked pattern does not match the recorded pattern name.");
+    if (rewrite.pattern == nullptr) {
+      throw BuilderError("Replay: a rewrite must link to its pattern.");
     }
     if (rewrite.matched_nodes.empty()) {
       throw BuilderError("Replay: a rewrite must match at least one node.");

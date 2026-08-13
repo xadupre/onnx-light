@@ -29,6 +29,17 @@ PatternRegistry &MutablePatternRegistry() {
 
 } // namespace
 
+void PatternOptimization::SetRegisteredName(const std::string &name) {
+  if (name.empty()) {
+    throw PatternRegistrationError("PatternOptimization: registered name cannot be empty.");
+  }
+  if (!Name().empty() && Name() != name) {
+    throw PatternRegistrationError("PatternOptimization: intrinsic name '" + Name() +
+                                   "' does not match registered name '" + name + "'.");
+  }
+  name_ = name;
+}
+
 void RegisterPattern(const std::string &name, PatternFactory factory) {
   if (name.empty()) {
     throw PatternRegistrationError("RegisterPattern: pattern name cannot be empty.");
@@ -76,6 +87,7 @@ std::vector<std::unique_ptr<PatternOptimization>> CreateRegisteredPatterns() {
       throw PatternRegistrationError("CreateRegisteredPatterns: factory for '" + registration.name +
                                      "' returned null.");
     }
+    pattern->SetRegisteredName(registration.name);
     patterns.push_back(std::move(pattern));
   }
   return patterns;

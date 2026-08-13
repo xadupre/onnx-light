@@ -101,9 +101,17 @@ Tensor MakeK_1_2_3_2() {
   // (batch=1, kv_heads=2, kv_seq=3, head_size=2)
   return Tensor::FromFloat("", {1, 2, 3, 2},
                            {
-                               1.0f, 0.0f, 0.5f, 0.5f, 0.0f,
+                               1.0f,
+                               0.0f,
+                               0.5f,
+                               0.5f,
+                               0.0f,
                                1.0f, // head 0
-                               -1.0f, 1.0f, 1.0f, 1.0f, 0.25f,
+                               -1.0f,
+                               1.0f,
+                               1.0f,
+                               1.0f,
+                               0.25f,
                                -0.5f, // head 1
                            });
 }
@@ -112,9 +120,17 @@ Tensor MakeV_1_2_3_2() {
   // (batch=1, kv_heads=2, kv_seq=3, v_head_size=2)
   return Tensor::FromFloat("", {1, 2, 3, 2},
                            {
-                               1.0f, 0.0f, 0.0f, 1.0f, -1.0f,
+                               1.0f,
+                               0.0f,
+                               0.0f,
+                               1.0f,
+                               -1.0f,
                                1.0f, // head 0
-                               2.0f, -2.0f, 0.5f, 0.25f, -0.5f,
+                               2.0f,
+                               -2.0f,
+                               0.5f,
+                               0.25f,
+                               -0.5f,
                                0.0f, // head 1
                            });
 }
@@ -144,6 +160,34 @@ Tensor MakeQ_1_4_2_2_gqa() {
                             1.0f, 1.0f, 0.0f, 0.5f, -0.5f});
 }
 
+void RegisterAttentionBenchmark(std::vector<TestCase> &registry,
+                                const onnx_kernels::kernel::Attention &attention,
+                                const OpsetId &opset, const std::string &name, int64_t query_heads,
+                                int64_t kv_heads, int64_t query_length, int64_t kv_length,
+                                bool causal) {
+  constexpr int64_t batch = 1;
+  constexpr int64_t head_size = 64;
+  const std::vector<int64_t> q_shape = {batch, query_heads, query_length, head_size};
+  const std::vector<int64_t> kv_shape = {batch, kv_heads, kv_length, head_size};
+  const int64_t q_count = batch * query_heads * query_length * head_size;
+  const int64_t kv_count = batch * kv_heads * kv_length * head_size;
+
+  NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+  if (causal) {
+    AddInt(node, "is_causal", 1);
+  }
+  onnx_kernels::kernel::Attention::Attributes attributes;
+  attributes.is_causal = causal;
+  Expect(registry, std::move(node), name, {opset}, {q_count, kv_count, kv_count}, {q_count},
+         [attention, attributes, q_shape, kv_shape, q_count, kv_count]() -> IoData {
+           Tensor Q = Tensor::FromFloat("", q_shape, Randn<float>(q_shape, 2501 + q_count));
+           Tensor K = Tensor::FromFloat("", kv_shape, Randn<float>(kv_shape, 2502 + kv_count));
+           Tensor V = Tensor::FromFloat("", kv_shape, Randn<float>(kv_shape, 2503 + kv_count));
+           Tensor Y = attention(Q, K, V, attributes).Y;
+           return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+         });
+}
+
 } // namespace
 
 void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
@@ -152,16 +196,19 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Attention attention{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
-    constexpr int64_t count = 1 * 8 * 128 * 64;
-    Expect(registry, std::move(node), "test_cc_attention_4d_benchmark", {opset},
-           {count, count, count}, {count}, [attention]() -> IoData {
-             Tensor Q = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 2501));
-             Tensor K = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 2502));
-             Tensor V = Tensor::FromFloat("", {1, 8, 128, 64}, Randn<float>({1, 8, 128, 64}, 2503));
-             Tensor Y = attention(Q, K, V);
-             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
-           });
+    RegisterAttentionBenchmark(registry, attention, opset,
+                               "test_cc_attention_prefill_mha_benchmark", 12, 12, 128, 128, true);
+    RegisterAttentionBenchmark(registry, attention, opset,
+                               "test_cc_attention_prefill_gqa_benchmark", 16, 4, 128, 128, true);
+    RegisterAttentionBenchmark(registry, attention, opset,
+                               "test_cc_attention_prefill_mqa_benchmark", 16, 1, 128, 128, true);
+    RegisterAttentionBenchmark(registry, attention, opset,
+                               "test_cc_attention_decode_mha_128_benchmark", 12, 12, 1, 128, false);
+    RegisterAttentionBenchmark(registry, attention, opset,
+                               "test_cc_attention_decode_gqa_128_benchmark", 16, 4, 1, 128, false);
+    RegisterAttentionBenchmark(registry, attention, opset,
+                               "test_cc_attention_decode_mqa_1024_benchmark", 16, 1, 1, 1024,
+                               false);
     return;
   }
 

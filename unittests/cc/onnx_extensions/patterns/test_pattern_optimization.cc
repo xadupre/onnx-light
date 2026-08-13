@@ -141,7 +141,14 @@ TEST(PatternOptimization, OptimizeAppliesPatternAndCleanupPasses) {
   patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
   core::builder::GraphGraph graph(builder, std::move(patterns));
 
-  EXPECT_EQ(graph.Optimize(), 1u);
+  const std::vector<core::builder::LocalRewriting> rewrites = graph.Optimize();
+  ASSERT_EQ(rewrites.size(), 1u);
+  EXPECT_EQ(rewrites[0].pattern, "CastCast");
+  EXPECT_EQ(rewrites[0].removed_nodes, std::vector<std::string>({"middle", "y"}));
+  EXPECT_EQ(rewrites[0].added_nodes.size(), 1u);
+  EXPECT_TRUE(rewrites[0].added_initializers.empty());
+  EXPECT_EQ(rewrites[0].insert_at, 1u);
+  EXPECT_EQ(rewrites[0].iteration, 0u);
   ASSERT_EQ(builder.Nodes().size(), 1u);
   EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Cast");
   EXPECT_EQ(builder.Nodes()[0].input()[0].value(), "x");
@@ -159,14 +166,57 @@ TEST(PatternOptimization, OptimizeAppliesDisjointMatchesInOneIteration) {
   builder.MakeOutput("y1");
   builder.MakeOutput("y2");
 
+  ModelProto original;
+  *original.mutable_graph() = builder.BuildGraph();
+
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
   patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
   core::builder::GraphGraph graph(builder, std::move(patterns));
 
-  EXPECT_EQ(graph.Optimize(1), 2u);
+  const std::vector<core::builder::LocalRewriting> rewrites = graph.Optimize(1);
+  ASSERT_EQ(rewrites.size(), 2u);
+  EXPECT_EQ(rewrites[0].iteration, 0u);
+  EXPECT_EQ(rewrites[1].iteration, 0u);
   ASSERT_EQ(builder.Nodes().size(), 2u);
   EXPECT_EQ(builder.Nodes()[0].input()[0].value(), "x1");
   EXPECT_EQ(builder.Nodes()[1].input()[0].value(), "x2");
+
+  const GraphProto replayed = core::builder::Replay(original, rewrites, SchemaLookup());
+  ASSERT_EQ(replayed.node_size(), 2);
+  EXPECT_EQ(replayed.node(0).input()[0].value(), "x1");
+  EXPECT_EQ(replayed.node(0).output()[0].value(), "y1");
+  EXPECT_EQ(replayed.node(1).input()[0].value(), "x2");
+  EXPECT_EQ(replayed.node(1).output()[0].value(), "y2");
+}
+
+TEST(PatternOptimization, ReplayRestoresAddedInitializers) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  builder.MakeNode("Identity", {"x"}, {"y"});
+  builder.MakeOutput("y");
+
+  ModelProto original;
+  *original.mutable_graph() = builder.BuildGraph();
+
+  core::builder::LocalRewriting rewrite;
+  rewrite.pattern = "AddWeight";
+  rewrite.removed_nodes = {"y"};
+  rewrite.insert_at = 0;
+  TensorProto &weight = rewrite.added_initializers.add();
+  weight.set_name("weight");
+  weight.set_data_type(TensorProto::DataType::FLOAT);
+  weight.add_dims(2);
+  weight.add_float_data(1.0f);
+  weight.add_float_data(2.0f);
+  rewrite.added_nodes.add() = MakeNode("Add", {"x", "weight"}, {"y"});
+
+  const GraphProto replayed = core::builder::Replay(
+      original, std::vector<core::builder::LocalRewriting>{rewrite}, SchemaLookup());
+  ASSERT_EQ(replayed.initializer_size(), 1);
+  EXPECT_EQ(replayed.initializer(0).name().value(), "weight");
+  ASSERT_EQ(replayed.node_size(), 1);
+  EXPECT_EQ(replayed.node(0).op_type().value(), "Add");
+  EXPECT_EQ(replayed.node(0).input()[1].value(), "weight");
 }
 
 TEST(PatternOptimization, OptimizeKeepsSharedInnerCastInTopologicalOrder) {
@@ -182,7 +232,7 @@ TEST(PatternOptimization, OptimizeKeepsSharedInnerCastInTopologicalOrder) {
   patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
   core::builder::GraphGraph graph(builder, std::move(patterns));
 
-  EXPECT_EQ(graph.Optimize(), 1u);
+  EXPECT_EQ(graph.Optimize().size(), 1u);
   ASSERT_EQ(builder.Nodes().size(), 3u);
   EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "middle");
   EXPECT_EQ(builder.Nodes()[1].output()[0].value(), "y");
@@ -202,7 +252,7 @@ TEST(PatternOptimization, OptimizeHonorsDoNotRemovePredicate) {
     return node.output()[0].value() == "middle";
   });
 
-  EXPECT_EQ(graph.Optimize(), 0u);
+  EXPECT_TRUE(graph.Optimize().empty());
   EXPECT_EQ(builder.Nodes().size(), 2u);
 }
 

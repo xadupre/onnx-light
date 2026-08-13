@@ -13,7 +13,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 class CastCastPattern final : public core::builder::PatternOptimization {
 public:
   /// Creates the pattern with the given optimization priority.
-  explicit CastCastPattern(int priority = 1) : PatternOptimization(priority) {}
+  explicit CastCastPattern(int priority = 1) : PatternOptimization(priority, "CastCast") {}
 
   /// Returns ``Cast`` as the only possible root operator.
   std::set<std::string> FastOpType() const override;

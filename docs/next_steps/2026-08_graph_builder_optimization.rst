@@ -28,7 +28,7 @@ rewrites of the same iteration.
 Progress
 ++++++++
 
-The initial design and the first two implementation steps were delivered in
+The initial design and the first four implementation steps were delivered in
 separate pull requests:
 
 .. list-table::
@@ -50,10 +50,18 @@ separate pull requests:
      - Pattern interfaces
      - Added ``PatternOptimization``, ``MatchResult``, the optimizer context,
        and the first ``Cast(Cast(x))`` pattern.
-   * - Current
+   * - `PR #4392 <https://github.com/xadupre/onnx-light/pull/4392>`_
+     - Pattern library and registration
+     - Moved concrete patterns to ``onnx_extensions`` and added explicit,
+       stable-name registration.
+   * - `PR #4394 <https://github.com/xadupre/onnx-light/pull/4394>`_
      - Match/apply loop and cleanup
      - Applies disjoint matches by priority and runs duplicate, identity, and
        unused-node cleanup passes until convergence.
+   * - Current
+     - Local rewriting and replay
+     - Returns persistent rewrite records from optimization and deterministically
+       replays them over a fresh model.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -259,19 +267,17 @@ Rewrites as data: ``LocalRewriting`` and replay
 A ``MatchResult`` only describes a match in terms of the transient
 ``const NodeProto *`` pointers of one ``GraphGraph``; those pointers become
 invalid as soon as the builder node field is rebuilt. To make rewrites
-reusable, ``optimize`` is refactored so that it returns the list of applied
-matches instead of only mutating the builder in place:
+reusable, ``Optimize`` returns self-contained records of the applied rewrites
+instead of only mutating the builder in place:
 
 .. code-block:: cpp
 
-    std::vector<MatchResult>
-    GraphBuilderPatternOptimization::Optimize(...);
+    std::vector<LocalRewriting> GraphGraph::Optimize(...);
 
-Each applied ``MatchResult`` is converted into a self-contained
-``LocalRewriting`` object. A ``LocalRewriting`` no longer refers to live node
-pointers: it records, by value name and node content, which nodes a rewrite
-removes and which nodes (and initializers) it adds. It therefore survives the
-index rebuild and can be serialized, logged, or stored:
+A ``LocalRewriting`` no longer refers to live node pointers: it records, by
+value name and node content, which nodes a rewrite removes and which nodes and
+initializers it adds. It therefore survives the index rebuild and can be
+serialized, logged, or stored:
 
 .. code-block:: cpp
 
@@ -279,7 +285,9 @@ index rebuild and can be serialized, logged, or stored:
       std::string pattern;                        // pattern that produced it
       std::vector<std::string> removed_nodes;     // outputs of removed nodes
       utils::RepeatedProtoField<NodeProto> added_nodes;   // replacement nodes
+      utils::RepeatedProtoField<TensorProto> added_initializers;
       std::size_t insert_at = 0;                  // position of the first match
+      std::size_t iteration = 0;                  // cleanup/replay boundary
     };
 
 Because a pattern never reuses an existing name, a ``LocalRewriting`` is fully
@@ -296,10 +304,11 @@ re-running the matching phase:
     GraphProto Replay(const ModelProto &model,
                       const std::vector<LocalRewriting> &rewrites);
 
-Replay applies each ``LocalRewriting`` in order: it drops the removed nodes and
-splices the added nodes in at ``insert_at``, then runs the same cleanup passes
-as the live loop. This gives a cheap, deterministic way to cache and reproduce
-an optimization, to audit exactly which rewrites fired, and to apply a captured
+Replay groups consecutive records from the same iteration, drops their removed
+nodes and splices their additions at ``insert_at`` in one rebuild, then runs the
+same cleanup passes as the live loop. This preserves simultaneous disjoint
+rewrites and gives a cheap, deterministic way to cache and reproduce an
+optimization, to audit exactly which rewrites fired, and to apply a captured
 sequence to a fresh ``ModelProto`` without paying the cost of matching again.
 
 Cleanup and convergence
@@ -376,9 +385,9 @@ Implementation order
    concrete pattern out of ``onnx_core``, and add the explicit core registry
    plus ``onnx_patterns::RegisterPatterns``.
 4. Implement the match/apply loop and wire in the existing cleanup passes.
-5. Refactor ``Optimize`` to return the list of applied ``MatchResult``, add the
-   ``LocalRewriting`` representation, and add ``Replay`` so a captured list of
-   rewrites reconstructs the final graph from a ``ModelProto``.
+5. Refactor ``Optimize`` to return the applied ``LocalRewriting`` records and
+   add ``Replay`` so a captured list of rewrites reconstructs the final graph
+   from a ``ModelProto``.
 6. Add logging with per-phase timing (match, rewrite, dead-branch removal,
    constant folding, subgraph optimization) reported at the end of ``Optimize``.
 7. Add constant folding of all-constant rewrites.
@@ -387,3 +396,13 @@ Implementation order
    linking requirements, and a custom-pattern example.
 10. Port the pattern library incrementally, one pattern per change, each with a
     C++ test that checks the rewritten graph against the expected one.
+
+Pull requests
++++++++++++++
+
+* `PR #4351 <https://github.com/xadupre/onnx-light/pull/4351>`_: initial plan.
+* `PR #4369 <https://github.com/xadupre/onnx-light/pull/4369>`_: graph index and value queries.
+* `PR #4389 <https://github.com/xadupre/onnx-light/pull/4389>`_: pattern interfaces.
+* `PR #4392 <https://github.com/xadupre/onnx-light/pull/4392>`_: pattern extension library.
+* `PR #4394 <https://github.com/xadupre/onnx-light/pull/4394>`_: match/apply loop and cleanup.
+* `PR #4396 <https://github.com/xadupre/onnx-light/pull/4396>`_: replay and phase-logging design.

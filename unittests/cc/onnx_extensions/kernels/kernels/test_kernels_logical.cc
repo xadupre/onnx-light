@@ -6,6 +6,8 @@
 #include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_core/runtime/kernel_context.h"
+#include "onnx_core/runtime/kernel_tuning.h"
+#include "onnx_core/runtime/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
 
@@ -751,6 +753,32 @@ TEST(KernelClass, NotClassMatchesReference) {
   EXPECT_EQ(y.data[1], 1u);
   EXPECT_EQ(y.data[2], 0u);
   EXPECT_EQ(y.data[3], 1u);
+}
+
+TEST(KernelClass, NotUsesTypedParallelTuning) {
+  const KernelContext ctx{DefaultOpset(1)};
+  Not not_kernel{ctx};
+  const auto bool_key = not_kernel.TuningKey(static_cast<int32_t>(core::runtime::DataType::BOOL));
+
+  EXPECT_EQ(bool_key.library, "onnx_light");
+  EXPECT_EQ(bool_key.kernel, "Not");
+  EXPECT_EQ(bool_key.implementation, "portable");
+  EXPECT_EQ(not_kernel.TuningKey(static_cast<int32_t>(core::runtime::DataType::FLOAT)).device,
+            core::symbolic::Device::kUndefined);
+
+  const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(bool_key);
+  ASSERT_NE(schema, nullptr);
+  EXPECT_EQ(schema->portable_defaults().Get<int64_t>("parallel.minimum_elements"),
+            core::runtime::kParallelForGrainSize);
+
+  core::runtime::KernelTuningParameters tuned{bool_key,
+                                              {{"parallel.minimum_elements", int64_t{3}}}};
+  not_kernel.Configure(tuned);
+  EXPECT_EQ(not_kernel.tuning().parallel_minimum_elements, 3);
+
+  Tensor x("", core::runtime::DataType::BOOL, {4}, {1, 0, 1, 0});
+  Tensor y = not_kernel(x);
+  EXPECT_EQ(y.data, (std::vector<uint8_t>{0, 1, 0, 1}));
 }
 
 TEST(KernelClass, NotInPlaceWritesToPreallocatedOutput) {

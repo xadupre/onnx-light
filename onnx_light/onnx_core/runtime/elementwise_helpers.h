@@ -360,15 +360,22 @@ Tensor BinaryHalfElementwiseAllocInOut(const char *op_name, const char *in_dtype
 /// Unary half-precision element-wise kernel (single-pass, no allocation).
 template <typename Op>
 void UnaryHalfElementwise(const Tensor &x, Tensor &output, HalfDecodeFunc decode,
-                          HalfEncodeFunc encode, Op op) {
+                          HalfEncodeFunc encode, int64_t grain_size, Op op) {
   const int64_t n = x.element_count();
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
   uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
-  ParallelFor(n, [px, py, decode, encode, op](int64_t begin, int64_t end) {
+  ParallelFor(n, grain_size, [px, py, decode, encode, op](int64_t begin, int64_t end) {
     for (int64_t i = begin; i < end; ++i) {
       py[i] = encode(op(decode(px[i])));
     }
   });
+}
+
+/// Unary half-precision element-wise kernel using the default parallel grain.
+template <typename Op>
+void UnaryHalfElementwise(const Tensor &x, Tensor &output, HalfDecodeFunc decode,
+                          HalfEncodeFunc encode, Op op) {
+  UnaryHalfElementwise(x, output, decode, encode, kParallelForGrainSize, op);
 }
 
 /// In-place half-precision binary comparison kernel (decode→compare→BOOL).

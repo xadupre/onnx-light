@@ -312,6 +312,9 @@ void RegisterKernelFunctions() {
   // idempotent, so calling it more than once (or from multiple independent
   // entry points) is safe and cheap after the first call.
   static const bool kRegistered = [] {
+    onnx_kernels::kernel::Abs::RegisterTuningSchemas();
+    onnx_kernels::kernel::Exp::RegisterTuningSchemas();
+    onnx_kernels::kernel::Not::RegisterTuningSchemas();
     for (const auto &entry : BuiltinKernelFunctions()) {
       const std::string &key = entry.first;
       const std::size_t sep = key.find(':');

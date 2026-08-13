@@ -5,7 +5,7 @@ Structured views over byte buffers
 
 :Date: 2026-08
 
-**in progress**
+**discussion**
 
 Motivation
 ++++++++++

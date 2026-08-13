@@ -5,11 +5,37 @@
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
 
 #include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <array>
 #include <cstdint>
 #include <stdexcept>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
+
+namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr std::array<int32_t, 1> kSupportedElementTypes = {static_cast<int32_t>(DataType::BOOL)};
+
+} // namespace
+
+Not::Not(const KernelContext &ctx) : KernelBase(ctx), tuning_(kParallelForGrainSize) {}
+
+void Not::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("Not", kSupportedElementTypes, kParallelForGrainSize,
+                                        kTuningAbi);
+}
+
+KernelTuningKey Not::TuningKey(int32_t element_type) const {
+  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
+             ? tuning::MakePortableTuningKey("Not", element_type, kTuningAbi)
+             : KernelTuningKey{};
+}
+
+void Not::Configure(const KernelTuningParameters &parameters) {
+  tuning::ConfigureParallelTuning("Not", parameters, tuning_, kTuningAbi);
+}
 
 Tensor Not::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count());
@@ -30,9 +56,11 @@ void Not::operator()(const Tensor &x, Tensor &output) const {
                       "kernel::Not preallocated output buffer has unexpected size in bytes.");
   const uint8_t *px = x.bytes();
   uint8_t *py = output.mutable_bytes();
-  for (int64_t i = 0; i < n; ++i) {
-    py[static_cast<size_t>(i)] = static_cast<uint8_t>(px[i] == 0 ? 1 : 0);
-  }
+  ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    for (int64_t i = begin; i < end; ++i) {
+      py[static_cast<size_t>(i)] = static_cast<uint8_t>(px[i] == 0 ? 1 : 0);
+    }
+  });
 }
 
 void Not::Run(RuntimeContext &rt) {

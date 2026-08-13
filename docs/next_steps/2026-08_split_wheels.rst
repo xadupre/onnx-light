@@ -5,6 +5,8 @@ Splitting ``onnx-light`` into composable wheels
 
 :Date: 2026-08
 
+**discussion**
+
 Objective
 +++++++++
 

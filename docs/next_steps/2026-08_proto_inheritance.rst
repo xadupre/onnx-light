@@ -5,7 +5,7 @@ Proto schema inheritance
 
 :Date: 2026-08
 
-**in progress**
+**discussion**
 
 Motivation
 ++++++++++

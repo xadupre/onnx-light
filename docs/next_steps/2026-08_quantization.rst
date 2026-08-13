@@ -6,7 +6,7 @@ Quantization
 
 :Date: 2026-08
 
-**complete**
+**discussion**
 
 .. note::
 

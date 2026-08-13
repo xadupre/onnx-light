@@ -297,9 +297,11 @@ the registered float and double variants of those two kernels.
 
 ``only_missing`` skips keys for which a compatible calibrated profile is
 already loaded. The batch report distinguishes calibrated, skipped,
-unsupported, and failed keys. One failing kernel does not discard successful
-profiles from other kernels, but the failure remains explicit in the report.
-The lower-level entry point for an exact list of keys may remain available:
+and unsupported keys. Callback and validation exceptions propagate to the
+caller. Publication occurs only after every selected callback succeeds, so a
+failure leaves the complete registry generation unchanged instead of returning
+a partially successful report. The lower-level entry point for an exact list
+of keys may remain available:
 
 .. code-block:: cpp
 
@@ -330,7 +332,8 @@ A calibration function should:
 The report records all candidates, samples, medians, dispersion, rejected
 measurements, selected values, processor information, thread count, runtime
 version, and tuning ABI. A calibration failure is explicit and leaves the
-portable defaults unchanged.
+portable defaults unchanged; it is not converted into a successful batch
+report carrying a ``failed`` entry.
 
 Example: ``Abs``
 ++++++++++++++++

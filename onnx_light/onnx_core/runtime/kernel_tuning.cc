@@ -611,18 +611,13 @@ CalibrationBatchReport CalibrateRegisteredKernels(const KernelCalibrationSelecti
     }
 
     CalibrationReporter reporter;
-    try {
-      KernelTuningParameters parameters = function(key, execution, options, reporter);
-      std::shared_ptr<const KernelTuningSchema> schema = registry.FindSchema(key);
-      if (schema == nullptr) {
-        throw std::invalid_argument("Kernel tuning schema disappeared during calibration.");
-      }
-      schema->Validate(parameters);
-      report.calibrated.push_back(std::move(parameters));
-    } catch (const std::exception &exception) {
-      report.failed.push_back(key);
-      report.diagnostics.push_back({key, exception.what()});
+    KernelTuningParameters parameters = function(key, execution, options, reporter);
+    std::shared_ptr<const KernelTuningSchema> schema = registry.FindSchema(key);
+    if (schema == nullptr) {
+      throw std::invalid_argument("Kernel tuning schema disappeared during calibration.");
     }
+    schema->Validate(parameters);
+    report.calibrated.push_back(std::move(parameters));
     for (const std::string &diagnostic : reporter.diagnostics()) {
       report.diagnostics.push_back({key, diagnostic});
     }

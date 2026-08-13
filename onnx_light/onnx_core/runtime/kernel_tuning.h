@@ -167,7 +167,6 @@ struct CalibrationBatchReport {
   std::vector<KernelTuningParameters> calibrated;
   std::vector<KernelTuningKey> skipped;
   std::vector<KernelTuningKey> unsupported;
-  std::vector<KernelTuningKey> failed;
   std::vector<KernelCalibrationDiagnostic> diagnostics;
 
   /** Returns successfully validated profiles. */
@@ -358,11 +357,13 @@ void RegisterKernelCalibrationFunction(const KernelTuningKey &key,
                                        KernelCalibrationFunction function);
 
 /**
- * Runs selected registered callbacks and atomically publishes successful profiles.
+ * Runs selected registered callbacks and atomically publishes their profiles.
  *
  * Unsupported keys have a tuning schema but no callback. ``only_missing``
- * skips keys with an explicitly published profile. Callback or validation
- * failures are reported without discarding successful keys.
+ * skips keys with an explicitly published profile.
+ *
+ * @throws std::exception from a calibration callback or profile validation.
+ * No profile is published unless every selected callback succeeds.
  */
 CalibrationBatchReport CalibrateRegisteredKernels(const KernelCalibrationSelection &selection = {},
                                                   const CalibrationOptions &options = {});

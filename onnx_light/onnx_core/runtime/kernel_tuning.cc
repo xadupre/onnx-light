@@ -68,13 +68,17 @@ std::string KeyDescription(const KernelTuningKey &key) {
   return key.library + "/" + key.kernel + "/" + key.implementation;
 }
 
-std::string CanonicalSelectorValue(std::string_view value) {
+std::string NormalizeSelectorValue(std::string_view value) {
   std::string canonical;
   for (unsigned char character : value) {
     if (std::isalnum(character) != 0) {
       canonical.push_back(static_cast<char>(std::tolower(character)));
     }
   }
+  return canonical;
+}
+
+constexpr std::string_view CanonicalSelectorValue(std::string_view canonical) noexcept {
   if (canonical == "amd64" || canonical == "x64") {
     return "x8664";
   }
@@ -92,8 +96,12 @@ std::string CanonicalSelectorValue(std::string_view value) {
 
 bool OptionalStringsConflict(const std::optional<std::string> &left,
                              const std::optional<std::string> &right) {
-  return left.has_value() && right.has_value() &&
-         CanonicalSelectorValue(*left) != CanonicalSelectorValue(*right);
+  if (!left.has_value() || !right.has_value()) {
+    return false;
+  }
+  const std::string normalized_left = NormalizeSelectorValue(*left);
+  const std::string normalized_right = NormalizeSelectorValue(*right);
+  return CanonicalSelectorValue(normalized_left) != CanonicalSelectorValue(normalized_right);
 }
 
 bool OptionalIntegersConflict(const std::optional<uint32_t> &left,

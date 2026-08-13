@@ -314,14 +314,18 @@ executed.
 
 A calibration function should:
 
-1. generate deterministic synthetic inputs;
-2. verify every candidate algorithm against the portable implementation;
-3. warm every candidate and shared thread pool;
-4. measure enough repetitions using robust statistics;
-5. search crossover regions rather than every possible shape;
-6. repeat measurements near a crossover and require a minimum winning margin;
-7. return conservative values when measurements overlap;
-8. respect time, memory, and thread budgets.
+1. generate deterministic synthetic inputs through shared runtime tensor
+   generators accepting an element type, shape, seed, and optional allocator;
+2. invoke the kernel implementation being calibrated rather than reimplementing
+   its computation inside the calibration callback;
+3. verify every candidate configuration against the same kernel forced onto
+   its portable serial path;
+4. warm every candidate and shared thread pool;
+5. measure enough repetitions using robust statistics;
+6. search crossover regions rather than every possible shape;
+7. repeat measurements near a crossover and require a minimum winning margin;
+8. return conservative values when measurements overlap;
+9. respect time, memory, and thread budgets.
 
 The report records all candidates, samples, medians, dispersion, rejected
 measurements, selected values, processor information, thread count, runtime
@@ -351,14 +355,31 @@ separately. The current fixed ``32 * kParallelForGrainSize`` policy becomes a
 portable default rather than a universal decision.
 
 The portable ``onnx_light`` implementation registers a concrete calibration
-callback for every element type supported by ``Abs``. It generates
-deterministic inputs, checks the parallel result against the serial loop, takes
-the median of five measurements per candidate size, and requires two
-consecutive wins of at least five percent before selecting a parallel grain.
-If no stable crossover is found within the requested time and memory budgets,
-it retains ``32 * kParallelForGrainSize``. SIMD crossover calibration remains
-the responsibility of an implementation such as ``onnx-light-cpu`` that owns
-the SIMD algorithm.
+callback for every element type supported by ``Abs``. It obtains deterministic
+inputs from the shared ``RandnTensor(element_type, shape, seed, allocator)``
+runtime helper. Two configured ``Abs`` instances then execute the actual
+kernel: one is forced onto the serial path and the other uses the candidate
+parallel grain. The callback checks their outputs, takes the median of five
+measurements per candidate size, and requires two consecutive wins of at least
+five percent before selecting a parallel grain. It does not duplicate the
+element-wise absolute-value implementation.
+
+The crossover search, resource budgets, warm-up, correctness comparison, and
+timing policy are implemented by shared portable-parallel calibration helpers,
+not by an ``Abs``-specific intermediate calibration function. If no stable
+crossover is found within the requested time and memory budgets, calibration
+retains ``32 * kParallelForGrainSize``. SIMD crossover calibration remains the
+responsibility of an implementation such as ``onnx-light-cpu`` that owns the
+SIMD algorithm.
+
+Example: ``Not``
+++++++++++++++++
+
+``Not`` uses the same shared portable-parallel calibration policy as ``Abs``.
+``RandnTensor`` supports ``BOOL`` inputs, and two configured ``Not`` instances
+measure the real serial and parallel kernel paths. This second integration
+ensures that input generation and calibration policy are reusable kernel
+infrastructure rather than special handling embedded in ``Abs``.
 
 Example: ``Gemm``
 +++++++++++++++++
@@ -540,8 +561,13 @@ Implementation order
    selection remains owned by ``onnx-light-cpu``.
 6. Migrate ``Gemm`` tiling, packing, task, and conversion thresholds (`PR #4413
    <https://github.com/xadupre/onnx-light/pull/4413>`_).
-7. Add exact, processor-list, and instruction-set profile registration.
-8. Add calibration callbacks and ``CalibrateRegisteredKernels`` selection.
+7. Add exact, processor-list, and instruction-set profile registration and
+   transactional publication of execution-specific calibrated profiles
+   (`PR #4415 <https://github.com/xadupre/onnx-light/pull/4415>`_).
+8. Add calibration callbacks and ``CalibrateRegisteredKernels`` selection,
+   initially integrating ``Abs`` and ``Not`` through shared random-tensor and
+   portable-parallel calibration helpers (`PR #4418
+   <https://github.com/xadupre/onnx-light/pull/4418>`_).
 9. Add atomic ``UpdateKernelTuningCache`` and deployment-profile import.
 10. Benchmark cold resolution separately from steady-state kernel execution and
     verify that the hot path performs no registry access.

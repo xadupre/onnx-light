@@ -5,7 +5,7 @@ Processor-aware kernel thresholds
 
 :Date: 2026-08
 
-**proposal**
+**implementation in progress**
 
 Objective
 +++++++++
@@ -523,8 +523,10 @@ Implementation order
 3. Add ``LoadKernelTuningCache`` and immutable profile publication (`PR #4390
    <https://github.com/xadupre/onnx-light/pull/4390>`_).
 4. Resolve an immutable profile while ``RuntimeSession`` initializes a kernel
-   (implemented).
-5. Migrate ``Abs`` algorithm and parallel grains to typed tuning parameters.
+   (`PR #4393 <https://github.com/xadupre/onnx-light/pull/4393>`_).
+5. Migrate the portable ``Abs`` and ``Exp`` parallel grains to typed tuning
+   parameters (implemented). SIMD algorithm selection remains owned by
+   ``onnx-light-cpu``.
 6. Migrate ``Gemm`` tiling, packing, task, and conversion thresholds.
 7. Add exact, processor-list, and instruction-set profile registration.
 8. Add calibration callbacks and ``CalibrateRegisteredKernels`` selection.

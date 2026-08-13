@@ -5,6 +5,8 @@ Pattern-based optimization in ``GraphBuilder``
 
 :Date: 2026-08
 
+**implementation in progress**
+
 Objective
 +++++++++
 

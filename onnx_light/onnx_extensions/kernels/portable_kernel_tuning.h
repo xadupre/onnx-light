@@ -1,0 +1,51 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include "onnx_core/runtime/kernel_tuning.h"
+
+#include <cstdint>
+#include <span>
+#include <string_view>
+
+namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::tuning {
+
+inline constexpr std::string_view kParallelMinimumElements = "parallel.minimum_elements";
+
+/** Stores the portable parallel configuration copied into one kernel instance. */
+struct ParallelTuning {
+  explicit ParallelTuning(int64_t minimum_elements) : parallel_minimum_elements(minimum_elements) {}
+
+  int64_t parallel_minimum_elements;
+};
+
+/**
+ * Returns the tuning key for one portable onnx-light kernel implementation.
+ *
+ * Returns:
+ *   The exact key for ``kernel`` and ``element_type``.
+ */
+core::runtime::KernelTuningKey MakePortableTuningKey(std::string_view kernel, int32_t element_type,
+                                                     uint32_t tuning_abi = 1);
+
+/**
+ * Returns whether an element type is supported by a kernel.
+ *
+ * Returns:
+ *   ``true`` when ``element_type`` appears in ``supported_element_types``.
+ */
+bool IsSupportedElementType(int32_t element_type, std::span<const int32_t> supported_element_types);
+
+/** Registers one parallel tuning schema for every supported element type. */
+void RegisterParallelTuningSchemas(std::string_view kernel,
+                                   std::span<const int32_t> supported_element_types,
+                                   int64_t portable_minimum_elements, uint32_t tuning_abi = 1);
+
+/** Validates and copies resolved parallel parameters into a typed configuration. */
+void ConfigureParallelTuning(std::string_view kernel,
+                             const core::runtime::KernelTuningParameters &parameters,
+                             ParallelTuning &tuning, uint32_t tuning_abi = 1);
+
+} // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::tuning

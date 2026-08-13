@@ -5,7 +5,7 @@ Mutable execution cache
 
 :Date: 2026-08
 
-**in progress**
+**discussion**
 
 Objective
 +++++++++

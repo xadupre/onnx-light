@@ -5,7 +5,7 @@ Quantized values in ``GraphBuilder``
 
 :Date: 2026-08
 
-**in progress**
+**discussion**
 
 Objective
 +++++++++

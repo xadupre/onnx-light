@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_core/runtime/float16_promote.h"
 #include "onnx_core/runtime/kernel_context.h"
+#include "onnx_core/runtime/kernel_tuning.h"
 #include "onnx_core/runtime/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
@@ -23,6 +24,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
+using core::runtime::DataType;
 using core::runtime::RuntimeContext;
 using core::runtime::Tensor;
 using onnx_kernels::SimpleRawBufferAllocator;
@@ -121,6 +123,38 @@ TEST(KernelClass, AbsClassParallelPathMatchesReference) {
   for (int64_t i = 0; i < n; ++i) {
     ASSERT_FLOAT_EQ(py[static_cast<size_t>(i)], static_cast<float>(i));
   }
+}
+
+TEST(KernelClass, AbsUsesTypedParallelTuningPerElementType) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Abs abs_kernel{ctx};
+  const auto float_key = abs_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  const auto double_key = abs_kernel.TuningKey(static_cast<int32_t>(DataType::DOUBLE));
+
+  EXPECT_EQ(float_key.library, "onnx_light");
+  EXPECT_EQ(float_key.kernel, "Abs");
+  EXPECT_EQ(float_key.implementation, "portable");
+  EXPECT_NE(float_key, double_key);
+  EXPECT_EQ(abs_kernel.TuningKey(static_cast<int32_t>(DataType::STRING)).device,
+            core::symbolic::Device::kUndefined);
+
+  const auto float_schema = core::runtime::GetKernelTuningRegistry().FindSchema(float_key);
+  const auto double_schema = core::runtime::GetKernelTuningRegistry().FindSchema(double_key);
+  ASSERT_NE(float_schema, nullptr);
+  ASSERT_NE(double_schema, nullptr);
+  EXPECT_EQ(float_schema->portable_defaults().Get<int64_t>("parallel.minimum_elements"),
+            32 * core::runtime::kParallelForGrainSize);
+
+  core::runtime::KernelTuningParameters tuned{float_key,
+                                              {{"parallel.minimum_elements", int64_t{17}}}};
+  abs_kernel.Configure(tuned);
+  EXPECT_EQ(abs_kernel.tuning().parallel_minimum_elements, 17);
+
+  tuned.values["parallel.minimum_elements"] = int64_t{0};
+  EXPECT_THROW(abs_kernel.Configure(tuned), std::invalid_argument);
+  tuned.key.library = "other_library";
+  tuned.values["parallel.minimum_elements"] = int64_t{19};
+  EXPECT_THROW(abs_kernel.Configure(tuned), std::invalid_argument);
 }
 
 TEST(ParallelFor, ReusesPersistentPoolAcrossManyCalls) {
@@ -333,6 +367,48 @@ TEST(KernelClass, ExpClassMatchesReference) {
   EXPECT_NEAR(py[0], 0.36787944f, 1e-6f);
   EXPECT_NEAR(py[1], 1.0f, 1e-6f);
   EXPECT_NEAR(py[2], 2.71828183f, 1e-6f);
+}
+
+TEST(KernelClass, ExpUsesTypedParallelTuningPerElementType) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Exp exp_kernel{ctx};
+  const auto float_key = exp_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  const auto float16_key = exp_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT16));
+
+  EXPECT_EQ(float_key.library, "onnx_light");
+  EXPECT_EQ(float_key.kernel, "Exp");
+  EXPECT_EQ(float_key.implementation, "portable");
+  EXPECT_NE(float_key, float16_key);
+  EXPECT_EQ(exp_kernel.TuningKey(static_cast<int32_t>(DataType::INT32)).device,
+            core::symbolic::Device::kUndefined);
+
+  const auto float_schema = core::runtime::GetKernelTuningRegistry().FindSchema(float_key);
+  const auto float16_schema = core::runtime::GetKernelTuningRegistry().FindSchema(float16_key);
+  ASSERT_NE(float_schema, nullptr);
+  ASSERT_NE(float16_schema, nullptr);
+  EXPECT_EQ(float_schema->portable_defaults().Get<int64_t>("parallel.minimum_elements"),
+            core::runtime::kParallelForGrainSize);
+
+  core::runtime::KernelTuningParameters tuned{float_key,
+                                              {{"parallel.minimum_elements", int64_t{23}}}};
+  exp_kernel.Configure(tuned);
+  EXPECT_EQ(exp_kernel.tuning().parallel_minimum_elements, 23);
+
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+  Tensor y = exp_kernel(x);
+  EXPECT_NEAR(y.AsFloat()[0], 0.36787944f, 1e-6f);
+  EXPECT_NEAR(y.AsFloat()[1], 1.0f, 1e-6f);
+  EXPECT_NEAR(y.AsFloat()[2], 2.71828183f, 1e-6f);
+
+  tuned.key = float16_key;
+  tuned.values["parallel.minimum_elements"] = int64_t{29};
+  exp_kernel.Configure(tuned);
+  Tensor x16 = onnx_kernels::DemoteFromFloat32(x, static_cast<int32_t>(DataType::FLOAT16));
+  Tensor y16 = onnx_kernels::PromoteToFloat32(exp_kernel(x16));
+  EXPECT_EQ(exp_kernel.tuning().parallel_minimum_elements, 29);
+  EXPECT_NEAR(y16.AsFloat()[0], 0.36787944f, 1e-3f);
+  EXPECT_NEAR(y16.AsFloat()[1], 1.0f, 1e-3f);
+  EXPECT_NEAR(y16.AsFloat()[2], 2.71828183f, 2e-3f);
 }
 
 TEST(KernelClass, ErfClassMatchesReference) {

@@ -7,6 +7,7 @@
 
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <array>
 #include <cstdint>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
@@ -14,17 +15,26 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 constexpr const char *kOrName = "kernel::Or";
 constexpr const char *kBoolName = "BOOL";
+constexpr std::array<int32_t, 1> kSupportedElementTypes = {static_cast<int32_t>(DataType::BOOL)};
 constexpr auto kOrOp = [](uint8_t a, uint8_t b) -> uint8_t { return (a != 0 || b != 0) ? 1 : 0; };
 } // namespace
 
+Or::Or(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Or", kSupportedElementTypes, kParallelForGrainSize) {}
+
+void Or::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("Or", kSupportedElementTypes, kParallelForGrainSize);
+}
+
 Tensor Or::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   return detail::BinaryElementwiseAlloc<uint8_t, uint8_t>(kOrName, kBoolName, DataType::BOOL, x, y,
-                                                          kOrOp, rt ? rt->allocator() : nullptr);
+                                                          kOrOp, rt ? rt->allocator() : nullptr,
+                                                          tuning().parallel_minimum_elements);
 }
 
 void Or::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
   detail::BinaryElementwise<uint8_t, uint8_t>(kOrName, kBoolName, DataType::BOOL, x, y, output,
-                                              kOrOp);
+                                              kOrOp, tuning().parallel_minimum_elements);
 }
 
 void Or::Run(RuntimeContext &rt) {

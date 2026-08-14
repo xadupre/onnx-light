@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/cast_helper.h"
 #include "onnx_core/runtime/parallel_for.h"
 #include "onnx_core/runtime/simple_tensor.h"
 
@@ -168,9 +169,10 @@ BinaryElementwiseAlloc(const char *op_name, const char *dtype_name, int32_t expe
 /// ``op(a, b) -> TOut`` for each element pair with full multidirectional
 /// broadcasting.
 template <typename TIn, typename TOut, typename Op>
-void BinaryElementwiseInOut(const char *op_name, const char *in_dtype_name, int32_t in_dtype,
-                            const char *out_dtype_name, int32_t out_dtype, const Tensor &x,
-                            const Tensor &y, Tensor &output, Op op) {
+void BinaryElementwiseInOut(
+    const char *op_name, const char *in_dtype_name, int32_t in_dtype, const char *out_dtype_name,
+    int32_t out_dtype, const Tensor &x, const Tensor &y, Tensor &output, Op op,
+    int64_t parallel_minimum_elements = std::numeric_limits<int64_t>::max()) {
   const BroadcastInfo bi = CheckBinaryBroadcastInOut(op_name, in_dtype_name, in_dtype, x, y);
   const size_t expected_bytes = static_cast<size_t>(bi.element_count) * sizeof(TOut);
   CheckPreallocatedOutput(op_name, out_dtype_name, out_dtype, bi.shape, expected_bytes, output);
@@ -180,37 +182,51 @@ void BinaryElementwiseInOut(const char *op_name, const char *in_dtype_name, int3
   TOut *pz = reinterpret_cast<TOut *>(output.mutable_bytes());
 
   if (x.shape == y.shape) {
-    for (int64_t i = 0; i < bi.element_count; ++i) {
-      pz[static_cast<size_t>(i)] = op(px[i], py[i]);
-    }
+    ParallelFor(bi.element_count, parallel_minimum_elements,
+                [px, py, pz, op](int64_t begin, int64_t end) {
+                  for (int64_t i = begin; i < end; ++i) {
+                    pz[static_cast<size_t>(i)] = op(px[i], py[i]);
+                  }
+                });
     return;
   }
   if (bi.nx == 1 || bi.ny == 1) {
-    for (int64_t i = 0; i < bi.element_count; ++i) {
-      const TIn a = bi.nx == 1 ? px[0] : px[i];
-      const TIn b = bi.ny == 1 ? py[0] : py[i];
-      pz[static_cast<size_t>(i)] = op(a, b);
-    }
+    ParallelFor(bi.element_count, parallel_minimum_elements,
+                [px, py, pz, op, nx = bi.nx, ny = bi.ny](int64_t begin, int64_t end) {
+                  for (int64_t i = begin; i < end; ++i) {
+                    const TIn a = nx == 1 ? px[0] : px[i];
+                    const TIn b = ny == 1 ? py[0] : py[i];
+                    pz[static_cast<size_t>(i)] = op(a, b);
+                  }
+                });
     return;
   }
 
-  const size_t rank = bi.shape.size();
-  Shape idx;
-  idx.assign(rank, 0);
-  for (int64_t flat = 0; flat < bi.element_count; ++flat) {
-    int64_t ox = 0, oy = 0;
-    for (size_t d = 0; d < rank; ++d) {
-      ox += idx[d] * bi.strides_x[d];
-      oy += idx[d] * bi.strides_y[d];
-    }
-    pz[static_cast<size_t>(flat)] = op(px[ox], py[oy]);
-    for (size_t d = rank; d-- > 0;) {
-      if (++idx[d] < bi.shape[d]) {
-        break;
-      }
-      idx[d] = 0;
-    }
-  }
+  ParallelFor(bi.element_count, parallel_minimum_elements,
+              [px, py, pz, op, &bi](int64_t begin, int64_t end) {
+                const size_t rank = bi.shape.size();
+                Shape idx;
+                idx.assign(rank, 0);
+                int64_t remaining = begin;
+                for (size_t d = rank; d-- > 0;) {
+                  idx[d] = remaining % bi.shape[d];
+                  remaining /= bi.shape[d];
+                }
+                for (int64_t flat = begin; flat < end; ++flat) {
+                  int64_t ox = 0, oy = 0;
+                  for (size_t d = 0; d < rank; ++d) {
+                    ox += idx[d] * bi.strides_x[d];
+                    oy += idx[d] * bi.strides_y[d];
+                  }
+                  pz[static_cast<size_t>(flat)] = op(px[ox], py[oy]);
+                  for (size_t d = rank; d-- > 0;) {
+                    if (++idx[d] < bi.shape[d]) {
+                      break;
+                    }
+                    idx[d] = 0;
+                  }
+                }
+              });
 }
 
 /// Allocating variant of :cpp:func:`BinaryElementwiseInOut`. Builds the
@@ -221,15 +237,16 @@ void BinaryElementwiseInOut(const char *op_name, const char *in_dtype_name, int3
 /// directly. Pass ``nullptr`` (or omit the argument) to use inline
 /// allocation.
 template <typename TIn, typename TOut, typename Op>
-Tensor BinaryElementwiseAllocInOut(const char *op_name, const char *in_dtype_name, int32_t in_dtype,
-                                   const char *out_dtype_name, int32_t out_dtype, const Tensor &x,
-                                   const Tensor &y, Op op,
-                                   RawBufferAllocator *allocator = nullptr) {
+Tensor BinaryElementwiseAllocInOut(
+    const char *op_name, const char *in_dtype_name, int32_t in_dtype, const char *out_dtype_name,
+    int32_t out_dtype, const Tensor &x, const Tensor &y, Op op,
+    RawBufferAllocator *allocator = nullptr,
+    int64_t parallel_minimum_elements = std::numeric_limits<int64_t>::max()) {
   const BroadcastInfo bi = CheckBinaryBroadcastInOut(op_name, in_dtype_name, in_dtype, x, y);
   const size_t n_bytes = static_cast<size_t>(bi.element_count) * sizeof(TOut);
   Tensor z = MakeOutputTensor(out_dtype, bi.shape, n_bytes, allocator);
   BinaryElementwiseInOut<TIn, TOut>(op_name, in_dtype_name, in_dtype, out_dtype_name, out_dtype, x,
-                                    y, z, op);
+                                    y, z, op, parallel_minimum_elements);
   return z;
 }
 
@@ -416,9 +433,10 @@ void UnaryHalfElementwise(const Tensor &x, Tensor &output, HalfDecodeFunc decode
 
 /// In-place half-precision binary comparison kernel (decode→compare→BOOL).
 template <typename Op>
-void BinaryHalfCompareElementwise(const char *op_name, const char *dtype_name, int32_t dtype,
-                                  const Tensor &x, const Tensor &y, Tensor &output,
-                                  HalfDecodeFunc decode, Op op) {
+void BinaryHalfCompareElementwise(
+    const char *op_name, const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y,
+    Tensor &output, HalfDecodeFunc decode, Op op,
+    int64_t parallel_minimum_elements = std::numeric_limits<int64_t>::max()) {
   const BroadcastInfo bi = CheckBinaryBroadcastInOut(op_name, dtype_name, dtype, x, y);
   const size_t expected_bytes = static_cast<size_t>(bi.element_count) * sizeof(uint8_t);
   CheckPreallocatedOutput(op_name, "BOOL", DataType::BOOL, bi.shape, expected_bytes, output);
@@ -428,37 +446,51 @@ void BinaryHalfCompareElementwise(const char *op_name, const char *dtype_name, i
   uint8_t *pz = output.mutable_bytes();
 
   if (x.shape == y.shape) {
-    for (int64_t i = 0; i < bi.element_count; ++i) {
-      pz[static_cast<size_t>(i)] = op(decode(px[i]), decode(py[i]));
-    }
+    ParallelFor(bi.element_count, parallel_minimum_elements,
+                [px, py, pz, decode, op](int64_t begin, int64_t end) {
+                  for (int64_t i = begin; i < end; ++i) {
+                    pz[static_cast<size_t>(i)] = op(decode(px[i]), decode(py[i]));
+                  }
+                });
     return;
   }
   if (bi.nx == 1 || bi.ny == 1) {
-    for (int64_t i = 0; i < bi.element_count; ++i) {
-      const float a = bi.nx == 1 ? decode(px[0]) : decode(px[i]);
-      const float b = bi.ny == 1 ? decode(py[0]) : decode(py[i]);
-      pz[static_cast<size_t>(i)] = op(a, b);
-    }
+    ParallelFor(bi.element_count, parallel_minimum_elements,
+                [px, py, pz, decode, op, nx = bi.nx, ny = bi.ny](int64_t begin, int64_t end) {
+                  for (int64_t i = begin; i < end; ++i) {
+                    const float a = nx == 1 ? decode(px[0]) : decode(px[i]);
+                    const float b = ny == 1 ? decode(py[0]) : decode(py[i]);
+                    pz[static_cast<size_t>(i)] = op(a, b);
+                  }
+                });
     return;
   }
 
-  const size_t rank = bi.shape.size();
-  Shape idx;
-  idx.assign(rank, 0);
-  for (int64_t flat = 0; flat < bi.element_count; ++flat) {
-    int64_t ox = 0, oy = 0;
-    for (size_t d = 0; d < rank; ++d) {
-      ox += idx[d] * bi.strides_x[d];
-      oy += idx[d] * bi.strides_y[d];
-    }
-    pz[static_cast<size_t>(flat)] = op(decode(px[ox]), decode(py[oy]));
-    for (size_t d = rank; d-- > 0;) {
-      if (++idx[d] < bi.shape[d]) {
-        break;
-      }
-      idx[d] = 0;
-    }
-  }
+  ParallelFor(bi.element_count, parallel_minimum_elements,
+              [px, py, pz, decode, op, &bi](int64_t begin, int64_t end) {
+                const size_t rank = bi.shape.size();
+                Shape idx;
+                idx.assign(rank, 0);
+                int64_t remaining = begin;
+                for (size_t d = rank; d-- > 0;) {
+                  idx[d] = remaining % bi.shape[d];
+                  remaining /= bi.shape[d];
+                }
+                for (int64_t flat = begin; flat < end; ++flat) {
+                  int64_t ox = 0, oy = 0;
+                  for (size_t d = 0; d < rank; ++d) {
+                    ox += idx[d] * bi.strides_x[d];
+                    oy += idx[d] * bi.strides_y[d];
+                  }
+                  pz[static_cast<size_t>(flat)] = op(decode(px[ox]), decode(py[oy]));
+                  for (size_t d = rank; d-- > 0;) {
+                    if (++idx[d] < bi.shape[d]) {
+                      break;
+                    }
+                    idx[d] = 0;
+                  }
+                }
+              });
 }
 
 /// Allocating half-precision binary comparison kernel (decode→compare→BOOL).
@@ -467,14 +499,86 @@ void BinaryHalfCompareElementwise(const char *op_name, const char *dtype_name, i
 /// directly. Pass ``nullptr`` (or omit the argument) to use inline
 /// allocation.
 template <typename Op>
-Tensor BinaryHalfCompareElementwiseAlloc(const char *op_name, const char *dtype_name, int32_t dtype,
-                                         const Tensor &x, const Tensor &y, HalfDecodeFunc decode,
-                                         Op op, RawBufferAllocator *allocator = nullptr) {
+Tensor BinaryHalfCompareElementwiseAlloc(
+    const char *op_name, const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y,
+    HalfDecodeFunc decode, Op op, RawBufferAllocator *allocator = nullptr,
+    int64_t parallel_minimum_elements = std::numeric_limits<int64_t>::max()) {
   const BroadcastInfo bi = CheckBinaryBroadcastInOut(op_name, dtype_name, dtype, x, y);
   const size_t n_bytes = static_cast<size_t>(bi.element_count) * sizeof(uint8_t);
   Tensor z = MakeOutputTensor(DataType::BOOL, bi.shape, n_bytes, allocator);
-  BinaryHalfCompareElementwise(op_name, dtype_name, dtype, x, y, z, decode, op);
+  BinaryHalfCompareElementwise(op_name, dtype_name, dtype, x, y, z, decode, op,
+                               parallel_minimum_elements);
   return z;
+}
+
+/** Dispatches one numeric binary comparison and allocates its BOOL output. */
+template <typename Op>
+Tensor BinaryComparisonAlloc(const char *op_name, const Tensor &x, const Tensor &y, Op op,
+                             RawBufferAllocator *allocator, int64_t parallel_minimum_elements) {
+#define ONNX_LIGHT_COMPARE_CASE(ENUM, NAME, CTYPE)                                                 \
+  case DataType::ENUM:                                                                             \
+    return BinaryElementwiseAllocInOut<CTYPE, uint8_t>(op_name, NAME, DataType::ENUM, "BOOL",      \
+                                                       DataType::BOOL, x, y, op, allocator,        \
+                                                       parallel_minimum_elements)
+  switch (x.data_type) {
+    ONNX_LIGHT_COMPARE_CASE(FLOAT, "FLOAT", float);
+    ONNX_LIGHT_COMPARE_CASE(INT8, "INT8", int8_t);
+    ONNX_LIGHT_COMPARE_CASE(INT16, "INT16", int16_t);
+    ONNX_LIGHT_COMPARE_CASE(INT32, "INT32", int32_t);
+    ONNX_LIGHT_COMPARE_CASE(INT64, "INT64", int64_t);
+    ONNX_LIGHT_COMPARE_CASE(UINT8, "UINT8", uint8_t);
+    ONNX_LIGHT_COMPARE_CASE(UINT16, "UINT16", uint16_t);
+    ONNX_LIGHT_COMPARE_CASE(UINT32, "UINT32", uint32_t);
+    ONNX_LIGHT_COMPARE_CASE(UINT64, "UINT64", uint64_t);
+  case DataType::FLOAT16:
+    return BinaryHalfCompareElementwiseAlloc(op_name, "FLOAT16", DataType::FLOAT16, x, y,
+                                             Float16BitsToFloat, op, allocator,
+                                             parallel_minimum_elements);
+  case DataType::BFLOAT16:
+    return BinaryHalfCompareElementwiseAlloc(op_name, "BFLOAT16", DataType::BFLOAT16, x, y,
+                                             Bfloat16BitsToFloat, op, allocator,
+                                             parallel_minimum_elements);
+  default:
+    EXT_THROW_INVALID(op_name, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
+  }
+#undef ONNX_LIGHT_COMPARE_CASE
+}
+
+/** Dispatches one numeric binary comparison into a preallocated BOOL output. */
+template <typename Op>
+void BinaryComparison(const char *op_name, const Tensor &x, const Tensor &y, Tensor &output, Op op,
+                      int64_t parallel_minimum_elements) {
+#define ONNX_LIGHT_COMPARE_CASE(ENUM, NAME, CTYPE)                                                 \
+  case DataType::ENUM:                                                                             \
+    BinaryElementwiseInOut<CTYPE, uint8_t>(op_name, NAME, DataType::ENUM, "BOOL", DataType::BOOL,  \
+                                           x, y, output, op, parallel_minimum_elements);           \
+    return
+  switch (x.data_type) {
+    ONNX_LIGHT_COMPARE_CASE(FLOAT, "FLOAT", float);
+    ONNX_LIGHT_COMPARE_CASE(INT8, "INT8", int8_t);
+    ONNX_LIGHT_COMPARE_CASE(INT16, "INT16", int16_t);
+    ONNX_LIGHT_COMPARE_CASE(INT32, "INT32", int32_t);
+    ONNX_LIGHT_COMPARE_CASE(INT64, "INT64", int64_t);
+    ONNX_LIGHT_COMPARE_CASE(UINT8, "UINT8", uint8_t);
+    ONNX_LIGHT_COMPARE_CASE(UINT16, "UINT16", uint16_t);
+    ONNX_LIGHT_COMPARE_CASE(UINT32, "UINT32", uint32_t);
+    ONNX_LIGHT_COMPARE_CASE(UINT64, "UINT64", uint64_t);
+  case DataType::FLOAT16:
+    BinaryHalfCompareElementwise(op_name, "FLOAT16", DataType::FLOAT16, x, y, output,
+                                 Float16BitsToFloat, op, parallel_minimum_elements);
+    return;
+  case DataType::BFLOAT16:
+    BinaryHalfCompareElementwise(op_name, "BFLOAT16", DataType::BFLOAT16, x, y, output,
+                                 Bfloat16BitsToFloat, op, parallel_minimum_elements);
+    return;
+  default:
+    EXT_THROW_INVALID(op_name, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
+  }
+#undef ONNX_LIGHT_COMPARE_CASE
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail

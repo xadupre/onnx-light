@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -95,6 +96,49 @@ TEST(OnnxKernelsDispatchTable, RegistersNotCalibrationFunction) {
   EXPECT_EQ(parameters.key, key);
   EXPECT_GT(parameters.Get<int64_t>(onnx_kernels::tuning::kParallelMinimumElements), 0);
   EXPECT_FALSE(reporter.diagnostics().empty());
+}
+
+TEST(OnnxKernelsDispatchTable, RegistersEveryBinaryElementwiseTuningSchema) {
+  ::onnx_light::onnx_kernels::RegisterKernelFunctions();
+  struct ExpectedSchema {
+    const char *kernel;
+    int32_t element_type;
+  };
+  constexpr std::array expected{
+      ExpectedSchema{"Add", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"Sub", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"Mul", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"Div", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"Mod", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"Pow", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"PRelu", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"SwiGLU", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"And", TensorProto::DataType::BOOL},
+      ExpectedSchema{"Or", TensorProto::DataType::BOOL},
+      ExpectedSchema{"Xor", TensorProto::DataType::BOOL},
+      ExpectedSchema{"Equal", TensorProto::DataType::STRING},
+      ExpectedSchema{"Greater", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"GreaterOrEqual", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"Less", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"LessOrEqual", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"BitwiseAnd", TensorProto::DataType::INT32},
+      ExpectedSchema{"BitwiseOr", TensorProto::DataType::INT32},
+      ExpectedSchema{"BitwiseXor", TensorProto::DataType::INT32},
+      ExpectedSchema{"BitShift", TensorProto::DataType::UINT32},
+      ExpectedSchema{"StringConcat", TensorProto::DataType::STRING},
+  };
+
+  for (const ExpectedSchema &expected_schema : expected) {
+    const core::runtime::KernelTuningKey key = onnx_kernels::tuning::MakePortableTuningKey(
+        expected_schema.kernel, expected_schema.element_type);
+    const std::shared_ptr<const core::runtime::KernelTuningSchema> schema =
+        core::runtime::GetKernelTuningRegistry().FindSchema(key);
+    ASSERT_NE(schema, nullptr) << expected_schema.kernel;
+    EXPECT_EQ(
+        schema->portable_defaults().Get<int64_t>(onnx_kernels::tuning::kParallelMinimumElements),
+        core::runtime::kParallelForGrainSize)
+        << expected_schema.kernel;
+  }
 }
 
 // The device is part of a kernel's identifier: a factory registered for a GPU

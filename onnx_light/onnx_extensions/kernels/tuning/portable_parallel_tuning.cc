@@ -24,6 +24,23 @@ void ValidateParallelTuning(std::string_view kernel,
 
 } // namespace
 
+ParallelTunableKernel::ParallelTunableKernel(const core::runtime::KernelContext &ctx,
+                                             std::string_view kernel,
+                                             std::span<const int32_t> supported_element_types,
+                                             int64_t portable_minimum_elements, uint32_t tuning_abi)
+    : KernelBase(ctx), kernel_(kernel), supported_element_types_(supported_element_types),
+      tuning_(portable_minimum_elements), tuning_abi_(tuning_abi) {}
+
+core::runtime::KernelTuningKey ParallelTunableKernel::TuningKey(int32_t element_type) const {
+  return IsSupportedElementType(element_type, supported_element_types_)
+             ? MakePortableTuningKey(kernel_, element_type, tuning_abi_)
+             : core::runtime::KernelTuningKey{};
+}
+
+void ParallelTunableKernel::Configure(const core::runtime::KernelTuningParameters &parameters) {
+  ConfigureParallelTuning(kernel_, parameters, tuning_, tuning_abi_);
+}
+
 core::runtime::KernelTuningKey MakePortableTuningKey(std::string_view kernel, int32_t element_type,
                                                      uint32_t tuning_abi) {
   return {std::string(kTuningLibrary),        std::string(kernel),

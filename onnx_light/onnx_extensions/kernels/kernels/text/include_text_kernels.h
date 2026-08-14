@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
 #include <string>
 #include <utility>
@@ -62,11 +63,12 @@ using ::onnx_light::core::runtime::OpsetId;
 
 /// Element-wise concatenation of two ``tensor(string)`` inputs with
 /// NumPy-style bidirectional broadcasting.
-class StringConcat : public KernelBase {
+class StringConcat : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:StringConcat";
+  explicit StringConcat(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;

@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/temporary_buffer.h"
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
@@ -19,6 +20,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 constexpr const char *kPowName = "kernel::Pow";
+constexpr std::array<int32_t, 5> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::FLOAT16),
+    static_cast<int32_t>(DataType::BFLOAT16), static_cast<int32_t>(DataType::INT32),
+    static_cast<int32_t>(DataType::INT64)};
 
 constexpr const char *kSupportedBaseTypesMsg =
     " only supports FLOAT, FLOAT16, BFLOAT16, INT32 and INT64 base inputs.";
@@ -45,40 +50,53 @@ template <typename TBase, typename TExp> TBase PowOne(TBase base, TExp exp) {
 // Broadcasted iteration over ``x`` and ``y`` writing ``PowOne(x_i, y_i)`` into
 // ``pz``. The dtype-specific buffer pointers are passed in pre-cast.
 template <typename TBase, typename TExp>
-void PowLoop(const detail::BroadcastInfo &bi, const TBase *px, const TExp *py, TBase *pz) {
+void PowLoop(const detail::BroadcastInfo &bi, const TBase *px, const TExp *py, TBase *pz,
+             int64_t grain) {
   // Fast paths: equal-shape and scalar broadcasting.
   if (bi.shape_x == bi.shape_y) {
-    for (int64_t i = 0; i < bi.element_count; ++i) {
-      pz[static_cast<size_t>(i)] = PowOne<TBase, TExp>(px[i], py[i]);
-    }
+    ParallelFor(bi.element_count, grain, [px, py, pz](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        pz[static_cast<size_t>(i)] = PowOne<TBase, TExp>(px[i], py[i]);
+      }
+    });
     return;
   }
   if (bi.nx == 1 || bi.ny == 1) {
-    for (int64_t i = 0; i < bi.element_count; ++i) {
-      const TBase a = bi.nx == 1 ? px[0] : px[i];
-      const TExp b = bi.ny == 1 ? py[0] : py[i];
-      pz[static_cast<size_t>(i)] = PowOne<TBase, TExp>(a, b);
-    }
+    ParallelFor(bi.element_count, grain,
+                [px, py, pz, nx = bi.nx, ny = bi.ny](int64_t begin, int64_t end) {
+                  for (int64_t i = begin; i < end; ++i) {
+                    const TBase a = nx == 1 ? px[0] : px[i];
+                    const TExp b = ny == 1 ? py[0] : py[i];
+                    pz[static_cast<size_t>(i)] = PowOne<TBase, TExp>(a, b);
+                  }
+                });
     return;
   }
 
-  const size_t rank = bi.shape.size();
-  Shape idx;
-  idx.assign(rank, 0);
-  for (int64_t flat = 0; flat < bi.element_count; ++flat) {
-    int64_t ox = 0, oy = 0;
-    for (size_t d = 0; d < rank; ++d) {
-      ox += idx[d] * bi.strides_x[d];
-      oy += idx[d] * bi.strides_y[d];
-    }
-    pz[static_cast<size_t>(flat)] = PowOne<TBase, TExp>(px[ox], py[oy]);
+  ParallelFor(bi.element_count, grain, [px, py, pz, &bi](int64_t begin, int64_t end) {
+    const size_t rank = bi.shape.size();
+    Shape idx;
+    idx.assign(rank, 0);
+    int64_t remaining = begin;
     for (size_t d = rank; d-- > 0;) {
-      if (++idx[d] < bi.shape[d]) {
-        break;
-      }
-      idx[d] = 0;
+      idx[d] = remaining % bi.shape[d];
+      remaining /= bi.shape[d];
     }
-  }
+    for (int64_t flat = begin; flat < end; ++flat) {
+      int64_t ox = 0, oy = 0;
+      for (size_t d = 0; d < rank; ++d) {
+        ox += idx[d] * bi.strides_x[d];
+        oy += idx[d] * bi.strides_y[d];
+      }
+      pz[static_cast<size_t>(flat)] = PowOne<TBase, TExp>(px[ox], py[oy]);
+      for (size_t d = rank; d-- > 0;) {
+        if (++idx[d] < bi.shape[d]) {
+          break;
+        }
+        idx[d] = 0;
+      }
+    }
+  });
 }
 
 // Compute broadcast shape/strides without enforcing that ``x`` and ``y`` share
@@ -131,63 +149,77 @@ detail::BroadcastInfo BroadcastShape(const Tensor &x, const Tensor &y) {
 
 template <typename TExp>
 void PowHalfLoop(const detail::BroadcastInfo &bi, const uint16_t *px, const TExp *py, uint16_t *pz,
-                 detail::HalfDecodeFunc decode, detail::HalfEncodeFunc encode) {
+                 detail::HalfDecodeFunc decode, detail::HalfEncodeFunc encode, int64_t grain) {
   if (bi.shape_x == bi.shape_y) {
-    for (int64_t i = 0; i < bi.element_count; ++i) {
-      pz[static_cast<size_t>(i)] = encode(std::pow(decode(px[i]), static_cast<float>(py[i])));
-    }
+    ParallelFor(bi.element_count, grain, [px, py, pz, decode, encode](int64_t begin, int64_t end) {
+      for (int64_t i = begin; i < end; ++i) {
+        pz[static_cast<size_t>(i)] = encode(std::pow(decode(px[i]), static_cast<float>(py[i])));
+      }
+    });
     return;
   }
   if (bi.nx == 1 || bi.ny == 1) {
-    for (int64_t i = 0; i < bi.element_count; ++i) {
-      const float a = bi.nx == 1 ? decode(px[0]) : decode(px[i]);
-      const float b = static_cast<float>(bi.ny == 1 ? py[0] : py[i]);
-      pz[static_cast<size_t>(i)] = encode(std::pow(a, b));
-    }
+    ParallelFor(bi.element_count, grain,
+                [px, py, pz, decode, encode, nx = bi.nx, ny = bi.ny](int64_t begin, int64_t end) {
+                  for (int64_t i = begin; i < end; ++i) {
+                    const float a = nx == 1 ? decode(px[0]) : decode(px[i]);
+                    const float b = static_cast<float>(ny == 1 ? py[0] : py[i]);
+                    pz[static_cast<size_t>(i)] = encode(std::pow(a, b));
+                  }
+                });
     return;
   }
-  const size_t rank = bi.shape.size();
-  Shape idx;
-  idx.assign(rank, 0);
-  for (int64_t flat = 0; flat < bi.element_count; ++flat) {
-    int64_t ox = 0, oy = 0;
-    for (size_t d = 0; d < rank; ++d) {
-      ox += idx[d] * bi.strides_x[d];
-      oy += idx[d] * bi.strides_y[d];
-    }
-    pz[static_cast<size_t>(flat)] = encode(std::pow(decode(px[ox]), static_cast<float>(py[oy])));
-    for (size_t d = rank; d-- > 0;) {
-      if (++idx[d] < bi.shape[d]) {
-        break;
-      }
-      idx[d] = 0;
-    }
-  }
+  ParallelFor(bi.element_count, grain,
+              [px, py, pz, decode, encode, &bi](int64_t begin, int64_t end) {
+                const size_t rank = bi.shape.size();
+                Shape idx;
+                idx.assign(rank, 0);
+                int64_t remaining = begin;
+                for (size_t d = rank; d-- > 0;) {
+                  idx[d] = remaining % bi.shape[d];
+                  remaining /= bi.shape[d];
+                }
+                for (int64_t flat = begin; flat < end; ++flat) {
+                  int64_t ox = 0, oy = 0;
+                  for (size_t d = 0; d < rank; ++d) {
+                    ox += idx[d] * bi.strides_x[d];
+                    oy += idx[d] * bi.strides_y[d];
+                  }
+                  pz[static_cast<size_t>(flat)] =
+                      encode(std::pow(decode(px[ox]), static_cast<float>(py[oy])));
+                  for (size_t d = rank; d-- > 0;) {
+                    if (++idx[d] < bi.shape[d]) {
+                      break;
+                    }
+                    idx[d] = 0;
+                  }
+                }
+              });
 }
 
 template <typename TBase, typename TExp>
 void PowDispatchExp(const Tensor &x, const Tensor &y, Tensor &output,
-                    const detail::BroadcastInfo &bi) {
+                    const detail::BroadcastInfo &bi, int64_t grain) {
   const TBase *px = reinterpret_cast<const TBase *>(x.bytes());
   const TExp *py = reinterpret_cast<const TExp *>(y.bytes());
   TBase *pz = reinterpret_cast<TBase *>(output.mutable_bytes());
-  PowLoop<TBase, TExp>(bi, px, py, pz);
+  PowLoop<TBase, TExp>(bi, px, py, pz, grain);
 }
 
 template <typename TBase>
 void PowDispatchBase(const Tensor &x, const Tensor &y, Tensor &output,
-                     const detail::BroadcastInfo &bi) {
+                     const detail::BroadcastInfo &bi, int64_t grain) {
   switch (y.data_type) {
   case DataType::FLOAT:
-    return PowDispatchExp<TBase, float>(x, y, output, bi);
+    return PowDispatchExp<TBase, float>(x, y, output, bi, grain);
   case DataType::INT32:
-    return PowDispatchExp<TBase, int32_t>(x, y, output, bi);
+    return PowDispatchExp<TBase, int32_t>(x, y, output, bi, grain);
   case DataType::INT64:
-    return PowDispatchExp<TBase, int64_t>(x, y, output, bi);
+    return PowDispatchExp<TBase, int64_t>(x, y, output, bi, grain);
   case DataType::UINT32:
-    return PowDispatchExp<TBase, uint32_t>(x, y, output, bi);
+    return PowDispatchExp<TBase, uint32_t>(x, y, output, bi, grain);
   case DataType::UINT64:
-    return PowDispatchExp<TBase, uint64_t>(x, y, output, bi);
+    return PowDispatchExp<TBase, uint64_t>(x, y, output, bi, grain);
   default:
     EXT_THROW_INVALID(kPowName, ": unsupported data type ", y.data_type,
                       kSupportedExponentTypesMsg);
@@ -197,19 +229,20 @@ void PowDispatchBase(const Tensor &x, const Tensor &y, Tensor &output,
 template <typename TExp>
 void PowDispatchHalfExp(const Tensor &x, const Tensor &y, Tensor &output,
                         const detail::BroadcastInfo &bi, detail::HalfDecodeFunc decode,
-                        detail::HalfEncodeFunc encode) {
+                        detail::HalfEncodeFunc encode, int64_t grain) {
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
   const TExp *py = reinterpret_cast<const TExp *>(y.bytes());
   uint16_t *pz = reinterpret_cast<uint16_t *>(output.mutable_bytes());
-  PowHalfLoop<TExp>(bi, px, py, pz, decode, encode);
+  PowHalfLoop<TExp>(bi, px, py, pz, decode, encode, grain);
 }
 
 void PowDispatchHalfBase(const Tensor &x, const Tensor &y, Tensor &output,
                          const detail::BroadcastInfo &bi, detail::HalfDecodeFunc decode,
-                         detail::HalfEncodeFunc encode, RawBufferAllocator *allocator) {
+                         detail::HalfEncodeFunc encode, RawBufferAllocator *allocator,
+                         int64_t grain) {
   switch (y.data_type) {
   case DataType::FLOAT:
-    return PowDispatchHalfExp<float>(x, y, output, bi, decode, encode);
+    return PowDispatchHalfExp<float>(x, y, output, bi, decode, encode, grain);
   case DataType::FLOAT16: {
     const int64_t ny = y.element_count();
     detail::TemporaryTypedBuffer<float> fy(static_cast<size_t>(ny), allocator, kPowName);
@@ -218,7 +251,7 @@ void PowDispatchHalfBase(const Tensor &x, const Tensor &y, Tensor &output,
       fy.data()[static_cast<size_t>(i)] = Float16BitsToFloat(raw_py[i]);
     const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
     uint16_t *pz = reinterpret_cast<uint16_t *>(output.mutable_bytes());
-    return PowHalfLoop<float>(bi, px, fy.data(), pz, decode, encode);
+    return PowHalfLoop<float>(bi, px, fy.data(), pz, decode, encode, grain);
   }
   case DataType::BFLOAT16: {
     const int64_t ny = y.element_count();
@@ -228,16 +261,16 @@ void PowDispatchHalfBase(const Tensor &x, const Tensor &y, Tensor &output,
       fy.data()[static_cast<size_t>(i)] = Bfloat16BitsToFloat(raw_py[i]);
     const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
     uint16_t *pz = reinterpret_cast<uint16_t *>(output.mutable_bytes());
-    return PowHalfLoop<float>(bi, px, fy.data(), pz, decode, encode);
+    return PowHalfLoop<float>(bi, px, fy.data(), pz, decode, encode, grain);
   }
   case DataType::INT32:
-    return PowDispatchHalfExp<int32_t>(x, y, output, bi, decode, encode);
+    return PowDispatchHalfExp<int32_t>(x, y, output, bi, decode, encode, grain);
   case DataType::INT64:
-    return PowDispatchHalfExp<int64_t>(x, y, output, bi, decode, encode);
+    return PowDispatchHalfExp<int64_t>(x, y, output, bi, decode, encode, grain);
   case DataType::UINT32:
-    return PowDispatchHalfExp<uint32_t>(x, y, output, bi, decode, encode);
+    return PowDispatchHalfExp<uint32_t>(x, y, output, bi, decode, encode, grain);
   case DataType::UINT64:
-    return PowDispatchHalfExp<uint64_t>(x, y, output, bi, decode, encode);
+    return PowDispatchHalfExp<uint64_t>(x, y, output, bi, decode, encode, grain);
   default:
     EXT_THROW_INVALID(kPowName, ": unsupported data type ", y.data_type,
                       kSupportedExponentTypesMsg);
@@ -279,24 +312,32 @@ const char *BaseDtypeName(int32_t dtype) {
 }
 
 void PowDispatch(const Tensor &x, const Tensor &y, Tensor &output, const detail::BroadcastInfo &bi,
-                 RawBufferAllocator *allocator) {
+                 RawBufferAllocator *allocator, int64_t grain) {
   switch (x.data_type) {
   case DataType::FLOAT:
-    return PowDispatchBase<float>(x, y, output, bi);
+    return PowDispatchBase<float>(x, y, output, bi, grain);
   case DataType::INT32:
-    return PowDispatchBase<int32_t>(x, y, output, bi);
+    return PowDispatchBase<int32_t>(x, y, output, bi, grain);
   case DataType::INT64:
-    return PowDispatchBase<int64_t>(x, y, output, bi);
+    return PowDispatchBase<int64_t>(x, y, output, bi, grain);
   case DataType::FLOAT16:
-    return PowDispatchHalfBase(x, y, output, bi, Float16BitsToFloat, FloatToFloat16Bits, allocator);
+    return PowDispatchHalfBase(x, y, output, bi, Float16BitsToFloat, FloatToFloat16Bits, allocator,
+                               grain);
   case DataType::BFLOAT16:
     return PowDispatchHalfBase(x, y, output, bi, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                               allocator);
+                               allocator, grain);
   default:
     EXT_THROW_INVALID(kPowName, ": unsupported data type ", x.data_type, kSupportedBaseTypesMsg);
   }
 }
 } // namespace
+
+Pow::Pow(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Pow", kSupportedElementTypes, kParallelForGrainSize) {}
+
+void Pow::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("Pow", kSupportedElementTypes, kParallelForGrainSize);
+}
 
 Tensor Pow::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   const detail::BroadcastInfo bi = BroadcastShape(x, y);
@@ -304,7 +345,7 @@ Tensor Pow::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) con
   const size_t z_n_bytes = static_cast<size_t>(bi.element_count) * elem_size;
   RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   Tensor z = MakeOutputTensor(x.data_type, bi.shape, z_n_bytes, allocator);
-  PowDispatch(x, y, z, bi, allocator);
+  PowDispatch(x, y, z, bi, allocator, tuning().parallel_minimum_elements);
   return z;
 }
 
@@ -315,7 +356,7 @@ void Pow::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
   detail::CheckPreallocatedOutput(kPowName, BaseDtypeName(x.data_type), x.data_type, bi.shape,
                                   expected_bytes, output);
   RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
-  PowDispatch(x, y, output, bi, allocator);
+  PowDispatch(x, y, output, bi, allocator, tuning().parallel_minimum_elements);
 }
 
 void Pow::Run(RuntimeContext &rt) {

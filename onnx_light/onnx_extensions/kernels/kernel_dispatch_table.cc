@@ -315,10 +315,28 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::Abs::RegisterTuningSchemas();
     onnx_kernels::kernel::Add::RegisterTuningSchemas();
     onnx_kernels::kernel::And::RegisterTuningSchemas();
+    onnx_kernels::kernel::BitShift::RegisterTuningSchemas();
+    onnx_kernels::kernel::BitwiseAnd::RegisterTuningSchemas();
+    onnx_kernels::kernel::BitwiseOr::RegisterTuningSchemas();
+    onnx_kernels::kernel::BitwiseXor::RegisterTuningSchemas();
+    onnx_kernels::kernel::Div::RegisterTuningSchemas();
+    onnx_kernels::kernel::Equal::RegisterTuningSchemas();
     onnx_kernels::kernel::Exp::RegisterTuningSchemas();
     onnx_kernels::kernel::Gemm::RegisterTuningSchemas();
+    onnx_kernels::kernel::Greater::RegisterTuningSchemas();
+    onnx_kernels::kernel::GreaterOrEqual::RegisterTuningSchemas();
+    onnx_kernels::kernel::Less::RegisterTuningSchemas();
+    onnx_kernels::kernel::LessOrEqual::RegisterTuningSchemas();
+    onnx_kernels::kernel::Mod::RegisterTuningSchemas();
     onnx_kernels::kernel::Mul::RegisterTuningSchemas();
     onnx_kernels::kernel::Not::RegisterTuningSchemas();
+    onnx_kernels::kernel::Or::RegisterTuningSchemas();
+    onnx_kernels::kernel::Pow::RegisterTuningSchemas();
+    onnx_kernels::kernel::PRelu::RegisterTuningSchemas();
+    onnx_kernels::kernel::Sub::RegisterTuningSchemas();
+    onnx_kernels::kernel::SwiGLU::RegisterTuningSchemas();
+    onnx_kernels::kernel::StringConcat::RegisterTuningSchemas();
+    onnx_kernels::kernel::Xor::RegisterTuningSchemas();
     for (const auto &entry : BuiltinKernelFunctions()) {
       const std::string &key = entry.first;
       const std::size_t sep = key.find(':');

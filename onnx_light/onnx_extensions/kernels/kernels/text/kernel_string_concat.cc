@@ -5,7 +5,9 @@
 #include "onnx_extensions/kernels/kernels/text/include_text_kernels.h"
 
 #include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <array>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -14,6 +16,8 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+constexpr std::array<int32_t, 1> kSupportedElementTypes = {static_cast<int32_t>(DataType::STRING)};
 
 // Validates that both inputs are STRING tensors of equal shape or that one
 // is a scalar (single element) — the same broadcasting flavor used by the
@@ -51,6 +55,14 @@ StringBroadcast CheckStringConcatInputs(const Tensor &x, const Tensor &y) {
 
 } // namespace
 
+StringConcat::StringConcat(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "StringConcat", kSupportedElementTypes, kParallelForGrainSize) {}
+
+void StringConcat::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("StringConcat", kSupportedElementTypes,
+                                        kParallelForGrainSize);
+}
+
 Tensor StringConcat::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   const StringBroadcast bi = CheckStringConcatInputs(x, y);
   Tensor out = Tensor::MakeString("", bi.shape,
@@ -68,11 +80,14 @@ void StringConcat::operator()(const Tensor &x, const Tensor &y, Tensor &output) 
                       "broadcasted input shape.");
   EXT_ENFORCE_INVALID(static_cast<int64_t>(output.string_data.size()) == bi.element_count,
                       "kernel::StringConcat preallocated output string_data has unexpected size.");
-  for (int64_t i = 0; i < bi.element_count; ++i) {
-    const std::string &a = x.string_data[bi.nx == 1 ? 0 : static_cast<size_t>(i)];
-    const std::string &b = y.string_data[bi.ny == 1 ? 0 : static_cast<size_t>(i)];
-    output.string_data[static_cast<size_t>(i)] = a + b;
-  }
+  ParallelFor(bi.element_count, tuning().parallel_minimum_elements,
+              [&x, &y, &output, &bi](int64_t begin, int64_t end) {
+                for (int64_t i = begin; i < end; ++i) {
+                  const std::string &a = x.string_data[bi.nx == 1 ? 0 : static_cast<size_t>(i)];
+                  const std::string &b = y.string_data[bi.ny == 1 ? 0 : static_cast<size_t>(i)];
+                  output.string_data[static_cast<size_t>(i)] = a + b;
+                }
+              });
 }
 
 void StringConcat::Run(RuntimeContext &rt) {

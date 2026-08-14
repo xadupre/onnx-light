@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_light_helpers.h"
+#include <array>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -24,6 +25,12 @@ constexpr const char *kBitwiseAndName = "kernel::BitwiseAnd";
 constexpr const char *kBitwiseOrName = "kernel::BitwiseOr";
 constexpr const char *kBitwiseXorName = "kernel::BitwiseXor";
 constexpr const char *kBitwiseNotName = "kernel::BitwiseNot";
+constexpr std::array<int32_t, 8> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::INT8),   static_cast<int32_t>(DataType::INT16),
+    static_cast<int32_t>(DataType::INT32),  static_cast<int32_t>(DataType::INT64),
+    static_cast<int32_t>(DataType::UINT8),  static_cast<int32_t>(DataType::UINT16),
+    static_cast<int32_t>(DataType::UINT32), static_cast<int32_t>(DataType::UINT64),
+};
 
 [[noreturn]] void ThrowUnsupportedBitwise(const char *op_name, int32_t data_type) {
   EXT_THROW_INVALID(op_name, ": unsupported data type ", data_type,
@@ -35,12 +42,13 @@ constexpr const char *kBitwiseNotName = "kernel::BitwiseNot";
 // typed ``BinaryElementwiseAlloc<T, T>`` call.
 template <typename Op>
 Tensor BitwiseBinAllocDispatch(const char *op_name, const Tensor &x, const Tensor &y, Op op,
-                               RawBufferAllocator *allocator = nullptr) {
+                               int64_t grain, RawBufferAllocator *allocator = nullptr) {
 #define ONNX_LIGHT_BITWISE_DISPATCH_CASE(ENUM, NAME, CTYPE)                                        \
   case DataType::ENUM:                                                                             \
     return detail::BinaryElementwiseAlloc<CTYPE, CTYPE>(                                           \
         op_name, NAME, DataType::ENUM, x, y,                                                       \
-        [&op](CTYPE a, CTYPE b) -> CTYPE { return static_cast<CTYPE>(op(a, b)); }, allocator)
+        [&op](CTYPE a, CTYPE b) -> CTYPE { return static_cast<CTYPE>(op(a, b)); }, allocator,      \
+        grain)
   switch (x.data_type) {
     ONNX_LIGHT_BITWISE_DISPATCH_CASE(INT8, "INT8", int8_t);
     ONNX_LIGHT_BITWISE_DISPATCH_CASE(INT16, "INT16", int16_t);
@@ -60,12 +68,12 @@ Tensor BitwiseBinAllocDispatch(const char *op_name, const Tensor &x, const Tenso
 // typed ``BinaryElementwise<T, T>`` call.
 template <typename Op>
 void BitwiseBinInPlaceDispatch(const char *op_name, const Tensor &x, const Tensor &y,
-                               Tensor &output, Op op) {
+                               Tensor &output, Op op, int64_t grain) {
 #define ONNX_LIGHT_BITWISE_DISPATCH_CASE(ENUM, NAME, CTYPE)                                        \
   case DataType::ENUM:                                                                             \
     detail::BinaryElementwise<CTYPE, CTYPE>(                                                       \
         op_name, NAME, DataType::ENUM, x, y, output,                                               \
-        [&op](CTYPE a, CTYPE b) -> CTYPE { return static_cast<CTYPE>(op(a, b)); });                \
+        [&op](CTYPE a, CTYPE b) -> CTYPE { return static_cast<CTYPE>(op(a, b)); }, grain);         \
     return
   switch (x.data_type) {
     ONNX_LIGHT_BITWISE_DISPATCH_CASE(INT8, "INT8", int8_t);
@@ -125,34 +133,63 @@ Tensor BitwiseNotAlloc(const char *dtype_name, int32_t dtype, const Tensor &x,
 // ---------------------------------------------------------------------------
 // BitwiseAnd
 // ---------------------------------------------------------------------------
+BitwiseAnd::BitwiseAnd(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "BitwiseAnd", kSupportedElementTypes, kParallelForGrainSize) {}
+
+void BitwiseAnd::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("BitwiseAnd", kSupportedElementTypes,
+                                        kParallelForGrainSize);
+}
+
 Tensor BitwiseAnd::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
-  return BitwiseBinAllocDispatch(kBitwiseAndName, x, y, kAndFn, rt ? rt->allocator() : nullptr);
+  return BitwiseBinAllocDispatch(kBitwiseAndName, x, y, kAndFn, tuning().parallel_minimum_elements,
+                                 rt ? rt->allocator() : nullptr);
 }
 
 void BitwiseAnd::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
-  BitwiseBinInPlaceDispatch(kBitwiseAndName, x, y, output, kAndFn);
+  BitwiseBinInPlaceDispatch(kBitwiseAndName, x, y, output, kAndFn,
+                            tuning().parallel_minimum_elements);
 }
 
 // ---------------------------------------------------------------------------
 // BitwiseOr
 // ---------------------------------------------------------------------------
+BitwiseOr::BitwiseOr(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "BitwiseOr", kSupportedElementTypes, kParallelForGrainSize) {}
+
+void BitwiseOr::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("BitwiseOr", kSupportedElementTypes, kParallelForGrainSize);
+}
+
 Tensor BitwiseOr::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
-  return BitwiseBinAllocDispatch(kBitwiseOrName, x, y, kOrFn, rt ? rt->allocator() : nullptr);
+  return BitwiseBinAllocDispatch(kBitwiseOrName, x, y, kOrFn, tuning().parallel_minimum_elements,
+                                 rt ? rt->allocator() : nullptr);
 }
 
 void BitwiseOr::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
-  BitwiseBinInPlaceDispatch(kBitwiseOrName, x, y, output, kOrFn);
+  BitwiseBinInPlaceDispatch(kBitwiseOrName, x, y, output, kOrFn,
+                            tuning().parallel_minimum_elements);
 }
 
 // ---------------------------------------------------------------------------
 // BitwiseXor
 // ---------------------------------------------------------------------------
+BitwiseXor::BitwiseXor(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "BitwiseXor", kSupportedElementTypes, kParallelForGrainSize) {}
+
+void BitwiseXor::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("BitwiseXor", kSupportedElementTypes,
+                                        kParallelForGrainSize);
+}
+
 Tensor BitwiseXor::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
-  return BitwiseBinAllocDispatch(kBitwiseXorName, x, y, kXorFn, rt ? rt->allocator() : nullptr);
+  return BitwiseBinAllocDispatch(kBitwiseXorName, x, y, kXorFn, tuning().parallel_minimum_elements,
+                                 rt ? rt->allocator() : nullptr);
 }
 
 void BitwiseXor::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
-  BitwiseBinInPlaceDispatch(kBitwiseXorName, x, y, output, kXorFn);
+  BitwiseBinInPlaceDispatch(kBitwiseXorName, x, y, output, kXorFn,
+                            tuning().parallel_minimum_elements);
 }
 
 // ---------------------------------------------------------------------------

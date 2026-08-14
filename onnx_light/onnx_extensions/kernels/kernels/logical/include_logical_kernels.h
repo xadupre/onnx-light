@@ -74,11 +74,12 @@ private:
 };
 
 /// Element-wise logical OR on BOOL tensors with multidirectional broadcasting.
-class Or : public KernelBase {
+class Or : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Or";
+  explicit Or(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
@@ -86,11 +87,12 @@ public:
 };
 
 /// Element-wise logical XOR on BOOL tensors with multidirectional broadcasting.
-class Xor : public KernelBase {
+class Xor : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Xor";
+  explicit Xor(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
@@ -165,11 +167,12 @@ public:
 /// UINT64 (both inputs must share the same dtype); the output is BOOL (one
 /// byte per element, ``0`` or ``1``). Mirrors the upstream ONNX ``Greater``
 /// reference implementation (``np.greater``).
-class Greater : public KernelBase {
+class Greater : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Greater";
+  explicit Greater(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
@@ -181,11 +184,12 @@ public:
 /// UINT64 (both inputs must share the same dtype); the output is BOOL (one
 /// byte per element, ``0`` or ``1``). Mirrors the upstream ONNX ``Less``
 /// reference implementation (``np.less``).
-class Less : public KernelBase {
+class Less : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Less";
+  explicit Less(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
@@ -197,11 +201,12 @@ public:
 /// UINT16, UINT32 or UINT64 (both inputs must share the same dtype); the
 /// output is BOOL (one byte per element, ``0`` or ``1``). Mirrors the upstream
 /// ONNX ``GreaterOrEqual`` reference implementation (``np.greater_equal``).
-class GreaterOrEqual : public KernelBase {
+class GreaterOrEqual : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GreaterOrEqual";
+  explicit GreaterOrEqual(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
@@ -213,11 +218,12 @@ public:
 /// UINT16, UINT32 or UINT64 (both inputs must share the same dtype); the
 /// output is BOOL (one byte per element, ``0`` or ``1``). Mirrors the upstream
 /// ONNX ``LessOrEqual`` reference implementation (``np.less_equal``).
-class LessOrEqual : public KernelBase {
+class LessOrEqual : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LessOrEqual";
+  explicit LessOrEqual(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
@@ -231,11 +237,12 @@ public:
 /// upstream ONNX ``Equal`` reference implementation (``np.equal``). STRING
 /// support matches the ``Equal`` opset 19 type expansion and is restricted
 /// to equal-shape inputs or scalar broadcasting.
-class Equal : public KernelBase {
+class Equal : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Equal";
+  explicit Equal(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
@@ -263,11 +270,12 @@ public:
 /// UINT16, UINT32 or UINT64 (both inputs must share the same dtype); the
 /// output has the same dtype. Mirrors the upstream ONNX ``BitwiseAnd``
 /// reference implementation (``np.bitwise_and``).
-class BitwiseAnd : public KernelBase {
+class BitwiseAnd : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:BitwiseAnd";
+  explicit BitwiseAnd(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
@@ -279,11 +287,12 @@ public:
 /// UINT16, UINT32 or UINT64 (both inputs must share the same dtype); the
 /// output has the same dtype. Mirrors the upstream ONNX ``BitwiseOr``
 /// reference implementation (``np.bitwise_or``).
-class BitwiseOr : public KernelBase {
+class BitwiseOr : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:BitwiseOr";
+  explicit BitwiseOr(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
@@ -295,11 +304,12 @@ public:
 /// UINT16, UINT32 or UINT64 (both inputs must share the same dtype); the
 /// output has the same dtype. Mirrors the upstream ONNX ``BitwiseXor``
 /// reference implementation (``np.bitwise_xor``).
-class BitwiseXor : public KernelBase {
+class BitwiseXor : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:BitwiseXor";
+  explicit BitwiseXor(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
@@ -327,14 +337,15 @@ public:
 /// is supported. The required ``direction`` attribute selects ``"LEFT"`` or
 /// ``"RIGHT"`` and is passed to ``operator()``. Mirrors the upstream
 /// ``np.left_shift`` / ``np.right_shift`` reference implementations.
-class BitShift : public KernelBase {
+class BitShift : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:BitShift";
+  explicit BitShift(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
   /// Direction of the bitwise shift.
   enum class Direction { kLeft, kRight };
 
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, Direction direction,
                     RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Direction direction, Tensor &output) const;

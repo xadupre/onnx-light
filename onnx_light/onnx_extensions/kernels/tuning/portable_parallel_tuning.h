@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/kernel_tuning.h"
 
 #include <cstdint>
@@ -19,6 +20,26 @@ struct ParallelTuning {
   explicit ParallelTuning(int64_t minimum_elements) : parallel_minimum_elements(minimum_elements) {}
 
   int64_t parallel_minimum_elements;
+};
+
+/** Implements the shared runtime contract for one parallel-tunable kernel. */
+class ParallelTunableKernel : public core::runtime::KernelBase {
+public:
+  ParallelTunableKernel(const core::runtime::KernelContext &ctx, std::string_view kernel,
+                        std::span<const int32_t> supported_element_types,
+                        int64_t portable_minimum_elements, uint32_t tuning_abi = 1);
+
+  core::runtime::KernelTuningKey TuningKey(int32_t element_type) const override;
+  void Configure(const core::runtime::KernelTuningParameters &parameters) override;
+
+  /** Returns the immutable configuration used by the execution path. */
+  const ParallelTuning &tuning() const noexcept { return tuning_; }
+
+private:
+  std::string_view kernel_;
+  std::span<const int32_t> supported_element_types_;
+  ParallelTuning tuning_;
+  uint32_t tuning_abi_;
 };
 
 /**

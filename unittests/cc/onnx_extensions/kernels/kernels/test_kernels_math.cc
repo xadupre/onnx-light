@@ -2415,6 +2415,21 @@ TEST(KernelClass, PowClassBroadcastsArrayExponent) {
   EXPECT_FLOAT_EQ(pz[5], 216.0f);
 }
 
+TEST(KernelClass, PowUsesTypedParallelTuningForGeneralBroadcasting) {
+  const KernelContext ctx{DefaultOpset(15)};
+  Pow pow_kernel{ctx};
+  const auto key = pow_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  pow_kernel.Configure({key, {{"parallel.minimum_elements", int64_t{1}}}});
+
+  EXPECT_EQ(pow_kernel.tuning().parallel_minimum_elements, 1);
+  Tensor x = Tensor::FromFloat("", {2, 1}, {2.0f, 3.0f});
+  Tensor y = Tensor::FromInt64("", {1, 3}, {1, 2, 3});
+  Tensor z = pow_kernel(x, y);
+  ASSERT_EQ(z.shape, (std::vector<int64_t>{2, 3}));
+  EXPECT_EQ(std::vector<float>(z.AsFloat(), z.AsFloat() + 6),
+            (std::vector<float>{2.0f, 4.0f, 8.0f, 3.0f, 9.0f, 27.0f}));
+}
+
 TEST(KernelClass, PowClassSupportsMixedBaseExponentDtypes) {
   // ``Pow`` is the only element-wise binary kernel whose ``T`` (base) and
   // ``T1`` (exponent) type constraints differ — exercise the cross-dtype

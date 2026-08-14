@@ -7,6 +7,7 @@
 
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <array>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -16,19 +17,23 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 
 constexpr const char *kBitShiftName = "kernel::BitShift";
+constexpr std::array<int32_t, 4> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::UINT8), static_cast<int32_t>(DataType::UINT16),
+    static_cast<int32_t>(DataType::UINT32), static_cast<int32_t>(DataType::UINT64)};
 
 [[noreturn]] void ThrowUnsupportedBitShift() {
   EXT_THROW_INVALID(kBitShiftName, " only supports UINT8, UINT16, UINT32 and UINT64 inputs.");
 }
 
 template <typename Op>
-Tensor BitShiftAllocDispatch(const Tensor &x, const Tensor &y, Op op,
+Tensor BitShiftAllocDispatch(const Tensor &x, const Tensor &y, Op op, int64_t grain,
                              RawBufferAllocator *allocator = nullptr) {
 #define ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(ENUM, NAME, CTYPE)                                       \
   case DataType::ENUM:                                                                             \
     return detail::BinaryElementwiseAlloc<CTYPE, CTYPE>(                                           \
         kBitShiftName, NAME, DataType::ENUM, x, y,                                                 \
-        [&op](CTYPE a, CTYPE b) -> CTYPE { return static_cast<CTYPE>(op(a, b)); }, allocator)
+        [&op](CTYPE a, CTYPE b) -> CTYPE { return static_cast<CTYPE>(op(a, b)); }, allocator,      \
+        grain)
   switch (x.data_type) {
     ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(UINT8, "UINT8", uint8_t);
     ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(UINT16, "UINT16", uint16_t);
@@ -41,12 +46,13 @@ Tensor BitShiftAllocDispatch(const Tensor &x, const Tensor &y, Op op,
 }
 
 template <typename Op>
-void BitShiftInPlaceDispatch(const Tensor &x, const Tensor &y, Tensor &output, Op op) {
+void BitShiftInPlaceDispatch(const Tensor &x, const Tensor &y, Tensor &output, Op op,
+                             int64_t grain) {
 #define ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(ENUM, NAME, CTYPE)                                       \
   case DataType::ENUM:                                                                             \
     detail::BinaryElementwise<CTYPE, CTYPE>(                                                       \
         kBitShiftName, NAME, DataType::ENUM, x, y, output,                                         \
-        [&op](CTYPE a, CTYPE b) -> CTYPE { return static_cast<CTYPE>(op(a, b)); });                \
+        [&op](CTYPE a, CTYPE b) -> CTYPE { return static_cast<CTYPE>(op(a, b)); }, grain);         \
     return
   switch (x.data_type) {
     ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(UINT8, "UINT8", uint8_t);
@@ -70,22 +76,29 @@ constexpr auto kRightShiftFn = [](auto a, auto b) { return a >> static_cast<int>
 
 } // namespace
 
+BitShift::BitShift(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "BitShift", kSupportedElementTypes, kParallelForGrainSize) {}
+
+void BitShift::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("BitShift", kSupportedElementTypes, kParallelForGrainSize);
+}
+
 Tensor BitShift::operator()(const Tensor &x, const Tensor &y, Direction direction,
                             RuntimeContext *rt) const {
   RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   if (direction == Direction::kLeft) {
-    return BitShiftAllocDispatch(x, y, kLeftShiftFn, allocator);
+    return BitShiftAllocDispatch(x, y, kLeftShiftFn, tuning().parallel_minimum_elements, allocator);
   }
-  return BitShiftAllocDispatch(x, y, kRightShiftFn, allocator);
+  return BitShiftAllocDispatch(x, y, kRightShiftFn, tuning().parallel_minimum_elements, allocator);
 }
 
 void BitShift::operator()(const Tensor &x, const Tensor &y, Direction direction,
                           Tensor &output) const {
   if (direction == Direction::kLeft) {
-    BitShiftInPlaceDispatch(x, y, output, kLeftShiftFn);
+    BitShiftInPlaceDispatch(x, y, output, kLeftShiftFn, tuning().parallel_minimum_elements);
     return;
   }
-  BitShiftInPlaceDispatch(x, y, output, kRightShiftFn);
+  BitShiftInPlaceDispatch(x, y, output, kRightShiftFn, tuning().parallel_minimum_elements);
 }
 
 void BitShift::Run(RuntimeContext &rt) {

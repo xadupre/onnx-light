@@ -7,6 +7,7 @@
 
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <array>
 #include <cstdint>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
@@ -14,19 +15,28 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 constexpr const char *kXorName = "kernel::Xor";
 constexpr const char *kBoolName = "BOOL";
+constexpr std::array<int32_t, 1> kSupportedElementTypes = {static_cast<int32_t>(DataType::BOOL)};
 constexpr auto kXorOp = [](uint8_t a, uint8_t b) -> uint8_t {
   return ((a != 0) != (b != 0)) ? 1 : 0;
 };
 } // namespace
 
+Xor::Xor(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Xor", kSupportedElementTypes, kParallelForGrainSize) {}
+
+void Xor::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("Xor", kSupportedElementTypes, kParallelForGrainSize);
+}
+
 Tensor Xor::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   return detail::BinaryElementwiseAlloc<uint8_t, uint8_t>(kXorName, kBoolName, DataType::BOOL, x, y,
-                                                          kXorOp, rt ? rt->allocator() : nullptr);
+                                                          kXorOp, rt ? rt->allocator() : nullptr,
+                                                          tuning().parallel_minimum_elements);
 }
 
 void Xor::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
   detail::BinaryElementwise<uint8_t, uint8_t>(kXorName, kBoolName, DataType::BOOL, x, y, output,
-                                              kXorOp);
+                                              kXorOp, tuning().parallel_minimum_elements);
 }
 
 void Xor::Run(RuntimeContext &rt) {

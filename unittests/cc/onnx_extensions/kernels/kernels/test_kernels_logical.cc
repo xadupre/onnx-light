@@ -69,6 +69,28 @@ TEST(KernelClass, AndClassBroadcastsScalar) {
   EXPECT_EQ(z.data[3], 0);
 }
 
+TEST(KernelClass, AndUsesTypedParallelTuningForBroadcasting) {
+  const KernelContext ctx{DefaultOpset(7)};
+  And and_kernel{ctx};
+  const auto bool_key = and_kernel.TuningKey(static_cast<int32_t>(core::runtime::DataType::BOOL));
+
+  EXPECT_EQ(bool_key.kernel, "And");
+  EXPECT_EQ(and_kernel.TuningKey(static_cast<int32_t>(core::runtime::DataType::FLOAT)).device,
+            core::symbolic::Device::kUndefined);
+  const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(bool_key);
+  ASSERT_NE(schema, nullptr);
+  EXPECT_EQ(schema->portable_defaults().Get<int64_t>("parallel.minimum_elements"),
+            core::runtime::kParallelForGrainSize);
+
+  and_kernel.Configure({bool_key, {{"parallel.minimum_elements", int64_t{1}}}});
+  EXPECT_EQ(and_kernel.tuning().parallel_minimum_elements, 1);
+  Tensor x("", core::runtime::DataType::BOOL, {2, 1}, {1, 0});
+  Tensor y("", core::runtime::DataType::BOOL, {1, 3}, {1, 0, 1});
+  Tensor z = and_kernel(x, y);
+  EXPECT_EQ(z.shape, (std::vector<int64_t>{2, 3}));
+  EXPECT_EQ(z.data, (std::vector<uint8_t>{1, 0, 1, 0, 0, 0}));
+}
+
 TEST(KernelClass, OrClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(7)};
   Or or_kernel{ctx};

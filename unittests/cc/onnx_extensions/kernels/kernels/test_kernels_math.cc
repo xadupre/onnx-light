@@ -969,6 +969,31 @@ TEST(KernelClass, AddClassMatchesReferenceInt64) {
   EXPECT_EQ(pz[3], 6);
 }
 
+TEST(KernelClass, AddUsesTypedParallelTuningForBroadcasting) {
+  const KernelContext ctx{DefaultOpset(14)};
+  Add add_kernel{ctx};
+  const auto float_key = add_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  const auto float16_key = add_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT16));
+
+  EXPECT_EQ(float_key.kernel, "Add");
+  EXPECT_NE(float_key, float16_key);
+  EXPECT_EQ(add_kernel.TuningKey(static_cast<int32_t>(DataType::STRING)).device,
+            core::symbolic::Device::kUndefined);
+  const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(float_key);
+  ASSERT_NE(schema, nullptr);
+  EXPECT_EQ(schema->portable_defaults().Get<int64_t>("parallel.minimum_elements"),
+            core::runtime::kParallelForGrainSize);
+
+  add_kernel.Configure({float_key, {{"parallel.minimum_elements", int64_t{1}}}});
+  EXPECT_EQ(add_kernel.tuning().parallel_minimum_elements, 1);
+  Tensor x = Tensor::FromFloat("", {2, 1}, {1.0f, 2.0f});
+  Tensor y = Tensor::FromFloat("", {1, 3}, {10.0f, 20.0f, 30.0f});
+  Tensor z = add_kernel(x, y);
+  ASSERT_EQ(z.shape, (std::vector<int64_t>{2, 3}));
+  EXPECT_EQ(std::vector<float>(z.AsFloat(), z.AsFloat() + 6),
+            (std::vector<float>{11.0f, 21.0f, 31.0f, 12.0f, 22.0f, 32.0f}));
+}
+
 TEST(KernelClass, BlackmanWindowPeriodicLength) {
   const KernelContext ctx{DefaultOpset(17)};
   BlackmanWindow blackman_kernel{ctx};
@@ -1205,6 +1230,26 @@ TEST(KernelClass, MulClassMatchesReference) {
   EXPECT_FLOAT_EQ(pz[0], 4.0f);
   EXPECT_FLOAT_EQ(pz[1], 10.0f);
   EXPECT_FLOAT_EQ(pz[2], 18.0f);
+}
+
+TEST(KernelClass, MulUsesTypedParallelTuningForEqualShapes) {
+  const KernelContext ctx{DefaultOpset(14)};
+  Mul mul_kernel{ctx};
+  const auto float_key = mul_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+
+  EXPECT_EQ(float_key.kernel, "Mul");
+  const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(float_key);
+  ASSERT_NE(schema, nullptr);
+  EXPECT_EQ(schema->portable_defaults().Get<int64_t>("parallel.minimum_elements"),
+            core::runtime::kParallelForGrainSize);
+
+  mul_kernel.Configure({float_key, {{"parallel.minimum_elements", int64_t{1}}}});
+  EXPECT_EQ(mul_kernel.tuning().parallel_minimum_elements, 1);
+  Tensor x = Tensor::FromFloat("", {6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor y = Tensor::FromFloat("", {6}, {2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
+  Tensor z = mul_kernel(x, y);
+  EXPECT_EQ(std::vector<float>(z.AsFloat(), z.AsFloat() + 6),
+            (std::vector<float>{2.0f, 6.0f, 12.0f, 20.0f, 30.0f, 42.0f}));
 }
 
 TEST(KernelClass, MulClassBroadcastsScalar) {
@@ -2368,6 +2413,21 @@ TEST(KernelClass, PowClassBroadcastsArrayExponent) {
   EXPECT_FLOAT_EQ(pz[3], 4.0f);
   EXPECT_FLOAT_EQ(pz[4], 25.0f);
   EXPECT_FLOAT_EQ(pz[5], 216.0f);
+}
+
+TEST(KernelClass, PowUsesTypedParallelTuningForGeneralBroadcasting) {
+  const KernelContext ctx{DefaultOpset(15)};
+  Pow pow_kernel{ctx};
+  const auto key = pow_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  pow_kernel.Configure({key, {{"parallel.minimum_elements", int64_t{1}}}});
+
+  EXPECT_EQ(pow_kernel.tuning().parallel_minimum_elements, 1);
+  Tensor x = Tensor::FromFloat("", {2, 1}, {2.0f, 3.0f});
+  Tensor y = Tensor::FromInt64("", {1, 3}, {1, 2, 3});
+  Tensor z = pow_kernel(x, y);
+  ASSERT_EQ(z.shape, (std::vector<int64_t>{2, 3}));
+  EXPECT_EQ(std::vector<float>(z.AsFloat(), z.AsFloat() + 6),
+            (std::vector<float>{2.0f, 4.0f, 8.0f, 3.0f, 9.0f, 27.0f}));
 }
 
 TEST(KernelClass, PowClassSupportsMixedBaseExponentDtypes) {

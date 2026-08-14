@@ -664,11 +664,12 @@ public:
 /// ``Swish_alpha(a) = a * sigmoid(alpha * a)``. Inputs ``A`` (gate) and ``B``
 /// (value) must have identical shapes and dtypes: broadcasting is not applied.
 /// ``alpha`` defaults to 1.0 to match the ONNX schema (opset 28).
-class SwiGLU : public KernelBase {
+class SwiGLU : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:SwiGLU";
+  explicit SwiGLU(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &a, const Tensor &b, float alpha = 1.0f,
                     RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &a, const Tensor &b, float alpha, Tensor &output) const;
@@ -741,23 +742,34 @@ public:
 class Add : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Add";
+  explicit Add(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
+  KernelTuningKey TuningKey(int32_t element_type) const override;
+  void Configure(const KernelTuningParameters &parameters) override;
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  /// Returns the immutable configuration used by the execution path.
+  const tuning::ParallelTuning &tuning() const noexcept { return tuning_; }
 
   /// Element-wise binary kernel: the output buffer may alias an input buffer
   /// when that input is not broadcast-expanded (i.e. its shape equals the
   /// output shape).
   static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  tuning::ParallelTuning tuning_;
 };
 
 /// Element-wise subtraction with NumPy-style broadcasting.
-class Sub : public KernelBase {
+class Sub : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Sub";
+  explicit Sub(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
@@ -771,15 +783,25 @@ public:
 class Mul : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Mul";
+  explicit Mul(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
+  KernelTuningKey TuningKey(int32_t element_type) const override;
+  void Configure(const KernelTuningParameters &parameters) override;
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  /// Returns the immutable configuration used by the execution path.
+  const tuning::ParallelTuning &tuning() const noexcept { return tuning_; }
 
   /// Element-wise binary kernel: the output buffer may alias an input buffer
   /// when that input is not broadcast-expanded (i.e. its shape equals the
   /// output shape).
   static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  tuning::ParallelTuning tuning_;
 };
 
 /// Element-wise parametric ReLU: ``y = x`` when ``x >= 0`` and
@@ -790,11 +812,12 @@ public:
 /// the kernel branches on the sign of ``x`` rather than evaluating
 /// ``max(0, x) + slope * min(0, x)`` (which would yield ``NaN`` for
 /// infinite inputs; see microsoft/onnxruntime#28732).
-class PRelu : public KernelBase {
+class PRelu : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:PRelu";
+  explicit PRelu(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &slope, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &slope, Tensor &output) const;
 
@@ -805,11 +828,12 @@ public:
 };
 
 /// Element-wise division with NumPy-style broadcasting.
-class Div : public KernelBase {
+class Div : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Div";
+  explicit Div(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
@@ -826,11 +850,12 @@ public:
 ///   * ``fmod == 1``: C ``fmod`` semantics whose sign follows the dividend.
 ///     Required when either input is floating point and also accepted for
 ///     integer inputs (where it coincides with C ``%`` truncated modulo).
-class Mod : public KernelBase {
+class Mod : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Mod";
+  explicit Mod(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, int64_t fmod = 0,
                     RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, int64_t fmod, Tensor &output) const;
@@ -868,11 +893,12 @@ public:
 /// precision and cast the result back to the base dtype, matching the
 /// reference behaviour of NumPy's ``numpy.power`` and the upstream ONNX
 /// backend test cases.
-class Pow : public KernelBase {
+class Pow : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Pow";
+  explicit Pow(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 

@@ -498,6 +498,39 @@ std::filesystem::path DefaultKernelTuningCachePath() {
   return std::filesystem::path("onnx-light-kernel-tuning.cache");
 }
 
+KernelTuningCacheInspectionReport
+InspectKernelTuningCache(const KernelTuningCacheOptions &options) {
+  KernelTuningCacheInspectionReport report;
+  report.path = CachePath(options);
+  std::error_code error;
+  const bool exists = std::filesystem::exists(report.path, error);
+  if (!exists) {
+    report.status =
+        error ? KernelTuningCacheLoadStatus::kUnreadable : KernelTuningCacheLoadStatus::kNotFound;
+    if (error) {
+      report.diagnostics.push_back("Unable to inspect cache '" + report.path.string() +
+                                   "': " + error.message());
+    }
+    return report;
+  }
+
+  std::ifstream input(report.path);
+  if (!input) {
+    report.status = KernelTuningCacheLoadStatus::kUnreadable;
+    report.diagnostics.push_back("Unable to read cache '" + report.path.string() + "'.");
+    return report;
+  }
+  ParsedCache cache = ParseCache(input);
+  report.diagnostics = std::move(cache.diagnostics);
+  if (cache.malformed) {
+    report.status = KernelTuningCacheLoadStatus::kMalformed;
+    return report;
+  }
+  report.status = KernelTuningCacheLoadStatus::kLoaded;
+  report.profiles = std::move(cache.profiles);
+  return report;
+}
+
 KernelTuningCacheUpdateReport
 UpdateKernelTuningCache(std::span<const CalibratedKernelProfile> profiles,
                         const KernelTuningCacheOptions &options) {

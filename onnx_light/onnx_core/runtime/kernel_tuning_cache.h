@@ -66,6 +66,14 @@ struct KernelTuningCacheLoadReport {
   std::vector<std::string> diagnostics;
 };
 
+/** Reports cache contents without validating or publishing them. */
+struct KernelTuningCacheInspectionReport {
+  KernelTuningCacheLoadStatus status = KernelTuningCacheLoadStatus::kNotFound;
+  std::filesystem::path path;
+  std::vector<CalibratedKernelProfile> profiles;
+  std::vector<std::string> diagnostics;
+};
+
 /** Controls import of a cache file as read-only deployment profiles. */
 struct KernelTuningDeploymentImportOptions {
   std::filesystem::path path;
@@ -91,6 +99,16 @@ struct KernelTuningDeploymentImportReport {
  *   A path under the user's cache directory.
  */
 std::filesystem::path DefaultKernelTuningCachePath();
+
+/**
+ * Reads every persisted profile without changing the tuning registry.
+ *
+ * Parsed profiles retain their recorded processor and effective thread count.
+ * Schema compatibility and value validation are intentionally deferred to
+ * :cpp:func:`LoadKernelTuningCache`.
+ */
+KernelTuningCacheInspectionReport
+InspectKernelTuningCache(const KernelTuningCacheOptions &options = {});
 
 /**
  * Validates, merges, and atomically persists calibrated profiles.

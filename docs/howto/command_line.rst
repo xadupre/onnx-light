@@ -10,6 +10,44 @@ Python module::
 
     python -m onnx_light <subcommand> [options]
 
+.. _l-cli-tune-kernels:
+
+tune-kernels
+------------
+
+Reports exact tuning keys that have no cache profile compatible with the local
+processor and effective thread count. The command separates missing keys with
+calibration callbacks from keys requiring manual calibration. It does not
+modify the cache by default:
+
+.. code-block:: bash
+
+    python -m onnx_light tune-kernels
+
+Restrict the proposal to a subset by repeating ``--kernel`` or
+``--element-type``. Element types accept ONNX names or integer values:
+
+.. code-block:: bash
+
+    python -m onnx_light tune-kernels \
+        --kernel Abs --kernel Add \
+        --element-type FLOAT --element-type DOUBLE
+
+Use ``--json`` for the complete machine-readable report and ``--cache`` for an
+explicit cache path. ``--apply`` is required to calibrate and persist proposed
+keys:
+
+.. code-block:: bash
+
+    python -m onnx_light tune-kernels \
+        --kernel Abs --element-type FLOAT \
+        --maximum-duration-ms 1000 \
+        --maximum-memory-mb 128 \
+        --apply
+
+Each duration budget applies independently to one exact key. Keys without a
+registered callback remain listed after ``--apply``.
+
 .. _l-cli-fillshape:
 
 fillshape

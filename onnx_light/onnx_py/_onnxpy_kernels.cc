@@ -9,6 +9,7 @@
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/runtime/cast_sub_byte.h"
+#include "onnx_core/runtime/kernel_tuning_cache.h"
 #include "onnx_core/runtime/random.h"
 #include "onnx_core/runtime/run_nodes.h"
 #include "onnx_core/runtime/runtime_context.h"
@@ -53,6 +54,7 @@ using core::runtime::Tensors;
 
 void AddOnnxPyKernels(nb::module_ &m);
 void AddOnnxPyRuntime(nb::module_ &m);
+void AddOnnxPyTuning(nb::module_ &m);
 
 namespace {
 
@@ -584,6 +586,21 @@ NB_MODULE(_onnxpykernels, m) {
   // core::runtime dispatch table so that RunNode/RuntimeSession work as
   // soon as the module is imported.
   onnx_kernels::RegisterKernelFunctions();
+  core::runtime::KernelTuningCacheOptions tuning_cache_options;
+  tuning_cache_options.execution = core::runtime::CpuExecutionDescriptor{
+      core::platform::GetCpuDescriptor(),
+      static_cast<uint32_t>(core::runtime::RuntimeParameters().EffectiveNumThreads())};
+  const core::runtime::KernelTuningCacheLoadReport tuning_cache =
+      core::runtime::LoadKernelTuningCache({}, tuning_cache_options);
+  if (tuning_cache.status == core::runtime::KernelTuningCacheLoadStatus::kUnreadable ||
+      tuning_cache.status == core::runtime::KernelTuningCacheLoadStatus::kMalformed) {
+    std::string message = "Unable to load the default onnx-light kernel tuning cache.";
+    if (!tuning_cache.diagnostics.empty()) {
+      message += " " + tuning_cache.diagnostics.front();
+    }
+    nb::module_::import_("warnings")
+        .attr("warn")(message, nb::module_::import_("builtins").attr("RuntimeWarning"));
+  }
 }
 
 void AddOnnxPyKernels(nb::module_ &m) {
@@ -637,6 +654,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                  "RuntimeSession evaluate one or more nodes through the static "
                  "KernelDispatchTable (with transparent dispatch to model-local "
                  "FunctionProto's) using a name-keyed RuntimeContext for tensor I/O.";
+  AddOnnxPyTuning(rt_mod);
 
   // OpsetId — (domain, version) opset identifier consumed by KernelContext.
   nb::class_<OpsetId>(rt_mod, "OpsetId",

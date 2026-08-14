@@ -17,6 +17,7 @@ How-to Python / C++
     save_ort_flatbuffers
     collect_backend_test_cases
     use_custom_kernel
+    tune_kernel_thresholds
     use_custom_shape_inference
     register_builtin_operators
     onnx_graph_manipulations

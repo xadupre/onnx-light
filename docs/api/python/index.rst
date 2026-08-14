@@ -7,5 +7,6 @@ Python API
     onnx/index
     onnx_core/index
     onnx_op/index
+    kernel_tuning
     tools/index
     ext_test_case

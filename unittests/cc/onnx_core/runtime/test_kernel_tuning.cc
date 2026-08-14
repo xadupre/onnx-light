@@ -597,6 +597,33 @@ TEST(KernelTuningCache, AllowsSameKeyForDifferentExecutionDescriptors) {
             224);
 }
 
+TEST(KernelTuningCache, InspectsProfilesWithoutPublishing) {
+  KernelTuningParameters defaults = MakeDefaults();
+  defaults.key.library = "cache_inspection_test";
+  RegisterKernelTuningSchema(KernelTuningSchema(defaults));
+  KernelTuningParameters tuned = defaults;
+  tuned.values["algorithm.tile_m"] = int64_t{160};
+  CpuExecutionDescriptor execution{platform::GetCpuDescriptor(), 3};
+  TemporaryCache cache("inspection");
+  {
+    std::ofstream stream(cache.path());
+    stream << "onnx_light_kernel_tuning_cache 1\n";
+    WriteProfile(stream, tuned, execution);
+  }
+  const KernelTuningRegistrySnapshot before = GetKernelTuningRegistry().Snapshot();
+
+  const KernelTuningCacheInspectionReport report =
+      InspectKernelTuningCache({cache.path(), std::nullopt});
+
+  EXPECT_EQ(report.status, KernelTuningCacheLoadStatus::kLoaded);
+  EXPECT_EQ(report.path, cache.path());
+  ASSERT_EQ(report.profiles.size(), 1u);
+  EXPECT_EQ(report.profiles[0].parameters.key, tuned.key);
+  EXPECT_EQ(report.profiles[0].parameters.Get<int64_t>("algorithm.tile_m"), 160);
+  EXPECT_EQ(report.profiles[0].execution, execution);
+  EXPECT_EQ(GetKernelTuningRegistry().Snapshot().generation(), before.generation());
+}
+
 TEST(KernelTuningCache, RejectsMalformedFileWithoutPublishing) {
   KernelTuningParameters defaults = MakeDefaults();
   defaults.key.library = "cache_malformed_test";

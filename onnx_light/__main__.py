@@ -118,11 +118,16 @@ run
         ``graph.initializer`` list contains one ``TensorProto`` per input
         and per output tensor (in that order).  Only ``numpy.ndarray``
         values are stored; non-array outputs (e.g. sequences) are skipped.
+
+tune-kernels
+    Proposes calibration updates for tuning keys missing from the local cache.
+    It is read-only unless ``--apply`` is specified.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import warnings
@@ -140,6 +145,66 @@ _EVENT_ACTION_RUN_NODE = "run_node"
 # loaded because shape inference may need their values (e.g. the ``shape``
 # input of a Reshape node).
 _FILLSHAPE_TINY_TENSOR_THRESHOLD = 128
+
+
+def _parse_kernel_element_type(value: str) -> int:
+    """Parses an ONNX element-type integer or enum name."""
+    try:
+        return int(value)
+    except ValueError:
+        from .onnx import TensorProto
+
+        name = value.upper()
+        if not hasattr(TensorProto, name):
+            raise argparse.ArgumentTypeError(
+                f"unknown ONNX element type {value!r}; use an integer or name such as FLOAT"
+            ) from None
+        return int(getattr(TensorProto, name))
+
+
+def _cmd_tune_kernels(args: argparse.Namespace) -> None:
+    """Proposes or applies local kernel tuning cache updates."""
+    from . import kernel_tuning
+
+    common = {
+        "kernels": args.kernel,
+        "element_types": args.element_type,
+        "library": args.library,
+        "implementation": args.implementation,
+        "path": args.cache,
+    }
+    if args.apply:
+        report = kernel_tuning.apply_kernel_tuning_updates(
+            **common,
+            maximum_duration_ms=args.maximum_duration_ms,
+            maximum_memory_bytes=args.maximum_memory_mb << 20,
+        )
+        summary = report["remaining"]
+    else:
+        report = kernel_tuning.propose_kernel_tuning_updates(**common)
+        summary = report
+
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return
+    action = "remaining" if args.apply else "proposed"
+    print(
+        f"cache={summary['cache_path']} selected={summary['selected']} "
+        f"covered={summary['covered']} missing={len(summary['missing'])}"
+    )
+    print(f"{action} calibrations: {len(summary['calibratable'])}")
+    for item in summary["calibratable"]:
+        print(
+            f"  {item['library']}/{item['kernel']}/{item['implementation']} "
+            f"dtype={item['element_type']} abi={item['tuning_abi']}"
+        )
+    if summary["unsupported"]:
+        print(f"missing without calibration callback: {len(summary['unsupported'])}")
+        for item in summary["unsupported"]:
+            print(
+                f"  {item['library']}/{item['kernel']}/{item['implementation']} "
+                f"dtype={item['element_type']} abi={item['tuning_abi']}"
+            )
 
 
 def _print_shape_inference_events(events: list) -> None:
@@ -989,6 +1054,49 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     run_parser.set_defaults(func=_cmd_run)
+
+    # --- tune-kernels --------------------------------------------------------
+    tuning_parser = subparsers.add_parser(
+        "tune-kernels",
+        help="Propose calibration updates for locally uncovered kernel tuning keys.",
+    )
+    tuning_parser.add_argument(
+        "--kernel",
+        action="append",
+        help="Restrict to a kernel name; may be specified multiple times.",
+    )
+    tuning_parser.add_argument(
+        "--element-type",
+        action="append",
+        type=_parse_kernel_element_type,
+        help="Restrict to an ONNX element-type integer or name; may be repeated.",
+    )
+    tuning_parser.add_argument(
+        "--library", default="onnx_light", help="Tuning library identifier."
+    )
+    tuning_parser.add_argument("--implementation", help="Restrict to one implementation.")
+    tuning_parser.add_argument("--cache", help="Use this cache instead of the platform default.")
+    tuning_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Calibrate and persist proposed keys; without this flag the command is read-only.",
+    )
+    tuning_parser.add_argument(
+        "--maximum-duration-ms",
+        type=int,
+        default=0,
+        help="Per-key calibration duration budget; 0 uses the callback default.",
+    )
+    tuning_parser.add_argument(
+        "--maximum-memory-mb",
+        type=int,
+        default=0,
+        help="Calibration memory budget in MiB; 0 uses the callback default.",
+    )
+    tuning_parser.add_argument(
+        "--json", action="store_true", help="Print the complete JSON report."
+    )
+    tuning_parser.set_defaults(func=_cmd_tune_kernels)
 
     return parser
 

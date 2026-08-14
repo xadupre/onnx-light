@@ -7,8 +7,8 @@
 #include <memory>
 
 #include "onnx_core/builder/pattern_registry.h"
-#include "onnx_extensions/patterns/cast_cast_pattern.h"
-#include "onnx_extensions/patterns/cast_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/cast_cast_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 

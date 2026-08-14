@@ -9,7 +9,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
-/// Collapses consecutive Cast nodes when a single conversion is equivalent.
+/// Canonicalizes consecutive Cast nodes when a single conversion is equivalent.
 class CastCastPattern final : public core::builder::PatternOptimization {
 public:
   /// Creates the pattern with the given optimization priority.

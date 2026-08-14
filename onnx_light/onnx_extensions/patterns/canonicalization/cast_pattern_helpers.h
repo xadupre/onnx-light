@@ -10,6 +10,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns::detail {
 
+/// Returns whether ``node`` has the canonical unary ONNX Cast form.
 inline bool IsDefaultCast(const NodeProto &node) {
   return node.op_type().value() == "Cast" &&
          NormaliseDomain(node.domain().value()) == kDefaultOnnxDomain && node.input_size() == 1 &&

@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_extensions/patterns/cast_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 
 #include "onnx_core/builder/graph_graph.h"
-#include "onnx_extensions/patterns/detail/cast_pattern_helpers.h"
+#include "onnx_extensions/patterns/canonicalization/cast_pattern_helpers.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {

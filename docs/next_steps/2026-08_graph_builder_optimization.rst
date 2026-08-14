@@ -496,6 +496,29 @@ Implementation order
 Remaining pattern batches
 +++++++++++++++++++++++++
 
+The implementation is split by functional family; the root directory only
+contains registration and dispatch:
+
+.. code-block:: text
+
+    onnx_extensions/patterns/
+    ├── dispatch_table.{h,cc}
+    ├── canonicalization/   # elementary local rewrites, including Cast
+    ├── collections/        # Concat, Gather, Split, Slice, Sequence
+    ├── expand/             # Expand, Where, Equal and broadcasting
+    ├── reshape/            # Reshape canonicalization
+    ├── layout/             # Squeeze, Unsqueeze and Transpose
+    ├── algebra/            # generic arithmetic and reductions
+    ├── matmul/             # MatMul and Gemm fusions
+    ├── normalization/      # normalization and activation fusions
+    └── attention/          # rotary embedding and attention functions
+
+Tests added by each batch mirror these family directories under
+``unittests/cc/onnx_extensions/patterns``. Helpers used by one family stay
+beside its patterns; only genuinely cross-family graph queries belong in
+``onnx_core``. This prevents both a flat pattern directory and a catch-all
+``detail`` directory.
+
 The upstream default list currently contains 104 enabled patterns.
 ``CastCastPattern`` and ``CastPattern`` are already covered, leaving 102
 patterns. They are grouped into nine cohesive pull requests below rather than

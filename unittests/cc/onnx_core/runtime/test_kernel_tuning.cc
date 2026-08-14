@@ -4,9 +4,11 @@
 
 #include "onnx_core/runtime/kernel_tuning.h"
 #include "onnx_core/runtime/kernel_tuning_cache.h"
+#include "onnx_core/runtime/parallel_for.h"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <fstream>
@@ -335,6 +337,7 @@ TEST(KernelCalibration, SelectsReportsAndPublishesCallbacks) {
         EXPECT_EQ(execution.effective_threads, 3u);
         EXPECT_EQ(options.maximum_duration_ms, 50u);
         reporter.AddDiagnostic("measured crossover");
+        reporter.RecordBenchmark(1024, 2000);
         KernelTuningParameters calibrated = success_defaults;
         calibrated.values["algorithm.tile_m"] = int64_t{192};
         return calibrated;
@@ -361,6 +364,11 @@ TEST(KernelCalibration, SelectsReportsAndPublishesCallbacks) {
                             return diagnostic.key == success_defaults.key &&
                                    diagnostic.message == "measured crossover";
                           }));
+  ASSERT_EQ(report.resources.size(), 1u);
+  EXPECT_EQ(report.resources[0].key, success_defaults.key);
+  EXPECT_EQ(report.resources[0].benchmark_cases, 1u);
+  EXPECT_EQ(report.resources[0].peak_memory_bytes, 1024u);
+  EXPECT_EQ(report.resources[0].measured_duration_ns, 2000u);
   EXPECT_GT(report.published_generation, generation_before);
   EXPECT_EQ(report.successful_profiles().size(), 1u);
   CpuExecutionDescriptor calibrated_execution = *options.execution;
@@ -375,6 +383,59 @@ TEST(KernelCalibration, SelectsReportsAndPublishesCallbacks) {
                 .Resolve(success_defaults.key, *options.execution)
                 ->Get<int64_t>("algorithm.tile_m"),
             64);
+}
+
+TEST(KernelCalibration, BuildsUnaryAndBroadcastingBinaryCases) {
+  const std::vector<KernelCalibrationCase> unary =
+      MakeElementwiseCalibrationCases(DataType::FLOAT, 1, 16, 16, false);
+  ASSERT_EQ(unary.size(), 1u);
+  EXPECT_EQ(unary[0].name, "unary");
+  EXPECT_EQ(unary[0].inputs.size(), 1u);
+  EXPECT_EQ(unary[0].inputs[0].shape, Shape({16}));
+  EXPECT_EQ(unary[0].output_shape, Shape({16}));
+
+  const std::vector<KernelCalibrationCase> binary =
+      MakeElementwiseCalibrationCases(DataType::UINT32, 2, 16, 16, true);
+  ASSERT_EQ(binary.size(), 3u);
+  EXPECT_EQ(binary[0].name, "equal_shape");
+  EXPECT_EQ(binary[1].name, "scalar_broadcast");
+  EXPECT_EQ(binary[1].inputs[1].shape, Shape({}));
+  EXPECT_EQ(binary[2].name, "multidirectional_broadcast");
+  EXPECT_EQ(binary[2].inputs[0].shape, Shape({4, 4}));
+  EXPECT_EQ(binary[2].inputs[1].shape, Shape({1, 4}));
+  EXPECT_EQ(binary[2].output_shape, Shape({4, 4}));
+
+  EXPECT_THROW(MakeElementwiseCalibrationCases(DataType::FLOAT, 0, 16, 16, false),
+               std::invalid_argument);
+  EXPECT_THROW(MakeElementwiseCalibrationCases(DataType::FLOAT, 1, 16, 16, true),
+               std::invalid_argument);
+}
+
+TEST(KernelCalibration, ValidatesCandidateOutput) {
+  if (ParallelForThreadCount() == 1) {
+    GTEST_SKIP() << "Parallel calibration is unavailable.";
+  }
+  KernelTuningParameters defaults = MakeDefaults();
+  KernelCalibrationBenchmark benchmark;
+  benchmark.portable_parameters = defaults;
+  benchmark.parameter_name = "algorithm.tile_m";
+  benchmark.cases = MakeElementwiseCalibrationCases(DataType::FLOAT, 1, 16, 16, false);
+  benchmark.repetitions = 1;
+  benchmark.required_consecutive_wins = 1;
+  benchmark.reference.configure = [](int64_t) {};
+  benchmark.candidate.configure = [](int64_t) {};
+  benchmark.reference.run = [](std::span<const Tensor>, Tensor &output) {
+    std::fill_n(output.AsFloat(), output.element_count(), 0.0f);
+  };
+  benchmark.candidate.run = [](std::span<const Tensor>, Tensor &output) {
+    std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
+  };
+  CpuExecutionDescriptor execution = MakeExecution();
+  execution.effective_threads = static_cast<uint32_t>(ParallelForThreadCount());
+  CalibrationReporter reporter;
+
+  EXPECT_THROW(CalibrateKernelBenchmark(defaults.key, execution, {}, reporter, benchmark),
+               std::runtime_error);
 }
 
 TEST(KernelCalibration, CallbackFailurePropagatesWithoutPublishingBatch) {

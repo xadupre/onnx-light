@@ -5,12 +5,14 @@
 #pragma once
 
 #include "onnx_core/platform/cpu_descriptor.h"
+#include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_light_helpers.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -137,17 +139,75 @@ struct CalibrationOptions {
   std::optional<uint32_t> maximum_threads;
 };
 
+/** Describes one deterministic input generated for a calibration benchmark. */
+struct CalibrationInputSpec {
+  int32_t element_type = 0;
+  Shape shape;
+  uint64_t seed = 0;
+};
+
+/** Describes one kernel-specific benchmark case and its expected output. */
+struct KernelCalibrationCase {
+  std::string name;
+  uint64_t problem_size = 0;
+  std::vector<CalibrationInputSpec> inputs;
+  int32_t output_element_type = 0;
+  Shape output_shape;
+};
+
+/** Configures and runs one reference or candidate kernel instance. */
+struct KernelCalibrationRunner {
+  std::function<void(int64_t)> configure;
+  std::function<void(std::span<const Tensor>, Tensor &)> run;
+};
+
+/**
+ * Defines a bounded crossover search for one integer tuning parameter.
+ *
+ * Cases with the same ``problem_size`` form one benchmark group. A group wins
+ * only when the candidate reaches ``minimum_speedup`` in every case.
+ */
+struct KernelCalibrationBenchmark {
+  KernelTuningParameters portable_parameters;
+  std::string parameter_name;
+  int64_t serial_parameter_value = std::numeric_limits<int64_t>::max();
+  std::vector<KernelCalibrationCase> cases;
+  KernelCalibrationRunner reference;
+  KernelCalibrationRunner candidate;
+  int repetitions = 5;
+  int required_consecutive_wins = 2;
+  double minimum_speedup = 0.05;
+  uint64_t default_maximum_duration_ms = 250;
+  uint64_t default_maximum_memory_bytes = uint64_t{64} << 20;
+  std::function<bool(const Tensor &, const Tensor &)> validate_output;
+};
+
 /** Collects diagnostics emitted by one calibration callback. */
 class CalibrationReporter {
 public:
   /** Appends one diagnostic message. */
   void AddDiagnostic(std::string message);
 
+  /** Records resources consumed by one completed benchmark case. */
+  void RecordBenchmark(uint64_t memory_bytes, uint64_t duration_ns);
+
   /** Returns callback diagnostics in emission order. */
   const std::vector<std::string> &diagnostics() const noexcept { return diagnostics_; }
 
+  /** Returns the number of benchmark cases measured by the callback. */
+  uint64_t benchmark_cases() const noexcept { return benchmark_cases_; }
+
+  /** Returns the largest live input/output allocation measured by the callback. */
+  uint64_t peak_memory_bytes() const noexcept { return peak_memory_bytes_; }
+
+  /** Returns the accumulated benchmark measurement duration. */
+  uint64_t measured_duration_ns() const noexcept { return measured_duration_ns_; }
+
 private:
   std::vector<std::string> diagnostics_;
+  uint64_t benchmark_cases_ = 0;
+  uint64_t peak_memory_bytes_ = 0;
+  uint64_t measured_duration_ns_ = 0;
 };
 
 /** Calibrates one exact, registered kernel tuning key. */
@@ -161,6 +221,14 @@ struct KernelCalibrationDiagnostic {
   std::string message;
 };
 
+/** Reports resources consumed while calibrating one exact key. */
+struct KernelCalibrationResourceUsage {
+  KernelTuningKey key;
+  uint64_t benchmark_cases = 0;
+  uint64_t peak_memory_bytes = 0;
+  uint64_t measured_duration_ns = 0;
+};
+
 /** Reports one explicit batch calibration and its atomic publication. */
 struct CalibrationBatchReport {
   uint64_t published_generation = 0;
@@ -168,6 +236,7 @@ struct CalibrationBatchReport {
   std::vector<KernelTuningKey> skipped;
   std::vector<KernelTuningKey> unsupported;
   std::vector<KernelCalibrationDiagnostic> diagnostics;
+  std::vector<KernelCalibrationResourceUsage> resources;
 
   /** Returns successfully validated profiles. */
   std::span<const KernelTuningParameters> successful_profiles() const noexcept {
@@ -355,6 +424,31 @@ void RegisterKernelTuningProfile(const KernelTuningKey &key, platform::CpuSelect
 /** Registers a trusted calibration callback in the process-wide registry. */
 void RegisterKernelCalibrationFunction(const KernelTuningKey &key,
                                        KernelCalibrationFunction function);
+
+/**
+ * Creates elementwise benchmark cases for unary or binary kernels.
+ *
+ * Binary cases include equal-shape inputs and, when requested, scalar and
+ * multidirectional broadcasting cases for every problem size.
+ *
+ * Returns:
+ *   Deterministic benchmark cases ordered by increasing problem size.
+ */
+std::vector<KernelCalibrationCase>
+MakeElementwiseCalibrationCases(int32_t element_type, size_t input_count, int64_t first_elements,
+                                int64_t maximum_elements, bool include_broadcasting);
+
+/**
+ * Runs a bounded, validated crossover search shared by unary and binary kernels.
+ *
+ * Returns:
+ *   A complete parameter set with the selected integer parameter.
+ */
+KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
+                                                const CpuExecutionDescriptor &execution,
+                                                const CalibrationOptions &options,
+                                                CalibrationReporter &reporter,
+                                                const KernelCalibrationBenchmark &benchmark);
 
 /**
  * Runs selected registered callbacks and atomically publishes their profiles.

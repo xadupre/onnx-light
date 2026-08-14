@@ -4,19 +4,14 @@
 
 #include "onnx_core/runtime/cast_helper.h"
 #include "onnx_core/runtime/parallel_for.h"
-#include "onnx_core/runtime/random.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
-#include <algorithm>
 #include <array>
-#include <chrono>
 #include <cmath>
-#include <cstring>
 #include <limits>
 #include <string>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
@@ -45,104 +40,27 @@ KernelTuningParameters CalibrateAbs(const KernelTuningKey &key,
                                     CalibrationReporter &reporter) {
   const int64_t portable_minimum = 32 * core::runtime::kParallelForGrainSize;
   const KernelContext context{DefaultOpset(13)};
-  Abs serial_kernel{context};
-  Abs parallel_kernel{context};
-  serial_kernel.Configure(
-      {key,
-       {{std::string(tuning::kParallelMinimumElements), std::numeric_limits<int64_t>::max()}}});
-
-  const uint32_t actual_threads = static_cast<uint32_t>(core::runtime::ParallelForThreadCount());
-  if (execution.effective_threads != actual_threads) {
-    throw std::invalid_argument(
-        "Abs calibration requested " + std::to_string(execution.effective_threads) +
-        " threads, but ParallelFor uses " + std::to_string(actual_threads) + ".");
-  }
-  if (actual_threads == 1) {
-    reporter.AddDiagnostic("Abs calibration kept the portable threshold because parallel "
-                           "execution is unavailable.");
-    return {key, {{std::string(tuning::kParallelMinimumElements), portable_minimum}}};
-  }
-
-  constexpr int64_t kFirstElements = int64_t{1} << 14;
-  constexpr int64_t kMaximumElements = int64_t{1} << 23;
-  constexpr int kRepetitions = 5;
-  const uint64_t memory_budget =
-      options.maximum_memory_bytes == 0 ? uint64_t{64} << 20 : options.maximum_memory_bytes;
-  const int64_t budget_elements = static_cast<int64_t>(
-      memory_budget / (3 * static_cast<uint64_t>(ElementSize(key.element_type))));
-  const int64_t maximum_elements = std::min(kMaximumElements, budget_elements);
-  if (maximum_elements < kFirstElements) {
-    reporter.AddDiagnostic(
-        "Abs calibration memory budget is too small; kept the portable threshold.");
-    return {key, {{std::string(tuning::kParallelMinimumElements), portable_minimum}}};
-  }
-  const uint64_t duration_ms = options.maximum_duration_ms == 0 ? 250 : options.maximum_duration_ms;
-  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(duration_ms);
-  const auto median = [](std::vector<int64_t> samples) {
-    std::sort(samples.begin(), samples.end());
-    return samples[samples.size() / 2];
+  Abs reference{context};
+  Abs candidate{context};
+  KernelCalibrationBenchmark benchmark;
+  benchmark.portable_parameters = {
+      key, {{std::string(tuning::kParallelMinimumElements), portable_minimum}}};
+  benchmark.parameter_name = std::string(tuning::kParallelMinimumElements);
+  benchmark.cases = MakeElementwiseCalibrationCases(key.element_type, 1, int64_t{1} << 14,
+                                                    int64_t{1} << 23, false);
+  benchmark.reference.configure = [&](int64_t value) {
+    reference.Configure({key, {{benchmark.parameter_name, value}}});
   };
-  const auto measure = [](const auto &run) {
-    const auto begin = std::chrono::steady_clock::now();
-    run();
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
-                                                                begin)
-        .count();
+  benchmark.reference.run = [&](std::span<const Tensor> inputs, Tensor &output) {
+    reference(inputs[0], output);
   };
-
-  int64_t minimum_elements = portable_minimum;
-  int64_t first_winning_elements = 0;
-  int consecutive_wins = 0;
-  bool selected = false;
-  for (int64_t elements = kFirstElements; elements <= maximum_elements; elements *= 2) {
-    const Tensor input = RandnTensor(key.element_type, {elements}, /*seed=*/5);
-    Tensor serial = MakeOutputTensor(key.element_type, {elements}, input.size_bytes(), nullptr);
-    Tensor parallel = MakeOutputTensor(key.element_type, {elements}, input.size_bytes(), nullptr);
-    parallel_kernel.Configure(
-        {key, {{std::string(tuning::kParallelMinimumElements), (elements + 1) / 2}}});
-    const auto run_serial = [&]() { serial_kernel(input, serial); };
-    const auto run_parallel = [&]() { parallel_kernel(input, parallel); };
-    run_serial();
-    run_parallel();
-    if (std::memcmp(serial.bytes(), parallel.bytes(), serial.size_bytes()) != 0) {
-      throw std::runtime_error("Abs calibration parallel result differs from the serial result.");
-    }
-
-    std::vector<int64_t> serial_samples;
-    std::vector<int64_t> parallel_samples;
-    serial_samples.reserve(kRepetitions);
-    parallel_samples.reserve(kRepetitions);
-    for (int repetition = 0; repetition < kRepetitions; ++repetition) {
-      serial_samples.push_back(measure(run_serial));
-      parallel_samples.push_back(measure(run_parallel));
-    }
-    const int64_t serial_nanoseconds = median(std::move(serial_samples));
-    const int64_t parallel_nanoseconds = median(std::move(parallel_samples));
-    if (parallel_nanoseconds * 100 <= serial_nanoseconds * 95) {
-      if (consecutive_wins == 0) {
-        first_winning_elements = elements;
-      }
-      ++consecutive_wins;
-      if (consecutive_wins == 2) {
-        minimum_elements = (first_winning_elements + 1) / 2;
-        selected = true;
-        reporter.AddDiagnostic(
-            "Abs selected parallel.minimum_elements=" + std::to_string(minimum_elements) + ".");
-        break;
-      }
-    } else {
-      consecutive_wins = 0;
-      first_winning_elements = 0;
-    }
-    if (std::chrono::steady_clock::now() >= deadline || elements > maximum_elements / 2) {
-      break;
-    }
-  }
-  if (!selected) {
-    reporter.AddDiagnostic(
-        "Abs calibration found no stable parallel crossover; kept the portable threshold.");
-  }
-  return {key, {{std::string(tuning::kParallelMinimumElements), minimum_elements}}};
+  benchmark.candidate.configure = [&](int64_t value) {
+    candidate.Configure({key, {{benchmark.parameter_name, value}}});
+  };
+  benchmark.candidate.run = [&](std::span<const Tensor> inputs, Tensor &output) {
+    candidate(inputs[0], output);
+  };
+  return CalibrateKernelBenchmark(key, execution, options, reporter, benchmark);
 }
 
 } // namespace

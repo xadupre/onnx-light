@@ -113,6 +113,8 @@ public:
   ~TemporaryCache() {
     std::error_code error;
     std::filesystem::remove(path_, error);
+    std::filesystem::remove(path_.string() + ".lock", error);
+    std::filesystem::remove(path_.string() + ".tmp", error);
   }
   const std::filesystem::path &path() const { return path_; }
 
@@ -638,6 +640,191 @@ TEST(KernelTuningCache, ReportsMissingFileWithoutPublishing) {
 
   EXPECT_EQ(report.status, KernelTuningCacheLoadStatus::kNotFound);
   EXPECT_EQ(GetKernelTuningRegistry().Snapshot().generation(), before.generation());
+}
+
+TEST(KernelTuningCache, AtomicallyCreatesMergesAndReplacesProfiles) {
+  KernelTuningParameters first = MakeDefaults();
+  first.key.library = "cache_update_merge_test";
+  first.key.kernel = "First";
+  KernelTuningParameters second = first;
+  second.key.kernel = "Second";
+  RegisterKernelTuningSchema(KernelTuningSchema(first));
+  RegisterKernelTuningSchema(KernelTuningSchema(second));
+  CpuExecutionDescriptor execution = MakeExecution();
+  TemporaryCache cache("update_merge");
+
+  first.values["algorithm.tile_m"] = int64_t{96};
+  KernelTuningCacheUpdateReport report = UpdateKernelTuningCache(
+      std::span<const KernelTuningParameters>(&first, 1), {cache.path(), execution});
+  EXPECT_EQ(report.status, KernelTuningCacheUpdateStatus::kUpdated);
+  EXPECT_EQ(report.updated, std::vector<KernelTuningKey>({first.key}));
+
+  second.values["algorithm.tile_m"] = int64_t{128};
+  report = UpdateKernelTuningCache(std::span<const KernelTuningParameters>(&second, 1),
+                                   {cache.path(), execution});
+  EXPECT_EQ(report.status, KernelTuningCacheUpdateStatus::kUpdated);
+
+  first.values["algorithm.tile_m"] = int64_t{192};
+  report = UpdateKernelTuningCache(std::span<const KernelTuningParameters>(&first, 1),
+                                   {cache.path(), execution});
+  EXPECT_EQ(report.status, KernelTuningCacheUpdateStatus::kUpdated);
+
+  KernelCalibrationSelection selection;
+  selection.library = first.key.library;
+  KernelTuningCacheLoadReport loaded = LoadKernelTuningCache(selection, {cache.path(), execution});
+  EXPECT_EQ(loaded.loaded.size(), 2u);
+  EXPECT_EQ(GetKernelTuningRegistry()
+                .Snapshot()
+                .Resolve(first.key, execution)
+                ->Get<int64_t>("algorithm.tile_m"),
+            192);
+  EXPECT_EQ(GetKernelTuningRegistry()
+                .Snapshot()
+                .Resolve(second.key, execution)
+                ->Get<int64_t>("algorithm.tile_m"),
+            128);
+}
+
+TEST(KernelTuningCache, HonorsReadOnlyAndReplacementOptions) {
+  KernelTuningParameters defaults = MakeDefaults();
+  defaults.key.library = "cache_update_options_test";
+  RegisterKernelTuningSchema(KernelTuningSchema(defaults));
+  CpuExecutionDescriptor execution = MakeExecution();
+  TemporaryCache cache("update_options");
+  KernelTuningParameters initial = defaults;
+  initial.values["algorithm.tile_m"] = int64_t{96};
+  ASSERT_EQ(UpdateKernelTuningCache(std::span<const KernelTuningParameters>(&initial, 1),
+                                    {cache.path(), execution})
+                .status,
+            KernelTuningCacheUpdateStatus::kUpdated);
+
+  KernelTuningParameters replacement = defaults;
+  replacement.values["algorithm.tile_m"] = int64_t{224};
+  KernelTuningCacheOptions no_replace{cache.path(), execution};
+  no_replace.replace_existing = false;
+  KernelTuningCacheUpdateReport report =
+      UpdateKernelTuningCache(std::span<const KernelTuningParameters>(&replacement, 1), no_replace);
+  EXPECT_TRUE(report.updated.empty());
+  EXPECT_EQ(report.preserved, std::vector<KernelTuningKey>({defaults.key}));
+
+  KernelTuningCacheOptions read_only{cache.path(), execution};
+  read_only.read_only = true;
+  report =
+      UpdateKernelTuningCache(std::span<const KernelTuningParameters>(&replacement, 1), read_only);
+  EXPECT_EQ(report.status, KernelTuningCacheUpdateStatus::kReadOnly);
+
+  KernelCalibrationSelection selection;
+  selection.library = defaults.key.library;
+  ASSERT_EQ(LoadKernelTuningCache(selection, {cache.path(), execution}).loaded.size(), 1u);
+  EXPECT_EQ(GetKernelTuningRegistry()
+                .Snapshot()
+                .Resolve(defaults.key, execution)
+                ->Get<int64_t>("algorithm.tile_m"),
+            96);
+}
+
+TEST(KernelTuningCache, PreservesMalformedCacheAndPrunesStaleAbi) {
+  KernelTuningParameters defaults = MakeDefaults();
+  defaults.key.library = "cache_update_stale_test";
+  RegisterKernelTuningSchema(KernelTuningSchema(defaults));
+  CpuExecutionDescriptor execution = MakeExecution();
+  TemporaryCache cache("update_stale");
+  {
+    std::ofstream stream(cache.path());
+    stream << "malformed cache\n";
+  }
+  const std::string malformed = "malformed cache\n";
+  EXPECT_EQ(UpdateKernelTuningCache(std::span<const KernelTuningParameters>(&defaults, 1),
+                                    {cache.path(), execution})
+                .status,
+            KernelTuningCacheUpdateStatus::kMalformed);
+  {
+    std::ifstream stream(cache.path());
+    EXPECT_EQ(std::string(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()),
+              malformed);
+  }
+
+  KernelTuningParameters stale = defaults;
+  stale.key.tuning_abi += 1;
+  {
+    std::ofstream stream(cache.path(), std::ios::trunc);
+    stream << "onnx_light_kernel_tuning_cache 1\n";
+    WriteProfile(stream, stale, execution);
+  }
+  KernelTuningCacheOptions options{cache.path(), execution};
+  options.prune_stale_abis = true;
+  KernelTuningCacheUpdateReport report =
+      UpdateKernelTuningCache(std::span<const KernelTuningParameters>(&defaults, 1), options);
+  EXPECT_EQ(report.status, KernelTuningCacheUpdateStatus::kUpdated);
+  EXPECT_EQ(report.pruned, std::vector<KernelTuningKey>({stale.key}));
+}
+
+TEST(KernelTuningCache, ImportsDeploymentProfileOnlyForExplicitSelector) {
+  KernelTuningParameters defaults = MakeDefaults();
+  defaults.key.library = "deployment_import_test";
+  RegisterKernelTuningSchema(KernelTuningSchema(defaults));
+  KernelTuningParameters tuned = defaults;
+  tuned.values["algorithm.tile_m"] = int64_t{176};
+  TemporaryCache cache("deployment_import");
+  {
+    std::ofstream stream(cache.path());
+    stream << "onnx_light_kernel_tuning_cache 1\n";
+    WriteProfile(stream, tuned, MakeExecution());
+  }
+
+  platform::CpuSelector processors;
+  processors.vendor = "intel";
+  processors.family = 6;
+  processors.models = {0x97};
+  KernelCalibrationSelection selection;
+  selection.library = defaults.key.library;
+  KernelTuningDeploymentImportReport report =
+      ImportKernelTuningDeploymentProfiles(selection, {cache.path(), processors, 0});
+
+  EXPECT_EQ(report.status, KernelTuningCacheLoadStatus::kLoaded);
+  EXPECT_EQ(report.imported, std::vector<KernelTuningKey>({defaults.key}));
+  CpuExecutionDescriptor matching = MakeExecution();
+  CpuExecutionDescriptor outside = matching;
+  outside.processor.model = 0x8E;
+  const KernelTuningRegistrySnapshot snapshot = GetKernelTuningRegistry().Snapshot();
+  EXPECT_EQ(snapshot.Resolve(defaults.key, matching)->Get<int64_t>("algorithm.tile_m"), 176);
+  EXPECT_EQ(snapshot.Resolve(defaults.key, outside)->Get<int64_t>("algorithm.tile_m"), 64);
+}
+
+TEST(KernelTuningCache, RejectsDeploymentImportWithoutPartialRegistration) {
+  KernelTuningParameters valid = MakeDefaults();
+  valid.key.library = "deployment_import_atomic_test";
+  valid.key.kernel = "Valid";
+  KernelTuningParameters invalid = valid;
+  invalid.key.kernel = "Invalid";
+  RegisterKernelTuningSchema(KernelTuningSchema(valid));
+  RegisterKernelTuningSchema(KernelTuningSchema(invalid));
+  valid.values["algorithm.tile_m"] = int64_t{144};
+  invalid.values.erase("algorithm.tile_m");
+  TemporaryCache cache("deployment_import_atomic");
+  {
+    std::ofstream stream(cache.path());
+    stream << "onnx_light_kernel_tuning_cache 1\n";
+    WriteProfile(stream, valid, MakeExecution());
+    WriteProfile(stream, invalid, MakeExecution());
+  }
+
+  platform::CpuSelector processors;
+  processors.vendor = "intel";
+  KernelCalibrationSelection selection;
+  selection.library = valid.key.library;
+  const uint64_t generation_before = GetKernelTuningRegistry().Snapshot().generation();
+  KernelTuningDeploymentImportReport report =
+      ImportKernelTuningDeploymentProfiles(selection, {cache.path(), processors, 0});
+
+  EXPECT_EQ(report.invalid, std::vector<KernelTuningKey>({invalid.key}));
+  EXPECT_TRUE(report.imported.empty());
+  EXPECT_EQ(GetKernelTuningRegistry().Snapshot().generation(), generation_before);
+  EXPECT_EQ(GetKernelTuningRegistry()
+                .Snapshot()
+                .Resolve(valid.key, MakeExecution())
+                ->Get<int64_t>("algorithm.tile_m"),
+            64);
 }
 
 } // namespace

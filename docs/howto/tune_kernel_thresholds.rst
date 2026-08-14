@@ -13,67 +13,104 @@ A cache profile overrides the portable defaults only when its complete tuning
 key, processor descriptor, and effective thread count match. It never changes
 the ONNX model or the numerical contract of the operator.
 
-Calibrate one kernel
-++++++++++++++++++++
+Inspect parameters from Python
+++++++++++++++++++++++++++++++
+
+The tuning API is exposed by the full Python build:
+
+.. code-block:: python
+
+    from onnx_light import kernel_tuning
+    from onnx_light.onnx import TensorProto
+
+    report = kernel_tuning.kernel_tuning_parameters(
+        kernel="Gemm",
+        element_type=int(TensorProto.FLOAT),
+    )
+    for kernel in report["kernels"]:
+        print(kernel["parameter_names"])
+        print("portable:", kernel["defaults"])
+        print("local cache:", kernel["cached_values"])
+        print("active:", kernel["active_values"], kernel["active_source"])
+
+Each result identifies the tuning ``library``, ``kernel``, ``implementation``,
+ONNX ``element_type``, CPU ``device``, and ``tuning_abi``. ``cached_values`` is
+``None`` when the cache has no profile matching both the local processor and
+the requested effective thread count. ``active_source`` distinguishes
+``portable_default``, ``published_profile`` (loaded, calibrated, or explicitly
+overridden), and a statically registered processor ``registered_profile``.
+
+Without a ``kernel`` filter, the function returns every registered exact key.
+The optional ``library``, ``implementation``, ``element_type``, ``path``, and
+``num_threads`` arguments narrow the query. The report also includes the cache
+path, parse status, and diagnostics.
+
+Change local values from Python
++++++++++++++++++++++++++++++++
+
+``set_kernel_tuning_parameters`` accepts a partial update. Unspecified values
+come from the matching cached profile when one exists, or from the portable
+defaults otherwise. The complete result is validated before the cache is
+modified:
+
+.. code-block:: python
+
+    update = kernel_tuning.set_kernel_tuning_parameters(
+        "Gemm",
+        int(TensorProto.FLOAT),
+        {
+            "algorithm.tile_m": 96,
+            "algorithm.tile_n": 192,
+        },
+    )
+    assert update["status"] == "updated", update["diagnostics"]
+
+By default the update is persisted atomically in the default cache and loaded
+into the current process. Pass ``path=...`` for another cache,
+``num_threads=...`` for a profile scoped to that effective thread count, or
+``load=False`` to persist without activating it. Unknown names, wrong Python
+types, and values rejected by the kernel schema raise an exception without
+changing the file.
+
+``inspect_kernel_tuning_cache(path=None, num_threads=0)`` returns every
+persisted profile and marks the profiles matching the local processor and
+thread count with ``local=True``. It does not change active runtime values.
+``default_kernel_tuning_cache_path()`` returns the default path.
+
+See :ref:`l-example-plot-kernel-tuning` for an executable gallery example that
+combines discovery, a temporary validated update, cache inspection, inference,
+and bounded calibration.
+
+Calibrate one kernel from Python
+++++++++++++++++++++++++++++++++
 
 The built-in calibration callbacks currently cover ``Abs``, ``Add``, and
-``Not``. Register the built-in kernels first, select a kernel, run its callback,
-and persist the successful profiles:
+``Not``. The Python extension registers them when imported. Select a kernel and
+optionally one or more ONNX element types:
 
-.. code-block:: cpp
+.. code-block:: python
 
-    #include "onnx_core/runtime/kernel_tuning.h"
-    #include "onnx_core/runtime/kernel_tuning_cache.h"
-    #include "onnx_extensions/kernels/kernel_dispatch_table.h"
-
-    #include <iostream>
-
-    namespace rt = onnx_light::core::runtime;
-
-    int main() {
-      onnx_light::onnx_kernels::RegisterKernelFunctions();
-
-      rt::KernelCalibrationSelection selection;
-      selection.library = "onnx_light";
-      selection.kernels = {"Abs"};
-      selection.element_types = {
-          static_cast<int32_t>(rt::DataType::FLOAT)};
-
-      rt::CalibrationOptions options;
-      options.maximum_duration_ms = 1000;
-      options.maximum_memory_bytes = uint64_t{128} << 20;
-
-      const rt::CalibrationBatchReport calibration =
-          rt::CalibrateRegisteredKernels(selection, options);
-      if (calibration.calibrated.empty()) {
-        std::cerr << "No selected kernel has a calibration callback.\n";
-        return 1;
-      }
-
-      const rt::KernelTuningCacheUpdateReport update =
-          rt::UpdateKernelTuningCache(
-              calibration.successful_profiles());
-      if (update.status != rt::KernelTuningCacheUpdateStatus::kUpdated) {
-        for (const std::string &message : update.diagnostics) {
-          std::cerr << message << '\n';
-        }
-        return 1;
-      }
-
-      std::cout << rt::DefaultKernelTuningCachePath() << '\n';
-    }
+    calibration = kernel_tuning.calibrate_kernel_tuning(
+        "Abs",
+        element_types=[int(TensorProto.FLOAT)],
+        maximum_duration_ms=1000,
+        maximum_memory_bytes=128 << 20,
+    )
+    print(calibration["calibrated"])
+    print(calibration["diagnostics"])
+    print(calibration["cache_update"])
 
 Calibration generates deterministic inputs, checks every candidate output
 against the forced serial implementation, warms the implementations, and uses
 median timings. The shared unary/binary crossover search requires the
 configured speedup for consecutive problem sizes. Resource limits bound the
-search. Inspect ``CalibrationBatchReport::diagnostics`` and ``resources`` to
-see the selected value and measurement cost.
+search. Inspect ``diagnostics`` to see the selected value. Schema-only keys
+without a callback appear in ``unsupported``.
 
 The selected profile is published in the current process immediately.
-``UpdateKernelTuningCache`` is needed only to make it available to later
-processes. It validates the complete profile, locks the cache across processes,
-merges it, and atomically replaces the file.
+With the default ``save=True``, it is also validated, locked, merged, and
+atomically persisted for later processes. Use ``save=False`` for an in-memory
+calibration or ``only_missing=True`` to skip an already active local profile.
 
 Add calibration to another kernel
 +++++++++++++++++++++++++++++++++
@@ -127,7 +164,8 @@ type. A value-only default adjustment does not require an ABI change.
 Locate and inspect the cache
 ++++++++++++++++++++++++++++
 
-``DefaultKernelTuningCachePath()`` returns the exact active default path:
+``default_kernel_tuning_cache_path()`` in Python and
+``DefaultKernelTuningCachePath()`` in C++ return the exact default path:
 
 * Windows: ``%LOCALAPPDATA%\onnx-light\kernel_tuning.cache``;
 * other platforms with ``XDG_CACHE_HOME``:
@@ -146,9 +184,22 @@ to use an explicit location.
 Load and use cached values
 ++++++++++++++++++++++++++
 
-The cache is **not loaded merely because the file exists**. Each process must
-load it explicitly after tuning schemas are registered and before its first
-``RuntimeSession`` initializes kernels:
+Importing ``onnx_light.onnx_py._onnxpykernels`` registers the built-in tuning
+schemas and automatically loads compatible profiles from the default cache.
+Therefore Python ``RuntimeSession`` and ``ReferenceEvaluator`` instances use
+the local default cache without another call.
+
+An explicit path is not loaded automatically. Load it before the first session
+initializes its kernels:
+
+.. code-block:: python
+
+    load = kernel_tuning.load_kernel_tuning_cache(
+        path="/path/to/kernel_tuning.cache",
+    )
+    assert load["status"] == "loaded", load["diagnostics"]
+
+The C++ API remains explicit for every path:
 
 .. code-block:: cpp
 

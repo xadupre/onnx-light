@@ -79,7 +79,8 @@ requests:
    * - `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_
      - First incremental pattern port
      - Ports ``CastPattern`` from ``yobx.xoptim.patterns`` with exact rewrite,
-       optimized-graph, rejection, and registration tests.
+       optimized-graph, rejection, and registration tests, and adds
+       source-located no-match diagnostics.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -187,6 +188,26 @@ A pattern is a stateless matcher and rewriter. The two Python classes
 
 ``FastOpType`` lets the driver restrict a pattern to the nodes of one operator
 type, exactly like ``fast_op_type`` gates ``subset_nodes`` in Python.
+
+No-match diagnostics and contract errors
++++++++++++++++++++++++++++++++++++++++++
+
+A candidate that does not satisfy a pattern is normal control flow, not an
+error. Matchers return ``NoMatch(candidate, reason)``; this keeps
+``MatchResult::pattern`` null while ``std::source_location`` captures the C++
+file and line of the rejected condition. The optional ``OptimizationReport``
+aggregates these diagnostics by pattern, location, and reason, so enabling a
+report explains why candidates were rejected without printing during normal
+optimization.
+
+``Apply`` has a different contract: the optimizer calls it only with nodes
+returned by a successful ``Match``. Invalid nodes passed directly to ``Apply``
+therefore indicate a pattern implementation or API misuse and raise
+``BuilderError``. ``BuilderError`` also captures its call-site file and line
+and includes them in ``what()``, making such exceptional failures actionable.
+This distinction mirrors the Python pattern API: ``none(node, line, reason)``
+reports an ordinary failed match, while ``apply`` assumes that matching has
+already succeeded.
 
 Pattern library and registration
 ++++++++++++++++++++++++++++++++
@@ -467,7 +488,9 @@ Implementation order
 10. Port the pattern library incrementally, one pattern per change, each with a
     C++ test that checks the rewritten graph against the expected one. The
     first port, ``CastPattern``, is
-    `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_.
+    `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_; it also ports
+    Python's source-located no-match diagnostics before further patterns are
+    added.
 
 Pull requests
 +++++++++++++
@@ -487,4 +510,4 @@ Pull requests
 * `PR #4427 <https://github.com/xadupre/onnx-light/pull/4427>`_: pattern linking,
   registration, selection, and standalone custom-pattern example.
 * `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_: first incremental
-  library port, ``CastPattern``.
+  library port, ``CastPattern``, plus source-located match diagnostics.

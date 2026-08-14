@@ -14,13 +14,18 @@ std::set<std::string> CastPattern::FastOpType() const { return {"Cast"}; }
 
 core::builder::MatchResult CastPattern::Match(core::builder::GraphGraph &graph,
                                               const NodeProto &candidate) const {
-  if (!detail::IsDefaultCast(candidate) || !graph.HasType(candidate.input()[0].value())) {
-    return {};
+  if (!detail::IsDefaultCast(candidate)) {
+    return NoMatch(candidate, "candidate is not a unary default-domain Cast");
+  }
+  if (!graph.HasType(candidate.input()[0].value())) {
+    return NoMatch(candidate, "input element type is unknown");
   }
   core::symbolic::TensorType target_type;
-  if (!detail::CastTarget(candidate, target_type) ||
-      target_type != graph.GetType(candidate.input()[0].value())) {
-    return {};
+  if (!detail::CastTarget(candidate, target_type)) {
+    return NoMatch(candidate, "the Cast 'to' attribute is missing or invalid");
+  }
+  if (target_type != graph.GetType(candidate.input()[0].value())) {
+    return NoMatch(candidate, "the input and target element types differ");
   }
   return core::builder::MatchResult{this, {&candidate}, &candidate};
 }

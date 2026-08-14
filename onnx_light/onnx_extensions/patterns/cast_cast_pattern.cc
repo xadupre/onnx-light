@@ -46,20 +46,30 @@ TensorType CastCastPattern::OneCastType(TensorType input_type, TensorType middle
 core::builder::MatchResult CastCastPattern::Match(core::builder::GraphGraph &graph,
                                                   const NodeProto &candidate) const {
   if (!detail::IsDefaultCast(candidate)) {
-    return {};
+    return NoMatch(candidate, "candidate is not a unary default-domain Cast");
   }
   const NodeProto *inner = graph.NodeBefore(candidate.input()[0].value());
-  if (inner == nullptr || !detail::IsDefaultCast(*inner) ||
-      !graph.HasType(inner->input()[0].value())) {
-    return {};
+  if (inner == nullptr) {
+    return NoMatch(candidate, "the Cast input is not produced by another node");
+  }
+  if (!detail::IsDefaultCast(*inner)) {
+    return NoMatch(candidate, "the preceding node is not a unary default-domain Cast");
+  }
+  if (!graph.HasType(inner->input()[0].value())) {
+    return NoMatch(candidate, "the first Cast input element type is unknown");
   }
 
   TensorType middle_type;
   TensorType final_type;
-  if (!detail::CastTarget(*inner, middle_type) || !detail::CastTarget(candidate, final_type) ||
-      OneCastType(graph.GetType(inner->input()[0].value()), middle_type, final_type) ==
-          TensorType::kUndefined) {
-    return {};
+  if (!detail::CastTarget(*inner, middle_type)) {
+    return NoMatch(candidate, "the first Cast 'to' attribute is missing or invalid");
+  }
+  if (!detail::CastTarget(candidate, final_type)) {
+    return NoMatch(candidate, "the second Cast 'to' attribute is missing or invalid");
+  }
+  if (OneCastType(graph.GetType(inner->input()[0].value()), middle_type, final_type) ==
+      TensorType::kUndefined) {
+    return NoMatch(candidate, "combining the Cast operations would change the result");
   }
   return core::builder::MatchResult{
       this,

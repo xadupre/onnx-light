@@ -41,6 +41,7 @@
 #include <functional>
 #include <memory>
 #include <set>
+#include <source_location>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -82,8 +83,22 @@ enum class ProtoKind {
 /// a name is reused or the opset version of a domain cannot be resolved.
 class BuilderError : public std::runtime_error {
 public:
-  /// Constructs a BuilderError with the given diagnostic message.
-  explicit BuilderError(const std::string &message) : std::runtime_error(message) {}
+  /// Constructs an error with the message and its call-site source location.
+  explicit BuilderError(const std::string &message,
+                        std::source_location location = std::source_location::current())
+      : std::runtime_error(std::string(location.file_name()) + ":" +
+                           std::to_string(location.line()) + ": " + message),
+        source_file_(location.file_name()), source_line_(location.line()) {}
+
+  /// Returns the source file where the error was created.
+  const std::string &SourceFile() const noexcept { return source_file_; }
+
+  /// Returns the source line where the error was created.
+  std::uint_least32_t SourceLine() const noexcept { return source_line_; }
+
+private:
+  std::string source_file_;
+  std::uint_least32_t source_line_;
 };
 
 /// Options controlling :cpp:func:`GraphBuilder::ConstantFold`.

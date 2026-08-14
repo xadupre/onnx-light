@@ -177,6 +177,43 @@ TEST(PatternOptimization, CastRejectsTypeChangingConversion) {
   const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
   EXPECT_EQ(match.pattern, nullptr);
   EXPECT_TRUE(match.nodes.empty());
+  ASSERT_TRUE(match.no_match.has_value());
+  EXPECT_TRUE(match.no_match->source_file.ends_with("cast_pattern.cc"));
+  EXPECT_GT(match.no_match->source_line, 0u);
+  EXPECT_EQ(match.no_match->reason, "the input and target element types differ");
+  EXPECT_NE(match.ToString().find("cast_pattern.cc:"), std::string::npos);
+  EXPECT_NE(match.ToString().find("the input and target element types differ"), std::string::npos);
+
+  core::builder::OptimizationReport report;
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::CastPattern>());
+  core::builder::GraphGraph diagnostic_graph(builder, std::move(patterns));
+  const std::vector<core::builder::LocalRewriting> rewrites =
+      diagnostic_graph.Optimize(-1, &report);
+  EXPECT_TRUE(rewrites.empty());
+  ASSERT_EQ(report.patterns.size(), 1u);
+  ASSERT_EQ(report.patterns[0].no_matches.size(), 1u);
+  EXPECT_TRUE(report.patterns[0].no_matches[0].source_file.ends_with("cast_pattern.cc"));
+  EXPECT_EQ(report.patterns[0].no_matches[0].source_line, match.no_match->source_line);
+  EXPECT_EQ(report.patterns[0].no_matches[0].reason, "the input and target element types differ");
+  EXPECT_EQ(report.patterns[0].no_matches[0].occurrences, 1u);
+}
+
+TEST(PatternOptimization, ApplyContractErrorIncludesSourceLocation) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::CastPattern pattern;
+
+  try {
+    pattern.Apply(graph, {});
+    FAIL() << "Expected CastPattern::Apply to reject an invalid direct call.";
+  } catch (const core::builder::BuilderError &error) {
+    EXPECT_TRUE(error.SourceFile().ends_with("cast_pattern.cc"));
+    EXPECT_GT(error.SourceLine(), 0u);
+    EXPECT_NE(std::string(error.what()).find("cast_pattern.cc:"), std::string::npos);
+    EXPECT_NE(std::string(error.what()).find("expects one default-domain Cast node"),
+              std::string::npos);
+  }
 }
 
 TEST(PatternOptimization, OptimizeCastProducesExpectedGraph) {

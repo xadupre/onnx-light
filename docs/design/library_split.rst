@@ -302,7 +302,10 @@ smallest set** that covers its needs.  The most common scenarios are:
   ``onnx_light::lib_onnx_patterns`` and call
   ``onnx_patterns::RegisterPatterns()`` before creating the registered
   pattern instances. Custom-only optimizers can link ``lib_onnx_core`` and
-  call ``core::builder::RegisterPattern`` directly.
+  either pass patterns directly to ``GraphGraph`` or call
+  ``core::builder::RegisterPattern``. See
+  :ref:`l-design-cpp-linking-patterns` for complete selection, registration,
+  and linking examples.
 * **Evaluate ONNX nodes / graphs / models in C++** using the bundled
   reference kernels (runtime ``struct Tensor``, ``RunGraph`` /
   ``RunFunction`` / ``RunModel``, ``SplitMix64`` RNG, ...) without

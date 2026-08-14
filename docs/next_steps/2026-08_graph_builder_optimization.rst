@@ -64,7 +64,7 @@ requests:
      - Local rewriting and replay
      - Returns persistent rewrite records from optimization and deterministically
        replays them over a fresh model.
-   * - Current
+   * - `PR #4416 <https://github.com/xadupre/onnx-light/pull/4416>`_
      - Constant folding
      - Folds all-constant replacement nodes into initializers and stores the
        materialized results in the persistent rewrite records.
@@ -76,6 +76,10 @@ requests:
      - Pattern integration documentation
      - Documents linking, registration, and selection, with a standalone
        custom-pattern example.
+   * - `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_
+     - First incremental pattern port
+     - Ports ``CastPattern`` from ``yobx.xoptim.patterns`` with exact rewrite,
+       optimized-graph, rejection, and registration tests.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -442,22 +446,28 @@ Implementation order
    (`PR #4389 <https://github.com/xadupre/onnx-light/pull/4389>`_).
 3. Create ``lib_onnx_patterns`` under ``onnx_extensions/patterns``, move the
    concrete pattern out of ``onnx_core``, and add the explicit core registry
-   plus ``onnx_patterns::RegisterPatterns``.
-4. Implement the match/apply loop and wire in the existing cleanup passes.
+   plus ``onnx_patterns::RegisterPatterns``
+   (`PR #4392 <https://github.com/xadupre/onnx-light/pull/4392>`_).
+4. Implement the match/apply loop and wire in the existing cleanup passes
+   (`PR #4394 <https://github.com/xadupre/onnx-light/pull/4394>`_).
 5. Refactor ``Optimize`` to return the applied ``LocalRewriting`` records and
    add ``Replay`` so a captured list of rewrites reconstructs the final graph
    from a ``ModelProto``
    (`PR #4412 <https://github.com/xadupre/onnx-light/pull/4412>`_).
 6. Add logging with per-phase timing (match, rewrite, dead-branch removal,
-   constant folding, subgraph optimization) reported at the end of ``Optimize``.
-7. Add constant folding of all-constant rewrites.
+   constant folding, subgraph optimization) reported at the end of ``Optimize``
+   (`PR #4414 <https://github.com/xadupre/onnx-light/pull/4414>`_).
+7. Add constant folding of all-constant rewrites
+   (`PR #4416 <https://github.com/xadupre/onnx-light/pull/4416>`_).
 8. Extend to subgraphs and add the statistics output
    (`PR #4425 <https://github.com/xadupre/onnx-light/pull/4425>`_).
 9. Document the core/extension boundary, registration and selection APIs,
    linking requirements, and a custom-pattern example
    (`PR #4427 <https://github.com/xadupre/onnx-light/pull/4427>`_).
 10. Port the pattern library incrementally, one pattern per change, each with a
-    C++ test that checks the rewritten graph against the expected one.
+    C++ test that checks the rewritten graph against the expected one. The
+    first port, ``CastPattern``, is
+    `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_.
 
 Pull requests
 +++++++++++++
@@ -468,7 +478,13 @@ Pull requests
 * `PR #4392 <https://github.com/xadupre/onnx-light/pull/4392>`_: pattern extension library.
 * `PR #4394 <https://github.com/xadupre/onnx-light/pull/4394>`_: match/apply loop and cleanup.
 * `PR #4396 <https://github.com/xadupre/onnx-light/pull/4396>`_: replay and phase-logging design.
+* `PR #4414 <https://github.com/xadupre/onnx-light/pull/4414>`_: phase timing and
+  optimization report.
+* `PR #4416 <https://github.com/xadupre/onnx-light/pull/4416>`_: constant folding
+  for replacement nodes.
 * `PR #4425 <https://github.com/xadupre/onnx-light/pull/4425>`_: recursive subgraph
   optimization, replay paths, and aggregated statistics.
 * `PR #4427 <https://github.com/xadupre/onnx-light/pull/4427>`_: pattern linking,
   registration, selection, and standalone custom-pattern example.
+* `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_: first incremental
+  library port, ``CastPattern``.

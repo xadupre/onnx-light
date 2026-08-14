@@ -756,10 +756,12 @@ def _render_box(box: _Box) -> str:
     rx = 12 if style["rounded"] else 4
     dash = ' stroke-dasharray="4 3"' if style["dashed"] else ""
     out = [
-        f'<rect x="{_round(box.x)}" y="{_round(box.y)}" '
-        f'width="{_round(box.width)}" height="{_round(box.height)}" '
-        f'rx="{rx}" ry="{rx}" fill="{style["fill"]}" '
-        f'stroke="{style["stroke"]}"{dash}/>'
+        (
+            f'<rect x="{_round(box.x)}" y="{_round(box.y)}" '
+            f'width="{_round(box.width)}" height="{_round(box.height)}" '
+            f'rx="{rx}" ry="{rx}" fill="{style["fill"]}" '
+            f'stroke="{style["stroke"]}"{dash}/>'
+        )
     ]
     cx = box.x + box.width / 2.0
     text_top = box.y + _BOX_PAD_Y + _LINE_HEIGHT * 0.75
@@ -787,9 +789,11 @@ def _render_edge(
         x2 = dst.x + dst.width / 2.0
         y2 = dst.y
     out = [
-        f'<line x1="{_round(x1)}" y1="{_round(y1)}" '
-        f'x2="{_round(x2)}" y2="{_round(y2)}" '
-        f'stroke="#555555" marker-end="url(#arrow)"/>'
+        (
+            f'<line x1="{_round(x1)}" y1="{_round(y1)}" '
+            f'x2="{_round(x2)}" y2="{_round(y2)}" '
+            f'stroke="#555555" marker-end="url(#arrow)"/>'
+        )
     ]
     if label:
         mx = (x1 + x2) / 2.0

@@ -28,13 +28,8 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install style tools (black, ruff)
-        run: pip install black==26.5.1 ruff==0.15.17
+      - name: Install style tools
+        run: pip install black==26.5.1 clang-format==22.1.8 ruff==0.16.3
 
       - name: Install build dependencies (nanobind)
         run: pip install nanobind
-
-      - name: Install clang-format
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y clang-format

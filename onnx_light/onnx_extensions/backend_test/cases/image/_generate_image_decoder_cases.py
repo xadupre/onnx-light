@@ -68,8 +68,10 @@ src = [
     "//",
     "// This file is auto-generated from the upstream ONNX node-level",
     "// backend test data (``onnx/backend/test/data/node/test_image_decoder_*``)",
-    "// by ``onnx_light/onnx_extensions/backend_test/cases/image/"
-    "_generate_image_decoder_cases.py``.",
+    (
+        "// by ``onnx_light/onnx_extensions/backend_test/cases/image/"
+        "_generate_image_decoder_cases.py``."
+    ),
     "// Each case carries the encoded input bytestream and the precomputed",
     "// expected ``(H, W, C)`` uint8 image as static byte arrays so the",
     "// backend test library does not need to depend on an image-decoding",

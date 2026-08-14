@@ -317,17 +317,21 @@ class BuildExt(Command):
         (
             "with-upstream-onnx",
             None,
-            "auto-detect the pip-installed onnx package prefix and forward it as "
-            "CMAKE_PREFIX_PATH so find_package(ONNX) succeeds (used by C++ unit "
-            "tests and benchmarks that compare against the upstream onnx library)",
+            (
+                "auto-detect the pip-installed onnx package prefix and forward it as "
+                "CMAKE_PREFIX_PATH so find_package(ONNX) succeeds (used by C++ unit "
+                "tests and benchmarks that compare against the upstream onnx library)"
+            ),
         ),
         (
             "no-kernels",
             None,
-            "build the reduced extension set without the operator-kernel runtime "
-            "and backend-test registries (sets -DONNX_LIGHT_BUILD_KERNELS=OFF); "
-            "the reference runtime and backend-test helpers then raise an explicit "
-            "error when used",
+            (
+                "build the reduced extension set without the operator-kernel runtime "
+                "and backend-test registries (sets -DONNX_LIGHT_BUILD_KERNELS=OFF); "
+                "the reference runtime and backend-test helpers then raise an explicit "
+                "error when used"
+            ),
         ),
         ("parallel=", "j", "number of parallel build jobs"),
     ]
@@ -437,9 +441,11 @@ class BuildBenchmarks(Command):
         (
             "with-upstream-onnx",
             None,
-            "set -DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON so CMake fetches "
-            "and builds upstream onnx via FetchContent, which makes "
-            "BENCH_HAS_UPSTREAM_ONNX defined for bench_load_file",
+            (
+                "set -DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON so CMake fetches "
+                "and builds upstream onnx via FetchContent, which makes "
+                "BENCH_HAS_UPSTREAM_ONNX defined for bench_load_file"
+            ),
         ),
         ("parallel=", "j", "number of parallel build jobs"),
     ]

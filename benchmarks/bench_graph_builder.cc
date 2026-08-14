@@ -122,7 +122,9 @@ int main(int argc, char **argv) {
 
   // Warm-up build so lazily-initialized caches (schema table, dispatch table)
   // are populated before timing.
-  { core::builder::GraphBuilder warmup(model); }
+  {
+    core::builder::GraphBuilder warmup(model);
+  }
 
   double total_ms = 0.0;
   for (int i = 0; i < iters; ++i) {

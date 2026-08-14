@@ -774,14 +774,18 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor V = Tensor::FromFloat("", {1, 2, 2, 3},
                                  {
                                      // kv head 0
-                                     1.0f, 2.0f,
+                                     1.0f,
+                                     2.0f,
                                      3.0f, // v0
-                                     4.0f, 5.0f,
+                                     4.0f,
+                                     5.0f,
                                      6.0f, // v1
                                            // kv head 1
-                                     -1.0f, 0.0f,
+                                     -1.0f,
+                                     0.0f,
                                      1.0f, // v0
-                                     0.0f, 1.0f,
+                                     0.0f,
+                                     1.0f,
                                      -1.0f, // v1
                                  });
     Tensor Y = flex(Q, K, V);

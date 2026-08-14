@@ -65,7 +65,6 @@ def _make_raw_data_constant_model():
 
 
 class TestReferenceEvaluator(ExtTestCase):
-    @unittest.expectedFailure
     def test_allocator_output_remains_live_after_context_clear(self):
         """Pins an exported allocator output across ``RuntimeContext.clear``."""
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
@@ -84,11 +83,11 @@ class TestReferenceEvaluator(ExtTestCase):
 
         evaluator._ctx.clear()
 
-        # The exported array must retain its allocation independently of the
-        # mutable tensor map. Step 2 introduces the handle that makes this pass.
+        # The exported array retains its allocation independently of the
+        # mutable tensor map.
         self.assertEqual(allocator.allocated_count, 1)
+        np.testing.assert_array_equal(output, np.array([11.0, 22.0, 33.0], dtype=np.float32))
 
-    @unittest.expectedFailure
     def test_allocator_output_remains_live_during_subsequent_run(self):
         """Pins the previous output while a subsequent run produces another."""
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
@@ -106,11 +105,42 @@ class TestReferenceEvaluator(ExtTestCase):
         (first,) = evaluator.run(None, first_feeds)
         (second,) = evaluator.run(None, second_feeds)
 
-        # Both arrays need distinct live allocations. This assertion precedes
-        # reading ``first`` so the known dangling pointer is never dereferenced.
+        # Both arrays need distinct live allocations while both remain alive.
         self.assertEqual(allocator.allocated_count, 2)
         np.testing.assert_array_equal(first, np.array([11.0, 22.0, 33.0], dtype=np.float32))
         np.testing.assert_array_equal(second, np.array([44.0, 55.0, 66.0], dtype=np.float32))
+
+    def test_allocator_output_keeps_runtime_and_allocator_alive(self):
+        """Keeps the allocator alive through the exported array owner."""
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        evaluator = ReferenceEvaluator(model, allocator=runtime.SimpleRawBufferAllocator(4))
+        (output,) = evaluator.run(
+            None,
+            {
+                "x": np.array([-1.0, 2.0, -3.0], dtype=np.float32),
+                "z": np.array([10.0, 20.0, 30.0], dtype=np.float32),
+            },
+        )
+
+        del evaluator
+        gc.collect()
+
+        np.testing.assert_array_equal(output, np.array([11.0, 22.0, 33.0], dtype=np.float32))
+
+    def test_allocator_duplicate_output_request_shares_export(self):
+        """Returns the same safe export when an output name is requested twice."""
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        evaluator = ReferenceEvaluator(model, allocator=runtime.SimpleRawBufferAllocator(4))
+        first, duplicate = evaluator.run(
+            ["y", "y"],
+            {
+                "x": np.array([-1.0, 2.0, -3.0], dtype=np.float32),
+                "z": np.array([10.0, 20.0, 30.0], dtype=np.float32),
+            },
+        )
+
+        self.assertIs(first, duplicate)
+        np.testing.assert_array_equal(first, np.array([11.0, 22.0, 33.0], dtype=np.float32))
 
     def test_metadata(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)

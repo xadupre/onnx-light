@@ -101,7 +101,10 @@ assert kernel["active_values"]["parallel.minimum_elements"] == 23456, kernel
 assert kernel["active_source"] == "published_profile", kernel
 """
             env = os.environ.copy()
-            env["XDG_CACHE_HOME"] = temporary
+            if sys.platform == "win32":
+                env["LOCALAPPDATA"] = temporary
+            else:
+                env["XDG_CACHE_HOME"] = temporary
             subprocess.run([sys.executable, "-c", code], check=True, env=env)
 
     def test_proposes_missing_subset_and_cli_is_read_only(self):

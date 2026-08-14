@@ -313,8 +313,11 @@ void RegisterKernelFunctions() {
   // entry points) is safe and cheap after the first call.
   static const bool kRegistered = [] {
     onnx_kernels::kernel::Abs::RegisterTuningSchemas();
+    onnx_kernels::kernel::Add::RegisterTuningSchemas();
+    onnx_kernels::kernel::And::RegisterTuningSchemas();
     onnx_kernels::kernel::Exp::RegisterTuningSchemas();
     onnx_kernels::kernel::Gemm::RegisterTuningSchemas();
+    onnx_kernels::kernel::Mul::RegisterTuningSchemas();
     onnx_kernels::kernel::Not::RegisterTuningSchemas();
     for (const auto &entry : BuiltinKernelFunctions()) {
       const std::string &key = entry.first;

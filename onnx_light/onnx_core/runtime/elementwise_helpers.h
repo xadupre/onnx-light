@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/simple_tensor.h"
 
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -77,7 +78,8 @@ void CheckPreallocatedOutput(const char *op_name, const char *dtype_name, int32_
 /// layout of the ``expected_dtype``.
 template <typename TIn, typename TOut, typename Op>
 void BinaryElementwise(const char *op_name, const char *dtype_name, int32_t expected_dtype,
-                       const Tensor &x, const Tensor &y, Tensor &output, Op op) {
+                       const Tensor &x, const Tensor &y, Tensor &output, Op op,
+                       int64_t parallel_minimum_elements = std::numeric_limits<int64_t>::max()) {
   const BroadcastInfo bi = CheckBinaryBroadcast(op_name, dtype_name, expected_dtype, x, y);
   const size_t expected_bytes = static_cast<size_t>(bi.element_count) * sizeof(TOut);
   CheckPreallocatedOutput(op_name, dtype_name, expected_dtype, bi.shape, expected_bytes, output);
@@ -88,39 +90,53 @@ void BinaryElementwise(const char *op_name, const char *dtype_name, int32_t expe
 
   // Fast paths: equal-shape and scalar broadcasting.
   if (x.shape == y.shape) {
-    for (int64_t i = 0; i < bi.element_count; ++i) {
-      pz[static_cast<size_t>(i)] = op(px[i], py[i]);
-    }
+    ParallelFor(bi.element_count, parallel_minimum_elements,
+                [px, py, pz, op](int64_t begin, int64_t end) {
+                  for (int64_t i = begin; i < end; ++i) {
+                    pz[static_cast<size_t>(i)] = op(px[i], py[i]);
+                  }
+                });
     return;
   }
   if (bi.nx == 1 || bi.ny == 1) {
-    for (int64_t i = 0; i < bi.element_count; ++i) {
-      const TIn a = bi.nx == 1 ? px[0] : px[i];
-      const TIn b = bi.ny == 1 ? py[0] : py[i];
-      pz[static_cast<size_t>(i)] = op(a, b);
-    }
+    ParallelFor(bi.element_count, parallel_minimum_elements,
+                [px, py, pz, op, nx = bi.nx, ny = bi.ny](int64_t begin, int64_t end) {
+                  for (int64_t i = begin; i < end; ++i) {
+                    const TIn a = nx == 1 ? px[0] : px[i];
+                    const TIn b = ny == 1 ? py[0] : py[i];
+                    pz[static_cast<size_t>(i)] = op(a, b);
+                  }
+                });
     return;
   }
 
   // General multidirectional broadcasting: iterate over output coordinates in
   // row-major order using the pre-computed per-input element strides.
-  const size_t rank = bi.shape.size();
-  Shape idx;
-  idx.assign(rank, 0);
-  for (int64_t flat = 0; flat < bi.element_count; ++flat) {
-    int64_t ox = 0, oy = 0;
-    for (size_t d = 0; d < rank; ++d) {
-      ox += idx[d] * bi.strides_x[d];
-      oy += idx[d] * bi.strides_y[d];
-    }
-    pz[static_cast<size_t>(flat)] = op(px[ox], py[oy]);
-    for (size_t d = rank; d-- > 0;) {
-      if (++idx[d] < bi.shape[d]) {
-        break;
-      }
-      idx[d] = 0;
-    }
-  }
+  ParallelFor(bi.element_count, parallel_minimum_elements,
+              [px, py, pz, op, &bi](int64_t begin, int64_t end) {
+                const size_t rank = bi.shape.size();
+                Shape idx;
+                idx.assign(rank, 0);
+                int64_t remaining = begin;
+                for (size_t d = rank; d-- > 0;) {
+                  idx[d] = remaining % bi.shape[d];
+                  remaining /= bi.shape[d];
+                }
+                for (int64_t flat = begin; flat < end; ++flat) {
+                  int64_t ox = 0, oy = 0;
+                  for (size_t d = 0; d < rank; ++d) {
+                    ox += idx[d] * bi.strides_x[d];
+                    oy += idx[d] * bi.strides_y[d];
+                  }
+                  pz[static_cast<size_t>(flat)] = op(px[ox], py[oy]);
+                  for (size_t d = rank; d-- > 0;) {
+                    if (++idx[d] < bi.shape[d]) {
+                      break;
+                    }
+                    idx[d] = 0;
+                  }
+                }
+              });
 }
 
 /// Allocating element-wise binary kernel driver. Builds the output tensor
@@ -132,13 +148,16 @@ void BinaryElementwise(const char *op_name, const char *dtype_name, int32_t expe
 /// :cpp:class:`RuntimeContext`. Pass ``nullptr`` (or omit the argument) to
 /// fall back to the legacy inline-allocation path.
 template <typename TIn, typename TOut, typename Op>
-Tensor BinaryElementwiseAlloc(const char *op_name, const char *dtype_name, int32_t expected_dtype,
-                              const Tensor &x, const Tensor &y, Op op,
-                              RawBufferAllocator *allocator = nullptr) {
+Tensor
+BinaryElementwiseAlloc(const char *op_name, const char *dtype_name, int32_t expected_dtype,
+                       const Tensor &x, const Tensor &y, Op op,
+                       RawBufferAllocator *allocator = nullptr,
+                       int64_t parallel_minimum_elements = std::numeric_limits<int64_t>::max()) {
   const BroadcastInfo bi = CheckBinaryBroadcast(op_name, dtype_name, expected_dtype, x, y);
   const size_t n_bytes = static_cast<size_t>(bi.element_count) * sizeof(TOut);
   Tensor z = MakeOutputTensor(expected_dtype, bi.shape, n_bytes, allocator);
-  BinaryElementwise<TIn, TOut>(op_name, dtype_name, expected_dtype, x, y, z, op);
+  BinaryElementwise<TIn, TOut>(op_name, dtype_name, expected_dtype, x, y, z, op,
+                               parallel_minimum_elements);
   return z;
 }
 
@@ -228,9 +247,10 @@ using HalfEncodeFunc = uint16_t (*)(float);
 
 /// In-place half-precision binary element-wise kernel.
 template <typename Op>
-void BinaryHalfElementwise(const char *op_name, const char *dtype_name, int32_t dtype,
-                           const Tensor &x, const Tensor &y, Tensor &output, HalfDecodeFunc decode,
-                           HalfEncodeFunc encode, Op op) {
+void BinaryHalfElementwise(
+    const char *op_name, const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y,
+    Tensor &output, HalfDecodeFunc decode, HalfEncodeFunc encode, Op op,
+    int64_t parallel_minimum_elements = std::numeric_limits<int64_t>::max()) {
   const BroadcastInfo bi = CheckBinaryBroadcast(op_name, dtype_name, dtype, x, y);
   const size_t expected_bytes = static_cast<size_t>(bi.element_count) * sizeof(uint16_t);
   CheckPreallocatedOutput(op_name, dtype_name, dtype, bi.shape, expected_bytes, output);
@@ -240,37 +260,52 @@ void BinaryHalfElementwise(const char *op_name, const char *dtype_name, int32_t 
   uint16_t *pz = reinterpret_cast<uint16_t *>(output.mutable_bytes());
 
   if (x.shape == y.shape) {
-    for (int64_t i = 0; i < bi.element_count; ++i) {
-      pz[static_cast<size_t>(i)] = encode(op(decode(px[i]), decode(py[i])));
-    }
+    ParallelFor(bi.element_count, parallel_minimum_elements,
+                [px, py, pz, decode, encode, op](int64_t begin, int64_t end) {
+                  for (int64_t i = begin; i < end; ++i) {
+                    pz[static_cast<size_t>(i)] = encode(op(decode(px[i]), decode(py[i])));
+                  }
+                });
     return;
   }
   if (bi.nx == 1 || bi.ny == 1) {
-    for (int64_t i = 0; i < bi.element_count; ++i) {
-      const float a = bi.nx == 1 ? decode(px[0]) : decode(px[i]);
-      const float b = bi.ny == 1 ? decode(py[0]) : decode(py[i]);
-      pz[static_cast<size_t>(i)] = encode(op(a, b));
-    }
+    ParallelFor(
+        bi.element_count, parallel_minimum_elements,
+        [px, py, pz, decode, encode, op, nx = bi.nx, ny = bi.ny](int64_t begin, int64_t end) {
+          for (int64_t i = begin; i < end; ++i) {
+            const float a = nx == 1 ? decode(px[0]) : decode(px[i]);
+            const float b = ny == 1 ? decode(py[0]) : decode(py[i]);
+            pz[static_cast<size_t>(i)] = encode(op(a, b));
+          }
+        });
     return;
   }
 
-  const size_t rank = bi.shape.size();
-  Shape idx;
-  idx.assign(rank, 0);
-  for (int64_t flat = 0; flat < bi.element_count; ++flat) {
-    int64_t ox = 0, oy = 0;
-    for (size_t d = 0; d < rank; ++d) {
-      ox += idx[d] * bi.strides_x[d];
-      oy += idx[d] * bi.strides_y[d];
-    }
-    pz[static_cast<size_t>(flat)] = encode(op(decode(px[ox]), decode(py[oy])));
-    for (size_t d = rank; d-- > 0;) {
-      if (++idx[d] < bi.shape[d]) {
-        break;
-      }
-      idx[d] = 0;
-    }
-  }
+  ParallelFor(bi.element_count, parallel_minimum_elements,
+              [px, py, pz, decode, encode, op, &bi](int64_t begin, int64_t end) {
+                const size_t rank = bi.shape.size();
+                Shape idx;
+                idx.assign(rank, 0);
+                int64_t remaining = begin;
+                for (size_t d = rank; d-- > 0;) {
+                  idx[d] = remaining % bi.shape[d];
+                  remaining /= bi.shape[d];
+                }
+                for (int64_t flat = begin; flat < end; ++flat) {
+                  int64_t ox = 0, oy = 0;
+                  for (size_t d = 0; d < rank; ++d) {
+                    ox += idx[d] * bi.strides_x[d];
+                    oy += idx[d] * bi.strides_y[d];
+                  }
+                  pz[static_cast<size_t>(flat)] = encode(op(decode(px[ox]), decode(py[oy])));
+                  for (size_t d = rank; d-- > 0;) {
+                    if (++idx[d] < bi.shape[d]) {
+                      break;
+                    }
+                    idx[d] = 0;
+                  }
+                }
+              });
 }
 
 /// Allocating half-precision binary element-wise kernel.
@@ -279,14 +314,15 @@ void BinaryHalfElementwise(const char *op_name, const char *dtype_name, int32_t 
 /// directly. Pass ``nullptr`` (or omit the argument) to use inline
 /// allocation.
 template <typename Op>
-Tensor BinaryHalfElementwiseAlloc(const char *op_name, const char *dtype_name, int32_t dtype,
-                                  const Tensor &x, const Tensor &y, HalfDecodeFunc decode,
-                                  HalfEncodeFunc encode, Op op,
-                                  RawBufferAllocator *allocator = nullptr) {
+Tensor BinaryHalfElementwiseAlloc(
+    const char *op_name, const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y,
+    HalfDecodeFunc decode, HalfEncodeFunc encode, Op op, RawBufferAllocator *allocator = nullptr,
+    int64_t parallel_minimum_elements = std::numeric_limits<int64_t>::max()) {
   const BroadcastInfo bi = CheckBinaryBroadcast(op_name, dtype_name, dtype, x, y);
   const size_t n_bytes = static_cast<size_t>(bi.element_count) * sizeof(uint16_t);
   Tensor z = MakeOutputTensor(dtype, bi.shape, n_bytes, allocator);
-  BinaryHalfElementwise(op_name, dtype_name, dtype, x, y, z, decode, encode, op);
+  BinaryHalfElementwise(op_name, dtype_name, dtype, x, y, z, decode, encode, op,
+                        parallel_minimum_elements);
   return z;
 }
 

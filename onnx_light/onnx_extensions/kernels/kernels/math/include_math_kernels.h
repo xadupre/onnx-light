@@ -741,15 +741,25 @@ public:
 class Add : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Add";
+  explicit Add(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
+  KernelTuningKey TuningKey(int32_t element_type) const override;
+  void Configure(const KernelTuningParameters &parameters) override;
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  /// Returns the immutable configuration used by the execution path.
+  const tuning::ParallelTuning &tuning() const noexcept { return tuning_; }
 
   /// Element-wise binary kernel: the output buffer may alias an input buffer
   /// when that input is not broadcast-expanded (i.e. its shape equals the
   /// output shape).
   static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  tuning::ParallelTuning tuning_;
 };
 
 /// Element-wise subtraction with NumPy-style broadcasting.
@@ -771,15 +781,25 @@ public:
 class Mul : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Mul";
+  explicit Mul(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
+  KernelTuningKey TuningKey(int32_t element_type) const override;
+  void Configure(const KernelTuningParameters &parameters) override;
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  /// Returns the immutable configuration used by the execution path.
+  const tuning::ParallelTuning &tuning() const noexcept { return tuning_; }
 
   /// Element-wise binary kernel: the output buffer may alias an input buffer
   /// when that input is not broadcast-expanded (i.e. its shape equals the
   /// output shape).
   static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  tuning::ParallelTuning tuning_;
 };
 
 /// Element-wise parametric ReLU: ``y = x`` when ``x >= 0`` and

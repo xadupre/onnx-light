@@ -55,12 +55,22 @@ using ::onnx_light::core::runtime::OpsetId;
 class And : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:And";
+  explicit And(const KernelContext &ctx);
+  /// Registers the portable BOOL tuning schema.
+  static void RegisterTuningSchemas();
+  KernelTuningKey TuningKey(int32_t element_type) const override;
+  void Configure(const KernelTuningParameters &parameters) override;
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
+  /// Returns the immutable configuration used by the execution path.
+  const tuning::ParallelTuning &tuning() const noexcept { return tuning_; }
+
   static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  tuning::ParallelTuning tuning_;
 };
 
 /// Element-wise logical OR on BOOL tensors with multidirectional broadcasting.

@@ -5,7 +5,7 @@ Buffer-reuse arenas
 
 :Date: 2026-08
 
-**discussion**
+**implementation in progress**
 
 Objective
 +++++++++

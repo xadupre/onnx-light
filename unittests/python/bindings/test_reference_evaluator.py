@@ -31,6 +31,7 @@ from onnx_light.onnx_lib import TensorProto, helper, parser
 # The reference runtime is only available in the full build; skip this module on
 # a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
+runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 
 _ABS_ADD_MODEL_SRC = (
     '<ir_version: 10, opset_import: ["" : 18]>\n'
@@ -64,6 +65,53 @@ def _make_raw_data_constant_model():
 
 
 class TestReferenceEvaluator(ExtTestCase):
+    @unittest.expectedFailure
+    def test_allocator_output_remains_live_after_context_clear(self):
+        """Pins an exported allocator output across ``RuntimeContext.clear``."""
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        allocator = runtime.SimpleRawBufferAllocator(4)
+        evaluator = ReferenceEvaluator(model, allocator=allocator)
+
+        (output,) = evaluator.run(
+            None,
+            {
+                "x": np.array([-1.0, 2.0, -3.0], dtype=np.float32),
+                "z": np.array([10.0, 20.0, 30.0], dtype=np.float32),
+            },
+        )
+        self.assertIsNotNone(output.base)
+        self.assertEqual(allocator.allocated_count, 1)
+
+        evaluator._ctx.clear()
+
+        # The exported array must retain its allocation independently of the
+        # mutable tensor map. Step 2 introduces the handle that makes this pass.
+        self.assertEqual(allocator.allocated_count, 1)
+
+    @unittest.expectedFailure
+    def test_allocator_output_remains_live_during_subsequent_run(self):
+        """Pins the previous output while a subsequent run produces another."""
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        allocator = runtime.SimpleRawBufferAllocator(4)
+        evaluator = ReferenceEvaluator(model, allocator=allocator)
+        first_feeds = {
+            "x": np.array([-1.0, 2.0, -3.0], dtype=np.float32),
+            "z": np.array([10.0, 20.0, 30.0], dtype=np.float32),
+        }
+        second_feeds = {
+            "x": np.array([-4.0, 5.0, -6.0], dtype=np.float32),
+            "z": np.array([40.0, 50.0, 60.0], dtype=np.float32),
+        }
+
+        (first,) = evaluator.run(None, first_feeds)
+        (second,) = evaluator.run(None, second_feeds)
+
+        # Both arrays need distinct live allocations. This assertion precedes
+        # reading ``first`` so the known dangling pointer is never dereferenced.
+        self.assertEqual(allocator.allocated_count, 2)
+        np.testing.assert_array_equal(first, np.array([11.0, 22.0, 33.0], dtype=np.float32))
+        np.testing.assert_array_equal(second, np.array([44.0, 55.0, 66.0], dtype=np.float32))
+
     def test_metadata(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         sess = ReferenceEvaluator(model)

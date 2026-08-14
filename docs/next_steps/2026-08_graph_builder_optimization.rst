@@ -381,6 +381,9 @@ node's subgraphs are optimized in place, seeded with the values visible from the
 enclosing scope. The subgraph builders are already owned by ``GraphBuilder``
 (``GraphBuilder::Subgraphs``), so the optimizer runs on each of them
 with an inherited context of input, initializer and preceding node names.
+Each rewrite stores the stable nested-builder path from the root graph. Replay
+uses that path to route an ordered rewrite batch to the same subgraph rather
+than applying every record to the root builder.
 
 Statistics
 ++++++++++
@@ -389,6 +392,12 @@ Every match, apply and cleanup step appends a record (pattern name, iteration,
 instances, elapsed time). The records are returned from ``Optimize`` so callers
 can profile which patterns fire and how long each phase takes, as the Python
 ``statistics`` list does.
+
+The root report aggregates iteration, rewrite and per-pattern counters across
+the complete graph hierarchy. It also exposes a deterministic per-subgraph list
+containing the graph path, elapsed wall-clock time and recursive activity.
+Root phase timings exclude subgraph work; ``subgraph_optimization_time_ns``
+accounts for that work separately so ``TotalTimeNs`` does not double-count it.
 
 Logging and phase timing
 ++++++++++++++++++++++++
@@ -434,7 +443,8 @@ Implementation order
 6. Add logging with per-phase timing (match, rewrite, dead-branch removal,
    constant folding, subgraph optimization) reported at the end of ``Optimize``.
 7. Add constant folding of all-constant rewrites.
-8. Extend to subgraphs and add the statistics output.
+8. Extend to subgraphs and add the statistics output
+   (`PR #4425 <https://github.com/xadupre/onnx-light/pull/4425>`_).
 9. Document the core/extension boundary, registration and selection APIs,
    linking requirements, and a custom-pattern example.
 10. Port the pattern library incrementally, one pattern per change, each with a
@@ -449,3 +459,5 @@ Pull requests
 * `PR #4392 <https://github.com/xadupre/onnx-light/pull/4392>`_: pattern extension library.
 * `PR #4394 <https://github.com/xadupre/onnx-light/pull/4394>`_: match/apply loop and cleanup.
 * `PR #4396 <https://github.com/xadupre/onnx-light/pull/4396>`_: replay and phase-logging design.
+* `PR #4425 <https://github.com/xadupre/onnx-light/pull/4425>`_: recursive subgraph
+  optimization, replay paths, and aggregated statistics.

@@ -48,6 +48,24 @@ std::string PatternOptimizationStatistics::ToString() const {
   return os.str();
 }
 
+std::string SubgraphOptimizationStatistics::ToString() const {
+  std::ostringstream os;
+  os << "Subgraph(path=";
+  if (graph_path.empty()) {
+    os << "<root>";
+  } else {
+    for (std::size_t i = 0; i < graph_path.size(); ++i) {
+      if (i != 0) {
+        os << "/";
+      }
+      os << graph_path[i];
+    }
+  }
+  os << ", iterations=" << iterations << ", rewrites=" << rewrites
+     << ", elapsed_time_ns=" << elapsed_time_ns << ")";
+  return os.str();
+}
+
 int64_t OptimizationReport::TotalTimeNs() const noexcept {
   return matching_time_ns + rewriting_time_ns + cleanup_time_ns + constant_folding_time_ns +
          subgraph_optimization_time_ns;
@@ -66,6 +84,13 @@ std::string OptimizationReport::ToString() const {
     }
     os << patterns[i].ToString();
   }
+  os << "], subgraphs=[";
+  for (std::size_t i = 0; i < subgraphs.size(); ++i) {
+    if (i != 0) {
+      os << ", ";
+    }
+    os << subgraphs[i].ToString();
+  }
   os << "])";
   return os.str();
 }
@@ -73,7 +98,14 @@ std::string OptimizationReport::ToString() const {
 std::string LocalRewriting::ToString() const {
   std::ostringstream os;
   os << "LocalRewriting(pattern=" << (pattern == nullptr ? "<null>" : pattern->Name())
-     << ", matched_nodes=[";
+     << ", graph_path=[";
+  for (std::size_t i = 0; i < graph_path.size(); ++i) {
+    if (i != 0) {
+      os << ", ";
+    }
+    os << graph_path[i];
+  }
+  os << "], matched_nodes=[";
   for (std::size_t i = 0; i < matched_nodes.size(); ++i) {
     if (i != 0) {
       os << ", ";

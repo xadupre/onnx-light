@@ -648,7 +648,9 @@ private:
   // Converts node attributes from proto form to builder form: GRAPH/GRAPHS
   // attributes become ``*_ref`` STRING/STRINGS attributes that reference nested
   // subgraph builders.
-  utils::RepeatedProtoField<AttributeProto> ImportAttributes(const NodeProto &node);
+  utils::RepeatedProtoField<AttributeProto>
+  ImportAttributes(const NodeProto &node,
+                   const std::unordered_set<std::string> &excluded_inherited_names = {});
 
   // Materializes ``*_ref`` STRING/STRINGS attributes in ``node`` back to
   // GRAPH/GRAPHS attributes from the referenced nested builders.
@@ -690,6 +692,7 @@ private:
   std::vector<std::unique_ptr<GraphBuilder>> local_functions_;
   std::vector<std::unique_ptr<GraphBuilder>> subgraphs_;
   std::unordered_set<std::string> names_;
+  std::unordered_set<std::string> inherited_names_;
   std::unordered_map<std::string, int> opsets_;
   std::unordered_set<std::string> user_opsets_;
   Device device_ = Device::kUndefined;

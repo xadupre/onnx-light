@@ -45,6 +45,16 @@ void AddCast(core::builder::GraphBuilder &builder, const std::string &input,
   builder.MakeNode("Cast", {input}, {output}, "", "", attributes);
 }
 
+void AddSubgraphReference(core::builder::GraphBuilder &builder, const std::string &attribute_name,
+                          const std::string &subgraph_name, const std::string &output) {
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  AttributeProto &attribute = attributes.add();
+  attribute.set_name(attribute_name + "_ref");
+  attribute.set_type(AttributeProto::AttributeType::STRING);
+  attribute.set_s(subgraph_name);
+  builder.MakeNode("SubgraphCarrier", {}, {output}, "", "", attributes);
+}
+
 class ReplaceIdentityWithConstantAddPattern final : public core::builder::PatternOptimization {
 public:
   ReplaceIdentityWithConstantAddPattern()
@@ -212,7 +222,7 @@ TEST(PatternOptimization, OptimizeAppliesPatternAndCleanupPasses) {
   EXPECT_GE(rewrites[0].match_time_ns, 0);
   EXPECT_GE(rewrites[0].apply_time_ns, 0);
   EXPECT_EQ(rewrites[0].ToString(),
-            "LocalRewriting(pattern=CastCast, matched_nodes=[0, 1], "
+            "LocalRewriting(pattern=CastCast, graph_path=[], matched_nodes=[0, 1], "
             "added_nodes=[Cast(outputs=[y])], added_initializers=[], "
             "added_initializer_positions=[], removed_initializers=[], value_renames=[], "
             "insert_at=1, iteration=0, match_time_ns=" +
@@ -303,6 +313,104 @@ TEST(PatternOptimization, OptimizeReportsPhaseAndPatternTimings) {
                                       report.cleanup_time_ns + report.constant_folding_time_ns);
   EXPECT_NE(report.ToString().find("phases={matching:"), std::string::npos);
   EXPECT_NE(report.ToString().find("CastCast(attempts=3, matches=1"), std::string::npos);
+}
+
+TEST(PatternOptimization, OptimizesNestedSubgraphsAndReplaysByGraphPath) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
+  builder.MakeNode("Neg", {"x"}, {"captured"});
+
+  core::builder::GraphBuilder &body = builder.MakeSubgraph("body");
+  AddCast(body, "captured", "body_middle", TensorProto::DataType::FLOAT);
+  AddCast(body, "body_middle", "body_y", TensorProto::DataType::FLOAT);
+  body.MakeOutput("body_y");
+
+  core::builder::GraphBuilder &leaf = body.MakeSubgraph("leaf");
+  AddCast(leaf, "captured", "leaf_middle", TensorProto::DataType::FLOAT);
+  AddCast(leaf, "leaf_middle", "leaf_y", TensorProto::DataType::FLOAT);
+  leaf.MakeOutput("leaf_y");
+  AddSubgraphReference(body, "body", "leaf", "leaf_result");
+  body.MakeOutput("leaf_result");
+
+  AddSubgraphReference(builder, "body", "body", "body_result");
+  builder.MakeOutput("body_result");
+
+  ModelProto original;
+  *original.mutable_graph() = builder.BuildGraph();
+  OperatorSetIdProto *opset = original.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(21);
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::CastCastPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  core::builder::OptimizationReport report;
+  const std::vector<core::builder::LocalRewriting> rewrites = graph.Optimize(-1, &report);
+
+  ASSERT_EQ(rewrites.size(), 2u);
+  EXPECT_EQ(rewrites[0].graph_path, std::vector<std::string>({"body", "leaf"}));
+  EXPECT_EQ(rewrites[1].graph_path, std::vector<std::string>({"body"}));
+  EXPECT_EQ(rewrites[0].iteration, 0u);
+  EXPECT_EQ(rewrites[1].iteration, 1u);
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Neg");
+  ASSERT_EQ(builder.Subgraph("body").Nodes().size(), 2u);
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[0].op_type().value(), "Cast");
+  ASSERT_EQ(builder.Subgraph("body").Subgraph("leaf").Nodes().size(), 1u);
+  EXPECT_EQ(builder.Subgraph("body").Subgraph("leaf").Nodes()[0].op_type().value(), "Cast");
+
+  EXPECT_EQ(report.rewrites, 2u);
+  EXPECT_GT(report.subgraph_optimization_time_ns, 0);
+  ASSERT_EQ(report.patterns.size(), 1u);
+  EXPECT_EQ(report.patterns[0].matches, 2u);
+  ASSERT_EQ(report.subgraphs.size(), 2u);
+  EXPECT_EQ(report.subgraphs[0].graph_path, std::vector<std::string>({"body"}));
+  EXPECT_EQ(report.subgraphs[0].rewrites, 2u);
+  EXPECT_EQ(report.subgraphs[1].graph_path, std::vector<std::string>({"body", "leaf"}));
+  EXPECT_EQ(report.subgraphs[1].rewrites, 1u);
+  EXPECT_NE(report.ToString().find("Subgraph(path=body/leaf"), std::string::npos);
+  EXPECT_EQ(report.TotalTimeNs(), report.matching_time_ns + report.rewriting_time_ns +
+                                      report.cleanup_time_ns + report.constant_folding_time_ns +
+                                      report.subgraph_optimization_time_ns);
+
+  const GraphProto optimized = builder.BuildGraph();
+  const GraphProto replayed = core::builder::Replay(original, rewrites, SchemaLookup());
+  EXPECT_EQ(replayed.SerializeAsString(), optimized.SerializeAsString());
+}
+
+TEST(PatternOptimization, SubgraphPatternsSeeCapturedParentInitializers) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion(kDefaultOnnxDomain, 21);
+  builder.MakeInitializer(MakeInitializer<float>("a", {1}, {1.0f}));
+  builder.MakeInitializer(MakeInitializer<float>("b", {1}, {2.0f}));
+
+  core::builder::GraphBuilder &body = builder.MakeSubgraph("body");
+  body.MakeNode("Identity", {"a"}, {"body_y"});
+  body.MakeOutput("body_y");
+  AddSubgraphReference(builder, "body", "body", "body_result");
+  builder.MakeOutput("body_result");
+
+  ModelProto original;
+  *original.mutable_graph() = builder.BuildGraph();
+  OperatorSetIdProto *opset = original.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(21);
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<ReplaceIdentityWithConstantAddPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  const std::vector<core::builder::LocalRewriting> rewrites = graph.Optimize();
+
+  ASSERT_EQ(rewrites.size(), 1u);
+  EXPECT_EQ(rewrites[0].graph_path, std::vector<std::string>({"body"}));
+  ASSERT_EQ(builder.Subgraph("body").Nodes().size(), 1u);
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[0].op_type().value(), "Add");
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[0].input()[0].value(), "a");
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[0].input()[1].value(), "b");
+
+  const GraphProto optimized = builder.BuildGraph();
+  const GraphProto replayed = core::builder::Replay(original, rewrites, SchemaLookup());
+  EXPECT_EQ(replayed.SerializeAsString(), optimized.SerializeAsString());
 }
 
 TEST(PatternOptimization, OptimizeFoldsConstantReplacementAndReplaysInitializer) {

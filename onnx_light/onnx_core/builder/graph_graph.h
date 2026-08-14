@@ -188,10 +188,21 @@ private:
   // Reads the scalar value of the constant ``name`` as a double into ``out``,
   // or returns ``false`` when it cannot be read.
   bool ConstantScalarValue(const std::string &name, double &out) const;
+  bool IsVisibleBefore(const std::string &name, std::size_t position_limit) const;
+
+  GraphGraph(GraphBuilder &builder,
+             const std::vector<std::shared_ptr<PatternOptimization>> &patterns,
+             DoNotRemovePredicate do_not_remove, const GraphGraph *parent_graph,
+             std::size_t parent_position_limit);
+
+  std::vector<LocalRewriting> OptimizeImpl(int max_iterations, OptimizationReport *report,
+                                           const std::vector<std::string> &graph_path);
 
   GraphBuilder &builder_;
   std::vector<std::shared_ptr<PatternOptimization>> patterns_;
   DoNotRemovePredicate do_not_remove_;
+  const GraphGraph *parent_graph_ = nullptr;
+  std::size_t parent_position_limit_ = 0;
   // Value name -> producing node (mirrors Python ``predecessors_``).
   std::unordered_map<std::string, const NodeProto *> predecessors_;
   // Value name -> consuming nodes, deduplicated, in insertion order.

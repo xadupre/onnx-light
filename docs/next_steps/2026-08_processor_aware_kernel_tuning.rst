@@ -533,6 +533,26 @@ The selected source and complete resolved parameter set are exposed through
 runtime diagnostics. This makes a performance result reproducible without
 embedding machine-specific tuning in the ONNX model.
 
+Cold resolution and hot-path verification
++++++++++++++++++++++++++++++++++++++++++
+
+``RuntimeSession::tuning_resolution_statistics`` reports the one-time cost of
+capturing an immutable registry generation and resolving profiles for tunable
+kernels. ``KernelTuningRegistry::AccessCounts`` exposes monotonic snapshot and
+snapshot-lookup counters, including profile resolutions, for diagnostics: the
+first session run advances them, whereas every later run of that session must
+leave every counter unchanged.
+
+The standalone ``bench_kernel_tuning`` executable measures repeated cold
+snapshot capture and profile resolution separately from steady
+``RuntimeSession::Run`` calls. It fails instead of printing a successful result
+if a steady-state run accesses the registry:
+
+.. code-block:: bash
+
+    cmake --build build --target bench_kernel_tuning -j
+    ./build/bench_kernel_tuning -n 100000
+
 Non-goals
 +++++++++
 

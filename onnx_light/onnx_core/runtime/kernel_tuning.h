@@ -295,6 +295,15 @@ private:
 
 class KernelTuningRegistry;
 
+/** Counts cold-path accesses to one kernel tuning registry. */
+struct KernelTuningRegistryAccessCounts {
+  uint64_t snapshots = 0;
+  uint64_t lookups = 0;
+  uint64_t resolutions = 0;
+
+  bool operator==(const KernelTuningRegistryAccessCounts &) const = default;
+};
+
 /**
  * Holds one immutable generation of resolved kernel tuning parameters.
  *
@@ -392,6 +401,14 @@ public:
 
   /** Returns the current immutable registry generation. */
   KernelTuningRegistrySnapshot Snapshot() const noexcept;
+
+  /**
+   * Returns monotonic cold-path access counters for diagnostics and benchmarks.
+   *
+   * Kernel execution does not touch these counters because kernels receive
+   * their immutable typed configuration before their first run.
+   */
+  KernelTuningRegistryAccessCounts AccessCounts() const noexcept;
 
   /**
    * Publishes a validated batch and resets selected keys to portable defaults.

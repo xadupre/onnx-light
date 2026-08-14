@@ -1,15 +1,16 @@
 @echo off
-:: profile.bat -- build bench_parse_serialize or bench_load_file with RelWithDebInfo and run a
+:: profile.bat -- build a C++ benchmark with RelWithDebInfo and run a
 :: gprof/plain-run profile on Windows, or prepare an executable for Visual Studio.
 ::
 :: Usage (run from the repository root):
-::   benchmarks\profile.bat [gprof|run|vs] [bench_parse_serialize|bench_load_file] [--with-upstream-onnx] [extra bench flags]
+::   benchmarks\profile.bat [gprof|run|vs] [benchmark target] [--with-upstream-onnx] [extra bench flags]
 ::
 :: Examples:
 ::   benchmarks\profile.bat gprof  -n 20 -t 1
 ::   benchmarks\profile.bat run    -n 20 -t 1
 ::   benchmarks\profile.bat vs     -n 20 -t 1
 ::   benchmarks\profile.bat run bench_load_file -n 20 -t 1
+::   benchmarks\profile.bat run bench_kernel_tuning -n 100000
 ::   benchmarks\profile.bat run bench_load_file --with-upstream-onnx -n 20
 ::
 :: The default tool is gprof (requires MinGW/MSYS2 g++ with -pg support).
@@ -40,6 +41,12 @@ set "PARSE_START_ARG=2"
 if /I "%BENCH_TARGET%"=="bench_parse_serialize" (
     set "PARSE_START_ARG=3"
 ) else if /I "%BENCH_TARGET%"=="bench_load_file" (
+    set "PARSE_START_ARG=3"
+) else if /I "%BENCH_TARGET%"=="bench_save_file" (
+    set "PARSE_START_ARG=3"
+) else if /I "%BENCH_TARGET%"=="bench_graph_builder" (
+    set "PARSE_START_ARG=3"
+) else if /I "%BENCH_TARGET%"=="bench_kernel_tuning" (
     set "PARSE_START_ARG=3"
 ) else (
     set "BENCH_TARGET=bench_parse_serialize"

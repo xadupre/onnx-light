@@ -137,9 +137,21 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
 
   // Capture exactly one immutable registry generation after all factories have
   // run, then configure every tunable kernel from that generation.
+  tuning_resolution_statistics_ = {};
+  const auto snapshot_start = std::chrono::steady_clock::now();
   tuning_snapshot_ = GetKernelTuningRegistry().Snapshot();
+  tuning_resolution_statistics_.snapshot_duration_ns =
+      static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                std::chrono::steady_clock::now() - snapshot_start)
+                                .count());
   const CpuExecutionDescriptor tuning_execution{
       platform::GetCpuDescriptor(), static_cast<uint32_t>(parameters_.EffectiveNumThreads())};
+  struct PendingTuning {
+    PreparedKernel *kernel;
+    KernelTuningKey key;
+  };
+  std::vector<PendingTuning> pending_tuning;
+  pending_tuning.reserve(kernels_.size());
   for (const ExecuteAction &action : plan_.actions()) {
     if (action.kind() != ExecuteActionKind::kExecuteNode) {
       continue;
@@ -160,10 +172,26 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
     if (tuning_key.device == Device::kUndefined) {
       continue;
     }
-    const KernelTuningParameters *parameters =
-        tuning_snapshot_->Resolve(tuning_key, tuning_execution);
+    pending_tuning.push_back({&prepared, tuning_key});
+  }
+  tuning_resolution_statistics_.tunable_kernels = pending_tuning.size();
+  std::vector<const KernelTuningParameters *> resolved_parameters;
+  resolved_parameters.reserve(pending_tuning.size());
+  if (!pending_tuning.empty()) {
+    const auto resolution_start = std::chrono::steady_clock::now();
+    for (const PendingTuning &pending : pending_tuning) {
+      resolved_parameters.push_back(tuning_snapshot_->Resolve(pending.key, tuning_execution));
+    }
+    tuning_resolution_statistics_.resolution_duration_ns =
+        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                  std::chrono::steady_clock::now() - resolution_start)
+                                  .count());
+  }
+  for (size_t i = 0; i < pending_tuning.size(); ++i) {
+    const KernelTuningParameters *parameters = resolved_parameters[i];
     if (parameters != nullptr) {
-      prepared.instance->Configure(*parameters);
+      ++tuning_resolution_statistics_.resolved_profiles;
+      pending_tuning[i].kernel->instance->Configure(*parameters);
     }
   }
 

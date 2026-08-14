@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # profile.sh — build bench_parse_serialize, bench_load_file, bench_save_file or
-# bench_graph_builder with RelWithDebInfo and run a
+# bench_graph_builder or bench_kernel_tuning with RelWithDebInfo and run a
 # gprof/perf/valgrind profile.
 #
 # Usage (run from the repository root):
@@ -13,6 +13,7 @@
 #   bash benchmarks/profile.sh perf bench_load_file -n 20 -t 1
 #   bash benchmarks/profile.sh perf bench_save_file -n 20 -t 1
 #   bash benchmarks/profile.sh perf bench_graph_builder -n 5
+#   bash benchmarks/profile.sh perf bench_kernel_tuning -n 100000
 #   bash benchmarks/profile.sh perf bench_load_file --with-upstream-onnx -n 20
 #
 # The default tool is gprof.
@@ -37,7 +38,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_BASE="${REPO_ROOT}/build"
 BENCH_TARGET="bench_parse_serialize"
 
-if [[ "${1:-}" == "bench_parse_serialize" || "${1:-}" == "bench_load_file" || "${1:-}" == "bench_save_file" || "${1:-}" == "bench_graph_builder" ]]; then
+if [[ "${1:-}" == "bench_parse_serialize" || "${1:-}" == "bench_load_file" || "${1:-}" == "bench_save_file" || "${1:-}" == "bench_graph_builder" || "${1:-}" == "bench_kernel_tuning" ]]; then
     BENCH_TARGET="${1}"
     shift || true
 fi

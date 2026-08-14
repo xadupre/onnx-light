@@ -96,6 +96,15 @@ GraphGraph::GraphGraph(GraphBuilder &builder,
   Rebuild();
 }
 
+GraphGraph::GraphGraph(GraphBuilder &builder,
+                       const std::vector<std::shared_ptr<PatternOptimization>> &patterns,
+                       DoNotRemovePredicate do_not_remove, const GraphGraph *parent_graph,
+                       std::size_t parent_position_limit)
+    : builder_(builder), patterns_(patterns), do_not_remove_(std::move(do_not_remove)),
+      parent_graph_(parent_graph), parent_position_limit_(parent_position_limit) {
+  Rebuild();
+}
+
 void GraphGraph::Rebuild() {
   predecessors_.clear();
   successors_.clear();
@@ -127,6 +136,11 @@ void GraphGraph::Rebuild() {
 }
 
 std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter, OptimizationReport *report) {
+  return OptimizeImpl(max_iter, report, {});
+}
+
+std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report,
+                                                     const std::vector<std::string> &graph_path) {
   if (max_iter < -1) {
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   }
@@ -135,6 +149,60 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter, OptimizationRepor
     report->patterns.reserve(patterns_.size());
     for (const std::shared_ptr<PatternOptimization> &pattern : patterns_) {
       report->patterns.push_back(PatternOptimizationStatistics{.pattern_name = pattern->Name()});
+    }
+  }
+
+  std::vector<LocalRewriting> applied;
+  std::size_t rewrite_batch = 0;
+  std::unordered_set<GraphBuilder *> optimized_subgraphs;
+  const auto optimize_subgraph = [&](GraphBuilder &subgraph, std::size_t position_limit) {
+    std::vector<std::string> child_path = graph_path;
+    child_path.push_back(subgraph.name());
+    OptimizationReport child_report;
+    std::chrono::steady_clock::time_point subgraph_start;
+    if (report != nullptr) {
+      subgraph_start = std::chrono::steady_clock::now();
+    }
+    GraphGraph child_graph(subgraph, patterns_, do_not_remove_, this, position_limit);
+    std::vector<LocalRewriting> child_rewrites =
+        child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, child_path);
+
+    for (LocalRewriting &rewriting : child_rewrites) {
+      rewriting.iteration += rewrite_batch;
+    }
+    if (!child_rewrites.empty()) {
+      rewrite_batch = child_rewrites.back().iteration + 1;
+    }
+    applied.insert(applied.end(), std::make_move_iterator(child_rewrites.begin()),
+                   std::make_move_iterator(child_rewrites.end()));
+
+    if (report != nullptr) {
+      const int64_t elapsed_time_ns = ElapsedNanoseconds(subgraph_start);
+      report->iterations += child_report.iterations;
+      report->rewrites += child_report.rewrites;
+      report->subgraph_optimization_time_ns += elapsed_time_ns;
+      for (std::size_t i = 0; i < report->patterns.size(); ++i) {
+        report->patterns[i].attempts += child_report.patterns[i].attempts;
+        report->patterns[i].matches += child_report.patterns[i].matches;
+        report->patterns[i].match_time_ns += child_report.patterns[i].match_time_ns;
+        report->patterns[i].apply_time_ns += child_report.patterns[i].apply_time_ns;
+      }
+      report->subgraphs.push_back(
+          {child_path, child_report.iterations, child_report.rewrites, elapsed_time_ns});
+      report->subgraphs.insert(report->subgraphs.end(), child_report.subgraphs.begin(),
+                               child_report.subgraphs.end());
+    }
+  };
+  for (std::size_t position = 0; position < builder_.nodes_.size(); ++position) {
+    for (GraphBuilder *subgraph : builder_.ReferencedSubgraphs(builder_.nodes_[position])) {
+      if (optimized_subgraphs.insert(subgraph).second) {
+        optimize_subgraph(*subgraph, position);
+      }
+    }
+  }
+  for (const std::unique_ptr<GraphBuilder> &subgraph : builder_.subgraphs_) {
+    if (optimized_subgraphs.insert(subgraph.get()).second) {
+      optimize_subgraph(*subgraph, builder_.nodes_.size());
     }
   }
 
@@ -154,9 +222,7 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter, OptimizationRepor
         static_cast<int>(std::max<std::size_t>(builder_.nodes_.size(), 10) * priorities.size());
   }
 
-  std::vector<LocalRewriting> applied;
   std::size_t priority_index = 0;
-  std::size_t rewrite_batch = 0;
   for (int iteration = 0; iteration < max_iter; ++iteration) {
     if (report != nullptr) {
       ++report->iterations;
@@ -260,6 +326,7 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter, OptimizationRepor
         throw BuilderError("GraphGraph::Optimize: matched pattern has no owner.");
       }
       rewriting.pattern = *pattern_owner;
+      rewriting.graph_path = graph_path;
       rewriting.insert_at = static_cast<std::ptrdiff_t>(position);
       rewriting.iteration = rewrite_batch;
       rewriting.match_time_ns = timed_match.match_time_ns;
@@ -373,7 +440,11 @@ std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter, OptimizationRepor
     if (report != nullptr) {
       cleanup_start = std::chrono::steady_clock::now();
     }
+    const std::size_t rewrites_before_cleanup = applied.size();
     const std::size_t cleaned = Cleanup(applied, rewrite_batch);
+    for (std::size_t i = rewrites_before_cleanup; i < applied.size(); ++i) {
+      applied[i].graph_path = graph_path;
+    }
     if (report != nullptr) {
       report->cleanup_time_ns += ElapsedNanoseconds(cleanup_start);
       report->rewrites = applied.size();
@@ -608,7 +679,6 @@ void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites
 GraphProto Replay(const ModelProto &model, const std::vector<LocalRewriting> &rewrites,
                   GraphBuilder::SchemaLookupFn schema_lookup) {
   GraphBuilder builder(model, std::move(schema_lookup));
-  GraphGraph graph(builder, std::vector<std::unique_ptr<PatternOptimization>>{});
 
   std::size_t next_iteration = 0;
   std::size_t begin = 0;
@@ -619,8 +689,19 @@ GraphProto Replay(const ModelProto &model, const std::vector<LocalRewriting> &re
     }
     std::size_t end = begin + 1;
     while (end < rewrites.size() && rewrites[end].iteration == iteration) {
+      if (rewrites[end].graph_path != rewrites[begin].graph_path) {
+        throw BuilderError("Replay: one optimization iteration cannot span multiple graphs.");
+      }
       ++end;
     }
+    GraphBuilder *target = &builder;
+    for (const std::string &name : rewrites[begin].graph_path) {
+      if (!target->HasSubgraph(name)) {
+        throw BuilderError("Replay: unknown subgraph '" + name + "'.");
+      }
+      target = &target->Subgraph(name);
+    }
+    GraphGraph graph(*target, std::vector<std::unique_ptr<PatternOptimization>>{});
     graph.ApplyRewritingBatch(rewrites, begin, end);
     next_iteration = iteration + 1;
     begin = end;
@@ -733,24 +814,33 @@ std::size_t GraphGraph::Position(const NodeProto &node) const {
   return it->second;
 }
 
-bool GraphGraph::HasShape(const std::string &name) const { return builder_.HasShape(name); }
+bool GraphGraph::HasShape(const std::string &name) const {
+  return builder_.HasShape(name) || (parent_graph_ != nullptr &&
+                                     parent_graph_->IsVisibleBefore(name, parent_position_limit_) &&
+                                     parent_graph_->HasShape(name));
+}
 
 const SymTensor &GraphGraph::GetShape(const std::string &name) const {
+  if (!builder_.HasShape(name) && parent_graph_ != nullptr &&
+      parent_graph_->IsVisibleBefore(name, parent_position_limit_)) {
+    return parent_graph_->GetShape(name);
+  }
   return builder_.GetShape(name);
 }
 
 bool GraphGraph::HasType(const std::string &name) const {
-  return builder_.HasShape(name) && builder_.GetShape(name).Dtype() != TensorType::kUndefined;
+  return HasShape(name) && GetShape(name).Dtype() != TensorType::kUndefined;
 }
 
-TensorType GraphGraph::GetType(const std::string &name) const {
-  return builder_.GetShape(name).Dtype();
-}
+TensorType GraphGraph::GetType(const std::string &name) const { return GetShape(name).Dtype(); }
 
 bool GraphGraph::IsConstant(const std::string &name) const {
   return initializers_.find(name) != initializers_.end() ||
          computed_constants_.find(name) != computed_constants_.end() ||
-         builder_.Compute().IsConstantValue(name);
+         builder_.Compute().IsConstantValue(name) ||
+         (parent_graph_ != nullptr &&
+          parent_graph_->IsVisibleBefore(name, parent_position_limit_) &&
+          parent_graph_->IsConstant(name));
 }
 
 const TensorProto *GraphGraph::GetComputedConstant(const std::string &name) const {
@@ -769,7 +859,14 @@ const TensorProto *GraphGraph::GetComputedConstant(const std::string &name) cons
       return &value->t();
     }
   }
-  return nullptr;
+  return parent_graph_ == nullptr || !parent_graph_->IsVisibleBefore(name, parent_position_limit_)
+             ? nullptr
+             : parent_graph_->GetComputedConstant(name);
+}
+
+bool GraphGraph::IsVisibleBefore(const std::string &name, std::size_t position_limit) const {
+  const NodeProto *producer = NodeBefore(name);
+  return producer == nullptr || Position(*producer) < position_limit;
 }
 
 void GraphGraph::SetComputedConstant(const std::string &name, TensorProto value) {

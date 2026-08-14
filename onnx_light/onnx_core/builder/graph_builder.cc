@@ -153,7 +153,7 @@ int GraphBuilder::OpsetVersion(const std::string &domain) const {
 // ── Name management ────────────────────────────────────────────────────
 
 bool GraphBuilder::HasName(const std::string &name) const noexcept {
-  return names_.find(name) != names_.end();
+  return names_.find(name) != names_.end() || inherited_names_.find(name) != inherited_names_.end();
 }
 
 const std::string &GraphBuilder::ReserveName(const std::string &name) {
@@ -309,7 +309,9 @@ bool GraphBuilder::NodeCarriesSubgraph(const NodeProto &node) {
   return false;
 }
 
-utils::RepeatedProtoField<AttributeProto> GraphBuilder::ImportAttributes(const NodeProto &node) {
+utils::RepeatedProtoField<AttributeProto>
+GraphBuilder::ImportAttributes(const NodeProto &node,
+                               const std::unordered_set<std::string> &excluded_inherited_names) {
   const auto has_graph_content = [](const GraphProto &graph) {
     return !graph.name().empty() || graph.input().size() > 0 || graph.output().size() > 0 ||
            graph.node().size() > 0 || graph.initializer().size() > 0 ||
@@ -335,6 +337,9 @@ utils::RepeatedProtoField<AttributeProto> GraphBuilder::ImportAttributes(const N
         subgraph_name = base + "_" + std::to_string(suffix++);
       }
       GraphBuilder &subgraph = MakeSubgraph(subgraph_name);
+      for (const std::string &name : excluded_inherited_names) {
+        subgraph.inherited_names_.erase(name);
+      }
       subgraph.ImportGraph(graph);
       AttributeProto ref;
       ref.set_name(attribute.name().value() + "_ref");
@@ -361,6 +366,9 @@ utils::RepeatedProtoField<AttributeProto> GraphBuilder::ImportAttributes(const N
           subgraph_name = base + "_" + std::to_string(suffix++);
         }
         GraphBuilder &subgraph = MakeSubgraph(subgraph_name);
+        for (const std::string &name : excluded_inherited_names) {
+          subgraph.inherited_names_.erase(name);
+        }
         subgraph.ImportGraph(graph);
         refs.add_strings(subgraph_name);
       }
@@ -589,8 +597,10 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   for (const AttributeProto &attribute : attributes) {
     attribute_source.add_attribute(attribute);
   }
+  const std::unordered_set<std::string> excluded_inherited_names(resolved_outputs.begin(),
+                                                                 resolved_outputs.end());
   const utils::RepeatedProtoField<AttributeProto> normalized_attributes =
-      ImportAttributes(attribute_source);
+      ImportAttributes(attribute_source, excluded_inherited_names);
   for (const AttributeProto &attribute : normalized_attributes) {
     node.add_attribute(attribute);
   }
@@ -1618,6 +1628,12 @@ GraphBuilder &GraphBuilder::MakeSubgraph(const std::string &name) {
   auto child = std::make_unique<GraphBuilder>(name, schema_lookup_);
   for (const auto &entry : opsets_) {
     child->SetOpsetVersion(entry.first, entry.second);
+  }
+  child->inherited_names_ = inherited_names_;
+  child->inherited_names_.insert(names_.begin(), names_.end());
+  child->inherited_names_.erase(name);
+  for (const auto &[value_name, tensor] : Shapes().Tensors()) {
+    child->SeedShape(value_name, tensor);
   }
   GraphBuilder &ref = *child;
   subgraphs_.push_back(std::move(child));

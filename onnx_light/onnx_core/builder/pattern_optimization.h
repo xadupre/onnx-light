@@ -36,24 +36,41 @@ struct PatternOptimizationStatistics {
   std::string ToString() const;
 };
 
+/// Activity and elapsed time for one recursively optimized subgraph.
+struct SubgraphOptimizationStatistics {
+  /// Nested builder path from the root graph.
+  std::vector<std::string> graph_path;
+  /// Number of optimization iterations executed in this subgraph and its children.
+  std::size_t iterations = 0;
+  /// Number of rewrites applied in this subgraph and its children.
+  std::size_t rewrites = 0;
+  /// Total elapsed optimization time for this subgraph, in nanoseconds.
+  int64_t elapsed_time_ns = 0;
+
+  /// Returns a concise summary of these statistics.
+  std::string ToString() const;
+};
+
 /// Optional timing report populated by :cpp:func:`GraphGraph::Optimize`.
 struct OptimizationReport {
   /// Number of optimization iterations executed.
   std::size_t iterations = 0;
   /// Number of local rewrites applied.
   std::size_t rewrites = 0;
-  /// Total time spent matching candidate nodes, in nanoseconds.
+  /// Time spent matching candidates in this graph, excluding subgraphs.
   int64_t matching_time_ns = 0;
-  /// Total time spent applying matches and rebuilding nodes, in nanoseconds.
+  /// Time spent applying matches and rebuilding this graph, excluding subgraphs.
   int64_t rewriting_time_ns = 0;
-  /// Total time spent in graph cleanup passes, in nanoseconds.
+  /// Time spent in cleanup passes for this graph, excluding subgraphs.
   int64_t cleanup_time_ns = 0;
-  /// Total time spent folding all-constant replacement nodes, in nanoseconds.
+  /// Time spent folding replacements in this graph, excluding subgraphs.
   int64_t constant_folding_time_ns = 0;
-  /// Reserved for recursive subgraph optimization added by a later step.
+  /// Total wall-clock time spent recursively optimizing subgraphs.
   int64_t subgraph_optimization_time_ns = 0;
-  /// Activity and timing counters in pattern evaluation order.
+  /// Aggregated root and subgraph counters in pattern evaluation order.
   std::vector<PatternOptimizationStatistics> patterns;
+  /// Flat, deterministic list of recursively optimized subgraphs.
+  std::vector<SubgraphOptimizationStatistics> subgraphs;
 
   /// Returns the sum of all phase durations, in nanoseconds.
   int64_t TotalTimeNs() const noexcept;
@@ -66,6 +83,8 @@ struct OptimizationReport {
 struct LocalRewriting {
   /// Shared link to the pattern that produced the rewrite.
   std::shared_ptr<const PatternOptimization> pattern;
+  /// Nested builder path from the root graph; empty means the root graph.
+  std::vector<std::string> graph_path;
   /**
    * Positions of the nodes selected by the match.
    *

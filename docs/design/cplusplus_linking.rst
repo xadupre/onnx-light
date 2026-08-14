@@ -212,9 +212,21 @@ When the standalone shape-inference dispatch is needed without the full
     find_package(onnx_light REQUIRED)
     target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_shape)
 
-The generic graph optimizer and custom-pattern registry are part of
-``onnx_light::lib_onnx_core``. To use the standard ONNX rewrite patterns, link
-the extension library and register its patterns explicitly:
+.. _l-design-cpp-linking-patterns:
+
+Registering and selecting graph patterns
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Pattern integration has two independent choices: link
+``lib_onnx_patterns`` and register the standard ONNX rewrites, or link only
+``lib_onnx_core`` and provide application-specific rewrites.
+
+Standard ONNX patterns
+++++++++++++++++++++++
+
+The generic graph optimizer and registry are part of ``lib_onnx_core``. The
+concrete ONNX rewrites live in the optional ``lib_onnx_patterns`` extension.
+Registration is explicit and idempotent:
 
 .. code-block:: cmake
 
@@ -223,15 +235,72 @@ the extension library and register its patterns explicitly:
 
 .. code-block:: cpp
 
+    #include "onnx_core/builder/graph_graph.h"
     #include "onnx_core/builder/pattern_registry.h"
     #include "onnx_extensions/patterns/dispatch_table.h"
 
     onnx_patterns::RegisterPatterns();
-    auto patterns = core::builder::CreateRegisteredPatterns();
+    core::builder::GraphGraph optimizer(builder);
+    optimizer.Optimize();
 
-Applications that provide only custom patterns can instead link
-``onnx_light::lib_onnx_core`` and call
-``core::builder::RegisterPattern`` directly.
+``GraphGraph(builder)`` instantiates every registered factory. Registration
+order is preserved by the registry, then the optimizer evaluates patterns in
+ascending ``priority`` order. Names are stable, non-empty, and unique;
+``RegisterPattern`` throws ``PatternRegistrationError`` for invalid or
+duplicate registrations.
+
+To inspect or filter the standard set, create it explicitly before constructing
+the optimizer:
+
+.. code-block:: cpp
+
+    onnx_patterns::RegisterPatterns();
+    const auto names = core::builder::RegisteredPatternNames();
+    auto patterns = core::builder::CreateRegisteredPatterns();
+    std::erase_if(patterns, [](const auto &pattern) {
+      return pattern->Name() != "CastCast";
+    });
+    core::builder::GraphGraph optimizer(builder, std::move(patterns));
+    optimizer.Optimize();
+
+Custom patterns
++++++++++++++++
+
+Applications that provide only custom rewrites link
+``onnx_light::lib_onnx_core``; they do not need ``lib_onnx_patterns``:
+
+.. code-block:: cmake
+
+    find_package(onnx_light REQUIRED)
+    target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_core)
+
+Derive from ``PatternOptimization`` and implement ``FastOpType``, ``Match``,
+and ``Apply``. Passing instances directly keeps selection local to one
+optimizer:
+
+.. code-block:: cpp
+
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<MyPattern>());
+    core::builder::GraphGraph optimizer(builder, std::move(patterns));
+    optimizer.Optimize();
+
+Alternatively, register a factory once to make the pattern available to
+default ``GraphGraph`` instances:
+
+.. code-block:: cpp
+
+    core::builder::RegisterPattern(
+        "my_extension.MyPattern",
+        []() { return std::make_unique<MyPattern>(); });
+    core::builder::GraphGraph optimizer(builder);
+    optimizer.Optimize();
+
+``examples/register_custom_pattern`` contains a complete custom pattern, both
+selection modes, and standalone CMake files. Its ``build.sh`` and ``build.bat``
+scripts first install the current source tree and then build against the
+exported ``onnx_light::lib_onnx_core`` target. Inside the source tree, the
+equivalent non-exported target name is ``lib_onnx_core``.
 
 To evaluate ONNX nodes / graphs / models in-process using the bundled C++
 **reference implementation** of the ONNX operators (runtime

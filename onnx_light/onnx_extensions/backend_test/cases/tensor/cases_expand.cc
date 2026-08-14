@@ -49,7 +49,7 @@ void RegisterExpandCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeExpandNode();
     Expect(registry, std::move(node), "test_cc_expand_dim_changed_benchmark", {opset}, {4096, 3},
            {2 * 4096 * 512}, [expand_kernel]() -> IoData {
-             Tensor input = Tensor::FromFloat("", {4096, 1}, Randn<float>({4096, 1}, 2001));
+             Tensor input = RandnTensor(DataType::FLOAT, {4096, 1}, 2001);
              Tensor shape = MakeShapeTensor({2, 4096, 512});
              Tensor output = expand_kernel(input, shape);
              return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};

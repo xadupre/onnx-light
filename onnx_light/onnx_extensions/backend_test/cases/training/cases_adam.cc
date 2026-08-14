@@ -71,14 +71,10 @@ void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode) {
            [adam, alpha, beta, epsilon, norm_coefficient, norm_coefficient_post]() -> IoData {
              Tensor R = Tensor::FromFloat("", {}, {0.1f});
              Tensor T = Tensor::FromInt64("", {}, {0});
-             Tensor X = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
-             Tensor G = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
-             Tensor V = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 987654323ULL));
-             Tensor H = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 987654324ULL));
+             Tensor X = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654321ULL);
+             Tensor G = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654322ULL);
+             Tensor V = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654323ULL);
+             Tensor H = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654324ULL);
              std::vector<Tensor> outs = adam(R, T, {X}, {G}, {V}, {H}, alpha, beta, epsilon,
                                              norm_coefficient, norm_coefficient_post);
              return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(V),

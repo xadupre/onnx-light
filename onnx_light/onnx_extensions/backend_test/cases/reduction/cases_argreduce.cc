@@ -134,8 +134,7 @@ void RegisterArgMaxCases(std::vector<TestCase> &registry, TestMode mode) {
 
     Expect(registry, std::move(node), "test_cc_argmax_no_keepdims_example_benchmark", {opset},
            {1024 * 1024}, {1024}, [arg_kernel]() -> IoData {
-             Tensor data =
-                 Tensor::FromFloat("", {1024, 1024}, Randn<float>({1024, 1024}, /*seed=*/9801));
+             Tensor data = RandnTensor(DataType::FLOAT, {1024, 1024}, /*seed=*/9801);
              Tensor result =
                  arg_kernel(data, /*axis=*/1, /*keepdims=*/false, /*select_last_index=*/false);
              return IoData{{std::move(data)}, {std::move(result)}};
@@ -162,8 +161,7 @@ void RegisterArgMinCases(std::vector<TestCase> &registry, TestMode mode) {
 
     Expect(registry, std::move(node), "test_cc_argmin_no_keepdims_example_benchmark", {opset},
            {1024 * 1024}, {1024}, [arg_kernel]() -> IoData {
-             Tensor data =
-                 Tensor::FromFloat("", {1024, 1024}, Randn<float>({1024, 1024}, /*seed=*/9802));
+             Tensor data = RandnTensor(DataType::FLOAT, {1024, 1024}, /*seed=*/9802);
              Tensor result =
                  arg_kernel(data, /*axis=*/1, /*keepdims=*/false, /*select_last_index=*/false);
              return IoData{{std::move(data)}, {std::move(result)}};

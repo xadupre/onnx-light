@@ -292,7 +292,7 @@ void RegisterOptionalHasElementEmptyCase(const std::string &name, bool with_empt
 void RegisterOptionalGetElementCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> big_shape = {512, 512};
-    Tensor input = Tensor::FromFloat("", big_shape, Randn<float>(big_shape, 4101));
+    Tensor input = RandnTensor(DataType::FLOAT, big_shape, 4101);
     const OpsetId opset = DefaultOpset(18);
     const KernelContext ctx{opset};
     Tensor output = onnx_kernels::kernel::OptionalGetElement(ctx)(input);
@@ -373,7 +373,7 @@ void RegisterOptionalGetElementCases(std::vector<TestCase> &registry, TestMode m
 void RegisterOptionalHasElementCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> big_shape = {512, 512};
-    Tensor input = Tensor::FromFloat("", big_shape, Randn<float>(big_shape, 4201));
+    Tensor input = RandnTensor(DataType::FLOAT, big_shape, 4201);
     const OpsetId opset = DefaultOpset(18);
     const KernelContext ctx{opset};
     Tensor output = onnx_kernels::kernel::OptionalHasElement(ctx)(input);

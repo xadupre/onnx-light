@@ -18,7 +18,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
 Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
-  return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
+  return RandnTensor(DataType::FLOAT, shape, seed);
 }
 
 } // namespace
@@ -43,8 +43,8 @@ void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = 1024 * 4096;
     Expect(registry, std::move(node), "test_cc_greater_benchmark", {opset}, {count, count}, {count},
            [greater_kernel, shape]() -> IoData {
-             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9201));
-             Tensor y = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9202));
+             Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/9201);
+             Tensor y = RandnTensor(DataType::FLOAT, shape, /*seed=*/9202);
              Tensor z = greater_kernel(x, y);
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
@@ -111,17 +111,15 @@ void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
        }},
       {"test_greater_int8",
        [=]() -> IoData {
-         auto inputs_0 = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/31));
-         auto inputs_1 = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/32));
+         auto inputs_0 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/31);
+         auto inputs_1 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/32);
          Tensor z = greater_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_greater_int16",
        [=]() -> IoData {
-         auto inputs_0 =
-             Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/33));
-         auto inputs_1 =
-             Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/34));
+         auto inputs_0 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/33);
+         auto inputs_1 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/34);
          Tensor z = greater_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},

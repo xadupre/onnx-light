@@ -40,9 +40,9 @@ void RegisterGroupNormalizationCases(std::vector<TestCase> &registry, TestMode m
     constexpr int64_t x_count = N * C * H * W;
     Expect(registry, std::move(node), "test_cc_group_normalization_example_benchmark", {opset},
            {x_count, C, C}, {x_count}, [groupnorm_kernel]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {N, C, H, W}, Randn<float>({N, C, H, W}, 1901));
-             Tensor scale = Tensor::FromFloat("", {C}, Randn<float>({C}, 1902));
-             Tensor bias = Tensor::FromFloat("", {C}, Randn<float>({C}, 1903));
+             Tensor x = RandnTensor(DataType::FLOAT, {N, C, H, W}, 1901);
+             Tensor scale = RandnTensor(DataType::FLOAT, {C}, 1902);
+             Tensor bias = RandnTensor(DataType::FLOAT, {C}, 1903);
              Tensor y = groupnorm_kernel(x, scale, bias, /*num_groups=*/2);
              return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
            });

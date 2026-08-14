@@ -39,8 +39,7 @@ void RegisterSpaceToDepthCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeSpaceToDepthNode(2);
     Expect(registry, std::move(node), "test_cc_spacetodepth_example_benchmark", {opset}, {4194304},
            {4194304}, [s2d]() -> IoData {
-             Tensor input =
-                 Tensor::FromFloat("", {1, 2, 1024, 2048}, Randn<float>({1, 2, 1024, 2048}, 2001));
+             Tensor input = RandnTensor(DataType::FLOAT, {1, 2, 1024, 2048}, 2001);
              onnx_kernels::kernel::SpaceToDepth::Attributes attrs;
              attrs.blocksize = 2;
              Tensor output = s2d(input, attrs);

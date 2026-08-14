@@ -43,8 +43,7 @@ void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeDepthToSpaceNode(2, "DCR");
     Expect(registry, std::move(node), "test_cc_depthtospace_dcr_benchmark", {opset},
            {1 * 8 * 512 * 1024}, {1 * 8 * 512 * 1024}, [d2s]() -> IoData {
-             Tensor input =
-                 Tensor::FromFloat("", {1, 8, 512, 1024}, Randn<float>({1, 8, 512, 1024}, 2001));
+             Tensor input = RandnTensor(DataType::FLOAT, {1, 8, 512, 1024}, 2001);
              onnx_kernels::kernel::DepthToSpace::Attributes attrs;
              attrs.blocksize = 2;
              attrs.mode = "DCR";

@@ -118,7 +118,7 @@ void RegisterTreeEnsembleCases(std::vector<TestCase> &registry, TestMode mode) {
 
     Expect(registry, std::move(node), "test_cc_treeensemble_single_tree_float_benchmark",
            {default_opset, opset}, {8192}, {8192}, [tree_ens]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {8192, 1}, Randn<float>({8192, 1}, 2741));
+             Tensor x = RandnTensor(DataType::FLOAT, {8192, 1}, 2741);
              Tensor y = tree_ens.operator()<float>(x, /*n_targets=*/1, /*aggregate_function=*/1,
                                                    /*post_transform=*/0);
              return IoData{{std::move(x)}, {std::move(y)}};

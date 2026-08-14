@@ -205,8 +205,7 @@ void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry, TestMode mod
     Expect(registry, std::move(node), "test_cc_randomnormallike_benchmark", {opset},
            {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
            [random_normal_like_kernel]() -> IoData {
-             Tensor x = Tensor::FromFloat("x", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+             Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654321ULL);
              Tensor y = random_normal_like_kernel(x);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -281,8 +280,7 @@ void RegisterRandomUniformLikeCases(std::vector<TestCase> &registry, TestMode mo
     Expect(registry, std::move(node), "test_cc_randomuniformlike_benchmark", {opset},
            {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
            [random_uniform_like_kernel]() -> IoData {
-             Tensor x = Tensor::FromFloat("x", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
+             Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654322ULL);
              Tensor y = random_uniform_like_kernel(x);
              return IoData{{std::move(x)}, {std::move(y)}};
            });

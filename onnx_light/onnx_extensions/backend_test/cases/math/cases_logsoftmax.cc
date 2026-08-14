@@ -27,7 +27,7 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = 2048 * 2048;
     Expect(registry, std::move(node), "test_cc_logsoftmax_benchmark", {opset}, {count}, {count},
            [logsoftmax_kernel, shape]() -> IoData {
-             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 432));
+             Tensor x = RandnTensor(DataType::FLOAT, shape, 432);
              Tensor y = logsoftmax_kernel(x, 1);
              return IoData{{std::move(x)}, {std::move(y)}};
            });

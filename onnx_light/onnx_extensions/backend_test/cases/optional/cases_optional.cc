@@ -52,7 +52,7 @@ void RegisterOptionalCases(std::vector<TestCase> &registry, TestMode mode) {
 
   Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
     Tensor input = benchmark
-                       ? Tensor::FromFloat("", shape, Randn<float>(shape, 4001))
+                       ? RandnTensor(DataType::FLOAT, shape, 4001)
                        : Tensor::FromFloat("", shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
     Tensor output = onnx_kernels::kernel::Optional(ctx)(input);
     return IoData{{std::move(input)}, {std::move(output)}};

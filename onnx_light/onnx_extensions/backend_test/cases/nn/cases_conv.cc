@@ -46,9 +46,8 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t y_count = 1 * 32 * 126 * 126;
     Expect(registry, std::move(node), "test_cc_basic_conv_without_padding_benchmark", {opset},
            {x_count, w_count}, {y_count}, [conv]() -> IoData {
-             Tensor X =
-                 Tensor::FromFloat("X", {1, 32, 128, 128}, Randn<float>({1, 32, 128, 128}, 1001));
-             Tensor W = Tensor::FromFloat("W", {32, 32, 3, 3}, Randn<float>({32, 32, 3, 3}, 1002));
+             Tensor X = RandnTensor(DataType::FLOAT, {1, 32, 128, 128}, 1001);
+             Tensor W = RandnTensor(DataType::FLOAT, {32, 32, 3, 3}, 1002);
              Tensor B;
              onnx_kernels::kernel::Conv::Attributes attrs;
              attrs.kernel_shape = {3, 3};

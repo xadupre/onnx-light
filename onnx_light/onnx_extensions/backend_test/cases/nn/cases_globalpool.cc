@@ -35,8 +35,7 @@ void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry, TestMode mo
     constexpr int64_t out_count = 1 * 64 * 1 * 1;
     Expect(registry, std::move(node), "test_cc_globalaveragepool_benchmark", {opset}, {in_count},
            {out_count}, [kernel]() -> IoData {
-             Tensor x =
-                 Tensor::FromFloat("", {1, 64, 128, 128}, Randn<float>({1, 64, 128, 128}, 1801));
+             Tensor x = RandnTensor(DataType::FLOAT, {1, 64, 128, 128}, 1801);
              Tensor y = kernel(x);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -101,8 +100,7 @@ void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) 
     constexpr int64_t out_count = 1 * 64 * 1 * 1;
     Expect(registry, std::move(node), "test_cc_globalmaxpool_benchmark", {opset}, {in_count},
            {out_count}, [kernel]() -> IoData {
-             Tensor x =
-                 Tensor::FromFloat("", {1, 64, 128, 128}, Randn<float>({1, 64, 128, 128}, 1802));
+             Tensor x = RandnTensor(DataType::FLOAT, {1, 64, 128, 128}, 1802);
              Tensor y = kernel(x);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -169,8 +167,7 @@ void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t out_count = 1 * 64 * 1 * 1;
     Expect(registry, std::move(node), "test_cc_globallppool_lp1_benchmark", {opset}, {in_count},
            {out_count}, [kernel]() -> IoData {
-             Tensor x =
-                 Tensor::FromFloat("", {1, 64, 128, 128}, Randn<float>({1, 64, 128, 128}, 1803));
+             Tensor x = RandnTensor(DataType::FLOAT, {1, 64, 128, 128}, 1803);
              Tensor y = kernel(x, /*p=*/1);
              return IoData{{std::move(x)}, {std::move(y)}};
            });

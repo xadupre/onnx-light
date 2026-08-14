@@ -18,7 +18,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
 Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
-  return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
+  return RandnTensor(DataType::FLOAT, shape, seed);
 }
 
 } // namespace
@@ -103,35 +103,29 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
        }},
       {"test_mul_int8",
        [=]() -> IoData {
-         auto inputs_0 = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/41));
-         auto inputs_1 = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/42));
+         auto inputs_0 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/41);
+         auto inputs_1 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/42);
          Tensor z = mul_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_mul_int16",
        [=]() -> IoData {
-         auto inputs_0 =
-             Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/43));
-         auto inputs_1 =
-             Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/44));
+         auto inputs_0 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/43);
+         auto inputs_1 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/44);
          Tensor z = mul_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_mul_int32",
        [=]() -> IoData {
-         auto inputs_0 =
-             Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/153));
-         auto inputs_1 =
-             Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/154));
+         auto inputs_0 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/153);
+         auto inputs_1 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/154);
          Tensor z = mul_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_mul_int64",
        [=]() -> IoData {
-         auto inputs_0 =
-             Tensor::FromInt64("", {3, 4, 5}, RandnInt<int64_t>({3, 4, 5}, /*seed=*/155));
-         auto inputs_1 =
-             Tensor::FromInt64("", {3, 4, 5}, RandnInt<int64_t>({3, 4, 5}, /*seed=*/156));
+         auto inputs_0 = RandnTensor(DataType::INT64, {3, 4, 5}, /*seed=*/155);
+         auto inputs_1 = RandnTensor(DataType::INT64, {3, 4, 5}, /*seed=*/156);
          Tensor z = mul_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},

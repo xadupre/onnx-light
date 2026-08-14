@@ -36,8 +36,8 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = 1024 * 4096;
     Expect(registry, std::move(node), "test_cc_equal_benchmark", {opset}, {count, count}, {count},
            [equal_kernel, shape]() -> IoData {
-             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9201));
-             Tensor y = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9202));
+             Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/9201);
+             Tensor y = RandnTensor(DataType::FLOAT, shape, /*seed=*/9202);
              Tensor z = equal_kernel(x, y);
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
@@ -97,26 +97,22 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
       // From Equal.export():
       {"test_equal",
        [=]() -> IoData {
-         auto inputs_0 =
-             Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/51));
-         auto inputs_1 =
-             Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/52));
+         auto inputs_0 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/51);
+         auto inputs_1 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/52);
          Tensor z = equal_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_equal_int8",
        [=]() -> IoData {
-         auto inputs_0 = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/53));
-         auto inputs_1 = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/54));
+         auto inputs_0 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/53);
+         auto inputs_1 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/54);
          Tensor z = equal_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_equal_int16",
        [=]() -> IoData {
-         auto inputs_0 =
-             Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/55));
-         auto inputs_1 =
-             Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/56));
+         auto inputs_0 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/55);
+         auto inputs_1 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/56);
          Tensor z = equal_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
@@ -159,9 +155,8 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
       // From Equal.export_equal_broadcast():
       {"test_equal_bcast",
        [=]() -> IoData {
-         auto inputs_0 =
-             Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/65));
-         auto inputs_1 = Tensor::FromInt32("", {5}, RandnInt<int32_t>({5}, /*seed=*/66));
+         auto inputs_0 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/65);
+         auto inputs_1 = RandnTensor(DataType::INT32, {5}, /*seed=*/66);
          Tensor z = equal_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},

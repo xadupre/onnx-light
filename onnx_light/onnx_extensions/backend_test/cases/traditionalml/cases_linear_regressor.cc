@@ -46,7 +46,7 @@ void RegisterLinearRegressorCases(std::vector<TestCase> &registry, TestMode mode
 
     Expect(registry, std::move(node), "test_cc_linearregressor_single_target_benchmark",
            {default_opset, opset}, {16384}, {8192}, [reg]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {8192, 2}, Randn<float>({8192, 2}, 2661));
+             Tensor x = RandnTensor(DataType::FLOAT, {8192, 2}, 2661);
              Tensor y = reg.operator()<float>(x, {0.5f, -1.0f}, {0.25f}, 1, "NONE");
              return IoData{{std::move(x)}, {std::move(y)}};
            });

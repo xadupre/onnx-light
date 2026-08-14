@@ -115,7 +115,7 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
 
     Expect(registry, std::move(node), "test_cc_treeensembleregressor_sum_single_target_benchmark",
            {default_opset, opset}, {8192}, {8192}, [reg]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {8192, 1}, Randn<float>({8192, 1}, 2731));
+             Tensor x = RandnTensor(DataType::FLOAT, {8192, 1}, 2731);
              Tensor y = reg.operator()<float>(x, /*n_targets=*/1, /*aggregate_function=*/"SUM",
                                               /*post_transform=*/"NONE", /*base_values=*/{});
              return IoData{{std::move(x)}, {std::move(y)}};

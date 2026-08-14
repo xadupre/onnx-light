@@ -59,9 +59,9 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
              const std::vector<int64_t> x_shape = {seq_length, batch_size, input_size};
              const std::vector<int64_t> w_shape = {1, kNumGates * hidden_size, input_size};
              const std::vector<int64_t> r_shape = {1, kNumGates * hidden_size, hidden_size};
-             Tensor x = Tensor::FromFloat("", x_shape, Randn<float>(x_shape, 2001));
-             Tensor w = Tensor::FromFloat("", w_shape, Randn<float>(w_shape, 2002));
-             Tensor r = Tensor::FromFloat("", r_shape, Randn<float>(r_shape, 2003));
+             Tensor x = RandnTensor(DataType::FLOAT, x_shape, 2001);
+             Tensor w = RandnTensor(DataType::FLOAT, w_shape, 2002);
+             Tensor r = RandnTensor(DataType::FLOAT, r_shape, 2003);
              auto [y_unused, y_h, y_c_unused] = lstm_kernel(x, w, r);
              (void)y_c_unused;
              (void)y_unused;

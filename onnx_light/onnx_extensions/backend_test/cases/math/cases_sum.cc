@@ -17,7 +17,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
 Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
-  return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
+  return RandnTensor(DataType::FLOAT, shape, seed);
 }
 
 } // namespace
@@ -41,8 +41,8 @@ void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_sum_benchmark", {opset}, {count, count}, {count},
            [sum_kernel, shape]() -> IoData {
-             Tensor x0 = Tensor::FromFloat("", shape, Randn<float>(shape, 423));
-             Tensor x1 = Tensor::FromFloat("", shape, Randn<float>(shape, 424));
+             Tensor x0 = RandnTensor(DataType::FLOAT, shape, 423);
+             Tensor x1 = RandnTensor(DataType::FLOAT, shape, 424);
              Tensor z = sum_kernel({x0, x1});
              return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
            });

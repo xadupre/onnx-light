@@ -22,8 +22,7 @@ void RegisterEyeLikeCases(std::vector<TestCase> &registry, TestMode mode) {
     const onnx_kernels::kernel::EyeLike eye_like_kernel{ctx};
     Expect(registry, std::move(node), "test_eyelike_without_dtype_benchmark", {opset},
            {2048 * 2048}, {2048 * 2048}, [eye_like_kernel]() -> IoData {
-             Tensor x =
-                 Tensor::FromFloat("x", {2048, 2048}, Randn<float>({2048, 2048}, 987654321ULL));
+             Tensor x = RandnTensor(DataType::FLOAT, {2048, 2048}, 987654321ULL);
              Tensor y = eye_like_kernel(x, /*k=*/0, /*dtype=*/0);
              return IoData{{std::move(x)}, {std::move(y)}};
            });

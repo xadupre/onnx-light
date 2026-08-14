@@ -120,8 +120,7 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_roialign_benchmark", {opset},
            {1 * 1 * 64 * 64, roi_count * 4, roi_count}, {roi_count * 1 * 5 * 5},
            [roialign_kernel, roi_count]() -> IoData {
-             Tensor x =
-                 Tensor::FromFloat("", {1, 1, 64, 64}, Randn<float>({1, 1, 64, 64}, 987654321ULL));
+             Tensor x = RandnTensor(DataType::FLOAT, {1, 1, 64, 64}, 987654321ULL);
              std::vector<float> rois_values;
              rois_values.reserve(static_cast<size_t>(roi_count * 4));
              for (int64_t i = 0; i < roi_count; ++i) {

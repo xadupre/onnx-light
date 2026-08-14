@@ -70,7 +70,7 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_label_encoder_int64_to_float_benchmark",
            {default_opset, opset}, {8192}, {8192},
            [label_encoder, keys, values, default_value]() -> IoData {
-             Tensor x = Tensor::FromInt64("", {8192}, RandnInt<int64_t>({8192}, 2641));
+             Tensor x = RandnTensor(DataType::INT64, {8192}, 2641);
              Tensor y = label_encoder.operator()<int64_t, float>(x, keys, values, default_value);
              return IoData{{std::move(x)}, {std::move(y)}};
            });

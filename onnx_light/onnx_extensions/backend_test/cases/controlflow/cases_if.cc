@@ -81,8 +81,8 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
 
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> big_shape = {512, 512};
-    const Tensor then_value = Tensor::FromFloat("", big_shape, Randn<float>(big_shape, 4301));
-    const Tensor else_value = Tensor::FromFloat("", big_shape, Randn<float>(big_shape, 4302));
+    const Tensor then_value = RandnTensor(DataType::FLOAT, big_shape, 4301);
+    const Tensor else_value = RandnTensor(DataType::FLOAT, big_shape, 4302);
 
     NodeProto node;
     node.set_op_type("If");

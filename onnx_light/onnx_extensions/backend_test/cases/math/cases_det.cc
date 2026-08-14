@@ -23,7 +23,7 @@ void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
     const std::vector<int64_t> shape = {512, 64, 64};
     Expect(registry, std::move(node), "test_cc_det_benchmark", {opset}, {512 * 64 * 64}, {512},
            [det_kernel, shape]() -> IoData {
-             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 439));
+             Tensor x = RandnTensor(DataType::FLOAT, shape, 439);
              Tensor y = det_kernel(x);
              return IoData{{std::move(x)}, {std::move(y)}};
            });

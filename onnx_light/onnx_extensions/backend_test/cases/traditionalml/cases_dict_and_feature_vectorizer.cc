@@ -111,8 +111,8 @@ void RegisterFeatureVectorizerCases(std::vector<TestCase> &registry, TestMode mo
 
     Expect(registry, std::move(node), "test_cc_feature_vectorizer_two_float_benchmark",
            {default_opset, opset}, {16384, 8192}, {24576}, [fv]() -> IoData {
-             Tensor x0 = Tensor::FromFloat("", {8192, 2}, Randn<float>({8192, 2}, 2711));
-             Tensor x1 = Tensor::FromFloat("", {8192, 1}, Randn<float>({8192, 1}, 2712));
+             Tensor x0 = RandnTensor(DataType::FLOAT, {8192, 2}, 2711);
+             Tensor x1 = RandnTensor(DataType::FLOAT, {8192, 1}, 2712);
              Tensor y = fv({x0, x1}, {2, 1});
              return IoData{{std::move(x0), std::move(x1)}, {std::move(y)}};
            });

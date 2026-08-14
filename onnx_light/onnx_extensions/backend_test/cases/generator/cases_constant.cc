@@ -25,8 +25,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Constant");
     node.add_output("y");
 
-    Tensor value = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                     Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+    Tensor value = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654321ULL);
 
     AttributeProto *attr = node.add_attribute();
     attr->set_name("value");

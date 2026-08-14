@@ -18,7 +18,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
 Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
-  return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
+  return RandnTensor(DataType::FLOAT, shape, seed);
 }
 
 Tensor RandFloatUnitOffset(const std::vector<int64_t> &shape, uint64_t seed) {
@@ -139,7 +139,7 @@ void RegisterDivCases(std::vector<TestCase> &registry, TestMode mode) {
        }},
       {"test_div_int8",
        [=]() -> IoData {
-         auto inputs_0 = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/61));
+         auto inputs_0 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/61);
          auto inputs_1 =
              Tensor::FromInt8("", {3, 4, 5}, RandnIntNonZero<int8_t>({3, 4, 5}, /*seed=*/62));
          Tensor z = div_kernel(inputs_0, inputs_1);
@@ -147,8 +147,7 @@ void RegisterDivCases(std::vector<TestCase> &registry, TestMode mode) {
        }},
       {"test_div_int16",
        [=]() -> IoData {
-         auto inputs_0 =
-             Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/63));
+         auto inputs_0 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/63);
          auto inputs_1 =
              Tensor::FromInt16("", {3, 4, 5}, RandnIntNonZero<int16_t>({3, 4, 5}, /*seed=*/64));
          Tensor z = div_kernel(inputs_0, inputs_1);
@@ -165,8 +164,7 @@ void RegisterDivCases(std::vector<TestCase> &registry, TestMode mode) {
        }},
       {"test_div_int64",
        [=]() -> IoData {
-         auto inputs_0 =
-             Tensor::FromInt64("", {3, 4, 5}, RandnInt<int64_t>({3, 4, 5}, /*seed=*/163));
+         auto inputs_0 = RandnTensor(DataType::INT64, {3, 4, 5}, /*seed=*/163);
          auto inputs_1 =
              Tensor::FromInt64("", {3, 4, 5}, RandnIntNonZero<int64_t>({3, 4, 5}, /*seed=*/164));
          Tensor z = div_kernel(inputs_0, inputs_1);

@@ -38,7 +38,7 @@ void RegisterTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeTransposeNode();
     Expect(registry, std::move(node), "test_cc_transpose_default_perm_benchmark", {opset},
            {4194304}, {4194304}, [transpose_kernel]() -> IoData {
-             Tensor data = Tensor::FromFloat("", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
+             Tensor data = RandnTensor(DataType::FLOAT, {2048, 2048}, 2001);
              Tensor transposed = transpose_kernel(data, /*perm=*/{});
              return IoData{{std::move(data)}, {std::move(transposed)}};
            });
@@ -95,7 +95,7 @@ void RegisterTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
       const std::string name = "test_cc_transpose_all_permutations_" + std::to_string(i);
       Expect(registry, MakeTransposeNode(perm), name, {opset},
              [transpose_kernel, shape, perm]() -> IoData {
-               Tensor data = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/41));
+               Tensor data = RandnTensor(DataType::FLOAT, shape, /*seed=*/41);
                Tensor transposed = transpose_kernel(data, perm);
                return IoData{{std::move(data)}, {std::move(transposed)}};
              });

@@ -68,8 +68,8 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = 512 * 512;
     Expect(registry, std::move(node), "test_cc_gemm_benchmark", {opset}, {count, count}, {count},
            [gemm_kernel, shape]() -> IoData {
-             Tensor a = Tensor::FromFloat("", shape, Randn<float>(shape, 433));
-             Tensor b = Tensor::FromFloat("", shape, Randn<float>(shape, 434));
+             Tensor a = RandnTensor(DataType::FLOAT, shape, 433);
+             Tensor b = RandnTensor(DataType::FLOAT, shape, 434);
              Tensor y = gemm_kernel(a, b, nullptr, 1.0f, 1.0f, 0, 0);
              return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
            });
@@ -80,8 +80,8 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeGemmNode(/*has_bias=*/false);
     Expect(registry, std::move(node), "test_cc_gemm_default", {opset}, [=]() -> IoData {
-      Tensor a = Tensor::FromFloat("", {3, 4}, Randn<float>({3, 4}, /*seed=*/1));
-      Tensor b = Tensor::FromFloat("", {4, 3}, Randn<float>({4, 3}, /*seed=*/2));
+      Tensor a = RandnTensor(DataType::FLOAT, {3, 4}, /*seed=*/1);
+      Tensor b = RandnTensor(DataType::FLOAT, {4, 3}, /*seed=*/2);
       Tensor y = gemm_kernel(a, b, nullptr, 1.0f, 1.0f, 0, 0);
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
@@ -92,8 +92,8 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeGemmNode(/*has_bias=*/false);
     Expect(registry, std::move(node), "test_cc_gemm_default_no_bias", {opset}, [=]() -> IoData {
-      Tensor a = Tensor::FromFloat("", {2, 10}, Randn<float>({2, 10}, /*seed=*/101));
-      Tensor b = Tensor::FromFloat("", {10, 3}, Randn<float>({10, 3}, /*seed=*/102));
+      Tensor a = RandnTensor(DataType::FLOAT, {2, 10}, /*seed=*/101);
+      Tensor b = RandnTensor(DataType::FLOAT, {10, 3}, /*seed=*/102);
       Tensor y = gemm_kernel(a, b, nullptr, 1.0f, 1.0f, 0, 0);
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
@@ -103,9 +103,9 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeGemmNode(/*has_bias=*/true);
     Expect(registry, std::move(node), "test_cc_gemm_default_matrix_bias", {opset}, [=]() -> IoData {
-      Tensor a = Tensor::FromFloat("", {3, 4}, Randn<float>({3, 4}, /*seed=*/3));
-      Tensor b = Tensor::FromFloat("", {4, 3}, Randn<float>({4, 3}, /*seed=*/4));
-      Tensor c = Tensor::FromFloat("", {3, 3}, Randn<float>({3, 3}, /*seed=*/5));
+      Tensor a = RandnTensor(DataType::FLOAT, {3, 4}, /*seed=*/3);
+      Tensor b = RandnTensor(DataType::FLOAT, {4, 3}, /*seed=*/4);
+      Tensor c = RandnTensor(DataType::FLOAT, {3, 3}, /*seed=*/5);
       Tensor y = gemm_kernel(a, b, &c, 1.0f, 1.0f, 0, 0);
       return IoData{{std::move(a), std::move(b), std::move(c)}, {std::move(y)}};
     });
@@ -115,9 +115,9 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeGemmNode(/*has_bias=*/true);
     Expect(registry, std::move(node), "test_cc_gemm_default_vector_bias", {opset}, [=]() -> IoData {
-      Tensor a = Tensor::FromFloat("", {2, 7}, Randn<float>({2, 7}, /*seed=*/6));
-      Tensor b = Tensor::FromFloat("", {7, 4}, Randn<float>({7, 4}, /*seed=*/7));
-      Tensor c = Tensor::FromFloat("", {4}, Randn<float>({4}, /*seed=*/8));
+      Tensor a = RandnTensor(DataType::FLOAT, {2, 7}, /*seed=*/6);
+      Tensor b = RandnTensor(DataType::FLOAT, {7, 4}, /*seed=*/7);
+      Tensor c = RandnTensor(DataType::FLOAT, {4}, /*seed=*/8);
       Tensor y = gemm_kernel(a, b, &c, 1.0f, 1.0f, 0, 0);
       return IoData{{std::move(a), std::move(b), std::move(c)}, {std::move(y)}};
     });
@@ -127,8 +127,8 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeGemmNode(/*has_bias=*/false, 1.0f, 1.0f, /*transA=*/1);
     Expect(registry, std::move(node), "test_cc_gemm_transposeA", {opset}, [=]() -> IoData {
-      Tensor a = Tensor::FromFloat("", {4, 3}, Randn<float>({4, 3}, /*seed=*/9));
-      Tensor b = Tensor::FromFloat("", {4, 5}, Randn<float>({4, 5}, /*seed=*/10));
+      Tensor a = RandnTensor(DataType::FLOAT, {4, 3}, /*seed=*/9);
+      Tensor b = RandnTensor(DataType::FLOAT, {4, 5}, /*seed=*/10);
       Tensor y = gemm_kernel(a, b, nullptr, 1.0f, 1.0f, 1, 0);
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
@@ -138,8 +138,8 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeGemmNode(/*has_bias=*/false, 1.0f, 1.0f, /*transA=*/0, /*transB=*/1);
     Expect(registry, std::move(node), "test_cc_gemm_transposeB", {opset}, [=]() -> IoData {
-      Tensor a = Tensor::FromFloat("", {3, 5}, Randn<float>({3, 5}, /*seed=*/11));
-      Tensor b = Tensor::FromFloat("", {4, 5}, Randn<float>({4, 5}, /*seed=*/12));
+      Tensor a = RandnTensor(DataType::FLOAT, {3, 5}, /*seed=*/11);
+      Tensor b = RandnTensor(DataType::FLOAT, {4, 5}, /*seed=*/12);
       Tensor y = gemm_kernel(a, b, nullptr, 1.0f, 1.0f, 0, 1);
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
@@ -151,9 +151,9 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
     const float beta = 2.0f;
     NodeProto node = MakeGemmNode(/*has_bias=*/true, alpha, beta, /*transA=*/1, /*transB=*/1);
     Expect(registry, std::move(node), "test_cc_gemm_all_attributes", {opset}, [=]() -> IoData {
-      Tensor a = Tensor::FromFloat("", {5, 3}, Randn<float>({5, 3}, /*seed=*/13));
-      Tensor b = Tensor::FromFloat("", {4, 5}, Randn<float>({4, 5}, /*seed=*/14));
-      Tensor c = Tensor::FromFloat("", {3, 4}, Randn<float>({3, 4}, /*seed=*/15));
+      Tensor a = RandnTensor(DataType::FLOAT, {5, 3}, /*seed=*/13);
+      Tensor b = RandnTensor(DataType::FLOAT, {4, 5}, /*seed=*/14);
+      Tensor c = RandnTensor(DataType::FLOAT, {3, 4}, /*seed=*/15);
       Tensor y = gemm_kernel(a, b, &c, alpha, beta, 1, 1);
       return IoData{{std::move(a), std::move(b), std::move(c)}, {std::move(y)}};
     });
@@ -163,8 +163,8 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeGemmNode(/*has_bias=*/true);
     Expect(registry, std::move(node), "test_cc_gemm_default_zero_bias", {opset}, [=]() -> IoData {
-      Tensor a = Tensor::FromFloat("", {3, 5}, Randn<float>({3, 5}, /*seed=*/16));
-      Tensor b = Tensor::FromFloat("", {5, 4}, Randn<float>({5, 4}, /*seed=*/17));
+      Tensor a = RandnTensor(DataType::FLOAT, {3, 5}, /*seed=*/16);
+      Tensor b = RandnTensor(DataType::FLOAT, {5, 4}, /*seed=*/17);
       Tensor c = Tensor::FromFloat("", {1, 4}, std::vector<float>(4, 0.0f));
       Tensor y = gemm_kernel(a, b, &c, 1.0f, 1.0f, 0, 0);
       return IoData{{std::move(a), std::move(b), std::move(c)}, {std::move(y)}};
@@ -175,8 +175,8 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeGemmNode(/*has_bias=*/true);
     Expect(registry, std::move(node), "test_cc_gemm_default_scalar_bias", {opset}, [=]() -> IoData {
-      Tensor a = Tensor::FromFloat("", {2, 3}, Randn<float>({2, 3}, /*seed=*/18));
-      Tensor b = Tensor::FromFloat("", {3, 4}, Randn<float>({3, 4}, /*seed=*/19));
+      Tensor a = RandnTensor(DataType::FLOAT, {2, 3}, /*seed=*/18);
+      Tensor b = RandnTensor(DataType::FLOAT, {3, 4}, /*seed=*/19);
       Tensor c = Tensor::FromFloat("", {}, {3.14f});
       Tensor y = gemm_kernel(a, b, &c, 1.0f, 1.0f, 0, 0);
       return IoData{{std::move(a), std::move(b), std::move(c)}, {std::move(y)}};
@@ -188,9 +188,9 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeGemmNode(/*has_bias=*/true);
     Expect(registry, std::move(node), "test_cc_gemm_default_single_elem_vector_bias", {opset},
            [=]() -> IoData {
-             Tensor a = Tensor::FromFloat("", {3, 7}, Randn<float>({3, 7}, /*seed=*/20));
-             Tensor b = Tensor::FromFloat("", {7, 3}, Randn<float>({7, 3}, /*seed=*/21));
-             Tensor c = Tensor::FromFloat("", {1}, Randn<float>({1}, /*seed=*/22));
+             Tensor a = RandnTensor(DataType::FLOAT, {3, 7}, /*seed=*/20);
+             Tensor b = RandnTensor(DataType::FLOAT, {7, 3}, /*seed=*/21);
+             Tensor c = RandnTensor(DataType::FLOAT, {1}, /*seed=*/22);
              Tensor y = gemm_kernel(a, b, &c, 1.0f, 1.0f, 0, 0);
              return IoData{{std::move(a), std::move(b), std::move(c)}, {std::move(y)}};
            });
@@ -201,8 +201,8 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
     const float alpha = 0.5f;
     NodeProto node = MakeGemmNode(/*has_bias=*/true, alpha);
     Expect(registry, std::move(node), "test_cc_gemm_alpha", {opset}, [=]() -> IoData {
-      Tensor a = Tensor::FromFloat("", {3, 5}, Randn<float>({3, 5}, /*seed=*/23));
-      Tensor b = Tensor::FromFloat("", {5, 4}, Randn<float>({5, 4}, /*seed=*/24));
+      Tensor a = RandnTensor(DataType::FLOAT, {3, 5}, /*seed=*/23);
+      Tensor b = RandnTensor(DataType::FLOAT, {5, 4}, /*seed=*/24);
       Tensor c = Tensor::FromFloat("", {1, 4}, std::vector<float>(4, 0.0f));
       Tensor y = gemm_kernel(a, b, &c, alpha, 1.0f, 0, 0);
       return IoData{{std::move(a), std::move(b), std::move(c)}, {std::move(y)}};
@@ -214,9 +214,9 @@ void RegisterGemmCases(std::vector<TestCase> &registry, TestMode mode) {
     const float beta = 0.5f;
     NodeProto node = MakeGemmNode(/*has_bias=*/true, /*alpha=*/1.0f, beta);
     Expect(registry, std::move(node), "test_cc_gemm_beta", {opset}, [=]() -> IoData {
-      Tensor a = Tensor::FromFloat("", {2, 7}, Randn<float>({2, 7}, /*seed=*/25));
-      Tensor b = Tensor::FromFloat("", {7, 4}, Randn<float>({7, 4}, /*seed=*/26));
-      Tensor c = Tensor::FromFloat("", {1, 4}, Randn<float>({1, 4}, /*seed=*/27));
+      Tensor a = RandnTensor(DataType::FLOAT, {2, 7}, /*seed=*/25);
+      Tensor b = RandnTensor(DataType::FLOAT, {7, 4}, /*seed=*/26);
+      Tensor c = RandnTensor(DataType::FLOAT, {1, 4}, /*seed=*/27);
       Tensor y = gemm_kernel(a, b, &c, 1.0f, beta, 0, 0);
       return IoData{{std::move(a), std::move(b), std::move(c)}, {std::move(y)}};
     });

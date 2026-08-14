@@ -35,7 +35,7 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_isinf_benchmark", {opset}, {count}, {count},
            [isinf_kernel, count]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {count}, Randn<float>({count}, /*seed=*/9301));
+             Tensor x = RandnTensor(DataType::FLOAT, {count}, /*seed=*/9301);
              Tensor y = isinf_kernel(x);
              return IoData{{std::move(x)}, {std::move(y)}};
            });

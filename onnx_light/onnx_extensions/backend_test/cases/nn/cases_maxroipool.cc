@@ -63,8 +63,7 @@ void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t y_count = 64 * 32 * 2 * 2;
     Expect(registry, std::move(node), "test_cc_maxroipool_default_benchmark", {opset},
            {x_count, rois_count}, {y_count}, [maxroipool_kernel]() -> IoData {
-             Tensor x =
-                 Tensor::FromFloat("", {1, 32, 128, 128}, Randn<float>({1, 32, 128, 128}, 2801));
+             Tensor x = RandnTensor(DataType::FLOAT, {1, 32, 128, 128}, 2801);
              const std::vector<int64_t> rois_shape = {64, 5};
              std::vector<float> rois_values;
              rois_values.reserve(64 * 5);

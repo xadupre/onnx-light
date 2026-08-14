@@ -75,7 +75,7 @@ void RegisterImputerCases(std::vector<TestCase> &registry, TestMode mode) {
 
     Expect(registry, std::move(node), "test_cc_imputer_float_benchmark", {default_opset, opset},
            {24576}, {24576}, [imputer, imputed_values, replaced_value]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {8192, 3}, Randn<float>({8192, 3}, 2631));
+             Tensor x = RandnTensor(DataType::FLOAT, {8192, 3}, 2631);
              Tensor y = imputer.operator()<float>(x, imputed_values, replaced_value);
              return IoData{{std::move(x)}, {std::move(y)}};
            });

@@ -27,8 +27,7 @@ void RegisterThresholdedReluCases(std::vector<TestCase> &registry, TestMode mode
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_thresholdedrelu_benchmark", {opset}, {count},
            {count}, [thresholdedrelu_kernel]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+             Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654321ULL);
              Tensor y = thresholdedrelu_kernel(x, 2.0f);
              return IoData{{std::move(x)}, {std::move(y)}};
            });

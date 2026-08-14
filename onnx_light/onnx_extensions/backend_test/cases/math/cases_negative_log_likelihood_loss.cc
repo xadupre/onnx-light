@@ -33,7 +33,7 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
     constexpr int64_t loss_count = 1;
     Expect(registry, std::move(node), "test_cc_negative_log_likelihood_loss_benchmark", {opset},
            {input_count, target_count}, {loss_count}, [nll_kernel, kN, kC]() -> IoData {
-             Tensor input = Tensor::FromFloat("", {kN, kC}, Randn<float>({kN, kC}, 444));
+             Tensor input = RandnTensor(DataType::FLOAT, {kN, kC}, 444);
              std::vector<int64_t> target_values(kN);
              for (int64_t i = 0; i < kN; ++i) {
                target_values[i] = i % kC;

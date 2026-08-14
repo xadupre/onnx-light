@@ -74,7 +74,7 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
     const std::vector<int64_t> axes{0, 2};
     Expect(registry, std::move(node), "test_cc_unsqueeze_axes_benchmark", {opset}, {4194304, 2},
            {4194304}, [unsqueeze_kernel, axes]() -> IoData {
-             Tensor data = Tensor::FromFloat("", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
+             Tensor data = RandnTensor(DataType::FLOAT, {2048, 2048}, 2001);
              Tensor axes_tensor = MakeAxesTensor(axes);
              Tensor expanded = unsqueeze_kernel(data, axes);
              return IoData{{std::move(data), std::move(axes_tensor)}, {std::move(expanded)}};

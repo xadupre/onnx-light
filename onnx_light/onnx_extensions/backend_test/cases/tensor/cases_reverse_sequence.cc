@@ -47,7 +47,7 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
     NodeProto node = MakeReverseSequenceNode(0, 1, /*set_time_attr=*/true, /*set_batch_attr=*/true);
     Expect(registry, std::move(node), "test_cc_reversesequence_time_benchmark", {opset},
            {4194304, 1024}, {4194304}, [reverse_seq_kernel]() -> IoData {
-             Tensor x = Tensor::FromFloat("X", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
+             Tensor x = RandnTensor(DataType::FLOAT, {4096, 1024}, 2001);
              Tensor seq =
                  Tensor::FromInt64("sequence_lens", {1024}, std::vector<int64_t>(1024, 4096));
              onnx_kernels::kernel::ReverseSequence::Attributes attrs;

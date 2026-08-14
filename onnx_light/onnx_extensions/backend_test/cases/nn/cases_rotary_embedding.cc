@@ -59,9 +59,9 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
            [kernel, batch, num_heads, seq, head_size, half, max_pos]() -> IoData {
              const std::vector<int64_t> x_shape = {batch, num_heads, seq, head_size};
              const std::vector<int64_t> cache_shape = {max_pos, half};
-             Tensor X = Tensor::FromFloat("", x_shape, Randn<float>(x_shape, 2001));
-             Tensor cos_cache = Tensor::FromFloat("", cache_shape, Randn<float>(cache_shape, 2002));
-             Tensor sin_cache = Tensor::FromFloat("", cache_shape, Randn<float>(cache_shape, 2003));
+             Tensor X = RandnTensor(DataType::FLOAT, x_shape, 2001);
+             Tensor cos_cache = RandnTensor(DataType::FLOAT, cache_shape, 2002);
+             Tensor sin_cache = RandnTensor(DataType::FLOAT, cache_shape, 2003);
              std::vector<int64_t> pos(static_cast<size_t>(batch * seq));
              for (int64_t b = 0; b < batch; ++b) {
                for (int64_t s = 0; s < seq; ++s) {

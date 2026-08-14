@@ -54,7 +54,7 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t output_count = 1024 * 100;
     Expect(registry, std::move(node), "test_cc_top_k_benchmark", {opset}, {input_count, k_count},
            {output_count, output_count}, [topk_kernel, shape]() -> IoData {
-             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 442));
+             Tensor x = RandnTensor(DataType::FLOAT, shape, 442);
              Tensor k = Tensor::FromInt64("", {1}, {100});
              auto [values, indices] =
                  topk_kernel(x, 100, /*axis=*/1, /*largest=*/true, /*sorted=*/true);

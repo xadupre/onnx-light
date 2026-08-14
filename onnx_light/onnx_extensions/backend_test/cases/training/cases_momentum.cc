@@ -69,12 +69,9 @@ void RegisterMomentumCases(std::vector<TestCase> &registry, TestMode mode) {
            [momentum, alpha, beta, norm_coefficient]() -> IoData {
              Tensor R = Tensor::FromFloat("", {}, {0.1f});
              Tensor T = Tensor::FromInt64("", {}, {0});
-             Tensor X = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
-             Tensor G = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
-             Tensor V = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 987654323ULL));
+             Tensor X = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654321ULL);
+             Tensor G = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654322ULL);
+             Tensor V = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654323ULL);
              std::vector<Tensor> outs = momentum(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient,
                                                  onnx_kernels::kernel::Momentum::Mode::kStandard);
              return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(V)},

@@ -19,7 +19,7 @@ namespace {
 // approximation). cosh is defined for every real input so no clamping is
 // required.
 Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
-  return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
+  return RandnTensor(DataType::FLOAT, shape, seed);
 }
 
 } // namespace

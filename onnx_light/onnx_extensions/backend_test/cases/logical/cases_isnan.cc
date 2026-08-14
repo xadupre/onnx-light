@@ -33,7 +33,7 @@ void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_isnan_benchmark", {opset}, {count}, {count},
            [isnan_kernel, count]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {count}, Randn<float>({count}, /*seed=*/9301));
+             Tensor x = RandnTensor(DataType::FLOAT, {count}, /*seed=*/9301);
              Tensor y = isnan_kernel(x);
              return IoData{{std::move(x)}, {std::move(y)}};
            });

@@ -1,7 +1,7 @@
-.. _l-next-steps-processor-aware-kernel-thresholds:
+.. _l-next-steps-processor-aware-kernel-tuning:
 
-Processor-aware kernel thresholds
-=================================
+Processor-aware kernel tuning
+=============================
 
 :Date: 2026-08
 
@@ -297,9 +297,11 @@ the registered float and double variants of those two kernels.
 
 ``only_missing`` skips keys for which a compatible calibrated profile is
 already loaded. The batch report distinguishes calibrated, skipped,
-unsupported, and failed keys. One failing kernel does not discard successful
-profiles from other kernels, but the failure remains explicit in the report.
-The lower-level entry point for an exact list of keys may remain available:
+and unsupported keys. Callback and validation exceptions propagate to the
+caller. Publication occurs only after every selected callback succeeds, so a
+failure leaves the complete registry generation unchanged instead of returning
+a partially successful report. The lower-level entry point for an exact list
+of keys may remain available:
 
 .. code-block:: cpp
 
@@ -314,19 +316,24 @@ executed.
 
 A calibration function should:
 
-1. generate deterministic synthetic inputs;
-2. verify every candidate algorithm against the portable implementation;
-3. warm every candidate and shared thread pool;
-4. measure enough repetitions using robust statistics;
-5. search crossover regions rather than every possible shape;
-6. repeat measurements near a crossover and require a minimum winning margin;
-7. return conservative values when measurements overlap;
-8. respect time, memory, and thread budgets.
+1. generate deterministic synthetic inputs through shared runtime tensor
+   generators accepting an element type, shape, seed, and optional allocator;
+2. invoke the kernel implementation being calibrated rather than reimplementing
+   its computation inside the calibration callback;
+3. verify every candidate configuration against the same kernel forced onto
+   its portable serial path;
+4. warm every candidate and shared thread pool;
+5. measure enough repetitions using robust statistics;
+6. search crossover regions rather than every possible shape;
+7. repeat measurements near a crossover and require a minimum winning margin;
+8. return conservative values when measurements overlap;
+9. respect time, memory, and thread budgets.
 
 The report records all candidates, samples, medians, dispersion, rejected
 measurements, selected values, processor information, thread count, runtime
 version, and tuning ABI. A calibration failure is explicit and leaves the
-portable defaults unchanged.
+portable defaults unchanged; it is not converted into a successful batch
+report carrying a ``failed`` entry.
 
 Example: ``Abs``
 ++++++++++++++++
@@ -349,6 +356,33 @@ Calibration compares serial scalar, serial SIMD, and parallel SIMD execution.
 It finds the scalar/SIMD crossover and the serial/parallel crossover
 separately. The current fixed ``32 * kParallelForGrainSize`` policy becomes a
 portable default rather than a universal decision.
+
+The portable ``onnx_light`` implementation registers a concrete calibration
+callback for every element type supported by ``Abs``. It obtains deterministic
+inputs from the shared ``RandnTensor(element_type, shape, seed, allocator)``
+runtime helper. Two configured ``Abs`` instances then execute the actual
+kernel: one is forced onto the serial path and the other uses the candidate
+parallel grain. The callback checks their outputs, takes the median of five
+measurements per candidate size, and requires two consecutive wins of at least
+five percent before selecting a parallel grain. It does not duplicate the
+element-wise absolute-value implementation.
+
+The first callback keeps the crossover search, resource budgets, warm-up,
+correctness comparison, and timing policy directly in ``CalibrateAbs``. This
+is intentional: a common calibration API should not be extracted from unary
+kernels alone. If no stable crossover is found within the requested time and
+memory budgets, calibration retains ``32 * kParallelForGrainSize``. SIMD
+crossover calibration remains the responsibility of an implementation such as
+``onnx-light-cpu`` that owns the SIMD algorithm.
+
+Example: ``Not``
+++++++++++++++++
+
+``RandnTensor`` supports ``BOOL`` inputs, and two configured ``Not`` instances
+measure the real serial and parallel kernel paths. ``CalibrateNot`` initially
+keeps its own search and measurement policy. The deliberate duplication makes
+the requirements of more than one callback visible without prematurely
+publishing an API specialized for unary kernels.
 
 Example: ``Gemm``
 +++++++++++++++++
@@ -530,8 +564,21 @@ Implementation order
    selection remains owned by ``onnx-light-cpu``.
 6. Migrate ``Gemm`` tiling, packing, task, and conversion thresholds (`PR #4413
    <https://github.com/xadupre/onnx-light/pull/4413>`_).
-7. Add exact, processor-list, and instruction-set profile registration.
-8. Add calibration callbacks and ``CalibrateRegisteredKernels`` selection.
-9. Add atomic ``UpdateKernelTuningCache`` and deployment-profile import.
-10. Benchmark cold resolution separately from steady-state kernel execution and
+7. Add exact, processor-list, and instruction-set profile registration and
+   transactional publication of execution-specific calibrated profiles
+   (`PR #4415 <https://github.com/xadupre/onnx-light/pull/4415>`_).
+8. Add calibration callbacks and ``CalibrateRegisteredKernels`` selection,
+   initially integrating ``Abs`` and ``Not`` through the shared random-tensor
+   helper while keeping their calibration searches local (`PR #4418
+   <https://github.com/xadupre/onnx-light/pull/4418>`_).
+9. Add typed parallel tuning to representative binary kernels, including
+   arithmetic kernels such as ``Add`` and ``Mul``, logical kernels such as
+   ``And``, and both equal-shape and broadcasting execution paths.
+10. Design and add one calibration API that supports unary and binary kernels,
+    input generation for every operand, broadcasting shapes, output
+    validation, resource accounting, and kernel-specific benchmark cases.
+    Replace the local ``Abs`` and ``Not`` search loops only after this API has
+    been exercised by both unary and binary integrations.
+11. Add atomic ``UpdateKernelTuningCache`` and deployment-profile import.
+12. Benchmark cold resolution separately from steady-state kernel execution and
     verify that the hot path performs no registry access.

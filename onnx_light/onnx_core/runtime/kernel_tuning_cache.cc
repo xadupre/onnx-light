@@ -29,10 +29,6 @@ struct ParsedCache {
   bool malformed = false;
 };
 
-template <typename T> bool Contains(const std::vector<T> &values, const T &value) {
-  return values.empty() || std::find(values.begin(), values.end(), value) != values.end();
-}
-
 std::string KeyDescription(const KernelTuningKey &key) {
   return key.library + "/" + key.kernel + "/" + key.implementation;
 }
@@ -275,13 +271,6 @@ bool SameIdentityIgnoringAbi(const KernelTuningKey &left, const KernelTuningKey 
 
 } // namespace
 
-bool KernelCalibrationSelection::Matches(const KernelTuningKey &key) const {
-  return (!library.has_value() || key.library == *library) && Contains(kernels, key.kernel) &&
-         Contains(implementations, key.implementation) &&
-         Contains(element_types, key.element_type) &&
-         (!device.has_value() || key.device == *device);
-}
-
 std::filesystem::path DefaultKernelTuningCachePath() {
 #if defined(_WIN32)
   if (const char *directory = std::getenv("LOCALAPPDATA")) {
@@ -332,7 +321,7 @@ KernelTuningCacheLoadReport LoadKernelTuningCache(const KernelCalibrationSelecti
   std::vector<KernelTuningKey> registered = registry.RegisteredKeys();
   std::vector<KernelTuningKey> selected;
   for (const KernelTuningKey &key : registered) {
-    if (selection.Matches(key)) {
+    if (selection.Matches(key) && (selection.device.has_value() || key.device == Device::kCPU)) {
       selected.push_back(key);
     }
   }
@@ -341,7 +330,8 @@ KernelTuningCacheLoadReport LoadKernelTuningCache(const KernelCalibrationSelecti
   std::vector<KernelTuningParameters> valid;
   std::unordered_set<KernelTuningKey, KernelTuningKeyHash> loaded;
   for (const CacheProfile &profile : cache.profiles) {
-    if (!selection.Matches(profile.parameters.key)) {
+    if (!selection.Matches(profile.parameters.key) ||
+        (!selection.device.has_value() && profile.parameters.key.device != Device::kCPU)) {
       continue;
     }
     auto schema = registry.FindSchema(profile.parameters.key);
@@ -374,7 +364,7 @@ KernelTuningCacheLoadReport LoadKernelTuningCache(const KernelCalibrationSelecti
     }
   }
 
-  registry.PublishProfiles(valid, selected);
+  registry.PublishCalibratedProfiles(valid, execution, selected);
   report.status = KernelTuningCacheLoadStatus::kLoaded;
   report.published_generation = registry.Snapshot().generation();
   return report;

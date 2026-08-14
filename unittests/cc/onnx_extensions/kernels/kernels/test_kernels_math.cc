@@ -103,6 +103,24 @@ TEST(KernelClass, AbsClassMatchesReference) {
   EXPECT_FLOAT_EQ(py[2], 2.5f);
 }
 
+TEST(KernelClass, AbsKeepsSignedMinimumRepresentable) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Abs abs_kernel{ctx};
+
+  const Tensor int8 = abs_kernel(Tensor::FromInt8("", {1}, {std::numeric_limits<int8_t>::min()}));
+  const Tensor int16 =
+      abs_kernel(Tensor::FromInt16("", {1}, {std::numeric_limits<int16_t>::min()}));
+  const Tensor int32 =
+      abs_kernel(Tensor::FromInt32("", {1}, {std::numeric_limits<int32_t>::min()}));
+  const Tensor int64 =
+      abs_kernel(Tensor::FromInt64("", {1}, {std::numeric_limits<int64_t>::min()}));
+
+  EXPECT_EQ(int8.AsInt8()[0], std::numeric_limits<int8_t>::min());
+  EXPECT_EQ(int16.AsInt16()[0], std::numeric_limits<int16_t>::min());
+  EXPECT_EQ(int32.AsInt32()[0], std::numeric_limits<int32_t>::min());
+  EXPECT_EQ(int64.AsInt64()[0], std::numeric_limits<int64_t>::min());
+}
+
 TEST(KernelClass, AbsClassParallelPathMatchesReference) {
   // Exercises the multi-threaded ParallelFor path used by the Abs kernel: the
   // element count is large enough to exceed the grain size so several worker

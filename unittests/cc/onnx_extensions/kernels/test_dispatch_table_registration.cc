@@ -6,8 +6,11 @@
 
 #include "onnx_core/runtime/kernel_context.h"
 #include "onnx_core/runtime/kernel_dispatch_table.h"
+#include "onnx_core/runtime/kernel_tuning.h"
+#include "onnx_core/runtime/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
+#include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
 #include <gtest/gtest.h>
 
@@ -46,6 +49,52 @@ TEST(OnnxKernelsDispatchTable, RegisterKernelFunctionsPopulatesCoreDispatchTable
   EXPECT_GT(table.size(), 200u);
   EXPECT_NE(table.find("ai.onnx:Add"), table.end());
   EXPECT_NE(table.find("ai.onnx.ml:Binarizer"), table.end());
+}
+
+TEST(OnnxKernelsDispatchTable, RegistersAbsCalibrationFunctions) {
+  ::onnx_light::onnx_kernels::RegisterKernelFunctions();
+  const core::runtime::KernelTuningKey key = onnx_kernels::tuning::MakePortableTuningKey(
+      "Abs", static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  core::runtime::KernelCalibrationFunction calibrate =
+      core::runtime::GetKernelTuningRegistry().FindCalibrationFunction(key);
+  ASSERT_TRUE(calibrate);
+
+  core::runtime::CpuExecutionDescriptor execution{
+      core::platform::GetCpuDescriptor(),
+      static_cast<uint32_t>(core::runtime::ParallelForThreadCount())};
+  core::runtime::CalibrationOptions options;
+  options.maximum_duration_ms = 1;
+  options.maximum_memory_bytes = 1 << 20;
+  core::runtime::CalibrationReporter reporter;
+  const core::runtime::KernelTuningParameters parameters =
+      calibrate(key, execution, options, reporter);
+
+  EXPECT_EQ(parameters.key, key);
+  EXPECT_GT(parameters.Get<int64_t>(onnx_kernels::tuning::kParallelMinimumElements), 0);
+  EXPECT_FALSE(reporter.diagnostics().empty());
+}
+
+TEST(OnnxKernelsDispatchTable, RegistersNotCalibrationFunction) {
+  ::onnx_light::onnx_kernels::RegisterKernelFunctions();
+  const core::runtime::KernelTuningKey key = onnx_kernels::tuning::MakePortableTuningKey(
+      "Not", static_cast<int32_t>(TensorProto::DataType::BOOL));
+  core::runtime::KernelCalibrationFunction calibrate =
+      core::runtime::GetKernelTuningRegistry().FindCalibrationFunction(key);
+  ASSERT_TRUE(calibrate);
+
+  core::runtime::CpuExecutionDescriptor execution{
+      core::platform::GetCpuDescriptor(),
+      static_cast<uint32_t>(core::runtime::ParallelForThreadCount())};
+  core::runtime::CalibrationOptions options;
+  options.maximum_duration_ms = 1;
+  options.maximum_memory_bytes = 1 << 20;
+  core::runtime::CalibrationReporter reporter;
+  const core::runtime::KernelTuningParameters parameters =
+      calibrate(key, execution, options, reporter);
+
+  EXPECT_EQ(parameters.key, key);
+  EXPECT_GT(parameters.Get<int64_t>(onnx_kernels::tuning::kParallelMinimumElements), 0);
+  EXPECT_FALSE(reporter.diagnostics().empty());
 }
 
 // The device is part of a kernel's identifier: a factory registered for a GPU

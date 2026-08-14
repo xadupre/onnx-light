@@ -94,6 +94,24 @@ extern template std::vector<float> Randn<float>(const Shape &shape, std::optiona
 /// @endcond
 
 /**
+ * Generates a deterministic normally distributed tensor of the requested type and shape.
+ *
+ * Supports ``FLOAT``, ``DOUBLE``, ``FLOAT16``, ``BFLOAT16``, ``INT8``, ``INT16``, ``INT32``,
+ * ``INT64``, and ``BOOL``. Integer samples follow :cpp:func:`RandnInt`; boolean samples are
+ * obtained by thresholding normally distributed values at zero.
+ *
+ * @param element_type Tensor element type.
+ * @param shape Output shape; dimensions must be non-negative.
+ * @param seed Optional 64-bit seed. ``std::nullopt`` selects the default seed.
+ * @param allocator Optional allocator for the tensor buffer.
+ * @return A tensor containing deterministic normally distributed values.
+ * @throws std::invalid_argument when the element type is unsupported or a dimension is negative.
+ */
+Tensor RandnTensor(int32_t element_type, const Shape &shape,
+                   std::optional<uint64_t> seed = std::nullopt,
+                   RawBufferAllocator *allocator = nullptr);
+
+/**
  * Generates ``count`` uniform samples in ``[low, high)`` and writes them
  * directly into ``dst`` without an intermediate allocation. Samples are
  * computed in ``double`` precision and ``static_cast`` to ``T``.
@@ -195,10 +213,12 @@ extern template std::vector<uint64_t> RandUint<uint64_t>(int64_t high, const Sha
  *
  * @param shape Output tensor shape; dimensions must be non-negative.
  * @param seed Optional 64-bit seed. ``std::nullopt`` selects the default seed.
+ * @param allocator Optional allocator for the tensor buffer.
  * @return A ``Tensor`` with ``data_type == BOOL`` whose ``data`` is a flat
  *         row-major buffer of one byte per element (``0`` or ``1``).
  * @throws std::invalid_argument when any dimension is negative.
  */
-Tensor RandBool(const Shape &shape, std::optional<uint64_t> seed = std::nullopt);
+Tensor RandBool(const Shape &shape, std::optional<uint64_t> seed = std::nullopt,
+                RawBufferAllocator *allocator = nullptr);
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

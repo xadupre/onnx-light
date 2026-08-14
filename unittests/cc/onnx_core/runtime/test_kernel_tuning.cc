@@ -318,6 +318,146 @@ TEST(KernelTuningRegistry, PublishedProfileOverridesProcessorProfile) {
   EXPECT_EQ(after.Resolve(MakeKey(), MakeExecution())->Get<int64_t>("algorithm.tile_m"), 160);
 }
 
+TEST(KernelCalibration, SelectsReportsAndPublishesCallbacks) {
+  KernelTuningParameters success_defaults = MakeDefaults();
+  success_defaults.key.library = "calibration_batch_test";
+  success_defaults.key.kernel = "Success";
+  KernelTuningParameters unsupported_defaults = success_defaults;
+  unsupported_defaults.key.kernel = "Unsupported";
+  RegisterKernelTuningSchema(KernelTuningSchema(success_defaults));
+  RegisterKernelTuningSchema(KernelTuningSchema(unsupported_defaults));
+
+  RegisterKernelCalibrationFunction(
+      success_defaults.key,
+      [success_defaults](const KernelTuningKey &key, const CpuExecutionDescriptor &execution,
+                         const CalibrationOptions &options, CalibrationReporter &reporter) {
+        EXPECT_EQ(key, success_defaults.key);
+        EXPECT_EQ(execution.effective_threads, 3u);
+        EXPECT_EQ(options.maximum_duration_ms, 50u);
+        reporter.AddDiagnostic("measured crossover");
+        KernelTuningParameters calibrated = success_defaults;
+        calibrated.values["algorithm.tile_m"] = int64_t{192};
+        return calibrated;
+      });
+
+  KernelCalibrationSelection selection;
+  selection.library = success_defaults.key.library;
+  selection.kernels = {"Success", "Unsupported"};
+  CalibrationOptions options;
+  options.execution = MakeExecution();
+  options.maximum_threads = 3;
+  options.maximum_duration_ms = 50;
+  const uint64_t generation_before = GetKernelTuningRegistry().Snapshot().generation();
+
+  CalibrationBatchReport report = CalibrateRegisteredKernels(selection, options);
+
+  ASSERT_EQ(report.calibrated.size(), 1u);
+  EXPECT_EQ(report.calibrated[0].key, success_defaults.key);
+  EXPECT_EQ(report.unsupported, std::vector<KernelTuningKey>({unsupported_defaults.key}));
+  EXPECT_TRUE(report.skipped.empty());
+  ASSERT_EQ(report.diagnostics.size(), 1u);
+  EXPECT_TRUE(std::any_of(report.diagnostics.begin(), report.diagnostics.end(),
+                          [&](const KernelCalibrationDiagnostic &diagnostic) {
+                            return diagnostic.key == success_defaults.key &&
+                                   diagnostic.message == "measured crossover";
+                          }));
+  EXPECT_GT(report.published_generation, generation_before);
+  EXPECT_EQ(report.successful_profiles().size(), 1u);
+  CpuExecutionDescriptor calibrated_execution = *options.execution;
+  calibrated_execution.effective_threads = 3;
+  EXPECT_EQ(GetKernelTuningRegistry()
+                .Snapshot()
+                .Resolve(success_defaults.key, calibrated_execution)
+                ->Get<int64_t>("algorithm.tile_m"),
+            192);
+  EXPECT_EQ(GetKernelTuningRegistry()
+                .Snapshot()
+                .Resolve(success_defaults.key, *options.execution)
+                ->Get<int64_t>("algorithm.tile_m"),
+            64);
+}
+
+TEST(KernelCalibration, CallbackFailurePropagatesWithoutPublishingBatch) {
+  KernelTuningParameters success_defaults = MakeDefaults();
+  success_defaults.key.library = "calibration_failure_test";
+  success_defaults.key.kernel = "Success";
+  KernelTuningParameters failure_defaults = success_defaults;
+  failure_defaults.key.kernel = "ZFailure";
+  RegisterKernelTuningSchema(KernelTuningSchema(success_defaults));
+  RegisterKernelTuningSchema(KernelTuningSchema(failure_defaults));
+  RegisterKernelCalibrationFunction(
+      success_defaults.key,
+      [success_defaults](const KernelTuningKey &, const CpuExecutionDescriptor &,
+                         const CalibrationOptions &, CalibrationReporter &) {
+        KernelTuningParameters calibrated = success_defaults;
+        calibrated.values["algorithm.tile_m"] = int64_t{192};
+        return calibrated;
+      });
+  RegisterKernelCalibrationFunction(failure_defaults.key,
+                                    [](const KernelTuningKey &, const CpuExecutionDescriptor &,
+                                       const CalibrationOptions &,
+                                       CalibrationReporter &) -> KernelTuningParameters {
+                                      throw std::runtime_error("measurement failed");
+                                    });
+
+  KernelCalibrationSelection selection;
+  selection.library = success_defaults.key.library;
+  CalibrationOptions options;
+  options.execution = MakeExecution();
+  const uint64_t generation_before = GetKernelTuningRegistry().Snapshot().generation();
+
+  EXPECT_THROW(CalibrateRegisteredKernels(selection, options), std::runtime_error);
+
+  const KernelTuningRegistrySnapshot after = GetKernelTuningRegistry().Snapshot();
+  EXPECT_EQ(after.generation(), generation_before);
+  EXPECT_EQ(
+      after.Resolve(success_defaults.key, *options.execution)->Get<int64_t>("algorithm.tile_m"),
+      64);
+}
+
+TEST(KernelCalibration, OnlyMissingSkipsPublishedProfile) {
+  KernelTuningParameters defaults = MakeDefaults();
+  defaults.key.library = "calibration_only_missing_test";
+  RegisterKernelTuningSchema(KernelTuningSchema(defaults));
+  RegisterKernelCalibrationFunction(
+      defaults.key, [defaults](const KernelTuningKey &, const CpuExecutionDescriptor &,
+                               const CalibrationOptions &, CalibrationReporter &) {
+        KernelTuningParameters calibrated = defaults;
+        calibrated.values["algorithm.tile_m"] = int64_t{128};
+        return calibrated;
+      });
+
+  KernelCalibrationSelection selection;
+  selection.library = defaults.key.library;
+  CalibrationOptions options;
+  options.execution = MakeExecution();
+  EXPECT_EQ(CalibrateRegisteredKernels(selection, options).calibrated.size(), 1u);
+
+  selection.only_missing = true;
+  CalibrationBatchReport report = CalibrateRegisteredKernels(selection, options);
+  EXPECT_TRUE(report.calibrated.empty());
+  EXPECT_EQ(report.skipped, std::vector<KernelTuningKey>({defaults.key}));
+
+  options.execution->effective_threads = 2;
+  report = CalibrateRegisteredKernels(selection, options);
+  EXPECT_EQ(report.calibrated.size(), 1u);
+  EXPECT_TRUE(report.skipped.empty());
+}
+
+TEST(KernelCalibration, RejectsInvalidRegistrationAndOptions) {
+  KernelTuningRegistry registry;
+  EXPECT_THROW(registry.RegisterCalibrationFunction(MakeKey(), {}), std::invalid_argument);
+  EXPECT_THROW(registry.RegisterCalibrationFunction(
+                   MakeKey(), [](const KernelTuningKey &, const CpuExecutionDescriptor &,
+                                 const CalibrationOptions &,
+                                 CalibrationReporter &) { return MakeDefaults(); }),
+               std::invalid_argument);
+
+  CalibrationOptions options;
+  options.maximum_threads = 0;
+  EXPECT_THROW(CalibrateRegisteredKernels({}, options), std::invalid_argument);
+}
+
 TEST(KernelTuningCache, LoadsCompatibleProfileAndPreservesOldSnapshot) {
   KernelTuningParameters defaults = MakeDefaults();
   defaults.key.library = "cache_load_test";
@@ -342,7 +482,7 @@ TEST(KernelTuningCache, LoadsCompatibleProfileAndPreservesOldSnapshot) {
   EXPECT_EQ(report.loaded.size(), 1);
   EXPECT_TRUE(report.invalid.empty());
   EXPECT_TRUE(report.missing.empty());
-  EXPECT_EQ(after.Find(defaults.key)->Get<int64_t>("algorithm.tile_m"), 192);
+  EXPECT_EQ(after.Resolve(defaults.key, execution)->Get<int64_t>("algorithm.tile_m"), 192);
   EXPECT_EQ(before.Find(defaults.key)->Get<int64_t>("algorithm.tile_m"), 64);
 }
 
@@ -372,9 +512,11 @@ TEST(KernelTuningCache, AllowsSameKeyForDifferentExecutionDescriptors) {
   EXPECT_EQ(report.status, KernelTuningCacheLoadStatus::kLoaded);
   EXPECT_EQ(report.loaded.size(), 1);
   EXPECT_EQ(report.incompatible.size(), 1);
-  EXPECT_EQ(
-      GetKernelTuningRegistry().Snapshot().Find(defaults.key)->Get<int64_t>("algorithm.tile_m"),
-      224);
+  EXPECT_EQ(GetKernelTuningRegistry()
+                .Snapshot()
+                .Resolve(defaults.key, execution)
+                ->Get<int64_t>("algorithm.tile_m"),
+            224);
 }
 
 TEST(KernelTuningCache, RejectsMalformedFileWithoutPublishing) {
@@ -417,7 +559,8 @@ TEST(KernelTuningCache, RejectsInvalidEntryAsAWhole) {
   KernelCalibrationSelection selection;
   selection.library = defaults.key.library;
   KernelTuningCacheLoadReport report = LoadKernelTuningCache(selection, {cache.path(), execution});
-  const KernelTuningParameters *resolved = GetKernelTuningRegistry().Snapshot().Find(defaults.key);
+  const KernelTuningParameters *resolved =
+      GetKernelTuningRegistry().Snapshot().Resolve(defaults.key, execution);
 
   EXPECT_EQ(report.status, KernelTuningCacheLoadStatus::kLoaded);
   EXPECT_EQ(report.invalid.size(), 1);

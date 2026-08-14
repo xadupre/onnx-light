@@ -269,7 +269,7 @@ template <typename Fn> void ParallelFor(int64_t total, int64_t grain_size, Fn fn
 
   // Use as many blocks as participants, but never so many that a block would
   // hold fewer than grain_size iterations.
-  const int64_t max_useful_blocks = (total + grain_size - 1) / grain_size;
+  const int64_t max_useful_blocks = total / grain_size;
   const int64_t num_blocks = std::min(max_threads, max_useful_blocks);
   if (num_blocks <= 1) {
     fn(static_cast<int64_t>(0), total);

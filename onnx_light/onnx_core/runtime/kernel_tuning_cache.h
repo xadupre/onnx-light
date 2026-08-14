@@ -8,24 +8,10 @@
 #include "onnx_core/runtime/kernel_tuning.h"
 
 #include <filesystem>
-#include <optional>
 #include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
-
-/** Filters cache entries. Non-empty fields combine with logical AND. */
-struct KernelCalibrationSelection {
-  std::optional<std::string> library;
-  std::vector<std::string> kernels;
-  std::vector<std::string> implementations;
-  std::vector<int32_t> element_types;
-  std::optional<Device> device;
-  bool only_missing = false;
-
-  /** Returns whether an exact key satisfies this selection. */
-  bool Matches(const KernelTuningKey &key) const;
-};
 
 /** Controls cache location and execution-descriptor matching. */
 struct KernelTuningCacheOptions {

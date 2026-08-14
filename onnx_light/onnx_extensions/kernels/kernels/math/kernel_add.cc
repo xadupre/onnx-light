@@ -46,6 +46,35 @@ void AddInPlace(const char *dtype_name, int32_t dtype, const Tensor &x, const Te
 constexpr const char *kSupportedAddTypesMsg =
     " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, INT16, INT32, INT64, UINT8, UINT16, "
     "UINT32 and UINT64 inputs.";
+
+KernelTuningParameters CalibrateAdd(const KernelTuningKey &key,
+                                    const CpuExecutionDescriptor &execution,
+                                    const CalibrationOptions &options,
+                                    CalibrationReporter &reporter) {
+  const int64_t portable_minimum = core::runtime::kParallelForGrainSize;
+  const KernelContext context{DefaultOpset(14)};
+  Add reference{context};
+  Add candidate{context};
+  KernelCalibrationBenchmark benchmark;
+  benchmark.portable_parameters = {
+      key, {{std::string(tuning::kParallelMinimumElements), portable_minimum}}};
+  benchmark.parameter_name = std::string(tuning::kParallelMinimumElements);
+  benchmark.cases = MakeElementwiseCalibrationCases(key.element_type, 2, int64_t{1} << 14,
+                                                    int64_t{1} << 23, true);
+  benchmark.reference.configure = [&](int64_t value) {
+    reference.Configure({key, {{benchmark.parameter_name, value}}});
+  };
+  benchmark.reference.run = [&](std::span<const Tensor> inputs, Tensor &output) {
+    reference(inputs[0], inputs[1], output);
+  };
+  benchmark.candidate.configure = [&](int64_t value) {
+    candidate.Configure({key, {{benchmark.parameter_name, value}}});
+  };
+  benchmark.candidate.run = [&](std::span<const Tensor> inputs, Tensor &output) {
+    candidate(inputs[0], inputs[1], output);
+  };
+  return CalibrateKernelBenchmark(key, execution, options, reporter, benchmark);
+}
 } // namespace
 
 Add::Add(const KernelContext &ctx) : KernelBase(ctx), tuning_(kParallelForGrainSize) {}
@@ -53,6 +82,10 @@ Add::Add(const KernelContext &ctx) : KernelBase(ctx), tuning_(kParallelForGrainS
 void Add::RegisterTuningSchemas() {
   tuning::RegisterParallelTuningSchemas("Add", kSupportedElementTypes, kParallelForGrainSize,
                                         kTuningAbi);
+  for (int32_t element_type : kSupportedElementTypes) {
+    const KernelTuningKey key = tuning::MakePortableTuningKey("Add", element_type, kTuningAbi);
+    core::runtime::RegisterKernelCalibrationFunction(key, CalibrateAdd);
+  }
 }
 
 KernelTuningKey Add::TuningKey(int32_t element_type) const {

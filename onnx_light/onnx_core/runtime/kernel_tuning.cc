@@ -4,8 +4,14 @@
 
 #include "onnx_core/runtime/kernel_tuning.h"
 
+#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/parallel_for.h"
+#include "onnx_core/runtime/random.h"
+
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <cstring>
 #include <limits>
 #include <mutex>
 #include <stdexcept>
@@ -229,6 +235,12 @@ bool KernelCalibrationSelection::Matches(const KernelTuningKey &key) const {
 
 void CalibrationReporter::AddDiagnostic(std::string message) {
   diagnostics_.push_back(std::move(message));
+}
+
+void CalibrationReporter::RecordBenchmark(uint64_t memory_bytes, uint64_t duration_ns) {
+  ++benchmark_cases_;
+  peak_memory_bytes_ = std::max(peak_memory_bytes_, memory_bytes);
+  measured_duration_ns_ += duration_ns;
 }
 
 bool KernelTuningParameters::Contains(std::string_view name) const {
@@ -567,6 +579,268 @@ void RegisterKernelCalibrationFunction(const KernelTuningKey &key,
   GetKernelTuningRegistry().RegisterCalibrationFunction(key, std::move(function));
 }
 
+std::vector<KernelCalibrationCase>
+MakeElementwiseCalibrationCases(int32_t element_type, size_t input_count, int64_t first_elements,
+                                int64_t maximum_elements, bool include_broadcasting) {
+  if (input_count == 0 || input_count > 2) {
+    throw std::invalid_argument("Elementwise calibration supports one or two inputs.");
+  }
+  if (first_elements <= 0 || maximum_elements < first_elements) {
+    throw std::invalid_argument("Elementwise calibration element bounds are invalid.");
+  }
+  if (include_broadcasting && input_count != 2) {
+    throw std::invalid_argument("Elementwise calibration broadcasting requires two inputs.");
+  }
+
+  std::vector<KernelCalibrationCase> cases;
+  for (int64_t elements = first_elements; elements <= maximum_elements;) {
+    KernelCalibrationCase equal;
+    equal.name = input_count == 1 ? "unary" : "equal_shape";
+    equal.problem_size = static_cast<uint64_t>(elements);
+    equal.output_element_type = element_type;
+    equal.output_shape = {elements};
+    for (size_t input = 0; input < input_count; ++input) {
+      equal.inputs.push_back(
+          {element_type, {elements}, uint64_t{5} + static_cast<uint64_t>(input)});
+    }
+    cases.push_back(std::move(equal));
+
+    if (include_broadcasting) {
+      cases.push_back({"scalar_broadcast",
+                       static_cast<uint64_t>(elements),
+                       {{element_type, {elements}, 5}, {element_type, {}, 6}},
+                       element_type,
+                       {elements}});
+      if (elements >= 4 && elements % 4 == 0) {
+        cases.push_back({"multidirectional_broadcast",
+                         static_cast<uint64_t>(elements),
+                         {{element_type, {elements / 4, 4}, 5}, {element_type, {1, 4}, 6}},
+                         element_type,
+                         {elements / 4, 4}});
+      }
+    }
+    if (elements > maximum_elements / 2) {
+      break;
+    }
+    elements *= 2;
+  }
+  return cases;
+}
+
+namespace {
+
+Tensor GenerateCalibrationInput(const CalibrationInputSpec &spec) {
+  switch (static_cast<DataType>(spec.element_type)) {
+  case DataType::UINT8:
+    return Tensor::From("", spec.shape, RandUint<uint8_t>(16, spec.shape, spec.seed));
+  case DataType::UINT16:
+    return Tensor::From("", spec.shape, RandUint<uint16_t>(16, spec.shape, spec.seed));
+  case DataType::UINT32:
+    return Tensor::From("", spec.shape, RandUint<uint32_t>(16, spec.shape, spec.seed));
+  case DataType::UINT64:
+    return Tensor::From("", spec.shape, RandUint<uint64_t>(16, spec.shape, spec.seed));
+  default:
+    return RandnTensor(spec.element_type, spec.shape, spec.seed);
+  }
+}
+
+uint64_t TensorStorageBytes(int32_t element_type, const Shape &shape) {
+  const int64_t elements = shape.product(0, shape.size(), "calibration tensor");
+  return static_cast<uint64_t>(PackedByteSize(element_type, elements));
+}
+
+uint64_t CaseMemoryBytes(const KernelCalibrationCase &benchmark_case) {
+  const uint64_t output_bytes =
+      TensorStorageBytes(benchmark_case.output_element_type, benchmark_case.output_shape);
+  if (output_bytes > std::numeric_limits<uint64_t>::max() / 2) {
+    throw std::invalid_argument("Calibration case output memory size overflows uint64.");
+  }
+  uint64_t bytes = 2 * output_bytes;
+  for (const CalibrationInputSpec &input : benchmark_case.inputs) {
+    const uint64_t input_bytes = TensorStorageBytes(input.element_type, input.shape);
+    if (input_bytes > std::numeric_limits<uint64_t>::max() - bytes) {
+      throw std::invalid_argument("Calibration case memory size overflows uint64.");
+    }
+    bytes += input_bytes;
+  }
+  return bytes;
+}
+
+bool ExactCalibrationOutput(const Tensor &reference, const Tensor &candidate) {
+  return reference.data_type == candidate.data_type && reference.shape == candidate.shape &&
+         reference.size_bytes() == candidate.size_bytes() &&
+         (reference.size_bytes() == 0 ||
+          std::memcmp(reference.bytes(), candidate.bytes(), reference.size_bytes()) == 0);
+}
+
+int64_t Median(std::vector<int64_t> samples) {
+  std::sort(samples.begin(), samples.end());
+  return samples[samples.size() / 2];
+}
+
+int64_t Measure(const std::function<void()> &run) {
+  const auto begin = std::chrono::steady_clock::now();
+  run();
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
+                                                              begin)
+      .count();
+}
+
+} // namespace
+
+KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
+                                                const CpuExecutionDescriptor &execution,
+                                                const CalibrationOptions &options,
+                                                CalibrationReporter &reporter,
+                                                const KernelCalibrationBenchmark &benchmark) {
+  if (benchmark.portable_parameters.key != key ||
+      !benchmark.portable_parameters.Contains(benchmark.parameter_name)) {
+    throw std::invalid_argument("Calibration benchmark portable parameters are incomplete.");
+  }
+  if (!benchmark.reference.configure || !benchmark.reference.run ||
+      !benchmark.candidate.configure || !benchmark.candidate.run || benchmark.cases.empty()) {
+    throw std::invalid_argument("Calibration benchmark runners and cases must not be empty.");
+  }
+  if (benchmark.repetitions <= 0 || benchmark.required_consecutive_wins <= 0 ||
+      benchmark.minimum_speedup < 0.0 || benchmark.minimum_speedup >= 1.0) {
+    throw std::invalid_argument("Calibration benchmark search parameters are invalid.");
+  }
+  const uint32_t actual_threads = static_cast<uint32_t>(ParallelForThreadCount());
+  if (execution.effective_threads != actual_threads) {
+    throw std::invalid_argument(
+        "Calibration requested " + std::to_string(execution.effective_threads) +
+        " threads, but ParallelFor uses " + std::to_string(actual_threads) + ".");
+  }
+
+  KernelTuningParameters selected = benchmark.portable_parameters;
+  if (actual_threads == 1) {
+    reporter.AddDiagnostic(key.kernel +
+                           " kept the portable threshold because parallel execution is "
+                           "unavailable.");
+    return selected;
+  }
+
+  const uint64_t memory_budget = options.maximum_memory_bytes == 0
+                                     ? benchmark.default_maximum_memory_bytes
+                                     : options.maximum_memory_bytes;
+  const uint64_t duration_ms = options.maximum_duration_ms == 0
+                                   ? benchmark.default_maximum_duration_ms
+                                   : options.maximum_duration_ms;
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(duration_ms);
+  const auto validate =
+      benchmark.validate_output ? benchmark.validate_output : ExactCalibrationOutput;
+  benchmark.reference.configure(benchmark.serial_parameter_value);
+
+  int consecutive_wins = 0;
+  uint64_t first_winning_size = 0;
+  bool measured_any = false;
+  bool tuned = false;
+  uint64_t previous_problem_size = 0;
+  for (size_t case_index = 0; case_index < benchmark.cases.size();) {
+    const uint64_t problem_size = benchmark.cases[case_index].problem_size;
+    if (problem_size == 0 || problem_size < previous_problem_size ||
+        problem_size > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+      throw std::invalid_argument(
+          "Calibration cases must have positive, nondecreasing int64 problem sizes.");
+    }
+    previous_problem_size = problem_size;
+    const int64_t candidate_value = static_cast<int64_t>((problem_size + 1) / 2);
+    benchmark.candidate.configure(candidate_value);
+    bool group_won = true;
+    bool group_measured = false;
+
+    while (case_index < benchmark.cases.size() &&
+           benchmark.cases[case_index].problem_size == problem_size) {
+      const KernelCalibrationCase &benchmark_case = benchmark.cases[case_index++];
+      if (benchmark_case.name.empty() || benchmark_case.inputs.empty()) {
+        throw std::invalid_argument("Calibration case name and inputs must not be empty.");
+      }
+      const uint64_t memory_bytes = CaseMemoryBytes(benchmark_case);
+      if (memory_bytes > memory_budget) {
+        group_won = false;
+        continue;
+      }
+
+      std::vector<Tensor> inputs;
+      inputs.reserve(benchmark_case.inputs.size());
+      for (const CalibrationInputSpec &input : benchmark_case.inputs) {
+        inputs.push_back(GenerateCalibrationInput(input));
+      }
+      const uint64_t output_bytes =
+          TensorStorageBytes(benchmark_case.output_element_type, benchmark_case.output_shape);
+      Tensor reference_output =
+          MakeOutputTensor(benchmark_case.output_element_type, benchmark_case.output_shape,
+                           static_cast<size_t>(output_bytes), nullptr);
+      Tensor candidate_output =
+          MakeOutputTensor(benchmark_case.output_element_type, benchmark_case.output_shape,
+                           static_cast<size_t>(output_bytes), nullptr);
+      const std::span<const Tensor> input_span(inputs);
+      const auto run_reference = [&]() { benchmark.reference.run(input_span, reference_output); };
+      const auto run_candidate = [&]() { benchmark.candidate.run(input_span, candidate_output); };
+      run_reference();
+      run_candidate();
+      if (!validate(reference_output, candidate_output)) {
+        throw std::runtime_error(key.kernel + " calibration case '" + benchmark_case.name +
+                                 "' candidate output differs from the reference output.");
+      }
+
+      std::vector<int64_t> reference_samples;
+      std::vector<int64_t> candidate_samples;
+      reference_samples.reserve(static_cast<size_t>(benchmark.repetitions));
+      candidate_samples.reserve(static_cast<size_t>(benchmark.repetitions));
+      uint64_t measured_duration_ns = 0;
+      for (int repetition = 0; repetition < benchmark.repetitions; ++repetition) {
+        const int64_t reference_ns = Measure(run_reference);
+        const int64_t candidate_ns = Measure(run_candidate);
+        reference_samples.push_back(reference_ns);
+        candidate_samples.push_back(candidate_ns);
+        measured_duration_ns +=
+            static_cast<uint64_t>(reference_ns) + static_cast<uint64_t>(candidate_ns);
+      }
+      reporter.RecordBenchmark(memory_bytes, measured_duration_ns);
+      measured_any = true;
+      group_measured = true;
+      const int64_t reference_ns = Median(std::move(reference_samples));
+      const int64_t candidate_ns = Median(std::move(candidate_samples));
+      if (static_cast<double>(candidate_ns) >
+          static_cast<double>(reference_ns) * (1.0 - benchmark.minimum_speedup)) {
+        group_won = false;
+      }
+    }
+
+    if (group_measured && group_won) {
+      if (consecutive_wins == 0) {
+        first_winning_size = problem_size;
+      }
+      ++consecutive_wins;
+      if (consecutive_wins == benchmark.required_consecutive_wins) {
+        const int64_t minimum_elements = static_cast<int64_t>((first_winning_size + 1) / 2);
+        selected.values[benchmark.parameter_name] = minimum_elements;
+        reporter.AddDiagnostic(key.kernel + " selected " + benchmark.parameter_name + "=" +
+                               std::to_string(minimum_elements) + ".");
+        tuned = true;
+        break;
+      }
+    } else {
+      consecutive_wins = 0;
+      first_winning_size = 0;
+    }
+    if (std::chrono::steady_clock::now() >= deadline) {
+      break;
+    }
+  }
+  if (!measured_any) {
+    reporter.AddDiagnostic(key.kernel +
+                           " calibration memory budget is too small; kept the portable "
+                           "threshold.");
+  } else if (!tuned) {
+    reporter.AddDiagnostic(key.kernel +
+                           " calibration found no stable parallel crossover; kept the portable "
+                           "threshold.");
+  }
+  return selected;
+}
+
 CalibrationBatchReport CalibrateRegisteredKernels(const KernelCalibrationSelection &selection,
                                                   const CalibrationOptions &options) {
   CalibrationBatchReport report;
@@ -620,6 +894,10 @@ CalibrationBatchReport CalibrateRegisteredKernels(const KernelCalibrationSelecti
     report.calibrated.push_back(std::move(parameters));
     for (const std::string &diagnostic : reporter.diagnostics()) {
       report.diagnostics.push_back({key, diagnostic});
+    }
+    if (reporter.benchmark_cases() != 0) {
+      report.resources.push_back({key, reporter.benchmark_cases(), reporter.peak_memory_bytes(),
+                                  reporter.measured_duration_ns()});
     }
   }
 

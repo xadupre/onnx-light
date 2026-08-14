@@ -25,6 +25,24 @@ and accounting. Treating both categories as one free list obscures when a
 buffer is actually reusable and can lead either to dangling NumPy arrays or to
 unnecessarily pinned execution memory.
 
+Progress
+++++++++
+
+The implementation is split into focused pull requests:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 30 52
+
+   * - Pull request
+     - Step
+     - Result
+   * - `PR #4430 <https://github.com/xadupre/onnx-light/pull/4430>`_
+     - Allocator-output lifetime characterization
+     - Moves this plan into active implementation and adds two expected-failure
+       tests covering ``RuntimeContext::Clear`` and a subsequent run while an
+       older allocator-backed NumPy output remains alive.
+
 Current behaviour
 +++++++++++++++++
 
@@ -247,9 +265,14 @@ Implementation order
 ++++++++++++++++++++
 
 1. Add tests demonstrating that a NumPy output remains valid after
-   :cpp:func:`RuntimeContext::Clear` and after subsequent runs.
+   :cpp:func:`RuntimeContext::Clear` and after subsequent runs
+   (`PR #4430 <https://github.com/xadupre/onnx-light/pull/4430>`_). The tests
+   are expected failures until step 2 introduces independent allocation
+   ownership. They assert allocator live counts before reading an older array,
+   so the known dangling pointer is never dereferenced.
 2. Introduce the movable allocation handle and use it for allocator-backed
-   :cpp:class:`Tensor` storage.
+   :cpp:class:`Tensor` storage. This step removes both expected-failure markers
+   from step 1.
 3. Implement ``ExecutionArena`` with capacity-preserving, size-bucketed reuse
    for intermediates and temporary workspaces.
 4. Implement ``IOArena`` and make its allocation handle suitable for ownership
@@ -285,3 +308,9 @@ allocation, but it must not disturb execution-arena reuse.
 
 Free buffers are reused only within their own lifetime domain, while buffers
 still visible outside the runtime remain pinned and untouched.
+
+Pull requests
++++++++++++++
+
+* `PR #4430 <https://github.com/xadupre/onnx-light/pull/4430>`_: allocator-backed
+  NumPy output lifetime characterization.

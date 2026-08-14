@@ -63,6 +63,25 @@ struct RuntimeSessionOptions {
   bool allow_external_output_allocators = false;
 };
 
+/** Reports the one-time kernel tuning work performed by a runtime session. */
+struct KernelTuningResolutionStatistics {
+  /// Time spent capturing the immutable registry generation.
+  uint64_t snapshot_duration_ns = 0;
+  /// Time spent resolving execution-specific profiles from that generation.
+  uint64_t resolution_duration_ns = 0;
+  /// Number of kernels that exposed a defined tuning key.
+  size_t tunable_kernels = 0;
+  /// Number of tunable kernels for which registered parameters were found.
+  size_t resolved_profiles = 0;
+
+  /// Returns the measured cold tuning duration.
+  uint64_t TotalDurationNs() const noexcept {
+    return snapshot_duration_ns + resolution_duration_ns;
+  }
+
+  bool operator==(const KernelTuningResolutionStatistics &) const = default;
+};
+
 /**
  * A reusable execution session that binds a precomputed
  * :cpp:class:`ExecutionPlan` and separates the runtime lifecycle into three
@@ -197,6 +216,11 @@ public:
     return tuning_snapshot_.has_value() ? tuning_snapshot_->generation() : 0;
   }
 
+  /// Returns the cold tuning work recorded during first-run kernel initialization.
+  const KernelTuningResolutionStatistics &tuning_resolution_statistics() const noexcept {
+    return tuning_resolution_statistics_;
+  }
+
   /// Enables or disables concrete-shape validation. When enabled, :cpp:func:`Run`
   /// checks that the concrete shape of every tensor carrying a declared
   /// (possibly symbolic) shape — the graph inputs, outputs and ``value_info``
@@ -322,6 +346,7 @@ private:
   /// Kernels copy resolved values during initialization; retaining the snapshot
   /// also makes the generation available for diagnostics.
   std::optional<KernelTuningRegistrySnapshot> tuning_snapshot_;
+  KernelTuningResolutionStatistics tuning_resolution_statistics_;
   std::vector<std::string> required_inputs_;
   /// Declared (possibly symbolic) shapes keyed by tensor name, populated by
   /// :cpp:func:`SetDeclaredShapes` and consulted by :cpp:func:`Run` when

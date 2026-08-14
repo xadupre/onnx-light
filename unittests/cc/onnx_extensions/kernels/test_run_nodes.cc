@@ -4750,10 +4750,22 @@ TEST(RuntimeSession, KeepsResolvedKernelTuningImmutable) {
   RuntimeContext first_rt(KernelContext(DefaultOpset(18)));
   first_rt.Set("x", Tensor::FromFloat("x", {1}, {1.0f}));
   RuntimeSession first_session(first_rt.GetExecutionPlan(graph));
+  core::runtime::KernelTuningRegistry &registry = core::runtime::GetKernelTuningRegistry();
+  const core::runtime::KernelTuningRegistryAccessCounts before_first_run = registry.AccessCounts();
   first_session.Run(first_rt);
+  const core::runtime::KernelTuningRegistryAccessCounts after_first_run = registry.AccessCounts();
   const uint64_t first_generation = first_session.tuning_generation();
   EXPECT_GT(first_generation, 0);
   EXPECT_EQ(first_rt.Get("y").AsInt64()[0], 20);
+  EXPECT_EQ(after_first_run.snapshots - before_first_run.snapshots, 1u);
+  EXPECT_EQ(after_first_run.lookups - before_first_run.lookups, 1u);
+  EXPECT_EQ(after_first_run.resolutions - before_first_run.resolutions, 1u);
+  const core::runtime::KernelTuningResolutionStatistics statistics =
+      first_session.tuning_resolution_statistics();
+  EXPECT_EQ(statistics.tunable_kernels, 1u);
+  EXPECT_EQ(statistics.resolved_profiles, 1u);
+  EXPECT_EQ(statistics.TotalDurationNs(),
+            statistics.snapshot_duration_ns + statistics.resolution_duration_ns);
 
   KernelTuningParameters second = defaults;
   second.values["algorithm.threshold"] = int64_t{30};
@@ -4761,9 +4773,13 @@ TEST(RuntimeSession, KeepsResolvedKernelTuningImmutable) {
       std::span<const KernelTuningParameters>(&second, 1));
 
   first_rt.Remove("y");
+  const core::runtime::KernelTuningRegistryAccessCounts before_hot_run = registry.AccessCounts();
   first_session.Run(first_rt);
+  const core::runtime::KernelTuningRegistryAccessCounts after_hot_run = registry.AccessCounts();
   EXPECT_EQ(first_session.tuning_generation(), first_generation);
   EXPECT_EQ(first_rt.Get("y").AsInt64()[0], 20);
+  EXPECT_EQ(after_hot_run, before_hot_run);
+  EXPECT_EQ(first_session.tuning_resolution_statistics(), statistics);
 
   RuntimeContext second_rt(KernelContext(DefaultOpset(18)));
   second_rt.Set("x", Tensor::FromFloat("x", {1}, {1.0f}));

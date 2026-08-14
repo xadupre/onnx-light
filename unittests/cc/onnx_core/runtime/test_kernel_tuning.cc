@@ -221,6 +221,21 @@ TEST(KernelTuningRegistry, KeepsPublishedGenerationsImmutable) {
   EXPECT_EQ(published.Find(MakeKey())->Get<int64_t>("algorithm.tile_m"), 128);
 }
 
+TEST(KernelTuningRegistry, CountsSnapshotsAndProfileResolutions) {
+  KernelTuningRegistry registry;
+  registry.RegisterSchema(KernelTuningSchema(MakeDefaults()));
+  const KernelTuningRegistryAccessCounts before = registry.AccessCounts();
+
+  const KernelTuningRegistrySnapshot snapshot = registry.Snapshot();
+  ASSERT_NE(snapshot.Resolve(MakeKey(), MakeExecution()), nullptr);
+  ASSERT_NE(snapshot.Resolve(MakeKey(), MakeExecution()), nullptr);
+  const KernelTuningRegistryAccessCounts after = registry.AccessCounts();
+
+  EXPECT_EQ(after.snapshots - before.snapshots, 1u);
+  EXPECT_EQ(after.lookups - before.lookups, 2u);
+  EXPECT_EQ(after.resolutions - before.resolutions, 2u);
+}
+
 TEST(KernelTuningRegistry, RejectsBatchWithoutPartialPublication) {
   KernelTuningRegistry registry;
   registry.RegisterSchema(KernelTuningSchema(MakeDefaults()));

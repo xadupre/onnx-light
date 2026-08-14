@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/random.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cstring>
@@ -309,6 +310,12 @@ void KernelTuningSchema::ValidateValues(const KernelTuningParameters &parameters
 }
 
 struct KernelTuningRegistrySnapshot::State {
+  struct AccessCounters {
+    std::atomic<uint64_t> snapshots{0};
+    std::atomic<uint64_t> lookups{0};
+    std::atomic<uint64_t> resolutions{0};
+  };
+
   struct RegisteredProfile {
     KernelTuningKey key;
     platform::CpuSelector processors;
@@ -327,6 +334,7 @@ struct KernelTuningRegistrySnapshot::State {
   std::unordered_set<KernelTuningKey, KernelTuningKeyHash> published_keys;
   std::vector<PublishedExecutionProfile> published_execution_profiles;
   std::vector<RegisteredProfile> registered_profiles;
+  std::shared_ptr<AccessCounters> access_counters;
 };
 
 struct KernelTuningRegistry::Impl {
@@ -336,21 +344,29 @@ struct KernelTuningRegistry::Impl {
       schemas;
   std::unordered_map<KernelTuningKey, KernelCalibrationFunction, KernelTuningKeyHash>
       calibration_functions;
+  std::shared_ptr<KernelTuningRegistrySnapshot::State::AccessCounters> access_counters;
   std::shared_ptr<const KernelTuningRegistrySnapshot::State> state;
 
-  Impl() : state(std::make_shared<const KernelTuningRegistrySnapshot::State>()) {}
+  Impl() {
+    auto initial = std::make_shared<KernelTuningRegistrySnapshot::State>();
+    access_counters = std::make_shared<KernelTuningRegistrySnapshot::State::AccessCounters>();
+    initial->access_counters = access_counters;
+    state = std::move(initial);
+  }
 };
 
 uint64_t KernelTuningRegistrySnapshot::generation() const noexcept { return state_->generation; }
 
 const KernelTuningParameters *
 KernelTuningRegistrySnapshot::Find(const KernelTuningKey &key) const noexcept {
+  state_->access_counters->lookups.fetch_add(1, std::memory_order_relaxed);
   auto found = state_->profiles.find(key);
   return found == state_->profiles.end() ? nullptr : &found->second;
 }
 
 bool KernelTuningRegistrySnapshot::HasPublishedProfile(
     const KernelTuningKey &key, const CpuExecutionDescriptor &execution) const noexcept {
+  state_->access_counters->lookups.fetch_add(1, std::memory_order_relaxed);
   return state_->published_keys.contains(key) ||
          std::any_of(state_->published_execution_profiles.begin(),
                      state_->published_execution_profiles.end(),
@@ -362,6 +378,8 @@ bool KernelTuningRegistrySnapshot::HasPublishedProfile(
 const KernelTuningParameters *
 KernelTuningRegistrySnapshot::Resolve(const KernelTuningKey &key,
                                       const CpuExecutionDescriptor &execution) const noexcept {
+  state_->access_counters->lookups.fetch_add(1, std::memory_order_relaxed);
+  state_->access_counters->resolutions.fetch_add(1, std::memory_order_relaxed);
   auto portable = state_->profiles.find(key);
   if (portable == state_->profiles.end() || state_->published_keys.contains(key)) {
     return portable == state_->profiles.end() ? nullptr : &portable->second;
@@ -492,7 +510,15 @@ void KernelTuningRegistry::RegisterCalibrationFunction(const KernelTuningKey &ke
 
 KernelTuningRegistrySnapshot KernelTuningRegistry::Snapshot() const noexcept {
   std::lock_guard lock(impl_->mutex);
+  impl_->access_counters->snapshots.fetch_add(1, std::memory_order_relaxed);
   return KernelTuningRegistrySnapshot(impl_->state);
+}
+
+KernelTuningRegistryAccessCounts KernelTuningRegistry::AccessCounts() const noexcept {
+  const auto &counters = impl_->access_counters;
+  return {counters->snapshots.load(std::memory_order_relaxed),
+          counters->lookups.load(std::memory_order_relaxed),
+          counters->resolutions.load(std::memory_order_relaxed)};
 }
 
 void KernelTuningRegistry::PublishProfiles(std::span<const KernelTuningParameters> profiles,

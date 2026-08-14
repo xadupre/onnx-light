@@ -155,8 +155,8 @@ inline SVMCommonAttrs ParseSVMCommonAttrs(const NodeProto &node, const char *op_
 // with a ``T*`` tag pointer (always null) so the caller can recover ``T`` via
 // ``std::remove_pointer_t<decltype(tag)>``.
 template <class Fn>
-auto DispatchSVMByDataType(const Tensor &x, const char *op_name,
-                           Fn &&fn) -> decltype(fn(static_cast<float *>(nullptr))) {
+auto DispatchSVMByDataType(const Tensor &x, const char *op_name, Fn &&fn)
+    -> decltype(fn(static_cast<float *>(nullptr))) {
   switch (x.data_type) {
   case static_cast<int32_t>(DataType::FLOAT):
     return fn(static_cast<float *>(nullptr));
@@ -176,8 +176,8 @@ auto DispatchSVMByDataType(const Tensor &x, const char *op_name,
 // set of input element types (FLOAT, DOUBLE, INT32, INT64) per the
 // ``ai.onnx.ml`` schema.
 template <class Fn>
-auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name,
-                                           Fn &&fn) -> decltype(fn(static_cast<float *>(nullptr))) {
+auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name, Fn &&fn)
+    -> decltype(fn(static_cast<float *>(nullptr))) {
   return DispatchSVMByDataType(x, op_name, std::forward<Fn>(fn));
 }
 

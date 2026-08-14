@@ -21,7 +21,7 @@ class TestCMakeCppStandard(unittest.TestCase):
             ),
             msg=(
                 "MSVC /MP must be guarded by a Ninja check; /WX must remain "
-                "in the outer MSVC block.",
+                "in the outer MSVC block."
             ),
         )
 

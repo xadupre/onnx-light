@@ -17,6 +17,12 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install clang-format
+        run: pip install clang-format==22.1.8
       - name: Check C++ formatting
         run: |
           find . \( -name "*.cc" -o -name "*.h" -o -name "*.hpp" \) \

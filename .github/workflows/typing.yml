@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install typing tools
-        run: pip install numpy ml-dtypes onnx mypy==2.1.0 pyrefly==1.1.1
+        run: pip install numpy ml-dtypes onnx mypy==2.3.0 pyrefly==1.2.0
       - name: Run mypy
         run: mypy onnx_light
       - name: Run pyrefly

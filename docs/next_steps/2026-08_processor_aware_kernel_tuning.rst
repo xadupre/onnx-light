@@ -575,11 +575,12 @@ Implementation order
    covering arithmetic, activation, logical, comparison, bitwise, equal-shape,
    and broadcasting execution paths (`PR #4421
    <https://github.com/xadupre/onnx-light/pull/4421>`_).
-10. Design and add one calibration API that supports unary and binary kernels,
-    input generation for every operand, broadcasting shapes, output
-    validation, resource accounting, and kernel-specific benchmark cases.
-    Replace the local ``Abs`` and ``Not`` search loops only after this API has
-    been exercised by both unary and binary integrations.
+10. Add one calibration API for unary and binary kernels, with deterministic
+    input generation for every operand, equal-shape and broadcasting cases,
+    output validation, bounded resource accounting, and kernel-specific
+    benchmark groups. Migrate the local ``Abs`` and ``Not`` searches and
+    exercise the binary path through ``Add`` (`PR #4422
+    <https://github.com/xadupre/onnx-light/pull/4422>`_).
 11. Add atomic ``UpdateKernelTuningCache`` and deployment-profile import.
 12. Benchmark cold resolution separately from steady-state kernel execution and
     verify that the hot path performs no registry access.

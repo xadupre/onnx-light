@@ -81,6 +81,31 @@ See :ref:`l-example-plot-kernel-tuning` for an executable gallery example that
 combines discovery, a temporary validated update, cache inspection, inference,
 and bounded calibration.
 
+Propose missing local profiles
+++++++++++++++++++++++++++++++
+
+The command-line tool scans all registered exact keys and reports those without
+a compatible profile in the selected cache:
+
+.. code-block:: bash
+
+    python -m onnx_light tune-kernels --json
+
+It is read-only by default. Select a subset and explicitly apply calibratable
+proposals with:
+
+.. code-block:: bash
+
+    python -m onnx_light tune-kernels \
+        --kernel Abs --kernel Add \
+        --element-type FLOAT \
+        --apply
+
+The equivalent Python functions are ``propose_kernel_tuning_updates`` and
+``apply_kernel_tuning_updates``. Both reports separate calibratable missing keys
+from kernels that have a schema but no calibration callback. See
+:ref:`l-cli-tune-kernels` for all options.
+
 Calibrate one kernel from Python
 ++++++++++++++++++++++++++++++++
 

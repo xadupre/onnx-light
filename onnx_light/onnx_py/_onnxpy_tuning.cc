@@ -227,6 +227,8 @@ nb::dict ListParameters(const std::optional<std::string> &kernel, const std::str
     nb::dict item = KeyToDict(key);
     const rt::KernelTuningParameters &defaults = schema->portable_defaults();
     item["defaults"] = ValuesToDict(defaults);
+    item["calibratable"] =
+        static_cast<bool>(rt::GetKernelTuningRegistry().FindCalibrationFunction(key));
     nb::list names;
     std::vector<std::string> sorted_names;
     for (const auto &[name, value] : defaults.values) {

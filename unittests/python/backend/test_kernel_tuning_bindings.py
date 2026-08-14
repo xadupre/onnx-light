@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -102,6 +103,40 @@ assert kernel["active_source"] == "published_profile", kernel
             env = os.environ.copy()
             env["XDG_CACHE_HOME"] = temporary
             subprocess.run([sys.executable, "-c", code], check=True, env=env)
+
+    def test_proposes_missing_subset_and_cli_is_read_only(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = str(Path(temporary) / "missing.cache")
+            proposal = kernel_tuning.propose_kernel_tuning_updates(
+                kernels=["Abs"], element_types=[int(TensorProto.FLOAT)], path=path
+            )
+            self.assertEqual(proposal["selected"], 1)
+            self.assertEqual(proposal["covered"], 0)
+            self.assertEqual(len(proposal["calibratable"]), 1)
+            self.assertEqual(proposal["calibratable"][0]["kernel"], "Abs")
+
+            process = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "onnx_light",
+                    "tune-kernels",
+                    "--kernel",
+                    "Abs",
+                    "--element-type",
+                    "FLOAT",
+                    "--cache",
+                    path,
+                    "--json",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            cli = json.loads(process.stdout)
+            self.assertEqual(cli["selected"], 1)
+            self.assertEqual(len(cli["calibratable"]), 1)
+            self.assertFalse(Path(path).exists())
 
 
 if __name__ == "__main__":

@@ -35,9 +35,26 @@ from onnx_light.onnx_lib import parser
 
 element_type = int(TensorProto.FLOAT)
 initial = kernel_tuning.kernel_tuning_parameters(kernel="Abs", element_type=element_type)
-assert len(initial["kernels"]) == 1
+(abs_parameters,) = initial["kernels"]
 print(f"default cache: {initial['cache_path']}")
-pprint(initial["kernels"][0])
+pprint(abs_parameters)
+
+#####################################
+# Propose missing profiles
+# ++++++++++++++++++++++++
+#
+# A proposal is read-only. It compares the requested exact keys with the local
+# cache and separates keys that can be calibrated automatically from those
+# without callbacks.
+
+temporary = tempfile.TemporaryDirectory()
+missing_cache = Path(temporary.name) / "missing_tuning.cache"
+proposal = kernel_tuning.propose_kernel_tuning_updates(
+    kernels=["Abs"], element_types=[element_type], path=str(missing_cache)
+)
+assert len(proposal["calibratable"]) == 1
+print("proposed calibrations:")
+pprint(proposal["calibratable"])
 
 #####################################
 # Write a validated profile
@@ -48,9 +65,8 @@ pprint(initial["kernels"][0])
 # defaults, validates the complete set, persists it atomically, and loads it
 # into the current process by default.
 
-temporary = tempfile.TemporaryDirectory()
 cache_path = Path(temporary.name) / "kernel_tuning.cache"
-portable_minimum = initial["kernels"][0]["defaults"]["parallel.minimum_elements"]
+portable_minimum = abs_parameters["defaults"]["parallel.minimum_elements"]
 chosen_minimum = max(1, portable_minimum // 2)
 
 update = kernel_tuning.set_kernel_tuning_parameters(
@@ -77,7 +93,7 @@ pprint(inspection["profiles"])
 current = kernel_tuning.kernel_tuning_parameters(
     kernel="Abs", element_type=element_type, path=str(cache_path)
 )
-abs_tuning = current["kernels"][0]
+(abs_tuning,) = current["kernels"]
 assert abs_tuning["cached_values"]["parallel.minimum_elements"] == chosen_minimum
 assert abs_tuning["active_values"]["parallel.minimum_elements"] == chosen_minimum
 print("active source:", abs_tuning["active_source"])

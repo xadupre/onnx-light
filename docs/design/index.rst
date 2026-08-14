@@ -26,6 +26,12 @@ a smooth replacement.
     cplusplus_linking
 
 .. toctree::
+    :caption: Runtime
+    :maxdepth: 1
+
+    kernel_tuning
+
+.. toctree::
     :caption: Test Coverage
     :maxdepth: 1
 

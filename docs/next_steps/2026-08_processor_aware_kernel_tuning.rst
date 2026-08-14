@@ -606,4 +606,5 @@ Implementation order
     deployment-profile import constrained by explicit processor selectors
     (`PR #4424 <https://github.com/xadupre/onnx-light/pull/4424>`_).
 12. Benchmark cold resolution separately from steady-state kernel execution and
-    verify that the hot path performs no registry access.
+    verify that the hot path performs no registry access (`PR #4426
+    <https://github.com/xadupre/onnx-light/pull/4426>`_).

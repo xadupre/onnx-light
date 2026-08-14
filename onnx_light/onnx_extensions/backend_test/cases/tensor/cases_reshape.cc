@@ -53,7 +53,7 @@ void RegisterReshapeCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_reshape_reordered_benchmark", {opset13},
            {kBenchmarkElementwiseSize, 2}, {kBenchmarkElementwiseSize},
            [reshape_kernel13]() -> IoData {
-             Tensor data = Tensor::FromFloat("", {2048, 2048}, Randn<float>({2048, 2048}, 2001));
+             Tensor data = RandnTensor(DataType::FLOAT, {2048, 2048}, 2001);
              Tensor shape = MakeShapeTensor({4096, 1024});
              Tensor output = reshape_kernel13(data, shape);
              return IoData{{std::move(data), std::move(shape)}, {std::move(output)}};

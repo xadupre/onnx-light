@@ -45,9 +45,8 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     constexpr int64_t y_count = 1 * 32 * 130 * 130;
     Expect(registry, std::move(node), "test_cc_convtranspose_benchmark", {opset},
            {x_count, w_count}, {y_count}, [ct]() -> IoData {
-             Tensor X =
-                 Tensor::FromFloat("X", {1, 32, 128, 128}, Randn<float>({1, 32, 128, 128}, 1401));
-             Tensor W = Tensor::FromFloat("W", {32, 32, 3, 3}, Randn<float>({32, 32, 3, 3}, 1402));
+             Tensor X = RandnTensor(DataType::FLOAT, {1, 32, 128, 128}, 1401);
+             Tensor W = RandnTensor(DataType::FLOAT, {32, 32, 3, 3}, 1402);
              Tensor B;
              onnx_kernels::kernel::ConvTranspose::Attributes attrs;
              attrs.kernel_shape = {3, 3};

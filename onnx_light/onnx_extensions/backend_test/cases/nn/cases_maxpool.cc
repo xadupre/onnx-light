@@ -88,7 +88,7 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t out_count = 1 * 32 * 16383;
     Expect(registry, std::move(node), "test_cc_maxpool_1d_default_benchmark", {opset}, {in_count},
            {out_count}, [maxpool_kernel]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {1, 32, 16384}, Randn<float>({1, 32, 16384}, 2301));
+             Tensor x = RandnTensor(DataType::FLOAT, {1, 32, 16384}, 2301);
              Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2});
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -103,7 +103,7 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2});
     Expect(registry, std::move(node), "test_cc_maxpool_1d_default", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {1, 3, 32}, Randn<float>({1, 3, 32}, /*seed=*/1));
+      Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32}, /*seed=*/1);
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2});
 
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -118,7 +118,7 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     Expect(registry, std::move(node), "test_cc_maxpool_2d_default", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {1, 3, 32, 32}, Randn<float>({1, 3, 32, 32}, /*seed=*/2));
+      Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32}, /*seed=*/2);
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2, 2});
 
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -134,7 +134,7 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {5, 5});
     AddAttribute<std::vector<int64_t>>(node, "strides", {3, 3});
     Expect(registry, std::move(node), "test_cc_maxpool_2d_strides", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {1, 3, 32, 32}, Randn<float>({1, 3, 32, 32}, /*seed=*/3));
+      Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32}, /*seed=*/3);
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{3, 3});
 
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -207,7 +207,7 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {2, 2, 2, 2});
     Expect(registry, std::move(node), "test_cc_maxpool_2d_pads", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {1, 3, 28, 28}, Randn<float>({1, 3, 28, 28}, /*seed=*/4));
+      Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 28, 28}, /*seed=*/4);
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1},
                                 /*pads=*/{2, 2, 2, 2});
 
@@ -279,7 +279,7 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::string>(node, "auto_pad", "SAME_LOWER");
     Expect(registry, std::move(node), "test_cc_maxpool_2d_same_lower", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {1, 3, 32, 32}, Randn<float>({1, 3, 32, 32}, /*seed=*/5));
+      Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32}, /*seed=*/5);
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
                                 /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/0,
                                 /*auto_pad=*/AutoPad::kSameLower);
@@ -297,7 +297,7 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::string>(node, "auto_pad", "SAME_UPPER");
     Expect(registry, std::move(node), "test_cc_maxpool_2d_same_upper", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {1, 3, 32, 32}, Randn<float>({1, 3, 32, 32}, /*seed=*/6));
+      Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32}, /*seed=*/6);
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
                                 /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/0,
                                 /*auto_pad=*/AutoPad::kSameUpper);
@@ -314,8 +314,7 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2, 2});
     Expect(registry, std::move(node), "test_cc_maxpool_3d_default", {opset}, [=]() -> IoData {
-      Tensor x =
-          Tensor::FromFloat("", {1, 3, 32, 32, 32}, Randn<float>({1, 3, 32, 32, 32}, /*seed=*/7));
+      Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32, 32}, /*seed=*/7);
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2, 2, 2});
 
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -413,8 +412,7 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<int64_t>(node, "ceil_mode", 1);
     Expect(registry, std::move(node), "test_cc_maxpool_3d_dilations_use_ref_impl_large", {opset},
            [=]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {1, 1, 32, 32, 32},
-                                          Randn<float>({1, 1, 32, 32, 32}, /*seed=*/8));
+             Tensor x = RandnTensor(DataType::FLOAT, {1, 1, 32, 32, 32}, /*seed=*/8);
              Tensor y = maxpool_kernel(x, /*kernel_shape=*/{5, 5, 5}, /*strides=*/{3, 3, 3},
                                        /*pads=*/{}, /*ceil_mode=*/true, /*dilations=*/{2, 2, 2});
 

@@ -38,9 +38,9 @@ void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry, TestMod
     constexpr int64_t x_count = N * C * H * W;
     Expect(registry, std::move(node), "test_cc_instancenorm_example_benchmark", {opset},
            {x_count, C, C}, {x_count}, [instancenorm_kernel]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {N, C, H, W}, Randn<float>({N, C, H, W}, 2001));
-             Tensor scale = Tensor::FromFloat("", {C}, Randn<float>({C}, 2002));
-             Tensor bias = Tensor::FromFloat("", {C}, Randn<float>({C}, 2003));
+             Tensor x = RandnTensor(DataType::FLOAT, {N, C, H, W}, 2001);
+             Tensor scale = RandnTensor(DataType::FLOAT, {C}, 2002);
+             Tensor bias = RandnTensor(DataType::FLOAT, {C}, 2003);
              Tensor y = instancenorm_kernel(x, scale, bias);
              return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
            });

@@ -54,11 +54,9 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t y_count = 1 * 16 * 127 * 127;
     Expect(registry, std::move(node), "test_cc_basic_deform_conv_without_padding_benchmark",
            {opset}, {x_count, w_count, offset_count}, {y_count}, [dc]() -> IoData {
-             Tensor X =
-                 Tensor::FromFloat("X", {1, 16, 128, 128}, Randn<float>({1, 16, 128, 128}, 1501));
-             Tensor W = Tensor::FromFloat("W", {16, 16, 2, 2}, Randn<float>({16, 16, 2, 2}, 1502));
-             Tensor offset = Tensor::FromFloat("offset", {1, 8, 127, 127},
-                                               Randn<float>({1, 8, 127, 127}, 1503));
+             Tensor X = RandnTensor(DataType::FLOAT, {1, 16, 128, 128}, 1501);
+             Tensor W = RandnTensor(DataType::FLOAT, {16, 16, 2, 2}, 1502);
+             Tensor offset = RandnTensor(DataType::FLOAT, {1, 8, 127, 127}, 1503);
              Tensor B;
              Tensor mask;
              onnx_kernels::kernel::DeformConv::Attributes attrs;

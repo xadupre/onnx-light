@@ -64,7 +64,7 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
                                    /*has_axis=*/true);
     Expect(registry, std::move(node), "test_cc_split_equal_parts_1d_opset13_benchmark", {opset13},
            {4194303}, {1398101, 1398101, 1398101}, [split_kernel]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {4194303}, Randn<float>({4194303}, 2001));
+             Tensor x = RandnTensor(DataType::FLOAT, {4194303}, 2001);
              std::vector<Tensor> outs =
                  split_kernel(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
              return IoData{{std::move(x)},

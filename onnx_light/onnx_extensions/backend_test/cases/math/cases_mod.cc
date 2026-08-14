@@ -64,8 +64,8 @@ void RegisterModCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_mod_benchmark", {opset}, {count, count}, {count},
            [mod_kernel, shape]() -> IoData {
-             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 427));
-             Tensor y = Tensor::FromFloat("", shape, Randn<float>(shape, 428));
+             Tensor x = RandnTensor(DataType::FLOAT, shape, 427);
+             Tensor y = RandnTensor(DataType::FLOAT, shape, 428);
              Tensor z = mod_kernel(x, y, /*fmod=*/1);
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });

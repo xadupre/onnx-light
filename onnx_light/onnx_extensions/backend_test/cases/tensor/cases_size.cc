@@ -44,7 +44,7 @@ void RegisterSizeCases(std::vector<TestCase> &registry, TestMode mode) {
     const std::vector<int64_t> shape = {2048, 2048};
     Expect(registry, MakeSizeNode(), "test_cc_size_benchmark", {opset}, {2048 * 2048}, {1},
            [size_kernel, shape]() -> IoData {
-             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 2001));
+             Tensor x = RandnTensor(DataType::FLOAT, shape, 2001);
              Tensor y = Rename(size_kernel(x), "y");
              return IoData{{std::move(x)}, {std::move(y)}};
            });

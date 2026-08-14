@@ -32,8 +32,8 @@ void RegisterBitwiseBinSignedCase(const std::string &name, const char *op,
                                   std::vector<TestCase> &registry) {
   NodeProto node = MakeNode(op, {"x", "y"}, {"z"});
   Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
-    Tensor x = Tensor::FromInt32("", x_shape, RandnInt<int32_t>(x_shape, x_seed));
-    Tensor y = Tensor::FromInt32("", y_shape, RandnInt<int32_t>(y_shape, y_seed));
+    Tensor x = RandnTensor(DataType::INT32, x_shape, x_seed);
+    Tensor y = RandnTensor(DataType::INT32, y_shape, y_seed);
     Tensor z = k(x, y);
     return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
   });
@@ -47,8 +47,8 @@ void RegisterBitwiseBinSignedCase16(const std::string &name, const char *op,
                                     std::vector<TestCase> &registry) {
   NodeProto node = MakeNode(op, {"x", "y"}, {"z"});
   Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
-    Tensor x = Tensor::FromInt16("", x_shape, RandnInt<int16_t>(x_shape, x_seed));
-    Tensor y = Tensor::FromInt16("", y_shape, RandnInt<int16_t>(y_shape, y_seed));
+    Tensor x = RandnTensor(DataType::INT16, x_shape, x_seed);
+    Tensor y = RandnTensor(DataType::INT16, y_shape, y_seed);
     Tensor z = k(x, y);
     return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
   });
@@ -92,8 +92,8 @@ void RegisterBitwiseBinInt8Case(const std::string &name, const char *op,
                                 std::vector<TestCase> &registry) {
   NodeProto node = MakeNode(op, {"x", "y"}, {"z"});
   Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
-    Tensor x = Tensor::FromInt8("", x_shape, RandnInt<int8_t>(x_shape, x_seed));
-    Tensor y = Tensor::FromInt8("", y_shape, RandnInt<int8_t>(y_shape, y_seed));
+    Tensor x = RandnTensor(DataType::INT8, x_shape, x_seed);
+    Tensor y = RandnTensor(DataType::INT8, y_shape, y_seed);
     Tensor z = k(x, y);
     return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
   });
@@ -107,8 +107,8 @@ void RegisterBitwiseBinInt64Case(const std::string &name, const char *op,
                                  std::vector<TestCase> &registry) {
   NodeProto node = MakeNode(op, {"x", "y"}, {"z"});
   Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
-    Tensor x = Tensor::FromInt64("", x_shape, RandnInt<int64_t>(x_shape, x_seed));
-    Tensor y = Tensor::FromInt64("", y_shape, RandnInt<int64_t>(y_shape, y_seed));
+    Tensor x = RandnTensor(DataType::INT64, x_shape, x_seed);
+    Tensor y = RandnTensor(DataType::INT64, y_shape, y_seed);
     Tensor z = k(x, y);
     return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
   });
@@ -146,8 +146,8 @@ void RegisterBitwiseAndCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_bitwise_and_benchmark", {opset}, {count, count},
            {count}, [k, count]() -> IoData {
-             Tensor x = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9601));
-             Tensor y = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9602));
+             Tensor x = RandnTensor(DataType::INT32, {count}, /*seed=*/9601);
+             Tensor y = RandnTensor(DataType::INT32, {count}, /*seed=*/9602);
              Tensor z = k(x, y);
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
@@ -198,8 +198,8 @@ void RegisterBitwiseOrCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_bitwise_or_benchmark", {opset}, {count, count},
            {count}, [k, count]() -> IoData {
-             Tensor x = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9601));
-             Tensor y = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9602));
+             Tensor x = RandnTensor(DataType::INT32, {count}, /*seed=*/9601);
+             Tensor y = RandnTensor(DataType::INT32, {count}, /*seed=*/9602);
              Tensor z = k(x, y);
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
@@ -249,8 +249,8 @@ void RegisterBitwiseXorCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_bitwise_xor_benchmark", {opset}, {count, count},
            {count}, [k, count]() -> IoData {
-             Tensor x = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9601));
-             Tensor y = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9602));
+             Tensor x = RandnTensor(DataType::INT32, {count}, /*seed=*/9601);
+             Tensor y = RandnTensor(DataType::INT32, {count}, /*seed=*/9602);
              Tensor z = k(x, y);
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
@@ -302,7 +302,7 @@ void RegisterBitwiseNotCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_bitwise_not_benchmark", {opset}, {count}, {count},
            [k, count]() -> IoData {
-             Tensor x = Tensor::FromInt32("", {count}, RandnInt<int32_t>({count}, /*seed=*/9603));
+             Tensor x = RandnTensor(DataType::INT32, {count}, /*seed=*/9603);
              Tensor y = k(x);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -324,7 +324,7 @@ void RegisterBitwiseNotCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeNode("BitwiseNot", {"x"}, {"y"});
     Expect(registry, std::move(node), "test_bitwise_not_2d", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromInt32("", {3, 4}, RandnInt<int32_t>({3, 4}, 1301));
+      Tensor x = RandnTensor(DataType::INT32, {3, 4}, 1301);
       Tensor y = k(x);
       return IoData{{std::move(x)}, {std::move(y)}};
     });

@@ -49,8 +49,7 @@ void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMod
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_dynamicquantizelinear_benchmark", {opset}, {count},
            {count, 1, 1}, [dyn_quantize_kernel]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 2521));
+             Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 2521);
              auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
              return IoData{{std::move(x)},
                            {std::move(y), std::move(y_scale), std::move(y_zero_point)}};

@@ -27,8 +27,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
 
     Expect(registry, std::move(node), "test_cc_dropout_default_inference_benchmark", {opset},
            {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize}, [dropout_kernel]() -> IoData {
-             Tensor data = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                             Randn<float>({kBenchmarkElementwiseSize}, 1601));
+             Tensor data = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 1601);
              Tensor mask("", static_cast<int32_t>(DataType::BOOL), data.shape,
                          std::vector<uint8_t>(static_cast<size_t>(kBenchmarkElementwiseSize), 1));
              Tensor output = dropout_kernel(data, /*ratio=*/0.5f,
@@ -96,7 +95,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<int64_t>(node, "seed", 0);
     Expect(registry, std::move(node), "test_dropout_default_ratio", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/0));
+      Tensor x = RandnTensor(DataType::FLOAT, {3, 4, 5}, /*seed=*/0);
       Tensor r = Tensor::FromFloat("", {}, {0.1f});
       Tensor y = dropout_kernel(x, /*ratio=*/0.1f, /*training_mode=*/false).first;
       return IoData{{std::move(x), std::move(r)}, {std::move(y)}};
@@ -112,7 +111,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("z");
     AddAttribute<int64_t>(node, "seed", 0);
     Expect(registry, std::move(node), "test_dropout_default_mask", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/0));
+      Tensor x = RandnTensor(DataType::FLOAT, {3, 4, 5}, /*seed=*/0);
       auto produced = dropout_kernel(x, /*ratio=*/0.5f, /*training_mode=*/false);
       return IoData{{std::move(x)}, {std::move(produced.first), std::move(produced.second)}};
     });
@@ -128,7 +127,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("z");
     AddAttribute<int64_t>(node, "seed", 0);
     Expect(registry, std::move(node), "test_dropout_default_mask_ratio", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/0));
+      Tensor x = RandnTensor(DataType::FLOAT, {3, 4, 5}, /*seed=*/0);
       Tensor r = Tensor::FromFloat("", {}, {0.1f});
       auto produced = dropout_kernel(x, /*ratio=*/0.1f, /*training_mode=*/false);
       return IoData{{std::move(x), std::move(r)},
@@ -149,7 +148,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<int64_t>(node, "seed", 0);
     Expect(registry, std::move(node), "test_training_dropout_default", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/0));
+      Tensor x = RandnTensor(DataType::FLOAT, {3, 4, 5}, /*seed=*/0);
       Tensor r = Tensor::FromFloat("", {}, {0.5f});
       Tensor t = Tensor::FromBool("", {}, {1});
       auto produced = dropout_kernel(x, /*ratio=*/0.5f, /*training_mode=*/true, /*seed=*/0);
@@ -169,7 +168,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<int64_t>(node, "seed", 0);
     Expect(registry, std::move(node), "test_training_dropout_default_mask", {opset},
            [=]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/0));
+             Tensor x = RandnTensor(DataType::FLOAT, {3, 4, 5}, /*seed=*/0);
              Tensor r = Tensor::FromFloat("", {}, {0.5f});
              Tensor t = Tensor::FromBool("", {}, {1});
              auto produced = dropout_kernel(x, /*ratio=*/0.5f, /*training_mode=*/true, /*seed=*/0);
@@ -188,7 +187,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<int64_t>(node, "seed", 0);
     Expect(registry, std::move(node), "test_training_dropout", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/0));
+      Tensor x = RandnTensor(DataType::FLOAT, {3, 4, 5}, /*seed=*/0);
       Tensor r = Tensor::FromFloat("", {}, {0.75f});
       Tensor t = Tensor::FromBool("", {}, {1});
       auto produced = dropout_kernel(x, /*ratio=*/0.75f, /*training_mode=*/true, /*seed=*/0);
@@ -207,7 +206,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("z");
     AddAttribute<int64_t>(node, "seed", 0);
     Expect(registry, std::move(node), "test_training_dropout_mask", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/0));
+      Tensor x = RandnTensor(DataType::FLOAT, {3, 4, 5}, /*seed=*/0);
       Tensor r = Tensor::FromFloat("", {}, {0.75f});
       Tensor t = Tensor::FromBool("", {}, {1});
       auto produced = dropout_kernel(x, /*ratio=*/0.75f, /*training_mode=*/true, /*seed=*/0);
@@ -226,7 +225,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<int64_t>(node, "seed", 0);
     Expect(registry, std::move(node), "test_training_dropout_zero_ratio", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/0));
+      Tensor x = RandnTensor(DataType::FLOAT, {3, 4, 5}, /*seed=*/0);
       Tensor r = Tensor::FromFloat("", {}, {0.0f});
       Tensor t = Tensor::FromBool("", {}, {1});
       auto produced = dropout_kernel(x, /*ratio=*/0.0f, /*training_mode=*/true, /*seed=*/0);
@@ -246,7 +245,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<int64_t>(node, "seed", 0);
     Expect(registry, std::move(node), "test_training_dropout_zero_ratio_mask", {opset},
            [=]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/0));
+             Tensor x = RandnTensor(DataType::FLOAT, {3, 4, 5}, /*seed=*/0);
              Tensor r = Tensor::FromFloat("", {}, {0.0f});
              Tensor t = Tensor::FromBool("", {}, {1});
              auto produced = dropout_kernel(x, /*ratio=*/0.0f, /*training_mode=*/true, /*seed=*/0);
@@ -285,7 +284,7 @@ void RegisterDropoutCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<float>(node, "ratio", 0.2f);
     Expect(registry, std::move(node), "test_dropout_random_old", {opset_old}, [=]() -> IoData {
-      Tensor x = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/0));
+      Tensor x = RandnTensor(DataType::FLOAT, {3, 4, 5}, /*seed=*/0);
       Tensor y = dropout_kernel_old(x, /*ratio=*/0.2f, /*training_mode=*/false).first;
       return IoData{{std::move(x)}, {std::move(y)}};
     });

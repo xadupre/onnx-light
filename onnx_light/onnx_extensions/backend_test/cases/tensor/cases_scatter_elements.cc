@@ -49,7 +49,7 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
                index_values[static_cast<std::size_t>(i)] = i % 4096;
              }
              Tensor indices = Tensor::FromInt64("", {4096, 1024}, index_values);
-             Tensor updates = Tensor::FromFloat("", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
+             Tensor updates = RandnTensor(DataType::FLOAT, {4096, 1024}, 2001);
              onnx_kernels::kernel::ScatterElements::Attributes attrs;
              Tensor output = se_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},

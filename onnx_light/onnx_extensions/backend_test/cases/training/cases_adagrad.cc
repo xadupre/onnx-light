@@ -65,12 +65,9 @@ void RegisterAdagradCases(std::vector<TestCase> &registry, TestMode mode) {
            [adagrad, epsilon, decay_factor, norm_coefficient]() -> IoData {
              Tensor R = Tensor::FromFloat("", {}, {0.1f});
              Tensor T = Tensor::FromInt64("", {}, {0});
-             Tensor X = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
-             Tensor G = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 987654322ULL));
-             Tensor H = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 987654323ULL));
+             Tensor X = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654321ULL);
+             Tensor G = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654322ULL);
+             Tensor H = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654323ULL);
              std::vector<Tensor> outs =
                  adagrad(R, T, {X}, {G}, {H}, epsilon, decay_factor, norm_coefficient);
              return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(H)},

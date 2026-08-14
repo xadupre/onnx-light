@@ -26,7 +26,7 @@ void RegisterArrayFeatureExtractorCases(std::vector<TestCase> &registry, TestMod
 
     Expect(registry, std::move(node), "test_ai_onnx_ml_array_feature_extractor_benchmark",
            {default_opset, opset}, {32768, 3}, {24576}, [afe]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {8192, 4}, Randn<float>({8192, 4}, 2701));
+             Tensor x = RandnTensor(DataType::FLOAT, {8192, 4}, 2701);
              Tensor y = Tensor::FromInt64("", {3}, {0, 2, 3});
              Tensor z = afe.operator()<float>(x, y);
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};

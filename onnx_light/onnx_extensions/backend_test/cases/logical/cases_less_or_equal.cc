@@ -18,7 +18,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
 Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
-  return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
+  return RandnTensor(DataType::FLOAT, shape, seed);
 }
 
 } // namespace
@@ -43,8 +43,8 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = 1024 * 4096;
     Expect(registry, std::move(node), "test_cc_less_or_equal_benchmark", {opset}, {count, count},
            {count}, [le_kernel, shape]() -> IoData {
-             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9201));
-             Tensor y = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/9202));
+             Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/9201);
+             Tensor y = RandnTensor(DataType::FLOAT, shape, /*seed=*/9202);
              Tensor z = le_kernel(x, y);
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
@@ -144,17 +144,15 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
        }},
       {"test_less_equal_int8",
        [=]() -> IoData {
-         auto inputs_0 = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/231));
-         auto inputs_1 = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/232));
+         auto inputs_0 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/231);
+         auto inputs_1 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/232);
          Tensor z = le_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_less_equal_int16",
        [=]() -> IoData {
-         auto inputs_0 =
-             Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/233));
-         auto inputs_1 =
-             Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/234));
+         auto inputs_0 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/233);
+         auto inputs_1 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/234);
          Tensor z = le_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},

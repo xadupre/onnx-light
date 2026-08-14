@@ -47,10 +47,10 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode m
     constexpr int64_t x_count = N * C * H * W;
     Expect(registry, std::move(node), "test_cc_batchnorm_example_benchmark", {opset},
            {x_count, C, C, C, C}, {x_count}, [batchnorm_kernel]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {N, C, H, W}, Randn<float>({N, C, H, W}, 1201));
-             Tensor scale = Tensor::FromFloat("", {C}, Randn<float>({C}, 1202));
-             Tensor bias = Tensor::FromFloat("", {C}, Randn<float>({C}, 1203));
-             Tensor mean = Tensor::FromFloat("", {C}, Randn<float>({C}, 1204));
+             Tensor x = RandnTensor(DataType::FLOAT, {N, C, H, W}, 1201);
+             Tensor scale = RandnTensor(DataType::FLOAT, {C}, 1202);
+             Tensor bias = RandnTensor(DataType::FLOAT, {C}, 1203);
+             Tensor mean = RandnTensor(DataType::FLOAT, {C}, 1204);
              Tensor var =
                  Tensor::FromFloat("", {C}, std::vector<float>(static_cast<size_t>(C), 1.0f));
              Tensor y = batchnorm_kernel(x, scale, bias, mean, var);

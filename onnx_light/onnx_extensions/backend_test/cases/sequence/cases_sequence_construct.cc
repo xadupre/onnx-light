@@ -47,8 +47,7 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mo
              std::vector<Tensor> tensors;
              tensors.reserve(8);
              for (int i = 0; i < 8; ++i) {
-               tensors.push_back(
-                   Tensor::FromFloat("", elem_shape, Randn<float>(elem_shape, 2001 + i)));
+               tensors.push_back(RandnTensor(DataType::FLOAT, elem_shape, 2001 + i));
              }
              Tensor output = onnx_kernels::kernel::SequenceConstruct(ctx)(tensors);
              return IoData{std::move(tensors), {std::move(output)}};

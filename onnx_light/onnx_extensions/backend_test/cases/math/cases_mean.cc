@@ -35,8 +35,8 @@ void RegisterMeanCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_mean_benchmark", {opset}, {count, count}, {count},
            [mean_kernel, shape]() -> IoData {
-             Tensor x0 = Tensor::FromFloat("", shape, Randn<float>(shape, 425));
-             Tensor x1 = Tensor::FromFloat("", shape, Randn<float>(shape, 426));
+             Tensor x0 = RandnTensor(DataType::FLOAT, shape, 425);
+             Tensor x1 = RandnTensor(DataType::FLOAT, shape, 426);
              Tensor z = mean_kernel({x0, x1});
              return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
            });

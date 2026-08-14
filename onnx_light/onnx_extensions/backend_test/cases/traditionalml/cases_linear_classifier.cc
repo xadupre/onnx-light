@@ -54,7 +54,7 @@ void RegisterLinearClassifierCases(std::vector<TestCase> &registry, TestMode mod
 
     Expect(registry, std::move(node), "test_cc_linearclassifier_int64_binary_benchmark",
            {default_opset, opset}, {16384}, {8192, 16384}, [cls]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {8192, 2}, Randn<float>({8192, 2}, 2651));
+             Tensor x = RandnTensor(DataType::FLOAT, {8192, 2}, 2651);
              auto [y, z] = cls.operator()<float>(x, {1.0f, -1.0f}, {0.0f},
                                                  std::vector<int64_t>{0, 1}, "NONE");
              return IoData{{std::move(x)}, {std::move(y), std::move(z)}};

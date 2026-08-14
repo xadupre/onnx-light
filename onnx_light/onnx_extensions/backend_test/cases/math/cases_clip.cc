@@ -71,7 +71,7 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t size = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_clip_benchmark", {opset}, {size, 1, 1}, {size},
            [clip_kernel, size]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {size}, Randn<float>({size}, /*seed=*/2001));
+             Tensor x = RandnTensor(DataType::FLOAT, {size}, /*seed=*/2001);
              Tensor min_val = ScalarTensor<float>(-1.0f);
              Tensor max_val = ScalarTensor<float>(1.0f);
              Tensor y = clip_kernel(x, &min_val, &max_val);
@@ -107,7 +107,7 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeClipNode();
     Expect(registry, std::move(node), "test_clip", {opset}, [=]() -> IoData {
       const std::vector<int64_t> shape = {3, 4, 5};
-      Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/1));
+      Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/1);
       Tensor min_val = ScalarTensor<float>(-1.0f);
       Tensor max_val = ScalarTensor<float>(1.0f);
       Tensor y = clip_kernel(x, &min_val, &max_val);
@@ -170,7 +170,7 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_clip_default_min", {opset}, [=]() -> IoData {
       Tensor min_val = ScalarTensor<float>(0.0f);
       const std::vector<int64_t> shape = {3, 4, 5};
-      Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/2));
+      Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/2);
       Tensor y = clip_kernel(x, &min_val, /*max=*/nullptr);
       return IoData{{std::move(x), std::move(min_val)}, {std::move(y)}};
     });
@@ -186,7 +186,7 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_clip_default_max", {opset}, [=]() -> IoData {
       Tensor max_val = ScalarTensor<float>(0.0f);
       const std::vector<int64_t> shape = {3, 4, 5};
-      Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/3));
+      Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/3);
       Tensor y = clip_kernel(x, /*min=*/nullptr, &max_val);
       return IoData{{std::move(x), std::move(max_val)}, {std::move(y)}};
     });

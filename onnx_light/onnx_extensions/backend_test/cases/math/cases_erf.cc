@@ -61,7 +61,7 @@ void RegisterErfCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_erf", {opset}, [=]() -> IoData {
       const std::vector<int64_t> shape = {3, 4, 5};
-      Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/1));
+      Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/1);
       Tensor y = erf_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
     });

@@ -176,8 +176,7 @@ void RegisterReduceL1Cases(std::vector<TestCase> &registry, TestMode mode) {
 
     Expect(registry, std::move(node), "test_cc_reducel1_default_axes_keepdims_benchmark",
            {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [reduce_l1_kernel]() -> IoData {
-             Tensor data =
-                 Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+             Tensor data = RandnTensor(DataType::FLOAT, {256, 256, 16}, /*seed=*/9701);
              Tensor reduced =
                  reduce_l1_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
              return IoData{{std::move(data)}, {std::move(reduced)}};
@@ -201,8 +200,7 @@ void RegisterReduceL2Cases(std::vector<TestCase> &registry, TestMode mode) {
 
     Expect(registry, std::move(node), "test_cc_reducel2_default_axes_keepdims_benchmark",
            {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [reduce_l2_kernel]() -> IoData {
-             Tensor data =
-                 Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+             Tensor data = RandnTensor(DataType::FLOAT, {256, 256, 16}, /*seed=*/9701);
              Tensor reduced =
                  reduce_l2_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
              return IoData{{std::move(data)}, {std::move(reduced)}};

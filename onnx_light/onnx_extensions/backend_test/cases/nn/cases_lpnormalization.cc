@@ -38,7 +38,7 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode
     constexpr int64_t count = 32 * 64 * 1024;
     Expect(registry, std::move(node), "test_cc_lpnormalization_default_benchmark", {opset}, {count},
            {count}, [kernel]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {32, 64, 1024}, Randn<float>({32, 64, 1024}, 2101));
+             Tensor x = RandnTensor(DataType::FLOAT, {32, 64, 1024}, 2101);
              Tensor y = kernel(x);
              return IoData{{std::move(x)}, {std::move(y)}};
            });

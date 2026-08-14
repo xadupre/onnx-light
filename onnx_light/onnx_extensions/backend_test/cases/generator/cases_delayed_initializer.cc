@@ -154,8 +154,7 @@ void RegisterDelayedInitializerCases(std::vector<TestCase> &registry, TestMode m
     const std::vector<int64_t> big_shape = {512, 512};
     RegisterDelayedInitializerCase(registry, "test_cc_delayedinitializer_benchmark",
                                    "onnx_light_backend_delayedinitializer_benchmark.bin", "cpu", 0,
-                                   {},
-                                   Tensor::FromFloat("", big_shape, Randn<float>(big_shape, 4601)));
+                                   {}, RandnTensor(DataType::FLOAT, big_shape, 4601));
     return;
   }
 

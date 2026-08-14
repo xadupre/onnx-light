@@ -1083,7 +1083,7 @@ void RegisterLoopBenchmarkCase(std::vector<TestCase> &registry) {
          [loop_kernel, shape, trip]() -> IoData {
            Tensor trip_count("trip_count", DataType::INT64, {}, Int64Bytes(trip));
            Tensor cond("cond", DataType::BOOL, {}, std::vector<uint8_t>{1});
-           Tensor y = Tensor::FromFloat("y", shape, Randn<float>(shape, 4401));
+           Tensor y = RandnTensor(DataType::FLOAT, shape, 4401);
 
            std::vector<Tensor> per_iter_scan;
            per_iter_scan.reserve(static_cast<size_t>(trip));

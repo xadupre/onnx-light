@@ -38,7 +38,7 @@ void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_gather_0_benchmark", {opset},
            {kBenchmarkElementwiseSize, 4096}, {kBenchmarkElementwiseSize},
            [gather_kernel]() -> IoData {
-             Tensor data = Tensor::FromFloat("", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
+             Tensor data = RandnTensor(DataType::FLOAT, {4096, 1024}, 2001);
              std::vector<int64_t> index_values(4096);
              for (int64_t i = 0; i < 4096; ++i) {
                index_values[static_cast<std::size_t>(i)] = i;

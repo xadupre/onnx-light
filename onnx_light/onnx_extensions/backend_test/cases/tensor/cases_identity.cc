@@ -44,8 +44,7 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeIdentityNode();
     Expect(registry, std::move(node), "test_cc_identity_benchmark", {opset},
            {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize}, [identity_kernel]() -> IoData {
-             Tensor x = Tensor::FromFloat("x", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 2001));
+             Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 2001);
              Tensor y = Rename(identity_kernel(x), "y");
              return IoData{{std::move(x)}, {std::move(y)}};
            });

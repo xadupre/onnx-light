@@ -68,7 +68,7 @@ void RegisterPadCases(std::vector<TestCase> &registry, TestMode mode) {
     const std::vector<int64_t> shape = {2048, 2048};
     Expect(registry, MakePadNode({"x", "pads", "value"}, "constant"), "test_cc_pad_benchmark",
            {opset}, {2048 * 2048, 4, 1}, {2050 * 2050}, [pad_kernel, shape]() -> IoData {
-             Tensor x = Tensor::FromFloat("x", shape, Randn<float>(shape, 2001));
+             Tensor x = RandnTensor(DataType::FLOAT, shape, 2001);
              Tensor pads = MakeInt64Vector("pads", {1, 1, 1, 1});
              Tensor value = Tensor::FromFloat("value", {}, {0.0f});
              Tensor y = pad_kernel(x, pads, &value, /*axes=*/nullptr, "constant");

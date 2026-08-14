@@ -47,8 +47,8 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = 512 * 512;
     Expect(registry, std::move(node), "test_cc_einsum_benchmark", {opset}, {count, count}, {count},
            [einsum_kernel, eq, shape]() -> IoData {
-             Tensor a = Tensor::FromFloat("", shape, Randn<float>(shape, 440));
-             Tensor b = Tensor::FromFloat("", shape, Randn<float>(shape, 441));
+             Tensor a = RandnTensor(DataType::FLOAT, shape, 440);
+             Tensor b = RandnTensor(DataType::FLOAT, shape, 441);
              Tensor z = einsum_kernel({a, b}, eq);
              return IoData{{std::move(a), std::move(b)}, {std::move(z)}};
            });

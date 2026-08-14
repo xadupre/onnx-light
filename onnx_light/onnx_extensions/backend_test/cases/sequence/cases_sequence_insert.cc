@@ -109,7 +109,7 @@ void RegisterSequenceInsertCases(std::vector<TestCase> &registry, TestMode mode)
       inputs.push_back(
           Tensor::FromFloat("t" + std::to_string(i), big_shape, Randn<float>(big_shape, 2001 + i)));
     }
-    Tensor to_insert = Tensor::FromFloat("x", big_shape, Randn<float>(big_shape, 3001));
+    Tensor to_insert = RandnTensor(DataType::FLOAT, big_shape, 3001);
     RegisterSequenceInsertCase("test_cc_sequence_insert_benchmark", inputs, to_insert, big_shape,
                                /*has_position=*/true, /*position=*/4, opset, registry);
     return;

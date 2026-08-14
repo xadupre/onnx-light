@@ -87,8 +87,7 @@ void RegisterReduceMeanCases(std::vector<TestCase> &registry, TestMode mode) {
 
     Expect(registry, std::move(node), "test_cc_reducemean_default_axes_keepdims_benchmark",
            {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [kernel]() -> IoData {
-             Tensor data =
-                 Tensor::FromFloat("", {256, 256, 16}, Randn<float>({256, 256, 16}, /*seed=*/9701));
+             Tensor data = RandnTensor(DataType::FLOAT, {256, 256, 16}, /*seed=*/9701);
              Tensor reduced = kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
              return IoData{{std::move(data)}, {std::move(reduced)}};
            });

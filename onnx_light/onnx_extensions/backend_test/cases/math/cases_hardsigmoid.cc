@@ -31,7 +31,7 @@ void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t n = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_hardsigmoid_benchmark", {opset}, {n}, {n},
            [hard_sigmoid_kernel, n]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {n}, Randn<float>({n}, 987654321ULL));
+             Tensor x = RandnTensor(DataType::FLOAT, {n}, 987654321ULL);
              Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
              return IoData{{std::move(x)}, {std::move(y)}};
            });

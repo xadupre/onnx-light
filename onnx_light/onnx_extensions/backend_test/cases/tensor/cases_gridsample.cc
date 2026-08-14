@@ -141,8 +141,8 @@ void RegisterGridSampleCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_gridsample_benchmark", {opset},
            {1 * 16 * 256 * 256, 1 * 256 * 256 * 2}, {1 * 16 * 256 * 256},
            [gridsample_kernel, x_shape, grid_shape]() -> IoData {
-             Tensor X = Tensor::FromFloat("X", x_shape, Randn<float>(x_shape, 2001));
-             Tensor Grid = Tensor::FromFloat("Grid", grid_shape, Randn<float>(grid_shape, 2002));
+             Tensor X = RandnTensor(DataType::FLOAT, x_shape, 2001);
+             Tensor Grid = RandnTensor(DataType::FLOAT, grid_shape, 2002);
              onnx_kernels::kernel::GridSample::Attributes attrs;
              attrs.mode = "linear";
              Tensor Y = gridsample_kernel(X, Grid, attrs);

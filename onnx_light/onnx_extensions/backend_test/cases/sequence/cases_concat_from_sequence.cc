@@ -130,9 +130,9 @@ void RegisterConcatFromSequenceCases(std::vector<TestCase> &registry, TestMode m
   if (mode == TestMode::BENCHMARK) {
     const OpsetId opset = DefaultOpset(11);
     const std::vector<int64_t> elem_shape = {1024, 1024};
-    const Tensor a = Tensor::FromFloat("", elem_shape, Randn<float>(elem_shape, 651));
-    const Tensor b = Tensor::FromFloat("", elem_shape, Randn<float>(elem_shape, 652));
-    const Tensor c = Tensor::FromFloat("", elem_shape, Randn<float>(elem_shape, 653));
+    const Tensor a = RandnTensor(DataType::FLOAT, elem_shape, 651);
+    const Tensor b = RandnTensor(DataType::FLOAT, elem_shape, 652);
+    const Tensor c = RandnTensor(DataType::FLOAT, elem_shape, 653);
     RegisterConcatFromSequenceCase("test_cc_concat_from_sequence_axis_0_benchmark", elem_shape, a,
                                    b, c,
                                    /*axis=*/0, /*new_axis=*/0, opset, registry);

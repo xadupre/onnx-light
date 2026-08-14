@@ -19,7 +19,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
 Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
-  return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
+  return RandnTensor(DataType::FLOAT, shape, seed);
 }
 
 } // namespace

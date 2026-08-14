@@ -99,8 +99,7 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t out_count = 1 * 32 * 127 * 127;
     Expect(registry, std::move(node), "test_cc_averagepool_2d_default_benchmark", {opset},
            {in_count}, {out_count}, [average_pool_kernel]() -> IoData {
-             Tensor x =
-                 Tensor::FromFloat("", {1, 32, 128, 128}, Randn<float>({1, 32, 128, 128}, 1101));
+             Tensor x = RandnTensor(DataType::FLOAT, {1, 32, 128, 128}, 1101);
              Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2});
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -623,8 +622,7 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
         Expect(registry, std::move(node), name, {opset},
                [average_pool_kernel, cip, ceil_mode, captured_seed]() -> IoData {
                  Tensor x =
-                     Tensor::FromFloat("", {1, 1, 32, 32, 32},
-                                       Randn<float>({1, 1, 32, 32, 32}, /*seed=*/captured_seed));
+                     RandnTensor(DataType::FLOAT, {1, 1, 32, 32, 32}, /*seed=*/captured_seed);
                  Tensor y =
                      average_pool_kernel(x, /*kernel_shape=*/{5, 5, 5}, /*strides=*/{3, 3, 3},
                                          /*pads=*/{}, /*ceil_mode=*/ceil_mode,

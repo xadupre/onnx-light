@@ -164,9 +164,9 @@ void RegisterAttentionBenchmark(std::vector<TestCase> &registry,
   attributes.is_causal = causal;
   Expect(registry, std::move(node), name, {opset}, {q_count, kv_count, kv_count}, {q_count},
          [attention, attributes, q_shape, kv_shape, q_count, kv_count]() -> IoData {
-           Tensor Q = Tensor::FromFloat("", q_shape, Randn<float>(q_shape, 2501 + q_count));
-           Tensor K = Tensor::FromFloat("", kv_shape, Randn<float>(kv_shape, 2502 + kv_count));
-           Tensor V = Tensor::FromFloat("", kv_shape, Randn<float>(kv_shape, 2503 + kv_count));
+           Tensor Q = RandnTensor(DataType::FLOAT, q_shape, 2501 + q_count);
+           Tensor K = RandnTensor(DataType::FLOAT, kv_shape, 2502 + kv_count);
+           Tensor V = RandnTensor(DataType::FLOAT, kv_shape, 2503 + kv_count);
            Tensor Y = attention(Q, K, V, attributes).Y;
            return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
          });

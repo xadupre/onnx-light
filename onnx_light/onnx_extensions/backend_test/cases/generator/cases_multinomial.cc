@@ -53,8 +53,7 @@ void RegisterMultinomialCases(std::vector<TestCase> &registry, TestMode mode) {
     const onnx_kernels::kernel::Multinomial multinomial_kernel{ctx};
     Expect(registry, std::move(node), "test_cc_multinomial_benchmark", {opset}, {1024 * 4096},
            {1024}, [multinomial_kernel]() -> IoData {
-             Tensor x =
-                 Tensor::FromFloat("x", {1024, 4096}, Randn<float>({1024, 4096}, 987654321ULL));
+             Tensor x = RandnTensor(DataType::FLOAT, {1024, 4096}, 987654321ULL);
              Tensor y = multinomial_kernel(x);
              return IoData{{std::move(x)}, {std::move(y)}};
            });

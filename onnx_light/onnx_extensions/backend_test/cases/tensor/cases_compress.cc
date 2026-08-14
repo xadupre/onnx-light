@@ -39,8 +39,7 @@ void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_compress_no_axis_benchmark", {opset},
            {kBenchmarkElementwiseSize, kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize / 2},
            [compress_kernel]() -> IoData {
-             Tensor input =
-                 Tensor::FromFloat("input", {4096, 1024}, Randn<float>({4096, 1024}, 2001));
+             Tensor input = RandnTensor(DataType::FLOAT, {4096, 1024}, 2001);
              std::vector<uint8_t> condition_values(kBenchmarkElementwiseSize);
              for (int64_t i = 0; i < kBenchmarkElementwiseSize; ++i) {
                condition_values[static_cast<std::size_t>(i)] = static_cast<uint8_t>((i % 2) == 0);

@@ -54,7 +54,7 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(
         registry, std::move(node), "test_cc_stft_benchmark", {opset_v17},
         {signal_count, scalar_count, scalar_count}, {output_count}, [stft_v17, shape]() -> IoData {
-          Tensor signal_b = Tensor::FromFloat("signal", shape, Randn<float>(shape, 446));
+          Tensor signal_b = RandnTensor(DataType::FLOAT, shape, 446);
           Tensor frame_step_b = Tensor::FromInt64("frame_step", {}, {512});
           Tensor frame_length_b = Tensor::FromInt64("frame_length", {}, {1024});
           Tensor y = stft_v17(signal_b, frame_step_b, /*window=*/nullptr, &frame_length_b,

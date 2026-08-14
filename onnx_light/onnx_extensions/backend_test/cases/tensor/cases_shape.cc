@@ -59,7 +59,7 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/std::nullopt),
            "test_cc_shape_benchmark", {opset}, {2048 * 2048}, {2},
            [shape_kernel, shape]() -> IoData {
-             Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, 2001));
+             Tensor x = RandnTensor(DataType::FLOAT, shape, 2001);
              onnx_kernels::kernel::Shape::Attributes attrs;
              Tensor y = Rename(shape_kernel(x, attrs), "y");
              return IoData{{std::move(x)}, {std::move(y)}};

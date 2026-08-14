@@ -53,7 +53,7 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});
     Expect(registry, std::move(node), "test_cc_col2im_benchmark", {opset}, {col * blocks, 2, 2},
            {channels * image * image}, [op, in_shape, block, image]() -> IoData {
-             Tensor input = Tensor::FromFloat("input", in_shape, Randn<float>(in_shape, 2001));
+             Tensor input = RandnTensor(DataType::FLOAT, in_shape, 2001);
              Tensor image_shape = Tensor::FromInt64("image_shape", {2}, {image, image});
              Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {block, block});
              onnx_kernels::kernel::Col2Im::Attributes attrs;

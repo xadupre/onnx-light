@@ -51,8 +51,7 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeUpsampleNode("nearest");
     Expect(registry, std::move(node), "test_cc_upsample_nearest_benchmark", {opset}, {1048576, 4},
            {6291456}, [upsample_kernel]() -> IoData {
-             Tensor X =
-                 Tensor::FromFloat("", {1, 1, 1024, 1024}, Randn<float>({1, 1, 1024, 1024}, 2001));
+             Tensor X = RandnTensor(DataType::FLOAT, {1, 1, 1024, 1024}, 2001);
              Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
              onnx_kernels::kernel::Upsample::Attributes attrs;
              attrs.mode = "nearest";

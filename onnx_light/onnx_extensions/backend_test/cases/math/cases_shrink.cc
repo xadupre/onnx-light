@@ -27,8 +27,7 @@ void RegisterShrinkCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_shrink_benchmark", {opset}, {count}, {count},
            [shrink_kernel]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {kBenchmarkElementwiseSize},
-                                          Randn<float>({kBenchmarkElementwiseSize}, 987654321ULL));
+             Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654321ULL);
              Tensor y = shrink_kernel(x, /*bias=*/0.0f, /*lambd=*/1.5f);
              return IoData{{std::move(x)}, {std::move(y)}};
            });

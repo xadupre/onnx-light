@@ -573,7 +573,8 @@ Implementation order
    <https://github.com/xadupre/onnx-light/pull/4418>`_).
 9. Add typed parallel tuning to representative binary kernels, including
    arithmetic kernels such as ``Add`` and ``Mul``, logical kernels such as
-   ``And``, and both equal-shape and broadcasting execution paths.
+   ``And``, and both equal-shape and broadcasting execution paths (`PR #4421
+   <https://github.com/xadupre/onnx-light/pull/4421>`_).
 10. Design and add one calibration API that supports unary and binary kernels,
     input generation for every operand, broadcasting shapes, output
     validation, resource accounting, and kernel-specific benchmark cases.

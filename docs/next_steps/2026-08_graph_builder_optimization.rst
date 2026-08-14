@@ -485,12 +485,90 @@ Implementation order
 9. Document the core/extension boundary, registration and selection APIs,
    linking requirements, and a custom-pattern example
    (`PR #4427 <https://github.com/xadupre/onnx-light/pull/4427>`_).
-10. Port the pattern library incrementally, one pattern per change, each with a
-    C++ test that checks the rewritten graph against the expected one. The
-    first port, ``CastPattern``, is
+10. Port the pattern library incrementally, one pattern per commit and several
+    related commits per pull request. Every pattern has a C++ test that checks
+    the rewritten graph against the expected one. The first port,
+    ``CastPattern``, is
     `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_; it also ports
     Python's source-located no-match diagnostics before further patterns are
     added.
+
+Remaining pattern batches
++++++++++++++++++++++++++
+
+The upstream default list currently contains 104 enabled patterns.
+``CastCastPattern`` and ``CastPattern`` are already covered, leaving 102
+patterns. They are grouped into nine cohesive pull requests below rather than
+one pull request per pattern. Within a batch, each pattern remains a separate
+commit with its exact positive rewrite test and at least one rejection test;
+this keeps reviews and ``git bisect`` useful without creating 102 pull
+requests. Commented-out, non-default upstream patterns are outside this plan.
+
+#. **Elementary canonicalization (9 patterns).**
+   ``CastCastBinaryPattern``, ``CastOpCastPattern``, ``ClipClipPattern``,
+   ``ConstantToInitializerPattern``, ``ConvBiasNullPattern``,
+   ``PadConvPattern``, ``DropoutPattern``, ``IdentityPattern``, and
+   ``NotNotPattern``.
+#. **Concat, gather, split, slice, and sequence (12 patterns).**
+   ``ConcatEmptyPattern``, ``ConcatGatherPattern``,
+   ``ConcatTwiceUnaryPattern``, ``GatherConcatPattern``,
+   ``GatherGatherPattern``, ``GathersSplitPattern``, ``GatherShapePattern``,
+   ``SequenceConstructAtPattern``, ``SplitToSequenceSequenceAtPattern``,
+   ``SliceSlicePattern``, ``SlicesSplitPattern``, and ``SplitConcatPattern``.
+#. **Expand, where, and equal (15 patterns).**
+   ``ExpandPattern``, ``ExpandBroadcastPattern``, ``ExpandSwapPattern``,
+   ``ExpandUnsqueezeExpandPattern``, ``ShapeBasedConcatExpandPattern``,
+   ``ShapeBasedExpandBroadcastPattern``,
+   ``ShapeBasedExpandBroadcastMatMulPattern``,
+   ``ShapeBasedExpandCastWhereSwapPattern``, ``ShapeBasedExpandSwapPattern``,
+   ``ShapeBasedStaticExpandPattern``, ``SwapExpandReshapePattern``,
+   ``SwapExpandUnsqueezePattern``, ``UnsqueezeEqualPattern``,
+   ``NotWherePattern``, and ``WhereAddPattern``.
+#. **Reshape canonicalization (13 patterns).**
+   ``ConcatReshapePattern``, ``ReshapePattern``, ``ReduceReshapePattern``,
+   ``Reshape2Of3Pattern``, ``ReshapeReshapeBinaryPattern``,
+   ``ReshapeReshapePattern``, ``ReshapeSqueezePattern``,
+   ``ShapeBasedEditDistanceReshapePattern``,
+   ``ShapeBasedReshapeIsSqueezePattern``, ``ShapedBasedReshapePattern``,
+   ``StaticConcatReshapePattern``, ``UnsqueezeOrSqueezeReshapePattern``, and
+   ``UnsqueezeReshapePattern``.
+#. **Squeeze, unsqueeze, and transpose (12 patterns).**
+   ``MulUnsqueezeUnsqueezePattern``, ``SqueezeAddPattern``,
+   ``SqueezeBinaryUnsqueezePattern``, ``SqueezeUnsqueezePattern``,
+   ``UnsqueezeUnsqueezePattern``, ``SwapUnsqueezeTransposePattern``,
+   ``TransposeEqualReshapePattern``, ``TransposeGatherPattern``,
+   ``TransposeReshapeTransposePattern``, ``TransposeTransposePattern``,
+   ``ShapeTransposePattern``, and ``UnsqueezeShapePattern``.
+#. **Generic algebra, reduction, and graph identities (12 patterns).**
+   ``MulMulMulScalarPattern``, ``SwitchOrderBinaryPattern``,
+   ``SwapRangeAddScalarPattern``, ``ReduceArgTopKPattern``,
+   ``ReduceSumNormalizePattern``, ``Sub1MulPattern``, ``SwapUnaryPattern``,
+   ``SameChildrenPattern``, ``SameChildrenFromInputPattern``,
+   ``ShapeBasedIdentityPattern``, ``ShapeBasedSameChildrenPattern``, and
+   ``ShapeBasedShapeShapeAddPattern``.
+#. **Matrix multiplication and linear algebra (9 patterns).**
+   ``GemmTransposePattern``, ``MatMulAddPattern``,
+   ``MatMulReshape2Of3Pattern``, ``MulMulMatMulPattern``,
+   ``ReshapeMatMulReshapePattern``, ``ShapeBasedMatMulToMulPattern``,
+   ``SwitchReshapeActivationPattern``, ``TransposeMatMulPattern``, and
+   ``TransposeReshapeMatMulPattern``.
+#. **Normalization and activations (11 patterns).**
+   ``BatchNormalizationPattern``, ``BatchNormalizationTrainingPattern``,
+   ``CastLayerNormalizationCastPattern``, ``LayerNormalizationPattern``,
+   ``LayerNormalizationScalePattern``, ``RMSNormalizationPattern``,
+   ``RMSNormalizationMulPattern``, ``GeluPattern``, ``LeakyReluPattern``,
+   ``MaxReluPattern``, and ``SoftmaxCrossEntropyLossCastPattern``.
+#. **Rotary embedding and attention functions (9 patterns).**
+   ``RotaryEmbeddingPattern``, ``RotaryConcatPartPattern``,
+   ``FunctionCausalMaskPattern``, ``FunctionCausalMaskMulAddPattern``,
+   ``FunctionCosSinCachePattern``, ``FunctionHalfRotaryEmbeddingPattern``,
+   ``FunctionAttentionPattern``, ``FunctionAttentionGQAPattern``, and
+   ``AttentionGQAPattern``.
+
+The batches are ordered from local, low-dependency rewrites toward
+shape-sensitive and model-specific fusions. If a batch exposes a missing
+generic graph query, that query is added and tested in the same pull request;
+model-specific shortcuts are not added to the optimizer core.
 
 Pull requests
 +++++++++++++

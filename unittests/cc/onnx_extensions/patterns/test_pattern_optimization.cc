@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_extensions/patterns/cast_cast_pattern.h"
+#include "onnx_extensions/patterns/cast_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 
 #include "onnx_helper.h"
@@ -36,13 +37,13 @@ core::symbolic::SymShape Shape() {
 }
 
 void AddCast(core::builder::GraphBuilder &builder, const std::string &input,
-             const std::string &output, TensorProto::DataType to) {
+             const std::string &output, TensorProto::DataType to, const std::string &name = "") {
   utils::RepeatedProtoField<AttributeProto> attributes;
   AttributeProto &attribute = attributes.add();
   attribute.set_name("to");
   attribute.set_type(AttributeProto::AttributeType::INT);
   attribute.set_i(static_cast<int64_t>(to));
-  builder.MakeNode("Cast", {input}, {output}, "", "", attributes);
+  builder.MakeNode("Cast", {input}, {output}, "", name, attributes);
 }
 
 void AddSubgraphReference(core::builder::GraphBuilder &builder, const std::string &attribute_name,
@@ -138,6 +139,62 @@ TEST(PatternOptimization, CastCastCollapsesRedundantOuterCast) {
   ASSERT_NE(FindAttribute(replacements[0], "to"), nullptr);
   EXPECT_EQ(FindAttribute(replacements[0], "to")->i(),
             static_cast<int64_t>(TensorProto::DataType::FLOAT));
+}
+
+TEST(PatternOptimization, CastReplacesRedundantConversionWithIdentity) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  AddCast(builder, "x", "y", TensorProto::DataType::FLOAT, "redundant");
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::CastPattern pattern;
+  EXPECT_EQ(pattern.priority, 0);
+  EXPECT_EQ(pattern.FastOpType(), std::set<std::string>({"Cast"}));
+
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  EXPECT_EQ(match.pattern, &pattern);
+  EXPECT_EQ(match.nodes, std::vector<const NodeProto *>({&builder.Nodes()[0]}));
+  EXPECT_EQ(match.insert_at, &builder.Nodes()[0]);
+
+  const utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 1u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Identity");
+  EXPECT_EQ(replacements[0].input()[0].value(), "x");
+  EXPECT_EQ(replacements[0].output()[0].value(), "y");
+  EXPECT_EQ(replacements[0].name().value(), "CastPattern--redundant");
+  EXPECT_TRUE(replacements[0].attribute().empty());
+}
+
+TEST(PatternOptimization, CastRejectsTypeChangingConversion) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  AddCast(builder, "x", "y", TensorProto::DataType::DOUBLE);
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::CastPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  EXPECT_EQ(match.pattern, nullptr);
+  EXPECT_TRUE(match.nodes.empty());
+}
+
+TEST(PatternOptimization, OptimizeCastProducesExpectedGraph) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  AddCast(builder, "x", "middle", TensorProto::DataType::FLOAT);
+  builder.MakeNode("Neg", {"middle"}, {"y"});
+  builder.MakeOutput("y");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::CastPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  graph.Optimize();
+
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Neg");
+  EXPECT_EQ(builder.Nodes()[0].input()[0].value(), "x");
+  EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "y");
 }
 
 TEST(PatternOptimization, AcceptsCustomPriority) {
@@ -575,6 +632,7 @@ TEST(PatternOptimization, OptimizeHonorsDoNotRemovePredicate) {
 TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
   onnx_patterns::RegisterPatterns();
   const std::vector<std::string> names = core::builder::RegisteredPatternNames();
+  EXPECT_EQ(std::count(names.begin(), names.end(), "Cast"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "CastCast"), 1);
 
   onnx_patterns::RegisterPatterns();
@@ -582,10 +640,15 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
 
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns =
       core::builder::CreateRegisteredPatterns();
-  const bool found = std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
-    return dynamic_cast<onnx_patterns::CastCastPattern *>(pattern.get()) != nullptr;
+  const bool found_cast = std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
+    return dynamic_cast<onnx_patterns::CastPattern *>(pattern.get()) != nullptr;
   });
-  EXPECT_TRUE(found);
+  const bool found_cast_cast =
+      std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
+        return dynamic_cast<onnx_patterns::CastCastPattern *>(pattern.get()) != nullptr;
+      });
+  EXPECT_TRUE(found_cast);
+  EXPECT_TRUE(found_cast_cast);
 }
 
 } // namespace Test

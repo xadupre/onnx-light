@@ -118,6 +118,13 @@ private:
                                           std::string_view actual);
 };
 
+/** Associates validated parameters with one deployment processor selector. */
+struct ProcessorKernelTuningProfile {
+  KernelTuningParameters parameters;
+  platform::CpuSelector processors;
+  int priority = 0;
+};
+
 /** Filters tuning keys. Non-empty fields combine with logical AND. */
 struct KernelCalibrationSelection {
   std::optional<std::string> library;
@@ -367,6 +374,13 @@ public:
    */
   void RegisterProfile(const KernelTuningKey &key, platform::CpuSelector processors,
                        KernelTuningParameters parameters, int priority = 0);
+
+  /**
+   * Registers processor-specific profiles in one immutable generation.
+   *
+   * Validation or ambiguity in any profile leaves the registry unchanged.
+   */
+  void RegisterProfiles(std::span<const ProcessorKernelTuningProfile> profiles);
 
   /**
    * Registers one trusted native calibration callback.

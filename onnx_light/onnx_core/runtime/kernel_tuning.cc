@@ -413,30 +413,63 @@ void KernelTuningRegistry::RegisterSchema(KernelTuningSchema schema) {
 void KernelTuningRegistry::RegisterProfile(const KernelTuningKey &key,
                                            platform::CpuSelector processors,
                                            KernelTuningParameters parameters, int priority) {
-  ValidateSelector(processors);
   if (parameters.key != key) {
     throw std::invalid_argument("Kernel tuning profile parameters have a mismatched key.");
   }
-  const uint32_t specificity = SelectorSpecificity(processors);
+  const ProcessorKernelTuningProfile profile{std::move(parameters), std::move(processors),
+                                             priority};
+  RegisterProfiles(std::span<const ProcessorKernelTuningProfile>(&profile, 1));
+}
+
+void KernelTuningRegistry::RegisterProfiles(
+    std::span<const ProcessorKernelTuningProfile> profiles) {
+  if (profiles.empty()) {
+    return;
+  }
 
   std::lock_guard lock(impl_->mutex);
-  auto schema = impl_->schemas.find(key);
-  if (schema == impl_->schemas.end()) {
-    throw std::invalid_argument("Cannot register profile for unregistered kernel tuning key '" +
-                                KeyDescription(key) + "'.");
-  }
-  schema->second->Validate(parameters);
-  for (const auto &registered : impl_->state->registered_profiles) {
-    if (registered.key == key && registered.specificity == specificity &&
-        registered.priority == priority && SelectorsCanOverlap(registered.processors, processors)) {
-      throw std::invalid_argument("Ambiguous kernel tuning profile for '" + KeyDescription(key) +
-                                  "': matching selectors have equal specificity and priority.");
+  struct ValidatedProfile {
+    const ProcessorKernelTuningProfile *profile;
+    uint32_t specificity;
+  };
+  std::vector<ValidatedProfile> validated;
+  validated.reserve(profiles.size());
+  for (const ProcessorKernelTuningProfile &profile : profiles) {
+    ValidateSelector(profile.processors);
+    auto schema = impl_->schemas.find(profile.parameters.key);
+    if (schema == impl_->schemas.end()) {
+      throw std::invalid_argument("Cannot register profile for unregistered kernel tuning key '" +
+                                  KeyDescription(profile.parameters.key) + "'.");
     }
+    schema->second->Validate(profile.parameters);
+    const uint32_t specificity = SelectorSpecificity(profile.processors);
+    for (const auto &registered : impl_->state->registered_profiles) {
+      if (registered.key == profile.parameters.key && registered.specificity == specificity &&
+          registered.priority == profile.priority &&
+          SelectorsCanOverlap(registered.processors, profile.processors)) {
+        throw std::invalid_argument("Ambiguous kernel tuning profile for '" +
+                                    KeyDescription(profile.parameters.key) +
+                                    "': matching selectors have equal specificity and priority.");
+      }
+    }
+    for (const ValidatedProfile &other : validated) {
+      if (other.profile->parameters.key == profile.parameters.key &&
+          other.specificity == specificity && other.profile->priority == profile.priority &&
+          SelectorsCanOverlap(other.profile->processors, profile.processors)) {
+        throw std::invalid_argument("Ambiguous kernel tuning profile batch for '" +
+                                    KeyDescription(profile.parameters.key) +
+                                    "': matching selectors have equal specificity and priority.");
+      }
+    }
+    validated.push_back({&profile, specificity});
   }
 
   auto next = std::make_shared<KernelTuningRegistrySnapshot::State>(*impl_->state);
-  next->registered_profiles.push_back(
-      {key, std::move(processors), std::move(parameters), priority, specificity});
+  for (const ValidatedProfile &entry : validated) {
+    next->registered_profiles.push_back({entry.profile->parameters.key, entry.profile->processors,
+                                         entry.profile->parameters, entry.profile->priority,
+                                         entry.specificity});
+  }
   ++next->generation;
   impl_->state = std::move(next);
 }

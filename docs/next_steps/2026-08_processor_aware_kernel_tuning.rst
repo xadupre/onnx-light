@@ -581,6 +581,9 @@ Implementation order
     benchmark groups. Migrate the local ``Abs`` and ``Not`` searches and
     exercise the binary path through ``Add`` (`PR #4422
     <https://github.com/xadupre/onnx-light/pull/4422>`_).
-11. Add atomic ``UpdateKernelTuningCache`` and deployment-profile import.
+11. Add inter-process-locked, atomic ``UpdateKernelTuningCache`` merging with
+    read-only, replacement, and stale-ABI controls, plus transactional
+    deployment-profile import constrained by explicit processor selectors
+    (`PR #4424 <https://github.com/xadupre/onnx-light/pull/4424>`_).
 12. Benchmark cold resolution separately from steady-state kernel execution and
     verify that the hot path performs no registry access.

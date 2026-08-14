@@ -72,6 +72,23 @@ int64_t ElapsedNanoseconds(std::chrono::steady_clock::time_point start) {
       .count();
 }
 
+void RecordNoMatch(PatternOptimizationStatistics &statistics, std::string_view source_file,
+                   std::uint_least32_t source_line, std::string_view reason,
+                   std::size_t occurrences = 1) {
+  const auto existing = std::find_if(statistics.no_matches.begin(), statistics.no_matches.end(),
+                                     [&](const PatternNoMatchStatistics &candidate) {
+                                       return candidate.source_file == source_file &&
+                                              candidate.source_line == source_line &&
+                                              candidate.reason == reason;
+                                     });
+  if (existing != statistics.no_matches.end()) {
+    existing->occurrences += occurrences;
+    return;
+  }
+  statistics.no_matches.push_back(
+      {std::string(source_file), source_line, std::string(reason), occurrences});
+}
+
 } // namespace
 
 GraphGraph::GraphGraph(GraphBuilder &builder) : GraphGraph(builder, CreateRegisteredPatterns()) {}
@@ -186,6 +203,10 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
         report->patterns[i].matches += child_report.patterns[i].matches;
         report->patterns[i].match_time_ns += child_report.patterns[i].match_time_ns;
         report->patterns[i].apply_time_ns += child_report.patterns[i].apply_time_ns;
+        for (const PatternNoMatchStatistics &no_match : child_report.patterns[i].no_matches) {
+          RecordNoMatch(report->patterns[i], no_match.source_file, no_match.source_line,
+                        no_match.reason, no_match.occurrences);
+        }
       }
       report->subgraphs.push_back(
           {child_path, child_report.iterations, child_report.rewrites, elapsed_time_ns});
@@ -256,6 +277,10 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
           statistics.match_time_ns += match_time_ns;
         }
         if (match.pattern == nullptr) {
+          if (report != nullptr && match.no_match.has_value()) {
+            RecordNoMatch(report->patterns[pattern_index], match.no_match->source_file,
+                          match.no_match->source_line, match.no_match->reason);
+          }
           continue;
         }
         if (match.pattern != pattern.get()) {

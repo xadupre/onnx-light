@@ -64,7 +64,7 @@ requests:
      - Local rewriting and replay
      - Returns persistent rewrite records from optimization and deterministically
        replays them over a fresh model.
-   * - Current
+   * - `PR #4416 <https://github.com/xadupre/onnx-light/pull/4416>`_
      - Constant folding
      - Folds all-constant replacement nodes into initializers and stores the
        materialized results in the persistent rewrite records.
@@ -76,6 +76,11 @@ requests:
      - Pattern integration documentation
      - Documents linking, registration, and selection, with a standalone
        custom-pattern example.
+   * - `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_
+     - First incremental pattern port
+     - Ports ``CastPattern`` from ``yobx.xoptim.patterns`` with exact rewrite,
+       optimized-graph, rejection, and registration tests, and adds
+       source-located no-match diagnostics.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -183,6 +188,26 @@ A pattern is a stateless matcher and rewriter. The two Python classes
 
 ``FastOpType`` lets the driver restrict a pattern to the nodes of one operator
 type, exactly like ``fast_op_type`` gates ``subset_nodes`` in Python.
+
+No-match diagnostics and contract errors
++++++++++++++++++++++++++++++++++++++++++
+
+A candidate that does not satisfy a pattern is normal control flow, not an
+error. Matchers return ``NoMatch(candidate, reason)``; this keeps
+``MatchResult::pattern`` null while ``std::source_location`` captures the C++
+file and line of the rejected condition. The optional ``OptimizationReport``
+aggregates these diagnostics by pattern, location, and reason, so enabling a
+report explains why candidates were rejected without printing during normal
+optimization.
+
+``Apply`` has a different contract: the optimizer calls it only with nodes
+returned by a successful ``Match``. Invalid nodes passed directly to ``Apply``
+therefore indicate a pattern implementation or API misuse and raise
+``BuilderError``. ``BuilderError`` also captures its call-site file and line
+and includes them in ``what()``, making such exceptional failures actionable.
+This distinction mirrors the Python pattern API: ``none(node, line, reason)``
+reports an ordinary failed match, while ``apply`` assumes that matching has
+already succeeded.
 
 Pattern library and registration
 ++++++++++++++++++++++++++++++++
@@ -442,22 +467,131 @@ Implementation order
    (`PR #4389 <https://github.com/xadupre/onnx-light/pull/4389>`_).
 3. Create ``lib_onnx_patterns`` under ``onnx_extensions/patterns``, move the
    concrete pattern out of ``onnx_core``, and add the explicit core registry
-   plus ``onnx_patterns::RegisterPatterns``.
-4. Implement the match/apply loop and wire in the existing cleanup passes.
+   plus ``onnx_patterns::RegisterPatterns``
+   (`PR #4392 <https://github.com/xadupre/onnx-light/pull/4392>`_).
+4. Implement the match/apply loop and wire in the existing cleanup passes
+   (`PR #4394 <https://github.com/xadupre/onnx-light/pull/4394>`_).
 5. Refactor ``Optimize`` to return the applied ``LocalRewriting`` records and
    add ``Replay`` so a captured list of rewrites reconstructs the final graph
    from a ``ModelProto``
    (`PR #4412 <https://github.com/xadupre/onnx-light/pull/4412>`_).
 6. Add logging with per-phase timing (match, rewrite, dead-branch removal,
-   constant folding, subgraph optimization) reported at the end of ``Optimize``.
-7. Add constant folding of all-constant rewrites.
+   constant folding, subgraph optimization) reported at the end of ``Optimize``
+   (`PR #4414 <https://github.com/xadupre/onnx-light/pull/4414>`_).
+7. Add constant folding of all-constant rewrites
+   (`PR #4416 <https://github.com/xadupre/onnx-light/pull/4416>`_).
 8. Extend to subgraphs and add the statistics output
    (`PR #4425 <https://github.com/xadupre/onnx-light/pull/4425>`_).
 9. Document the core/extension boundary, registration and selection APIs,
    linking requirements, and a custom-pattern example
    (`PR #4427 <https://github.com/xadupre/onnx-light/pull/4427>`_).
-10. Port the pattern library incrementally, one pattern per change, each with a
-    C++ test that checks the rewritten graph against the expected one.
+10. Port the pattern library incrementally, one pattern per commit and several
+    related commits per pull request. Every pattern has a C++ test that checks
+    the rewritten graph against the expected one. The first port,
+    ``CastPattern``, is
+    `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_; it also ports
+    Python's source-located no-match diagnostics before further patterns are
+    added.
+
+Remaining pattern batches
++++++++++++++++++++++++++
+
+The implementation is split by functional family; the root directory only
+contains registration and dispatch:
+
+.. code-block:: text
+
+    onnx_extensions/patterns/
+    ├── dispatch_table.{h,cc}
+    ├── canonicalization/   # elementary local rewrites, including Cast
+    ├── collections/        # Concat, Gather, Split, Slice, Sequence
+    ├── expand/             # Expand, Where, Equal and broadcasting
+    ├── reshape/            # Reshape canonicalization
+    ├── layout/             # Squeeze, Unsqueeze and Transpose
+    ├── algebra/            # generic arithmetic and reductions
+    ├── matmul/             # MatMul and Gemm fusions
+    ├── normalization/      # normalization and activation fusions
+    └── attention/          # rotary embedding and attention functions
+
+Tests added by each batch mirror these family directories under
+``unittests/cc/onnx_extensions/patterns``. Helpers used by one family stay
+beside its patterns; only genuinely cross-family graph queries belong in
+``onnx_core``. This prevents both a flat pattern directory and a catch-all
+``detail`` directory.
+
+The upstream default list currently contains 104 enabled patterns.
+``CastCastPattern`` and ``CastPattern`` are already covered, leaving 102
+patterns. They are grouped into nine cohesive pull requests below rather than
+one pull request per pattern. Within a batch, each pattern remains a separate
+commit with its exact positive rewrite test and at least one rejection test;
+this keeps reviews and ``git bisect`` useful without creating 102 pull
+requests. Commented-out, non-default upstream patterns are outside this plan.
+
+#. **Elementary canonicalization (9 patterns).**
+   ``CastCastBinaryPattern``, ``CastOpCastPattern``, ``ClipClipPattern``,
+   ``ConstantToInitializerPattern``, ``ConvBiasNullPattern``,
+   ``PadConvPattern``, ``DropoutPattern``, ``IdentityPattern``, and
+   ``NotNotPattern``.
+#. **Concat, gather, split, slice, and sequence (12 patterns).**
+   ``ConcatEmptyPattern``, ``ConcatGatherPattern``,
+   ``ConcatTwiceUnaryPattern``, ``GatherConcatPattern``,
+   ``GatherGatherPattern``, ``GathersSplitPattern``, ``GatherShapePattern``,
+   ``SequenceConstructAtPattern``, ``SplitToSequenceSequenceAtPattern``,
+   ``SliceSlicePattern``, ``SlicesSplitPattern``, and ``SplitConcatPattern``.
+#. **Expand, where, and equal (15 patterns).**
+   ``ExpandPattern``, ``ExpandBroadcastPattern``, ``ExpandSwapPattern``,
+   ``ExpandUnsqueezeExpandPattern``, ``ShapeBasedConcatExpandPattern``,
+   ``ShapeBasedExpandBroadcastPattern``,
+   ``ShapeBasedExpandBroadcastMatMulPattern``,
+   ``ShapeBasedExpandCastWhereSwapPattern``, ``ShapeBasedExpandSwapPattern``,
+   ``ShapeBasedStaticExpandPattern``, ``SwapExpandReshapePattern``,
+   ``SwapExpandUnsqueezePattern``, ``UnsqueezeEqualPattern``,
+   ``NotWherePattern``, and ``WhereAddPattern``.
+#. **Reshape canonicalization (13 patterns).**
+   ``ConcatReshapePattern``, ``ReshapePattern``, ``ReduceReshapePattern``,
+   ``Reshape2Of3Pattern``, ``ReshapeReshapeBinaryPattern``,
+   ``ReshapeReshapePattern``, ``ReshapeSqueezePattern``,
+   ``ShapeBasedEditDistanceReshapePattern``,
+   ``ShapeBasedReshapeIsSqueezePattern``, ``ShapedBasedReshapePattern``,
+   ``StaticConcatReshapePattern``, ``UnsqueezeOrSqueezeReshapePattern``, and
+   ``UnsqueezeReshapePattern``.
+#. **Squeeze, unsqueeze, and transpose (12 patterns).**
+   ``MulUnsqueezeUnsqueezePattern``, ``SqueezeAddPattern``,
+   ``SqueezeBinaryUnsqueezePattern``, ``SqueezeUnsqueezePattern``,
+   ``UnsqueezeUnsqueezePattern``, ``SwapUnsqueezeTransposePattern``,
+   ``TransposeEqualReshapePattern``, ``TransposeGatherPattern``,
+   ``TransposeReshapeTransposePattern``, ``TransposeTransposePattern``,
+   ``ShapeTransposePattern``, and ``UnsqueezeShapePattern``.
+#. **Generic algebra, reduction, and graph identities (12 patterns).**
+   ``MulMulMulScalarPattern``, ``SwitchOrderBinaryPattern``,
+   ``SwapRangeAddScalarPattern``, ``ReduceArgTopKPattern``,
+   ``ReduceSumNormalizePattern``, ``Sub1MulPattern``, ``SwapUnaryPattern``,
+   ``SameChildrenPattern``, ``SameChildrenFromInputPattern``,
+   ``ShapeBasedIdentityPattern``, ``ShapeBasedSameChildrenPattern``, and
+   ``ShapeBasedShapeShapeAddPattern``.
+#. **Matrix multiplication and linear algebra (9 patterns).**
+   ``GemmTransposePattern``, ``MatMulAddPattern``,
+   ``MatMulReshape2Of3Pattern``, ``MulMulMatMulPattern``,
+   ``ReshapeMatMulReshapePattern``, ``ShapeBasedMatMulToMulPattern``,
+   ``SwitchReshapeActivationPattern``, ``TransposeMatMulPattern``, and
+   ``TransposeReshapeMatMulPattern``.
+#. **Normalization and activations (11 patterns).**
+   ``BatchNormalizationPattern``, ``BatchNormalizationTrainingPattern``,
+   ``CastLayerNormalizationCastPattern``, ``LayerNormalizationPattern``,
+   ``LayerNormalizationScalePattern``, ``RMSNormalizationPattern``,
+   ``RMSNormalizationMulPattern``, ``GeluPattern``, ``LeakyReluPattern``,
+   ``MaxReluPattern``, and ``SoftmaxCrossEntropyLossCastPattern``.
+#. **Rotary embedding and attention functions (9 patterns).**
+   ``RotaryEmbeddingPattern``, ``RotaryConcatPartPattern``,
+   ``FunctionCausalMaskPattern``, ``FunctionCausalMaskMulAddPattern``,
+   ``FunctionCosSinCachePattern``, ``FunctionHalfRotaryEmbeddingPattern``,
+   ``FunctionAttentionPattern``, ``FunctionAttentionGQAPattern``, and
+   ``AttentionGQAPattern``.
+
+The batches are ordered from local, low-dependency rewrites toward
+shape-sensitive and model-specific fusions. If a batch exposes a missing
+generic graph query, that query is added and tested in the same pull request;
+model-specific shortcuts are not added to the optimizer core.
 
 Pull requests
 +++++++++++++
@@ -468,7 +602,13 @@ Pull requests
 * `PR #4392 <https://github.com/xadupre/onnx-light/pull/4392>`_: pattern extension library.
 * `PR #4394 <https://github.com/xadupre/onnx-light/pull/4394>`_: match/apply loop and cleanup.
 * `PR #4396 <https://github.com/xadupre/onnx-light/pull/4396>`_: replay and phase-logging design.
+* `PR #4414 <https://github.com/xadupre/onnx-light/pull/4414>`_: phase timing and
+  optimization report.
+* `PR #4416 <https://github.com/xadupre/onnx-light/pull/4416>`_: constant folding
+  for replacement nodes.
 * `PR #4425 <https://github.com/xadupre/onnx-light/pull/4425>`_: recursive subgraph
   optimization, replay paths, and aggregated statistics.
 * `PR #4427 <https://github.com/xadupre/onnx-light/pull/4427>`_: pattern linking,
   registration, selection, and standalone custom-pattern example.
+* `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_: first incremental
+  library port, ``CastPattern``, plus source-located match diagnostics.

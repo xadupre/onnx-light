@@ -7,8 +7,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <set>
+#include <source_location>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -18,6 +21,21 @@ namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
 class GraphGraph;
 class PatternOptimization;
+
+/// Aggregated reason and source location for rejected pattern candidates.
+struct PatternNoMatchStatistics {
+  /// Source file containing the rejection condition.
+  std::string source_file;
+  /// Source line containing the rejection condition.
+  std::uint_least32_t source_line = 0;
+  /// Human-readable reason why the candidate did not match.
+  std::string reason;
+  /// Number of match attempts rejected at this condition.
+  std::size_t occurrences = 0;
+
+  /// Returns a concise summary of this rejection.
+  std::string ToString() const;
+};
 
 /// Aggregated timing and activity counters for one optimization pattern.
 struct PatternOptimizationStatistics {
@@ -31,6 +49,8 @@ struct PatternOptimizationStatistics {
   int64_t match_time_ns = 0;
   /// Total time spent building replacement nodes, in nanoseconds.
   int64_t apply_time_ns = 0;
+  /// Rejection conditions aggregated by source location and reason.
+  std::vector<PatternNoMatchStatistics> no_matches;
 
   /// Returns a concise summary of these statistics.
   std::string ToString() const;
@@ -117,6 +137,21 @@ struct LocalRewriting {
   std::string ToString() const;
 };
 
+/// Explains why one candidate did not match a pattern.
+struct PatternNoMatch {
+  /// Candidate inspected by the matcher.
+  const NodeProto *candidate = nullptr;
+  /// Source file containing the rejection condition.
+  std::string_view source_file;
+  /// Source line containing the rejection condition.
+  std::uint_least32_t source_line = 0;
+  /// Human-readable reason why the candidate did not match.
+  std::string_view reason;
+
+  /// Returns a concise summary of this rejection.
+  std::string ToString() const;
+};
+
 /// Describes one subgraph recognized by an optimization pattern.
 struct MatchResult {
   /// Pattern that produced this match.
@@ -125,6 +160,8 @@ struct MatchResult {
   std::vector<const NodeProto *> nodes;
   /// Optional node before which the replacement should be inserted.
   const NodeProto *insert_at = nullptr;
+  /// Diagnostic attached to an empty result, when the pattern supplied one.
+  std::optional<PatternNoMatch> no_match;
 
   /// Returns a concise summary of this match.
   std::string ToString() const;
@@ -161,7 +198,24 @@ public:
   /// Priority used by the optimization driver.
   int priority;
 
+protected:
+  /**
+   * Returns an empty match with a rejection reason and its call-site location.
+   *
+   * This is the normal result for a candidate that does not satisfy a pattern.
+   * ``Apply`` is only called for successful matches; invalid arguments passed
+   * directly to it remain contract violations.
+   */
+  template <std::size_t N>
+  MatchResult NoMatch(const NodeProto &candidate, const char (&reason)[N],
+                      std::source_location location = std::source_location::current()) const {
+    return NoMatchImpl(candidate, std::string_view(reason, N - 1), location);
+  }
+
 private:
+  MatchResult NoMatchImpl(const NodeProto &candidate, std::string_view reason,
+                          std::source_location location) const;
+
   std::string name_;
 };
 

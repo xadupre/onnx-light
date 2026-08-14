@@ -41,10 +41,31 @@ void AppendNodes(std::ostringstream &os, const utils::RepeatedProtoField<NodePro
 
 } // namespace
 
+std::string PatternNoMatchStatistics::ToString() const {
+  std::ostringstream os;
+  os << source_file << ":" << source_line << "(occurrences=" << occurrences;
+  if (!reason.empty()) {
+    os << ", reason=" << reason;
+  }
+  os << ")";
+  return os.str();
+}
+
 std::string PatternOptimizationStatistics::ToString() const {
   std::ostringstream os;
   os << pattern_name << "(attempts=" << attempts << ", matches=" << matches
-     << ", match_time_ns=" << match_time_ns << ", apply_time_ns=" << apply_time_ns << ")";
+     << ", match_time_ns=" << match_time_ns << ", apply_time_ns=" << apply_time_ns;
+  if (!no_matches.empty()) {
+    os << ", no_matches=[";
+    for (std::size_t i = 0; i < no_matches.size(); ++i) {
+      if (i != 0) {
+        os << ", ";
+      }
+      os << no_matches[i].ToString();
+    }
+    os << "]";
+  }
+  os << ")";
   return os.str();
 }
 
@@ -156,8 +177,29 @@ std::string MatchResult::ToString() const {
     }
     os << NodeSummary(nodes[i]);
   }
-  os << "], insert_at=" << NodeSummary(insert_at) << ")";
+  os << "], insert_at=" << NodeSummary(insert_at);
+  if (no_match.has_value()) {
+    os << ", no_match=" << no_match->ToString();
+  }
+  os << ")";
   return os.str();
+}
+
+std::string PatternNoMatch::ToString() const {
+  std::ostringstream os;
+  os << source_file << ":" << source_line << "(candidate=" << NodeSummary(candidate);
+  if (!reason.empty()) {
+    os << ", reason=" << reason;
+  }
+  os << ")";
+  return os.str();
+}
+
+MatchResult PatternOptimization::NoMatchImpl(const NodeProto &candidate, std::string_view reason,
+                                             const std::source_location location) const {
+  MatchResult result;
+  result.no_match = PatternNoMatch{&candidate, location.file_name(), location.line(), reason};
+  return result;
 }
 
 std::string PatternOptimization::ToString() const {

@@ -2,9 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_extensions/patterns/cast_cast_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/cast_cast_pattern.h"
 
 #include "onnx_core/builder/graph_graph.h"
+#include "onnx_extensions/patterns/canonicalization/cast_pattern_helpers.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
@@ -14,21 +15,6 @@ namespace {
 using core::builder::BuilderError;
 using core::builder::GraphGraph;
 using core::symbolic::TensorType;
-
-bool IsDefaultCast(const NodeProto &node) {
-  return node.op_type().value() == "Cast" &&
-         NormaliseDomain(node.domain().value()) == kDefaultOnnxDomain && node.input_size() == 1 &&
-         node.output_size() == 1;
-}
-
-bool CastTarget(const NodeProto &node, TensorType &type) {
-  const AttributeProto *attribute = FindAttribute(node, "to");
-  if (attribute == nullptr || attribute->type() != AttributeProto::AttributeType::INT) {
-    return false;
-  }
-  type = core::symbolic::DataTypeToTensorType(static_cast<TensorProto::DataType>(attribute->i()));
-  return type != TensorType::kUndefined;
-}
 
 bool IsFloatingRoundTripType(TensorType type) {
   return type == TensorType::kFloat16 || type == TensorType::kBfloat16 ||
@@ -59,20 +45,31 @@ TensorType CastCastPattern::OneCastType(TensorType input_type, TensorType middle
 
 core::builder::MatchResult CastCastPattern::Match(core::builder::GraphGraph &graph,
                                                   const NodeProto &candidate) const {
-  if (!IsDefaultCast(candidate)) {
-    return {};
+  if (!detail::IsDefaultCast(candidate)) {
+    return NoMatch(candidate, "candidate is not a unary default-domain Cast");
   }
   const NodeProto *inner = graph.NodeBefore(candidate.input()[0].value());
-  if (inner == nullptr || !IsDefaultCast(*inner) || !graph.HasType(inner->input()[0].value())) {
-    return {};
+  if (inner == nullptr) {
+    return NoMatch(candidate, "the Cast input is not produced by another node");
+  }
+  if (!detail::IsDefaultCast(*inner)) {
+    return NoMatch(candidate, "the preceding node is not a unary default-domain Cast");
+  }
+  if (!graph.HasType(inner->input()[0].value())) {
+    return NoMatch(candidate, "the first Cast input element type is unknown");
   }
 
   TensorType middle_type;
   TensorType final_type;
-  if (!CastTarget(*inner, middle_type) || !CastTarget(candidate, final_type) ||
-      OneCastType(graph.GetType(inner->input()[0].value()), middle_type, final_type) ==
-          TensorType::kUndefined) {
-    return {};
+  if (!detail::CastTarget(*inner, middle_type)) {
+    return NoMatch(candidate, "the first Cast 'to' attribute is missing or invalid");
+  }
+  if (!detail::CastTarget(candidate, final_type)) {
+    return NoMatch(candidate, "the second Cast 'to' attribute is missing or invalid");
+  }
+  if (OneCastType(graph.GetType(inner->input()[0].value()), middle_type, final_type) ==
+      TensorType::kUndefined) {
+    return NoMatch(candidate, "combining the Cast operations would change the result");
   }
   return core::builder::MatchResult{
       this,
@@ -84,15 +81,15 @@ utils::RepeatedProtoField<NodeProto>
 CastCastPattern::Apply(core::builder::GraphGraph &graph,
                        const std::vector<const NodeProto *> &nodes) const {
   if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr ||
-      !IsDefaultCast(*nodes[0]) || !IsDefaultCast(*nodes[1])) {
+      !detail::IsDefaultCast(*nodes[0]) || !detail::IsDefaultCast(*nodes[1])) {
     throw BuilderError("CastCastPattern::Apply expects two consecutive Cast nodes.");
   }
   const NodeProto &inner = *nodes[0];
   const NodeProto &outer = *nodes[1];
   TensorType middle_type;
   TensorType final_type;
-  if (!graph.HasType(inner.input()[0].value()) || !CastTarget(inner, middle_type) ||
-      !CastTarget(outer, final_type)) {
+  if (!graph.HasType(inner.input()[0].value()) || !detail::CastTarget(inner, middle_type) ||
+      !detail::CastTarget(outer, final_type)) {
     throw BuilderError("CastCastPattern::Apply received an invalid Cast match.");
   }
   const TensorType input_type = graph.GetType(inner.input()[0].value());

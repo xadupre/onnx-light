@@ -443,7 +443,8 @@ Implementation order
 6. Add logging with per-phase timing (match, rewrite, dead-branch removal,
    constant folding, subgraph optimization) reported at the end of ``Optimize``.
 7. Add constant folding of all-constant rewrites.
-8. Extend to subgraphs and add the statistics output.
+8. Extend to subgraphs and add the statistics output
+   (`PR #4425 <https://github.com/xadupre/onnx-light/pull/4425>`_).
 9. Document the core/extension boundary, registration and selection APIs,
    linking requirements, and a custom-pattern example.
 10. Port the pattern library incrementally, one pattern per change, each with a
@@ -458,3 +459,5 @@ Pull requests
 * `PR #4392 <https://github.com/xadupre/onnx-light/pull/4392>`_: pattern extension library.
 * `PR #4394 <https://github.com/xadupre/onnx-light/pull/4394>`_: match/apply loop and cleanup.
 * `PR #4396 <https://github.com/xadupre/onnx-light/pull/4396>`_: replay and phase-logging design.
+* `PR #4425 <https://github.com/xadupre/onnx-light/pull/4425>`_: recursive subgraph
+  optimization, replay paths, and aggregated statistics.

@@ -5,7 +5,11 @@ Processor-aware kernel tuning
 
 :Date: 2026-08
 
-**implementation in progress**
+**implementation complete**
+
+The user workflow for calibrating one kernel, persisting or loading its cache,
+and promoting a measured threshold to a portable compiled default is described
+in :ref:`l-how-to-tune-kernel-thresholds`.
 
 Objective
 +++++++++

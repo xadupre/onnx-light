@@ -7,9 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### New Features
 
-- Added a C++ pattern-based `GraphBuilder` optimizer with a pattern registry and dispatch table, recursive subgraph optimization, and `Cast`-focused rewrite patterns (redundant `Cast`, binary `Cast`, and `Cast`-op-`Cast`).
-- Added constant folding to `GraphBuilder`, backed by a read-only `GraphGraph` index and build-time constant-information analysis.
-- Added per-kernel tuning with shared unary and binary calibration, atomic tuning-cache updates, and a CPU descriptor for processor-aware kernel thresholds.
+- Added a pattern-based `GraphBuilder` optimizer: a `GraphGraph` read-only index, a `PatternOptimization` engine that matches and rewrites subgraphs (recursively, including nested subgraphs), a pattern registry and dispatch table, a dedicated patterns library, and canonicalization patterns for redundant `Cast`, binary `Cast`, and `Cast`-op-`Cast`.
+- Added a kernel auto-tuning framework: a `KernelTuning` registry and persistent tuning cache with atomic updates, shared unary/binary calibration, portable GEMM tuning, and per-session integration through the runtime session and kernel context, tuning logical and math kernels.
+- Added constant folding to `GraphBuilder`, backed by the read-only `GraphGraph` index and build-time constant-information analysis.
 - Added a `RunModel` C++ helper for whole-model execution with `Tensor` I/O and exposed it in Python.
 - Exposed a public tensor comparison helper with `atol`/`rtol`.
 
@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Exported `ParseLimitExceeded` in the proto public API.
 - Fixed `get_cpp_build_info` for editable installs and static builds.
 - Improved runtime performance and expanded the Python NumPy kernel bindings.
+- Added a CPU descriptor exposing processor topology for processor-aware kernel thresholds.
 - Made the opaque type unconditional (propagated from onnx/onnx#8269).
 - Corrected optional input/output presence in `InferenceContextImpl` (propagated from onnx/onnx#8271).
 - Made `ScopedResource` use a `Traits` type to avoid a pointer non-type template parameter (propagated from onnx/onnx#8279).

@@ -71,9 +71,7 @@ class TestCppApiDocsSync(unittest.TestCase):
         """Returns every ``doxygenfile`` path referenced from the C++ docs."""
         refs: set[str] = set()
         for rst in self.CPP_DOCS.rglob("*.rst"):
-            for match in re.finditer(
-                r"doxygenfile::\s*(\S+)", rst.read_text(encoding="utf-8")
-            ):
+            for match in re.finditer(r"doxygenfile::\s*(\S+)", rst.read_text(encoding="utf-8")):
                 refs.add(match.group(1))
         return refs
 

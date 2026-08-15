@@ -37,6 +37,7 @@ namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::runtime::ExecuteAction;
 using core::runtime::ExecuteActionKind;
+using core::runtime::ExecutionArena;
 using core::runtime::ExecutionPlan;
 using core::runtime::KernelContext;
 using core::runtime::Map;
@@ -1214,9 +1215,13 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "Returns ``True`` when the graph should run with more than one thread, i.e. "
            "when :meth:`effective_num_threads` is greater than ``1``.");
 
+  nb::class_<RawBufferAllocator>(
+      rt_mod, "RawBufferAllocator",
+      "Abstract allocator interface accepted by :class:`RuntimeContext`.");
+
   // SimpleRawBufferAllocator — fixed-capacity pool allocator exposing live and
   // peak memory so RuntimeEvent.allocated_bytes / peak_bytes become non-zero.
-  nb::class_<SimpleRawBufferAllocator>(
+  nb::class_<SimpleRawBufferAllocator, RawBufferAllocator>(
       rt_mod, "SimpleRawBufferAllocator",
       "Fixed-capacity pool allocator for the runtime's raw buffers. Attach one "
       "to a :class:`RuntimeContext` via the :class:`RuntimeContext` constructor so "
@@ -1238,6 +1243,26 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def("reset_peak", &SimpleRawBufferAllocator::ResetPeak,
            "Resets the memory peak to the current :attr:`total_allocated_size`.");
 
+  nb::class_<ExecutionArena, RawBufferAllocator>(
+      rt_mod, "ExecutionArena",
+      "Fixed-slot allocator that retains freed storage and reuses the smallest "
+      "sufficient capacity for execution buffers.")
+      .def(nb::init<size_t>(), nb::arg("capacity"))
+      .def_prop_ro("total_allocated_size", &ExecutionArena::TotalAllocatedSize,
+                   "Logical bytes held by currently live buffers.")
+      .def_prop_ro("peak_allocated_size", &ExecutionArena::PeakAllocatedSize,
+                   "Peak logical live-byte count since construction or reset.")
+      .def_prop_ro("allocated_count", &ExecutionArena::allocated_count,
+                   "Number of currently live buffers.")
+      .def_prop_ro("capacity", &ExecutionArena::capacity,
+                   "Maximum number of simultaneously live buffers.")
+      .def_prop_ro("retained_size", &ExecutionArena::RetainedSize,
+                   "Total capacity of free retained buffers.")
+      .def_prop_ro("retained_count", &ExecutionArena::retained_count,
+                   "Number of free retained buffers.")
+      .def("reset_peak", &ExecutionArena::ResetPeak,
+           "Resets the memory peak to the current :attr:`total_allocated_size`.");
+
   // RuntimeContext — name-keyed tensor map + kernel context + function registry.
   nb::class_<RuntimeContext>(
       rt_mod, "RuntimeContext",
@@ -1249,7 +1274,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(
           "__init__",
           [](RuntimeContext *self, KernelContext kernel_ctx, bool events_enabled, int verbose,
-             bool release_intermediates, SimpleRawBufferAllocator *allocator) {
+             bool release_intermediates, RawBufferAllocator *allocator) {
             new (self) RuntimeContext(std::move(kernel_ctx),
                                       core::runtime::RuntimeContextOptions{
                                           .allocator = allocator,

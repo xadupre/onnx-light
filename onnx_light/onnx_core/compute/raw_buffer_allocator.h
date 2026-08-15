@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/simple_tensor.h"
 
 #include <cstddef>
+#include <map>
 #include <unordered_map>
 #include <vector>
 
@@ -136,6 +137,77 @@ private:
   size_t total_allocated_size_ = 0;
   size_t peak_allocated_size_ = 0;
   size_t allocated_count_ = 0;
+};
+
+/**
+ * Fixed-slot arena that retains and reuses the storage of freed buffers.
+ *
+ * Free buffers are indexed by their retained capacity. Allocation selects the
+ * smallest sufficient capacity, or grows the largest free buffer when every
+ * retained buffer is too small. Slot addresses remain stable for the lifetime
+ * of the arena.
+ *
+ * @note This class is not thread-safe.
+ */
+class ExecutionArena : public RawBufferAllocator {
+public:
+  /**
+   * Constructs an arena with at most ``capacity`` simultaneously live buffers.
+   *
+   * @param capacity  Number of stable :cpp:struct:`RawBuffer` slots.
+   */
+  explicit ExecutionArena(size_t capacity);
+
+  /**
+   * Allocates ``n_bytes`` from the smallest sufficient retained buffer.
+   *
+   * An unused slot is preferred when no retained buffer is large enough. Once
+   * all slots have acquired storage, the largest undersized free buffer grows
+   * to satisfy the request.
+   *
+   * @throws std::bad_alloc if all slots are currently live.
+   */
+  RawBuffer *Allocate(size_t n_bytes) override;
+
+  /**
+   * Returns a live buffer to its capacity bucket without releasing its storage.
+   *
+   * @throws std::invalid_argument if ``buf`` is not live in this arena.
+   */
+  void Free(RawBuffer *buf) override;
+
+  /// Returns the logical bytes held by live buffers.
+  size_t TotalAllocatedSize() const override;
+
+  /// Returns the peak logical live-byte count.
+  size_t PeakAllocatedSize() const override;
+
+  /// Resets the live-byte peak to the current live-byte count.
+  void ResetPeak() override;
+
+  /// Returns the maximum number of simultaneously live buffers.
+  size_t capacity() const noexcept;
+
+  /// Returns the number of currently live buffers.
+  size_t allocated_count() const noexcept;
+
+  /// Returns the total capacity of free retained buffers.
+  size_t RetainedSize() const noexcept;
+
+  /// Returns the number of free retained buffers.
+  size_t retained_count() const noexcept;
+
+private:
+  std::vector<RawBuffer> buffers_;
+  std::vector<size_t> unused_slots_;
+  std::map<size_t, std::vector<size_t>> free_buckets_;
+  std::unordered_map<RawBuffer *, size_t> slot_indices_;
+  std::vector<bool> live_slots_;
+  size_t total_allocated_size_ = 0;
+  size_t peak_allocated_size_ = 0;
+  size_t allocated_count_ = 0;
+  size_t retained_size_ = 0;
+  size_t retained_count_ = 0;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

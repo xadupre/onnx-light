@@ -229,6 +229,7 @@ private:
   uint32_t value{0};
 };
 
+/// \cond DOXYGEN_EXCLUDE_INTERNAL_LINKAGE
 static inline bool operator==(Symbol lhs, Symbol rhs) {
   return static_cast<uint32_t>(lhs) == static_cast<uint32_t>(rhs);
 }
@@ -239,6 +240,7 @@ static inline bool operator==(BuiltinSymbol lhs, Symbol rhs) {
 static inline bool operator==(Symbol lhs, BuiltinSymbol rhs) {
   return static_cast<uint32_t>(lhs) == static_cast<uint32_t>(rhs);
 }
+/// \endcond
 
 /// Creates a Symbol from a string literal, for example "axis"_sym.
 inline Symbol

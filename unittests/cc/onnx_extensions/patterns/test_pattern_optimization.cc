@@ -7,9 +7,6 @@
 #include "onnx_core/runtime/kernel_dispatch_table.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
-#include "onnx_extensions/patterns/canonicalization/cast_cast_binary_pattern.h"
-#include "onnx_extensions/patterns/canonicalization/cast_cast_pattern.h"
-#include "onnx_extensions/patterns/canonicalization/cast_op_cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 

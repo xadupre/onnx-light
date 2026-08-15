@@ -114,6 +114,23 @@ GraphGraph::GraphGraph(GraphBuilder &builder,
 }
 
 GraphGraph::GraphGraph(GraphBuilder &builder,
+                       std::vector<std::shared_ptr<PatternOptimization>> patterns)
+    : builder_(builder), patterns_(std::move(patterns)) {
+  for (const std::shared_ptr<PatternOptimization> &pattern : patterns_) {
+    if (pattern == nullptr) {
+      throw BuilderError("GraphGraph: a pattern must not be null.");
+    }
+    if (pattern->Name().empty()) {
+      throw BuilderError("GraphGraph: a pattern must have a stable diagnostic name.");
+    }
+  }
+  std::stable_sort(patterns_.begin(), patterns_.end(), [](const auto &left, const auto &right) {
+    return left->priority < right->priority;
+  });
+  Rebuild();
+}
+
+GraphGraph::GraphGraph(GraphBuilder &builder,
                        const std::vector<std::shared_ptr<PatternOptimization>> &patterns,
                        DoNotRemovePredicate do_not_remove, const GraphGraph *parent_graph,
                        std::size_t parent_position_limit)

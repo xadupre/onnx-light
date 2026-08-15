@@ -68,6 +68,9 @@ public:
   GraphGraph(GraphBuilder &builder, std::vector<std::unique_ptr<PatternOptimization>> patterns,
              DoNotRemovePredicate do_not_remove = {});
 
+  /// Builds the index and shares ownership of the supplied patterns.
+  GraphGraph(GraphBuilder &builder, std::vector<std::shared_ptr<PatternOptimization>> patterns);
+
   /// Returns the builder being indexed and optimized.
   GraphBuilder &Builder() noexcept { return builder_; }
 

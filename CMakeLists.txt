@@ -204,7 +204,11 @@ set(ONNX_PY_PROTOOP_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyprotoop.cc"
 )
 set(ONNX_PY_PROTOLIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_lib.cc")
-set(ONNX_PY_CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_core.cc")
+set(ONNX_PY_CORE_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_core.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_patterns_core.cc")
+set(ONNX_PY_PATTERNS_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_patterns.cc")
 set(ONNX_PY_KERNELS_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_kernels.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_numpy_api.cc"
@@ -707,12 +711,19 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   target_include_directories(_onnxpyprotolib PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxpyprotolib PRIVATE lib_onnx_lib)
 
-  # _onnxpycore: core bindings (symbolic expressions and shape inference).
+  # _onnxpycore: core bindings (symbolic expressions, shape inference, and
+  # graph-pattern optimizer interfaces).
   # Split from _onnxpyproto* so the schema bindings and the shape-inference
   # bindings live in distinct extensions.
   nanobind_add_module(_onnxpycore STABLE_ABI ${ONNX_PY_CORE_SOURCES})
   target_include_directories(_onnxpycore PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxpycore PRIVATE lib_onnx_shape)
+
+  # _onnxpypatterns: concrete ONNX rewrite patterns. The optimizer interfaces
+  # remain in _onnxpycore so the core extension does not depend on this library.
+  nanobind_add_module(_onnxpypatterns STABLE_ABI ${ONNX_PY_PATTERNS_SOURCES})
+  target_include_directories(_onnxpypatterns PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
+  target_link_libraries(_onnxpypatterns PRIVATE lib_onnx_patterns)
 
   # _onnxpykernels: kernel helpers (deterministic pseudo-random helpers backing
   # ``onnx_backend_test``). Links lib_onnx_kernels only and does not depend on
@@ -778,7 +789,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # every .so and refuses to repair if a referenced library (e.g.
   # ``liblib_onnx_proto.so`` referenced by ``liblib_onnx_kernels.so``) cannot
   # be located via the consuming library's own rpath.
-  set(_onnxpy_rpath_targets _onnxpyprotoop _onnxpyprotolib _onnxpycore)
+  set(_onnxpy_rpath_targets _onnxpyprotoop _onnxpyprotolib _onnxpycore _onnxpypatterns)
   if(ONNX_LIGHT_BUILD_KERNELS)
     list(APPEND _onnxpy_rpath_targets _onnxpykernels _onnxpybackend _onnxpygradient)
   endif()
@@ -1093,7 +1104,8 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # alongside so the $ORIGIN rpath above resolves them without
   # LD_LIBRARY_PATH and the compiled code is shared across all extensions
   # instead of being duplicated inside each .so.
-  install(TARGETS _onnxpyprotoop _onnxpyprotolib _onnxpycore LIBRARY DESTINATION onnx_light/onnx_py)
+  install(TARGETS _onnxpyprotoop _onnxpyprotolib _onnxpycore _onnxpypatterns
+      LIBRARY DESTINATION onnx_light/onnx_py)
   if(ONNX_LIGHT_BUILD_KERNELS)
     install(TARGETS _onnxpykernels _onnxpybackend _onnxpygradient LIBRARY DESTINATION onnx_light/onnx_py)
   endif()
@@ -1313,7 +1325,7 @@ if(ONNX_LIGHT_BUILD_KERNELS)
 endif()
 if(ONNX_LIGHT_BUILD_PYTHON)
   list(APPEND _onnx_light_hardening_targets
-      _onnxpyprotoop _onnxpyprotolib _onnxpycore)
+      _onnxpyprotoop _onnxpyprotolib _onnxpycore _onnxpypatterns)
   if(ONNX_LIGHT_BUILD_KERNELS)
     list(APPEND _onnx_light_hardening_targets _onnxpykernels _onnxpybackend)
   endif()

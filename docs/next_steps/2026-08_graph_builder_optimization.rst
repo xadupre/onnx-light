@@ -89,6 +89,11 @@ requests:
      - Cast-operation-Cast canonicalization
      - Ports ``CastOpCastPattern`` with guarded type migration, attribute
        preservation, and shared-output restoration.
+   * - Current branch
+     - Python bindings and custom patterns
+     - Exposes optimizer queries, rewrites, reports, replay, and concrete Cast
+       patterns; supports explicitly supplied Python pattern subclasses with
+       recursive lifetime and exception propagation.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -562,7 +567,8 @@ Implementation order
 10. Add Python bindings for the optimizer classes and reports, expose the
     standard ONNX pattern classes through ``_onnxpypatterns``, and support
     Python-defined ``PatternOptimization`` subclasses passed explicitly to an
-    optimization run.
+    optimization run. Implemented on branch ``patsampy``; the pull request is
+    pending.
 11. Port the pattern library incrementally, one pattern per commit and several
     related commits per pull request. Every pattern has a C++ test that checks
     the rewritten graph against the expected one. The first port,

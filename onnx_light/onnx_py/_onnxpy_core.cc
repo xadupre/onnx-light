@@ -56,6 +56,7 @@ constexpr const char *InPlaceReuseKindEnumName(core::compute::InPlaceReuseKind k
 void AddOnnxPyExpressions(nb::module_ &m);
 void AddOnnxPyShapeInference(nb::module_ &m);
 void AddOnnxPyBuilder(nb::module_ &m);
+void AddOnnxPyPatternCore(nb::module_ &m);
 
 NB_MODULE(_onnxpycore, m) {
   m.doc() = "onnx core bindings from python: symbolic dimension expressions and "
@@ -63,6 +64,7 @@ NB_MODULE(_onnxpycore, m) {
   AddOnnxPyExpressions(m);
   AddOnnxPyShapeInference(m);
   AddOnnxPyBuilder(m);
+  AddOnnxPyPatternCore(m);
 }
 
 void AddOnnxPyExpressions(nb::module_ &m) {

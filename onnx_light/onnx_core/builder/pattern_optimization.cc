@@ -198,7 +198,8 @@ std::string PatternNoMatch::ToString() const {
 MatchResult PatternOptimization::NoMatchImpl(const NodeProto &candidate, std::string_view reason,
                                              const std::source_location location) const {
   MatchResult result;
-  result.no_match = PatternNoMatch{&candidate, location.file_name(), location.line(), reason};
+  result.no_match =
+      PatternNoMatch{&candidate, location.file_name(), location.line(), std::string(reason)};
   return result;
 }
 

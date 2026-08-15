@@ -811,7 +811,9 @@ if(ONNX_LIGHT_BUILD_TESTS)
   file(GLOB_RECURSE ONNX_CPP_LIB_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_lib/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_OP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_op/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_SHAPE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/shapes/test_*.cc")
-  file(GLOB_RECURSE ONNX_CPP_PATTERNS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/patterns/test_*.cc")
+  file(GLOB_RECURSE ONNX_CPP_PATTERNS_TEST_SOURCES CONFIGURE_DEPENDS
+      "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/patterns/test_*.cc"
+      "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/patterns/*/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_KERNELS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/kernels/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_BACKEND_TEST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/backend_test/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_GRADIENT_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_extensions/gradient/test_*.cc")

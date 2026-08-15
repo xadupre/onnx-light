@@ -81,6 +81,10 @@ requests:
      - Ports ``CastPattern`` from ``yobx.xoptim.patterns`` with exact rewrite,
        optimized-graph, rejection, and registration tests, and adds
        source-located no-match diagnostics.
+   * - `PR #4432 <https://github.com/xadupre/onnx-light/pull/4432>`_
+     - First elementary canonicalization pattern
+     - Ports ``CastCastBinaryPattern`` with precision and shared-use guards,
+       family-scoped tests, and standard pattern registration.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -491,7 +495,8 @@ Implementation order
     ``CastPattern``, is
     `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_; it also ports
     Python's source-located no-match diagnostics before further patterns are
-    added.
+    added. ``CastCastBinaryPattern`` starts the elementary canonicalization
+    batch in `PR #4432 <https://github.com/xadupre/onnx-light/pull/4432>`_.
 
 Remaining pattern batches
 +++++++++++++++++++++++++
@@ -520,15 +525,16 @@ beside its patterns; only genuinely cross-family graph queries belong in
 ``detail`` directory.
 
 The upstream default list currently contains 104 enabled patterns.
-``CastCastPattern`` and ``CastPattern`` are already covered, leaving 102
+``CastCastPattern``, ``CastPattern``, and ``CastCastBinaryPattern`` are already
+covered, leaving 101
 patterns. They are grouped into nine cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;
 this keeps reviews and ``git bisect`` useful without creating 102 pull
 requests. Commented-out, non-default upstream patterns are outside this plan.
 
-#. **Elementary canonicalization (9 patterns).**
-   ``CastCastBinaryPattern``, ``CastOpCastPattern``, ``ClipClipPattern``,
+#. **Elementary canonicalization (8 patterns remaining).**
+   ``CastOpCastPattern``, ``ClipClipPattern``,
    ``ConstantToInitializerPattern``, ``ConvBiasNullPattern``,
    ``PadConvPattern``, ``DropoutPattern``, ``IdentityPattern``, and
    ``NotNotPattern``.
@@ -612,3 +618,5 @@ Pull requests
   registration, selection, and standalone custom-pattern example.
 * `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_: first incremental
   library port, ``CastPattern``, plus source-located match diagnostics.
+* `PR #4432 <https://github.com/xadupre/onnx-light/pull/4432>`_: first elementary
+  canonicalization port, ``CastCastBinaryPattern``.

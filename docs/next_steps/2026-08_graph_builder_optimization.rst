@@ -85,6 +85,10 @@ requests:
      - First elementary canonicalization pattern
      - Ports ``CastCastBinaryPattern`` with precision and shared-use guards,
        family-scoped tests, and standard pattern registration.
+   * - `PR #4433 <https://github.com/xadupre/onnx-light/pull/4433>`_
+     - Cast-operation-Cast canonicalization
+     - Ports ``CastOpCastPattern`` with guarded type migration, attribute
+       preservation, and shared-output restoration.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -496,7 +500,9 @@ Implementation order
     `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_; it also ports
     Python's source-located no-match diagnostics before further patterns are
     added. ``CastCastBinaryPattern`` starts the elementary canonicalization
-    batch in `PR #4432 <https://github.com/xadupre/onnx-light/pull/4432>`_.
+    batch in `PR #4432 <https://github.com/xadupre/onnx-light/pull/4432>`_;
+    ``CastOpCastPattern`` follows in
+    `PR #4433 <https://github.com/xadupre/onnx-light/pull/4433>`_.
 
 Remaining pattern batches
 +++++++++++++++++++++++++
@@ -620,3 +626,6 @@ Pull requests
   library port, ``CastPattern``, plus source-located match diagnostics.
 * `PR #4432 <https://github.com/xadupre/onnx-light/pull/4432>`_: first elementary
   canonicalization port, ``CastCastBinaryPattern``.
+* `PR #4433 <https://github.com/xadupre/onnx-light/pull/4433>`_:
+  ``CastOpCastPattern`` with guarded type migration and shared-output
+  preservation.

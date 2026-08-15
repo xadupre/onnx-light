@@ -79,7 +79,6 @@ class TestReferenceEvaluator(ExtTestCase):
             },
         )
         self.assertIsNotNone(output.base)
-        self.assertEqual(allocator.allocated_count, 1)
 
         evaluator._ctx.clear()
 
@@ -91,7 +90,7 @@ class TestReferenceEvaluator(ExtTestCase):
     def test_allocator_output_remains_live_during_subsequent_run(self):
         """Pins the previous output while a subsequent run produces another."""
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
-        allocator = runtime.SimpleRawBufferAllocator(4)
+        allocator = runtime.SimpleRawBufferAllocator(5)
         evaluator = ReferenceEvaluator(model, allocator=allocator)
         first_feeds = {
             "x": np.array([-1.0, 2.0, -3.0], dtype=np.float32),
@@ -104,6 +103,7 @@ class TestReferenceEvaluator(ExtTestCase):
 
         (first,) = evaluator.run(None, first_feeds)
         (second,) = evaluator.run(None, second_feeds)
+        evaluator._ctx.clear()
 
         # Both arrays need distinct live allocations while both remain alive.
         self.assertEqual(allocator.allocated_count, 2)

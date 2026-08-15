@@ -20,4 +20,5 @@ How-to Python / C++
     tune_kernel_thresholds
     use_custom_shape_inference
     register_builtin_operators
+    add_custom_pattern
     onnx_graph_manipulations

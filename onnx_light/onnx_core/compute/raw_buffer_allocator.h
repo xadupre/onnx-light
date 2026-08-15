@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <map>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -206,6 +207,154 @@ private:
   size_t total_allocated_size_ = 0;
   size_t peak_allocated_size_ = 0;
   size_t allocated_count_ = 0;
+  size_t retained_size_ = 0;
+  size_t retained_count_ = 0;
+};
+
+class IOArena;
+
+/**
+ * Reference-counted lease that pins one I/O allocation for an external owner.
+ *
+ * A lease is the ownership token handed to a cross-boundary consumer such as a
+ * NumPy capsule. While the lease is alive its buffer stays live and pinned: the
+ * owning :cpp:class:`IOArena` never reuses that storage. The lease also holds a
+ * shared reference to the arena, so the arena outlives every exported buffer and
+ * a capsule is never left with a dangling arena pointer.
+ *
+ * The lease is move-only. Destruction or :cpp:func:`Reset` returns the buffer to
+ * its arena's retained free list exactly once; an empty or moved-from lease is a
+ * no-op.
+ */
+class IOLease {
+public:
+  IOLease() noexcept = default;
+  ~IOLease();
+
+  IOLease(const IOLease &) = delete;
+  IOLease &operator=(const IOLease &) = delete;
+  IOLease(IOLease &&other) noexcept;
+  IOLease &operator=(IOLease &&other) noexcept;
+
+  /// Returns whether this lease pins an allocation.
+  explicit operator bool() const noexcept { return buffer_ != nullptr; }
+
+  /// Returns the leased buffer, or ``nullptr`` for an empty lease.
+  RawBuffer *buffer() const noexcept { return buffer_; }
+
+  /// Returns the logical byte size captured when the lease was created.
+  size_t logical_size() const noexcept { return logical_size_; }
+
+  /// Returns the buffer to its arena and makes this lease empty.
+  void Reset() noexcept;
+
+private:
+  friend class IOArena;
+  IOLease(std::shared_ptr<IOArena> arena, RawBuffer *buffer, size_t logical_size) noexcept;
+
+  std::shared_ptr<IOArena> arena_;
+  RawBuffer *buffer_ = nullptr;
+  size_t logical_size_ = 0;
+};
+
+/**
+ * Fixed-slot arena for I/O buffers with capacity-preserving reuse and leasing.
+ *
+ * :cpp:class:`IOArena` retains and reuses freed storage exactly like
+ * :cpp:class:`ExecutionArena`, but it additionally supports exporting a live
+ * allocation to an external owner through an :cpp:class:`IOLease`. An exported
+ * buffer stays live and pinned until its lease is released; only then does the
+ * arena reclaim its storage for reuse. Leases keep the arena alive, so an
+ * exported buffer never outlives the arena that owns its storage.
+ *
+ * Because leases share ownership of the arena, an ``IOArena`` must be created on
+ * the heap through :cpp:func:`Create` and held by ``std::shared_ptr``.
+ *
+ * @note This class is not thread-safe.
+ */
+class IOArena : public RawBufferAllocator, public std::enable_shared_from_this<IOArena> {
+public:
+  /**
+   * Creates a shared arena with at most ``capacity`` simultaneously live buffers.
+   *
+   * @param capacity  Number of stable :cpp:struct:`RawBuffer` slots.
+   */
+  static std::shared_ptr<IOArena> Create(size_t capacity);
+
+  /**
+   * Allocates ``n_bytes`` from the smallest sufficient retained buffer.
+   *
+   * An unused slot is preferred when no retained buffer is large enough. Once
+   * all slots have acquired storage, the largest undersized free buffer grows to
+   * satisfy the request.
+   *
+   * @throws std::bad_alloc if all slots are currently live.
+   */
+  RawBuffer *Allocate(size_t n_bytes) override;
+
+  /**
+   * Returns a live, unleased buffer to its capacity bucket without releasing its
+   * storage.
+   *
+   * @throws std::invalid_argument if ``buf`` is not live in this arena or has
+   *         been exported through a lease.
+   */
+  void Free(RawBuffer *buf) override;
+
+  /**
+   * Exports a live buffer to an external owner, returning a pinning lease.
+   *
+   * The buffer stays live and counted while the lease exists; the arena does not
+   * reuse it until the lease is released.
+   *
+   * @throws std::invalid_argument if ``buf`` is not live in this arena or has
+   *         already been exported.
+   */
+  IOLease Export(RawBuffer *buf);
+
+  /// Returns the logical bytes held by live buffers (allocated and leased).
+  size_t TotalAllocatedSize() const override;
+
+  /// Returns the peak logical live-byte count.
+  size_t PeakAllocatedSize() const override;
+
+  /// Resets the live-byte peak to the current live-byte count.
+  void ResetPeak() override;
+
+  /// Returns the maximum number of simultaneously live buffers.
+  size_t capacity() const noexcept;
+
+  /// Returns the number of live buffers owned directly by the arena (not leased).
+  size_t allocated_count() const noexcept;
+
+  /// Returns the number of buffers currently exported through a lease.
+  size_t leased_count() const noexcept;
+
+  /// Returns the total capacity of free retained buffers.
+  size_t RetainedSize() const noexcept;
+
+  /// Returns the number of free retained buffers.
+  size_t retained_count() const noexcept;
+
+private:
+  friend class IOLease;
+
+  explicit IOArena(size_t capacity);
+
+  /// Returns a previously leased buffer to the retained free list — called by
+  /// :cpp:class:`IOLease`.
+  void ReturnLease(RawBuffer *buf) noexcept;
+
+  std::vector<RawBuffer> buffers_;
+  std::vector<size_t> unused_slots_;
+  std::map<size_t, std::vector<size_t>> free_buckets_;
+  std::unordered_map<RawBuffer *, size_t> slot_indices_;
+  std::vector<bool> live_slots_;
+  std::vector<bool> leased_slots_;
+  size_t total_allocated_size_ = 0;
+  size_t peak_allocated_size_ = 0;
+  size_t allocated_count_ = 0;
+  size_t leased_count_ = 0;
   size_t retained_size_ = 0;
   size_t retained_count_ = 0;
 };

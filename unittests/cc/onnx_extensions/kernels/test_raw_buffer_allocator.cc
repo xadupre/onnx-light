@@ -13,6 +13,8 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::runtime::ExecutionArena;
+using core::runtime::IOArena;
+using core::runtime::IOLease;
 using core::runtime::RawBuffer;
 using core::runtime::RawBufferAllocator;
 using core::runtime::RuntimeContext;
@@ -264,6 +266,173 @@ TEST(ExecutionArena, WorksThroughAllocatorInterfaceAndRuntimeContext) {
   EXPECT_EQ(arena.allocated_count(), 0u);
   EXPECT_EQ(arena.retained_count(), 1u);
   EXPECT_GE(arena.RetainedSize(), 2u * sizeof(int32_t));
+}
+
+// ---------------------------------------------------------------------------
+// IOArena tests
+// ---------------------------------------------------------------------------
+
+TEST(IOArena, RetainsAndReusesPayloadStorage) {
+  auto arena = IOArena::Create(1);
+  RawBuffer *first = arena->Allocate(64);
+  uint8_t *payload = first->data();
+  const size_t retained_capacity = first->capacity();
+
+  arena->Free(first);
+  EXPECT_EQ(arena->allocated_count(), 0u);
+  EXPECT_EQ(arena->retained_count(), 1u);
+  EXPECT_EQ(arena->RetainedSize(), retained_capacity);
+
+  RawBuffer *second = arena->Allocate(32);
+  EXPECT_EQ(second, first);
+  EXPECT_EQ(second->data(), payload);
+  EXPECT_EQ(second->size(), 32u);
+  EXPECT_EQ(arena->RetainedSize(), 0u);
+}
+
+TEST(IOArena, ChoosesSmallestSufficientCapacity) {
+  auto arena = IOArena::Create(2);
+  RawBuffer *small = arena->Allocate(64);
+  RawBuffer *large = arena->Allocate(128);
+  uint8_t *small_payload = small->data();
+  uint8_t *large_payload = large->data();
+  arena->Free(small);
+  arena->Free(large);
+
+  RawBuffer *selected = arena->Allocate(48);
+  EXPECT_EQ(selected->data(), small_payload);
+  EXPECT_NE(selected->data(), large_payload);
+}
+
+TEST(IOArena, TracksLivePeakAndEnforcesSlotLimit) {
+  auto arena = IOArena::Create(2);
+  RawBuffer *first = arena->Allocate(10);
+  RawBuffer *second = arena->Allocate(20);
+  EXPECT_EQ(arena->TotalAllocatedSize(), 30u);
+  EXPECT_EQ(arena->PeakAllocatedSize(), 30u);
+  EXPECT_EQ(arena->allocated_count(), 2u);
+  EXPECT_THROW(arena->Allocate(1), std::bad_alloc);
+
+  arena->Free(first);
+  EXPECT_EQ(arena->TotalAllocatedSize(), 20u);
+  EXPECT_EQ(arena->PeakAllocatedSize(), 30u);
+  arena->ResetPeak();
+  EXPECT_EQ(arena->PeakAllocatedSize(), 20u);
+  arena->Free(second);
+}
+
+TEST(IOArena, RejectsUnknownAndAlreadyFreedBuffers) {
+  auto arena = IOArena::Create(1);
+  RawBuffer unknown;
+  EXPECT_THROW(arena->Free(&unknown), std::invalid_argument);
+
+  RawBuffer *buffer = arena->Allocate(8);
+  arena->Free(buffer);
+  EXPECT_THROW(arena->Free(buffer), std::invalid_argument);
+}
+
+TEST(IOArena, ExportPinsBufferAndKeepsItLive) {
+  auto arena = IOArena::Create(1);
+  RawBuffer *buffer = arena->Allocate(64);
+  uint8_t *payload = buffer->data();
+
+  IOLease lease = arena->Export(buffer);
+  EXPECT_TRUE(static_cast<bool>(lease));
+  EXPECT_EQ(lease.buffer(), buffer);
+  EXPECT_EQ(lease.buffer()->data(), payload);
+  EXPECT_EQ(lease.logical_size(), 64u);
+
+  // The exported buffer is still live but no longer owned directly by the arena.
+  EXPECT_EQ(arena->allocated_count(), 0u);
+  EXPECT_EQ(arena->leased_count(), 1u);
+  EXPECT_EQ(arena->TotalAllocatedSize(), 64u);
+  EXPECT_EQ(arena->retained_count(), 0u);
+
+  // A leased buffer cannot be freed through the allocator interface.
+  EXPECT_THROW(arena->Free(buffer), std::invalid_argument);
+  // Nor exported twice.
+  EXPECT_THROW(arena->Export(buffer), std::invalid_argument);
+}
+
+TEST(IOArena, ReleasingLeaseReturnsStorageForReuse) {
+  auto arena = IOArena::Create(1);
+  RawBuffer *buffer = arena->Allocate(64);
+  uint8_t *payload = buffer->data();
+  const size_t retained_capacity = buffer->capacity();
+
+  {
+    IOLease lease = arena->Export(buffer);
+    EXPECT_EQ(arena->leased_count(), 1u);
+  }
+
+  // Destroying the lease returns the buffer to the retained free list.
+  EXPECT_EQ(arena->leased_count(), 0u);
+  EXPECT_EQ(arena->TotalAllocatedSize(), 0u);
+  EXPECT_EQ(arena->retained_count(), 1u);
+  EXPECT_EQ(arena->RetainedSize(), retained_capacity);
+
+  RawBuffer *reused = arena->Allocate(32);
+  EXPECT_EQ(reused->data(), payload);
+}
+
+TEST(IOArena, ResetReleasesLeaseExactlyOnce) {
+  auto arena = IOArena::Create(1);
+  RawBuffer *buffer = arena->Allocate(16);
+  IOLease lease = arena->Export(buffer);
+
+  lease.Reset();
+  EXPECT_FALSE(static_cast<bool>(lease));
+  EXPECT_EQ(lease.buffer(), nullptr);
+  EXPECT_EQ(arena->leased_count(), 0u);
+  EXPECT_EQ(arena->retained_count(), 1u);
+
+  // A second reset is a no-op and does not double-return the buffer.
+  lease.Reset();
+  EXPECT_EQ(arena->retained_count(), 1u);
+}
+
+TEST(IOArena, MovedLeaseTransfersOwnership) {
+  auto arena = IOArena::Create(1);
+  RawBuffer *buffer = arena->Allocate(16);
+  IOLease lease = arena->Export(buffer);
+
+  IOLease moved = std::move(lease);
+  EXPECT_FALSE(static_cast<bool>(lease));
+  EXPECT_TRUE(static_cast<bool>(moved));
+  EXPECT_EQ(moved.buffer(), buffer);
+  EXPECT_EQ(arena->leased_count(), 1u);
+
+  moved.Reset();
+  EXPECT_EQ(arena->leased_count(), 0u);
+}
+
+TEST(IOArena, LeaseKeepsArenaAliveAfterSharedPointerReset) {
+  auto arena = IOArena::Create(1);
+  RawBuffer *buffer = arena->Allocate(16);
+  buffer->data()[0] = 42;
+  IOLease lease = arena->Export(buffer);
+
+  // Drop the local strong reference; the lease must keep the arena alive so the
+  // exported buffer remains valid (mirrors a NumPy capsule outliving the runtime).
+  arena.reset();
+  ASSERT_TRUE(static_cast<bool>(lease));
+  EXPECT_EQ(lease.buffer()->data()[0], 42);
+
+  // Releasing the lease drops the final reference without dangling.
+  lease.Reset();
+  EXPECT_FALSE(static_cast<bool>(lease));
+}
+
+TEST(IOArena, WorksThroughAllocatorInterface) {
+  auto arena = IOArena::Create(2);
+  RawBufferAllocator *allocator = arena.get();
+
+  RawBuffer *buf = allocator->Allocate(64);
+  EXPECT_EQ(allocator->TotalAllocatedSize(), 64u);
+  EXPECT_EQ(allocator->PeakAllocatedSize(), 64u);
+  allocator->Free(buf);
+  EXPECT_EQ(allocator->TotalAllocatedSize(), 0u);
+  EXPECT_EQ(allocator->PeakAllocatedSize(), 64u);
 }
 
 // ---------------------------------------------------------------------------

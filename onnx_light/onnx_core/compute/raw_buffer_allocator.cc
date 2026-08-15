@@ -8,6 +8,7 @@
 #include <iterator>
 #include <new>
 #include <stdexcept>
+#include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
@@ -144,5 +145,166 @@ size_t ExecutionArena::allocated_count() const noexcept { return allocated_count
 size_t ExecutionArena::RetainedSize() const noexcept { return retained_size_; }
 
 size_t ExecutionArena::retained_count() const noexcept { return retained_count_; }
+
+// ---------------------------------------------------------------------------
+// IOLease
+// ---------------------------------------------------------------------------
+
+IOLease::IOLease(std::shared_ptr<IOArena> arena, RawBuffer *buffer, size_t logical_size) noexcept
+    : arena_(std::move(arena)), buffer_(buffer), logical_size_(logical_size) {}
+
+IOLease::IOLease(IOLease &&other) noexcept
+    : arena_(std::move(other.arena_)), buffer_(other.buffer_), logical_size_(other.logical_size_) {
+  other.buffer_ = nullptr;
+  other.logical_size_ = 0;
+}
+
+IOLease &IOLease::operator=(IOLease &&other) noexcept {
+  if (this != &other) {
+    Reset();
+    arena_ = std::move(other.arena_);
+    buffer_ = other.buffer_;
+    logical_size_ = other.logical_size_;
+    other.buffer_ = nullptr;
+    other.logical_size_ = 0;
+  }
+  return *this;
+}
+
+IOLease::~IOLease() { Reset(); }
+
+void IOLease::Reset() noexcept {
+  if (buffer_ != nullptr) {
+    arena_->ReturnLease(buffer_);
+    buffer_ = nullptr;
+    logical_size_ = 0;
+  }
+  arena_.reset();
+}
+
+// ---------------------------------------------------------------------------
+// IOArena
+// ---------------------------------------------------------------------------
+
+IOArena::IOArena(size_t capacity)
+    : buffers_(capacity), live_slots_(capacity, false), leased_slots_(capacity, false) {
+  unused_slots_.reserve(capacity);
+  slot_indices_.reserve(capacity);
+  for (size_t i = capacity; i-- > 0;) {
+    unused_slots_.push_back(i);
+    slot_indices_.emplace(&buffers_[i], i);
+  }
+}
+
+std::shared_ptr<IOArena> IOArena::Create(size_t capacity) {
+  return std::shared_ptr<IOArena>(new IOArena(capacity));
+}
+
+RawBuffer *IOArena::Allocate(size_t n_bytes) {
+  size_t i;
+  size_t previous_capacity = 0;
+  auto bucket = free_buckets_.lower_bound(n_bytes);
+
+  if (bucket != free_buckets_.end()) {
+    i = bucket->second.back();
+    previous_capacity = buffers_[i].capacity();
+    buffers_[i].resize(n_bytes);
+    bucket->second.pop_back();
+    if (bucket->second.empty()) {
+      free_buckets_.erase(bucket);
+    }
+    retained_size_ -= previous_capacity;
+    --retained_count_;
+  } else if (!unused_slots_.empty()) {
+    i = unused_slots_.back();
+    buffers_[i].resize(n_bytes);
+    unused_slots_.pop_back();
+  } else if (!free_buckets_.empty()) {
+    bucket = std::prev(free_buckets_.end());
+    i = bucket->second.back();
+    previous_capacity = buffers_[i].capacity();
+    buffers_[i].resize(n_bytes);
+    bucket->second.pop_back();
+    if (bucket->second.empty()) {
+      free_buckets_.erase(bucket);
+    }
+    retained_size_ -= previous_capacity;
+    --retained_count_;
+  } else {
+    throw std::bad_alloc();
+  }
+
+  RawBuffer *buffer = &buffers_[i];
+  live_slots_[i] = true;
+  total_allocated_size_ += n_bytes;
+  peak_allocated_size_ = std::max(peak_allocated_size_, total_allocated_size_);
+  ++allocated_count_;
+  return buffer;
+}
+
+void IOArena::Free(RawBuffer *buf) {
+  const auto slot = slot_indices_.find(buf);
+  if (slot == slot_indices_.end() || !live_slots_[slot->second] || leased_slots_[slot->second]) {
+    throw std::invalid_argument("IOArena::Free: buffer is not live in this arena.");
+  }
+
+  const size_t i = slot->second;
+  const size_t logical_size = buffers_[i].size();
+  const size_t retained_capacity = buffers_[i].capacity();
+  free_buckets_[retained_capacity].push_back(i);
+  buffers_[i].resize(0);
+  total_allocated_size_ -= logical_size;
+  retained_size_ += retained_capacity;
+  ++retained_count_;
+  --allocated_count_;
+  live_slots_[i] = false;
+}
+
+IOLease IOArena::Export(RawBuffer *buf) {
+  const auto slot = slot_indices_.find(buf);
+  if (slot == slot_indices_.end() || !live_slots_[slot->second] || leased_slots_[slot->second]) {
+    throw std::invalid_argument("IOArena::Export: buffer is not live in this arena.");
+  }
+
+  const size_t i = slot->second;
+  const size_t logical_size = buffers_[i].size();
+  // The buffer stays live and counted; ownership moves from the caller to the
+  // lease, which pins the storage until it is released.
+  leased_slots_[i] = true;
+  --allocated_count_;
+  ++leased_count_;
+  return IOLease(shared_from_this(), buf, logical_size);
+}
+
+void IOArena::ReturnLease(RawBuffer *buf) noexcept {
+  const auto slot = slot_indices_.find(buf);
+  const size_t i = slot->second;
+  const size_t logical_size = buffers_[i].size();
+  const size_t retained_capacity = buffers_[i].capacity();
+  free_buckets_[retained_capacity].push_back(i);
+  buffers_[i].resize(0);
+  total_allocated_size_ -= logical_size;
+  retained_size_ += retained_capacity;
+  ++retained_count_;
+  --leased_count_;
+  live_slots_[i] = false;
+  leased_slots_[i] = false;
+}
+
+size_t IOArena::TotalAllocatedSize() const { return total_allocated_size_; }
+
+size_t IOArena::PeakAllocatedSize() const { return peak_allocated_size_; }
+
+void IOArena::ResetPeak() { peak_allocated_size_ = total_allocated_size_; }
+
+size_t IOArena::capacity() const noexcept { return buffers_.size(); }
+
+size_t IOArena::allocated_count() const noexcept { return allocated_count_; }
+
+size_t IOArena::leased_count() const noexcept { return leased_count_; }
+
+size_t IOArena::RetainedSize() const noexcept { return retained_size_; }
+
+size_t IOArena::retained_count() const noexcept { return retained_count_; }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

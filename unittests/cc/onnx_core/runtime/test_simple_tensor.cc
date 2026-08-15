@@ -16,6 +16,7 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::AllocationHandle;
 using core::runtime::DataType;
 using core::runtime::ElementSize;
 using core::runtime::FillValueInfo;
@@ -294,6 +295,52 @@ TEST(SimpleTensorCopyMove, RawByteBufferMoveKeepsStorage) {
   uint8_t *original = bytes.data();
   Tensor tensor = Tensor::FromRawBytes("moved", DataType::FLOAT, {2}, std::move(bytes));
   EXPECT_EQ(tensor.data.data(), original);
+}
+
+TEST(AllocationHandle, MoveTransfersAndReturnsAllocationOnce) {
+  SimpleRawBufferAllocator allocator(2);
+  auto *buffer = allocator.Allocate(16);
+  ASSERT_NE(buffer, nullptr);
+  const auto *data = buffer->data();
+
+  {
+    AllocationHandle first(&allocator, buffer);
+    EXPECT_EQ(first.buffer()->data(), data);
+    EXPECT_EQ(first.owner(), &allocator);
+    EXPECT_EQ(first.logical_size(), 16u);
+    EXPECT_GE(first.retained_capacity(), first.logical_size());
+
+    AllocationHandle second(std::move(first));
+    EXPECT_FALSE(first);
+    EXPECT_TRUE(second);
+    EXPECT_EQ(allocator.allocated_count(), 1u);
+
+    AllocationHandle third;
+    third = std::move(second);
+    EXPECT_FALSE(second);
+    EXPECT_TRUE(third);
+    EXPECT_EQ(allocator.allocated_count(), 1u);
+  }
+
+  EXPECT_EQ(allocator.allocated_count(), 0u);
+}
+
+TEST(AllocationHandle, TensorReleaseOutlivesTensorAndReturnsOnLastOwner) {
+  SimpleRawBufferAllocator allocator(2);
+  AllocationHandle external;
+  {
+    Tensor tensor = Tensor::FromFloat("x", {2}, {1.0f, 2.0f}, &allocator);
+    external = tensor.ReleaseAllocation();
+    EXPECT_FALSE(tensor.has_allocation());
+    EXPECT_TRUE(external);
+    EXPECT_EQ(allocator.allocated_count(), 1u);
+  }
+
+  EXPECT_EQ(allocator.allocated_count(), 1u);
+  external.Reset();
+  EXPECT_EQ(allocator.allocated_count(), 0u);
+  external.Reset();
+  EXPECT_EQ(allocator.allocated_count(), 0u);
 }
 
 // ---------------------------------------------------------------------------

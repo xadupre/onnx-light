@@ -390,6 +390,11 @@ nb::object NewNumpyArray(OnnxLightNumpyDtype *dtype, const Shape &shape, void *d
   return nb::steal<nb::object>(array_pointer);
 }
 
+struct AllocatedNumpyOwner {
+  nb::object runtime;
+  core::runtime::AllocationHandle allocation;
+};
+
 nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
   if (static_cast<TensorProto::DataType>(tensor.data_type) == TensorProto::STRING) {
     OnnxLightNumpyDtype *object_dtype = OnnxLightNumpyDtypeFromType(OnnxLightNumpyType::kObject);
@@ -433,7 +438,13 @@ nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
 
   nb::object owner;
   uint8_t *data = const_cast<uint8_t *>(tensor.bytes());
-  if (!tensor.has_allocation() && data == tensor.data.data()) {
+  if (tensor.has_allocation()) {
+    auto *array_owner = new AllocatedNumpyOwner{nb::cast(&rt, nb::rv_policy::reference),
+                                                tensor.ReleaseAllocation()};
+    owner = nb::capsule(array_owner, [](void *pointer) noexcept {
+      delete static_cast<AllocatedNumpyOwner *>(pointer);
+    });
+  } else if (data == tensor.data.data()) {
     auto *owned = new core::runtime::RawByteBuffer(tensor.data.release());
     data = owned->data();
     owner = nb::capsule(owned, [](void *pointer) noexcept {
@@ -528,17 +539,26 @@ public:
     session_->Run(rt);
 
     nb::list results;
+    std::unordered_map<std::string, nb::object> exported_outputs;
     for (const std::string &name : outputs) {
+      const auto exported = exported_outputs.find(name);
+      if (exported != exported_outputs.end()) {
+        results.append(exported->second);
+        continue;
+      }
+      nb::object result;
       if (rt.Has(name)) {
-        results.append(TensorToNumpy(rt.Get(name), rt));
+        result = TensorToNumpy(rt.Get(name), rt);
       } else if (rt.HasSequence(name)) {
         nb::list sequence;
         for (Tensor &tensor : rt.GetSequence(name).values)
           sequence.append(TensorToNumpy(tensor, rt));
-        results.append(std::move(sequence));
+        result = std::move(sequence);
       } else {
         throw std::runtime_error("Output '" + name + "' was not produced by the graph.");
       }
+      exported_outputs.emplace(name, result);
+      results.append(std::move(result));
     }
     return results;
   }

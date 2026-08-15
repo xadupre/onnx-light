@@ -380,6 +380,7 @@ struct RawBuffer {
   bool operator!=(const std::vector<uint8_t> &v) const noexcept { return !(*this == v); }
 
   size_t size() const noexcept { return storage_.size(); }
+  size_t capacity() const noexcept { return storage_.capacity(); }
   bool empty() const noexcept { return storage_.empty(); }
 
   uint8_t *data() noexcept { return storage_.data(); }
@@ -419,6 +420,49 @@ private:
 };
 
 class RawBufferAllocator;
+
+/**
+ * Owns one allocator-backed raw buffer and returns it exactly once.
+ *
+ * The handle is move-only. Moving it transfers ownership without moving or
+ * copying the payload. Destruction and :cpp:func:`Reset` return the buffer to
+ * its allocator; an empty or moved-from handle is a no-op.
+ */
+class AllocationHandle {
+public:
+  AllocationHandle() noexcept = default;
+  AllocationHandle(RawBufferAllocator *owner, RawBuffer *buffer);
+  ~AllocationHandle();
+
+  AllocationHandle(const AllocationHandle &) = delete;
+  AllocationHandle &operator=(const AllocationHandle &) = delete;
+  AllocationHandle(AllocationHandle &&other) noexcept;
+  AllocationHandle &operator=(AllocationHandle &&other) noexcept;
+
+  /// Returns whether this handle owns an allocation.
+  explicit operator bool() const noexcept { return buffer_ != nullptr; }
+
+  /// Returns the owned buffer, or ``nullptr`` for an empty handle.
+  RawBuffer *buffer() const noexcept { return buffer_; }
+
+  /// Returns the allocator that owns the buffer, or ``nullptr`` when empty.
+  RawBufferAllocator *owner() const noexcept { return owner_; }
+
+  /// Returns the logical byte size captured when the handle was created.
+  size_t logical_size() const noexcept { return logical_size_; }
+
+  /// Returns the retained byte capacity captured when the handle was created.
+  size_t retained_capacity() const noexcept { return retained_capacity_; }
+
+  /// Returns the allocation to its owner and makes this handle empty.
+  void Reset() noexcept;
+
+private:
+  RawBufferAllocator *owner_ = nullptr;
+  RawBuffer *buffer_ = nullptr;
+  size_t logical_size_ = 0;
+  size_t retained_capacity_ = 0;
+};
 
 /**
  * Tensor — minimal runtime tensor used by backend test cases.
@@ -465,11 +509,7 @@ struct Tensor {
     return tensor;
   }
 
-  /// Releases the allocator-backed allocation, if any (no-op for inline or
-  /// borrowed storage). Makes ``Tensor`` self-owning so callers no longer
-  /// need to manually free the allocation before a ``Tensor`` is destroyed
-  /// or overwritten.
-  ~Tensor();
+  ~Tensor() = default;
 
   /// Deep-copies ``other``. When ``other`` is allocator-backed
   /// (``has_allocation()``), a fresh buffer is acquired from the *same*
@@ -530,8 +570,8 @@ struct Tensor {
   /// Returns a pointer to the raw element bytes.
   /// Works for both owned (``data``) and borrowed (non-owning view) tensors.
   const uint8_t *bytes() const noexcept {
-    if (allocation_ != nullptr) {
-      return allocation_->data();
+    if (allocation_) {
+      return allocation_.buffer()->data();
     }
     return borrow_ptr_ != nullptr ? borrow_ptr_ : data.data();
   }
@@ -542,8 +582,8 @@ struct Tensor {
   /// through the returned pointer when the tensor was created via
   /// :cpp:func:`Borrow` with an immutable backing buffer.
   uint8_t *mutable_bytes() noexcept {
-    if (allocation_ != nullptr) {
-      return allocation_->data();
+    if (allocation_) {
+      return allocation_.buffer()->data();
     }
     // For borrowed tensors borrow_ptr_ is const; cast away the const here.
     // Callers are responsible for ensuring the backing storage is writable.
@@ -553,8 +593,8 @@ struct Tensor {
   /// Returns the total number of raw element bytes.
   /// Works for both owned and borrowed tensors.
   size_t size_bytes() const noexcept {
-    if (allocation_ != nullptr) {
-      return allocation_->size();
+    if (allocation_) {
+      return allocation_.logical_size();
     }
     return borrow_ptr_ != nullptr ? borrow_size_ : data.size();
   }
@@ -562,19 +602,18 @@ struct Tensor {
   /// Marks the tensor storage as allocator-backed.
   /// Callers must release/clear any existing allocation first.
   void SetAllocation(RawBufferAllocator *allocator_owner, RawBuffer *allocation) {
-    EXT_ENFORCE(allocation_ == nullptr, "Tensor::SetAllocation: allocation is already set.");
+    EXT_ENFORCE(!allocation_, "Tensor::SetAllocation: allocation is already set.");
     EXT_ENFORCE(allocator_owner != nullptr,
                 "Tensor::SetAllocation: allocator owner must not be null.");
     EXT_ENFORCE(allocation != nullptr, "Tensor::SetAllocation: allocation must not be null.");
-    allocation_owner_ = allocator_owner;
-    allocation_ = allocation;
+    allocation_ = AllocationHandle(allocator_owner, allocation);
     // Drop inline storage: bytes()/size_bytes() now resolve from allocation_.
     data = RawBuffer{};
     borrow_ptr_ = nullptr;
     borrow_size_ = 0;
   }
 
-  bool has_allocation() const noexcept { return allocation_ != nullptr; }
+  bool has_allocation() const noexcept { return static_cast<bool>(allocation_); }
 
   /// Returns whether the tensor is a non-owning (borrowed) view over external
   /// memory (created via :cpp:func:`Borrow` / :cpp:func:`BorrowStrings`, e.g. a
@@ -594,18 +633,20 @@ struct Tensor {
   Tensor ToOwned() const;
 
   RawBuffer *allocation() const {
-    EXT_ENFORCE(allocation_ != nullptr, "Tensor::allocation: tensor is not allocator-backed.");
-    return allocation_;
+    EXT_ENFORCE(allocation_, "Tensor::allocation: tensor is not allocator-backed.");
+    return allocation_.buffer();
   }
   RawBufferAllocator *allocation_owner() const {
-    EXT_ENFORCE(allocation_owner_ != nullptr,
+    EXT_ENFORCE(allocation_.owner() != nullptr,
                 "Tensor::allocation_owner: tensor is not allocator-backed.");
-    return allocation_owner_;
+    return allocation_.owner();
   }
-  void ClearAllocation() noexcept {
-    allocation_ = nullptr;
-    allocation_owner_ = nullptr;
-  }
+
+  /// Transfers the allocator-backed storage out of this tensor in O(1).
+  AllocationHandle ReleaseAllocation() noexcept { return std::move(allocation_); }
+
+  /// Returns allocator-backed storage immediately and leaves the tensor empty.
+  void ResetAllocation() noexcept { allocation_.Reset(); }
 
   /// Returns the product of all shape dimensions; 1 for an empty shape.
   int64_t element_count() const;
@@ -719,10 +760,8 @@ struct Tensor {
   std::vector<std::string> &AsStrings();
 
 private:
-  /// Non-null when the tensor bytes are owned by a ``RawBufferAllocator``.
-  RawBuffer *allocation_ = nullptr;
-  /// Allocator owning ``allocation_``.
-  RawBufferAllocator *allocation_owner_ = nullptr;
+  /// Move-only ownership of allocator-backed bytes.
+  AllocationHandle allocation_;
   /// Non-null only for borrowed (non-owning) tensors created via
   /// :cpp:func:`Borrow`.  When set, element bytes are read from
   /// ``borrow_ptr_[0 .. borrow_size_-1]`` rather than from ``data``.

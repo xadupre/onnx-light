@@ -15,15 +15,6 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 namespace {
 
-void ReleaseTensorAllocation(Tensor &tensor) {
-  if (!tensor.has_allocation()) {
-    return;
-  }
-  RawBufferAllocator *owner = tensor.allocation_owner();
-  owner->Free(tensor.allocation());
-  tensor.ClearAllocation();
-}
-
 void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator) {
   // STRING tensors store their payload in string_data instead of raw bytes.
   if (allocator == nullptr || static_cast<DataType>(tensor.data_type) == DataType::STRING) {
@@ -268,11 +259,7 @@ void RuntimeContext::RecordRunNodeEvent(const NodeProto &node, const std::string
   events_.push_back(std::move(ev));
 }
 
-RuntimeContext::~RuntimeContext() {
-  for (auto &it : tensors_) {
-    ReleaseTensorAllocation(it.second);
-  }
-}
+RuntimeContext::~RuntimeContext() = default;
 
 void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
@@ -298,10 +285,6 @@ void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKin
     StampAllocatorMemory(ev);
     events_.push_back(std::move(ev));
   }
-  auto it = tensors_.find(name);
-  if (it != tensors_.end()) {
-    ReleaseTensorAllocation(it->second);
-  }
   tensors_[name] = std::move(tensor);
 }
 
@@ -310,7 +293,6 @@ bool RuntimeContext::Remove(const std::string &name) {
   if (it == tensors_.end()) {
     return false;
   }
-  ReleaseTensorAllocation(it->second);
   tensors_.erase(it);
   if (events_enabled_) {
     RuntimeEvent ev = MakeRemoveEvent(RuntimeEventKind::kUnknown, name,

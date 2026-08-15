@@ -5,6 +5,7 @@
 #include "onnx_core/compute/raw_buffer_allocator.h"
 
 #include <algorithm>
+#include <cassert>
 #include <iterator>
 #include <new>
 #include <stdexcept>
@@ -178,8 +179,8 @@ void IOLease::Reset() noexcept {
     arena_->ReturnLease(buffer_);
     buffer_ = nullptr;
     logical_size_ = 0;
+    arena_.reset();
   }
-  arena_.reset();
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +279,7 @@ IOLease IOArena::Export(RawBuffer *buf) {
 
 void IOArena::ReturnLease(RawBuffer *buf) noexcept {
   const auto slot = slot_indices_.find(buf);
+  assert(slot != slot_indices_.end());
   const size_t i = slot->second;
   const size_t logical_size = buffers_[i].size();
   const size_t retained_capacity = buffers_[i].capacity();

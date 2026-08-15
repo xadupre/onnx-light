@@ -1,7 +1,7 @@
 .. _l-next-steps-prepared-execution:
 
-Parallel model initialization
-=============================
+Prepared and asynchronous execution
+===================================
 
 :Date: 2026-08
 
@@ -10,16 +10,20 @@ Parallel model initialization
 Objective
 +++++++++
 
-The objective is to reduce model loading time. Initialization follows four
-steps:
+The first objective is to reduce model loading time. Initialization follows
+four steps:
 
 1. load the graph and initializer metadata without loading weight payloads;
 2. run shape inference and determine which results are constant;
 3. initialize every kernel and ask it what data preparation it requires;
 4. execute the resulting initialization plan in parallel.
 
-After these steps, the model is ready to run. Model execution itself is not
-covered by this proposal.
+After these steps, the model is ready to run. The task graph and scheduler also
+define the asynchronous execution contract requested by
+`issue #4299 <https://github.com/xadupre/onnx-light/issues/4299>`_. Ordinary
+model execution remains sequential in the first implementation, but the public
+API, dependency representation, errors, and cancellation must not require a
+later incompatible ``run``/``run_wait`` split.
 
 Step 1: load the model without weights
 ++++++++++++++++++++++++++++++++++++++
@@ -121,6 +125,12 @@ A task declares:
 * an estimated amount of work and peak memory;
 * whether the result is optional or required before the first inference.
 
+Dependencies identify the produced object or completion event a consumer
+requires. The scheduler derives waits from these edges. A barrier is reserved
+for an external synchronization requirement that cannot be represented by
+ordinary data dependencies; plans must not insert a manual ``wait`` before
+every consumer.
+
 A kernel that needs no preparation returns no task. A kernel may request only
 loading, loading followed by prepack, or a more expensive computation.
 
@@ -197,6 +207,64 @@ Loading and prepack overlap naturally: ``prepack W0`` starts when ``W0`` is
 available while another I/O worker reads ``W1``. A task releases its source
 buffer when no later task needs it. External-data mappings may instead remain
 available as the portable backing store.
+
+Asynchronous session contract
++++++++++++++++++++++++++++++
+
+One execution submission returns a moveable handle:
+
+.. code-block:: cpp
+
+    ExecutionHandle RuntimeSession::RunAsync(RuntimeContext &rt);
+
+    void RuntimeSession::Run(RuntimeContext &rt) {
+      RunAsync(rt).Wait();
+    }
+
+The handle owns the submission state, keeps every borrowed context/resource
+alive for the submission, and exposes at least:
+
+* ``Wait()``, which returns only after every required task finishes and
+  rethrows the first execution error;
+* ``IsReady()``, for non-blocking completion checks;
+* cooperative ``Cancel()``, which prevents tasks that have not started from
+  running and requests cancellation from operations that support it;
+* final status and diagnostics, including the failing task and suppressed
+  downstream tasks.
+
+Destroying a live handle must have one documented behavior. The initial
+contract should wait rather than detach silently, because ``RuntimeContext`` and
+caller-owned inputs may otherwise be destroyed while tasks still reference
+them. A later detached API requires owned inputs and a session-owned result
+object.
+
+``Run`` stays the compatibility entry point and is exactly synchronous
+``RunAsync`` followed by ``Wait``. A separate ``run_wait`` method would expose
+two partially overlapping execution paths and leave ownership between the calls
+undefined.
+
+Task resources and scheduling
++++++++++++++++++++++++++++++
+
+The task graph uses explicit resource classes:
+
+* bounded I/O workers for external-data reads and persisted-prepack reads;
+* CPU workers for transforms, packing, and CPU kernels;
+* one queue per accelerator or asynchronous device stream;
+* an inline resource for trivial tasks whose dispatch cost exceeds their work.
+
+Ready tasks may run when every dependency has completed successfully and the
+resource and in-flight-memory budgets admit them. Failure cancels dependent
+tasks but does not abandon already-running independent work without joining it.
+Cancellation and failure therefore reach one terminal submission state before
+``Wait`` returns.
+
+Initialization and inference may use the same scheduler, but they remain
+different plans. Initialization tasks produce session-owned prepared objects.
+Inference tasks consume caller inputs and produce invocation-owned outputs.
+Keeping these lifetime domains separate prevents a model-loading task from
+being replayed on every inference and prevents one invocation from mutating
+another invocation's state.
 
 Prepacking
 ++++++++++
@@ -353,24 +421,34 @@ weights and measure:
 It should compare sequential and parallel execution of exactly the same
 initialization plan.
 
+The asynchronous execution benchmark additionally measures submission latency,
+time spent waiting, overlap between I/O and CPU work, ready-queue delay,
+cancellation latency, and end-to-end completion. It must verify that
+``RunAsync(...).Wait()`` and ``Run(...)`` produce identical values, errors,
+release order, and allocator ownership.
+
 Implementation order
 ++++++++++++++++++++
 
-1. Add a valid external-data model benchmark that is never rewritten by the
+#. Add a valid external-data model benchmark that is never rewritten by the
    benchmark.
-2. Build ``WeightDescriptor`` objects while parsing with
+#. Build ``WeightDescriptor`` objects while parsing with
    ``skip_raw_data=true``.
-3. Add constant-result propagation without payload materialization.
-4. Add the kernel initialization query and an empty default implementation.
-5. Implement initialization tasks for one CPU ``Gemm`` with a constant ``B``,
+#. Add constant-result propagation without payload materialization.
+#. Add the kernel initialization query and an empty default implementation.
+#. Implement initialization tasks for one CPU ``Gemm`` with a constant ``B``,
    including both ``transB`` values.
-6. Merge the kernel tasks into a dependency graph and execute it sequentially.
-7. Add the bounded I/O and CPU task queues, then compare the same plan in
+#. Merge the kernel tasks into a dependency graph and execute it sequentially.
+#. Add the bounded I/O and CPU task queues, then compare the same plan in
    sequential and parallel modes.
-8. Reuse a persisted prepack through the ``CompiledTensorProto`` cache: skip the
+#. Add ``ExecutionHandle`` and implement synchronous ``Run`` as
+   ``RunAsync(...).Wait()`` over the same scheduler.
+#. Add task failure propagation, dependency cancellation, and deterministic
+   handle-destruction semantics.
+#. Reuse a persisted prepack through the ``CompiledTensorProto`` cache: skip the
    prepack task on a matching ``(source_digest, layout, device)`` hit and write a
    new entry on a miss.
-9. Add one CUDA ``Gemm`` whose initialization can choose CPU-pack-plus-copy or
+#. Add one CUDA ``Gemm`` whose initialization can choose CPU-pack-plus-copy or
    CUDA-side pack.
-10. Add alternative execution-device variants and weight residency only after
+#. Add alternative execution-device variants and weight residency only after
     fixed-placement initialization is complete.

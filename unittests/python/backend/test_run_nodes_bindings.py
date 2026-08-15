@@ -85,6 +85,9 @@ _MODEL_SRC = (
 class TestRunNodesBindings(ExtTestCase):
     def test_runtime_submodule_exposes_expected_names(self):
         for name in [
+            "RawBufferAllocator",
+            "SimpleRawBufferAllocator",
+            "ExecutionArena",
             "OpsetId",
             "KernelContext",
             "RuntimeContext",
@@ -394,6 +397,18 @@ class TestRunNodesBindings(ExtTestCase):
         ev = ctx.events()[0]
         self.assertEqual(ev.allocated_bytes, 0)
         self.assertEqual(ev.peak_bytes, 0)
+
+    def test_execution_arena_is_accepted_as_runtime_allocator(self):
+        arena = rt.ExecutionArena(2)
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)), allocator=arena)
+
+        ctx.set("x", _make_float_tensor("x", [1.0, 2.0]))
+        self.assertEqual(arena.allocated_count, 1)
+        self.assertGreater(arena.total_allocated_size, 0)
+        self.assertTrue(ctx.remove("x"))
+        self.assertEqual(arena.allocated_count, 0)
+        self.assertEqual(arena.retained_count, 1)
+        self.assertGreater(arena.retained_size, 0)
 
     def test_run_model_abs_then_add(self):
         model = parser.parse_model(_MODEL_SRC)

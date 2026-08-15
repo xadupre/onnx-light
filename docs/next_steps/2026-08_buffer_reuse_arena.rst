@@ -42,6 +42,14 @@ The implementation is split into focused pull requests:
      - Moves this plan into active implementation and adds two expected-failure
        tests covering ``RuntimeContext::Clear`` and a subsequent run while an
        older allocator-backed NumPy output remains alive.
+   * - `PR #4431 <https://github.com/xadupre/onnx-light/pull/4431>`_
+     - Movable allocation handle
+     - Gives allocator-backed tensors move-only ownership that returns each
+       allocation exactly once and fixes the output lifetime tests from step 1.
+   * - `PR #4436 <https://github.com/xadupre/onnx-light/pull/4436>`_
+     - ``ExecutionArena``
+     - Adds capacity-preserving, best-fit reuse for execution buffers, live and
+       retained accounting, runtime integration, and Python access.
 
 Current behaviour
 +++++++++++++++++
@@ -271,10 +279,12 @@ Implementation order
    ownership. They assert allocator live counts before reading an older array,
    so the known dangling pointer is never dereferenced.
 2. Introduce the movable allocation handle and use it for allocator-backed
-   :cpp:class:`Tensor` storage. This step removes both expected-failure markers
-   from step 1.
+   :cpp:class:`Tensor` storage (`PR #4431
+   <https://github.com/xadupre/onnx-light/pull/4431>`_). This step removes both
+   expected-failure markers from step 1.
 3. Implement ``ExecutionArena`` with capacity-preserving, size-bucketed reuse
-   for intermediates and temporary workspaces.
+   for intermediates and temporary workspaces (`PR #4436
+   <https://github.com/xadupre/onnx-light/pull/4436>`_).
 4. Implement ``IOArena`` and make its allocation handle suitable for ownership
    by a NumPy capsule.
 5. Extend output allocation with an execution/I/O role and route declared graph
@@ -314,3 +324,7 @@ Pull requests
 
 * `PR #4430 <https://github.com/xadupre/onnx-light/pull/4430>`_: allocator-backed
   NumPy output lifetime characterization.
+* `PR #4431 <https://github.com/xadupre/onnx-light/pull/4431>`_: movable
+  allocation ownership for allocator-backed tensors.
+* `PR #4436 <https://github.com/xadupre/onnx-light/pull/4436>`_:
+  capacity-preserving ``ExecutionArena`` reuse.

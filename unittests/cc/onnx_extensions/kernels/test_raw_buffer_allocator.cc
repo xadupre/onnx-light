@@ -12,6 +12,7 @@
 #include <stdexcept>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::ExecutionArena;
 using core::runtime::RawBuffer;
 using core::runtime::RawBufferAllocator;
 using core::runtime::RuntimeContext;
@@ -178,6 +179,91 @@ TEST(RawBufferAllocatorPolymorphism, PeakAccessibleViaBasePointer) {
   EXPECT_EQ(alloc->PeakAllocatedSize(), 64u);
   alloc->ResetPeak();
   EXPECT_EQ(alloc->PeakAllocatedSize(), 0u);
+}
+
+TEST(ExecutionArena, RetainsAndReusesPayloadStorage) {
+  ExecutionArena arena(1);
+  RawBuffer *first = arena.Allocate(64);
+  uint8_t *payload = first->data();
+  const size_t retained_capacity = first->capacity();
+
+  arena.Free(first);
+  EXPECT_EQ(arena.allocated_count(), 0u);
+  EXPECT_EQ(arena.retained_count(), 1u);
+  EXPECT_EQ(arena.RetainedSize(), retained_capacity);
+
+  RawBuffer *second = arena.Allocate(32);
+  EXPECT_EQ(second, first);
+  EXPECT_EQ(second->data(), payload);
+  EXPECT_EQ(second->size(), 32u);
+  EXPECT_EQ(arena.RetainedSize(), 0u);
+}
+
+TEST(ExecutionArena, ChoosesSmallestSufficientCapacity) {
+  ExecutionArena arena(2);
+  RawBuffer *small = arena.Allocate(64);
+  RawBuffer *large = arena.Allocate(128);
+  uint8_t *small_payload = small->data();
+  uint8_t *large_payload = large->data();
+  arena.Free(small);
+  arena.Free(large);
+
+  RawBuffer *selected = arena.Allocate(48);
+  EXPECT_EQ(selected->data(), small_payload);
+  EXPECT_NE(selected->data(), large_payload);
+}
+
+TEST(ExecutionArena, GrowsAFreeSlotWhenRetainedBuffersAreTooSmall) {
+  ExecutionArena arena(1);
+  RawBuffer *first = arena.Allocate(16);
+  arena.Free(first);
+
+  RawBuffer *grown = arena.Allocate(256);
+  EXPECT_EQ(grown, first);
+  EXPECT_EQ(grown->size(), 256u);
+  EXPECT_GE(grown->capacity(), 256u);
+  EXPECT_EQ(arena.retained_count(), 0u);
+}
+
+TEST(ExecutionArena, TracksLivePeakAndEnforcesSlotLimit) {
+  ExecutionArena arena(2);
+  RawBuffer *first = arena.Allocate(10);
+  RawBuffer *second = arena.Allocate(20);
+  EXPECT_EQ(arena.TotalAllocatedSize(), 30u);
+  EXPECT_EQ(arena.PeakAllocatedSize(), 30u);
+  EXPECT_EQ(arena.allocated_count(), 2u);
+  EXPECT_THROW(arena.Allocate(1), std::bad_alloc);
+
+  arena.Free(first);
+  EXPECT_EQ(arena.TotalAllocatedSize(), 20u);
+  EXPECT_EQ(arena.PeakAllocatedSize(), 30u);
+  arena.ResetPeak();
+  EXPECT_EQ(arena.PeakAllocatedSize(), 20u);
+  arena.Free(second);
+}
+
+TEST(ExecutionArena, RejectsUnknownAndAlreadyFreedBuffers) {
+  ExecutionArena arena(1);
+  RawBuffer unknown;
+  EXPECT_THROW(arena.Free(&unknown), std::invalid_argument);
+
+  RawBuffer *buffer = arena.Allocate(8);
+  arena.Free(buffer);
+  EXPECT_THROW(arena.Free(buffer), std::invalid_argument);
+}
+
+TEST(ExecutionArena, WorksThroughAllocatorInterfaceAndRuntimeContext) {
+  ExecutionArena arena(2);
+  RawBufferAllocator *allocator = &arena;
+  RuntimeContext ctx(RuntimeContextOptions{.allocator = allocator});
+
+  ctx.Set("x", core::runtime::Tensor::FromInt32("", {2}, {1, 2}));
+  EXPECT_EQ(ctx.allocator(), allocator);
+  EXPECT_EQ(arena.allocated_count(), 1u);
+  EXPECT_TRUE(ctx.Remove("x"));
+  EXPECT_EQ(arena.allocated_count(), 0u);
+  EXPECT_EQ(arena.retained_count(), 1u);
+  EXPECT_GE(arena.RetainedSize(), 2u * sizeof(int32_t));
 }
 
 // ---------------------------------------------------------------------------

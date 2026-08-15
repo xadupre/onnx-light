@@ -28,15 +28,19 @@ The module is exposed as ``onnx_light.onnx_core.graph_builder``.
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
+from typing import TypeAlias
 
-from ..onnx_op import GetAllOnnxOpSchemasWithHistory
+from ..onnx_op import GetAllOnnxOpSchemasWithHistory, LightOpSchema
 from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
 
-ConstantFoldingOptions = _C.ConstantFoldingOptions
+ConstantFoldingOptions: TypeAlias = _C.ConstantFoldingOptions
+PatternOptimization: TypeAlias = _C.PatternOptimization
+
+SchemaLookup: TypeAlias = Callable[[str], "list[LightOpSchema]"]
 
 
-def _default_schema_lookup(op_type: str) -> list:
+def _default_schema_lookup(op_type: str) -> list[LightOpSchema]:
     """Returns the built-in ONNX schema history for ``op_type``.
 
     The schemas live in the ``onnx_op`` extension, which the ``_onnxpycore``
@@ -55,8 +59,34 @@ class GraphBuilder(_C.GraphBuilder):
     ``op_type -> list[LightOpSchema]`` callable to use different schemas.
     """
 
-    def __init__(self, name: str | Any = "graph", schema_lookup=_default_schema_lookup) -> None:
+    def __init__(
+        self, name: str = "graph", schema_lookup: SchemaLookup | None = _default_schema_lookup
+    ) -> None:
         super().__init__(name, schema_lookup)
+        self._registered_patterns: dict[str, PatternOptimization] = {}
+
+    def register_pattern(self, pattern: PatternOptimization) -> None:
+        """Registers or replaces a pattern for this builder."""
+        name = str(pattern.name)
+        if not name:
+            raise ValueError("A registered pattern must have a non-empty name.")
+        self._registered_patterns[name] = pattern
+
+    def unregister_pattern(self, name: str) -> bool:
+        """Removes a builder-local pattern and returns whether it existed."""
+        return self._registered_patterns.pop(name, None) is not None
+
+    def clear_registered_patterns(self) -> None:
+        """Removes every builder-local pattern."""
+        self._registered_patterns.clear()
+
+    def registered_patterns(self) -> tuple[PatternOptimization, ...]:
+        """Returns builder-local patterns in registration order."""
+        return tuple(self._registered_patterns.values())
+
+    def registered_pattern_names(self) -> tuple[str, ...]:
+        """Returns builder-local pattern names in registration order."""
+        return tuple(self._registered_patterns)
 
 
-__all__ = ["ConstantFoldingOptions", "GraphBuilder"]
+__all__ = ["ConstantFoldingOptions", "GraphBuilder", "PatternOptimization", "SchemaLookup"]

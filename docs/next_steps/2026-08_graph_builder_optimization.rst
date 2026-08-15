@@ -89,6 +89,11 @@ requests:
      - Cast-operation-Cast canonicalization
      - Ports ``CastOpCastPattern`` with guarded type migration, attribute
        preservation, and shared-output restoration.
+   * - `PR #4445 <https://github.com/xadupre/onnx-light/pull/4445>`_
+     - Python bindings and custom patterns
+     - Exposes optimizer queries, rewrites, reports, replay, and concrete Cast
+       patterns; supports global, builder-local, and graph-local Python pattern
+       registration with recursive lifetime and exception propagation.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -479,9 +484,14 @@ preserve the core/extension boundary:
 * ``_onnxpypatterns`` links ``lib_onnx_patterns`` and exposes the concrete ONNX
   classes such as ``CastPattern`` without making ``_onnxpycore`` depend on the
   extension library;
-* the high-level Python API accepts either concrete C++ patterns, Python
-  subclasses, or registered pattern names and returns the optimized model,
-  replayable rewrites, and optional statistics.
+* ``GraphGraph`` accepts concrete C++ patterns and Python subclasses, while
+  ``standard_patterns`` resolves registered names before construction;
+  optimization always runs through ``GraphGraph.optimize`` and the optimized
+  model is produced by the associated ``GraphBuilder``.
+* standard patterns are registered globally at import; callers may register or
+  replace a pattern globally, on one ``GraphBuilder``, or in one
+  ``GraphGraph`` constructor. Registries are merged by stable pattern name,
+  with the most local registration taking precedence.
 
 A custom Python pattern follows the same contract as a C++ pattern:
 
@@ -520,11 +530,12 @@ pattern for the full optimization, including recursive subgraph passes, and
 propagates Python exceptions without converting them into a successful
 no-match result.
 
-Python-defined patterns are supplied explicitly to ``GraphGraph`` or the
-high-level ``optimize`` helper rather than stored in the process-global C++
-registry. This avoids retaining Python callables past interpreter shutdown.
-The bindings still expose registered C++ pattern names and selection so Python
-callers can combine the standard library with custom patterns.
+Python-defined patterns may be registered globally, on a ``GraphBuilder``, or
+supplied explicitly to ``GraphGraph``. The Python global registry owns its
+callbacks and is destroyed with the module, avoiding C++ static references
+past interpreter shutdown. The bindings expose registered C++ pattern names
+and selection so callers can combine the standard library with custom
+patterns.
 
 Tests cover a Python-only rewrite, positive and rejected matches, exact replay,
 recursive subgraphs, callback exception propagation, pattern lifetime after
@@ -561,8 +572,9 @@ Implementation order
    (`PR #4427 <https://github.com/xadupre/onnx-light/pull/4427>`_).
 10. Add Python bindings for the optimizer classes and reports, expose the
     standard ONNX pattern classes through ``_onnxpypatterns``, and support
-    Python-defined ``PatternOptimization`` subclasses passed explicitly to an
-    optimization run.
+    globally or locally registered Python-defined ``PatternOptimization``
+    subclasses (`PR #4445
+    <https://github.com/xadupre/onnx-light/pull/4445>`_).
 11. Port the pattern library incrementally, one pattern per commit and several
     related commits per pull request. Every pattern has a C++ test that checks
     the rewritten graph against the expected one. The first port,

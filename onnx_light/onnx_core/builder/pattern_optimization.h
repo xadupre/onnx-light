@@ -142,11 +142,11 @@ struct PatternNoMatch {
   /// Candidate inspected by the matcher.
   const NodeProto *candidate = nullptr;
   /// Source file containing the rejection condition.
-  std::string_view source_file;
+  std::string source_file;
   /// Source line containing the rejection condition.
   std::uint_least32_t source_line = 0;
   /// Human-readable reason why the candidate did not match.
-  std::string_view reason;
+  std::string reason;
 
   /// Returns a concise summary of this rejection.
   std::string ToString() const;

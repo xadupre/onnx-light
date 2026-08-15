@@ -29,14 +29,15 @@ The module is exposed as ``onnx_light.onnx_core.graph_builder``.
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TypeAlias
 
 from ..onnx_op import GetAllOnnxOpSchemasWithHistory, LightOpSchema
 from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
 
-ConstantFoldingOptions = _C.ConstantFoldingOptions
-PatternOptimization = _C.PatternOptimization
+ConstantFoldingOptions: TypeAlias = _C.ConstantFoldingOptions
+PatternOptimization: TypeAlias = _C.PatternOptimization
 
-SchemaLookup = Callable[[str], "list[LightOpSchema]"]
+SchemaLookup: TypeAlias = Callable[[str], "list[LightOpSchema]"]
 
 
 def _default_schema_lookup(op_type: str) -> list[LightOpSchema]:

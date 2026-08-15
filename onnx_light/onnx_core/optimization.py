@@ -3,21 +3,22 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import TypeAlias
 
 from ..onnx_lib import GraphProto, ModelProto
 from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
 from ..onnx_py import _onnxpypatterns as _patterns  # type: ignore[attr-defined]
 from .graph_builder import GraphBuilder, SchemaLookup, _default_schema_lookup
 
-PatternOptimization = _C.PatternOptimization
-MatchResult = _C.MatchResult
-LocalRewriting = _C.LocalRewriting
-OptimizationReport = _C.OptimizationReport
+PatternOptimization: TypeAlias = _C.PatternOptimization
+MatchResult: TypeAlias = _C.MatchResult
+LocalRewriting: TypeAlias = _C.LocalRewriting
+OptimizationReport: TypeAlias = _C.OptimizationReport
 
-CastPattern = _patterns.CastPattern
-CastCastPattern = _patterns.CastCastPattern
-CastCastBinaryPattern = _patterns.CastCastBinaryPattern
-CastOpCastPattern = _patterns.CastOpCastPattern
+CastPattern: TypeAlias = _patterns.CastPattern
+CastCastPattern: TypeAlias = _patterns.CastCastPattern
+CastCastBinaryPattern: TypeAlias = _patterns.CastCastBinaryPattern
+CastOpCastPattern: TypeAlias = _patterns.CastOpCastPattern
 
 
 def standard_pattern_names() -> list[str]:

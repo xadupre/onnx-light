@@ -20,10 +20,15 @@ EXCLUDE_PATTERNS       = */stream_class_print.hpp \
                          */stream_class_size.hpp \
                          */stream_class_write.hpp \
                          */stream_class.hpp \
+                         */stream_class_adapters.hpp \
                          */fields.hpp \
                          */defs/operator_sets*.h \
                          */common/schema.h \
-                         */onnx_lib/onnx-data.pb.h
+                         */onnx_lib/onnx-data.pb.h \
+                         */onnx_lib/onnx_pb.h \
+                         */onnx_core/onnx_core.h \
+                         */run_nodes_internal.h \
+                         */blake3/*
 
 # Output formats: XML is required for Breathe; disable HTML (Sphinx handles it)
 GENERATE_XML           = YES

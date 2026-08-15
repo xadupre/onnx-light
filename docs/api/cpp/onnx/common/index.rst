@@ -18,6 +18,7 @@ common
     platform_helpers
     proto_util
     proto_utils
+    safe_math
     scoped_resource
     status
     string_utils

@@ -43,4 +43,6 @@ This module also documents:
     :maxdepth: 1
 
     kernel_dispatch_table
+    kernel_run_helpers
     kernels/index
+    tuning/index

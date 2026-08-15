@@ -10,11 +10,16 @@ libraries depending on the other.
     :maxdepth: 1
 
     expressions
+    dim_sum
     graph_manipulations
     light_op_schema
     sym_tensor
     sym_sequence
     sym_map
+    symbolic_helper
+    builder/index
+    gradient/index
+    platform/index
     shapes/index
     runtime/index
     compute/index

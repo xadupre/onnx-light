@@ -30,6 +30,7 @@ adapters
     reshape_4_5
     reshape_5_4
     resize_10_11
+    resize_18_17
     scan_8_9
     scan_9_8
     scatter_10_11

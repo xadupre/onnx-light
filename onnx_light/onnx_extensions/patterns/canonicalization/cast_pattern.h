@@ -12,8 +12,13 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Canonicalizes a Cast to Identity when its input already has the target type.
  *
  * @code
- * Before:  x:T -- Cast(to=T) --> y:T
- * After:   x:T ---- Identity ---> y:T
+ * Before:             After:
+ *
+ *   x:T                 x:T
+ *    |                   |
+ * Cast(to=T)          Identity
+ *    |                   |
+ *   y:T                 y:T
  * @endcode
  */
 class CastPattern final : public core::builder::PatternOptimization {

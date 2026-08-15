@@ -13,8 +13,17 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Canonicalizes consecutive Cast nodes when a single conversion is equivalent.
  *
  * @code
- * Before:  x:A -- Cast(to=B) --> m:B -- Cast(to=C) --> y:C
- * After:   x:A ------------ Cast(to=C*) or Identity --> y:C
+ * Before:             After:
+ *
+ *   x:A                 x:A
+ *    |                   |
+ * Cast(to=B)       Cast(to=C*) or
+ *    |                Identity
+ *   m:B                  |
+ *    |                  y:C
+ * Cast(to=C)
+ *    |
+ *   y:C
  * @endcode
  *
  * ``C*`` denotes the single safe replacement type selected from the input,

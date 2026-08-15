@@ -12,13 +12,17 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Moves matching floating-point Cast nodes after a binary arithmetic operation.
  *
  * @code
- * Before:  x:A -- Cast(to=B) --+
- *                              +-- Binary:B --> z:B
- *          y:A -- Cast(to=B) --+
+ * Before:             After:
  *
- * After:   x:A ----------------+
- *                              +-- Binary:A -- Cast(to=B) --> z:B
- *          y:A ----------------+
+ * x:A       y:A       x:A       y:A
+ *  |         |         |         |
+ * Cast(B)  Cast(B)     +----+----+
+ *  |         |              |
+ *  +----+----+           Binary:A
+ *       |                   |
+ *    Binary:B             Cast(B)
+ *       |                   |
+ *      z:B                 z:B
  * @endcode
  */
 class CastCastBinaryPattern final : public core::builder::PatternOptimization {

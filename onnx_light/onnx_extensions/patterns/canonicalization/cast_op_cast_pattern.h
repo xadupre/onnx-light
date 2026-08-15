@@ -12,13 +12,19 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Moves an operation from a temporary floating-point type to its result type.
  *
  * @code
- * Before:  x:C -----------------+
- *                               +-- Op:C -- Cast(to=R) --> z:R
- *          y:R -- Cast(to=C) ---+
+ * Before:             After:
  *
- * After:   x:C -- Cast(to=R) ---+
- *                               +-- Op:R -----------------> z:R
- *          y:R -----------------+
+ * x:C       y:R       x:C       y:R
+ *  |         |         |         |
+ *  |       Cast(C)   Cast(R)     |
+ *  |         |         |         |
+ *  +----+----+         +----+----+
+ *       |                   |
+ *      Op:C                Op:R
+ *       |                   |
+ *    Cast(R)               z:R
+ *       |
+ *      z:R
  * @endcode
  *
  * Inputs already produced in ``R`` lose their Cast; other inputs gain one.

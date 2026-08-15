@@ -11,6 +11,8 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
+AllocationHandle::AllocationHandle() noexcept = default;
+
 AllocationHandle::AllocationHandle(RawBufferAllocator *owner, RawBuffer *buffer)
     : owner_(owner), buffer_(buffer), logical_size_(buffer == nullptr ? 0 : buffer->size()),
       retained_capacity_(buffer == nullptr ? 0 : buffer->capacity()) {

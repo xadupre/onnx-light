@@ -439,7 +439,7 @@ class IOLease;
  */
 class AllocationHandle {
 public:
-  AllocationHandle() noexcept = default;
+  AllocationHandle() noexcept;
   AllocationHandle(RawBufferAllocator *owner, RawBuffer *buffer);
   /**
    * Adopts an :cpp:class:`IOLease` so the handle keeps its arena alive.

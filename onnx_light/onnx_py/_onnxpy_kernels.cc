@@ -390,7 +390,7 @@ nb::object NewNumpyArray(OnnxLightNumpyDtype *dtype, const Shape &shape, void *d
   return nb::steal<nb::object>(array_pointer);
 }
 
-struct NumpyArrayOwner {
+struct AllocatedNumpyOwner {
   nb::object runtime;
   core::runtime::AllocationHandle allocation;
 };
@@ -439,10 +439,10 @@ nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
   nb::object owner;
   uint8_t *data = const_cast<uint8_t *>(tensor.bytes());
   if (tensor.has_allocation()) {
-    auto *array_owner =
-        new NumpyArrayOwner{nb::cast(&rt, nb::rv_policy::reference), tensor.ReleaseAllocation()};
+    auto *array_owner = new AllocatedNumpyOwner{nb::cast(&rt, nb::rv_policy::reference),
+                                                tensor.ReleaseAllocation()};
     owner = nb::capsule(array_owner, [](void *pointer) noexcept {
-      delete static_cast<NumpyArrayOwner *>(pointer);
+      delete static_cast<AllocatedNumpyOwner *>(pointer);
     });
   } else if (data == tensor.data.data()) {
     auto *owned = new core::runtime::RawByteBuffer(tensor.data.release());

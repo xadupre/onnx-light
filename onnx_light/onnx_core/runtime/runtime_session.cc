@@ -83,10 +83,12 @@ void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
   // Record the graph's declared output names so Run() can detach any borrowed
   // output from the model before returning (see MaterializeBorrowedOutputs).
   output_names_.clear();
+  output_names_set_.clear();
   for (int i = 0; i < graph.output().size(); ++i) {
     const std::string &name = graph.output()[i].name();
     if (!name.empty()) {
       output_names_.push_back(name);
+      output_names_set_.insert(name);
     }
   }
   for (int i = 0; i < graph.value_info().size(); ++i) {
@@ -217,7 +219,24 @@ std::vector<std::string> RuntimeSession::used_kernels() const {
   return result;
 }
 
+bool RuntimeSession::ProducesDeclaredOutput(const NodeProto &node) const {
+  if (output_names_set_.empty()) {
+    return false;
+  }
+  for (int i = 0; i < node.output_size(); ++i) {
+    const std::string &name = node.output(i);
+    if (!name.empty() && output_names_set_.find(name) != output_names_set_.end()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const {
+  const bool routed_to_io = session_io_allocator_ != nullptr && ProducesDeclaredOutput(node);
+  const RawBufferAllocator *expected = routed_to_io ? session_io_allocator_ : session_allocator_;
+  const char *expected_name =
+      routed_to_io ? "the session's I/O allocator" : "the session's execution allocator";
   for (int i = 0; i < node.output_size(); ++i) {
     const std::string &name = node.output(i);
     if (name.empty() || !rt.Has(name)) {
@@ -227,9 +246,9 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
     if (!output.has_allocation()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(output.allocation_owner() == session_allocator_, "RuntimeSession: op '",
+    EXT_ENFORCE_INVALID(output.allocation_owner() == expected, "RuntimeSession: op '",
                         node.op_type(), "' produced output '", name,
-                        "' backed by an allocator other than the session's unique allocator.");
+                        "' backed by an allocator other than ", expected_name, ".");
   }
 }
 
@@ -270,9 +289,12 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   const int effective_verbose = verbose_ != 0 ? verbose_ : rt.verbose();
   // Capture the allocator attached to ``rt`` once, on the first Run, as the
   // session's unique allocator; every output tensor produced from here on is
-  // verified against this same allocator (see VerifyOutputAllocators).
+  // verified against this same allocator (see VerifyOutputAllocators). The
+  // I/O allocator (if any) is captured alongside it so declared graph
+  // outputs can be routed to it (see the kExecuteNode case below).
   if (!session_allocator_captured_) {
-    session_allocator_ = rt.allocator();
+    session_allocator_ = rt.execution_allocator();
+    session_io_allocator_ = rt.io_allocator();
     session_allocator_captured_ = true;
   }
   // Every external input the scheduled nodes read must already be available in
@@ -323,6 +345,14 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
       const std::string &op_type = node.op_type().value();
       detail::PrintNodeProgress(rt, node, domain, op_type, effective_verbose);
+
+      // Route this node's kernel invocation through the I/O allocator instead
+      // of the execution allocator when it produces at least one declared
+      // graph output and an I/O allocator is attached to ``rt``. This lets a
+      // kernel's zero-copy MakeOutputTensor call allocate the final result
+      // directly from the I/O arena, with no promotion copy afterwards.
+      const bool routed_to_io = session_io_allocator_ != nullptr && ProducesDeclaredOutput(node);
+      rt.SetActiveAllocator(routed_to_io ? session_io_allocator_ : session_allocator_);
 
       // Only capture timing when event logging is active.
       const bool logging = rt.events_enabled();

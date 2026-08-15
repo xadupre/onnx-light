@@ -56,6 +56,12 @@ The implementation is split into focused pull requests:
        reference-counted ``IOLease`` that pins an exported allocation and keeps
        the arena alive, making the allocation handle suitable for ownership by a
        NumPy capsule.
+   * - `PR #4447 <https://github.com/xadupre/onnx-light/pull/4447>`_
+     - Output allocation routing
+     - Gives :cpp:class:`RuntimeContext` a dedicated I/O allocator alongside its
+       execution allocator and has :cpp:class:`RuntimeSession` route a node's
+       kernel invocation through it whenever that node produces a declared
+       graph output, falling back to the execution allocator otherwise.
 
 Current behaviour
 +++++++++++++++++
@@ -298,7 +304,12 @@ Implementation order
    reference-counted ``IOLease`` that pins the buffer and keeps the arena alive
    until the last external owner releases it.
 5. Extend output allocation with an execution/I/O role and route declared graph
-   outputs directly to the I/O arena.
+   outputs directly to the I/O arena (`PR #4447
+   <https://github.com/xadupre/onnx-light/pull/4447>`_). ``RuntimeContext``
+   gains a dedicated I/O allocator alongside its execution allocator, and
+   ``RuntimeSession::Run`` switches the active allocator to it for the
+   kernel invocation of any node that produces a declared graph output,
+   restoring the execution allocator for every other node.
 6. Transfer each exported output handle to its NumPy capsule; remove the
    dependency on keeping the mutable :cpp:class:`RuntimeContext` as the data
    owner.
@@ -340,3 +351,5 @@ Pull requests
   capacity-preserving ``ExecutionArena`` reuse.
 * `PR #4444 <https://github.com/xadupre/onnx-light/pull/4444>`_: capacity-preserving
   ``IOArena`` reuse with a reference-counted ``IOLease`` for exported I/O buffers.
+* `PR #4447 <https://github.com/xadupre/onnx-light/pull/4447>`_: routes declared
+  graph outputs to a dedicated I/O allocator via an execution/I/O allocation role.

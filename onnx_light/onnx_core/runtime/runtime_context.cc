@@ -364,6 +364,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
 RuntimeContext RuntimeContext::MakeFunctionContext() const {
   RuntimeContext child(kernel_ctx_, RuntimeContextOptions{
                                         .allocator = allocator_,
+                                        .io_allocator = io_allocator_,
                                         .events_enabled = false,
                                         .verbose = verbose_,
                                         .release_intermediates = release_intermediates_,

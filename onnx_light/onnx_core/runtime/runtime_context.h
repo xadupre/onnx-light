@@ -351,6 +351,13 @@ using RuntimeEventLog = std::vector<RuntimeEvent>;
  */
 struct RuntimeContextOptions {
   RawBufferAllocator *allocator = nullptr;
+  /// Optional allocator dedicated to values that cross the runtime boundary
+  /// (declared graph outputs and owned input staging buffers), as opposed to
+  /// :cpp:var:`allocator`, which backs run-local intermediates and kernel
+  /// workspaces. ``nullptr`` (the default) routes every allocation through
+  /// :cpp:var:`allocator`, matching the pre-existing single-allocator
+  /// behaviour. See :cpp:func:`RuntimeContext::io_allocator`.
+  RawBufferAllocator *io_allocator = nullptr;
   bool events_enabled = false;
   int verbose = 0;
   bool release_intermediates = false;
@@ -392,21 +399,24 @@ public:
   explicit RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options = {})
       : kernel_ctx_(std::move(kernel_ctx)), events_enabled_(options.events_enabled),
         verbose_(options.verbose), release_intermediates_(options.release_intermediates),
-        allocator_(options.allocator), device_(options.device) {
-    kernel_ctx_.allocator = allocator_;
+        allocator_(options.allocator), io_allocator_(options.io_allocator),
+        active_allocator_(options.allocator), device_(options.device) {
+    kernel_ctx_.allocator = active_allocator_;
   }
   RuntimeContext(KernelContext kernel_ctx, TensorMap tensors, RuntimeContextOptions options = {})
       : tensors_(std::move(tensors)), kernel_ctx_(std::move(kernel_ctx)),
         events_enabled_(options.events_enabled), verbose_(options.verbose),
         release_intermediates_(options.release_intermediates), allocator_(options.allocator),
+        io_allocator_(options.io_allocator), active_allocator_(options.allocator),
         device_(options.device) {
-    kernel_ctx_.allocator = allocator_;
+    kernel_ctx_.allocator = active_allocator_;
   }
   explicit RuntimeContext(RuntimeContextOptions options)
       : events_enabled_(options.events_enabled), verbose_(options.verbose),
         release_intermediates_(options.release_intermediates), allocator_(options.allocator),
+        io_allocator_(options.io_allocator), active_allocator_(options.allocator),
         device_(options.device) {
-    kernel_ctx_.allocator = allocator_;
+    kernel_ctx_.allocator = active_allocator_;
   }
 
   /// Returns whether event logging was enabled when the context was built.
@@ -451,15 +461,49 @@ public:
   KernelContext &kernel_ctx() noexcept { return kernel_ctx_; }
   const KernelContext &kernel_ctx() const noexcept { return kernel_ctx_; }
 
-  /// Optional allocator used by kernels to acquire and release
-  /// :cpp:struct:`RawBuffer` instances. ``nullptr`` when no allocator was
-  /// supplied at construction time (the default). The caller retains
-  /// ownership; the lifetime of the allocator must exceed the lifetime of
-  /// this context. Propagated into :cpp:var:`KernelContext::allocator` so
-  /// kernels built via ``rt.kernel_ctx()`` route their result storage
-  /// through it.
-  RawBufferAllocator *allocator() noexcept { return allocator_; }
-  const RawBufferAllocator *allocator() const noexcept { return allocator_; }
+  /// Returns the allocator kernels should currently use to acquire and
+  /// release :cpp:struct:`RawBuffer` instances — the *active* allocator. It
+  /// equals :cpp:func:`execution_allocator` (the construction-time
+  /// :cpp:var:`RuntimeContextOptions::allocator`) except while
+  /// :cpp:class:`RuntimeSession` temporarily routes a node's declared graph
+  /// outputs to :cpp:func:`io_allocator` (see :cpp:func:`SetActiveAllocator`).
+  /// ``nullptr`` when no allocator was supplied at construction time (the
+  /// default). The caller retains ownership; the lifetime of the allocator
+  /// must exceed the lifetime of this context. Propagated into
+  /// :cpp:var:`KernelContext::allocator` so kernels built via
+  /// ``rt.kernel_ctx()`` route their result storage through it.
+  RawBufferAllocator *allocator() noexcept { return active_allocator_; }
+  const RawBufferAllocator *allocator() const noexcept { return active_allocator_; }
+
+  /// Returns the execution allocator supplied at construction time
+  /// (:cpp:var:`RuntimeContextOptions::allocator`), regardless of which
+  /// allocator :cpp:func:`allocator` currently reports as active. Run-local
+  /// intermediates and kernel workspaces are always accounted against this
+  /// allocator (see :cpp:func:`StampAllocatorMemory`).
+  RawBufferAllocator *execution_allocator() noexcept { return allocator_; }
+  const RawBufferAllocator *execution_allocator() const noexcept { return allocator_; }
+
+  /// Optional allocator dedicated to values that cross the runtime boundary
+  /// (declared graph outputs and owned input staging buffers). ``nullptr``
+  /// when no dedicated I/O allocator was supplied at construction time, in
+  /// which case every allocation is routed through :cpp:func:`execution_allocator`.
+  RawBufferAllocator *io_allocator() noexcept { return io_allocator_; }
+  const RawBufferAllocator *io_allocator() const noexcept { return io_allocator_; }
+
+  /// Temporarily overrides the allocator :cpp:func:`allocator` reports as
+  /// active (and propagates it to :cpp:var:`KernelContext::allocator`),
+  /// without disturbing :cpp:func:`execution_allocator`. Used by
+  /// :cpp:class:`RuntimeSession` to route a node's declared graph outputs to
+  /// :cpp:func:`io_allocator` for the duration of that node's kernel
+  /// invocation, then restore the execution allocator afterwards.
+  ///
+  /// @returns The previously active allocator, so the caller can restore it.
+  RawBufferAllocator *SetActiveAllocator(RawBufferAllocator *allocator) noexcept {
+    RawBufferAllocator *previous = active_allocator_;
+    active_allocator_ = allocator;
+    kernel_ctx_.allocator = allocator;
+    return previous;
+  }
 
   /// Logical device the graph is evaluated on (see
   /// :cpp:member:`RuntimeContextOptions::device`). The C++ reference runtime
@@ -783,8 +827,16 @@ private:
   /// the same model.
   std::unordered_map<const void *, ExecutionPlan> execution_plans_;
   /// Optional allocator for :cpp:struct:`RawBuffer` instances. Non-owning;
-  /// ``nullptr`` when no allocator has been attached.
+  /// ``nullptr`` when no allocator has been attached. Backs run-local
+  /// intermediates and kernel workspaces; see :cpp:func:`execution_allocator`.
   RawBufferAllocator *allocator_ = nullptr;
+  /// Optional dedicated allocator for values crossing the runtime boundary.
+  /// Non-owning; ``nullptr`` when no I/O allocator has been attached. See
+  /// :cpp:func:`io_allocator`.
+  RawBufferAllocator *io_allocator_ = nullptr;
+  /// Allocator currently reported by :cpp:func:`allocator`, switched by
+  /// :cpp:func:`SetActiveAllocator`. Defaults to :cpp:var:`allocator_`.
+  RawBufferAllocator *active_allocator_ = nullptr;
   /// Logical device the graph is evaluated on. See :cpp:func:`device`.
   symbolic::Device device_ = symbolic::Device::kUndefined;
 };

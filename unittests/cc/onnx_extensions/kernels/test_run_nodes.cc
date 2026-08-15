@@ -4441,6 +4441,105 @@ TEST(RunNodes, RuntimeSessionAllowsOutputFromForeignAllocatorWhenOptionSet) {
   EXPECT_FLOAT_EQ(yp[2], 6.0f);
 }
 
+// A RuntimeContext built with a dedicated I/O allocator (in addition to its
+// execution allocator) routes the kernel invocation that produces a declared
+// graph output through the I/O allocator, while an intermediate value that
+// is not a declared output keeps allocating from the execution allocator.
+// This exercises step 5 of the buffer-reuse arena plan (see
+// docs/next_steps/2026-08_buffer_reuse_arena.rst): "route declared graph
+// outputs directly to the I/O arena".
+TEST(RunNodes, RuntimeSessionRoutesDeclaredOutputsToIOAllocator) {
+  core::runtime::SimpleRawBufferAllocator execution_alloc(8);
+  core::runtime::SimpleRawBufferAllocator io_alloc(8);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
+                                                         .io_allocator = &io_alloc});
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}, &execution_alloc));
+
+  auto scale_by = [](float factor) {
+    return [factor](const NodeProto &node, RuntimeContext &ctx) {
+      const Tensor &in = ctx.Get(node.input(0));
+      std::vector<float> out(static_cast<size_t>(in.element_count()));
+      const float *src = in.AsFloat();
+      for (size_t i = 0; i < out.size(); ++i) {
+        out[i] = src[i] * factor;
+      }
+      ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, out, ctx.allocator()));
+    };
+  };
+  rt.RegisterCustomKernel("my.domain", "Double", scale_by(2.0f));
+  rt.RegisterCustomKernel("my.domain", "Increment", scale_by(1.0f));
+
+  ModelProto model;
+  model.set_ir_version(10);
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  // "z" is an intermediate, not a declared graph output.
+  NodeProto *n1 = g->add_node();
+  n1->set_op_type("Double");
+  n1->set_domain("my.domain");
+  n1->add_input("x");
+  n1->add_output("z");
+  // "y" is the graph's only declared output.
+  NodeProto *n2 = g->add_node();
+  n2->set_op_type("Increment");
+  n2->set_domain("my.domain");
+  n2->add_input("z");
+  n2->add_output("y");
+  g->add_output()->set_name("y");
+
+  RuntimeSession session(model);
+  session.Run(rt);
+
+  ASSERT_TRUE(rt.Has("z"));
+  ASSERT_TRUE(rt.Has("y"));
+  const Tensor &z = rt.Get("z");
+  const Tensor &y = rt.Get("y");
+  EXPECT_EQ(z.allocation_owner(), &execution_alloc);
+  EXPECT_EQ(y.allocation_owner(), &io_alloc);
+  const float *yp = y.AsFloat();
+  EXPECT_FLOAT_EQ(yp[0], 2.0f);
+  EXPECT_FLOAT_EQ(yp[1], 4.0f);
+  EXPECT_FLOAT_EQ(yp[2], 6.0f);
+}
+
+// Without a dedicated I/O allocator (the pre-existing single-allocator
+// configuration), every output — declared or intermediate — keeps allocating
+// from the execution allocator, preserving prior behaviour.
+TEST(RunNodes, RuntimeSessionKeepsSingleAllocatorBehaviorWithoutIOAllocator) {
+  core::runtime::SimpleRawBufferAllocator execution_alloc(8);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.allocator = &execution_alloc});
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}, &execution_alloc));
+
+  rt.RegisterCustomKernel("my.domain", "Increment", [](const NodeProto &node, RuntimeContext &ctx) {
+    const Tensor &in = ctx.Get(node.input(0));
+    std::vector<float> out(static_cast<size_t>(in.element_count()));
+    const float *src = in.AsFloat();
+    for (size_t i = 0; i < out.size(); ++i) {
+      out[i] = src[i] + 1.0f;
+    }
+    ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, out, ctx.allocator()));
+  });
+
+  ModelProto model;
+  model.set_ir_version(10);
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *n = g->add_node();
+  n->set_op_type("Increment");
+  n->set_domain("my.domain");
+  n->add_input("x");
+  n->add_output("y");
+  g->add_output()->set_name("y");
+
+  RuntimeSession session(model);
+  session.Run(rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  EXPECT_EQ(rt.Get("y").allocation_owner(), &execution_alloc);
+}
+
 // ---------------------------------------------------------------------------
 // Release-unused-intermediates tests
 // ---------------------------------------------------------------------------

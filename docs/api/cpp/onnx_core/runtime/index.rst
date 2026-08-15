@@ -37,6 +37,10 @@ a dependency from ``onnx_core`` back onto ``onnx_kernels``.
     run_nodes
     runtime_session
     kernel_dispatch_table
+    kernel_tuning
+    kernel_tuning_cache
+    parallel_for
+    tensor_compare
     node_helpers
     temporary_buffer
     random

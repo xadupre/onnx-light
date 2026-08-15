@@ -11,3 +11,6 @@ the per-operator registries in ``onnx_extensions/backend_test/cases/``.
     :maxdepth: 1
 
     test_case
+    test_case_registry
+    expect
+    io_data

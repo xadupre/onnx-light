@@ -19,6 +19,8 @@ back into the model (value_info and node metadata); and
     :maxdepth: 1
 
     compute_context
+    constant_info
+    result_lifetime
     inplace_reuse
     inplace_reuse_types
     peak_memory

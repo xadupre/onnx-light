@@ -14,4 +14,9 @@ onnx_proto
     simple_span
     thread_pool
     fields
+    onnx_verify
+    serialize_options
+    tml
+    type_helper
+    visibility
     google_protobuf_compat

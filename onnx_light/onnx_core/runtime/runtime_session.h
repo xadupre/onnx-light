@@ -15,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 /**
@@ -306,9 +307,17 @@ private:
   void InitializeKernels(RuntimeContext &rt);
 
   /// Verifies that every tensor output of ``node`` that is allocator-backed
-  /// is owned by :cpp:member:`session_allocator_`. Called after a node's
+  /// is owned by :cpp:member:`session_allocator_`, or by
+  /// :cpp:member:`session_io_allocator_` when ``node`` produces a declared
+  /// graph output and an I/O allocator is attached. Called after a node's
   /// kernel has run, once :cpp:member:`session_allocator_` has been captured.
   void VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const;
+
+  /// Returns whether ``node`` produces at least one declared graph output
+  /// (a name present in :cpp:member:`output_names_`). Used by
+  /// :cpp:func:`Run` to route that node's kernel invocation through the
+  /// I/O allocator instead of the execution allocator.
+  bool ProducesDeclaredOutput(const NodeProto &node) const;
 
   /// Verifies, when :cpp:func:`check_shapes` is enabled, that the concrete
   /// shape of the tensor stored under ``name`` in ``rt`` (if any) matches the
@@ -358,6 +367,10 @@ private:
   /// Consulted by :cpp:func:`MaterializeBorrowedOutputs` so borrowed graph
   /// outputs are detached from the model before :cpp:func:`Run` returns.
   std::vector<std::string> output_names_;
+  /// Same names as :cpp:member:`output_names_`, indexed for O(1) membership
+  /// checks by :cpp:func:`ProducesDeclaredOutput` and
+  /// :cpp:func:`VerifyOutputAllocators`.
+  std::unordered_set<std::string> output_names_set_;
   bool kernels_initialized_ = false;
   /// When ``true``, :cpp:func:`Run` validates concrete tensor shapes against
   /// the declarations in :cpp:member:`declared_shapes_`.
@@ -373,6 +386,13 @@ private:
   /// every output tensor produced by a scheduled node is verified to be
   /// backed by this same allocator (see :cpp:func:`Run`).
   RawBufferAllocator *session_allocator_ = nullptr;
+  /// I/O allocator observed on ``rt`` (:cpp:func:`RuntimeContext::io_allocator`)
+  /// the first time :cpp:func:`Run` executes, alongside
+  /// :cpp:member:`session_allocator_`. When non-null, :cpp:func:`Run` routes
+  /// the kernel invocation of any node that produces a declared graph output
+  /// (see :cpp:member:`output_names_set_`) through this allocator instead of
+  /// :cpp:member:`session_allocator_`.
+  RawBufferAllocator *session_io_allocator_ = nullptr;
   bool session_allocator_captured_ = false;
 };
 

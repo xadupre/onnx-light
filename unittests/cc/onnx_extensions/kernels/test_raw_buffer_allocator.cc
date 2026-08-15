@@ -462,6 +462,43 @@ TEST(RuntimeContextAllocator, DefaultConstructorLeavesAllocatorUnset) {
   EXPECT_EQ(ctx.allocator(), nullptr);
 }
 
+TEST(RuntimeContextAllocator, DefaultIOAllocatorIsNull) {
+  RuntimeContext ctx;
+  EXPECT_EQ(ctx.io_allocator(), nullptr);
+  EXPECT_EQ(ctx.execution_allocator(), nullptr);
+}
+
+TEST(RuntimeContextAllocator, SetAndGetIOAllocator) {
+  SimpleRawBufferAllocator execution_alloc(4);
+  SimpleRawBufferAllocator io_alloc(4);
+  RuntimeContext ctx(
+      RuntimeContextOptions{.allocator = &execution_alloc, .io_allocator = &io_alloc});
+  // Until SetActiveAllocator switches it, allocator() reports the execution
+  // allocator, matching pre-existing single-allocator behaviour.
+  EXPECT_EQ(ctx.allocator(), &execution_alloc);
+  EXPECT_EQ(ctx.execution_allocator(), &execution_alloc);
+  EXPECT_EQ(ctx.io_allocator(), &io_alloc);
+}
+
+TEST(RuntimeContextAllocator, SetActiveAllocatorSwitchesAllocatorAndKernelContext) {
+  SimpleRawBufferAllocator execution_alloc(4);
+  SimpleRawBufferAllocator io_alloc(4);
+  RuntimeContext ctx(
+      RuntimeContextOptions{.allocator = &execution_alloc, .io_allocator = &io_alloc});
+
+  RawBufferAllocator *previous = ctx.SetActiveAllocator(&io_alloc);
+  EXPECT_EQ(previous, &execution_alloc);
+  EXPECT_EQ(ctx.allocator(), &io_alloc);
+  EXPECT_EQ(ctx.kernel_ctx().allocator, &io_alloc);
+  // execution_allocator() is unaffected by SetActiveAllocator.
+  EXPECT_EQ(ctx.execution_allocator(), &execution_alloc);
+
+  previous = ctx.SetActiveAllocator(&execution_alloc);
+  EXPECT_EQ(previous, &io_alloc);
+  EXPECT_EQ(ctx.allocator(), &execution_alloc);
+  EXPECT_EQ(ctx.kernel_ctx().allocator, &execution_alloc);
+}
+
 TEST(RuntimeContextAllocator, SetStoresAllocatorBackedTensorData) {
   SimpleRawBufferAllocator alloc(2);
   RuntimeContext ctx(RuntimeContextOptions{.allocator = &alloc});

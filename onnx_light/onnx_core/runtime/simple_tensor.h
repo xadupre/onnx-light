@@ -420,6 +420,7 @@ private:
 };
 
 class RawBufferAllocator;
+class IOLease;
 
 /**
  * Owns one allocator-backed raw buffer and returns it exactly once.
@@ -427,11 +428,28 @@ class RawBufferAllocator;
  * The handle is move-only. Moving it transfers ownership without moving or
  * copying the payload. Destruction and :cpp:func:`Reset` return the buffer to
  * its allocator; an empty or moved-from handle is a no-op.
+ *
+ * A handle may instead own an :cpp:class:`IOLease` (see the lease-adopting
+ * constructor). Such a handle keeps its owning :cpp:class:`IOArena` alive on
+ * its own, so it may outlive the :cpp:class:`RuntimeContext` that produced it —
+ * making it suitable for ownership by a cross-boundary consumer such as a NumPy
+ * capsule. Its accessors describe the leased allocation exactly like a plain
+ * allocator-backed handle, but :cpp:func:`Reset` returns the buffer through the
+ * lease rather than the allocator interface.
  */
 class AllocationHandle {
 public:
   AllocationHandle() noexcept = default;
   AllocationHandle(RawBufferAllocator *owner, RawBuffer *buffer);
+  /**
+   * Adopts an :cpp:class:`IOLease` so the handle keeps its arena alive.
+   *
+   * @param owner  The :cpp:class:`IOArena` that produced ``lease`` (reported by
+   *               :cpp:func:`owner`).
+   * @param lease  A lease pinning the exported allocation. Its buffer, logical
+   *               size, and retained capacity are captured by the handle.
+   */
+  AllocationHandle(RawBufferAllocator *owner, IOLease lease);
   ~AllocationHandle();
 
   AllocationHandle(const AllocationHandle &) = delete;
@@ -454,6 +472,20 @@ public:
   /// Returns the retained byte capacity captured when the handle was created.
   size_t retained_capacity() const noexcept { return retained_capacity_; }
 
+  /// Returns whether this handle keeps its arena alive through an
+  /// :cpp:class:`IOLease` (as opposed to a plain allocator reference).
+  bool holds_lease() const noexcept { return static_cast<bool>(lease_); }
+
+  /// Relinquishes ownership of an allocator-backed buffer without returning it
+  /// to the allocator, and makes this handle empty.
+  ///
+  /// Returns the previously owned buffer for a plain allocator-backed handle so
+  /// the caller can take over its lifetime (for example to re-export it through
+  /// an :cpp:class:`IOArena` lease). A lease-backed handle owns no transferable
+  /// raw buffer, so its lease is released to the arena and ``nullptr`` is
+  /// returned.
+  RawBuffer *Release() noexcept;
+
   /// Returns the allocation to its owner and makes this handle empty.
   void Reset() noexcept;
 
@@ -462,6 +494,10 @@ private:
   RawBuffer *buffer_ = nullptr;
   size_t logical_size_ = 0;
   size_t retained_capacity_ = 0;
+  /// Non-null when the handle owns its allocation through a reference-counted
+  /// lease that keeps the :cpp:class:`IOArena` alive. Held by pointer so the
+  /// header only needs a forward declaration of :cpp:class:`IOLease`.
+  std::unique_ptr<IOLease> lease_;
 };
 
 /**

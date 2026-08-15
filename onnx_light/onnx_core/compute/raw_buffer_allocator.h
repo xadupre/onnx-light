@@ -312,6 +312,34 @@ public:
    */
   IOLease Export(RawBuffer *buf);
 
+  /**
+   * Exports a live buffer as a self-owning :cpp:class:`AllocationHandle`.
+   *
+   * The returned handle owns the buffer's :cpp:class:`IOLease`, so it keeps this
+   * arena alive on its own and returns the buffer exactly once when destroyed.
+   * It may therefore outlive the :cpp:class:`RuntimeContext` that produced it,
+   * which is what lets an exported graph output be transferred into a NumPy
+   * capsule without keeping the mutable context alive as the data owner.
+   *
+   * @throws std::invalid_argument if ``buf`` is not live in this arena or has
+   *         already been exported.
+   */
+  AllocationHandle ExportHandle(RawBuffer *buf);
+
+  /**
+   * Exports a live buffer already owned by an :cpp:class:`AllocationHandle`.
+   *
+   * ``handle`` must own a plain allocator-backed buffer from this arena. Its
+   * ownership is transferred into the returned self-owning handle without moving
+   * or copying the payload; ``handle`` is left empty. This is the ergonomic
+   * entry point for exporting a graph output that a :cpp:class:`Tensor` released
+   * (see :cpp:func:`Tensor::ReleaseAllocation`) into a NumPy capsule.
+   *
+   * @throws std::invalid_argument if the buffer is not live in this arena or has
+   *         already been exported.
+   */
+  AllocationHandle ExportHandle(AllocationHandle &&handle);
+
   /// Returns the logical bytes held by live buffers (allocated and leased).
   size_t TotalAllocatedSize() const override;
 

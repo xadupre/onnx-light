@@ -46,6 +46,24 @@ class TestPythonApiDocsSync(unittest.TestCase):
             ),
         )
 
+    def _assert_automodule_uses_members(self, doc_index: str, module: str) -> None:
+        text = (self.ROOT / doc_index).read_text(encoding="utf-8")
+        self.assertIn(f".. automodule:: {module}", text)
+        self.assertIn("    :members:", text)
+
+    def test_root_api_index_includes_public_modules(self):
+        documented = self._read_toctree_entries(self.ROOT / "docs/api/python/index.rst")
+        public_modules = {
+            path.stem
+            for path in (self.ROOT / "onnx_light").glob("*.py")
+            if path.stem != "__init__" and not path.stem.startswith("_")
+        }
+        self.assertEqual(
+            set(),
+            public_modules - documented,
+            f"Missing from root Python API docs: {sorted(public_modules - documented)}",
+        )
+
     def test_onnx_api_index_matches_package_modules(self):
         self._assert_doc_index_matches_package(
             "onnx_light/onnx", "docs/api/python/onnx/index.rst"
@@ -60,6 +78,16 @@ class TestPythonApiDocsSync(unittest.TestCase):
         self._assert_doc_index_matches_package(
             "onnx_light/tools", "docs/api/python/tools/index.rst"
         )
+
+    def test_package_indexes_include_members(self):
+        for doc_index, module in [
+            ("docs/api/python/onnx/index.rst", "onnx_light.onnx"),
+            ("docs/api/python/onnx_core/index.rst", "onnx_light.onnx_core"),
+            ("docs/api/python/onnx_op/index.rst", "onnx_light.onnx_op"),
+            ("docs/api/python/tools/index.rst", "onnx_light.tools"),
+        ]:
+            with self.subTest(doc_index=doc_index):
+                self._assert_automodule_uses_members(doc_index, module)
 
 
 if __name__ == "__main__":

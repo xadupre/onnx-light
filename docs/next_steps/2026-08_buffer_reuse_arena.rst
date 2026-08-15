@@ -50,6 +50,12 @@ The implementation is split into focused pull requests:
      - ``ExecutionArena``
      - Adds capacity-preserving, best-fit reuse for execution buffers, live and
        retained accounting, runtime integration, and Python access.
+   * - `PR #4444 <https://github.com/xadupre/onnx-light/pull/4444>`_
+     - ``IOArena``
+     - Adds the second arena: capacity-preserving reuse for I/O buffers plus a
+       reference-counted ``IOLease`` that pins an exported allocation and keeps
+       the arena alive, making the allocation handle suitable for ownership by a
+       NumPy capsule.
 
 Current behaviour
 +++++++++++++++++
@@ -286,7 +292,11 @@ Implementation order
    for intermediates and temporary workspaces (`PR #4436
    <https://github.com/xadupre/onnx-light/pull/4436>`_).
 4. Implement ``IOArena`` and make its allocation handle suitable for ownership
-   by a NumPy capsule.
+   by a NumPy capsule (`PR #4444
+   <https://github.com/xadupre/onnx-light/pull/4444>`_). The arena reuses I/O
+   buffers like ``ExecutionArena`` and exports each allocation through a
+   reference-counted ``IOLease`` that pins the buffer and keeps the arena alive
+   until the last external owner releases it.
 5. Extend output allocation with an execution/I/O role and route declared graph
    outputs directly to the I/O arena.
 6. Transfer each exported output handle to its NumPy capsule; remove the
@@ -328,3 +338,5 @@ Pull requests
   allocation ownership for allocator-backed tensors.
 * `PR #4436 <https://github.com/xadupre/onnx-light/pull/4436>`_:
   capacity-preserving ``ExecutionArena`` reuse.
+* `PR #4444 <https://github.com/xadupre/onnx-light/pull/4444>`_: capacity-preserving
+  ``IOArena`` reuse with a reference-counted ``IOLease`` for exported I/O buffers.

@@ -198,6 +198,69 @@ available while another I/O worker reads ``W1``. A task releases its source
 buffer when no later task needs it. External-data mappings may instead remain
 available as the portable backing store.
 
+Prepacking
+++++++++++
+
+A prepack task turns a source weight into the physical representation a kernel
+consumes at run time. The source bytes are never modified: the graph continues
+to reference the original initializer, which remains the portable fallback. The
+prepacked object is a derived, kernel- and device-specific value.
+
+Prepacked object contract
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A prepack task produces a prepared object described by:
+
+.. code-block:: cpp
+
+    struct PrepackRequest {
+      std::string source_name;   // initializer to read
+      int32_t element_type;      // source element type
+      std::vector<int64_t> dimensions;
+      std::string layout;        // requested packed layout key
+      int32_t device;            // index into ModelProto.devices
+    };
+
+    struct PrepackedWeight {
+      PrepackRequest request;    // identity of the prepared object
+      // opaque, kernel-owned packed representation
+    };
+
+The ``layout`` key captures every parameter that changes the packed bytes, such
+as the ``transB`` flag of ``Gemm``, a block size, or a tiling shape. Two kernels
+that request the same ``(source_name, layout, device)`` share one prepacked
+object; two kernels that disagree on any of these fields receive distinct
+objects. This is the deduplication rule already illustrated by the
+``read W0 -> prepack W0`` / ``prepack W0'`` fan-out of Step 4.
+
+Because a ``PrepackRequest`` is a pure function of the source tensor and the
+layout key, it also defines the cache identity used for persistence.
+
+Reusing a persisted prepack
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Prepacking is often linear but not free, and it repeats on every load. The
+:ref:`l-next-steps-compiled-tensor` plan defines a ``CompiledTensorProto`` cache
+that persists a packed representation next to the model. Prepacking reuses that
+cache instead of introducing a second one:
+
+* the cache key is ``(source_digest, layout, device)``, where ``source_digest``
+  is the digest of the canonical source tensor defined by the compiled-tensor
+  plan and ``layout``/``device`` come from the ``PrepackRequest``;
+* on a cache hit with a compatible ``DeviceProto``, the scheduler replaces the
+  ``prepack`` task with a plain read of the cached bytes and skips the packing
+  work;
+* on a cache miss, or when the persisted ``source_digest`` no longer matches the
+  current initializer, the prepack task runs normally and may write a new
+  ``CompiledTensorProto`` entry;
+* an incompatible runtime or device ignores the cached value and falls back to
+  the portable initializer, exactly as the compiled-tensor plan requires.
+
+The scheduler therefore treats a cached prepack as an I/O task and an uncached
+prepack as an I/O task followed by a CPU or accelerator task. The dependency
+graph, the in-flight memory budget, and the deduplication rule are unchanged;
+only the source of the packed bytes differs.
+
 Kernel and device
 +++++++++++++++++
 
@@ -304,7 +367,10 @@ Implementation order
 6. Merge the kernel tasks into a dependency graph and execute it sequentially.
 7. Add the bounded I/O and CPU task queues, then compare the same plan in
    sequential and parallel modes.
-8. Add one CUDA ``Gemm`` whose initialization can choose CPU-pack-plus-copy or
+8. Reuse a persisted prepack through the ``CompiledTensorProto`` cache: skip the
+   prepack task on a matching ``(source_digest, layout, device)`` hit and write a
+   new entry on a miss.
+9. Add one CUDA ``Gemm`` whose initialization can choose CPU-pack-plus-copy or
    CUDA-side pack.
-9. Add alternative execution-device variants and weight residency only after
-   fixed-placement initialization is complete.
+10. Add alternative execution-device variants and weight residency only after
+    fixed-placement initialization is complete.

@@ -525,16 +525,16 @@ beside its patterns; only genuinely cross-family graph queries belong in
 ``detail`` directory.
 
 The upstream default list currently contains 104 enabled patterns.
-``CastCastPattern``, ``CastPattern``, and ``CastCastBinaryPattern`` are already
-covered, leaving 101
+``CastCastPattern``, ``CastPattern``, ``CastCastBinaryPattern``, and
+``CastOpCastPattern`` are already covered, leaving 100
 patterns. They are grouped into nine cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;
-this keeps reviews and ``git bisect`` useful without creating 102 pull
+this keeps reviews and ``git bisect`` useful without creating 100 pull
 requests. Commented-out, non-default upstream patterns are outside this plan.
 
-#. **Elementary canonicalization (8 patterns remaining).**
-   ``CastOpCastPattern``, ``ClipClipPattern``,
+#. **Elementary canonicalization (7 patterns remaining).**
+   ``ClipClipPattern``,
    ``ConstantToInitializerPattern``, ``ConvBiasNullPattern``,
    ``PadConvPattern``, ``DropoutPattern``, ``IdentityPattern``, and
    ``NotNotPattern``.

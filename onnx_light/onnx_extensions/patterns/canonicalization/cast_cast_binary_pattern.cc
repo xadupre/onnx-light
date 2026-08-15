@@ -14,25 +14,6 @@ namespace {
 
 using core::symbolic::TensorType;
 
-bool IsSupportedFloat(TensorType type) {
-  return type == TensorType::kFloat16 || type == TensorType::kBfloat16 ||
-         type == TensorType::kFloat || type == TensorType::kDouble;
-}
-
-int FloatWidth(TensorType type) {
-  switch (type) {
-  case TensorType::kFloat16:
-  case TensorType::kBfloat16:
-    return 16;
-  case TensorType::kFloat:
-    return 32;
-  case TensorType::kDouble:
-    return 64;
-  default:
-    return 0;
-  }
-}
-
 bool IsBinaryArithmetic(const NodeProto &node) {
   const std::string &op_type = node.op_type().value();
   return (op_type == "Add" || op_type == "Div" || op_type == "Mul" || op_type == "Sub") &&
@@ -78,8 +59,8 @@ core::builder::MatchResult CastCastBinaryPattern::Match(core::builder::GraphGrap
   }
   const TensorType left_source = graph.GetType(left->input()[0].value());
   const TensorType right_source = graph.GetType(right->input()[0].value());
-  if (!IsSupportedFloat(left_source) || !IsSupportedFloat(right_source) ||
-      !IsSupportedFloat(left_target) || !IsSupportedFloat(right_target)) {
+  if (!detail::IsSupportedFloat(left_source) || !detail::IsSupportedFloat(right_source) ||
+      !detail::IsSupportedFloat(left_target) || !detail::IsSupportedFloat(right_target)) {
     return NoMatch(candidate, "the Cast source and target types must be floating-point");
   }
   if (left_source != right_source || left_target != right_target ||
@@ -87,7 +68,7 @@ core::builder::MatchResult CastCastBinaryPattern::Match(core::builder::GraphGrap
       graph.GetType(candidate.input()[1].value()) != right_target) {
     return NoMatch(candidate, "the two Cast operations must have matching source and target types");
   }
-  if (FloatWidth(left_target) > FloatWidth(left_source)) {
+  if (detail::FloatWidth(left_target) > detail::FloatWidth(left_source)) {
     return NoMatch(candidate, "moving the binary operation would lower its precision");
   }
   return core::builder::MatchResult{this, {left, right, &candidate}, &candidate};

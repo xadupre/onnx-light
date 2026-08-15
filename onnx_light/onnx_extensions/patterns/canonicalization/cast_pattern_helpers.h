@@ -10,6 +10,29 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns::detail {
 
+/// Returns whether ``type`` is one of the standard floating-point tensor types.
+inline bool IsSupportedFloat(core::symbolic::TensorType type) {
+  using core::symbolic::TensorType;
+  return type == TensorType::kFloat16 || type == TensorType::kBfloat16 ||
+         type == TensorType::kFloat || type == TensorType::kDouble;
+}
+
+/// Returns the storage width of a standard floating-point tensor type.
+inline int FloatWidth(core::symbolic::TensorType type) {
+  using core::symbolic::TensorType;
+  switch (type) {
+  case TensorType::kFloat16:
+  case TensorType::kBfloat16:
+    return 16;
+  case TensorType::kFloat:
+    return 32;
+  case TensorType::kDouble:
+    return 64;
+  default:
+    return 0;
+  }
+}
+
 /// Returns whether ``node`` has the canonical unary ONNX Cast form.
 inline bool IsDefaultCast(const NodeProto &node) {
   return node.op_type().value() == "Cast" &&

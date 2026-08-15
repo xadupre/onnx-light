@@ -81,6 +81,10 @@ requests:
      - Ports ``CastPattern`` from ``yobx.xoptim.patterns`` with exact rewrite,
        optimized-graph, rejection, and registration tests, and adds
        source-located no-match diagnostics.
+   * - `PR #4432 <https://github.com/xadupre/onnx-light/pull/4432>`_
+     - First elementary canonicalization pattern
+     - Ports ``CastCastBinaryPattern`` with precision and shared-use guards,
+       family-scoped tests, and standard pattern registration.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -491,7 +495,8 @@ Implementation order
     ``CastPattern``, is
     `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_; it also ports
     Python's source-located no-match diagnostics before further patterns are
-    added.
+    added. ``CastCastBinaryPattern`` starts the elementary canonicalization
+    batch in `PR #4432 <https://github.com/xadupre/onnx-light/pull/4432>`_.
 
 Remaining pattern batches
 +++++++++++++++++++++++++
@@ -613,3 +618,5 @@ Pull requests
   registration, selection, and standalone custom-pattern example.
 * `PR #4429 <https://github.com/xadupre/onnx-light/pull/4429>`_: first incremental
   library port, ``CastPattern``, plus source-located match diagnostics.
+* `PR #4432 <https://github.com/xadupre/onnx-light/pull/4432>`_: first elementary
+  canonicalization port, ``CastCastBinaryPattern``.

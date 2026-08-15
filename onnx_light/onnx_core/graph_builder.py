@@ -57,6 +57,30 @@ class GraphBuilder(_C.GraphBuilder):
 
     def __init__(self, name: str | Any = "graph", schema_lookup=_default_schema_lookup) -> None:
         super().__init__(name, schema_lookup)
+        self._registered_patterns: dict[str, Any] = {}
+
+    def register_pattern(self, pattern: Any) -> None:
+        """Registers or replaces a pattern for this builder."""
+        name = str(pattern.name)
+        if not name:
+            raise ValueError("A registered pattern must have a non-empty name.")
+        self._registered_patterns[name] = pattern
+
+    def unregister_pattern(self, name: str) -> bool:
+        """Removes a builder-local pattern and returns whether it existed."""
+        return self._registered_patterns.pop(name, None) is not None
+
+    def clear_registered_patterns(self) -> None:
+        """Removes every builder-local pattern."""
+        self._registered_patterns.clear()
+
+    def registered_patterns(self) -> tuple[Any, ...]:
+        """Returns builder-local patterns in registration order."""
+        return tuple(self._registered_patterns.values())
+
+    def registered_pattern_names(self) -> tuple[str, ...]:
+        """Returns builder-local pattern names in registration order."""
+        return tuple(self._registered_patterns)
 
 
 __all__ = ["ConstantFoldingOptions", "GraphBuilder"]

@@ -59,10 +59,9 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(len(rewrites), 1)
         self.assertEqual(rewrites[0].pattern_name, "NegNeg")
         self.assertEqual(report.rewrites, 1)
-        self.assertEqual(report.patterns[0].matches, 1)
-        self.assertGreaterEqual(
-            sum(item.occurrences for item in report.patterns[0].no_matches), 1
-        )
+        pattern_report = next(item for item in report.patterns if item.pattern_name == "NegNeg")
+        self.assertEqual(pattern_report.matches, 1)
+        self.assertGreaterEqual(sum(item.occurrences for item in pattern_report.no_matches), 1)
 
     def test_replay_reproduces_python_rewrite(self):
         model = _double_neg_model()
@@ -84,6 +83,34 @@ class TestPatternOptimization(ExtTestCase):
 
         rewrites = graph.optimize()
         self.assertEqual(len(rewrites), 1)
+
+    def test_global_pattern_registration(self):
+        optim.register_pattern(NegNegPattern())
+        try:
+            builder = optim.GraphBuilder(_double_neg_model())
+            graph = optim.GraphGraph(builder)
+            rewrites = graph.optimize()
+            self.assertIn("NegNeg", optim.registered_pattern_names())
+            self.assertTrue(any(rewrite.pattern_name == "NegNeg" for rewrite in rewrites))
+        finally:
+            optim.unregister_pattern("NegNeg")
+
+    def test_builder_pattern_registration(self):
+        builder = optim.GraphBuilder(_double_neg_model())
+        builder.register_pattern(NegNegPattern())
+
+        graph = optim.GraphGraph(builder, use_global_patterns=False)
+        rewrites = graph.optimize()
+
+        self.assertEqual(builder.registered_pattern_names(), ("NegNeg",))
+        self.assertEqual(rewrites[0].pattern_name, "NegNeg")
+
+    def test_graph_pattern_registration(self):
+        builder = optim.GraphBuilder(_double_neg_model())
+        graph = optim.GraphGraph(builder, [NegNegPattern()], use_global_patterns=False)
+
+        rewrites = graph.optimize()
+        self.assertEqual(rewrites[0].pattern_name, "NegNeg")
 
     def test_python_exception_propagates(self):
         class FailingPattern(NegNegPattern):

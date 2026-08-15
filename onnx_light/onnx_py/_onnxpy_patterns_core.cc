@@ -178,6 +178,12 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
   nb::class_<GraphGraph>(builder_mod, "GraphGraph")
       .def(
           "__init__",
+          [](GraphGraph *self, core::builder::GraphBuilder &builder) {
+            new (self) GraphGraph(builder);
+          },
+          nb::arg("builder"), nb::keep_alive<1, 2>())
+      .def(
+          "__init__",
           [](GraphGraph *self, core::builder::GraphBuilder &builder, nb::iterable patterns) {
             std::vector<std::shared_ptr<PatternOptimization>> owned;
             for (nb::handle pattern : patterns) {

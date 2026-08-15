@@ -44,19 +44,32 @@ std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::str
 NB_MODULE(_onnxpypatterns, m) {
   nb::module_::import_("onnx_light.onnx_py._onnxpyprotoop");
   nb::module_::import_("onnx_light.onnx_py._onnxpycore");
+  onnx_patterns::RegisterPatterns();
 
   m.doc() = "Concrete ONNX graph-rewriting patterns.";
 
-  nb::class_<onnx_patterns::CastPattern, core::builder::PatternOptimization>(m, "CastPattern")
+  nb::class_<onnx_patterns::CastPattern, core::builder::PatternOptimization>(
+      m, "CastPattern",
+      "Replaces a type-preserving ``Cast(to=T)`` with ``Identity``.\n\n"
+      "``x:T -> Cast(to=T) -> y:T`` becomes ``x:T -> Identity -> y:T``.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
-  nb::class_<onnx_patterns::CastCastPattern, core::builder::PatternOptimization>(m,
-                                                                                 "CastCastPattern")
+  nb::class_<onnx_patterns::CastCastPattern, core::builder::PatternOptimization>(
+      m, "CastCastPattern",
+      "Collapses two consecutive compatible Cast nodes.\n\n"
+      "``x:A -> Cast(B) -> Cast(C) -> y:C`` becomes one safe ``Cast(C)`` "
+      "or ``Identity``.")
       .def(nb::init<int>(), nb::arg("priority") = 1);
   nb::class_<onnx_patterns::CastCastBinaryPattern, core::builder::PatternOptimization>(
-      m, "CastCastBinaryPattern")
+      m, "CastCastBinaryPattern",
+      "Moves matching floating-point input Cast nodes after a binary operation.\n\n"
+      "``Cast(x), Cast(y) -> Binary`` becomes ``Binary(x, y) -> Cast`` when "
+      "precision and use guards allow it.")
       .def(nb::init<int>(), nb::arg("priority") = 1);
   nb::class_<onnx_patterns::CastOpCastPattern, core::builder::PatternOptimization>(
-      m, "CastOpCastPattern")
+      m, "CastOpCastPattern",
+      "Moves a unary or binary operation to the result Cast type.\n\n"
+      "Compatible input Cast nodes and the trailing result Cast are removed or "
+      "relocated while preserving shared outputs.")
       .def(nb::init<int>(), nb::arg("priority") = 1);
 
   m.def(

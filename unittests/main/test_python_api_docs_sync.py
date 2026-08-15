@@ -48,8 +48,7 @@ class TestPythonApiDocsSync(unittest.TestCase):
 
     def _assert_automodule_uses_members(self, doc_index: str, module: str) -> None:
         text = (self.ROOT / doc_index).read_text(encoding="utf-8")
-        self.assertIn(f".. automodule:: {module}", text)
-        self.assertIn("    :members:", text)
+        self.assertIn(f".. automodule:: {module}\n    :members:", text)
 
     def test_root_api_index_includes_public_modules(self):
         documented = self._read_toctree_entries(self.ROOT / "docs/api/python/index.rst")

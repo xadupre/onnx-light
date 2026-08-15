@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
 
+from ..onnx_lib import GraphProto, ModelProto
 from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
 from ..onnx_py import _onnxpypatterns as _patterns  # type: ignore[attr-defined]
-from .graph_builder import GraphBuilder, _default_schema_lookup
+from .graph_builder import GraphBuilder, SchemaLookup, _default_schema_lookup
 
 PatternOptimization = _C.PatternOptimization
 MatchResult = _C.MatchResult
@@ -31,7 +31,9 @@ def standard_patterns(names: Iterable[str] | None = None) -> list[PatternOptimiz
     return [_patterns.create_pattern(name) for name in selected]
 
 
-_GLOBAL_PATTERNS = {pattern.name: pattern for pattern in standard_patterns()}
+_GLOBAL_PATTERNS: dict[str, PatternOptimization] = {
+    pattern.name: pattern for pattern in standard_patterns()
+}
 
 
 def register_pattern(pattern: PatternOptimization) -> None:
@@ -100,7 +102,11 @@ class GraphGraph(_C.GraphGraph):
         super().__init__(builder, list(selected.values()))
 
 
-def replay(model: Any, rewrites: Iterable[LocalRewriting], schema_lookup=_default_schema_lookup):
+def replay(
+    model: ModelProto,
+    rewrites: Iterable[LocalRewriting],
+    schema_lookup: SchemaLookup | None = _default_schema_lookup,
+) -> GraphProto:
     """Replays captured rewrites and returns the resulting graph."""
     return _C.replay(model, list(rewrites), schema_lookup)
 

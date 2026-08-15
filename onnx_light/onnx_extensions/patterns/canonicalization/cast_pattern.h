@@ -8,7 +8,14 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
-/// Canonicalizes a Cast to Identity when its input already has the target type.
+/**
+ * Canonicalizes a Cast to Identity when its input already has the target type.
+ *
+ * @code
+ * Before:  x:T -- Cast(to=T) --> y:T
+ * After:   x:T ---- Identity ---> y:T
+ * @endcode
+ */
 class CastPattern final : public core::builder::PatternOptimization {
 public:
   /// Creates the pattern with the given optimization priority.

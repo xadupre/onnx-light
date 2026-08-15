@@ -8,7 +8,22 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
-/// Moves an operation from a temporary floating-point type to its result type.
+/**
+ * Moves an operation from a temporary floating-point type to its result type.
+ *
+ * @code
+ * Before:  x:C -----------------+
+ *                               +-- Op:C -- Cast(to=R) --> z:R
+ *          y:R -- Cast(to=C) ---+
+ *
+ * After:   x:C -- Cast(to=R) ---+
+ *                               +-- Op:R -----------------> z:R
+ *          y:R -----------------+
+ * @endcode
+ *
+ * Inputs already produced in ``R`` lose their Cast; other inputs gain one.
+ * The unary case follows the same transformation with a single input.
+ */
 class CastOpCastPattern final : public core::builder::PatternOptimization {
 public:
   /// Creates the pattern with the given optimization priority.

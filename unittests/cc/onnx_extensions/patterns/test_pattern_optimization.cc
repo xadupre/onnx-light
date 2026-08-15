@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/kernel_dispatch_table.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_extensions/patterns/canonicalization/cast_cast_binary_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/cast_cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
@@ -671,6 +672,7 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
   const std::vector<std::string> names = core::builder::RegisteredPatternNames();
   EXPECT_EQ(std::count(names.begin(), names.end(), "Cast"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "CastCast"), 1);
+  EXPECT_EQ(std::count(names.begin(), names.end(), "CastCastBinary"), 1);
 
   onnx_patterns::RegisterPatterns();
   EXPECT_EQ(core::builder::RegisteredPatternNames(), names);
@@ -684,8 +686,13 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
       std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
         return dynamic_cast<onnx_patterns::CastCastPattern *>(pattern.get()) != nullptr;
       });
+  const bool found_cast_cast_binary =
+      std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
+        return dynamic_cast<onnx_patterns::CastCastBinaryPattern *>(pattern.get()) != nullptr;
+      });
   EXPECT_TRUE(found_cast);
   EXPECT_TRUE(found_cast_cast);
+  EXPECT_TRUE(found_cast_cast_binary);
 }
 
 } // namespace Test

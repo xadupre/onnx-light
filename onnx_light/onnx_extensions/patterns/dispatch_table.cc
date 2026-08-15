@@ -8,6 +8,7 @@
 
 #include "onnx_core/builder/pattern_registry.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
@@ -28,6 +29,10 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("CastOpCast",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<CastOpCastPattern>();
+                                   });
+    core::builder::RegisterPattern("ClipClip",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ClipClipPattern>();
                                    });
     return true;
   }();

@@ -94,6 +94,10 @@ requests:
      - Exposes optimizer queries, rewrites, reports, replay, and concrete Cast
        patterns; supports global, builder-local, and graph-local Python pattern
        registration with recursive lifetime and exception propagation.
+   * - `PR #4455 <https://github.com/xadupre/onnx-light/pull/4455>`_
+     - Consecutive-Clip canonicalization
+     - Ports ``ClipClipPattern``, merging two Clip nodes with complementary
+       minimum and maximum bounds, with C++ and Python selection tests.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -584,7 +588,9 @@ Implementation order
     added. ``CastCastBinaryPattern`` starts the elementary canonicalization
     batch in `PR #4432 <https://github.com/xadupre/onnx-light/pull/4432>`_;
     ``CastOpCastPattern`` follows in
-    `PR #4433 <https://github.com/xadupre/onnx-light/pull/4433>`_.
+    `PR #4433 <https://github.com/xadupre/onnx-light/pull/4433>`_, and
+    ``ClipClipPattern`` continues it in
+    `PR #4455 <https://github.com/xadupre/onnx-light/pull/4455>`_.
 
 Remaining pattern batches
 +++++++++++++++++++++++++
@@ -613,16 +619,15 @@ beside its patterns; only genuinely cross-family graph queries belong in
 ``detail`` directory.
 
 The upstream default list currently contains 104 enabled patterns.
-``CastCastPattern``, ``CastPattern``, ``CastCastBinaryPattern``, and
-``CastOpCastPattern`` are already covered, leaving 100
+``CastCastPattern``, ``CastPattern``, ``CastCastBinaryPattern``,
+``CastOpCastPattern``, and ``ClipClipPattern`` are already covered, leaving 99
 patterns. They are grouped into nine cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;
 this keeps reviews and ``git bisect`` useful without creating 100 pull
 requests. Commented-out, non-default upstream patterns are outside this plan.
 
-#. **Elementary canonicalization (7 patterns remaining).**
-   ``ClipClipPattern``,
+#. **Elementary canonicalization (6 patterns remaining).**
    ``ConstantToInitializerPattern``, ``ConvBiasNullPattern``,
    ``PadConvPattern``, ``DropoutPattern``, ``IdentityPattern``, and
    ``NotNotPattern``.
@@ -711,3 +716,5 @@ Pull requests
 * `PR #4433 <https://github.com/xadupre/onnx-light/pull/4433>`_:
   ``CastOpCastPattern`` with guarded type migration and shared-output
   preservation.
+* `PR #4455 <https://github.com/xadupre/onnx-light/pull/4455>`_:
+  ``ClipClipPattern`` merging two Clip nodes with complementary bounds.

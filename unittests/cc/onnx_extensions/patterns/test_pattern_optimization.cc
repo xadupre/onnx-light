@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 
 #include "onnx_helper.h"
@@ -672,6 +673,7 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
   EXPECT_EQ(std::count(names.begin(), names.end(), "CastCast"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "CastCastBinary"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "CastOpCast"), 1);
+  EXPECT_EQ(std::count(names.begin(), names.end(), "ClipClip"), 1);
 
   onnx_patterns::RegisterPatterns();
   EXPECT_EQ(core::builder::RegisteredPatternNames(), names);
@@ -693,10 +695,15 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
       std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
         return dynamic_cast<onnx_patterns::CastOpCastPattern *>(pattern.get()) != nullptr;
       });
+  const bool found_clip_clip =
+      std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
+        return dynamic_cast<onnx_patterns::ClipClipPattern *>(pattern.get()) != nullptr;
+      });
   EXPECT_TRUE(found_cast);
   EXPECT_TRUE(found_cast_cast);
   EXPECT_TRUE(found_cast_cast_binary);
   EXPECT_TRUE(found_cast_op_cast);
+  EXPECT_TRUE(found_clip_clip);
 }
 
 } // namespace Test

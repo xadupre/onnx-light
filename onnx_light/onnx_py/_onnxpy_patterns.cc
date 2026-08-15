@@ -5,6 +5,7 @@
 #include "onnx_core/builder/pattern_optimization.h"
 #include "onnx_core/builder/pattern_registry.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 
 #include <memory>
@@ -35,6 +36,9 @@ std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::str
   }
   if (name == "CastOpCast") {
     return std::make_shared<onnx_patterns::CastOpCastPattern>(priority.value_or(1));
+  }
+  if (name == "ClipClip") {
+    return std::make_shared<onnx_patterns::ClipClipPattern>(priority.value_or(1));
   }
   throw std::invalid_argument("Unknown ONNX pattern '" + name + "'.");
 }
@@ -70,6 +74,12 @@ NB_MODULE(_onnxpypatterns, m) {
       "Moves a unary or binary operation to the result Cast type.\n\n"
       "Compatible input Cast nodes and the trailing result Cast are removed or "
       "relocated while preserving shared outputs.")
+      .def(nb::init<int>(), nb::arg("priority") = 1);
+  nb::class_<onnx_patterns::ClipClipPattern, core::builder::PatternOptimization>(
+      m, "ClipClipPattern",
+      "Merges two consecutive Clip nodes with complementary bounds.\n\n"
+      "``Clip(x, min) -> Clip(x1, , max)`` becomes one ``Clip(x, min, max)`` "
+      "when one Clip defines the minimum and the other the maximum.")
       .def(nb::init<int>(), nb::arg("priority") = 1);
 
   m.def(

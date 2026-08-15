@@ -79,6 +79,11 @@ Registered standard patterns
      - Supported unary and binary operators
      - Moves an operation to its result type and removes or relocates its
        surrounding Cast nodes.
+   * - :class:`ClipClipPattern` / ``ClipClip``
+     - 1
+     - ``Clip``
+     - Merges two consecutive Clip nodes into one when one defines the minimum
+       bound and the other the maximum bound.
 
 The runtime list is available through :func:`standard_pattern_names`.
 

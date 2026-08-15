@@ -50,7 +50,10 @@ class NegNegPattern(optim.PatternOptimization):
 class TestPatternOptimization(ExtTestCase):
     def test_python_pattern_rewrites_and_reports_rejections(self):
         model = _double_neg_model()
-        optimized, rewrites, report = optim.optimize(model, [NegNegPattern()], report=True)
+        builder = optim.GraphBuilder(model)
+        graph = optim.GraphGraph(builder, [NegNegPattern()])
+        rewrites, report = graph.optimize(report=True)
+        optimized = builder.to_onnx("model")
 
         self.assertEqual([node.op_type for node in optimized.graph.node], ["Identity"])
         self.assertEqual(len(rewrites), 1)
@@ -100,7 +103,10 @@ class TestPatternOptimization(ExtTestCase):
             "  y = Cast <to=1> (x)\n"
             "}\n"
         )
-        optimized, rewrites = optim.optimize(model, ["Cast"])
+        builder = optim.GraphBuilder(model)
+        graph = optim.GraphGraph(builder, optim.standard_patterns(["Cast"]))
+        rewrites = graph.optimize()
+        optimized = builder.to_onnx("model")
 
         self.assertEqual(optim.registered_pattern_names()[0], "Cast")
         self.assertIsInstance(optim.CastPattern(), optim.PatternOptimization)
@@ -138,7 +144,9 @@ class TestPatternOptimization(ExtTestCase):
         )
         model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
 
-        _, rewrites, report = optim.optimize(model, [NegNegPattern()], report=True)
+        builder = optim.GraphBuilder(model)
+        graph = optim.GraphGraph(builder, [NegNegPattern()])
+        rewrites, report = graph.optimize(report=True)
 
         self.assertEqual(len(rewrites), 1)
         self.assertEqual(rewrites[0].graph_path, ["then_branch"])

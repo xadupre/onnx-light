@@ -484,9 +484,10 @@ preserve the core/extension boundary:
 * ``_onnxpypatterns`` links ``lib_onnx_patterns`` and exposes the concrete ONNX
   classes such as ``CastPattern`` without making ``_onnxpycore`` depend on the
   extension library;
-* the high-level Python API accepts either concrete C++ patterns, Python
-  subclasses, or registered pattern names and returns the optimized model,
-  replayable rewrites, and optional statistics.
+* ``GraphGraph`` accepts concrete C++ patterns and Python subclasses, while
+  ``standard_patterns`` resolves registered names before construction;
+  optimization always runs through ``GraphGraph.optimize`` and the optimized
+  model is produced by the associated ``GraphBuilder``.
 
 A custom Python pattern follows the same contract as a C++ pattern:
 
@@ -525,11 +526,11 @@ pattern for the full optimization, including recursive subgraph passes, and
 propagates Python exceptions without converting them into a successful
 no-match result.
 
-Python-defined patterns are supplied explicitly to ``GraphGraph`` or the
-high-level ``optimize`` helper rather than stored in the process-global C++
-registry. This avoids retaining Python callables past interpreter shutdown.
-The bindings still expose registered C++ pattern names and selection so Python
-callers can combine the standard library with custom patterns.
+Python-defined patterns are supplied explicitly to ``GraphGraph`` rather than
+stored in the process-global C++ registry. This avoids retaining Python
+callables past interpreter shutdown. The bindings still expose registered C++
+pattern names and selection so Python callers can combine the standard library
+with custom patterns.
 
 Tests cover a Python-only rewrite, positive and rejected matches, exact replay,
 recursive subgraphs, callback exception propagation, pattern lifetime after

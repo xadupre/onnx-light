@@ -465,6 +465,72 @@ keeping aggregation and formatting out of the default path:
     std::vector<LocalRewriting> rewrites = graph.Optimize(-1, &report);
     std::cout << report.ToString() << std::endl;
 
+Python bindings and custom patterns
++++++++++++++++++++++++++++++++++++
+
+The optimizer must also be usable and extensible from Python. The bindings
+preserve the core/extension boundary:
+
+* ``_onnxpycore.builder`` exposes ``GraphGraph``, ``PatternOptimization``,
+  ``MatchResult``, ``LocalRewriting``, ``OptimizationReport``, and the graph
+  structure, shape, type, and constant queries needed by a matcher;
+* a ``PatternOptimization`` nanobind trampoline forwards ``fast_op_type``,
+  ``match``, and ``apply`` to Python, reacquiring the GIL for every callback;
+* ``_onnxpypatterns`` links ``lib_onnx_patterns`` and exposes the concrete ONNX
+  classes such as ``CastPattern`` without making ``_onnxpycore`` depend on the
+  extension library;
+* the high-level Python API accepts either concrete C++ patterns, Python
+  subclasses, or registered pattern names and returns the optimized model,
+  replayable rewrites, and optional statistics.
+
+A custom Python pattern follows the same contract as a C++ pattern:
+
+.. code-block:: python
+
+    class NegNegPattern(PatternOptimization):
+        def __init__(self):
+            super().__init__(priority=1, name="NegNeg")
+
+        def fast_op_type(self):
+            return {"Neg"}
+
+        def match(self, graph, node):
+            previous = graph.node_before(node.input[0])
+            if previous is None or previous.op_type != "Neg":
+                return self.no_match(node, "the input is not produced by Neg")
+            return self.result([previous, node], insert_at=node)
+
+        def apply(self, graph, nodes):
+            previous, node = nodes
+            return [
+                make_node("Identity", [previous.input[0]], list(node.output))
+            ]
+
+    builder = GraphBuilder(model)
+    optimizer = GraphGraph(
+        builder,
+        patterns=[CastPattern(), NegNegPattern()],
+    )
+    rewrites, report = optimizer.optimize(report=True)
+
+``GraphGraph`` and matched ``NodeProto`` objects are borrowed views valid only
+while the owning builder and callback are alive. Replacement nodes are copied
+back into C++ before the callback returns. The optimizer retains every Python
+pattern for the full optimization, including recursive subgraph passes, and
+propagates Python exceptions without converting them into a successful
+no-match result.
+
+Python-defined patterns are supplied explicitly to ``GraphGraph`` or the
+high-level ``optimize`` helper rather than stored in the process-global C++
+registry. This avoids retaining Python callables past interpreter shutdown.
+The bindings still expose registered C++ pattern names and selection so Python
+callers can combine the standard library with custom patterns.
+
+Tests cover a Python-only rewrite, positive and rejected matches, exact replay,
+recursive subgraphs, callback exception propagation, pattern lifetime after
+garbage collection, registered C++ pattern selection, and mixed C++/Python
+pattern ordering by priority.
+
 Implementation order
 ++++++++++++++++++++
 
@@ -493,7 +559,11 @@ Implementation order
 9. Document the core/extension boundary, registration and selection APIs,
    linking requirements, and a custom-pattern example
    (`PR #4427 <https://github.com/xadupre/onnx-light/pull/4427>`_).
-10. Port the pattern library incrementally, one pattern per commit and several
+10. Add Python bindings for the optimizer classes and reports, expose the
+    standard ONNX pattern classes through ``_onnxpypatterns``, and support
+    Python-defined ``PatternOptimization`` subclasses passed explicitly to an
+    optimization run.
+11. Port the pattern library incrementally, one pattern per commit and several
     related commits per pull request. Every pattern has a C++ test that checks
     the rewritten graph against the expected one. The first port,
     ``CastPattern``, is

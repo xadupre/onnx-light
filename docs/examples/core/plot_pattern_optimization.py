@@ -38,7 +38,7 @@ from onnx_light.tools import pretty_onnx
 
 #####################################
 # Build a model with redundant nodes
-# +++++++++++++++++++++++++++++++++
+# ++++++++++++++++++++++++++++++++++
 #
 # ``x`` is cast to ``float`` (a no-op, since it is already ``float``) and then
 # negated twice before being cast back. The standard ``Cast`` pattern removes
@@ -58,7 +58,7 @@ print(pretty_onnx(model))
 
 #####################################
 # Run the standard patterns and read the statistics
-# ++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++++++++++++++++++++++++++++++
 #
 # :meth:`~onnx_light.onnx_core.optimization.GraphGraph.optimize` returns the
 # list of applied rewrites; passing ``report=True`` additionally returns an
@@ -68,9 +68,9 @@ print(pretty_onnx(model))
 builder = GraphBuilder(model)
 graph = GraphGraph(builder, standard_patterns(["Cast"]))
 rewrites, report = graph.optimize(report=True)
-optimized = builder.to_onnx("optimized")
+optimized_graph = builder.build_graph()
 
-print(pretty_onnx(optimized))
+print(pretty_onnx(builder.to_onnx("model")))
 print(report)
 
 for pattern_stats in report.patterns:
@@ -93,12 +93,12 @@ for rewrite in rewrites:
     print(rewrite)
 
 replayed_graph = replay(model, rewrites)
-assert replayed_graph.SerializeToString() == optimized.graph.SerializeToString()
+assert replayed_graph.SerializeToString() == optimized_graph.SerializeToString()
 print("replay reproduced the optimized graph")
 
 #####################################
 # Add a custom pattern
-# +++++++++++++++++++++
+# ++++++++++++++++++++
 #
 # A pattern derives from
 # :class:`~onnx_light.onnx_core.optimization.PatternOptimization` and
@@ -133,7 +133,7 @@ class NegNegPattern(PatternOptimization):
 builder = GraphBuilder(model)
 graph = GraphGraph(builder, [*standard_patterns(["Cast"]), NegNegPattern()])
 rewrites = graph.optimize()
-fully_optimized = builder.to_onnx("fully_optimized")
+fully_optimized = builder.to_onnx("model")
 
 print(pretty_onnx(fully_optimized))
 print([rewrite.pattern_name for rewrite in rewrites])

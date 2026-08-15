@@ -3,7 +3,7 @@
 :html_theme.sidebar_secondary.remove:
 
 How to add a custom graph-rewriting pattern and set its priority
-==================================================================
+================================================================
 
 This page shows how to write and register a graph-rewriting **pattern** —
 the building block of graph optimization

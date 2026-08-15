@@ -282,6 +282,10 @@ AllocationHandle IOArena::ExportHandle(RawBuffer *buf) {
 }
 
 AllocationHandle IOArena::ExportHandle(AllocationHandle &&handle) {
+  if (!handle || handle.holds_lease()) {
+    throw std::invalid_argument(
+        "IOArena::ExportHandle: handle must own a plain allocator-backed buffer.");
+  }
   return AllocationHandle(this, Export(handle.Release()));
 }
 

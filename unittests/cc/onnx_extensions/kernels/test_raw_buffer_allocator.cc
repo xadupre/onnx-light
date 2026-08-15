@@ -522,6 +522,23 @@ TEST(IOArenaExportHandle, MovePreservesLeaseOwnership) {
   EXPECT_EQ(arena->retained_count(), 1u);
 }
 
+// ExportHandle(AllocationHandle&&) rejects an empty or already lease-backed
+// handle instead of silently mis-exporting a null buffer.
+TEST(IOArenaExportHandle, RejectsEmptyOrLeaseBackedHandle) {
+  auto arena = IOArena::Create(1);
+
+  AllocationHandle empty;
+  EXPECT_THROW(arena->ExportHandle(std::move(empty)), std::invalid_argument);
+
+  RawBuffer *buffer = arena->Allocate(16);
+  AllocationHandle leased = arena->ExportHandle(buffer);
+  ASSERT_TRUE(leased.holds_lease());
+  EXPECT_THROW(arena->ExportHandle(std::move(leased)), std::invalid_argument);
+  // The rejected handle keeps its lease intact.
+  EXPECT_TRUE(leased.holds_lease());
+  EXPECT_EQ(arena->leased_count(), 1u);
+}
+
 // A graph output allocated from an IOArena can have its allocation released
 // from the tensor and exported as a self-owning handle. The handle then keeps
 // the arena's storage alive even after the arena's other owner is destroyed,

@@ -335,8 +335,9 @@ public:
    * entry point for exporting a graph output that a :cpp:class:`Tensor` released
    * (see :cpp:func:`Tensor::ReleaseAllocation`) into a NumPy capsule.
    *
-   * @throws std::invalid_argument if the buffer is not live in this arena or has
-   *         already been exported.
+   * @throws std::invalid_argument if ``handle`` is empty or already lease-backed,
+   *         or if its buffer is not live in this arena or has already been
+   *         exported.
    */
   AllocationHandle ExportHandle(AllocationHandle &&handle);
 

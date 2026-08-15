@@ -51,12 +51,14 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+/// \cond DOXYGEN_EXCLUDE_INTERNAL_LINKAGE
 // internal/private API
 static inline std::string toVarName(size_t i) {
   std::ostringstream oss;
   oss << "_v_" << i;
   return oss.str();
 }
+/// \endcond
 
 /**
  * @brief Lightweight computation graph that owns all its nodes and values.
@@ -163,6 +165,7 @@ enum class AttributeKind : uint8_t {
   tps
 };
 
+/// \cond DOXYGEN_EXCLUDE_INTERNAL_LINKAGE
 /**
  * @brief Converts an @ref AttributeKind enumerator to its string name.
  * @param kind The attribute kind.
@@ -175,6 +178,7 @@ static inline const char *toString(AttributeKind kind) {
   ONNX_ASSERT(size_t(kind) < std::size(names))
   return names[static_cast<int>(kind)];
 }
+/// \endcond
 
 /**
  * @brief Abstract base class for a named attribute value stored on a @ref Node.
@@ -408,12 +412,14 @@ struct Use final {
   size_t offset;
 };
 
+/// \cond DOXYGEN_EXCLUDE_INTERNAL_LINKAGE
 /**
  * @brief Returns true if two @ref Use records refer to the same (node, offset) pair.
  */
 static inline bool operator==(const Use &a, const Use &b) {
   return a.user == b.user && a.offset == b.offset;
 }
+/// \endcond
 
 /** @brief Ordered list of @ref Node pointers. */
 using node_list = std::vector<Node *>;

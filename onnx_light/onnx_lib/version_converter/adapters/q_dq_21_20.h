@@ -15,9 +15,11 @@
 
 namespace ONNX_LIGHT_NAMESPACE::version_conversion {
 
+/// \cond DOXYGEN_EXCLUDE_INTERNAL_LINKAGE
 static const std::vector<TensorProto_DataType> q_dq_20_unallowed_types = {
     TensorProto_DataType_UINT16, TensorProto_DataType_INT16, TensorProto_DataType_UINT4,
     TensorProto_DataType_INT4};
+/// \endcond
 
 class QuantizeLinear_21_20 final : public TypeRestriction {
 public:

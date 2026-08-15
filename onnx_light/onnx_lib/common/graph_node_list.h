@@ -43,10 +43,12 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+/// \cond DOXYGEN_EXCLUDE_INTERNAL_LINKAGE
 /// Direction index for forward (next-pointer) traversal.
 static constexpr size_t kNextDirection = 0;
 /// Direction index for reverse (previous-pointer) traversal.
 static constexpr size_t kPrevDirection = 1;
+/// \endcond
 
 template <typename T> struct generic_graph_node_list;
 
@@ -230,6 +232,7 @@ private:
   size_t d; ///< Traversal direction: 0 = forward, 1 = reverse.
 };
 
+/// \cond DOXYGEN_EXCLUDE_INTERNAL_LINKAGE
 /**
  * @brief Equality comparison for two iterators.
  *
@@ -259,6 +262,7 @@ static inline bool operator!=(generic_graph_node_list_iterator<T> a,
                               generic_graph_node_list_iterator<T> b) {
   return *a != *b;
 }
+/// \endcond
 
 } // namespace ONNX_LIGHT_NAMESPACE
 

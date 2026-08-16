@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 
 #include <cstddef>
 #include <map>

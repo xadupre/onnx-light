@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
-#include "onnx_core/runtime/simple_map.h"
+#include "onnx_core/runtime/memory/simple_map.h"
 #include "onnx_extensions/backend_test/cases/traditionalml/include_traditionalml_cases.h"
 #include "onnx_extensions/kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 

@@ -4,10 +4,10 @@
 
 #pragma once
 
-#include "onnx_core/runtime/kernel_context.h"
-#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
-#include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
 #include <string>

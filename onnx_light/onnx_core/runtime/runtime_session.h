@@ -4,10 +4,10 @@
 
 #pragma once
 
-#include "onnx_core/runtime/kernel_dispatch_table.h"
-#include "onnx_core/runtime/kernel_tuning.h"
+#include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/runtime_context.h"
-#include "onnx_core/runtime/runtime_parameters.h"
+#include "onnx_core/runtime/tuning/kernel_tuning.h"
+#include "onnx_core/runtime/tuning/runtime_parameters.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 

@@ -34,12 +34,12 @@
  */
 
 #include "onnx_core/compute/execution_plan.h"
-#include "onnx_core/runtime/kernel_context.h"
-#include "onnx_core/runtime/kernel_dispatch_table.h"
-#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
-#include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_proto/onnx.h"

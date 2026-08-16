@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
-#include "onnx_core/runtime/cast_float8.h"
-#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/kernels/cast_float8.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/quantization/include_quantization_cases.h"
 #include "onnx_extensions/kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -20,7 +20,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
 // Tensor builders and bit packing helpers are provided by
-// ``onnx_core/runtime/cast_helper.h`` (Uint16ZeroPoint,
+// ``onnx_core/runtime/kernels/cast_helper.h`` (Uint16ZeroPoint,
 // Int16ZeroPoint, MakeFloat8Tensor, onnx_kernels::kernel::Pack2Bit,
 // kernel::Pack4Bit, MakeSubByteTensor,
 // kernel::FloatToFloat4E2M1Nibble, MakeFloat4E2M1Tensor).

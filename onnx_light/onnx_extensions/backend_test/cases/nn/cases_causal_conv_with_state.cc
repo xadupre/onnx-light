@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
-#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -28,7 +28,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
 // The FLOAT16 tensor builder is provided by
-// ``onnx_core/runtime/cast_helper.h`` as ``MakeFloat16Tensor``.
+// ``onnx_core/runtime/kernels/cast_helper.h`` as ``MakeFloat16Tensor``.
 
 NodeProto MakeCausalConvNode(const std::vector<std::string> &inputs,
                              const std::vector<std::string> &outputs) {

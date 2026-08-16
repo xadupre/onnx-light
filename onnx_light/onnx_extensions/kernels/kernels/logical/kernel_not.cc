@@ -4,8 +4,8 @@
 
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
 
-#include "onnx_core/runtime/node_helpers.h"
-#include "onnx_core/runtime/parallel_for.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <array>
 #include <cstdint>

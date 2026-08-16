@@ -14,7 +14,7 @@
  * The kernel implementations themselves stay in ``onnx_kernels``, one per
  * ``onnx_kernels/kernels/<domain>/kernel_<name>.cc`` file (except the
  * control-flow kernels ``If``/``Loop``/``Scan``, which live in
- * ``onnx_core/runtime/controlflow`` since the runtime dispatcher needs to
+ * ``onnx_core/runtime/kernels/controlflow`` since the runtime dispatcher needs to
  * invoke them directly while recursively evaluating sub-graphs), and this
  * translation unit is the single place that wires all of them into the
  * shared registry via :cpp:func:`RegisterKernelFunctions`. Keeping the

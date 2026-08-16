@@ -10,7 +10,7 @@
 #include <string>
 
 #include "onnx_core/graph/graph_manipulations.h"
-#include "onnx_core/runtime/run_nodes_internal.h"
+#include "onnx_core/runtime/kernels/run_nodes_internal.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx_helper.h"
 

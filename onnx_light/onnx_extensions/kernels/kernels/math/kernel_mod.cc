@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/cast_helper.h"
-#include "onnx_core/runtime/elementwise_helpers.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
+#include "onnx_core/runtime/kernels/elementwise_helpers.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
-#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <array>
 #include <cmath>
@@ -110,7 +110,7 @@ void ModInPlaceFloat(const char *dtype_name, int32_t dtype, const Tensor &x, con
 }
 
 // IEEE-754 binary16 helpers for the FLOAT16 dispatch path are provided by
-// ``onnx_core/runtime/cast_helper.h`` (``FloatToFloat16Bits`` /
+// ``onnx_core/runtime/kernels/cast_helper.h`` (``FloatToFloat16Bits`` /
 // ``Float16BitsToFloat``). ``np.fmod`` on float16 inputs yields the same
 // bit pattern as round-tripping through float32 fmod, so this conversion
 // path matches the upstream ``test_mod_mixed_sign_float16`` reference.

@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
-#include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
-#include "onnx_core/runtime/random.h"
+#include "onnx_core/runtime/kernels/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/kernels/random.h"
 #include "onnx_extensions/backend_test/cases/controlflow/include_controlflow_cases.h"
 
 #include <algorithm>

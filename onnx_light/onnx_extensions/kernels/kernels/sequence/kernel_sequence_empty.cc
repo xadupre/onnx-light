@@ -4,7 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 
-#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
 #include <cstdint>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {

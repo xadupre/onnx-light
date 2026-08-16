@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/random.h"
+#include "onnx_core/runtime/kernels/random.h"
 
 #include "onnx_core/compute/raw_buffer_allocator.h"
 

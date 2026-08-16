@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/kernel_tuning.h"
-#include "onnx_core/runtime/kernel_tuning_cache.h"
-#include "onnx_core/runtime/parallel_for.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
+#include "onnx_core/runtime/tuning/kernel_tuning.h"
+#include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
 
 #include <gtest/gtest.h>
 

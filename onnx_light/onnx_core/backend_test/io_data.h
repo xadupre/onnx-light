@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "onnx_core/runtime/simple_map.h"
-#include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_core/runtime/memory/simple_map.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 
 #include <vector>
 

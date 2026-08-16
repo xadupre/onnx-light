@@ -440,11 +440,21 @@ nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
   nb::object owner;
   uint8_t *data = const_cast<uint8_t *>(tensor.bytes());
   if (tensor.has_allocation()) {
-    auto *array_owner = new AllocatedNumpyOwner{nb::cast(&rt, nb::rv_policy::reference),
-                                                tensor.ReleaseAllocation()};
-    owner = nb::capsule(array_owner, [](void *pointer) noexcept {
-      delete static_cast<AllocatedNumpyOwner *>(pointer);
-    });
+    core::runtime::AllocationHandle handle = tensor.ReleaseAllocation();
+    if (auto *io_arena = dynamic_cast<core::runtime::IOArena *>(handle.owner());
+        io_arena != nullptr) {
+      handle = io_arena->ExportHandle(std::move(handle));
+      auto *array_owner = new core::runtime::AllocationHandle(std::move(handle));
+      owner = nb::capsule(array_owner, [](void *pointer) noexcept {
+        delete static_cast<core::runtime::AllocationHandle *>(pointer);
+      });
+    } else {
+      auto *array_owner =
+          new AllocatedNumpyOwner{nb::cast(&rt, nb::rv_policy::reference), std::move(handle)};
+      owner = nb::capsule(array_owner, [](void *pointer) noexcept {
+        delete static_cast<AllocatedNumpyOwner *>(pointer);
+      });
+    }
   } else if (data == tensor.data.data()) {
     auto *owned = new core::runtime::RawByteBuffer(tensor.data.release());
     data = owned->data();

@@ -110,8 +110,8 @@ class TestReferenceEvaluator(ExtTestCase):
         np.testing.assert_array_equal(first, np.array([11.0, 22.0, 33.0], dtype=np.float32))
         np.testing.assert_array_equal(second, np.array([44.0, 55.0, 66.0], dtype=np.float32))
 
-    def test_allocator_output_keeps_runtime_and_allocator_alive(self):
-        """Keeps the allocator alive through the exported array owner."""
+    def test_allocator_output_remains_live_after_evaluator_destruction(self):
+        """Keeps the exported allocation alive after evaluator destruction."""
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         evaluator = ReferenceEvaluator(model, allocator=runtime.SimpleRawBufferAllocator(4))
         (output,) = evaluator.run(

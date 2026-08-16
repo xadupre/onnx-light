@@ -4,9 +4,11 @@
 
 #include "onnx_extensions/patterns/canonicalization/constant_pattern.h"
 
+#include <cstddef>
 #include <string>
 
 #include "onnx_core/builder/graph_graph.h"
+#include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
@@ -18,6 +20,32 @@ using core::builder::BuilderError;
 bool IsDefaultConstant(const NodeProto &node) {
   return node.op_type().value() == "Constant" &&
          NormaliseDomain(node.domain().value()) == kDefaultOnnxDomain && node.output_size() == 1;
+}
+
+// Re-encodes a numeric constant tensor so its payload lives in ``raw_data``, the
+// canonical form the constant folder materialises (see ProtoFromRuntimeTensor in
+// graph_builder.cc). The Identity node this pattern emits is folded away, and the
+// folder re-materialises the value as a ``raw_data`` initializer. Producing the
+// intermediate initializer in the same encoding lets the byte-strict initializer
+// deduplication collapse both copies into a single initializer instead of leaving
+// an orphaned duplicate. ``STRING`` tensors already share the ``string_data``
+// encoding with the folder, so they are copied unchanged.
+TensorProto CanonicaliseInitializer(const TensorProto &value, const std::string &name) {
+  if (static_cast<TensorProto::DataType>(value.data_type()) == TensorProto::DataType::STRING ||
+      value.has_raw_data()) {
+    TensorProto proto = value;
+    proto.set_name(name);
+    return proto;
+  }
+  const core::runtime::Tensor tensor = core::runtime::TensorFromProto(value);
+  TensorProto proto;
+  proto.set_name(name);
+  proto.set_data_type(value.data_type());
+  for (int i = 0; i < value.dims().size(); ++i) {
+    proto.add_dims(value.dims()[static_cast<std::size_t>(i)]);
+  }
+  proto.set_raw_data(tensor.bytes(), tensor.size_bytes());
+  return proto;
 }
 
 } // namespace
@@ -47,15 +75,13 @@ ConstantToInitializerPattern::Apply(core::builder::GraphGraph &graph,
     throw BuilderError(
         "ConstantToInitializerPattern::Apply received a non-materialisable Constant.");
   }
-  TensorProto initializer = *value;
   core::builder::GraphBuilder &builder = graph.Builder();
   const std::string base = node.output()[0].value() + "_cst2init";
   std::string init_name = base;
   for (int suffix = 0; builder.HasName(init_name); ++suffix) {
     init_name = base + "_" + std::to_string(suffix);
   }
-  initializer.set_name(init_name);
-  builder.MakeInitializer(initializer);
+  builder.MakeInitializer(CanonicaliseInitializer(*value, init_name));
 
   const std::string name = "ConstantToInitializerPattern--" + node.name().value();
   utils::RepeatedProtoField<NodeProto> replacements;

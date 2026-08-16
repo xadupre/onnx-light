@@ -223,6 +223,11 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(evaluator._io_allocator.leased_count, 1)
         np.testing.assert_array_equal(output, np.array([11.0, 22.0, 33.0], dtype=np.float32))
 
+        del output
+        gc.collect()
+        self.assertEqual(evaluator._io_allocator.leased_count, 0)
+        self.assertEqual(evaluator._io_allocator.retained_count, 1)
+
     def test_reference_evaluator_accepts_io_allocator_only(self):
         """Creates a default ExecutionArena when only an IOArena is provided."""
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
@@ -245,6 +250,11 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(io_arena.allocated_count, 0)
         self.assertEqual(io_arena.leased_count, 1)
         np.testing.assert_array_equal(output, np.array([11.0, 22.0, 33.0], dtype=np.float32))
+
+        del output
+        gc.collect()
+        self.assertEqual(io_arena.leased_count, 0)
+        self.assertEqual(io_arena.retained_count, 1)
 
     def test_metadata(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)

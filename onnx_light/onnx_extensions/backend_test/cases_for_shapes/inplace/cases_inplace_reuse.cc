@@ -22,7 +22,7 @@ constexpr const char *kNotUsedAfterMetadataKey = "onnx_light.not_used_after";
 
 } // namespace
 
-void RegisterInPlaceReuseCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterInPlaceReuseCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(14);
   const onnx_kernels::kernel::KernelContext ctx{opset};
   const onnx_kernels::kernel::Abs abs_kernel{ctx};

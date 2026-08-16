@@ -61,30 +61,10 @@ expressions::DimType &NodeMemoryProfileScalar(NodeMemoryProfile &profile, const 
   return std::get<expressions::DimType>(it->second);
 }
 
-const expressions::DimType &NodeMemoryProfileScalar(const NodeMemoryProfile &profile,
-                                                    const std::string &key) {
-  static const expressions::DimType zero = int64_t{0};
-  auto it = profile.find(key);
-  if (it == profile.end()) {
-    return zero;
-  }
-  return std::get<expressions::DimType>(it->second);
-}
-
 TaggedMemory &NodeMemoryProfileBucket(NodeMemoryProfile &profile, const std::string &key) {
   auto it = profile.find(key);
   if (it == profile.end()) {
     it = profile.emplace(key, TaggedMemory{}).first;
-  }
-  return std::get<TaggedMemory>(it->second);
-}
-
-const TaggedMemory &NodeMemoryProfileBucket(const NodeMemoryProfile &profile,
-                                            const std::string &key) {
-  static const TaggedMemory empty;
-  auto it = profile.find(key);
-  if (it == profile.end()) {
-    return empty;
   }
   return std::get<TaggedMemory>(it->second);
 }
@@ -131,7 +111,7 @@ ComputeContext::ComputeValueAndNodeTags(const GraphProto &graph) {
   CollectGraphSeedTags(graph, value_tags_);
   std::vector<const NodeProto *> nodes;
   nodes.reserve(graph.node().size());
-  for (int i = 0; i < graph.node().size(); ++i) {
+  for (std::size_t i = 0; i < graph.node().size(); ++i) {
     nodes.push_back(&graph.node()[i]);
   }
   InferNodesTags(nodes, value_tags_, node_tags_, this);
@@ -144,7 +124,7 @@ ComputeContext::ComputeValueAndNodeTags(const FunctionProto &function) {
   node_tags_.clear();
   std::vector<const NodeProto *> nodes;
   nodes.reserve(function.node().size());
-  for (int i = 0; i < function.node().size(); ++i) {
+  for (std::size_t i = 0; i < function.node().size(); ++i) {
     nodes.push_back(&function.node()[i]);
   }
   InferNodesTags(nodes, value_tags_, node_tags_, this);
@@ -207,7 +187,7 @@ void ComputeContext::AppendNodeConstant(const NodeProto &node, std::size_t node_
       ::ONNX_LIGHT_NAMESPACE::core::compute::IsNodeConstant(node, constant_values_);
   node_constant_[node_index] = is_constant ? ConstantInfo::kConstant : ConstantInfo::kNotConstant;
   if (is_constant) {
-    for (int o = 0; o < node.output().size(); ++o) {
+    for (std::size_t o = 0; o < node.output().size(); ++o) {
       const std::string &out = node.output(static_cast<std::size_t>(o));
       if (!out.empty()) {
         constant_values_.insert(out);
@@ -228,13 +208,13 @@ void ComputeContext::AppendNodeTags(const utils::RepeatedProtoField<NodeProto> &
   // Register the new node's producer/consumer edges so tag changes flowing out
   // of it (forward) or back into its inputs (backward) can re-queue the exact
   // set of dependent nodes without scanning the whole graph.
-  for (int i = 0; i < new_node.input().size(); ++i) {
+  for (std::size_t i = 0; i < new_node.input().size(); ++i) {
     const std::string &in = new_node.input(static_cast<std::size_t>(i));
     if (!in.empty()) {
       tag_consumers_[in].push_back(static_cast<int>(node_index));
     }
   }
-  for (int o = 0; o < new_node.output().size(); ++o) {
+  for (std::size_t o = 0; o < new_node.output().size(); ++o) {
     const std::string &out = new_node.output(static_cast<std::size_t>(o));
     if (!out.empty()) {
       tag_producer_node_.emplace(out, static_cast<int>(node_index));
@@ -458,7 +438,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   }
 
   std::unordered_map<std::string, LiveAllocation> alive;
-  for (int i = 0; i < graph.initializer().size(); ++i) {
+  for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
     const std::string name = graph.initializer()[i].name();
     if (name.empty() || !ctx.Has(name)) {
       continue;
@@ -471,7 +451,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     alive[name] = LiveAllocation{expressions::simplify_dim_type(*bytes, &simplified_dim_cache),
                                  MemoryValueSource::kInitializer, ValueTag(value_tags, name)};
   }
-  for (int i = 0; i < graph.input().size(); ++i) {
+  for (std::size_t i = 0; i < graph.input().size(); ++i) {
     const std::string name = graph.input()[i].name();
     if (name.empty() || alive.find(name) != alive.end() || !ctx.Has(name)) {
       continue;
@@ -716,7 +696,7 @@ const ShapesContext &ComputeContext::ComputeShapes(const ModelProto &model,
 const ShapesContext &ComputeContext::ComputeShapes(const FunctionProto &function,
                                                    const InputShapes &input_shapes) {
   shapes_.Clear();
-  for (int i = 0; i < function.opset_import().size(); ++i) {
+  for (std::size_t i = 0; i < function.opset_import().size(); ++i) {
     const OperatorSetIdProto &osi = function.opset_import()[i];
     shapes_.SetOpsetVersion(osi.domain(), static_cast<int>(osi.version()));
   }
@@ -741,7 +721,7 @@ ComputeContext::ComputeShapes(const utils::RepeatedProtoField<NodeProto> &nodes,
 const std::vector<int64_t> &ComputeContext::ComputePeakMemory(const GraphProto &graph,
                                                               Device device) {
   peak_memory_.assign(static_cast<std::size_t>(graph.node().size()), 0);
-  for (int i = 0; i < graph.node().size(); ++i) {
+  for (std::size_t i = 0; i < graph.node().size(); ++i) {
     const NodeProto &node = graph.node()[i];
     std::vector<SymShape> input_shapes;
     input_shapes.reserve(node.input().size());
@@ -778,7 +758,7 @@ void ComputeContext::WriteToGraph(GraphProto &graph) const {
   shapes_.ApplyInferredShapesToGraph(graph);
   WriteToMetadata(graph);
   if (peak_memory_.size() == static_cast<std::size_t>(graph.node().size())) {
-    for (int i = 0; i < graph.node().size(); ++i) {
+    for (std::size_t i = 0; i < graph.node().size(); ++i) {
       const int64_t peak = peak_memory_[static_cast<std::size_t>(i)];
       if (peak > 0) {
         (*graph.mutable_node())[i].add_metadata(kNodePeakMemoryMetadataKey, std::to_string(peak));

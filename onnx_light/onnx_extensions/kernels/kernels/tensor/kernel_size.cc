@@ -10,7 +10,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
-Tensor Size::operator()(const Tensor &data, RuntimeContext *rt) const {
+Tensor Size::operator()(const Tensor &data, RuntimeContext * /*rt*/) const {
   const int64_t n = data.shape.product();
   return Tensor::FromInt64("", {}, {n}, ctx_.allocator);
 }

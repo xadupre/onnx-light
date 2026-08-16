@@ -27,7 +27,7 @@ bool IsElementNonZero(const uint8_t *bytes, std::size_t elem_size) {
 
 } // namespace
 
-Tensor NonZero::operator()(const Tensor &x, RuntimeContext *rt) const {
+Tensor NonZero::operator()(const Tensor &x, RuntimeContext * /*rt*/) const {
   switch (static_cast<DataType>(x.data_type)) {
   case DataType::FLOAT:
   case DataType::DOUBLE:

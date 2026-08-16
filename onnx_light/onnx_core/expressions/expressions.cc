@@ -411,15 +411,15 @@ public:
   virtual NodePtr visit(NodePtr node) {
     if (!node)
       return node;
-    if (auto *c = dynamic_cast<Constant *>(node.get()))
+    if (dynamic_cast<Constant *>(node.get()))
       return visit_Constant(std::unique_ptr<Constant>(static_cast<Constant *>(node.release())));
-    if (auto *n = dynamic_cast<Name *>(node.get()))
+    if (dynamic_cast<Name *>(node.get()))
       return visit_Name(std::unique_ptr<Name>(static_cast<Name *>(node.release())));
-    if (auto *b = dynamic_cast<BinOp *>(node.get()))
+    if (dynamic_cast<BinOp *>(node.get()))
       return visit_BinOp(std::unique_ptr<BinOp>(static_cast<BinOp *>(node.release())));
-    if (auto *u = dynamic_cast<UnaryOp *>(node.get()))
+    if (dynamic_cast<UnaryOp *>(node.get()))
       return visit_UnaryOp(std::unique_ptr<UnaryOp>(static_cast<UnaryOp *>(node.release())));
-    if (auto *call = dynamic_cast<Call *>(node.get()))
+    if (dynamic_cast<Call *>(node.get()))
       return visit_Call(std::unique_ptr<Call>(static_cast<Call *>(node.release())));
     return node;
   }

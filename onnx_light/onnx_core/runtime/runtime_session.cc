@@ -62,7 +62,7 @@ void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
     }
     const TensorShapeProto &shape = tt.shape();
     core::symbolic::SymShape dims;
-    for (int i = 0; i < shape.dim().size(); ++i) {
+    for (std::size_t i = 0; i < shape.dim().size(); ++i) {
       const TensorShapeProto::Dimension &d = shape.dim()[i];
       if (d.has_dim_value()) {
         dims.PushBack(core::symbolic::SymDim(static_cast<int64_t>(d.dim_value())));
@@ -74,24 +74,24 @@ void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
     }
     declared_shapes_[vi.name().value()] = std::move(dims);
   };
-  for (int i = 0; i < graph.input().size(); ++i) {
+  for (std::size_t i = 0; i < graph.input().size(); ++i) {
     record(graph.input()[i]);
   }
-  for (int i = 0; i < graph.output().size(); ++i) {
+  for (std::size_t i = 0; i < graph.output().size(); ++i) {
     record(graph.output()[i]);
   }
   // Record the graph's declared output names so Run() can detach any borrowed
   // output from the model before returning (see MaterializeBorrowedOutputs).
   output_names_.clear();
   output_names_set_.clear();
-  for (int i = 0; i < graph.output().size(); ++i) {
+  for (std::size_t i = 0; i < graph.output().size(); ++i) {
     const std::string &name = graph.output()[i].name();
     if (!name.empty()) {
       output_names_.push_back(name);
       output_names_set_.insert(name);
     }
   }
-  for (int i = 0; i < graph.value_info().size(); ++i) {
+  for (std::size_t i = 0; i < graph.value_info().size(); ++i) {
     record(graph.value_info()[i]);
   }
 }

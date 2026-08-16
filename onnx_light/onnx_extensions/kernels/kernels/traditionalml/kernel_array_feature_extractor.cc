@@ -70,7 +70,7 @@ void GatherLastAxis(const Tensor &x, const Tensor &indices, const onnx_kernels::
 
 template <typename T>
 Tensor ArrayFeatureExtractor::operator()(const Tensor &x, const Tensor &indices,
-                                         RuntimeContext *rt) const {
+                                         RuntimeContext * /*rt*/) const {
   ValidateInput<T>(x);
   ValidateIndices(x, indices);
   const onnx_kernels::Shape out_shape = ComputeOutputShape(x, indices);

@@ -7479,7 +7479,7 @@ TEST(onnx_proto, SerializeOptions_RawDataCallback_LeavesCallerModelUntouched) {
   std::string original(reinterpret_cast<const char *>(original_raw.data()), original_raw.size());
 
   SerializeOptions options;
-  options.raw_data_callback = [&](TensorProto &tensor, GraphProto *, uint8_t *buffer,
+  options.raw_data_callback = [&](TensorProto & /*tensor*/, GraphProto *, uint8_t *buffer,
                                   size_t buffer_size, bool size_only) -> int64_t {
     if (size_only) {
       // Rewrite to a single sentinel byte, changing the tensor from its original bytes.

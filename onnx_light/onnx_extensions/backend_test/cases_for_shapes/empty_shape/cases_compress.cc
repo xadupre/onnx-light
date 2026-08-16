@@ -35,7 +35,7 @@ NodeProto MakeCompressNode(std::optional<int64_t> axis) {
 // both. ``kernel::Compress`` is used to compute the expected output so the
 // case is self-consistent with the in-tree kernel.
 // ---------------------------------------------------------------------------
-void RegisterCompressEmptyShapeCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterCompressEmptyShapeCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(11);
   const onnx_kernels::kernel::KernelContext ctx{opset};
   const onnx_kernels::kernel::Compress compress_kernel{ctx};

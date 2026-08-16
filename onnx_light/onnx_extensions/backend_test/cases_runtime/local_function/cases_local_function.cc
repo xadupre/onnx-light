@@ -56,7 +56,7 @@ void AddOpsetImport(ModelProto &model, const std::string &domain, int64_t versio
 // (domain, name, overload) from inside a callee's body.
 // ---------------------------------------------------------------------------
 void RegisterFunctionCallsFunctionAcrossDomainsCase(std::vector<TestCase> &registry,
-                                                    TestMode mode) {
+                                                    TestMode /*mode*/) {
   const std::string name = "test_cc_local_function_calls_function_across_domains";
 
   TestCase tc(name, name, "node", "local_function");
@@ -121,7 +121,7 @@ void RegisterFunctionCallsFunctionAcrossDomainsCase(std::vector<TestCase> &regis
 // function registry propagated to nested ``RuntimeContext`` instances
 // remains complete at every nesting depth.
 // ---------------------------------------------------------------------------
-void RegisterFunctionThreeLevelNestedCallsCase(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterFunctionThreeLevelNestedCallsCase(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const std::string name = "test_cc_local_function_three_level_nested_calls";
 
   TestCase tc(name, name, "node", "local_function");
@@ -191,7 +191,7 @@ void RegisterFunctionThreeLevelNestedCallsCase(std::vector<TestCase> &registry, 
 // that emits a single FLOAT scalar; the test asserts the value selected
 // by the condition matches the corresponding branch.
 // ---------------------------------------------------------------------------
-void RegisterFunctionLinkedAttributeCase(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterFunctionLinkedAttributeCase(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const std::string name = "test_cc_local_function_linked_attribute";
 
   TestCase tc(name, name, "node", "local_function");

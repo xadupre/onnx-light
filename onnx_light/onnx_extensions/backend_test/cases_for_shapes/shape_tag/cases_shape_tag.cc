@@ -37,7 +37,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // The expected metadata is pre-embedded into the model so consumers can
 // verify that ``WriteValueAndNodeTagsToMetadata`` reproduces it exactly.
 // ---------------------------------------------------------------------------
-void RegisterShapeTagCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterShapeTagCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 
@@ -119,7 +119,7 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry, TestMode mode) {
 // The expected metadata is pre-embedded into the model so consumers can
 // verify that ``WriteValueAndNodeTagsToMetadata`` reproduces it exactly.
 // ---------------------------------------------------------------------------
-void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 
@@ -223,7 +223,8 @@ void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry, TestMode mo
 //   * node[3] (Concat) → ``"shape"`` (inherited from first input S1)
 //   * node[4] (Reshape) → ``"weight"`` (inherited from first input X)
 // ---------------------------------------------------------------------------
-void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &registry,
+                                                   TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 
@@ -389,7 +390,7 @@ void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &regist
 // This exercises the code path that writes the per-ValueInfo shape tag to a
 // graph output (rather than only to intermediate ``value_info`` entries).
 // ---------------------------------------------------------------------------
-void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 
@@ -454,7 +455,7 @@ void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry, TestMod
 // Expected value tags: C="weight", KH="weight", PAST="weight"
 // Expected node tags:  node[0] (Concat) → "weight"
 // ---------------------------------------------------------------------------
-void RegisterShapeTagConcatWeightWinsCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterShapeTagConcatWeightWinsCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 
@@ -534,7 +535,7 @@ void RegisterShapeTagConcatWeightWinsCases(std::vector<TestCase> &registry, Test
 // Expected value tags: W="weight", X="weight", Y="weight", Z="weight"
 // Expected node tags:  node[0] (Cast) → "weight", node[1] (Add) → "weight"
 // ---------------------------------------------------------------------------
-void RegisterShapeTagCastBackwardCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterShapeTagCastBackwardCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 
@@ -631,7 +632,7 @@ void RegisterShapeTagCastBackwardCases(std::vector<TestCase> &registry, TestMode
 // Expected value tags: S="shape", W="weight", X="weight", Y="weight", Z="weight"
 // Expected node tags:  node[0] (Reshape) → "weight", node[1] (Add) → "weight"
 // ---------------------------------------------------------------------------
-void RegisterShapeTagReshapeBackwardCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterShapeTagReshapeBackwardCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 

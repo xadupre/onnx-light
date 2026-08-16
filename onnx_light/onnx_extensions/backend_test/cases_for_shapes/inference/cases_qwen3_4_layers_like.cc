@@ -45,7 +45,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 //   Causal masking with attention softmax
 //   SwiGLU MLP (gate+up projections, Sigmoid, Mul, down projection)
 // ---------------------------------------------------------------------------
-void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registry,
+                                                  TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(21);
 
   const std::string name = "test_cc_shape_inference_big_qwen3_4_layers_like";
@@ -1186,19 +1187,19 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       entry->set_key(core::compute::kValueTagMetadataKey);
       entry->set_value(tag_for(name));
     };
-    for (int i = 0; i < graph->input().size(); ++i) {
+    for (std::size_t i = 0; i < graph->input().size(); ++i) {
       ValueInfoProto *vi = graph->mutable_input(static_cast<std::size_t>(i));
       set_value_tag(vi->add_metadata_props(), vi->name());
     }
-    for (int i = 0; i < graph->value_info().size(); ++i) {
+    for (std::size_t i = 0; i < graph->value_info().size(); ++i) {
       ValueInfoProto *vi = graph->mutable_value_info(static_cast<std::size_t>(i));
       set_value_tag(vi->add_metadata_props(), vi->name());
     }
-    for (int i = 0; i < graph->output().size(); ++i) {
+    for (std::size_t i = 0; i < graph->output().size(); ++i) {
       ValueInfoProto *vi = graph->mutable_output(static_cast<std::size_t>(i));
       set_value_tag(vi->add_metadata_props(), vi->name());
     }
-    for (int i = 0; i < graph->initializer().size(); ++i) {
+    for (std::size_t i = 0; i < graph->initializer().size(); ++i) {
       TensorProto *init = graph->mutable_initializer(static_cast<std::size_t>(i));
       set_value_tag(init->add_metadata_props(), init->name());
     }

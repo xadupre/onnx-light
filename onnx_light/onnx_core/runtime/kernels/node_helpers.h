@@ -11,6 +11,7 @@
 
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -91,9 +92,9 @@ void RequireMinInputCount(const NodeProto &node, int min_expected);
 
 void RequireOutputCount(const NodeProto &node, int expected);
 
-const AttributeProto *FindAttribute(const NodeProto &node, const std::string &name);
+const AttributeProto *FindAttribute(const NodeProto &node, std::string_view name);
 
-const GraphProto &GetRequiredGraphAttribute(const NodeProto &node, const std::string &name);
+const GraphProto &GetRequiredGraphAttribute(const NodeProto &node, std::string_view name);
 
 int64_t GetAttributeIntOrDefault(const NodeProto &node, const std::string &name, int64_t fallback);
 

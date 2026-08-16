@@ -159,7 +159,7 @@ void GraphGraph::Rebuild() {
   for (std::size_t i = 0; i < nodes.size(); ++i) {
     const NodeProto &node = nodes[i];
     positions_.emplace(&node, i);
-    for (int o = 0; o < node.output().size(); ++o) {
+    for (std::size_t o = 0; o < node.output().size(); ++o) {
       std::string name(node.output(static_cast<std::size_t>(o)));
       if (!name.empty()) {
         predecessors_[std::move(name)] = &node;
@@ -421,7 +421,7 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
       std::unordered_set<std::string> replacement_outputs;
       for (std::size_t i = 0; i < replacements.size(); ++i) {
         for (const NodeProto &node : replacements[i].rewriting.added_nodes) {
-          for (int o = 0; o < node.output().size(); ++o) {
+          for (std::size_t o = 0; o < node.output().size(); ++o) {
             const std::string output(node.output(static_cast<std::size_t>(o)));
             if (!output.empty()) {
               output_owners.emplace(output, i);
@@ -454,7 +454,7 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
         utils::RepeatedProtoField<NodeProto> unfolded_nodes;
         for (const NodeProto &node : replacement.rewriting.added_nodes) {
           bool folded = !node.output().empty();
-          for (int o = 0; o < node.output().size(); ++o) {
+          for (std::size_t o = 0; o < node.output().size(); ++o) {
             const std::string output(node.output(static_cast<std::size_t>(o)));
             if (!output.empty() && folded_outputs.find(output) == folded_outputs.end()) {
               folded = false;
@@ -646,7 +646,7 @@ void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites
       bool replaces_matched_output = false;
       for (const std::size_t position : rewrite.matched_nodes) {
         const NodeProto &matched = builder_.nodes_[position];
-        for (int o = 0; o < matched.output().size(); ++o) {
+        for (std::size_t o = 0; o < matched.output().size(); ++o) {
           if (matched.output(static_cast<std::size_t>(o)) == initializer.name()) {
             replaces_matched_output = true;
             break;
@@ -754,7 +754,7 @@ GraphProto Replay(const ModelProto &model, const std::vector<LocalRewriting> &re
 void GraphGraph::RebuildSuccessors() {
   const utils::RepeatedProtoField<NodeProto> &nodes = builder_.Nodes();
   for (const NodeProto &node : nodes) {
-    for (int in = 0; in < node.input().size(); ++in) {
+    for (std::size_t in = 0; in < node.input().size(); ++in) {
       std::string name(node.input(static_cast<std::size_t>(in)));
       if (name.empty()) {
         continue;
@@ -798,7 +798,7 @@ const std::vector<const NodeProto *> &GraphGraph::NextNodes(const std::string &n
 
 std::vector<const NodeProto *> GraphGraph::Predecessors(const NodeProto &node) const {
   std::vector<const NodeProto *> result;
-  for (int in = 0; in < node.input().size(); ++in) {
+  for (std::size_t in = 0; in < node.input().size(); ++in) {
     std::string name(node.input(static_cast<std::size_t>(in)));
     if (name.empty()) {
       continue;
@@ -816,7 +816,7 @@ std::vector<const NodeProto *> GraphGraph::Predecessors(const NodeProto &node) c
 
 std::vector<const NodeProto *> GraphGraph::Successors(const NodeProto &node) const {
   std::vector<const NodeProto *> result;
-  for (int o = 0; o < node.output().size(); ++o) {
+  for (std::size_t o = 0; o < node.output().size(); ++o) {
     std::string name(node.output(static_cast<std::size_t>(o)));
     if (name.empty()) {
       continue;
@@ -919,7 +919,7 @@ bool GraphGraph::ConstantShape(const std::string &name, std::vector<int64_t> &di
   const TensorProto *tensor = GetComputedConstant(name);
   if (tensor != nullptr) {
     dims.clear();
-    for (int i = 0; i < tensor->dims().size(); ++i) {
+    for (std::size_t i = 0; i < tensor->dims().size(); ++i) {
       dims.push_back(tensor->dims()[static_cast<std::size_t>(i)]);
     }
     return true;

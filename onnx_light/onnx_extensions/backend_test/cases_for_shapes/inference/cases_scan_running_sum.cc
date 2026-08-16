@@ -90,7 +90,7 @@ GraphProto BuildRunningSumBody() {
 //     ``[T, kD]`` for ``Y_pre_abs``.
 //   * ``Abs`` propagates the ``[T, kD]`` shape to ``Y``.
 // ---------------------------------------------------------------------------
-void RegisterScanRunningSumShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterScanRunningSumShapeInferenceCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
 
   const std::string name = "test_cc_shape_inference_scan_running_sum";

@@ -136,7 +136,7 @@ GraphProto BuildPairwiseDistanceBody() {
 // integer pairwise distances ``[[0, 3, 4], [3, 0, 5], [4, 5, 0]]``.
 // ---------------------------------------------------------------------------
 void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry,
-                                                     TestMode mode) {
+                                                     TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
 
   const std::string name = "test_cc_shape_inference_loop_pairwise_distance";

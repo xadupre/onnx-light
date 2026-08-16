@@ -96,7 +96,7 @@ void FillScalarRepeat(const uint8_t *src, std::size_t elem_size, std::size_t cou
 } // namespace
 
 Tensor OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tensor &values,
-                          const OneHot::Attributes &attrs, RuntimeContext *rt) const {
+                          const OneHot::Attributes &attrs, RuntimeContext * /*rt*/) const {
   EXT_ENFORCE_INVALID(values.shape.size() == 1 && values.element_count() == 2,
                       "kernel::OneHot: input 'values' must be a rank-1 tensor with exactly two "
                       "elements [off_value, on_value].");

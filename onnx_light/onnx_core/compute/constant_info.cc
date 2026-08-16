@@ -20,7 +20,7 @@ namespace {
 // than appending a duplicate), mirroring the helper used by value_tags.cc so
 // the write is idempotent.
 template <typename T> void SetMetadataValue(T &obj, const char *key, const std::string &value) {
-  for (int i = 0; i < obj.metadata_props().size(); ++i) {
+  for (std::size_t i = 0; i < obj.metadata_props().size(); ++i) {
     if (obj.metadata_props()[i].key() == key) {
       obj.mutable_metadata_props(static_cast<std::size_t>(i))->set_value(value);
       return;
@@ -35,17 +35,17 @@ template <typename T> void SetMetadataValue(T &obj, const char *key, const std::
 // non-deterministic op, in which case a control-flow node embedding it cannot
 // be treated as constant.
 bool GraphHasNonDeterministicOp(const GraphProto &graph) {
-  for (int i = 0; i < graph.node().size(); ++i) {
+  for (std::size_t i = 0; i < graph.node().size(); ++i) {
     const NodeProto &node = graph.node()[i];
     if (IsNonDeterministicOp(node.domain(), node.op_type())) {
       return true;
     }
-    for (int a = 0; a < node.attribute().size(); ++a) {
+    for (std::size_t a = 0; a < node.attribute().size(); ++a) {
       const AttributeProto &attr = node.attribute()[a];
       if (attr.has_g() && GraphHasNonDeterministicOp(attr.g())) {
         return true;
       }
-      for (int g = 0; g < attr.graphs().size(); ++g) {
+      for (std::size_t g = 0; g < attr.graphs().size(); ++g) {
         if (GraphHasNonDeterministicOp(attr.graphs()[g])) {
           return true;
         }
@@ -56,12 +56,12 @@ bool GraphHasNonDeterministicOp(const GraphProto &graph) {
 }
 
 bool NodeSubgraphsHaveNonDeterministicOp(const NodeProto &node) {
-  for (int a = 0; a < node.attribute().size(); ++a) {
+  for (std::size_t a = 0; a < node.attribute().size(); ++a) {
     const AttributeProto &attr = node.attribute()[a];
     if (attr.has_g() && GraphHasNonDeterministicOp(attr.g())) {
       return true;
     }
-    for (int g = 0; g < attr.graphs().size(); ++g) {
+    for (std::size_t g = 0; g < attr.graphs().size(); ++g) {
       if (GraphHasNonDeterministicOp(attr.graphs()[g])) {
         return true;
       }
@@ -80,7 +80,7 @@ InferConstantsFromNodes(const Nodes &nodes, std::unordered_set<std::string> cons
   bool changed = true;
   while (changed) {
     changed = false;
-    for (int i = 0; i < nodes.size(); ++i) {
+    for (std::size_t i = 0; i < nodes.size(); ++i) {
       if (node_constant[static_cast<std::size_t>(i)] == ConstantInfo::kConstant) {
         continue;
       }
@@ -90,7 +90,7 @@ InferConstantsFromNodes(const Nodes &nodes, std::unordered_set<std::string> cons
       }
       node_constant[static_cast<std::size_t>(i)] = ConstantInfo::kConstant;
       changed = true;
-      for (int o = 0; o < node.output().size(); ++o) {
+      for (std::size_t o = 0; o < node.output().size(); ++o) {
         const std::string out = node.output()[o];
         if (!out.empty()) {
           constants.insert(out);
@@ -104,11 +104,11 @@ InferConstantsFromNodes(const Nodes &nodes, std::unordered_set<std::string> cons
 std::unordered_set<std::string>
 GraphConstantSeed(const GraphProto &graph, const std::unordered_set<std::string> &outer_constants) {
   std::unordered_set<std::string> constants = outer_constants;
-  for (int i = 0; i < graph.initializer().size(); ++i) {
+  for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
     constants.insert(graph.initializer()[i].name());
   }
   // Graph inputs are never constant (and this also avoids accidental name collisions).
-  for (int i = 0; i < graph.input().size(); ++i) {
+  for (std::size_t i = 0; i < graph.input().size(); ++i) {
     constants.erase(graph.input()[i].name());
   }
   return constants;
@@ -121,12 +121,12 @@ void WriteConstantInfoToGraphImpl(GraphProto &graph,
 // seeding each subgraph with the constant values visible from the enclosing
 // scope.
 void RecurseSubgraphs(NodeProto &node, const std::unordered_set<std::string> &constants) {
-  for (int a = 0; a < node.attribute().size(); ++a) {
+  for (std::size_t a = 0; a < node.attribute().size(); ++a) {
     AttributeProto *attr = node.mutable_attribute(static_cast<std::size_t>(a));
     if (attr->has_g()) {
       WriteConstantInfoToGraphImpl(*attr->mutable_g(), constants);
     }
-    for (int g = 0; g < attr->graphs().size(); ++g) {
+    for (std::size_t g = 0; g < attr->graphs().size(); ++g) {
       WriteConstantInfoToGraphImpl(*attr->mutable_graphs(static_cast<std::size_t>(g)), constants);
     }
   }
@@ -159,7 +159,7 @@ void WriteConstantInfoToGraphImpl(GraphProto &graph,
   mark_values(*graph.mutable_output());
   mark_values(*graph.mutable_initializer());
 
-  for (int i = 0; i < graph.node().size(); ++i) {
+  for (std::size_t i = 0; i < graph.node().size(); ++i) {
     RecurseSubgraphs(*graph.mutable_node(static_cast<std::size_t>(i)), constants);
   }
 }
@@ -207,7 +207,7 @@ std::pair<std::unordered_set<std::string>, std::vector<ConstantInfo>>
 InferConstants(const FunctionProto &function,
                const std::unordered_set<std::string> &outer_constants) {
   std::unordered_set<std::string> constants = outer_constants;
-  for (int i = 0; i < function.input().size(); ++i) {
+  for (std::size_t i = 0; i < function.input().size(); ++i) {
     constants.erase(function.input(static_cast<std::size_t>(i)));
   }
   return InferConstantsFromNodes(function.node(), std::move(constants));
@@ -227,13 +227,13 @@ void WriteConstantInfoToMetadata(FunctionProto &function) {
       SetMetadataValue(*function.mutable_node(i), kConstantMetadataKey, "1");
     }
   }
-  for (int i = 0; i < function.value_info().size(); ++i) {
+  for (std::size_t i = 0; i < function.value_info().size(); ++i) {
     if (constants.count(function.value_info()[i].name()) != 0) {
       SetMetadataValue(*function.mutable_value_info(static_cast<std::size_t>(i)),
                        kConstantMetadataKey, "1");
     }
   }
-  for (int i = 0; i < function.node().size(); ++i) {
+  for (std::size_t i = 0; i < function.node().size(); ++i) {
     RecurseSubgraphs(*function.mutable_node(static_cast<std::size_t>(i)), constants);
   }
 }

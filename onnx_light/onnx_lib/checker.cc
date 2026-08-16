@@ -438,7 +438,7 @@ static void check_sparse_tensor_indices_2(const TensorProto &indices,
     fail_check("Sparse tensor indices (", indices.name(),
                ") first dimension size does not equal NNZ.");
   }
-  if (indices.dims(1) != static_cast<uint64_t>(dense_rank)) {
+  if (indices.dims(1) != static_cast<int64_t>(dense_rank)) {
     fail_check("Sparse tensor indices (", indices.name(),
                ") second dimension size does not match rank of tensor.");
   }

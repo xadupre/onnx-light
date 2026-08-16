@@ -395,7 +395,7 @@ void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, b
 } // namespace
 
 Tensor GridSample::operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs,
-                              RuntimeContext *rt) const {
+                              RuntimeContext * /*rt*/) const {
   ValidateInputs(X, grid);
   Tensor out;
   out.data_type = X.data_type;

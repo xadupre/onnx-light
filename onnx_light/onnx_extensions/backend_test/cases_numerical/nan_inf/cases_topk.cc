@@ -51,7 +51,7 @@ NodeProto MakeTopKNode(int64_t axis, int64_t largest, int64_t sorted_attr) {
 // (1) no NaN is silently turned into a finite value and (2) running the
 // node through the backend produces a bit-identical result.
 // ---------------------------------------------------------------------------
-void RegisterTopKNanInfCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterTopKNanInfCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(11);
 
   constexpr float kPosInf = std::numeric_limits<float>::infinity();

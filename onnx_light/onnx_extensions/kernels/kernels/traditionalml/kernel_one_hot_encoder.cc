@@ -102,7 +102,7 @@ void ValidatePreallocatedOutput(const Tensor &output, const onnx_kernels::Shape 
 
 template <typename T>
 Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &cats, bool zeros,
-                                 RuntimeContext *rt) const {
+                                 RuntimeContext * /*rt*/) const {
   ValidateNumericInput<T>(x, cats);
   const onnx_kernels::Shape out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());
@@ -113,7 +113,7 @@ Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &ca
 }
 
 Tensor OneHotEncoder::operator()(const Tensor &x, const ParamStrings &cats, bool zeros,
-                                 RuntimeContext *rt) const {
+                                 RuntimeContext * /*rt*/) const {
   ValidateStringInput(x, cats);
   const onnx_kernels::Shape out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());

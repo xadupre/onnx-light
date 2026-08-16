@@ -31,7 +31,7 @@ int64_t ReadK(const Tensor *k) {
 } // namespace
 
 Tensor Trilu::operator()(const Tensor &input, const Tensor *k, const Trilu::Attributes &attrs,
-                         RuntimeContext *rt) const {
+                         RuntimeContext * /*rt*/) const {
   Tensor output;
   output.name = "";
   output.data_type = input.data_type;

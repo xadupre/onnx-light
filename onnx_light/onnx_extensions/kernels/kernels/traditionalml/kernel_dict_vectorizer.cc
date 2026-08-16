@@ -56,7 +56,7 @@ void Fill(std::span<const K> input_keys, std::span<const V> input_values,
 
 template <typename K, typename V>
 Tensor DictVectorizer::operator()(std::span<const K> input_keys, std::span<const V> input_values,
-                                  const std::vector<K> &vocabulary, RuntimeContext *rt) const {
+                                  const std::vector<K> &vocabulary, RuntimeContext * /*rt*/) const {
   const int64_t c = static_cast<int64_t>(vocabulary.size());
   const onnx_kernels::Shape shape{c};
   if constexpr (std::is_same_v<V, std::string>) {

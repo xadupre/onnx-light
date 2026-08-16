@@ -521,7 +521,7 @@ SymShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
 int FindMetadataIndex(const ValueInfoProto &vi, const char *key) {
   for (std::size_t i = 0; i < vi.metadata_props().size(); ++i) {
     if (vi.metadata_props()[i].key() == key) {
-      return i;
+      return static_cast<int>(i);
     }
   }
   return -1;

@@ -76,7 +76,7 @@ std::vector<int> BackwardTagInputIndices(const NodeProto &node, const std::strin
     std::vector<int> all_inputs;
     all_inputs.reserve(static_cast<std::size_t>(node.input().size()));
     for (std::size_t i = 0; i < node.input().size(); ++i) {
-      all_inputs.push_back(i);
+      all_inputs.push_back(static_cast<int>(i));
     }
     return all_inputs;
   }

@@ -239,9 +239,10 @@ class ReferenceEvaluator:
         Optional :class:`IOArena` (or any ``RawBufferAllocator``) dedicated to
         declared graph outputs. When neither allocator is provided, the
         evaluator creates persistent execution and I/O arenas and reuses them
-        across runs. Passing only ``allocator`` preserves the legacy
-        single-allocator behaviour; passing only ``io_allocator`` creates a
-        default persistent execution arena.
+        across runs. Passing only one allocator creates a default persistent
+        arena for the other lifetime domain; pass the same allocator as both
+        ``allocator`` and ``io_allocator`` to request single-allocator
+        behaviour explicitly.
 
     Example
     -------
@@ -366,7 +367,7 @@ class ReferenceEvaluator:
         # every call. The per-invocation tensor / sequence / event state is
         # reset via ``RuntimeContext.clear`` at the start of each :meth:`run`.
         create_execution_arena = allocator is None
-        create_io_arena = allocator is None and io_allocator is None
+        create_io_arena = io_allocator is None
         if create_execution_arena or create_io_arena:
             if self._graph is not None:
                 node_output_slots = sum(len(node.output) for node in self._graph.node)

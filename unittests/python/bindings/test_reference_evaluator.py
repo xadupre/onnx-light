@@ -69,7 +69,7 @@ class TestReferenceEvaluator(ExtTestCase):
         """Pins an exported allocator output across ``RuntimeContext.clear``."""
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         allocator = runtime.SimpleRawBufferAllocator(4)
-        evaluator = ReferenceEvaluator(model, allocator=allocator)
+        evaluator = ReferenceEvaluator(model, allocator=allocator, io_allocator=allocator)
 
         (output,) = evaluator.run(
             None,
@@ -91,7 +91,7 @@ class TestReferenceEvaluator(ExtTestCase):
         """Pins the previous output while a subsequent run produces another."""
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         allocator = runtime.SimpleRawBufferAllocator(5)
-        evaluator = ReferenceEvaluator(model, allocator=allocator)
+        evaluator = ReferenceEvaluator(model, allocator=allocator, io_allocator=allocator)
         first_feeds = {
             "x": np.array([-1.0, 2.0, -3.0], dtype=np.float32),
             "z": np.array([10.0, 20.0, 30.0], dtype=np.float32),
@@ -113,7 +113,8 @@ class TestReferenceEvaluator(ExtTestCase):
     def test_allocator_output_remains_live_after_evaluator_destruction(self):
         """Keeps the exported allocation alive after evaluator destruction."""
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
-        evaluator = ReferenceEvaluator(model, allocator=runtime.SimpleRawBufferAllocator(4))
+        allocator = runtime.SimpleRawBufferAllocator(4)
+        evaluator = ReferenceEvaluator(model, allocator=allocator, io_allocator=allocator)
         (output,) = evaluator.run(
             None,
             {
@@ -130,7 +131,8 @@ class TestReferenceEvaluator(ExtTestCase):
     def test_allocator_duplicate_output_request_shares_export(self):
         """Returns the same safe export when an output name is requested twice."""
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
-        evaluator = ReferenceEvaluator(model, allocator=runtime.SimpleRawBufferAllocator(4))
+        allocator = runtime.SimpleRawBufferAllocator(4)
+        evaluator = ReferenceEvaluator(model, allocator=allocator, io_allocator=allocator)
         first, duplicate = evaluator.run(
             ["y", "y"],
             {
@@ -195,6 +197,27 @@ class TestReferenceEvaluator(ExtTestCase):
         gc.collect()
         self.assertEqual(io_arena.leased_count, 0)
         self.assertEqual(io_arena.retained_count, 1)
+
+    def test_reference_evaluator_accepts_allocator_only(self):
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        execution_arena = runtime.ExecutionArena(4)
+        evaluator = ReferenceEvaluator(model, allocator=execution_arena)
+
+        (output,) = evaluator.run(
+            None,
+            {
+                "x": np.array([-1.0, 2.0, -3.0], dtype=np.float32),
+                "z": np.array([10.0, 20.0, 30.0], dtype=np.float32),
+            },
+        )
+
+        self.assertIs(evaluator._allocator, execution_arena)
+        self.assertIsInstance(evaluator._io_allocator, runtime.IOArena)
+        evaluator._ctx.clear()
+        self.assertEqual(execution_arena.allocated_count, 0)
+        self.assertEqual(evaluator._io_allocator.allocated_count, 0)
+        self.assertEqual(evaluator._io_allocator.leased_count, 1)
+        np.testing.assert_array_equal(output, np.array([11.0, 22.0, 33.0], dtype=np.float32))
 
     def test_reference_evaluator_accepts_io_allocator_only(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)

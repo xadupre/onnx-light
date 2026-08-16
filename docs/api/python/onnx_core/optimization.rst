@@ -84,6 +84,31 @@ Registered standard patterns
      - ``Clip``
      - Merges two consecutive Clip nodes into one when one defines the minimum
        bound and the other the maximum bound.
+   * - :class:`ConstantToInitializerPattern` / ``ConstantToInitializer``
+     - 1
+     - ``Constant``
+     - Replaces a Constant node by an initializer and an Identity node.
+   * - :class:`ConvBiasNullPattern` / ``ConvBiasNull``
+     - 0
+     - ``Conv``
+     - Removes a null (all-zero) bias input from a Conv node.
+   * - :class:`DropoutPattern` / ``Dropout``
+     - 1
+     - ``Dropout``
+     - Replaces an inference Dropout by an Identity node when its mask output is
+       unused and training mode is disabled.
+   * - :class:`IdentityPattern` / ``Identity``
+     - 0
+     - Arithmetic and layout operators
+     - Replaces no-op arithmetic and layout operations by an Identity node.
+   * - :class:`NotNotPattern` / ``NotNot``
+     - 1
+     - ``Not``
+     - Fuses two consecutive Not nodes into an Identity node.
+   * - :class:`PadConvPattern` / ``PadConv``
+     - 0
+     - ``Conv``
+     - Folds a Pad node into the ``pads`` attribute of a following Conv node.
 
 The runtime list is available through :func:`standard_pattern_names`.
 

@@ -20,6 +20,12 @@ CastCastPattern: TypeAlias = _patterns.CastCastPattern
 CastCastBinaryPattern: TypeAlias = _patterns.CastCastBinaryPattern
 CastOpCastPattern: TypeAlias = _patterns.CastOpCastPattern
 ClipClipPattern: TypeAlias = _patterns.ClipClipPattern
+ConstantToInitializerPattern: TypeAlias = _patterns.ConstantToInitializerPattern
+ConvBiasNullPattern: TypeAlias = _patterns.ConvBiasNullPattern
+DropoutPattern: TypeAlias = _patterns.DropoutPattern
+IdentityPattern: TypeAlias = _patterns.IdentityPattern
+NotNotPattern: TypeAlias = _patterns.NotNotPattern
+PadConvPattern: TypeAlias = _patterns.PadConvPattern
 
 
 def standard_pattern_names() -> list[str]:
@@ -119,11 +125,17 @@ __all__ = [
     "CastOpCastPattern",
     "CastPattern",
     "ClipClipPattern",
+    "ConstantToInitializerPattern",
+    "ConvBiasNullPattern",
+    "DropoutPattern",
     "GraphBuilder",
     "GraphGraph",
+    "IdentityPattern",
     "LocalRewriting",
     "MatchResult",
+    "NotNotPattern",
     "OptimizationReport",
+    "PadConvPattern",
     "PatternOptimization",
     "clear_registered_patterns",
     "register_pattern",

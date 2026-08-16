@@ -98,6 +98,13 @@ requests:
      - Consecutive-Clip canonicalization
      - Ports ``ClipClipPattern``, merging two Clip nodes with complementary
        minimum and maximum bounds, with C++ and Python selection tests.
+   * - `PR #4462 <https://github.com/xadupre/onnx-light/issues/4462>`_
+     - Elementary canonicalization patterns
+     - Ports the remaining elementary canonicalization patterns
+       (``ConstantToInitializerPattern``, ``ConvBiasNullPattern``,
+       ``PadConvPattern``, ``DropoutPattern``, ``IdentityPattern``, and
+       ``NotNotPattern``) with per-pattern rewrite and rejection tests,
+       registration, and Python bindings.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -620,17 +627,19 @@ beside its patterns; only genuinely cross-family graph queries belong in
 
 The upstream default list currently contains 104 enabled patterns.
 ``CastCastPattern``, ``CastPattern``, ``CastCastBinaryPattern``,
-``CastOpCastPattern``, and ``ClipClipPattern`` are already covered, leaving 99
+``CastOpCastPattern``, ``ClipClipPattern``, ``ConstantToInitializerPattern``,
+``ConvBiasNullPattern``, ``PadConvPattern``, ``DropoutPattern``,
+``IdentityPattern``, and ``NotNotPattern`` are already covered, leaving 93
 patterns. They are grouped into nine cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;
 this keeps reviews and ``git bisect`` useful without creating 100 pull
 requests. Commented-out, non-default upstream patterns are outside this plan.
 
-#. **Elementary canonicalization (6 patterns remaining).**
+#. **Elementary canonicalization (done).**
    ``ConstantToInitializerPattern``, ``ConvBiasNullPattern``,
    ``PadConvPattern``, ``DropoutPattern``, ``IdentityPattern``, and
-   ``NotNotPattern``.
+   ``NotNotPattern`` are ported and registered.
 #. **Concat, gather, split, slice, and sequence (12 patterns).**
    ``ConcatEmptyPattern``, ``ConcatGatherPattern``,
    ``ConcatTwiceUnaryPattern``, ``GatherConcatPattern``,
@@ -718,3 +727,7 @@ Pull requests
   preservation.
 * `PR #4455 <https://github.com/xadupre/onnx-light/pull/4455>`_:
   ``ClipClipPattern`` merging two Clip nodes with complementary bounds.
+* `PR #4462 <https://github.com/xadupre/onnx-light/issues/4462>`_: remaining
+  elementary canonicalization patterns (``ConstantToInitializerPattern``,
+  ``ConvBiasNullPattern``, ``PadConvPattern``, ``DropoutPattern``,
+  ``IdentityPattern``, and ``NotNotPattern``).

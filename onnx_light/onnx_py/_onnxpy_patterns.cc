@@ -6,6 +6,11 @@
 #include "onnx_core/builder/pattern_registry.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/constant_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/conv_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/dropout_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/not_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 
 #include <memory>
@@ -39,6 +44,24 @@ std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::str
   }
   if (name == "ClipClip") {
     return std::make_shared<onnx_patterns::ClipClipPattern>(priority.value_or(1));
+  }
+  if (name == "ConstantToInitializer") {
+    return std::make_shared<onnx_patterns::ConstantToInitializerPattern>(priority.value_or(1));
+  }
+  if (name == "ConvBiasNull") {
+    return std::make_shared<onnx_patterns::ConvBiasNullPattern>(priority.value_or(0));
+  }
+  if (name == "Dropout") {
+    return std::make_shared<onnx_patterns::DropoutPattern>(priority.value_or(1));
+  }
+  if (name == "Identity") {
+    return std::make_shared<onnx_patterns::IdentityPattern>(priority.value_or(0));
+  }
+  if (name == "NotNot") {
+    return std::make_shared<onnx_patterns::NotNotPattern>(priority.value_or(1));
+  }
+  if (name == "PadConv") {
+    return std::make_shared<onnx_patterns::PadConvPattern>(priority.value_or(0));
   }
   throw std::invalid_argument("Unknown ONNX pattern '" + name + "'.");
 }
@@ -81,6 +104,27 @@ NB_MODULE(_onnxpypatterns, m) {
       "``Clip(x, min) -> Clip(x1, , max)`` becomes one ``Clip(x, min, max)`` "
       "when one Clip defines the minimum and the other the maximum.")
       .def(nb::init<int>(), nb::arg("priority") = 1);
+  nb::class_<onnx_patterns::ConstantToInitializerPattern, core::builder::PatternOptimization>(
+      m, "ConstantToInitializerPattern",
+      "Replaces a Constant node by an initializer and an Identity node.")
+      .def(nb::init<int>(), nb::arg("priority") = 1);
+  nb::class_<onnx_patterns::ConvBiasNullPattern, core::builder::PatternOptimization>(
+      m, "ConvBiasNullPattern", "Removes a null (all-zero) bias input from a Conv node.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::DropoutPattern, core::builder::PatternOptimization>(
+      m, "DropoutPattern",
+      "Replaces an inference Dropout by an Identity node when its mask output "
+      "is unused and training mode is disabled.")
+      .def(nb::init<int>(), nb::arg("priority") = 1);
+  nb::class_<onnx_patterns::IdentityPattern, core::builder::PatternOptimization>(
+      m, "IdentityPattern", "Replaces no-op arithmetic and layout operations by an Identity node.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::NotNotPattern, core::builder::PatternOptimization>(
+      m, "NotNotPattern", "Fuses two consecutive Not nodes into an Identity node.")
+      .def(nb::init<int>(), nb::arg("priority") = 1);
+  nb::class_<onnx_patterns::PadConvPattern, core::builder::PatternOptimization>(
+      m, "PadConvPattern", "Folds a Pad node into the ``pads`` attribute of a following Conv node.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
 
   m.def(
       "registered_pattern_names",

@@ -48,7 +48,8 @@ constexpr const char *kFuncRangeName = "func_range";
 // run shape inference on the function body with the function's input/output
 // names rebound to the caller's names.
 // ---------------------------------------------------------------------------
-void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry,
+                                                 TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext kctx{opset};
 
@@ -154,7 +155,8 @@ void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry
 //
 // Expected output: out = [0, 1, 2, 3, 4]
 // ---------------------------------------------------------------------------
-void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &registry,
+                                                   TestMode /*mode*/) {
   constexpr int64_t kRangeStart = 0;
   constexpr int64_t kRangeDelta = 1;
   constexpr int64_t kRangeLimit = 5;

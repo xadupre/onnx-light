@@ -110,7 +110,8 @@ void AppendIdentityOutput(GraphProto &g, const std::string &input_name,
 // then-branch (``cond = true``) so the case is executable end-to-end by
 // ``BackendTestCaseRunModel``.
 // ---------------------------------------------------------------------------
-void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry,
+                                                 TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(13);
 
   const std::string name = "test_cc_shape_inference_if_symbolic_shapes";

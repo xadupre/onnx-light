@@ -105,7 +105,7 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   for (const auto &kv : ctx.Opsets()) {
     sub_ctx.SetOpsetVersion(kv.first, kv.second);
   }
-  for (int i = 0; i < func.opset_import().size(); ++i) {
+  for (std::size_t i = 0; i < func.opset_import().size(); ++i) {
     const OperatorSetIdProto &osi = func.opset_import()[i];
     sub_ctx.SetOpsetVersion(osi.domain(), static_cast<int>(osi.version()));
   }
@@ -882,7 +882,7 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node) {
 }
 
 void ShapesContext::ComputeShapes(const utils::RepeatedProtoField<NodeProto> &nodes) {
-  for (int i = 0; i < nodes.size(); ++i) {
+  for (std::size_t i = 0; i < nodes.size(); ++i) {
     current_node_index_ = static_cast<int64_t>(i);
     ComputeShapeNode(nodes[i]);
   }
@@ -894,7 +894,7 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   // (an ONNX initializer may appear both in ``graph.initializer()``
   // and ``graph.input()``; the initializer wins).
   current_node_index_ = -2;
-  for (int i = 0; i < graph.initializer().size(); ++i) {
+  for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
     const TensorProto &init = graph.initializer()[i];
     const std::string name = init.name();
     if (name.empty() || Has(name)) {
@@ -908,7 +908,7 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   // Then seed graph inputs (skipping those already known via the
   // initializers or via outer-scope entries carried in ``*this``).
   current_node_index_ = -1;
-  for (int i = 0; i < graph.input().size(); ++i) {
+  for (std::size_t i = 0; i < graph.input().size(); ++i) {
     const ValueInfoProto &vi = graph.input()[i];
     SeedInputValueInfo(vi, *this);
   }
@@ -917,14 +917,14 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
 
 void ShapesContext::ComputeShapeModel(const ModelProto &model,
                                       bool prefill_with_value_info_output) {
-  for (int i = 0; i < model.opset_import().size(); ++i) {
+  for (std::size_t i = 0; i < model.opset_import().size(); ++i) {
     const OperatorSetIdProto &osi = model.opset_import()[i];
     SetOpsetVersion(osi.domain(), static_cast<int>(osi.version()));
   }
   // Register every model-local function so node-level dispatch can
   // expand calls to them. The pointers reference entries owned by
   // ``model`` and remain valid for the duration of this call.
-  for (int i = 0; i < model.functions().size(); ++i) {
+  for (std::size_t i = 0; i < model.functions().size(); ++i) {
     SetLocalFunction(&model.functions()[i]);
   }
   EXT_ENFORCE_INVALID(model.has_graph(),
@@ -952,10 +952,10 @@ void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
   // Names that already have authoritative type/shape information in
   // the proto and must not be overwritten.
   std::unordered_set<std::string> seeded;
-  for (int i = 0; i < graph.input().size(); ++i) {
+  for (std::size_t i = 0; i < graph.input().size(); ++i) {
     seeded.insert(graph.input()[i].name());
   }
-  for (int i = 0; i < graph.initializer().size(); ++i) {
+  for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
     seeded.insert(graph.initializer()[i].name());
   }
   // Update graph outputs in place.

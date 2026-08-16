@@ -23,7 +23,7 @@ namespace {
 /// Returns the value of the ``metadata_props`` entry keyed by ``key`` on
 /// ``node``, or an empty string when the key is absent.
 std::string ReadNodeMetadata(const NodeProto &node, const char *key) {
-  for (int i = 0; i < node.metadata_props().size(); ++i) {
+  for (std::size_t i = 0; i < node.metadata_props().size(); ++i) {
     if (node.metadata_props()[i].key() == key) {
       return node.metadata_props()[i].value();
     }
@@ -137,7 +137,7 @@ ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
 
 ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
   inputs_.reserve(func.input_size());
-  for (size_t i = 0; i < func.input_size(); ++i) {
+  for (size_t i = 0; i < static_cast<std::size_t>(func.input_size()); ++i) {
     const std::string name = func.input(i);
     if (!name.empty()) {
       keep_.insert(name);
@@ -145,7 +145,7 @@ ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
     }
   }
   outputs_.reserve(func.output_size());
-  for (size_t i = 0; i < func.output_size(); ++i) {
+  for (size_t i = 0; i < static_cast<std::size_t>(func.output_size()); ++i) {
     const std::string name = func.output(i);
     if (!name.empty()) {
       keep_.insert(name);

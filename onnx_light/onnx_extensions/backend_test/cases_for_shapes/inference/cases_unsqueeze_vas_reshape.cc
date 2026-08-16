@@ -55,7 +55,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // case is executable end-to-end by ``BackendTestCaseRunModel``.
 // ---------------------------------------------------------------------------
 void RegisterUnsqueezeVasReshapeShapeInferenceCases(std::vector<TestCase> &registry,
-                                                    TestMode mode) {
+                                                    TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 

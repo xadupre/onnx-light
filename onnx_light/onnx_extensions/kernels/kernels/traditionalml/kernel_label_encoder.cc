@@ -73,7 +73,7 @@ void ValidateInputs(const Tensor &x, std::span<const KeyT> keys, std::span<const
 template <typename KeyT, typename ValueT>
 Tensor LabelEncoder::operator()(const Tensor &x, std::span<const KeyT> keys,
                                 std::span<const ValueT> values, ValueT default_value,
-                                RuntimeContext *rt) const {
+                                RuntimeContext * /*rt*/) const {
   ValidateInputs<KeyT, ValueT>(x, keys, values);
   const int64_t n = x.element_count();
   Tensor out = MakeOutputTensor(TensorElementType<ValueT>::value, x.shape,

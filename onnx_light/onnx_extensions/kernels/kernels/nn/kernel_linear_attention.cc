@@ -33,7 +33,7 @@ void Check3DFloat(const Tensor &t, const char *label, int64_t &B, int64_t &T, in
 } // namespace
 
 Tensor LinearAttention::operator()(const Tensor &query, const Tensor &key, const Tensor &value,
-                                   RuntimeContext *rt) const {
+                                   RuntimeContext * /*rt*/) const {
   Attributes attrs;
   attrs.update_rule = "linear";
   attrs.q_num_heads = 0; // will be inferred below

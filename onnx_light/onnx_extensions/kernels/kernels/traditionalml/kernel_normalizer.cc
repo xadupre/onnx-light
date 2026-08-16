@@ -108,7 +108,8 @@ template <typename T> void ApplyNormalizer(const Tensor &x, NormMode mode, float
 } // namespace
 
 template <typename T>
-Tensor Normalizer::operator()(const Tensor &x, const std::string &norm, RuntimeContext *rt) const {
+Tensor Normalizer::operator()(const Tensor &x, const std::string &norm,
+                              RuntimeContext * /*rt*/) const {
   ValidateInput<T>(x);
   const NormMode mode = ParseNorm(norm);
   const int64_t n = x.element_count();

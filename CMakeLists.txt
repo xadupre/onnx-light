@@ -67,6 +67,12 @@ if(MSVC)
     add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/MP>)
   endif()
   add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/WX>)
+else()
+  # Surface compiler warnings on GCC/Clang builds so regressions are caught in
+  # CI logs, mirroring the /WX (warnings-as-errors) treatment already applied
+  # to MSVC above.
+  add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-Wall>)
+  add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-Wextra>)
 endif()
 
 include(GNUInstallDirs)

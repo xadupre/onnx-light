@@ -41,7 +41,7 @@ void CheckRegexFullMatchInput(const Tensor &x) {
 } // namespace
 
 Tensor RegexFullMatch::operator()(const Tensor &x, const std::string &pattern,
-                                  RuntimeContext *rt) const {
+                                  RuntimeContext * /*rt*/) const {
   CheckRegexFullMatchInput(x);
   const int64_t n = x.element_count();
   const size_t n_bytes = static_cast<size_t>(n) * sizeof(uint8_t);

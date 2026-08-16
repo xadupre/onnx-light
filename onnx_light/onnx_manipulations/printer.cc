@@ -55,8 +55,6 @@ bool IsValidIdentifier(const std::string &str) {
   return next_ == end_;
 }
 
-bool IsValidIdentifier(const utils::RefString &str) { return IsValidIdentifier(std::string(str)); }
-
 class ProtoPrinter {
 public:
   explicit ProtoPrinter(std::ostream &os) : output_(os) {}

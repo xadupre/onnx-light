@@ -354,7 +354,7 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
       refs.set_name(attribute.name().value() + "_ref");
       refs.set_type(AttributeProto::AttributeType::STRINGS);
       const auto &graphs = attribute.graphs();
-      for (int i = 0; i < graphs.size(); ++i) {
+      for (std::size_t i = 0; i < graphs.size(); ++i) {
         const GraphProto &graph = graphs[static_cast<std::size_t>(i)];
         std::string base = graph.name().empty() ? attribute.name().value() : graph.name().value();
         if (base.empty()) {
@@ -390,12 +390,12 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
   for (const auto &node : graph.node()) {
     std::vector<std::string> inputs;
     inputs.reserve(node.input().size());
-    for (int i = 0; i < node.input().size(); ++i) {
+    for (std::size_t i = 0; i < node.input().size(); ++i) {
       inputs.push_back(node.input(static_cast<std::size_t>(i)));
     }
     std::vector<std::string> outputs;
     outputs.reserve(node.output().size());
-    for (int i = 0; i < node.output().size(); ++i) {
+    for (std::size_t i = 0; i < node.output().size(); ++i) {
       outputs.push_back(node.output(static_cast<std::size_t>(i)));
     }
     MakeNode(node.op_type().value(), inputs, outputs,
@@ -412,7 +412,7 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
     SetOpsetVersion(opset.domain().empty() ? std::string() : opset.domain().value(),
                     static_cast<int>(opset.version()));
   }
-  for (int i = 0; i < function.input().size(); ++i) {
+  for (std::size_t i = 0; i < function.input().size(); ++i) {
     ValueInfoProto value_info;
     value_info.set_name(function.input(static_cast<std::size_t>(i)));
     MakeInput(value_info);
@@ -420,19 +420,19 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
   for (const auto &node : function.node()) {
     std::vector<std::string> inputs;
     inputs.reserve(node.input().size());
-    for (int i = 0; i < node.input().size(); ++i) {
+    for (std::size_t i = 0; i < node.input().size(); ++i) {
       inputs.push_back(node.input(static_cast<std::size_t>(i)));
     }
     std::vector<std::string> outputs;
     outputs.reserve(node.output().size());
-    for (int i = 0; i < node.output().size(); ++i) {
+    for (std::size_t i = 0; i < node.output().size(); ++i) {
       outputs.push_back(node.output(static_cast<std::size_t>(i)));
     }
     MakeNode(node.op_type().value(), inputs, outputs,
              node.domain().empty() ? std::string() : node.domain().value(),
              node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node));
   }
-  for (int i = 0; i < function.output().size(); ++i) {
+  for (std::size_t i = 0; i < function.output().size(); ++i) {
     MakeOutput(function.output(static_cast<std::size_t>(i)));
   }
 }
@@ -459,7 +459,7 @@ void GraphBuilder::MaterializeGraphReferences(NodeProto &node) const {
       graphs_attribute.set_name(base_name);
       graphs_attribute.set_type(AttributeProto::AttributeType::GRAPHS);
       const auto &refs = attribute.strings();
-      for (int i = 0; i < refs.size(); ++i) {
+      for (std::size_t i = 0; i < refs.size(); ++i) {
         const std::string ref_name = refs[static_cast<std::size_t>(i)];
         if (HasSubgraph(ref_name)) {
           *graphs_attribute.add_graphs() = Subgraph(ref_name).BuildGraph();
@@ -656,7 +656,7 @@ std::vector<GraphBuilder *> GraphBuilder::ReferencedSubgraphs(const NodeProto &n
       }
     } else if (attribute.type() == AttributeProto::AttributeType::STRINGS) {
       const auto &refs = attribute.strings();
-      for (int i = 0; i < refs.size(); ++i) {
+      for (std::size_t i = 0; i < refs.size(); ++i) {
         GraphBuilder *subgraph =
             FindNamedBuilder(subgraphs_, std::string(refs[static_cast<std::size_t>(i)]));
         if (subgraph != nullptr) {
@@ -679,7 +679,7 @@ void GraphBuilder::CollectImplicitInputs(std::unordered_set<std::string> &out) c
     defined.insert(initializer.name().value());
   }
   for (const NodeProto &node : nodes_) {
-    for (int i = 0; i < node.output().size(); ++i) {
+    for (std::size_t i = 0; i < node.output().size(); ++i) {
       std::string name(node.output(static_cast<std::size_t>(i)));
       if (!name.empty()) {
         defined.insert(std::move(name));
@@ -705,7 +705,7 @@ void GraphBuilder::CollectImplicitInputs(std::unordered_set<std::string> &out) c
 
 void GraphBuilder::CollectNodeReferences(const NodeProto &node,
                                          std::vector<std::string> &refs) const {
-  for (int i = 0; i < node.input().size(); ++i) {
+  for (std::size_t i = 0; i < node.input().size(); ++i) {
     std::string name(node.input(static_cast<std::size_t>(i)));
     if (!name.empty()) {
       refs.push_back(std::move(name));
@@ -744,7 +744,7 @@ std::size_t GraphBuilder::RemoveUnusedNodesImpl(bool recursive) {
   std::unordered_map<std::string, std::size_t> producer;
   for (std::size_t i = 0; i < num_nodes; ++i) {
     const NodeProto &node = nodes_[i];
-    for (int j = 0; j < node.output().size(); ++j) {
+    for (std::size_t j = 0; j < node.output().size(); ++j) {
       std::string name(node.output(static_cast<std::size_t>(j)));
       if (!name.empty()) {
         producer.emplace(std::move(name), i);
@@ -813,7 +813,7 @@ bool CanReuseOutputs(const NodeProto &node, const std::vector<std::string> &surv
   if (static_cast<std::size_t>(node.output().size()) > survivor_outputs.size()) {
     return false;
   }
-  for (int i = 0; i < node.output().size(); ++i) {
+  for (std::size_t i = 0; i < node.output().size(); ++i) {
     if (!std::string(node.output(static_cast<std::size_t>(i))).empty() &&
         survivor_outputs[static_cast<std::size_t>(i)].empty()) {
       return false;
@@ -940,12 +940,12 @@ std::size_t GraphBuilder::RemoveDuplicateNodesImpl(
     // sub-computations collapses in a single forward pass.
     std::vector<std::string> resolved_inputs;
     resolved_inputs.reserve(static_cast<std::size_t>(node.input().size()));
-    for (int i = 0; i < node.input().size(); ++i) {
+    for (std::size_t i = 0; i < node.input().size(); ++i) {
       resolved_inputs.push_back(resolve(std::string(node.input(static_cast<std::size_t>(i)))));
     }
 
     bool produces_output = false;
-    for (int i = 0; i < node.output().size(); ++i) {
+    for (std::size_t i = 0; i < node.output().size(); ++i) {
       if (output_names.find(std::string(node.output(static_cast<std::size_t>(i)))) !=
           output_names.end()) {
         produces_output = true;
@@ -959,7 +959,7 @@ std::size_t GraphBuilder::RemoveDuplicateNodesImpl(
     auto it = seen.find(signature);
     if (it != seen.end() && !produces_output && CanReuseOutputs(node, it->second)) {
       // Drop the duplicate and rewire each of its outputs onto the survivor.
-      for (int i = 0; i < node.output().size(); ++i) {
+      for (std::size_t i = 0; i < node.output().size(); ++i) {
         std::string out(node.output(static_cast<std::size_t>(i)));
         if (!out.empty()) {
           rename.emplace(std::move(out), it->second[static_cast<std::size_t>(i)]);
@@ -974,7 +974,7 @@ std::size_t GraphBuilder::RemoveDuplicateNodesImpl(
     if (it == seen.end()) {
       std::vector<std::string> outputs;
       outputs.reserve(static_cast<std::size_t>(node.output().size()));
-      for (int i = 0; i < node.output().size(); ++i) {
+      for (std::size_t i = 0; i < node.output().size(); ++i) {
         outputs.push_back(std::string(node.output(static_cast<std::size_t>(i))));
       }
       seen.emplace(signature, std::move(outputs));
@@ -1057,7 +1057,7 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
 
   // Fresh names for every remaining body value (node outputs not yet mapped).
   for (const NodeProto &node : function.nodes_) {
-    for (int j = 0; j < node.output().size(); ++j) {
+    for (std::size_t j = 0; j < node.output().size(); ++j) {
       std::string produced(node.output(static_cast<std::size_t>(j)));
       if (produced.empty() || rename.find(produced) != rename.end()) {
         continue;
@@ -1084,10 +1084,10 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
     if (!body.name().empty()) {
       node.set_name(body.name().value());
     }
-    for (int i = 0; i < body.input().size(); ++i) {
+    for (std::size_t i = 0; i < body.input().size(); ++i) {
       node.add_input(remap(std::string(body.input(static_cast<std::size_t>(i)))));
     }
-    for (int i = 0; i < body.output().size(); ++i) {
+    for (std::size_t i = 0; i < body.output().size(); ++i) {
       node.add_output(remap(std::string(body.output(static_cast<std::size_t>(i)))));
     }
     for (const AttributeProto &attribute : body.attribute()) {
@@ -1327,7 +1327,7 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     bool candidate = node_constant[idx] == core::compute::ConstantInfo::kConstant &&
                      !is_excluded(normalised_domain, op_type) && !NodeCarriesSubgraph(node);
     if (candidate && included_outputs != nullptr) {
-      for (int i = 0; i < node.output().size(); ++i) {
+      for (std::size_t i = 0; i < node.output().size(); ++i) {
         const std::string output(node.output(static_cast<std::size_t>(i)));
         if (!output.empty() && included_outputs->find(output) == included_outputs->end()) {
           candidate = false;
@@ -1339,7 +1339,7 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     // constant; otherwise the data needed to evaluate the node is missing (for
     // example a predecessor that was left unfolded).
     if (candidate) {
-      for (int i = 0; i < node.input().size(); ++i) {
+      for (std::size_t i = 0; i < node.input().size(); ++i) {
         const std::string input(node.input(static_cast<std::size_t>(i)));
         if (!input.empty() && const_tensors.find(input) == const_tensors.end()) {
           candidate = false;
@@ -1355,7 +1355,7 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     // Classify the node by the value tag of its outputs. A shape-carrying result
     // must be foldable; a weight (or untagged) result is folded best-effort.
     bool is_shape_result = false;
-    for (int i = 0; i < node.output().size(); ++i) {
+    for (std::size_t i = 0; i < node.output().size(); ++i) {
       const std::string output(node.output(static_cast<std::size_t>(i)));
       const auto tag_it = value_tags.find(output);
       if (tag_it != value_tags.end() && tag_it->second == "shape") {
@@ -1398,7 +1398,7 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     core::runtime::RuntimeContext rt(core::runtime::KernelContext(core::runtime::DefaultOpset(
                                          opset > 0 ? static_cast<int64_t>(opset) : 0)),
                                      core::runtime::RuntimeContextOptions{.device = device_});
-    for (int i = 0; i < node.input().size(); ++i) {
+    for (std::size_t i = 0; i < node.input().size(); ++i) {
       const std::string input(node.input(static_cast<std::size_t>(i)));
       if (input.empty()) {
         continue;
@@ -1411,7 +1411,7 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     // then kept untouched.
     bool within_threshold = true;
     if (options.max_element_count >= 0) {
-      for (int i = 0; i < node.output().size(); ++i) {
+      for (std::size_t i = 0; i < node.output().size(); ++i) {
         const std::string output(node.output(static_cast<std::size_t>(i)));
         if (output.empty()) {
           continue;
@@ -1428,7 +1428,7 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     }
 
     // Materialize every output as a constant available to later folds.
-    for (int i = 0; i < node.output().size(); ++i) {
+    for (std::size_t i = 0; i < node.output().size(); ++i) {
       const std::string output(node.output(static_cast<std::size_t>(i)));
       if (output.empty()) {
         continue;
@@ -1523,7 +1523,7 @@ void GraphBuilder::RewriteInitializerReferences(
     return;
   }
   for (NodeProto &node : nodes_) {
-    for (int i = 0; i < node.input().size(); ++i) {
+    for (std::size_t i = 0; i < node.input().size(); ++i) {
       auto it = rename.find(node.input(static_cast<std::size_t>(i)));
       if (it != rename.end()) {
         node.mutable_input(static_cast<std::size_t>(i))->assign(it->second);
@@ -1552,7 +1552,7 @@ void GraphBuilder::RewriteCapturedReferences(
     return;
   }
   for (NodeProto &node : nodes_) {
-    for (int i = 0; i < node.input().size(); ++i) {
+    for (std::size_t i = 0; i < node.input().size(); ++i) {
       auto it = rename.find(node.input(static_cast<std::size_t>(i)));
       if (it != rename.end()) {
         node.mutable_input(static_cast<std::size_t>(i))->assign(it->second);
@@ -1699,7 +1699,7 @@ std::string GraphBuilder::ToString() const {
   for (const TensorProto &tensor : initializers_) {
     os << "    " << tensor.name().value() << ": dtype=" << static_cast<int>(tensor.data_type())
        << ", shape=[";
-    for (int i = 0; i < tensor.dims().size(); ++i) {
+    for (std::size_t i = 0; i < tensor.dims().size(); ++i) {
       if (i != 0) {
         os << ",";
       }
@@ -1720,14 +1720,14 @@ std::string GraphBuilder::ToString() const {
       os << node_domain << ".";
     }
     os << node.op_type().value() << "(";
-    for (int i = 0; i < node.input().size(); ++i) {
+    for (std::size_t i = 0; i < node.input().size(); ++i) {
       if (i != 0) {
         os << ", ";
       }
       os << node.input(static_cast<std::size_t>(i));
     }
     os << ") -> ";
-    for (int i = 0; i < node.output().size(); ++i) {
+    for (std::size_t i = 0; i < node.output().size(); ++i) {
       if (i != 0) {
         os << ", ";
       }
@@ -1813,16 +1813,16 @@ FunctionProto GraphBuilder::ToFunction(const std::string &domain) {
   if (!domain.empty()) {
     function.set_domain(domain);
   }
-  for (int i = 0; i < graph.input().size(); ++i) {
+  for (std::size_t i = 0; i < graph.input().size(); ++i) {
     function.add_input(graph.input(static_cast<std::size_t>(i)).name().value());
   }
-  for (int i = 0; i < graph.output().size(); ++i) {
+  for (std::size_t i = 0; i < graph.output().size(); ++i) {
     function.add_output(graph.output(static_cast<std::size_t>(i)).name().value());
   }
   for (const auto &entry : opsets_) {
     function.add_opset(entry.first, entry.second);
   }
-  for (int i = 0; i < graph.node().size(); ++i) {
+  for (std::size_t i = 0; i < graph.node().size(); ++i) {
     function.add_node(graph.node(static_cast<std::size_t>(i)));
   }
   return function;

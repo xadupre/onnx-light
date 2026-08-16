@@ -69,7 +69,8 @@ constexpr int64_t kDefaultIrVersion = 10;
 //   avg       float[1, 1, 1, 1]
 //   Y         float[2, 1, 5, 7]
 // ---------------------------------------------------------------------------
-void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry,
+                                                TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 

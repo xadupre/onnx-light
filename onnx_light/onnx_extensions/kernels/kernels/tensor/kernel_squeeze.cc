@@ -58,7 +58,7 @@ onnx_kernels::Shape ComputeSqueezedShape(const Tensor &data, const onnx_kernels:
 } // namespace
 
 Tensor Squeeze::operator()(const Tensor &data, const onnx_kernels::Shape &axes,
-                           RuntimeContext *rt) const {
+                           RuntimeContext * /*rt*/) const {
   const onnx_kernels::Shape out_shape = ComputeSqueezedShape(data, axes);
   Tensor output = data;
   output.name.clear();

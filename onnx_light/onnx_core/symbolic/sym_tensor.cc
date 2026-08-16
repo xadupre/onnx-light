@@ -93,7 +93,7 @@ Device DeviceFromName(const std::string &name) {
 // non-negative shape values).
 SymShape ShapeFromTensorProtoDims(const TensorProto &tensor_proto) {
   SymShape shape;
-  for (int i = 0; i < tensor_proto.dims().size(); ++i) {
+  for (std::size_t i = 0; i < tensor_proto.dims().size(); ++i) {
     shape.PushBack(SymDim(static_cast<int64_t>(tensor_proto.dims()[i])));
   }
   return shape;
@@ -503,7 +503,7 @@ namespace {
 // lived in shape_inference.cc.
 SymShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
   SymShape shape;
-  for (int i = 0; i < sp.dim().size(); ++i) {
+  for (std::size_t i = 0; i < sp.dim().size(); ++i) {
     const TensorShapeProto::Dimension &d = sp.dim()[i];
     if (d.has_dim_value()) {
       shape.PushBack(SymDim(static_cast<int64_t>(d.dim_value())));
@@ -519,7 +519,7 @@ SymShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
 // Returns the index of the metadata entry whose key matches ``key``,
 // or -1 when none is present.
 int FindMetadataIndex(const ValueInfoProto &vi, const char *key) {
-  for (int i = 0; i < vi.metadata_props().size(); ++i) {
+  for (std::size_t i = 0; i < vi.metadata_props().size(); ++i) {
     if (vi.metadata_props()[i].key() == key) {
       return i;
     }

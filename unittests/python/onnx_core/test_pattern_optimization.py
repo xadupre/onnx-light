@@ -62,6 +62,10 @@ class TestPatternOptimization(ExtTestCase):
         pattern_report = next(item for item in report.patterns if item.pattern_name == "NegNeg")
         self.assertEqual(pattern_report.matches, 1)
         self.assertGreaterEqual(sum(item.occurrences for item in pattern_report.no_matches), 1)
+        self.assertIn(
+            "the input is not produced by Neg",
+            {item.reason for item in pattern_report.no_matches},
+        )
 
     def test_replay_reproduces_python_rewrite(self):
         model = _double_neg_model()

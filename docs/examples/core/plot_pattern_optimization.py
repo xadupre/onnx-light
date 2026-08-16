@@ -16,7 +16,9 @@ whole workflow on a tiny model:
 3. List every applied modification
    (:class:`~onnx_light.onnx_core.optimization.LocalRewriting`) and *replay*
    them from the original model to reproduce the optimized graph.
-4. Write a custom pattern and apply it together with the standard ones.
+4. Write a custom pattern.
+5. Inspect a candidate rejected by that pattern and the recorded failure reason.
+6. Apply the custom pattern together with the standard ones.
 
 See :ref:`l-howto-add-custom-pattern` for a companion how-to that focuses on
 writing and registering a pattern (including how priorities order patterns),
@@ -129,6 +131,46 @@ class NegNegPattern(PatternOptimization):
         previous, node = nodes
         return [helper.make_node("Identity", [previous.input[0]], list(node.output))]
 
+
+#####################################
+# Inspect a failed pattern candidate
+# ++++++++++++++++++++++++++++++++++
+#
+# The same custom pattern rejects a single ``Neg`` because its input is not
+# produced by another ``Neg``. Returning ``self.no_match(candidate, reason)``
+# keeps that rejection out of normal output, but the optional report stores the
+# aggregated reason so the pattern author can understand why nothing changed.
+
+failure_model = parser.parse_model(
+    '<ir_version: 10, opset_import: ["" : 18]>\n'
+    "agraph (float[4] x) => (float[4] y) {\n"
+    "  y = Neg(x)\n"
+    "}\n"
+)
+builder = GraphBuilder(failure_model)
+graph = GraphGraph(builder, [NegNegPattern()])
+failed_rewrites, failed_report = graph.optimize(report=True)
+
+print(f"failed rewrite count: {len(failed_rewrites)}")
+for pattern_stats in failed_report.patterns:
+    for no_match in pattern_stats.no_matches:
+        print(
+            f"{pattern_stats.pattern_name} rejected "
+            f"{no_match.occurrences} candidate(s): {no_match.reason}"
+        )
+
+assert not failed_rewrites
+failed_no_match_reasons = {
+    no_match.reason
+    for pattern_stats in failed_report.patterns
+    if pattern_stats.pattern_name == "NegNeg"
+    for no_match in pattern_stats.no_matches
+}
+assert "the input is not produced by Neg" in failed_no_match_reasons
+
+#####################################
+# Apply the custom pattern with the standard patterns
+# +++++++++++++++++++++++++++++++++++++++++++++++++++
 
 builder = GraphBuilder(model)
 graph = GraphGraph(builder, [*standard_patterns(["Cast"]), NegNegPattern()])

@@ -77,6 +77,10 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ConcatGatherPattern>();
                                    });
+    core::builder::RegisterPattern("ConcatTwiceUnary",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ConcatTwiceUnaryPattern>();
+                                   });
     core::builder::RegisterPattern("GatherConcat",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<GatherConcatPattern>();
@@ -89,9 +93,17 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<GatherShapePattern>();
                                    });
+    core::builder::RegisterPattern("GathersSplit",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<GathersSplitPattern>();
+                                   });
     core::builder::RegisterPattern("SliceSlice",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<SliceSlicePattern>();
+                                   });
+    core::builder::RegisterPattern("SlicesSplit",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<SlicesSplitPattern>();
                                    });
     core::builder::RegisterPattern("SplitConcat",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {

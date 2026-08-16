@@ -62,4 +62,33 @@ public:
         const std::vector<const NodeProto *> &nodes) const override;
 };
 
+/**
+ * Pushes a shape-preserving unary operator through a ``Concat(x, x)`` so that
+ * ``Unary(Concat(x, x))`` becomes ``Concat(Unary(x), Unary(x))``, exposing the
+ * shared ``Unary(x)`` for common-subexpression elimination.
+ *
+ * The rewrite requires opset ≥ 18, a two-input ``Concat`` whose inputs are the
+ * same value, and a consumer that is a shape-preserving unary op (or a
+ * broadcasting ``Mul`` / ``Add`` / ``Div`` / ``Sub`` / ``Unsqueeze`` with a
+ * constant scalar second input).
+ */
+class ConcatTwiceUnaryPattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit ConcatTwiceUnaryPattern(int priority = 0)
+      : PatternOptimization(priority, "ConcatTwiceUnary") {}
+
+  /// Returns ``Concat`` as the only possible root operator.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds a ``Concat(x, x)`` consumed by a shape-preserving unary op.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Moves the unary op ahead of the ``Concat``.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_patterns

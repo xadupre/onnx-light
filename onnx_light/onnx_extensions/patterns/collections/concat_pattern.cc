@@ -5,6 +5,7 @@
 #include "onnx_extensions/patterns/collections/concat_pattern.h"
 
 #include <cstdint>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,67 @@ namespace {
 using collections::GetAxis;
 using collections::IsDefaultOp;
 using core::builder::BuilderError;
+
+// Shape-preserving unary operators that may be pushed through a Concat(x, x).
+const std::set<std::string> &UnaryLikeOpTypes() {
+  static const std::set<std::string> types = {"Abs",
+                                              "Acos",
+                                              "Acosh",
+                                              "Asin",
+                                              "Asinh",
+                                              "Atan",
+                                              "Atanh",
+                                              "BitShift",
+                                              "BitwiseNot",
+                                              "Cast",
+                                              "CastLike",
+                                              "Ceil",
+                                              "Celu",
+                                              "Clip",
+                                              "Cos",
+                                              "Cosh",
+                                              "CumSum",
+                                              "DequantizeLinear",
+                                              "DynamicQuantizeLinear",
+                                              "Elu",
+                                              "Erf",
+                                              "Exp",
+                                              "Floor",
+                                              "HardSigmoid",
+                                              "HardSwish",
+                                              "IsInf",
+                                              "LeakyRelu",
+                                              "Log",
+                                              "LogSoftmax",
+                                              "LpNormalization",
+                                              "LRN",
+                                              "MeanVarianceNormalization",
+                                              "Mish",
+                                              "Neg",
+                                              "Not",
+                                              "PRelu",
+                                              "QuantizeLinear",
+                                              "Reciprocal",
+                                              "Relu",
+                                              "Round",
+                                              "Selu",
+                                              "Shrink",
+                                              "Sigmoid",
+                                              "Sign",
+                                              "Sin",
+                                              "Sinh",
+                                              "Softmax",
+                                              "Softplus",
+                                              "Softsign",
+                                              "Sqrt",
+                                              "Tan",
+                                              "Tanh",
+                                              "ThresholdedRelu",
+                                              "ThresholdRelu",
+                                              "Trilu",
+                                              "Trunc"};
+  return types;
+}
 
 // Returns the indices of ``concat`` inputs that are empty along ``axis``.
 std::vector<int> EmptyConcatInputs(core::builder::GraphGraph &graph, const NodeProto &concat) {
@@ -65,6 +127,36 @@ bool ConcatInputBucket(core::builder::GraphGraph &graph, const NodeProto &concat
       return true;
     }
     offset += n;
+  }
+  return false;
+}
+
+// Returns true when ``unary`` may be pushed ahead of ``concat`` (see pattern).
+bool ValidUnaryConsumer(core::builder::GraphGraph &graph, const NodeProto &concat,
+                        const NodeProto &unary) {
+  const std::string &op_type = unary.op_type().value();
+  if (NormaliseDomain(unary.domain().value()) != kDefaultOnnxDomain) {
+    return false;
+  }
+  if (UnaryLikeOpTypes().count(op_type) != 0) {
+    return true;
+  }
+  if (op_type == "Unsqueeze" && unary.input_size() >= 2 &&
+      graph.IsConstantScalar(unary.input()[1].value())) {
+    int64_t cst = 0;
+    if (!collections::ReadScalarInt(*graph.GetComputedConstant(unary.input()[1].value()), cst)) {
+      return false;
+    }
+    const int64_t axis = GetAxis(concat, 0);
+    if (axis == -1 && cst != -1 && graph.HasShape(unary.input()[0].value()) &&
+        cst < static_cast<int64_t>(graph.GetShape(unary.input()[0].value()).Shape().Rank())) {
+      return true;
+    }
+  }
+  static const std::set<std::string> binary = {"Mul", "Add", "Div", "Sub"};
+  if (binary.count(op_type) != 0 && unary.input_size() >= 2 &&
+      graph.IsConstantScalar(unary.input()[1].value())) {
+    return true;
   }
   return false;
 }
@@ -213,6 +305,68 @@ ConcatGatherPattern::Apply(core::builder::GraphGraph &graph,
     replacements.add() = concat;
   }
   replacements.push_back(replacement);
+  return replacements;
+}
+
+std::set<std::string> ConcatTwiceUnaryPattern::FastOpType() const { return {"Concat"}; }
+
+core::builder::MatchResult ConcatTwiceUnaryPattern::Match(core::builder::GraphGraph &graph,
+                                                          const NodeProto &candidate) const {
+  if (graph.Builder().OpsetVersion("") < 18) {
+    return NoMatch(candidate, "the default opset is older than 18");
+  }
+  if (!IsDefaultOp(candidate, "Concat")) {
+    return NoMatch(candidate, "candidate is not a default-domain Concat");
+  }
+  if (candidate.input_size() != 2 || candidate.input()[0].value() != candidate.input()[1].value()) {
+    return NoMatch(candidate, "the Concat does not repeat a single input twice");
+  }
+  for (const NodeProto *user : graph.NextNodes(candidate.output()[0].value())) {
+    if (ValidUnaryConsumer(graph, candidate, *user)) {
+      return core::builder::MatchResult{this, {&candidate, user}, &candidate};
+    }
+  }
+  return NoMatch(candidate, "the Concat is not consumed by a shape-preserving unary op");
+}
+
+utils::RepeatedProtoField<NodeProto>
+ConcatTwiceUnaryPattern::Apply(core::builder::GraphGraph &graph,
+                               const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
+    throw BuilderError("ConcatTwiceUnaryPattern::Apply expects a Concat and a unary node.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[0]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError("ConcatTwiceUnaryPattern::Apply received an unsafe or inconsistent match.");
+  }
+  const NodeProto &concat = *nodes[0];
+  const NodeProto &unary = *nodes[1];
+
+  core::builder::GraphBuilder &builder = graph.Builder();
+  const std::string new_name = builder.UniqueName("u" + unary.output()[0].value());
+  const std::string name = "ConcatTwiceUnaryPattern--" + unary.name().value();
+
+  std::vector<std::string> unary_inputs{concat.input()[0].value()};
+  for (int i = 1; i < unary.input_size(); ++i) {
+    unary_inputs.push_back(unary.input()[i].value());
+  }
+  NodeProto new_unary =
+      MakeNode(unary.op_type().value().c_str(), unary_inputs, {new_name}, "", name.c_str());
+  for (const auto &attribute : unary.attribute()) {
+    *new_unary.add_attribute() = attribute;
+  }
+  NodeProto new_concat = MakeNode(concat.op_type().value().c_str(), {new_name, new_name},
+                                  {unary.output()[0].value()}, "", name.c_str());
+  for (const auto &attribute : concat.attribute()) {
+    *new_concat.add_attribute() = attribute;
+  }
+
+  utils::RepeatedProtoField<NodeProto> replacements;
+  if (graph.IsUsedMoreThanOnce(concat.output()[0].value())) {
+    replacements.add() = concat;
+  }
+  replacements.push_back(new_unary);
+  replacements.push_back(new_concat);
   return replacements;
 }
 

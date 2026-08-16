@@ -139,5 +139,43 @@ TEST(ConcatGatherPattern, RewritesToIdentityForSingletonInput) {
   EXPECT_EQ(replacements[0].input()[0].value(), "a");
 }
 
+TEST(ConcatTwiceUnaryPattern, PushesUnaryThroughConcat) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 3));
+  builder.MakeNode("Concat", {"x", "x"}, {"c"}, "", "", AxisAttrs(0));
+  builder.MakeNode("Sin", {"c"}, {"y"});
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ConcatTwiceUnaryPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  ASSERT_EQ(match.pattern, &pattern);
+  ASSERT_EQ(match.nodes.size(), 2u);
+
+  const utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 2u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Sin");
+  EXPECT_EQ(replacements[0].input()[0].value(), "x");
+  EXPECT_EQ(replacements[1].op_type().value(), "Concat");
+  EXPECT_EQ(replacements[1].input()[0].value(), replacements[0].output()[0].value());
+  EXPECT_EQ(replacements[1].input()[1].value(), replacements[0].output()[0].value());
+  EXPECT_EQ(replacements[1].output()[0].value(), "y");
+}
+
+TEST(ConcatTwiceUnaryPattern, RejectsOldOpset) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 17);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 3));
+  builder.MakeNode("Concat", {"x", "x"}, {"c"}, "", "", AxisAttrs(0));
+  builder.MakeNode("Sin", {"c"}, {"y"});
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ConcatTwiceUnaryPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  EXPECT_EQ(match.pattern, nullptr);
+}
+
 } // namespace
 } // namespace Test

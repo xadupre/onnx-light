@@ -52,38 +52,16 @@ registry; :func:`reset_registered_patterns` restores the standard patterns.
 Registered standard patterns
 ++++++++++++++++++++++++++++
 
-.. list-table::
-   :header-rows: 1
-   :widths: 24 12 24 40
+The following table lists the standard patterns registered when this module is
+imported. It is generated from the live registry, so it always reflects the
+currently available patterns.
 
-   * - Class / registered name
-     - Priority
-     - Candidate roots
-     - Transformation
-   * - :class:`CastPattern` / ``Cast``
-     - 0
-     - ``Cast``
-     - Replaces a type-preserving Cast with Identity.
-   * - :class:`CastCastPattern` / ``CastCast``
-     - 1
-     - ``Cast``
-     - Collapses two compatible consecutive Cast nodes into one Cast or
-       Identity.
-   * - :class:`CastCastBinaryPattern` / ``CastCastBinary``
-     - 1
-     - Binary arithmetic operators
-     - Moves matching floating-point input Cast nodes after the binary
-       operation when precision and shared-use guards allow it.
-   * - :class:`CastOpCastPattern` / ``CastOpCast``
-     - 1
-     - Supported unary and binary operators
-     - Moves an operation to its result type and removes or relocates its
-       surrounding Cast nodes.
-   * - :class:`ClipClipPattern` / ``ClipClip``
-     - 1
-     - ``Clip``
-     - Merges two consecutive Clip nodes into one when one defines the minimum
-       bound and the other the maximum bound.
+.. runpython::
+    :rst:
+
+    from onnx_light.onnx_core.optimization import render_rst_standard_patterns_table
+
+    print(render_rst_standard_patterns_table())
 
 The runtime list is available through :func:`standard_pattern_names`.
 

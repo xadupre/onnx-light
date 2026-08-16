@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/kernels/kernels/generator/include_generator_kernels.h"
 
-#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cmath>
@@ -101,7 +101,7 @@ float ReadBfloat16Scalar(const Tensor &t, const char *name) {
 }
 
 // IEEE-754 binary16 / bfloat16 encoders (round-to-nearest-even) are provided
-// by ``onnx_core/runtime/cast_helper.h`` as ``FloatToFloat16Bits``
+// by ``onnx_core/runtime/kernels/cast_helper.h`` as ``FloatToFloat16Bits``
 // and ``FloatToBfloat16Bits``.
 
 // Computes a Range output whose element type is float16 or bfloat16 by

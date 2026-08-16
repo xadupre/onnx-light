@@ -6,7 +6,7 @@
 
 #include "onnx_core/runtime/runtime_context.h"
 
-#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
 #include <array>
 #include <bit>
 #include <cstddef>

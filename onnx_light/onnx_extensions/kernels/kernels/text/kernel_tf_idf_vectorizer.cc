@@ -4,7 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/text/include_text_kernels.h"
 
-#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_light_helpers.h"
 #include <algorithm>

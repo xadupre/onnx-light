@@ -4,7 +4,7 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
-#include "onnx_core/runtime/kernel_context.h"
+#include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernels/object_detection/include_object_detection_kernels.h"
 

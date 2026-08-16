@@ -4,10 +4,10 @@
 
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 
-#include "onnx_core/runtime/kernel_dispatch_table.h"
-#include "onnx_core/runtime/node_helpers.h"
-#include "onnx_core/runtime/run_nodes.h"
-#include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_extensions/kernels/kernels/generator/include_generator_kernels.h"
 #include "onnx_extensions/kernels/kernels/image/include_image_kernels.h"
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
@@ -41,7 +41,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels {
 
 // The generic per-node helpers (``RequireInputCount``, ``GetInput``, ...)
 // and runtime types (``Tensor``, ``RuntimeContext``, ...) now live in
-// ``onnx_core::runtime`` (see ``onnx_core/runtime/node_helpers.h``); pull
+// ``onnx_core::runtime`` (see ``onnx_core/runtime/kernels/node_helpers.h``); pull
 // them in unqualified so the dispatch-table factory below can refer to them
 // without qualification. Each kernel's ``KernelBase::Run`` implementation
 // lives alongside its ``operator()`` in the kernel's own source file.

@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/tensor_compare.h"
+#include "onnx_core/runtime/kernels/tensor_compare.h"
 
-#include "onnx_core/runtime/cast_helper.h"
-#include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 
 #include <gtest/gtest.h>
 

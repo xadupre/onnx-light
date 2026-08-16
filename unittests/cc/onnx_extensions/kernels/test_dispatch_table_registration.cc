@@ -4,11 +4,11 @@
 
 #include "onnx_proto/onnx.h"
 
-#include "onnx_core/runtime/kernel_context.h"
-#include "onnx_core/runtime/kernel_dispatch_table.h"
-#include "onnx_core/runtime/kernel_tuning.h"
-#include "onnx_core/runtime/parallel_for.h"
+#include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 

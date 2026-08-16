@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 
 #include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_proto/onnx.h"

@@ -66,7 +66,7 @@ back through :cpp:func:`onnx_light::core::runtime::RuntimeContext::Put`.
 
       .. code-block:: cpp
 
-          #include "onnx_core/runtime/run_nodes.h"
+          #include "onnx_core/runtime/kernels/run_nodes.h"
           #include "onnx_core/runtime/runtime_context.h"
 
           #include <vector>
@@ -160,7 +160,7 @@ kernel *before* running the evaluators that should use it.
 
       .. code-block:: cpp
 
-          #include "onnx_core/runtime/kernel_dispatch_table.h"
+          #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 
           using namespace onnx_light::core::runtime;
 
@@ -292,7 +292,7 @@ tensor encoding/decoding.  This Python binding mirrors the C++
 
       .. code-block:: cpp
 
-          #include "onnx_core/runtime/run_nodes.h"
+          #include "onnx_core/runtime/kernels/run_nodes.h"
           #include "onnx_core/runtime/runtime_context.h"
 
           using namespace onnx_light::core::runtime;

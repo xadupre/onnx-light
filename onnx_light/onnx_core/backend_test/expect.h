@@ -6,8 +6,8 @@
 
 #include "onnx_core/backend_test/io_data.h"
 #include "onnx_core/backend_test/test_case.h"
-#include "onnx_core/runtime/cast_helper.h"
-#include "onnx_core/runtime/random.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
+#include "onnx_core/runtime/kernels/random.h"
 
 #include <cstdint>
 #include <functional>

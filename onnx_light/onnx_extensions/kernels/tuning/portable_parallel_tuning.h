@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "onnx_core/runtime/kernel_context.h"
-#include "onnx_core/runtime/kernel_tuning.h"
+#include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/tuning/kernel_tuning.h"
 
 #include <cstdint>
 #include <span>

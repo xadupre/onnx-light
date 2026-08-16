@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/parallel_for.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 
 #include <gtest/gtest.h>
 

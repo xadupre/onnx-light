@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
-#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -16,7 +16,7 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 // IEEE-754 binary16 ↔ binary32 conversions used by the FLOAT16 dispatch
-// path are provided by ``onnx_core/runtime/cast_helper.h``.
+// path are provided by ``onnx_core/runtime/kernels/cast_helper.h``.
 
 std::pair<Tensor, Tensor> CausalConvWithState::operator()(const Tensor &input, const Tensor &weight,
                                                           const Tensor &bias,

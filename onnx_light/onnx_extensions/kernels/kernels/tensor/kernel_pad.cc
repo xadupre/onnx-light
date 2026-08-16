@@ -4,9 +4,9 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
-#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/memory/temporary_buffer.h"
 #include "onnx_core/runtime/runtime_context.h"
-#include "onnx_core/runtime/temporary_buffer.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>

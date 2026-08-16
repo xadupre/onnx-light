@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
-#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/quantization/include_quantization_cases.h"
 #include "onnx_extensions/kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -33,7 +33,7 @@ NodeProto MakeQLinearMatMulNode() {
 }
 
 // The IEEE-754 binary16 encoder and FLOAT16 scalar builder are provided by
-// ``onnx_core/runtime/cast_helper.h`` as ``FloatToFloat16Bits``
+// ``onnx_core/runtime/kernels/cast_helper.h`` as ``FloatToFloat16Bits``
 // and ``MakeFloat16Scalar``.
 
 // Builds an INT8/UINT8 scalar tensor (used for zero points). ``dtype`` must be

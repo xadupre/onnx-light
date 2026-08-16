@@ -160,7 +160,13 @@ for pattern_stats in failed_report.patterns:
         )
 
 assert not failed_rewrites
-assert failed_report.patterns[0].no_matches[0].reason == "the input is not produced by Neg"
+failed_no_match_reasons = {
+    no_match.reason
+    for pattern_stats in failed_report.patterns
+    if pattern_stats.pattern_name == "NegNeg"
+    for no_match in pattern_stats.no_matches
+}
+assert "the input is not produced by Neg" in failed_no_match_reasons
 
 #####################################
 # Apply the custom pattern with the standard patterns

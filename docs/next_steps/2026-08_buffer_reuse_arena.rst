@@ -69,6 +69,12 @@ The implementation is split into focused pull requests:
        its own and returns the buffer exactly once, so an exported graph output
        can be transferred to a NumPy capsule without keeping the mutable
        :cpp:class:`RuntimeContext` as the data owner.
+   * - `PR #4457 <https://github.com/xadupre/onnx-light/pull/4457>`_
+     - Capsule ownership wiring for exported outputs
+     - Updates NumPy export so allocator-backed graph outputs transfer their
+       released ``AllocationHandle`` into an ``IOArena`` lease-backed handle and
+       store that handle directly in the NumPy capsule, removing the dependency
+       on keeping the mutable :cpp:class:`RuntimeContext` alive as the data owner.
 
 Current behaviour
 +++++++++++++++++
@@ -323,8 +329,8 @@ Implementation order
    <https://github.com/xadupre/onnx-light/pull/4454>`_): ``IOArena::ExportHandle``
    turns a live buffer into an ``AllocationHandle`` backed by an ``IOLease``, so
    the handle keeps its arena alive on its own and can be owned by a capsule
-   independently of the context. Wiring the capsule to hold this handle instead
-   of the context follows.
+   independently of the context. The NumPy capsule wiring then lands in `PR #4457
+   <https://github.com/xadupre/onnx-light/pull/4457>`_.
 7. Add independent retention caps, LRU eviction, trimming, and accounting for
    both arenas.
 8. Benchmark repeated large intermediate and large-output models separately.
@@ -368,3 +374,6 @@ Pull requests
 * `PR #4454 <https://github.com/xadupre/onnx-light/pull/4454>`_: adds
   ``IOArena::ExportHandle`` and an ``IOLease``-backed ``AllocationHandle`` so an
   exported output can outlive the :cpp:class:`RuntimeContext` that produced it.
+* `PR #4457 <https://github.com/xadupre/onnx-light/pull/4457>`_: wires NumPy
+  output export to store an ``IOLease``-backed ``AllocationHandle`` directly in
+  the owner capsule instead of keeping :cpp:class:`RuntimeContext` alive.

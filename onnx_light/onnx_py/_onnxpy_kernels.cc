@@ -28,6 +28,7 @@
 #include <nanobind/stl/function.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
+#include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/vector.h>
@@ -40,6 +41,7 @@ using core::runtime::ExecuteAction;
 using core::runtime::ExecuteActionKind;
 using core::runtime::ExecutionArena;
 using core::runtime::ExecutionPlan;
+using core::runtime::IOArena;
 using core::runtime::KernelContext;
 using core::runtime::Map;
 using core::runtime::OpsetId;
@@ -1283,6 +1285,38 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "Releases the storage retained by every free buffer and returns the "
            "number of bytes released. Live buffers are left untouched.");
 
+  nb::class_<IOArena, RawBufferAllocator>(
+      rt_mod, "IOArena",
+      "Fixed-slot allocator for graph outputs and other I/O buffers. It retains "
+      "freed storage like :class:`ExecutionArena` and keeps exported NumPy "
+      "outputs pinned through reference-counted leases.")
+      .def(nb::new_([](size_t capacity, size_t retention_cap) {
+             return IOArena::Create(capacity, retention_cap);
+           }),
+           nb::arg("capacity"), nb::arg("retention_cap") = std::numeric_limits<size_t>::max())
+      .def_prop_ro("total_allocated_size", &IOArena::TotalAllocatedSize,
+                   "Logical bytes held by currently live and leased buffers.")
+      .def_prop_ro("peak_allocated_size", &IOArena::PeakAllocatedSize,
+                   "Peak logical live-byte count since construction or reset.")
+      .def_prop_ro("allocated_count", &IOArena::allocated_count,
+                   "Number of currently live buffers not exported through a lease.")
+      .def_prop_ro("leased_count", &IOArena::leased_count,
+                   "Number of buffers currently pinned by exported owners.")
+      .def_prop_ro("capacity", &IOArena::capacity,
+                   "Maximum number of simultaneously live or leased buffers.")
+      .def_prop_ro("retained_size", &IOArena::RetainedSize,
+                   "Total capacity of free retained buffers.")
+      .def_prop_ro("retained_count", &IOArena::retained_count, "Number of free retained buffers.")
+      .def_prop_rw("retention_cap", &IOArena::retention_cap, &IOArena::SetRetentionCap,
+                   "Maximum total capacity kept on the retained free lists. Lowering it "
+                   "evicts the least-recently-freed buffers until the retained capacity "
+                   "fits; live and leased buffers are never evicted.")
+      .def("reset_peak", &IOArena::ResetPeak,
+           "Resets the memory peak to the current :attr:`total_allocated_size`.")
+      .def("trim", &IOArena::Trim,
+           "Releases the storage retained by every free buffer and returns the "
+           "number of bytes released. Live and leased buffers are left untouched.");
+
   // RuntimeContext — name-keyed tensor map + kernel context + function registry.
   nb::class_<RuntimeContext>(
       rt_mod, "RuntimeContext",
@@ -1294,10 +1328,12 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(
           "__init__",
           [](RuntimeContext *self, KernelContext kernel_ctx, bool events_enabled, int verbose,
-             bool release_intermediates, RawBufferAllocator *allocator) {
+             bool release_intermediates, RawBufferAllocator *allocator,
+             RawBufferAllocator *io_allocator) {
             new (self) RuntimeContext(std::move(kernel_ctx),
                                       core::runtime::RuntimeContextOptions{
                                           .allocator = allocator,
+                                          .io_allocator = io_allocator,
                                           .events_enabled = events_enabled,
                                           .verbose = verbose,
                                           .release_intermediates = release_intermediates,
@@ -1305,7 +1341,18 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           },
           nb::arg("kernel_ctx"), nb::kw_only(), nb::arg("events_enabled") = false,
           nb::arg("verbose") = 0, nb::arg("release_intermediates") = false,
-          nb::arg("allocator").none() = nullptr, nb::keep_alive<1, 6>())
+          nb::arg("allocator").none() = nullptr, nb::arg("io_allocator").none() = nullptr,
+          nb::keep_alive<1, 6>(), nb::keep_alive<1, 7>())
+      .def_prop_ro(
+          "execution_allocator",
+          [](RuntimeContext &rt) -> RawBufferAllocator * { return rt.execution_allocator(); },
+          nb::rv_policy::reference_internal,
+          "Allocator used for run-local intermediates and workspaces.")
+      .def_prop_ro(
+          "io_allocator",
+          [](RuntimeContext &rt) -> RawBufferAllocator * { return rt.io_allocator(); },
+          nb::rv_policy::reference_internal,
+          "Allocator used for declared graph outputs when supplied.")
       .def_prop_ro(
           "events_enabled", [](const RuntimeContext &rt) { return rt.events_enabled(); },
           "When ``True``, :func:`set` / :func:`put` / :func:`remove` and "

@@ -82,6 +82,7 @@ if _ml_dtypes is not None:
 _NP_TO_DTYPE: dict[Any, int] = {v: k for k, v in _DTYPE_TO_NP.items()}
 
 _IS_BIG_ENDIAN = sys.byteorder == "big"
+_DEFAULT_ARENA_CAPACITY = 4096
 
 
 def _cpp_tensor_to_numpy(t: Any, steal: bool = False) -> np.ndarray:
@@ -233,6 +234,12 @@ class ReferenceEvaluator:
         memory, so the event log doubles as a per-node memory profile. The
         allocator must have enough slot ``capacity`` for the number of buffers
         alive at the same time; the caller retains ownership.
+    io_allocator:
+        Optional :class:`IOArena` (or any ``RawBufferAllocator``) dedicated to
+        declared graph outputs. When neither allocator is provided, the
+        evaluator creates persistent execution and I/O arenas and reuses them
+        across runs. Passing only ``allocator`` preserves the legacy
+        single-allocator behaviour.
 
     Example
     -------
@@ -259,6 +266,7 @@ class ReferenceEvaluator:
         events_enabled: bool = False,
         release_intermediates: bool = True,
         allocator: Any = None,
+        io_allocator: Any = None,
     ) -> None:
         proto = self._load_proto(proto)
         if not isinstance(verbose, int):
@@ -355,17 +363,40 @@ class ReferenceEvaluator:
         # context, keyed by graph/function address) instead of rebuilding it on
         # every call. The per-invocation tensor / sequence / event state is
         # reset via ``RuntimeContext.clear`` at the start of each :meth:`run`.
+        if allocator is None and io_allocator is None:
+            if self._graph is not None:
+                node_output_slots = sum(len(node.output) for node in self._graph.node)
+                initializer_slots = len(self._graph.initializer)
+            elif self._function is not None:
+                node_output_slots = len(self._function.output)
+                initializer_slots = 0
+            else:
+                node_output_slots = 0
+                initializer_slots = 0
+            arena_capacity = max(
+                _DEFAULT_ARENA_CAPACITY,
+                len(self._input_names)
+                + len(self._output_names)
+                + initializer_slots
+                + node_output_slots
+                + 4,
+            )
+            allocator = _runtime.ExecutionArena(arena_capacity)
+            io_allocator = _runtime.IOArena(arena_capacity)
+
         self._ctx = _runtime.RuntimeContext(
             self._kernel_ctx,
             verbose=self._verbose,
             events_enabled=self._events_enabled,
             allocator=allocator,
+            io_allocator=io_allocator,
         )
         # Keep a Python reference to the allocator so it outlives the context
         # (the binding also keeps it alive) and attach it so the runtime routes
         # buffer storage through it and records its live / peak memory on every
         # event.
         self._allocator = allocator
+        self._io_allocator = io_allocator
         if self._model is not None:
             _runtime.register_model_functions(self._model, self._ctx)
 

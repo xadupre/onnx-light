@@ -142,6 +142,55 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertIs(first, duplicate)
         np.testing.assert_array_equal(first, np.array([11.0, 22.0, 33.0], dtype=np.float32))
 
+    def test_default_arenas_route_outputs_to_io_arena(self):
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        evaluator = ReferenceEvaluator(model)
+
+        (output,) = evaluator.run(
+            None,
+            {
+                "x": np.array([-1.0, 2.0, -3.0], dtype=np.float32),
+                "z": np.array([10.0, 20.0, 30.0], dtype=np.float32),
+            },
+        )
+
+        self.assertIsInstance(evaluator._allocator, runtime.ExecutionArena)
+        self.assertIsInstance(evaluator._io_allocator, runtime.IOArena)
+        evaluator._ctx.clear()
+        self.assertEqual(evaluator._allocator.allocated_count, 0)
+        self.assertGreaterEqual(evaluator._allocator.retained_count, 1)
+        self.assertEqual(evaluator._io_allocator.allocated_count, 0)
+        self.assertEqual(evaluator._io_allocator.leased_count, 1)
+        np.testing.assert_array_equal(output, np.array([11.0, 22.0, 33.0], dtype=np.float32))
+
+        del output
+        gc.collect()
+        self.assertEqual(evaluator._io_allocator.leased_count, 0)
+        self.assertEqual(evaluator._io_allocator.retained_count, 1)
+
+    def test_reference_evaluator_accepts_io_allocator(self):
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        execution_arena = runtime.ExecutionArena(4)
+        io_arena = runtime.IOArena(4)
+        evaluator = ReferenceEvaluator(model, allocator=execution_arena, io_allocator=io_arena)
+
+        (output,) = evaluator.run(
+            None,
+            {
+                "x": np.array([-1.0, 2.0, -3.0], dtype=np.float32),
+                "z": np.array([10.0, 20.0, 30.0], dtype=np.float32),
+            },
+        )
+
+        self.assertIs(evaluator._allocator, execution_arena)
+        self.assertIs(evaluator._io_allocator, io_arena)
+        evaluator._ctx.clear()
+        self.assertEqual(execution_arena.allocated_count, 0)
+        self.assertGreaterEqual(execution_arena.retained_count, 1)
+        self.assertEqual(io_arena.allocated_count, 0)
+        self.assertEqual(io_arena.leased_count, 1)
+        np.testing.assert_array_equal(output, np.array([11.0, 22.0, 33.0], dtype=np.float32))
+
     def test_metadata(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         sess = ReferenceEvaluator(model)

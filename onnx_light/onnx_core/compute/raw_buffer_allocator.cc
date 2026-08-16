@@ -277,6 +277,18 @@ IOLease IOArena::Export(RawBuffer *buf) {
   return IOLease(shared_from_this(), buf, logical_size);
 }
 
+AllocationHandle IOArena::ExportHandle(RawBuffer *buf) {
+  return AllocationHandle(this, Export(buf));
+}
+
+AllocationHandle IOArena::ExportHandle(AllocationHandle &&handle) {
+  if (!handle || handle.holds_lease()) {
+    throw std::invalid_argument(
+        "IOArena::ExportHandle: handle must own a plain allocator-backed buffer.");
+  }
+  return AllocationHandle(this, Export(handle.Release()));
+}
+
 void IOArena::ReturnLease(RawBuffer *buf) noexcept {
   const auto slot = slot_indices_.find(buf);
   assert(slot != slot_indices_.end());

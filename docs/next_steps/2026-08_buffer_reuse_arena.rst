@@ -62,6 +62,13 @@ The implementation is split into focused pull requests:
        execution allocator and has :cpp:class:`RuntimeSession` route a node's
        kernel invocation through it whenever that node produces a declared
        graph output, falling back to the execution allocator otherwise.
+   * - `PR #4454 <https://github.com/xadupre/onnx-light/pull/4454>`_
+     - Self-owning exported allocation handle
+     - Lets an ``IOArena`` export a live buffer as an ``AllocationHandle`` backed
+       by an ``IOLease`` (``ExportHandle``). The handle keeps its arena alive on
+       its own and returns the buffer exactly once, so an exported graph output
+       can be transferred to a NumPy capsule without keeping the mutable
+       :cpp:class:`RuntimeContext` as the data owner.
 
 Current behaviour
 +++++++++++++++++
@@ -312,7 +319,12 @@ Implementation order
    restoring the execution allocator for every other node.
 6. Transfer each exported output handle to its NumPy capsule; remove the
    dependency on keeping the mutable :cpp:class:`RuntimeContext` as the data
-   owner.
+   owner. The enabling mechanism lands first (`PR #4454
+   <https://github.com/xadupre/onnx-light/pull/4454>`_): ``IOArena::ExportHandle``
+   turns a live buffer into an ``AllocationHandle`` backed by an ``IOLease``, so
+   the handle keeps its arena alive on its own and can be owned by a capsule
+   independently of the context. Wiring the capsule to hold this handle instead
+   of the context follows.
 7. Add independent retention caps, LRU eviction, trimming, and accounting for
    both arenas.
 8. Benchmark repeated large intermediate and large-output models separately.
@@ -353,3 +365,6 @@ Pull requests
   ``IOArena`` reuse with a reference-counted ``IOLease`` for exported I/O buffers.
 * `PR #4447 <https://github.com/xadupre/onnx-light/pull/4447>`_: routes declared
   graph outputs to a dedicated I/O allocator via an execution/I/O allocation role.
+* `PR #4454 <https://github.com/xadupre/onnx-light/pull/4454>`_: adds
+  ``IOArena::ExportHandle`` and an ``IOLease``-backed ``AllocationHandle`` so an
+  exported output can outlive the :cpp:class:`RuntimeContext` that produced it.

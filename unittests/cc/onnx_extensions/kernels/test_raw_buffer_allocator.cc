@@ -12,6 +12,7 @@
 #include <stdexcept>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::AllocationHandle;
 using core::runtime::ExecutionArena;
 using core::runtime::IOArena;
 using core::runtime::IOLease;
@@ -20,6 +21,7 @@ using core::runtime::RawBufferAllocator;
 using core::runtime::RuntimeContext;
 using core::runtime::RuntimeContextOptions;
 using core::runtime::SimpleRawBufferAllocator;
+using core::runtime::Tensor;
 
 namespace Test {
 
@@ -433,6 +435,136 @@ TEST(IOArena, WorksThroughAllocatorInterface) {
   allocator->Free(buf);
   EXPECT_EQ(allocator->TotalAllocatedSize(), 0u);
   EXPECT_EQ(allocator->PeakAllocatedSize(), 64u);
+}
+
+// ---------------------------------------------------------------------------
+// IOArena::ExportHandle — self-owning exported allocation handle (step 6 of the
+// buffer-reuse arena plan, see docs/next_steps/2026-08_buffer_reuse_arena.rst).
+// ---------------------------------------------------------------------------
+
+// ExportHandle turns a live buffer into an AllocationHandle that keeps the arena
+// alive on its own and returns the buffer exactly once when destroyed.
+TEST(IOArenaExportHandle, PinsBufferAndReturnsItOnce) {
+  auto arena = IOArena::Create(1);
+  RawBuffer *buffer = arena->Allocate(64);
+  uint8_t *payload = buffer->data();
+  const size_t retained_capacity = buffer->capacity();
+
+  {
+    AllocationHandle handle = arena->ExportHandle(buffer);
+    EXPECT_TRUE(static_cast<bool>(handle));
+    EXPECT_TRUE(handle.holds_lease());
+    EXPECT_EQ(handle.buffer(), buffer);
+    EXPECT_EQ(handle.owner(), arena.get());
+    EXPECT_EQ(handle.logical_size(), 64u);
+
+    // The buffer is leased (pinned), not owned directly by the arena.
+    EXPECT_EQ(arena->allocated_count(), 0u);
+    EXPECT_EQ(arena->leased_count(), 1u);
+    EXPECT_EQ(arena->TotalAllocatedSize(), 64u);
+  }
+
+  // Destroying the handle returns the buffer to the retained free list once.
+  EXPECT_EQ(arena->leased_count(), 0u);
+  EXPECT_EQ(arena->TotalAllocatedSize(), 0u);
+  EXPECT_EQ(arena->retained_count(), 1u);
+  EXPECT_EQ(arena->RetainedSize(), retained_capacity);
+
+  RawBuffer *reused = arena->Allocate(32);
+  EXPECT_EQ(reused->data(), payload);
+}
+
+// A handle exported from the arena keeps the arena alive after every other
+// strong reference is dropped, mirroring a NumPy capsule that outlives the
+// RuntimeContext that produced its data.
+TEST(IOArenaExportHandle, KeepsArenaAliveAfterSharedPointerReset) {
+  auto arena = IOArena::Create(1);
+  RawBuffer *buffer = arena->Allocate(16);
+  buffer->data()[0] = 42;
+
+  AllocationHandle handle = arena->ExportHandle(buffer);
+
+  // Drop the local strong reference; the handle's lease must keep the arena
+  // alive so the exported buffer remains valid.
+  arena.reset();
+  ASSERT_TRUE(static_cast<bool>(handle));
+  EXPECT_EQ(handle.buffer()->data()[0], 42);
+
+  // Releasing the handle drops the final reference without dangling.
+  handle.Reset();
+  EXPECT_FALSE(static_cast<bool>(handle));
+  EXPECT_FALSE(handle.holds_lease());
+}
+
+// Moving a lease-backed handle transfers both the allocation and the arena
+// reference, and the buffer is still returned exactly once.
+TEST(IOArenaExportHandle, MovePreservesLeaseOwnership) {
+  auto arena = IOArena::Create(1);
+  RawBuffer *buffer = arena->Allocate(16);
+
+  AllocationHandle first = arena->ExportHandle(buffer);
+  AllocationHandle second(std::move(first));
+  EXPECT_FALSE(static_cast<bool>(first));
+  EXPECT_FALSE(first.holds_lease());
+  EXPECT_TRUE(static_cast<bool>(second));
+  EXPECT_TRUE(second.holds_lease());
+  EXPECT_EQ(second.buffer(), buffer);
+  EXPECT_EQ(arena->leased_count(), 1u);
+
+  AllocationHandle third;
+  third = std::move(second);
+  EXPECT_FALSE(static_cast<bool>(second));
+  EXPECT_TRUE(third.holds_lease());
+  EXPECT_EQ(arena->leased_count(), 1u);
+
+  third.Reset();
+  EXPECT_EQ(arena->leased_count(), 0u);
+  EXPECT_EQ(arena->retained_count(), 1u);
+}
+
+// ExportHandle(AllocationHandle&&) rejects an empty or already lease-backed
+// handle instead of silently mis-exporting a null buffer.
+TEST(IOArenaExportHandle, RejectsEmptyOrLeaseBackedHandle) {
+  auto arena = IOArena::Create(1);
+
+  AllocationHandle empty;
+  EXPECT_THROW(arena->ExportHandle(std::move(empty)), std::invalid_argument);
+
+  RawBuffer *buffer = arena->Allocate(16);
+  AllocationHandle leased = arena->ExportHandle(buffer);
+  ASSERT_TRUE(leased.holds_lease());
+  EXPECT_THROW(arena->ExportHandle(std::move(leased)), std::invalid_argument);
+  // The rejected handle keeps its lease intact.
+  EXPECT_TRUE(leased.holds_lease());
+  EXPECT_EQ(arena->leased_count(), 1u);
+}
+
+// A graph output allocated from an IOArena can have its allocation released
+// from the tensor and exported as a self-owning handle. The handle then keeps
+// the arena's storage alive even after the arena's other owner is destroyed,
+// which is exactly what an exported NumPy output requires.
+TEST(IOArenaExportHandle, ExportedTensorOutputOutlivesArenaOwner) {
+  auto arena = IOArena::Create(1);
+  Tensor tensor = Tensor::FromFloat("y", {2}, {1.0f, 2.0f}, arena.get());
+  ASSERT_TRUE(tensor.has_allocation());
+
+  // Transfer the allocation out of the tensor and re-export it as a self-owning
+  // handle (the tensor no longer owns the buffer once released).
+  AllocationHandle exported = arena->ExportHandle(tensor.ReleaseAllocation());
+  EXPECT_TRUE(exported.holds_lease());
+  EXPECT_FALSE(tensor.has_allocation());
+
+  const float *values = reinterpret_cast<const float *>(exported.buffer()->data());
+  EXPECT_FLOAT_EQ(values[0], 1.0f);
+  EXPECT_FLOAT_EQ(values[1], 2.0f);
+
+  // Drop the arena's strong reference; the exported handle keeps it alive.
+  arena.reset();
+  ASSERT_TRUE(static_cast<bool>(exported));
+  EXPECT_FLOAT_EQ(reinterpret_cast<const float *>(exported.buffer()->data())[1], 2.0f);
+
+  exported.Reset();
+  EXPECT_FALSE(static_cast<bool>(exported));
 }
 
 // ---------------------------------------------------------------------------

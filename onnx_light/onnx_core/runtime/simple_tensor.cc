@@ -11,6 +11,8 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
+AllocationHandle::AllocationHandle() noexcept = default;
+
 AllocationHandle::AllocationHandle(RawBufferAllocator *owner, RawBuffer *buffer)
     : owner_(owner), buffer_(buffer), logical_size_(buffer == nullptr ? 0 : buffer->size()),
       retained_capacity_(buffer == nullptr ? 0 : buffer->capacity()) {
@@ -18,11 +20,20 @@ AllocationHandle::AllocationHandle(RawBufferAllocator *owner, RawBuffer *buffer)
   EXT_ENFORCE(buffer != nullptr, "AllocationHandle: buffer must not be null.");
 }
 
+AllocationHandle::AllocationHandle(RawBufferAllocator *owner, IOLease lease)
+    : owner_(owner), buffer_(lease.buffer()),
+      logical_size_(lease.buffer() == nullptr ? 0 : lease.logical_size()),
+      retained_capacity_(lease.buffer() == nullptr ? 0 : lease.buffer()->capacity()) {
+  EXT_ENFORCE(owner != nullptr, "AllocationHandle: allocator owner must not be null.");
+  EXT_ENFORCE(static_cast<bool>(lease), "AllocationHandle: lease must pin an allocation.");
+  lease_ = std::make_unique<IOLease>(std::move(lease));
+}
+
 AllocationHandle::~AllocationHandle() { Reset(); }
 
 AllocationHandle::AllocationHandle(AllocationHandle &&other) noexcept
     : owner_(other.owner_), buffer_(other.buffer_), logical_size_(other.logical_size_),
-      retained_capacity_(other.retained_capacity_) {
+      retained_capacity_(other.retained_capacity_), lease_(std::move(other.lease_)) {
   other.owner_ = nullptr;
   other.buffer_ = nullptr;
   other.logical_size_ = 0;
@@ -38,6 +49,7 @@ AllocationHandle &AllocationHandle::operator=(AllocationHandle &&other) noexcept
   buffer_ = other.buffer_;
   logical_size_ = other.logical_size_;
   retained_capacity_ = other.retained_capacity_;
+  lease_ = std::move(other.lease_);
   other.owner_ = nullptr;
   other.buffer_ = nullptr;
   other.logical_size_ = 0;
@@ -45,8 +57,24 @@ AllocationHandle &AllocationHandle::operator=(AllocationHandle &&other) noexcept
   return *this;
 }
 
+RawBuffer *AllocationHandle::Release() noexcept {
+  // A lease-backed handle owns no raw buffer the caller can adopt; return its
+  // buffer to the arena and report that nothing was transferred.
+  RawBuffer *buffer = lease_ != nullptr ? nullptr : buffer_;
+  lease_.reset();
+  owner_ = nullptr;
+  buffer_ = nullptr;
+  logical_size_ = 0;
+  retained_capacity_ = 0;
+  return buffer;
+}
+
 void AllocationHandle::Reset() noexcept {
-  if (buffer_ != nullptr) {
+  if (lease_ != nullptr) {
+    // Returns the buffer through the lease and drops this handle's reference to
+    // the arena, which the lease keeps alive.
+    lease_.reset();
+  } else if (buffer_ != nullptr) {
     owner_->Free(buffer_);
   }
   owner_ = nullptr;

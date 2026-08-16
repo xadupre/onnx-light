@@ -78,6 +78,9 @@ def render_rst_standard_patterns_table() -> str:
     The table is generated from the patterns returned by
     :func:`standard_patterns`, so it stays in sync with the registered
     patterns without any manual maintenance.
+
+    Returns:
+        The ``list-table`` directive as a reST string.
     """
     lines = [
         ".. list-table::",

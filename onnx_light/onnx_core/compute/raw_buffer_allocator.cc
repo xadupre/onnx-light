@@ -149,8 +149,8 @@ size_t ExecutionArena::retained_count() const noexcept { return retained_count_;
 
 size_t ExecutionArena::Trim() noexcept {
   const size_t released = retained_size_;
-  for (auto &[capacity, slots] : free_buckets_) {
-    for (const size_t i : slots) {
+  for (auto &bucket : free_buckets_) {
+    for (const size_t i : bucket.second) {
       // Assigning an empty buffer releases the retained bytes; the slot address
       // stays stable, so slot_indices_ remains valid.
       buffers_[i] = RawBuffer{};
@@ -339,8 +339,8 @@ size_t IOArena::retained_count() const noexcept { return retained_count_; }
 
 size_t IOArena::Trim() noexcept {
   const size_t released = retained_size_;
-  for (auto &[capacity, slots] : free_buckets_) {
-    for (const size_t i : slots) {
+  for (auto &bucket : free_buckets_) {
+    for (const size_t i : bucket.second) {
       // Assigning an empty buffer releases the retained bytes; the slot address
       // stays stable, so slot_indices_ remains valid. Live and leased buffers
       // are never on a free bucket, so they are untouched.

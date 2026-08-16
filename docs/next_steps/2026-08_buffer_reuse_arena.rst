@@ -82,6 +82,15 @@ The implementation is split into focused pull requests:
        lists, returns the freed slots to the unused pool, and reports the number
        of bytes released. Live and (for the I/O arena) leased buffers are left
        untouched, so trimming only gives back capacity that is currently idle.
+   * - `PR #4469 <https://github.com/xadupre/onnx-light/pull/4469>`_
+     - Retention caps and LRU eviction
+     - Gives both arenas a per-arena retention cap that bounds the total
+       capacity kept on the free lists. When freeing (or returning a lease)
+       pushes the retained capacity above the cap, the arena evicts the
+       least-recently-freed buffers until it fits again. ``SetRetentionCap``
+       lowers the cap and evicts immediately; the cap defaults to unbounded so
+       existing behaviour is unchanged. Live and leased buffers are never
+       evicted.
 
 Current behaviour
 +++++++++++++++++
@@ -343,7 +352,12 @@ Implementation order
    <https://github.com/xadupre/onnx-light/pull/4465>`_): ``ExecutionArena::Trim``
    and ``IOArena::Trim`` release every retained free buffer's storage, return the
    slots to the unused pool, and report the bytes released, without touching live
-   or leased buffers. Retention caps and LRU eviction follow.
+   or leased buffers. Retention caps and LRU eviction follow (`PR #4469
+   <https://github.com/xadupre/onnx-light/pull/4469>`_): each arena bounds the
+   total capacity kept on its free lists and, when a free (or lease return) would
+   exceed the cap, evicts the least-recently-freed buffers until the retained
+   capacity fits. ``SetRetentionCap`` lowers the cap and evicts immediately; the
+   cap defaults to unbounded and live or leased buffers are never evicted.
 8. Benchmark repeated large intermediate and large-output models separately.
    Confirm that later runs reuse materialized pages, that retained NumPy
    outputs remain unchanged, and that peak live-memory accounting remains
@@ -390,3 +404,5 @@ Pull requests
   the owner capsule instead of keeping :cpp:class:`RuntimeContext` alive.
 * `PR #4465 <https://github.com/xadupre/onnx-light/pull/4465>`_: adds ``Trim`` to
   both arenas to release retained free-buffer storage on demand.
+* `PR #4469 <https://github.com/xadupre/onnx-light/pull/4469>`_: adds a per-arena
+  retention cap with least-recently-freed eviction to both arenas.

@@ -22,6 +22,7 @@
 #include <complex>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/function.h>
@@ -1257,7 +1258,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       rt_mod, "ExecutionArena",
       "Fixed-slot allocator that retains freed storage and reuses the smallest "
       "sufficient capacity for execution buffers.")
-      .def(nb::init<size_t>(), nb::arg("capacity"))
+      .def(nb::init<size_t, size_t>(), nb::arg("capacity"),
+           nb::arg("retention_cap") = std::numeric_limits<size_t>::max())
       .def_prop_ro("total_allocated_size", &ExecutionArena::TotalAllocatedSize,
                    "Logical bytes held by currently live buffers.")
       .def_prop_ro("peak_allocated_size", &ExecutionArena::PeakAllocatedSize,
@@ -1270,6 +1272,11 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                    "Total capacity of free retained buffers.")
       .def_prop_ro("retained_count", &ExecutionArena::retained_count,
                    "Number of free retained buffers.")
+      .def_prop_rw("retention_cap", &ExecutionArena::retention_cap,
+                   &ExecutionArena::SetRetentionCap,
+                   "Maximum total capacity kept on the retained free lists. Lowering it "
+                   "evicts the least-recently-freed buffers until the retained capacity "
+                   "fits; live buffers are never evicted.")
       .def("reset_peak", &ExecutionArena::ResetPeak,
            "Resets the memory peak to the current :attr:`total_allocated_size`.")
       .def("trim", &ExecutionArena::Trim,

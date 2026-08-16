@@ -26,6 +26,18 @@ DropoutPattern: TypeAlias = _patterns.DropoutPattern
 IdentityPattern: TypeAlias = _patterns.IdentityPattern
 NotNotPattern: TypeAlias = _patterns.NotNotPattern
 PadConvPattern: TypeAlias = _patterns.PadConvPattern
+SplitConcatPattern: TypeAlias = _patterns.SplitConcatPattern
+GathersSplitPattern: TypeAlias = _patterns.GathersSplitPattern
+SlicesSplitPattern: TypeAlias = _patterns.SlicesSplitPattern
+ConcatEmptyPattern: TypeAlias = _patterns.ConcatEmptyPattern
+ConcatGatherPattern: TypeAlias = _patterns.ConcatGatherPattern
+ConcatTwiceUnaryPattern: TypeAlias = _patterns.ConcatTwiceUnaryPattern
+GatherConcatPattern: TypeAlias = _patterns.GatherConcatPattern
+GatherGatherPattern: TypeAlias = _patterns.GatherGatherPattern
+GatherShapePattern: TypeAlias = _patterns.GatherShapePattern
+SliceSlicePattern: TypeAlias = _patterns.SliceSlicePattern
+SequenceConstructAtPattern: TypeAlias = _patterns.SequenceConstructAtPattern
+SplitToSequenceSequenceAtPattern: TypeAlias = _patterns.SplitToSequenceSequenceAtPattern
 
 
 def standard_pattern_names() -> list[str]:
@@ -161,9 +173,16 @@ __all__ = [
     "CastOpCastPattern",
     "CastPattern",
     "ClipClipPattern",
+    "ConcatEmptyPattern",
+    "ConcatGatherPattern",
+    "ConcatTwiceUnaryPattern",
     "ConstantToInitializerPattern",
     "ConvBiasNullPattern",
     "DropoutPattern",
+    "GatherConcatPattern",
+    "GatherGatherPattern",
+    "GatherShapePattern",
+    "GathersSplitPattern",
     "GraphBuilder",
     "GraphGraph",
     "IdentityPattern",
@@ -173,6 +192,11 @@ __all__ = [
     "OptimizationReport",
     "PadConvPattern",
     "PatternOptimization",
+    "SequenceConstructAtPattern",
+    "SliceSlicePattern",
+    "SlicesSplitPattern",
+    "SplitConcatPattern",
+    "SplitToSequenceSequenceAtPattern",
     "clear_registered_patterns",
     "register_pattern",
     "registered_pattern_names",

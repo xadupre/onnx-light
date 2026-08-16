@@ -11,6 +11,12 @@
 #include "onnx_extensions/patterns/canonicalization/dropout_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
+#include "onnx_extensions/patterns/collections/concat_pattern.h"
+#include "onnx_extensions/patterns/collections/gather_pattern.h"
+#include "onnx_extensions/patterns/collections/sequence_pattern.h"
+#include "onnx_extensions/patterns/collections/shape_pattern.h"
+#include "onnx_extensions/patterns/collections/slice_pattern.h"
+#include "onnx_extensions/patterns/collections/split_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 
 #include <memory>
@@ -62,6 +68,42 @@ std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::str
   }
   if (name == "PadConv") {
     return std::make_shared<onnx_patterns::PadConvPattern>(priority.value_or(0));
+  }
+  if (name == "SplitConcat") {
+    return std::make_shared<onnx_patterns::SplitConcatPattern>(priority.value_or(0));
+  }
+  if (name == "GathersSplit") {
+    return std::make_shared<onnx_patterns::GathersSplitPattern>(priority.value_or(0));
+  }
+  if (name == "SlicesSplit") {
+    return std::make_shared<onnx_patterns::SlicesSplitPattern>(priority.value_or(0));
+  }
+  if (name == "ConcatEmpty") {
+    return std::make_shared<onnx_patterns::ConcatEmptyPattern>(priority.value_or(0));
+  }
+  if (name == "ConcatGather") {
+    return std::make_shared<onnx_patterns::ConcatGatherPattern>(priority.value_or(0));
+  }
+  if (name == "ConcatTwiceUnary") {
+    return std::make_shared<onnx_patterns::ConcatTwiceUnaryPattern>(priority.value_or(0));
+  }
+  if (name == "GatherConcat") {
+    return std::make_shared<onnx_patterns::GatherConcatPattern>(priority.value_or(0));
+  }
+  if (name == "GatherGather") {
+    return std::make_shared<onnx_patterns::GatherGatherPattern>(priority.value_or(0));
+  }
+  if (name == "GatherShape") {
+    return std::make_shared<onnx_patterns::GatherShapePattern>(priority.value_or(0));
+  }
+  if (name == "SliceSlice") {
+    return std::make_shared<onnx_patterns::SliceSlicePattern>(priority.value_or(0));
+  }
+  if (name == "SequenceConstructAt") {
+    return std::make_shared<onnx_patterns::SequenceConstructAtPattern>(priority.value_or(0));
+  }
+  if (name == "SplitToSequenceSequenceAt") {
+    return std::make_shared<onnx_patterns::SplitToSequenceSequenceAtPattern>(priority.value_or(0));
   }
   throw std::invalid_argument("Unknown ONNX pattern '" + name + "'.");
 }
@@ -124,6 +166,63 @@ NB_MODULE(_onnxpypatterns, m) {
       .def(nb::init<int>(), nb::arg("priority") = 1);
   nb::class_<onnx_patterns::PadConvPattern, core::builder::PatternOptimization>(
       m, "PadConvPattern", "Folds a Pad node into the ``pads`` attribute of a following Conv node.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::SplitConcatPattern, core::builder::PatternOptimization>(
+      m, "SplitConcatPattern",
+      "Replaces a Split immediately followed by a Concat that restores the "
+      "original tensor with an Identity node.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::GathersSplitPattern, core::builder::PatternOptimization>(
+      m, "GathersSplitPattern",
+      "Replaces sibling Gather nodes selecting contiguous single indices of a "
+      "shared input by a single Split node.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::SlicesSplitPattern, core::builder::PatternOptimization>(
+      m, "SlicesSplitPattern",
+      "Replaces sibling Slice nodes cutting a shared input into contiguous "
+      "chunks along one axis by a single Split node.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ConcatEmptyPattern, core::builder::PatternOptimization>(
+      m, "ConcatEmptyPattern",
+      "Drops empty inputs from a Concat node, reducing it to an Identity when a "
+      "single input remains.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ConcatGatherPattern, core::builder::PatternOptimization>(
+      m, "ConcatGatherPattern",
+      "Rewrites a Gather reading a single Concat input into a Gather on that "
+      "input directly.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ConcatTwiceUnaryPattern, core::builder::PatternOptimization>(
+      m, "ConcatTwiceUnaryPattern",
+      "Pushes a shape-preserving unary op ahead of a ``Concat(x, x)`` so the "
+      "unary op runs once on ``x``.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::GatherConcatPattern, core::builder::PatternOptimization>(
+      m, "GatherConcatPattern",
+      "Merges a Concat of single-index Gather nodes on a shared input into one "
+      "Gather node.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::GatherGatherPattern, core::builder::PatternOptimization>(
+      m, "GatherGatherPattern",
+      "Collapses two consecutive scalar Gather nodes into a single Gather node.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::GatherShapePattern, core::builder::PatternOptimization>(
+      m, "GatherShapePattern",
+      "Rewrites a Gather of a scalar index over a Shape node into a narrowed "
+      "Shape node.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::SliceSlicePattern, core::builder::PatternOptimization>(
+      m, "SliceSlicePattern", "Merges two consecutive Slice nodes on distinct axes into one Slice.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::SequenceConstructAtPattern, core::builder::PatternOptimization>(
+      m, "SequenceConstructAtPattern",
+      "Replaces a SequenceAt reading a constant index of a SequenceConstruct by "
+      "the corresponding input tensor.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::SplitToSequenceSequenceAtPattern, core::builder::PatternOptimization>(
+      m, "SplitToSequenceSequenceAtPattern",
+      "Replaces a SequenceAt reading a constant index of a SplitToSequence by a "
+      "single Split output.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
 
   m.def(

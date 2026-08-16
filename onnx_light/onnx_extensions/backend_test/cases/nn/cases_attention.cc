@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
-#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
@@ -55,7 +55,7 @@ NodeProto MakeAttentionNode(const std::vector<std::string> &inputs,
 
 // IEEE-754 binary16 ↔ binary32 conversions and the ``FloatToFloat16Tensor``
 // / ``RoundToFloat16`` helpers are provided by
-// ``onnx_core/runtime/cast_helper.h`` as
+// ``onnx_core/runtime/kernels/cast_helper.h`` as
 // ``FloatToFloat16Tensor`` / ``RoundToFloat16``.
 
 // Builds a small deterministic FLOAT tensor of the requested shape. Values

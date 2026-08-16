@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
-#include "onnx_core/runtime/controlflow/include_controlflow_kernels.h"
-#include "onnx_core/runtime/kernel_context.h"
+#include "onnx_core/runtime/kernels/controlflow/include_controlflow_kernels.h"
+#include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_extensions/kernels/kernels/generator/include_generator_kernels.h"
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"

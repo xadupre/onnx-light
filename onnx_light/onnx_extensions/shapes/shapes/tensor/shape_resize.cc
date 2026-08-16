@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "onnx_core/expressions/expressions.h"
-#include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_core/symbolic/symbolic_helper.h"

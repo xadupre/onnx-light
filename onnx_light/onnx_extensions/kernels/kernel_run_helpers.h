@@ -15,9 +15,9 @@
 // the ``core::runtime`` types re-exported at ``onnx_kernels`` scope rather than
 // to the like-named ``kernel::Shape`` kernel class.
 
-#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
-#include "onnx_core/runtime/simple_tensor.h"
 
 #include <cstdint>
 #include <span>

@@ -4,7 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/rt/include_rt_kernels.h"
 
-#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <cstring>
 #include <filesystem>

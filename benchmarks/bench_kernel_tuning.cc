@@ -9,9 +9,9 @@
  *   ./build/bench_kernel_tuning [-n iterations]
  */
 
-#include "onnx_core/runtime/kernel_dispatch_table.h"
-#include "onnx_core/runtime/kernel_tuning.h"
+#include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <chrono>

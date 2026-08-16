@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
-#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/generator/include_generator_cases.h"
 #include "onnx_extensions/kernels/kernels/generator/include_generator_kernels.h"
 
@@ -16,7 +16,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
 // IEEE-754 binary16 / bfloat16 encoders are provided by
-// ``onnx_core/runtime/cast_helper.h``; the scalar tensor builders
+// ``onnx_core/runtime/kernels/cast_helper.h``; the scalar tensor builders
 // ``MakeFloat16Scalar`` / ``MakeBfloat16Scalar`` are used
 // directly by the case registrations below.
 

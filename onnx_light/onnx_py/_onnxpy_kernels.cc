@@ -8,13 +8,13 @@
 #include "onnx_core/compute/execute_action.h"
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
-#include "onnx_core/runtime/cast_sub_byte.h"
-#include "onnx_core/runtime/kernel_tuning_cache.h"
-#include "onnx_core/runtime/random.h"
-#include "onnx_core/runtime/run_nodes.h"
+#include "onnx_core/runtime/kernels/cast_sub_byte.h"
+#include "onnx_core/runtime/kernels/random.h"
+#include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
-#include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 
 #include <algorithm>

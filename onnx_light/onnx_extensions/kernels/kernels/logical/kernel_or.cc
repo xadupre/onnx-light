@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/elementwise_helpers.h"
+#include "onnx_core/runtime/kernels/elementwise_helpers.h"
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
 
-#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <array>
 #include <cstdint>

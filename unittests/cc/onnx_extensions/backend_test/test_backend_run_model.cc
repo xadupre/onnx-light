@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
-#include "onnx_core/runtime/kernel_context.h"
-#include "onnx_core/runtime/run_nodes.h"
+#include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
-#include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 
 #include <gtest/gtest.h>

@@ -9,8 +9,8 @@
 // scope so unqualified ``Shape`` resolves to the ``core::runtime`` fixed-rank
 // shape rather than the like-named ``kernel::Shape`` kernel class.
 
-#include "onnx_core/runtime/node_helpers.h"
-#include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_extensions/kernels/kernels/auto_pad.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels {

@@ -4,9 +4,9 @@
 
 #include "onnx_core/builder/graph_builder.h"
 
-#include "onnx_core/runtime/kernel_dispatch_table.h"
+#include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
-#include "onnx_core/runtime/simple_tensor.h"
 #include "onnx_helper.h"
 #include "onnx_op/operator_sets.h"
 

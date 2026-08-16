@@ -4,9 +4,9 @@
 
 #pragma once
 
-#include "onnx_core/runtime/kernel_context.h"
+#include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
-#include "onnx_core/runtime/simple_tensor.h"
 
 #include <optional>
 #include <span>

@@ -5,9 +5,9 @@
 #pragma once
 
 #include "onnx.h"
-#include "onnx_core/runtime/kernel_context.h"
-#include "onnx_core/runtime/simple_map.h"
-#include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/memory/simple_map.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 
 #include <cstdint>
 #include <functional>

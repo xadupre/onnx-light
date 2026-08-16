@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
-#include "onnx_core/runtime/cast_helper.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/math/include_math_cases.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
@@ -46,7 +46,7 @@ std::vector<int32_t> Arange30() {
 
 // IEEE-754 binary16 encoder (round-to-nearest-even) and the FLOAT16 tensor
 // builder ``MakeFloat16Tensor`` are provided by
-// ``onnx_core/runtime/cast_helper.h``.
+// ``onnx_core/runtime/kernels/cast_helper.h``.
 
 } // namespace
 

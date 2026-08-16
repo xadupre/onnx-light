@@ -210,6 +210,25 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(rewrites[0].graph_path, ["then_branch"])
         self.assertTrue(any(item.graph_path == ["then_branch"] for item in report.subgraphs))
 
+    def test_render_rst_standard_patterns_table_lists_every_pattern(self):
+        table = optim.render_rst_standard_patterns_table()
+
+        self.assertIn(".. list-table::", table)
+        self.assertIn(":header-rows: 1", table)
+        self.assertIn("Class / registered name", table)
+        self.assertIn("Candidate roots", table)
+        self.assertIn("Transformation", table)
+        for name in optim.standard_pattern_names():
+            self.assertIn(f"``{name}``", table)
+
+    def test_render_rst_standard_patterns_table_reflects_metadata(self):
+        table = optim.render_rst_standard_patterns_table()
+
+        for pattern in optim.standard_patterns():
+            self.assertIn(f":class:`{type(pattern).__name__}`", table)
+            for op in pattern.fast_op_type():
+                self.assertIn(f"``{op}``", table)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

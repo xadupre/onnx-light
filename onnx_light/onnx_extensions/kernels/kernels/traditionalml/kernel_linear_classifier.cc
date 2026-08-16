@@ -6,7 +6,7 @@
 
 #include "onnx_extensions/kernels/kernels/traditionalml/kernel_svm_common.h"
 
-#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <cstdint>
 #include <string>

@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/cast_float8.h"
-#include "onnx_core/runtime/cast_helper.h"
-#include "onnx_core/runtime/cast_sub_byte.h"
-#include "onnx_core/runtime/temporary_buffer.h"
+#include "onnx_core/runtime/kernels/cast_float8.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
+#include "onnx_core/runtime/kernels/cast_sub_byte.h"
+#include "onnx_core/runtime/memory/temporary_buffer.h"
 #include "onnx_extensions/kernels/kernels/quantization/include_quantization_kernels.h"
 
-#include "onnx_core/runtime/node_helpers.h"
+#include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>

@@ -78,6 +78,42 @@ def registered_pattern_names() -> tuple[str, ...]:
     return tuple(_GLOBAL_PATTERNS)
 
 
+def render_rst_standard_patterns_table() -> str:
+    """Renders the standard ONNX patterns as a reST ``list-table``.
+
+    The table is generated from the patterns returned by
+    :func:`standard_patterns`, so it stays in sync with the registered
+    patterns without any manual maintenance.
+
+    Returns:
+        The ``list-table`` directive as a reST string.
+    """
+    lines = [
+        ".. list-table::",
+        "    :header-rows: 1",
+        "    :widths: 30 10 30 40",
+        "",
+        "    * - Class / registered name",
+        "      - Priority",
+        "      - Candidate roots",
+        "      - Transformation",
+    ]
+    for pattern in sorted(standard_patterns(), key=lambda p: str(p.name)):
+        class_name = type(pattern).__name__
+        roots = ", ".join(f"``{op}``" for op in sorted(pattern.fast_op_type()))
+        doc = (type(pattern).__doc__ or "").strip()
+        summary = " ".join(doc.split("\n\n", 1)[0].split()) if doc else ""
+        lines.extend(
+            [
+                f"    * - :class:`{class_name}` / ``{pattern.name}``",
+                f"      - {pattern.priority}",
+                f"      - {roots}",
+                f"      - {summary}",
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
 class GraphGraph(_C.GraphGraph):
     """Indexes a builder and runs globally or locally registered patterns.
 
@@ -141,6 +177,7 @@ __all__ = [
     "register_pattern",
     "registered_pattern_names",
     "registered_patterns",
+    "render_rst_standard_patterns_table",
     "replay",
     "reset_registered_patterns",
     "standard_pattern_names",

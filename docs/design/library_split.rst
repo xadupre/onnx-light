@@ -103,7 +103,7 @@ the concrete ONNX operator implementations live in sibling libraries
         ``BuiltinPeakMemoryFunctions()`` and registers them through
         ``RegisterPeakMemoryFunctions()``.
     * - Runtime kernels
-      - ``onnx_core/runtime/kernel_dispatch_table.h`` defines
+      - ``onnx_core/runtime/kernels/kernel_dispatch_table.h`` defines
         ``NodeKernelFn`` + ``RegisterKernelFn`` / ``KernelDispatchTable``.
       - ``onnx_extensions/kernels/kernel_dispatch_table.cc`` builds
         ``BuiltinKernelFunctions()`` and registers them through

@@ -58,6 +58,8 @@ Shape ValidateAndBroadcastShape(const Tensors &inputs, const char *dtype_name,
   return shape;
 }
 
+template <typename T> T AddOf(T a, T b) { return a + b; }
+
 template <typename T>
 Tensor SumAlloc(const char *dtype_name, int32_t dtype, const Tensors &inputs,
                 RawBufferAllocator *allocator) {
@@ -76,16 +78,14 @@ Tensor SumAlloc(const char *dtype_name, int32_t dtype, const Tensors &inputs,
     return z;
   }
   // First pair: accumulate into the output buffer.
-  detail::BinaryElementwise<T, T>(kSumName, dtype_name, dtype, inputs[0], inputs[1], z,
-                                  [](T a, T b) -> T { return a + b; });
+  detail::BinaryElementwise<T, T>(kSumName, dtype_name, dtype, inputs[0], inputs[1], z, AddOf<T>);
   // Subsequent inputs: accumulate in place by re-running the binary
   // element-wise driver with ``z`` as both an input and the output. The
   // driver supports aliasing when the input is not broadcast-expanded; ``z``
   // has the full broadcast shape so its stride pattern matches the output.
   for (size_t i = 2; i < inputs.size(); ++i) {
     Tensor partial = z;
-    detail::BinaryElementwise<T, T>(kSumName, dtype_name, dtype, partial, inputs[i], z,
-                                    [](T a, T b) -> T { return a + b; });
+    detail::BinaryElementwise<T, T>(kSumName, dtype_name, dtype, partial, inputs[i], z, AddOf<T>);
   }
   return z;
 }
@@ -107,11 +107,11 @@ void SumInPlace(const char *dtype_name, int32_t dtype, const Tensors &inputs, Te
     return;
   }
   detail::BinaryElementwise<T, T>(kSumName, dtype_name, dtype, inputs[0], inputs[1], output,
-                                  [](T a, T b) -> T { return a + b; });
+                                  AddOf<T>);
   for (size_t i = 2; i < inputs.size(); ++i) {
     Tensor partial = output;
     detail::BinaryElementwise<T, T>(kSumName, dtype_name, dtype, partial, inputs[i], output,
-                                    [](T a, T b) -> T { return a + b; });
+                                    AddOf<T>);
   }
 }
 

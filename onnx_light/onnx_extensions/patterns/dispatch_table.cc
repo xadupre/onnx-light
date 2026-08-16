@@ -9,6 +9,11 @@
 #include "onnx_core/builder/pattern_registry.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/constant_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/conv_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/dropout_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/not_pattern.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
@@ -33,6 +38,30 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("ClipClip",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ClipClipPattern>();
+                                   });
+    core::builder::RegisterPattern("ConstantToInitializer",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ConstantToInitializerPattern>();
+                                   });
+    core::builder::RegisterPattern("ConvBiasNull",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ConvBiasNullPattern>();
+                                   });
+    core::builder::RegisterPattern("Dropout",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<DropoutPattern>();
+                                   });
+    core::builder::RegisterPattern("Identity",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<IdentityPattern>();
+                                   });
+    core::builder::RegisterPattern("NotNot",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<NotNotPattern>();
+                                   });
+    core::builder::RegisterPattern("PadConv",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<PadConvPattern>();
                                    });
     return true;
   }();

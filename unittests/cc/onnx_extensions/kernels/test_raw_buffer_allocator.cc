@@ -270,6 +270,45 @@ TEST(ExecutionArena, WorksThroughAllocatorInterfaceAndRuntimeContext) {
   EXPECT_GE(arena.RetainedSize(), 2u * sizeof(int32_t));
 }
 
+TEST(ExecutionArena, TrimReleasesRetainedStorageAndReusesSlots) {
+  ExecutionArena arena(2);
+  RawBuffer *first = arena.Allocate(64);
+  RawBuffer *second = arena.Allocate(128);
+  const size_t retained_capacity = first->capacity() + second->capacity();
+  arena.Free(first);
+  arena.Free(second);
+  EXPECT_EQ(arena.retained_count(), 2u);
+  EXPECT_EQ(arena.RetainedSize(), retained_capacity);
+
+  EXPECT_EQ(arena.Trim(), retained_capacity);
+  EXPECT_EQ(arena.retained_count(), 0u);
+  EXPECT_EQ(arena.RetainedSize(), 0u);
+
+  // A second trim releases nothing and stays a no-op.
+  EXPECT_EQ(arena.Trim(), 0u);
+
+  // Trimmed slots remain usable for later allocations.
+  RawBuffer *reused = arena.Allocate(16);
+  EXPECT_EQ(reused->size(), 16u);
+  EXPECT_EQ(arena.allocated_count(), 1u);
+}
+
+TEST(ExecutionArena, TrimLeavesLiveBuffersUntouched) {
+  ExecutionArena arena(2);
+  RawBuffer *live = arena.Allocate(32);
+  RawBuffer *freed = arena.Allocate(48);
+  const size_t retained_capacity = freed->capacity();
+  arena.Free(freed);
+  EXPECT_EQ(arena.RetainedSize(), retained_capacity);
+
+  EXPECT_EQ(arena.Trim(), retained_capacity);
+  EXPECT_EQ(arena.retained_count(), 0u);
+  EXPECT_EQ(arena.allocated_count(), 1u);
+  EXPECT_EQ(arena.TotalAllocatedSize(), 32u);
+  EXPECT_EQ(live->size(), 32u);
+  arena.Free(live);
+}
+
 // ---------------------------------------------------------------------------
 // IOArena tests
 // ---------------------------------------------------------------------------
@@ -435,6 +474,52 @@ TEST(IOArena, WorksThroughAllocatorInterface) {
   allocator->Free(buf);
   EXPECT_EQ(allocator->TotalAllocatedSize(), 0u);
   EXPECT_EQ(allocator->PeakAllocatedSize(), 64u);
+}
+
+TEST(IOArena, TrimReleasesRetainedStorageAndReusesSlots) {
+  auto arena = IOArena::Create(2);
+  RawBuffer *first = arena->Allocate(64);
+  RawBuffer *second = arena->Allocate(128);
+  const size_t retained_capacity = first->capacity() + second->capacity();
+  arena->Free(first);
+  arena->Free(second);
+  EXPECT_EQ(arena->retained_count(), 2u);
+  EXPECT_EQ(arena->RetainedSize(), retained_capacity);
+
+  EXPECT_EQ(arena->Trim(), retained_capacity);
+  EXPECT_EQ(arena->retained_count(), 0u);
+  EXPECT_EQ(arena->RetainedSize(), 0u);
+
+  // A second trim releases nothing and stays a no-op.
+  EXPECT_EQ(arena->Trim(), 0u);
+
+  // Trimmed slots remain usable for later allocations.
+  RawBuffer *reused = arena->Allocate(16);
+  EXPECT_EQ(reused->size(), 16u);
+  EXPECT_EQ(arena->allocated_count(), 1u);
+}
+
+TEST(IOArena, TrimLeavesLiveAndLeasedBuffersUntouched) {
+  auto arena = IOArena::Create(3);
+  RawBuffer *live = arena->Allocate(32);
+  RawBuffer *leased = arena->Allocate(24);
+  RawBuffer *freed = arena->Allocate(48);
+  const size_t retained_capacity = freed->capacity();
+  arena->Free(freed);
+  IOLease lease = arena->Export(leased);
+  EXPECT_EQ(arena->RetainedSize(), retained_capacity);
+  EXPECT_EQ(arena->leased_count(), 1u);
+
+  // Only the retained free buffer is released; the live and leased buffers stay.
+  EXPECT_EQ(arena->Trim(), retained_capacity);
+  EXPECT_EQ(arena->retained_count(), 0u);
+  EXPECT_EQ(arena->allocated_count(), 1u);
+  EXPECT_EQ(arena->leased_count(), 1u);
+  EXPECT_EQ(live->size(), 32u);
+  EXPECT_EQ(lease.buffer(), leased);
+
+  lease.Reset();
+  arena->Free(live);
 }
 
 // ---------------------------------------------------------------------------

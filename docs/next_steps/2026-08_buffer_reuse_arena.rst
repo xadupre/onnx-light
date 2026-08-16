@@ -75,6 +75,13 @@ The implementation is split into focused pull requests:
        released ``AllocationHandle`` into an ``IOArena`` lease-backed handle and
        store that handle directly in the NumPy capsule, removing the dependency
        on keeping the mutable :cpp:class:`RuntimeContext` alive as the data owner.
+   * - `PR #4465 <https://github.com/xadupre/onnx-light/pull/4465>`_
+     - Arena trimming
+     - Adds ``Trim`` to both :cpp:class:`ExecutionArena` and
+       :cpp:class:`IOArena`. It releases the storage held on the retained free
+       lists, returns the freed slots to the unused pool, and reports the number
+       of bytes released. Live and (for the I/O arena) leased buffers are left
+       untouched, so trimming only gives back capacity that is currently idle.
 
 Current behaviour
 +++++++++++++++++
@@ -332,7 +339,11 @@ Implementation order
    independently of the context. The NumPy capsule wiring then lands in `PR #4457
    <https://github.com/xadupre/onnx-light/pull/4457>`_.
 7. Add independent retention caps, LRU eviction, trimming, and accounting for
-   both arenas.
+   both arenas. Trimming lands first (`PR #4465
+   <https://github.com/xadupre/onnx-light/pull/4465>`_): ``ExecutionArena::Trim``
+   and ``IOArena::Trim`` release every retained free buffer's storage, return the
+   slots to the unused pool, and report the bytes released, without touching live
+   or leased buffers. Retention caps and LRU eviction follow.
 8. Benchmark repeated large intermediate and large-output models separately.
    Confirm that later runs reuse materialized pages, that retained NumPy
    outputs remain unchanged, and that peak live-memory accounting remains
@@ -377,3 +388,5 @@ Pull requests
 * `PR #4457 <https://github.com/xadupre/onnx-light/pull/4457>`_: wires NumPy
   output export to store an ``IOLease``-backed ``AllocationHandle`` directly in
   the owner capsule instead of keeping :cpp:class:`RuntimeContext` alive.
+* `PR #4465 <https://github.com/xadupre/onnx-light/pull/4465>`_: adds ``Trim`` to
+  both arenas to release retained free-buffer storage on demand.

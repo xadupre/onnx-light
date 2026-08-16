@@ -1271,7 +1271,10 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_prop_ro("retained_count", &ExecutionArena::retained_count,
                    "Number of free retained buffers.")
       .def("reset_peak", &ExecutionArena::ResetPeak,
-           "Resets the memory peak to the current :attr:`total_allocated_size`.");
+           "Resets the memory peak to the current :attr:`total_allocated_size`.")
+      .def("trim", &ExecutionArena::Trim,
+           "Releases the storage retained by every free buffer and returns the "
+           "number of bytes released. Live buffers are left untouched.");
 
   // RuntimeContext — name-keyed tensor map + kernel context + function registry.
   nb::class_<RuntimeContext>(

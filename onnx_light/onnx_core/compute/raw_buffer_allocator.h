@@ -198,6 +198,17 @@ public:
   /// Returns the number of free retained buffers.
   size_t retained_count() const noexcept;
 
+  /**
+   * Releases the storage retained by every free buffer.
+   *
+   * Live buffers are left untouched. Each trimmed slot returns to the unused
+   * pool and acquires fresh storage on a later allocation, so trimming only
+   * gives back the capacity currently held on the retained free lists.
+   *
+   * @returns The number of retained bytes released.
+   */
+  size_t Trim() noexcept;
+
 private:
   std::vector<RawBuffer> buffers_;
   std::vector<size_t> unused_slots_;
@@ -364,6 +375,17 @@ public:
 
   /// Returns the number of free retained buffers.
   size_t retained_count() const noexcept;
+
+  /**
+   * Releases the storage retained by every free buffer.
+   *
+   * Live and leased buffers are left untouched: only buffers already returned to
+   * the retained free lists give back their storage. Each trimmed slot returns
+   * to the unused pool and acquires fresh storage on a later allocation.
+   *
+   * @returns The number of retained bytes released.
+   */
+  size_t Trim() noexcept;
 
 private:
   friend class IOLease;

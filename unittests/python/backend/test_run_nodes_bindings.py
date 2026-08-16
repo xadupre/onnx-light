@@ -410,6 +410,12 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertEqual(arena.retained_count, 1)
         self.assertGreater(arena.retained_size, 0)
 
+        # ``trim`` gives back the retained free-buffer storage on demand.
+        released = arena.trim()
+        self.assertGreater(released, 0)
+        self.assertEqual(arena.retained_count, 0)
+        self.assertEqual(arena.retained_size, 0)
+
     def test_run_model_abs_then_add(self):
         model = parser.parse_model(_MODEL_SRC)
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))

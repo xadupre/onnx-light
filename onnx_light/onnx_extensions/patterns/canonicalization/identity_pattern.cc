@@ -24,6 +24,21 @@ const std::set<std::string> &BinaryOps() {
   return ops;
 }
 
+const std::set<std::string> &SupportedOps() {
+  static const std::set<std::string> ops = {"Add",
+                                            "Mul",
+                                            "Div",
+                                            "Sub",
+                                            "And",
+                                            "Or",
+                                            "Transpose",
+                                            "Slice",
+                                            "Expand",
+                                            "Reshape",
+                                            "BatchNormalization"};
+  return ops;
+}
+
 bool IsDefaultDomain(const NodeProto &node) {
   return NormaliseDomain(node.domain().value()) == kDefaultOnnxDomain;
 }
@@ -76,13 +91,13 @@ bool AllEqual(const std::vector<double> &values, double target) {
   return true;
 }
 
-bool AllUnique(const std::vector<double> &values, double &unique) {
+bool AllSame(const std::vector<double> &values, double &common_value) {
   if (values.empty()) {
     return false;
   }
-  unique = values[0];
+  common_value = values[0];
   for (double value : values) {
-    if (value != unique) {
+    if (value != common_value) {
       return false;
     }
   }
@@ -104,24 +119,12 @@ bool IsScalarShape(core::builder::GraphGraph &graph, const std::string &name) {
 
 } // namespace
 
-std::set<std::string> IdentityPattern::FastOpType() const {
-  return {"Add",
-          "Mul",
-          "Div",
-          "Sub",
-          "And",
-          "Or",
-          "Transpose",
-          "Slice",
-          "Expand",
-          "Reshape",
-          "BatchNormalization"};
-}
+std::set<std::string> IdentityPattern::FastOpType() const { return SupportedOps(); }
 
 core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &graph,
                                                   const NodeProto &candidate) const {
   const std::string &op_type = candidate.op_type().value();
-  if (!IsDefaultDomain(candidate) || FastOpType().count(op_type) == 0) {
+  if (!IsDefaultDomain(candidate) || SupportedOps().count(op_type) == 0) {
     return NoMatch(candidate, "candidate is not a supported default-domain operation");
   }
 
@@ -218,9 +221,9 @@ core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &gra
         return NoMatch(candidate, "a BatchNormalization parameter is not constant");
       }
       std::vector<double> values;
-      double unique = 0.0;
+      double common_value = 0.0;
       if (!ReadConstDoubles(graph, candidate.input()[i].value(), values) ||
-          !AllUnique(values, unique) || unique != expected[i - 1]) {
+          !AllSame(values, common_value) || common_value != expected[i - 1]) {
         return NoMatch(candidate, "the BatchNormalization parameters are not identity");
       }
     }
@@ -253,8 +256,8 @@ core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &gra
     if (HasRank(graph, input1, rank) && rank == 1 &&
         (op_type == "Add" || op_type == "Mul" || op_type == "Sub" || op_type == "Div")) {
       std::vector<double> values;
-      double unique = 0.0;
-      if (!ReadConstDoubles(graph, input1, values) || !AllUnique(values, unique)) {
+      double common_value = 0.0;
+      if (!ReadConstDoubles(graph, input1, values) || !AllSame(values, common_value)) {
         return NoMatch(candidate, "the constant operand is not uniform");
       }
       if (!graph.HasShape(input0)) {
@@ -265,10 +268,10 @@ core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &gra
           shape[shape.Rank() - 1].AsInt() != static_cast<int64_t>(values.size())) {
         return NoMatch(candidate, "the constant does not broadcast on the last dimension");
       }
-      if ((op_type == "Add" || op_type == "Sub") && unique != 0.0) {
+      if ((op_type == "Add" || op_type == "Sub") && common_value != 0.0) {
         return NoMatch(candidate, "the additive constant is not zero");
       }
-      if ((op_type == "Mul" || op_type == "Div") && unique != 1.0) {
+      if ((op_type == "Mul" || op_type == "Div") && common_value != 1.0) {
         return NoMatch(candidate, "the multiplicative constant is not one");
       }
       return core::builder::MatchResult{this, {&candidate}, &candidate};

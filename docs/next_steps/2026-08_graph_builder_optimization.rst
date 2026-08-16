@@ -98,7 +98,7 @@ requests:
      - Consecutive-Clip canonicalization
      - Ports ``ClipClipPattern``, merging two Clip nodes with complementary
        minimum and maximum bounds, with C++ and Python selection tests.
-   * - `PR #4462 <https://github.com/xadupre/onnx-light/issues/4462>`_
+   * - `Issue #4462 <https://github.com/xadupre/onnx-light/issues/4462>`_
      - Elementary canonicalization patterns
      - Ports the remaining elementary canonicalization patterns
        (``ConstantToInitializerPattern``, ``ConvBiasNullPattern``,
@@ -727,7 +727,7 @@ Pull requests
   preservation.
 * `PR #4455 <https://github.com/xadupre/onnx-light/pull/4455>`_:
   ``ClipClipPattern`` merging two Clip nodes with complementary bounds.
-* `PR #4462 <https://github.com/xadupre/onnx-light/issues/4462>`_: remaining
+* `Issue #4462 <https://github.com/xadupre/onnx-light/issues/4462>`_: remaining
   elementary canonicalization patterns (``ConstantToInitializerPattern``,
   ``ConvBiasNullPattern``, ``PadConvPattern``, ``DropoutPattern``,
   ``IdentityPattern``, and ``NotNotPattern``).

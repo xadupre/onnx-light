@@ -60,6 +60,8 @@ Shape ValidateAndBroadcastShape(const Tensors &inputs, const char *dtype_name,
   return shape;
 }
 
+template <typename T> T AddOf(T a, T b) { return a + b; }
+
 template <typename T>
 Tensor SumAlloc(const char *dtype_name, int32_t dtype, const Tensors &inputs,
                 RawBufferAllocator *allocator) {

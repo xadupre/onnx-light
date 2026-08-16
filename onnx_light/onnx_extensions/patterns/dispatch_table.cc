@@ -17,6 +17,8 @@
 #include "onnx_extensions/patterns/collections/concat_pattern.h"
 #include "onnx_extensions/patterns/collections/gather_pattern.h"
 #include "onnx_extensions/patterns/collections/sequence_pattern.h"
+#include "onnx_extensions/patterns/collections/shape_pattern.h"
+#include "onnx_extensions/patterns/collections/slice_pattern.h"
 #include "onnx_extensions/patterns/collections/split_pattern.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
@@ -82,6 +84,14 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("GatherGather",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<GatherGatherPattern>();
+                                   });
+    core::builder::RegisterPattern("GatherShape",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<GatherShapePattern>();
+                                   });
+    core::builder::RegisterPattern("SliceSlice",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<SliceSlicePattern>();
                                    });
     core::builder::RegisterPattern("SplitConcat",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {

@@ -157,11 +157,13 @@ class TestReferenceEvaluator(ExtTestCase):
             },
         )
 
-        evaluator._ctx.clear()
         execution_arena = evaluator._ctx.execution_allocator
         io_arena = evaluator._ctx.io_allocator
         self.assertIsInstance(execution_arena, runtime.ExecutionArena)
         self.assertIsInstance(io_arena, runtime.IOArena)
+        evaluator._ctx.clear()
+        self.assertIs(evaluator._ctx.execution_allocator, execution_arena)
+        self.assertIs(evaluator._ctx.io_allocator, io_arena)
         self.assertEqual(execution_arena.allocated_count, 0)
         self.assertGreaterEqual(execution_arena.retained_count, 1)
         self.assertEqual(io_arena.allocated_count, 0)
@@ -188,6 +190,8 @@ class TestReferenceEvaluator(ExtTestCase):
             },
         )
 
+        self.assertIs(evaluator._ctx.execution_allocator, execution_arena)
+        self.assertIs(evaluator._ctx.io_allocator, io_arena)
         evaluator._ctx.clear()
         self.assertIs(evaluator._ctx.execution_allocator, execution_arena)
         self.assertIs(evaluator._ctx.io_allocator, io_arena)
@@ -216,10 +220,12 @@ class TestReferenceEvaluator(ExtTestCase):
             },
         )
 
-        evaluator._ctx.clear()
         io_arena = evaluator._ctx.io_allocator
         self.assertIs(evaluator._ctx.execution_allocator, execution_arena)
         self.assertIsInstance(io_arena, runtime.IOArena)
+        evaluator._ctx.clear()
+        self.assertIs(evaluator._ctx.execution_allocator, execution_arena)
+        self.assertIs(evaluator._ctx.io_allocator, io_arena)
         self.assertEqual(execution_arena.allocated_count, 0)
         self.assertGreaterEqual(execution_arena.retained_count, 1)
         self.assertEqual(io_arena.allocated_count, 0)
@@ -245,9 +251,11 @@ class TestReferenceEvaluator(ExtTestCase):
             },
         )
 
-        evaluator._ctx.clear()
         execution_arena = evaluator._ctx.execution_allocator
         self.assertIsInstance(execution_arena, runtime.ExecutionArena)
+        self.assertIs(evaluator._ctx.io_allocator, io_arena)
+        evaluator._ctx.clear()
+        self.assertIs(evaluator._ctx.execution_allocator, execution_arena)
         self.assertIs(evaluator._ctx.io_allocator, io_arena)
         self.assertEqual(execution_arena.allocated_count, 0)
         self.assertGreaterEqual(execution_arena.retained_count, 1)

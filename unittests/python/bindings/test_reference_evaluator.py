@@ -157,19 +157,21 @@ class TestReferenceEvaluator(ExtTestCase):
             },
         )
 
-        self.assertIsInstance(evaluator._allocator, runtime.ExecutionArena)
-        self.assertIsInstance(evaluator._io_allocator, runtime.IOArena)
+        execution_arena = evaluator._ctx.execution_allocator
+        io_arena = evaluator._ctx.io_allocator
+        self.assertIsInstance(execution_arena, runtime.ExecutionArena)
+        self.assertIsInstance(io_arena, runtime.IOArena)
         evaluator._ctx.clear()
-        self.assertEqual(evaluator._allocator.allocated_count, 0)
-        self.assertGreaterEqual(evaluator._allocator.retained_count, 1)
-        self.assertEqual(evaluator._io_allocator.allocated_count, 0)
-        self.assertEqual(evaluator._io_allocator.leased_count, 1)
+        self.assertEqual(execution_arena.allocated_count, 0)
+        self.assertGreaterEqual(execution_arena.retained_count, 1)
+        self.assertEqual(io_arena.allocated_count, 0)
+        self.assertEqual(io_arena.leased_count, 1)
         np.testing.assert_array_equal(output, np.array([11.0, 22.0, 33.0], dtype=np.float32))
 
         del output
         gc.collect()
-        self.assertEqual(evaluator._io_allocator.leased_count, 0)
-        self.assertEqual(evaluator._io_allocator.retained_count, 1)
+        self.assertEqual(io_arena.leased_count, 0)
+        self.assertEqual(io_arena.retained_count, 1)
 
     def test_reference_evaluator_accepts_io_allocator(self):
         """Routes outputs through the caller-provided IOArena."""
@@ -186,8 +188,8 @@ class TestReferenceEvaluator(ExtTestCase):
             },
         )
 
-        self.assertIs(evaluator._allocator, execution_arena)
-        self.assertIs(evaluator._io_allocator, io_arena)
+        self.assertIs(evaluator._ctx.execution_allocator, execution_arena)
+        self.assertIs(evaluator._ctx.io_allocator, io_arena)
         evaluator._ctx.clear()
         self.assertEqual(execution_arena.allocated_count, 0)
         self.assertGreaterEqual(execution_arena.retained_count, 1)
@@ -214,19 +216,20 @@ class TestReferenceEvaluator(ExtTestCase):
             },
         )
 
-        self.assertIs(evaluator._allocator, execution_arena)
-        self.assertIsInstance(evaluator._io_allocator, runtime.IOArena)
+        io_arena = evaluator._ctx.io_allocator
+        self.assertIs(evaluator._ctx.execution_allocator, execution_arena)
+        self.assertIsInstance(io_arena, runtime.IOArena)
         evaluator._ctx.clear()
         self.assertEqual(execution_arena.allocated_count, 0)
         self.assertGreaterEqual(execution_arena.retained_count, 1)
-        self.assertEqual(evaluator._io_allocator.allocated_count, 0)
-        self.assertEqual(evaluator._io_allocator.leased_count, 1)
+        self.assertEqual(io_arena.allocated_count, 0)
+        self.assertEqual(io_arena.leased_count, 1)
         np.testing.assert_array_equal(output, np.array([11.0, 22.0, 33.0], dtype=np.float32))
 
         del output
         gc.collect()
-        self.assertEqual(evaluator._io_allocator.leased_count, 0)
-        self.assertEqual(evaluator._io_allocator.retained_count, 1)
+        self.assertEqual(io_arena.leased_count, 0)
+        self.assertEqual(io_arena.retained_count, 1)
 
     def test_reference_evaluator_accepts_io_allocator_only(self):
         """Creates a default ExecutionArena when only an IOArena is provided."""
@@ -242,11 +245,12 @@ class TestReferenceEvaluator(ExtTestCase):
             },
         )
 
-        self.assertIsInstance(evaluator._allocator, runtime.ExecutionArena)
-        self.assertIs(evaluator._io_allocator, io_arena)
+        execution_arena = evaluator._ctx.execution_allocator
+        self.assertIsInstance(execution_arena, runtime.ExecutionArena)
+        self.assertIs(evaluator._ctx.io_allocator, io_arena)
         evaluator._ctx.clear()
-        self.assertEqual(evaluator._allocator.allocated_count, 0)
-        self.assertGreaterEqual(evaluator._allocator.retained_count, 1)
+        self.assertEqual(execution_arena.allocated_count, 0)
+        self.assertGreaterEqual(execution_arena.retained_count, 1)
         self.assertEqual(io_arena.allocated_count, 0)
         self.assertEqual(io_arena.leased_count, 1)
         np.testing.assert_array_equal(output, np.array([11.0, 22.0, 33.0], dtype=np.float32))

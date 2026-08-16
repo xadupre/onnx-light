@@ -398,12 +398,6 @@ class ReferenceEvaluator:
             allocator=allocator,
             io_allocator=io_allocator,
         )
-        # Keep a Python reference to the allocator so it outlives the context
-        # (the binding also keeps it alive) and attach it so the runtime routes
-        # buffer storage through it and records its live / peak memory on every
-        # event.
-        self._allocator = allocator
-        self._io_allocator = io_allocator
         if self._model is not None:
             _runtime.register_model_functions(self._model, self._ctx)
 

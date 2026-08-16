@@ -191,6 +191,11 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(io_arena.leased_count, 1)
         np.testing.assert_array_equal(output, np.array([11.0, 22.0, 33.0], dtype=np.float32))
 
+        del output
+        gc.collect()
+        self.assertEqual(io_arena.leased_count, 0)
+        self.assertEqual(io_arena.retained_count, 1)
+
     def test_metadata(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         sess = ReferenceEvaluator(model)

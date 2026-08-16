@@ -8,7 +8,7 @@
 #include <string>
 
 #include "onnx_core/builder/graph_graph.h"
-#include "onnx_core/runtime/simple_tensor.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {

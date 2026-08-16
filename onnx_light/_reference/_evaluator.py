@@ -368,7 +368,7 @@ class ReferenceEvaluator:
                 node_output_slots = sum(len(node.output) for node in self._graph.node)
                 initializer_slots = len(self._graph.initializer)
             elif self._function is not None:
-                node_output_slots = len(self._function.output)
+                node_output_slots = sum(len(node.output) for node in self._function.node)
                 initializer_slots = 0
             else:
                 node_output_slots = 0

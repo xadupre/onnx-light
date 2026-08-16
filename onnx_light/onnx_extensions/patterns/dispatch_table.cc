@@ -20,6 +20,7 @@
 #include "onnx_extensions/patterns/collections/shape_pattern.h"
 #include "onnx_extensions/patterns/collections/slice_pattern.h"
 #include "onnx_extensions/patterns/collections/split_pattern.h"
+#include "onnx_extensions/patterns/expand/where_pattern.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
@@ -116,6 +117,18 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("SplitToSequenceSequenceAt",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<SplitToSequenceSequenceAtPattern>();
+                                   });
+    core::builder::RegisterPattern("NotWhere",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<NotWherePattern>();
+                                   });
+    core::builder::RegisterPattern("UnsqueezeEqual",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<UnsqueezeEqualPattern>();
+                                   });
+    core::builder::RegisterPattern("WhereAdd",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<WhereAddPattern>();
                                    });
     return true;
   }();

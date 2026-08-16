@@ -18,6 +18,7 @@
 #include "onnx_extensions/patterns/collections/slice_pattern.h"
 #include "onnx_extensions/patterns/collections/split_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
+#include "onnx_extensions/patterns/expand/where_pattern.h"
 
 #include <memory>
 #include <optional>
@@ -104,6 +105,15 @@ std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::str
   }
   if (name == "SplitToSequenceSequenceAt") {
     return std::make_shared<onnx_patterns::SplitToSequenceSequenceAtPattern>(priority.value_or(0));
+  }
+  if (name == "NotWhere") {
+    return std::make_shared<onnx_patterns::NotWherePattern>(priority.value_or(0));
+  }
+  if (name == "UnsqueezeEqual") {
+    return std::make_shared<onnx_patterns::UnsqueezeEqualPattern>(priority.value_or(0));
+  }
+  if (name == "WhereAdd") {
+    return std::make_shared<onnx_patterns::WhereAddPattern>(priority.value_or(0));
   }
   throw std::invalid_argument("Unknown ONNX pattern '" + name + "'.");
 }
@@ -223,6 +233,18 @@ NB_MODULE(_onnxpypatterns, m) {
       m, "SplitToSequenceSequenceAtPattern",
       "Replaces a SequenceAt reading a constant index of a SplitToSequence by a "
       "single Split output.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+
+  nb::class_<onnx_patterns::NotWherePattern, core::builder::PatternOptimization>(
+      m, "NotWherePattern", "Rewrites ``Where(Not(c), x, y)`` into ``Where(c, y, x)``.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::UnsqueezeEqualPattern, core::builder::PatternOptimization>(
+      m, "UnsqueezeEqualPattern",
+      "Rewrites ``Equal(Unsqueeze(x), Unsqueeze(y))`` into ``Equal(x, y)`` "
+      "when both Unsqueeze nodes use matching constant axes.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::WhereAddPattern, core::builder::PatternOptimization>(
+      m, "WhereAddPattern", "Factors a common additive term from Where branches built with Add.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
 
   m.def(

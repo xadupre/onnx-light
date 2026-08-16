@@ -38,6 +38,9 @@ GatherShapePattern: TypeAlias = _patterns.GatherShapePattern
 SliceSlicePattern: TypeAlias = _patterns.SliceSlicePattern
 SequenceConstructAtPattern: TypeAlias = _patterns.SequenceConstructAtPattern
 SplitToSequenceSequenceAtPattern: TypeAlias = _patterns.SplitToSequenceSequenceAtPattern
+NotWherePattern: TypeAlias = _patterns.NotWherePattern
+UnsqueezeEqualPattern: TypeAlias = _patterns.UnsqueezeEqualPattern
+WhereAddPattern: TypeAlias = _patterns.WhereAddPattern
 
 
 def standard_pattern_names() -> list[str]:
@@ -189,6 +192,7 @@ __all__ = [
     "LocalRewriting",
     "MatchResult",
     "NotNotPattern",
+    "NotWherePattern",
     "OptimizationReport",
     "PadConvPattern",
     "PatternOptimization",
@@ -197,6 +201,8 @@ __all__ = [
     "SlicesSplitPattern",
     "SplitConcatPattern",
     "SplitToSequenceSequenceAtPattern",
+    "UnsqueezeEqualPattern",
+    "WhereAddPattern",
     "clear_registered_patterns",
     "register_pattern",
     "registered_pattern_names",

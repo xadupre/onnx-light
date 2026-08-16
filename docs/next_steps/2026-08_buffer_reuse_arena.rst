@@ -179,12 +179,63 @@ operator that creates it:
 * borrowed inputs allocate nothing;
 * copied or converted inputs are allocated from the I/O arena.
 
-The execution plan already knows which value names are graph outputs. Extend
-the output-allocation path so it accepts the output name or an allocation role,
-rather than passing one undifferentiated allocator to every
-:cpp:func:`MakeOutputTensor` call. This preserves zero-copy output creation:
-the final operator writes directly into an I/O allocation, with no promotion
-copy after execution.
+The kernel does not decide whether one of its outputs is final. That information
+belongs to the graph/session layer:
+
+1. When the session is built, it records the names declared by
+   ``GraphProto::output``.
+2. For every node output slot, the session compares
+   ``node.output(slot)`` with that set and records an ``execution`` or ``I/O``
+   allocation role in the execution plan.
+3. During execution, the kernel requests storage for an output *slot*. It
+   supplies the element type, shape and byte size, but not the lifetime role.
+4. The runtime resolves the slot's precomputed role and calls either
+   ``ExecutionArena::Allocate`` or ``IOArena::Allocate``.
+5. The kernel writes directly into that buffer. No result is first allocated
+   in the execution arena and then copied or promoted to the I/O arena.
+
+Conceptually, the allocation path is:
+
+.. code-block:: text
+
+    GraphProto::output names
+             |
+             v
+    ExecutionPlan: (node, output slot) -> allocation role
+             |
+             v
+    kernel asks for output slot N
+             |
+             +-- execution role --> ExecutionArena
+             |
+             `-- I/O role -------> IOArena
+
+The important API distinction is between asking for anonymous bytes and asking
+for a node output. ``MakeOutputTensor(dtype, shape, bytes, allocator)`` alone
+cannot make the decision because neither the allocator nor the kernel knows
+which graph value the bytes will represent. The output-allocation API must
+therefore carry a node/output-slot identity, for example through
+``RuntimeContext::MakeOutputTensor(node, slot, dtype, shape, bytes)`` or an
+equivalent pre-resolved output-allocation object. The kernel identifies the
+slot it is producing; the runtime, not the kernel, translates that slot into an
+arena.
+
+PR #4447 implements an initial, node-scoped version of this routing.
+``RuntimeSession::ProducesDeclaredOutput`` checks the node's output names before
+invoking its kernel and temporarily makes the I/O allocator active when any
+output is declared by the graph. This is correct for the common case where a
+node has one output, or where all of its allocated outputs have the same
+lifetime role. It is deliberately transparent to the kernel: existing calls
+using ``RuntimeContext::allocator()`` receive the selected allocator.
+
+Node-scoped routing is not sufficient for a mixed-output node. If output 0 is a
+declared graph output and output 1 is an intermediate, switching one active
+allocator for the whole invocation places both buffers in the I/O arena. It is
+safe, but it retains the intermediate in the wrong lifetime domain and weakens
+the memory and accounting guarantees of the two-arena design. The routing must
+therefore be refined to the output-slot contract above. A test must cover both
+orders (final/intermediate and intermediate/final) and verify each allocation's
+owning arena.
 
 Subgraphs and functions follow the same rule relative to their caller. Values
 that remain internal use the child execution arena. A value crossing the child
@@ -324,12 +375,13 @@ Implementation order
    reference-counted ``IOLease`` that pins the buffer and keeps the arena alive
    until the last external owner releases it.
 5. Extend output allocation with an execution/I/O role and route declared graph
-   outputs directly to the I/O arena (`PR #4447
-   <https://github.com/xadupre/onnx-light/pull/4447>`_). ``RuntimeContext``
-   gains a dedicated I/O allocator alongside its execution allocator, and
-   ``RuntimeSession::Run`` switches the active allocator to it for the
-   kernel invocation of any node that produces a declared graph output,
-   restoring the execution allocator for every other node.
+   outputs directly to the I/O arena. `PR #4447
+   <https://github.com/xadupre/onnx-light/pull/4447>`_ adds the dedicated I/O
+   allocator and the initial node-scoped routing: ``RuntimeSession::Run``
+   switches the active allocator for a kernel invocation when the node produces
+   a declared graph output. Complete this step with output-slot routing so a
+   mixed-output node allocates only its declared graph outputs from the I/O
+   arena and keeps its intermediate outputs in the execution arena.
 6. Transfer each exported output handle to its NumPy capsule; remove the
    dependency on keeping the mutable :cpp:class:`RuntimeContext` as the data
    owner. The enabling mechanism lands first (`PR #4454

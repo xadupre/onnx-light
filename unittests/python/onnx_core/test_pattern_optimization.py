@@ -140,6 +140,33 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual([node.op_type for node in optimized.graph.node], ["Identity"])
         self.assertEqual(rewrites[0].pattern_name, "Cast")
 
+    def test_standard_clip_clip_pattern_is_selectable(self):
+        graph = helper.make_graph(
+            [
+                helper.make_node("Clip", ["x", "mn"], ["x1"]),
+                helper.make_node("Clip", ["x1", "", "mx"], ["y"]),
+            ],
+            "agraph",
+            [
+                helper.make_tensor_value_info("x", TensorProto.FLOAT, [2]),
+                helper.make_tensor_value_info("mn", TensorProto.FLOAT, [1]),
+                helper.make_tensor_value_info("mx", TensorProto.FLOAT, [1]),
+            ],
+            [helper.make_tensor_value_info("y", TensorProto.FLOAT, [2])],
+        )
+        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+
+        builder = optim.GraphBuilder(model)
+        graph = optim.GraphGraph(builder, optim.standard_patterns(["ClipClip"]))
+        rewrites = graph.optimize()
+        optimized = builder.to_onnx("model")
+
+        self.assertIn("ClipClip", optim.registered_pattern_names())
+        self.assertIsInstance(optim.ClipClipPattern(), optim.PatternOptimization)
+        self.assertEqual([node.op_type for node in optimized.graph.node], ["Clip"])
+        self.assertEqual(list(optimized.graph.node[0].input), ["x", "mn", "mx"])
+        self.assertEqual(rewrites[0].pattern_name, "ClipClip")
+
     def test_python_pattern_runs_recursively_in_subgraph(self):
         then_branch = helper.make_graph(
             [

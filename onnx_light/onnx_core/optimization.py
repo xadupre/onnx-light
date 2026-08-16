@@ -19,6 +19,7 @@ CastPattern: TypeAlias = _patterns.CastPattern
 CastCastPattern: TypeAlias = _patterns.CastCastPattern
 CastCastBinaryPattern: TypeAlias = _patterns.CastCastBinaryPattern
 CastOpCastPattern: TypeAlias = _patterns.CastOpCastPattern
+ClipClipPattern: TypeAlias = _patterns.ClipClipPattern
 
 
 def standard_pattern_names() -> list[str]:
@@ -117,6 +118,7 @@ __all__ = [
     "CastCastPattern",
     "CastOpCastPattern",
     "CastPattern",
+    "ClipClipPattern",
     "GraphBuilder",
     "GraphGraph",
     "LocalRewriting",

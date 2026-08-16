@@ -41,8 +41,8 @@ TensorProto CanonicaliseInitializer(const TensorProto &value, const std::string 
   TensorProto proto;
   proto.set_name(name);
   proto.set_data_type(value.data_type());
-  for (int i = 0; i < value.dims().size(); ++i) {
-    proto.add_dims(value.dims()[static_cast<std::size_t>(i)]);
+  for (std::size_t i = 0; i < value.dims().size(); ++i) {
+    proto.add_dims(value.dims()[i]);
   }
   proto.set_raw_data(tensor.bytes(), tensor.size_bytes());
   return proto;

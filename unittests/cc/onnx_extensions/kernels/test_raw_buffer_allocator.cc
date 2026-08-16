@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <cstddef>
+#include <limits>
 #include <stdexcept>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -309,6 +310,54 @@ TEST(ExecutionArena, TrimLeavesLiveBuffersUntouched) {
   arena.Free(live);
 }
 
+TEST(ExecutionArena, DefaultRetentionCapIsUnbounded) {
+  ExecutionArena arena(1);
+  EXPECT_EQ(arena.retention_cap(), std::numeric_limits<size_t>::max());
+}
+
+TEST(ExecutionArena, RetentionCapEvictsLeastRecentlyFreedBuffer) {
+  ExecutionArena arena(2);
+  RawBuffer *first = arena.Allocate(64);
+  RawBuffer *second = arena.Allocate(64);
+  const size_t cap_second = second->capacity();
+
+  arena.Free(first); // freed first, so least recently freed
+  arena.Free(second);
+  EXPECT_EQ(arena.retained_count(), 2u);
+
+  // Lowering the cap keeps only the most-recently-freed buffer.
+  arena.SetRetentionCap(cap_second);
+  EXPECT_EQ(arena.retention_cap(), cap_second);
+  EXPECT_EQ(arena.retained_count(), 1u);
+  EXPECT_EQ(arena.RetainedSize(), cap_second);
+
+  // The retained buffer is the most-recently-freed one; reusing its size returns
+  // the same slot, confirming the least-recently-freed buffer was evicted.
+  RawBuffer *reused = arena.Allocate(64);
+  EXPECT_EQ(reused, second);
+  EXPECT_EQ(arena.retained_count(), 0u);
+  arena.Free(reused);
+}
+
+TEST(ExecutionArena, RetentionCapFromConstructorNeverEvictsLiveBuffers) {
+  ExecutionArena arena(2, /*retention_cap=*/0);
+  EXPECT_EQ(arena.retention_cap(), 0u);
+  RawBuffer *live = arena.Allocate(64);
+  RawBuffer *temp = arena.Allocate(32);
+
+  // Freeing releases the storage immediately because nothing may be retained.
+  arena.Free(temp);
+  EXPECT_EQ(arena.retained_count(), 0u);
+  EXPECT_EQ(arena.RetainedSize(), 0u);
+
+  // The live buffer is untouched by the cap.
+  EXPECT_EQ(arena.allocated_count(), 1u);
+  EXPECT_EQ(arena.TotalAllocatedSize(), 64u);
+  EXPECT_EQ(live->size(), 64u);
+  arena.Free(live);
+  EXPECT_EQ(arena.retained_count(), 0u);
+}
+
 // ---------------------------------------------------------------------------
 // IOArena tests
 // ---------------------------------------------------------------------------
@@ -519,6 +568,59 @@ TEST(IOArena, TrimLeavesLiveAndLeasedBuffersUntouched) {
   EXPECT_EQ(lease.buffer(), leased);
 
   lease.Reset();
+  arena->Free(live);
+}
+
+TEST(IOArena, DefaultRetentionCapIsUnbounded) {
+  auto arena = IOArena::Create(1);
+  EXPECT_EQ(arena->retention_cap(), std::numeric_limits<size_t>::max());
+}
+
+TEST(IOArena, RetentionCapEvictsLeastRecentlyFreedBuffer) {
+  auto arena = IOArena::Create(2);
+  RawBuffer *first = arena->Allocate(64);
+  RawBuffer *second = arena->Allocate(64);
+  const size_t cap_second = second->capacity();
+
+  arena->Free(first); // freed first, so least recently freed
+  arena->Free(second);
+  EXPECT_EQ(arena->retained_count(), 2u);
+
+  // Lowering the cap keeps only the most-recently-freed buffer.
+  arena->SetRetentionCap(cap_second);
+  EXPECT_EQ(arena->retention_cap(), cap_second);
+  EXPECT_EQ(arena->retained_count(), 1u);
+  EXPECT_EQ(arena->RetainedSize(), cap_second);
+
+  RawBuffer *reused = arena->Allocate(64);
+  EXPECT_EQ(reused, second);
+  EXPECT_EQ(arena->retained_count(), 0u);
+  arena->Free(reused);
+}
+
+TEST(IOArena, RetentionCapNeverEvictsLiveOrLeasedBuffers) {
+  auto arena = IOArena::Create(3, /*retention_cap=*/0);
+  EXPECT_EQ(arena->retention_cap(), 0u);
+  RawBuffer *live = arena->Allocate(64);
+  RawBuffer *leased = arena->Allocate(48);
+  IOLease lease = arena->Export(leased);
+  RawBuffer *temp = arena->Allocate(32);
+
+  // Freeing releases the storage immediately because nothing may be retained.
+  arena->Free(temp);
+  EXPECT_EQ(arena->retained_count(), 0u);
+  EXPECT_EQ(arena->RetainedSize(), 0u);
+
+  // Neither the live nor the leased buffer is evicted by the cap.
+  EXPECT_EQ(arena->allocated_count(), 1u);
+  EXPECT_EQ(arena->leased_count(), 1u);
+  EXPECT_EQ(lease.buffer(), leased);
+  EXPECT_EQ(live->size(), 64u);
+
+  // Releasing the lease returns the buffer, which the zero cap evicts at once.
+  lease.Reset();
+  EXPECT_EQ(arena->leased_count(), 0u);
+  EXPECT_EQ(arena->retained_count(), 0u);
   arena->Free(live);
 }
 

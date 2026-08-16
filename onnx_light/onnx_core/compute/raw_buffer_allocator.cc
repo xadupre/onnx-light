@@ -64,7 +64,8 @@ size_t SimpleRawBufferAllocator::capacity() const noexcept { return buffers_.siz
 
 size_t SimpleRawBufferAllocator::allocated_count() const noexcept { return allocated_count_; }
 
-ExecutionArena::ExecutionArena(size_t capacity) : buffers_(capacity), live_slots_(capacity, false) {
+ExecutionArena::ExecutionArena(size_t capacity, size_t retention_cap)
+    : buffers_(capacity), live_slots_(capacity, false), retention_cap_(retention_cap) {
   unused_slots_.reserve(capacity);
   slot_indices_.reserve(capacity);
   for (size_t i = capacity; i-- > 0;) {
@@ -86,6 +87,7 @@ RawBuffer *ExecutionArena::Allocate(size_t n_bytes) {
     if (bucket->second.empty()) {
       free_buckets_.erase(bucket);
     }
+    UntrackFreeSlot(i);
     retained_size_ -= previous_capacity;
     --retained_count_;
   } else if (!unused_slots_.empty()) {
@@ -101,6 +103,7 @@ RawBuffer *ExecutionArena::Allocate(size_t n_bytes) {
     if (bucket->second.empty()) {
       free_buckets_.erase(bucket);
     }
+    UntrackFreeSlot(i);
     retained_size_ -= previous_capacity;
     --retained_count_;
   } else {
@@ -131,6 +134,8 @@ void ExecutionArena::Free(RawBuffer *buf) {
   ++retained_count_;
   --allocated_count_;
   live_slots_[i] = false;
+  TrackFreeSlot(i);
+  EnforceRetentionCap();
 }
 
 size_t ExecutionArena::TotalAllocatedSize() const { return total_allocated_size_; }
@@ -147,6 +152,48 @@ size_t ExecutionArena::RetainedSize() const noexcept { return retained_size_; }
 
 size_t ExecutionArena::retained_count() const noexcept { return retained_count_; }
 
+size_t ExecutionArena::retention_cap() const noexcept { return retention_cap_; }
+
+void ExecutionArena::SetRetentionCap(size_t retention_cap) noexcept {
+  retention_cap_ = retention_cap;
+  EnforceRetentionCap();
+}
+
+void ExecutionArena::TrackFreeSlot(size_t i) {
+  lru_order_.push_back(i);
+  lru_iter_[i] = std::prev(lru_order_.end());
+}
+
+void ExecutionArena::UntrackFreeSlot(size_t i) {
+  const auto it = lru_iter_.find(i);
+  lru_order_.erase(it->second);
+  lru_iter_.erase(it);
+}
+
+size_t ExecutionArena::EnforceRetentionCap() noexcept {
+  size_t evicted = 0;
+  while (retained_size_ > retention_cap_ && !lru_order_.empty()) {
+    const size_t i = lru_order_.front();
+    const size_t retained_capacity = buffers_[i].capacity();
+    const auto bucket = free_buckets_.find(retained_capacity);
+    auto &slots = bucket->second;
+    slots.erase(std::find(slots.begin(), slots.end(), i));
+    if (slots.empty()) {
+      free_buckets_.erase(bucket);
+    }
+    // Assigning an empty buffer releases the retained bytes; the slot address
+    // stays stable, so slot_indices_ remains valid.
+    buffers_[i] = RawBuffer{};
+    unused_slots_.push_back(i);
+    retained_size_ -= retained_capacity;
+    --retained_count_;
+    lru_order_.pop_front();
+    lru_iter_.erase(i);
+    evicted += retained_capacity;
+  }
+  return evicted;
+}
+
 size_t ExecutionArena::Trim() noexcept {
   const size_t released = retained_size_;
   for (auto &bucket : free_buckets_) {
@@ -158,6 +205,8 @@ size_t ExecutionArena::Trim() noexcept {
     }
   }
   free_buckets_.clear();
+  lru_order_.clear();
+  lru_iter_.clear();
   retained_size_ = 0;
   retained_count_ = 0;
   return released;
@@ -203,8 +252,9 @@ void IOLease::Reset() noexcept {
 // IOArena
 // ---------------------------------------------------------------------------
 
-IOArena::IOArena(size_t capacity)
-    : buffers_(capacity), live_slots_(capacity, false), leased_slots_(capacity, false) {
+IOArena::IOArena(size_t capacity, size_t retention_cap)
+    : buffers_(capacity), live_slots_(capacity, false), leased_slots_(capacity, false),
+      retention_cap_(retention_cap) {
   unused_slots_.reserve(capacity);
   slot_indices_.reserve(capacity);
   for (size_t i = capacity; i-- > 0;) {
@@ -213,8 +263,8 @@ IOArena::IOArena(size_t capacity)
   }
 }
 
-std::shared_ptr<IOArena> IOArena::Create(size_t capacity) {
-  return std::shared_ptr<IOArena>(new IOArena(capacity));
+std::shared_ptr<IOArena> IOArena::Create(size_t capacity, size_t retention_cap) {
+  return std::shared_ptr<IOArena>(new IOArena(capacity, retention_cap));
 }
 
 RawBuffer *IOArena::Allocate(size_t n_bytes) {
@@ -230,6 +280,7 @@ RawBuffer *IOArena::Allocate(size_t n_bytes) {
     if (bucket->second.empty()) {
       free_buckets_.erase(bucket);
     }
+    UntrackFreeSlot(i);
     retained_size_ -= previous_capacity;
     --retained_count_;
   } else if (!unused_slots_.empty()) {
@@ -245,6 +296,7 @@ RawBuffer *IOArena::Allocate(size_t n_bytes) {
     if (bucket->second.empty()) {
       free_buckets_.erase(bucket);
     }
+    UntrackFreeSlot(i);
     retained_size_ -= previous_capacity;
     --retained_count_;
   } else {
@@ -275,6 +327,8 @@ void IOArena::Free(RawBuffer *buf) {
   ++retained_count_;
   --allocated_count_;
   live_slots_[i] = false;
+  TrackFreeSlot(i);
+  EnforceRetentionCap();
 }
 
 IOLease IOArena::Export(RawBuffer *buf) {
@@ -319,6 +373,8 @@ void IOArena::ReturnLease(RawBuffer *buf) noexcept {
   --leased_count_;
   live_slots_[i] = false;
   leased_slots_[i] = false;
+  TrackFreeSlot(i);
+  EnforceRetentionCap();
 }
 
 size_t IOArena::TotalAllocatedSize() const { return total_allocated_size_; }
@@ -337,6 +393,49 @@ size_t IOArena::RetainedSize() const noexcept { return retained_size_; }
 
 size_t IOArena::retained_count() const noexcept { return retained_count_; }
 
+size_t IOArena::retention_cap() const noexcept { return retention_cap_; }
+
+void IOArena::SetRetentionCap(size_t retention_cap) noexcept {
+  retention_cap_ = retention_cap;
+  EnforceRetentionCap();
+}
+
+void IOArena::TrackFreeSlot(size_t i) {
+  lru_order_.push_back(i);
+  lru_iter_[i] = std::prev(lru_order_.end());
+}
+
+void IOArena::UntrackFreeSlot(size_t i) {
+  const auto it = lru_iter_.find(i);
+  lru_order_.erase(it->second);
+  lru_iter_.erase(it);
+}
+
+size_t IOArena::EnforceRetentionCap() noexcept {
+  size_t evicted = 0;
+  while (retained_size_ > retention_cap_ && !lru_order_.empty()) {
+    const size_t i = lru_order_.front();
+    const size_t retained_capacity = buffers_[i].capacity();
+    const auto bucket = free_buckets_.find(retained_capacity);
+    auto &slots = bucket->second;
+    slots.erase(std::find(slots.begin(), slots.end(), i));
+    if (slots.empty()) {
+      free_buckets_.erase(bucket);
+    }
+    // Assigning an empty buffer releases the retained bytes; the slot address
+    // stays stable, so slot_indices_ remains valid. Live and leased buffers are
+    // never on a free bucket, so they are untouched.
+    buffers_[i] = RawBuffer{};
+    unused_slots_.push_back(i);
+    retained_size_ -= retained_capacity;
+    --retained_count_;
+    lru_order_.pop_front();
+    lru_iter_.erase(i);
+    evicted += retained_capacity;
+  }
+  return evicted;
+}
+
 size_t IOArena::Trim() noexcept {
   const size_t released = retained_size_;
   for (auto &bucket : free_buckets_) {
@@ -349,6 +448,8 @@ size_t IOArena::Trim() noexcept {
     }
   }
   free_buckets_.clear();
+  lru_order_.clear();
+  lru_iter_.clear();
   retained_size_ = 0;
   retained_count_ = 0;
   return released;

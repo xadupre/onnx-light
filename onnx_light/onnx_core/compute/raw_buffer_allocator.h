@@ -7,6 +7,8 @@
 #include "onnx_core/runtime/memory/simple_tensor.h"
 
 #include <cstddef>
+#include <limits>
+#include <list>
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -148,6 +150,11 @@ private:
  * retained buffer is too small. Slot addresses remain stable for the lifetime
  * of the arena.
  *
+ * A retention cap bounds the total capacity kept on the free lists. When freeing
+ * a buffer pushes the retained capacity above the cap, the arena releases the
+ * storage of the least-recently-freed buffers until the retained capacity fits
+ * again. Live buffers are never evicted. The cap defaults to unbounded.
+ *
  * @note This class is not thread-safe.
  */
 class ExecutionArena : public RawBufferAllocator {
@@ -155,9 +162,12 @@ public:
   /**
    * Constructs an arena with at most ``capacity`` simultaneously live buffers.
    *
-   * @param capacity  Number of stable :cpp:struct:`RawBuffer` slots.
+   * @param capacity       Number of stable :cpp:struct:`RawBuffer` slots.
+   * @param retention_cap  Maximum total capacity kept on the retained free
+   *                       lists. Defaults to unbounded, disabling eviction.
    */
-  explicit ExecutionArena(size_t capacity);
+  explicit ExecutionArena(size_t capacity,
+                          size_t retention_cap = std::numeric_limits<size_t>::max());
 
   /**
    * Allocates ``n_bytes`` from the smallest sufficient retained buffer.
@@ -198,6 +208,18 @@ public:
   /// Returns the number of free retained buffers.
   size_t retained_count() const noexcept;
 
+  /// Returns the maximum total capacity kept on the retained free lists.
+  size_t retention_cap() const noexcept;
+
+  /**
+   * Sets the retention cap and evicts least-recently-freed buffers if needed.
+   *
+   * Lowering the cap below the current :cpp:func:`RetainedSize` immediately
+   * releases the storage of the least-recently-freed buffers until the retained
+   * capacity fits. Live buffers are never evicted.
+   */
+  void SetRetentionCap(size_t retention_cap) noexcept;
+
   /**
    * Releases the storage retained by every free buffer.
    *
@@ -210,11 +232,22 @@ public:
   size_t Trim() noexcept;
 
 private:
+  /// Records slot ``i`` as the most-recently-freed retained buffer.
+  void TrackFreeSlot(size_t i);
+  /// Removes slot ``i`` from the least-recently-freed tracking.
+  void UntrackFreeSlot(size_t i);
+  /// Evicts least-recently-freed buffers until the retention cap is satisfied.
+  size_t EnforceRetentionCap() noexcept;
+
   std::vector<RawBuffer> buffers_;
   std::vector<size_t> unused_slots_;
   std::map<size_t, std::vector<size_t>> free_buckets_;
   std::unordered_map<RawBuffer *, size_t> slot_indices_;
   std::vector<bool> live_slots_;
+  /// Free slots in least-recently-freed order; front is the eviction candidate.
+  std::list<size_t> lru_order_;
+  std::unordered_map<size_t, std::list<size_t>::iterator> lru_iter_;
+  size_t retention_cap_;
   size_t total_allocated_size_ = 0;
   size_t peak_allocated_size_ = 0;
   size_t allocated_count_ = 0;
@@ -278,6 +311,10 @@ private:
  * arena reclaim its storage for reuse. Leases keep the arena alive, so an
  * exported buffer never outlives the arena that owns its storage.
  *
+ * A retention cap bounds the total capacity kept on the free lists exactly like
+ * :cpp:class:`ExecutionArena`; live and leased buffers are never evicted. The
+ * cap defaults to unbounded.
+ *
  * Because leases share ownership of the arena, an ``IOArena`` must be created on
  * the heap through :cpp:func:`Create` and held by ``std::shared_ptr``.
  *
@@ -288,9 +325,12 @@ public:
   /**
    * Creates a shared arena with at most ``capacity`` simultaneously live buffers.
    *
-   * @param capacity  Number of stable :cpp:struct:`RawBuffer` slots.
+   * @param capacity       Number of stable :cpp:struct:`RawBuffer` slots.
+   * @param retention_cap  Maximum total capacity kept on the retained free
+   *                       lists. Defaults to unbounded, disabling eviction.
    */
-  static std::shared_ptr<IOArena> Create(size_t capacity);
+  static std::shared_ptr<IOArena> Create(size_t capacity,
+                                         size_t retention_cap = std::numeric_limits<size_t>::max());
 
   /**
    * Allocates ``n_bytes`` from the smallest sufficient retained buffer.
@@ -376,6 +416,18 @@ public:
   /// Returns the number of free retained buffers.
   size_t retained_count() const noexcept;
 
+  /// Returns the maximum total capacity kept on the retained free lists.
+  size_t retention_cap() const noexcept;
+
+  /**
+   * Sets the retention cap and evicts least-recently-freed buffers if needed.
+   *
+   * Lowering the cap below the current :cpp:func:`RetainedSize` immediately
+   * releases the storage of the least-recently-freed buffers until the retained
+   * capacity fits. Live and leased buffers are never evicted.
+   */
+  void SetRetentionCap(size_t retention_cap) noexcept;
+
   /**
    * Releases the storage retained by every free buffer.
    *
@@ -390,11 +442,18 @@ public:
 private:
   friend class IOLease;
 
-  explicit IOArena(size_t capacity);
+  explicit IOArena(size_t capacity, size_t retention_cap);
 
   /// Returns a previously leased buffer to the retained free list — called by
   /// :cpp:class:`IOLease`.
   void ReturnLease(RawBuffer *buf) noexcept;
+
+  /// Records slot ``i`` as the most-recently-freed retained buffer.
+  void TrackFreeSlot(size_t i);
+  /// Removes slot ``i`` from the least-recently-freed tracking.
+  void UntrackFreeSlot(size_t i);
+  /// Evicts least-recently-freed buffers until the retention cap is satisfied.
+  size_t EnforceRetentionCap() noexcept;
 
   std::vector<RawBuffer> buffers_;
   std::vector<size_t> unused_slots_;
@@ -402,6 +461,10 @@ private:
   std::unordered_map<RawBuffer *, size_t> slot_indices_;
   std::vector<bool> live_slots_;
   std::vector<bool> leased_slots_;
+  /// Free slots in least-recently-freed order; front is the eviction candidate.
+  std::list<size_t> lru_order_;
+  std::unordered_map<size_t, std::list<size_t>::iterator> lru_iter_;
+  size_t retention_cap_;
   size_t total_allocated_size_ = 0;
   size_t peak_allocated_size_ = 0;
   size_t allocated_count_ = 0;

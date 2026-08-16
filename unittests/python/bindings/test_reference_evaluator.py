@@ -196,6 +196,27 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(io_arena.leased_count, 0)
         self.assertEqual(io_arena.retained_count, 1)
 
+    def test_reference_evaluator_accepts_io_allocator_only(self):
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        io_arena = runtime.IOArena(4)
+        evaluator = ReferenceEvaluator(model, io_allocator=io_arena)
+
+        (output,) = evaluator.run(
+            None,
+            {
+                "x": np.array([-1.0, 2.0, -3.0], dtype=np.float32),
+                "z": np.array([10.0, 20.0, 30.0], dtype=np.float32),
+            },
+        )
+
+        self.assertIsInstance(evaluator._allocator, runtime.ExecutionArena)
+        self.assertIs(evaluator._io_allocator, io_arena)
+        evaluator._ctx.clear()
+        self.assertEqual(evaluator._allocator.allocated_count, 0)
+        self.assertEqual(io_arena.allocated_count, 0)
+        self.assertEqual(io_arena.leased_count, 1)
+        np.testing.assert_array_equal(output, np.array([11.0, 22.0, 33.0], dtype=np.float32))
+
     def test_metadata(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         sess = ReferenceEvaluator(model)

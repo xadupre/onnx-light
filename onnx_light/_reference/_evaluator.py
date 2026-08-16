@@ -83,6 +83,7 @@ _NP_TO_DTYPE: dict[Any, int] = {v: k for k, v in _DTYPE_TO_NP.items()}
 
 _IS_BIG_ENDIAN = sys.byteorder == "big"
 _DEFAULT_ARENA_CAPACITY = 4096
+_DEFAULT_ARENA_EXTRA_SLOTS = 4
 
 
 def _cpp_tensor_to_numpy(t: Any, steal: bool = False) -> np.ndarray:
@@ -239,7 +240,8 @@ class ReferenceEvaluator:
         declared graph outputs. When neither allocator is provided, the
         evaluator creates persistent execution and I/O arenas and reuses them
         across runs. Passing only ``allocator`` preserves the legacy
-        single-allocator behaviour.
+        single-allocator behaviour; passing only ``io_allocator`` creates a
+        default persistent execution arena.
 
     Example
     -------
@@ -363,7 +365,9 @@ class ReferenceEvaluator:
         # context, keyed by graph/function address) instead of rebuilding it on
         # every call. The per-invocation tensor / sequence / event state is
         # reset via ``RuntimeContext.clear`` at the start of each :meth:`run`.
-        if allocator is None and io_allocator is None:
+        create_execution_arena = allocator is None
+        create_io_arena = allocator is None and io_allocator is None
+        if create_execution_arena or create_io_arena:
             if self._graph is not None:
                 node_output_slots = sum(len(node.output) for node in self._graph.node)
                 initializer_slots = len(self._graph.initializer)
@@ -379,10 +383,12 @@ class ReferenceEvaluator:
                 + len(self._output_names)
                 + initializer_slots
                 + node_output_slots
-                + 4,
+                + _DEFAULT_ARENA_EXTRA_SLOTS,
             )
-            allocator = _runtime.ExecutionArena(arena_capacity)
-            io_allocator = _runtime.IOArena(arena_capacity)
+            if create_execution_arena:
+                allocator = _runtime.ExecutionArena(arena_capacity)
+            if create_io_arena:
+                io_allocator = _runtime.IOArena(arena_capacity)
 
         self._ctx = _runtime.RuntimeContext(
             self._kernel_ctx,

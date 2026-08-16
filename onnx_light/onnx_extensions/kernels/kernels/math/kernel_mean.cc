@@ -19,7 +19,7 @@ constexpr const char *kMeanName = "kernel::Mean";
 
 constexpr const char *kSupportedMeanTypesMsg = " only supports FLOAT and DOUBLE inputs.";
 
-template <typename T> T AddOf(T a, T b) { return a + b; }
+template <typename T> T MeanAddOf(T a, T b) { return a + b; }
 
 // Computes the broadcast shape of every tensor in ``inputs``. ``inputs`` must
 // be non-empty and all tensors must share ``expected_dtype``.
@@ -48,13 +48,13 @@ void AccumulateAndScale(const char *dtype_name, int32_t dtype, const Tensors &in
   }
   // First pair: accumulate into the output buffer.
   detail::BinaryElementwise<T, T>(kMeanName, dtype_name, dtype, inputs[0], inputs[1], output,
-                                  AddOf<T>);
+                                  MeanAddOf<T>);
   // Subsequent inputs: accumulate in place by re-running the binary
   // element-wise driver with ``output`` as both an input and the output.
   for (size_t i = 2; i < inputs.size(); ++i) {
     Tensor partial = output;
     detail::BinaryElementwise<T, T>(kMeanName, dtype_name, dtype, partial, inputs[i], output,
-                                    AddOf<T>);
+                                    MeanAddOf<T>);
   }
   // Divide the accumulated sum by the input count to obtain the mean.
   const T inv_n = static_cast<T>(1) / static_cast<T>(inputs.size());

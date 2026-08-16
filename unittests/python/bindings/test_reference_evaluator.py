@@ -145,6 +145,7 @@ class TestReferenceEvaluator(ExtTestCase):
         np.testing.assert_array_equal(first, np.array([11.0, 22.0, 33.0], dtype=np.float32))
 
     def test_default_arenas_route_outputs_to_io_arena(self):
+        """Routes default ReferenceEvaluator outputs through an internal IOArena."""
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         evaluator = ReferenceEvaluator(model)
 
@@ -171,6 +172,7 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(evaluator._io_allocator.retained_count, 1)
 
     def test_reference_evaluator_accepts_io_allocator(self):
+        """Routes outputs through the caller-provided IOArena."""
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         execution_arena = runtime.ExecutionArena(4)
         io_arena = runtime.IOArena(4)
@@ -199,6 +201,7 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(io_arena.retained_count, 1)
 
     def test_reference_evaluator_accepts_allocator_only(self):
+        """Creates a default IOArena when only an execution allocator is provided."""
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         execution_arena = runtime.ExecutionArena(4)
         evaluator = ReferenceEvaluator(model, allocator=execution_arena)
@@ -220,6 +223,7 @@ class TestReferenceEvaluator(ExtTestCase):
         np.testing.assert_array_equal(output, np.array([11.0, 22.0, 33.0], dtype=np.float32))
 
     def test_reference_evaluator_accepts_io_allocator_only(self):
+        """Creates a default ExecutionArena when only an IOArena is provided."""
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         io_arena = runtime.IOArena(4)
         evaluator = ReferenceEvaluator(model, io_allocator=io_arena)

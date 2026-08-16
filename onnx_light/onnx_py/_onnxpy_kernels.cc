@@ -1299,7 +1299,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_prop_ro("peak_allocated_size", &IOArena::PeakAllocatedSize,
                    "Peak logical live-byte count since construction or reset.")
       .def_prop_ro("allocated_count", &IOArena::allocated_count,
-                   "Number of currently live buffers not exported through a lease.")
+                   "Number of buffers currently live in the arena, excluding buffers "
+                   "pinned by exported leases.")
       .def_prop_ro("leased_count", &IOArena::leased_count,
                    "Number of buffers currently pinned by exported owners.")
       .def_prop_ro("capacity", &IOArena::capacity,

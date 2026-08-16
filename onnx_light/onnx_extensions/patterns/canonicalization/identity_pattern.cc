@@ -56,7 +56,11 @@ bool ReadConstDoubles(core::builder::GraphGraph &graph, const std::string &name,
   }
   std::vector<int64_t> integers;
   if (ReadIntegerValues(*tensor, integers)) {
-    out.assign(integers.begin(), integers.end());
+    out.clear();
+    out.reserve(integers.size());
+    for (int64_t value : integers) {
+      out.push_back(static_cast<double>(value));
+    }
     return true;
   }
   return false;
@@ -146,10 +150,13 @@ core::builder::MatchResult IdentityPattern::Match(core::builder::GraphGraph &gra
     }
     std::vector<int64_t> ends;
     if (!graph.IsConstant(candidate.input()[2].value()) ||
-        !ReadConstInts(graph, candidate.input()[2].value(), ends) ||
-        !AllEqual(std::vector<double>(ends.begin(), ends.end()),
-                  static_cast<double>(std::numeric_limits<int64_t>::max()))) {
+        !ReadConstInts(graph, candidate.input()[2].value(), ends) || ends.empty()) {
       return NoMatch(candidate, "the Slice ends do not select the full range");
+    }
+    for (int64_t end : ends) {
+      if (end != std::numeric_limits<int64_t>::max()) {
+        return NoMatch(candidate, "the Slice ends do not select the full range");
+      }
     }
     return core::builder::MatchResult{this, {&candidate}, &candidate};
   }

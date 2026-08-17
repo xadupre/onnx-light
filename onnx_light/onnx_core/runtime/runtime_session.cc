@@ -9,7 +9,6 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
-#include <vector>
 
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/kernels/run_nodes_internal.h"
@@ -237,6 +236,9 @@ bool RuntimeSession::ProducesDeclaredOutput(const NodeProto &node) const {
 void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const {
   const bool routed_to_io = session_io_allocator_ != nullptr && ProducesDeclaredOutput(node);
   RawBufferAllocator *expected = routed_to_io ? session_io_allocator_ : session_allocator_;
+  if (expected == nullptr) {
+    return;
+  }
   const char *expected_name =
       routed_to_io ? "the session's I/O allocator" : "the session's execution allocator";
   for (int i = 0; i < node.output_size(); ++i) {
@@ -255,11 +257,10 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
       const int32_t output_data_type = output.data_type;
       const Shape output_shape = output.shape;
       const std::string output_name = output.name;
-      const std::vector<uint8_t> output_copy(output_bytes, output_bytes + output_size_bytes);
       Tensor migrated =
           MakeOutputTensor(output_data_type, output_shape, output_size_bytes, expected);
       migrated.name = output_name;
-      std::memcpy(migrated.mutable_bytes(), output_copy.data(), output_size_bytes);
+      std::memcpy(migrated.mutable_bytes(), output_bytes, output_size_bytes);
       const RuntimeEventKind migrated_kind = output_names_set_.find(name) != output_names_set_.end()
                                                  ? RuntimeEventKind::kOutput
                                                  : RuntimeEventKind::kIntermediate;

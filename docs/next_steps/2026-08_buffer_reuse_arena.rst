@@ -278,7 +278,7 @@ A kernel workspace has the opposite requirement to a declared output: it must
 stay in the execution arena even when the node is routed to the I/O allocator.
 :cpp:func:`RuntimeContext::MakeTemporaryTensor` is the ``AllocateTemporary`` half
 of the facade: it always allocates from :cpp:func:`RuntimeContext::execution_allocator`
-regardless of which allocator is currently active, so scratch buffers a
+regardless of which allocator is currently active, so scratch buffers that a
 declared-output kernel needs never enter the I/O arena's retention budget.
 Converting the built-in kernels to the slot-aware :cpp:func:`RuntimeContext::MakeOutputTensor`
 and :cpp:func:`RuntimeContext::MakeTemporaryTensor` overloads is a follow-up.

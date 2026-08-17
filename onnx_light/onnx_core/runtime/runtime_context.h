@@ -567,6 +567,9 @@ public:
   /// ``MakeOutputTensor(dtype, shape, bytes, allocator())`` would pin it in the
   /// I/O arena for the duration of that node. When no execution allocator was
   /// supplied at construction time the tensor owns its bytes inline.
+  ///
+  /// @returns A tensor of the requested type and shape whose storage is owned by
+  ///          the execution arena (or inline when no execution allocator exists).
   Tensor MakeTemporaryTensor(int32_t data_type, const Shape &shape, size_t n_bytes) {
     return ONNX_LIGHT_NAMESPACE::core::runtime::MakeOutputTensor(data_type, shape, n_bytes,
                                                                  allocator_);

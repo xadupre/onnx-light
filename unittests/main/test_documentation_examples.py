@@ -92,7 +92,7 @@ class TestDocumentationExamples(ExtTestCase):
         root_fold = os.path.normpath(os.path.join(this, "..", "..", "docs", "examples"))
         # Collect (fold, name) pairs from all subdirectories
         found = []
-        for subdir in ("backend", "core", "proto"):
+        for subdir in ("runtime", "core", "proto"):
             fold = os.path.join(root_fold, subdir)
             if os.path.isdir(fold):
                 for name in os.listdir(fold):

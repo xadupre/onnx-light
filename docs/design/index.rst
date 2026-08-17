@@ -7,16 +7,13 @@ It replicates the same Python API and the same C++ API to enable
 a smooth replacement.
 
 .. toctree::
-    :caption: ONNX, Concepts, link to protobuf
+    :caption: ONNX and Concepts
     :maxdepth: 1
 
     intro/index
     goals
     differences
-    protobuf_format
-    ort_flatbuffer_format
-    no_copy_ownership
-    loading_saving_scenarios
+    proto/index
 
 .. toctree::
     :caption: Library Split
@@ -29,15 +26,7 @@ a smooth replacement.
     :caption: Runtime
     :maxdepth: 1
 
-    kernel_tuning
-    arenas
-
-.. toctree::
-    :caption: Test Coverage
-    :maxdepth: 1
-
-    test_coverage
-    runtime_coverage
+    runtime/index
 
 .. toctree::
     :caption: Shape Inference

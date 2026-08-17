@@ -345,9 +345,6 @@ template <typename Derived> struct Attributes {
    *        vector, for hot-path callers (e.g. the subgraph walk).
    * @param fn Callable accepting @c (Symbol name, AttributeKind kind).
    */
-  // Like attributeNames() followed by kindOf() on each, but without allocating
-  // a names vector -- for callers (e.g. Graph's subgraph walk) that just need
-  // to visit every (name, kind) pair on a hot path.
   template <typename Fn> void forEachAttributeNameAndKind(const Fn &fn) const {
     for (const auto &a : values_) {
       fn(a->name, a->kind());

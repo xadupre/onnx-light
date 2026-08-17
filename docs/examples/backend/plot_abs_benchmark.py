@@ -48,7 +48,7 @@ def make_abs_model():
         [helper.make_tensor_value_info("Y", TensorProto.FLOAT, ["N"])],
     )
     model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
-    model.ir_version = ORT_MAX_IR_VERSION
+    model.ir_version = min(model.ir_version, ORT_MAX_IR_VERSION)
     checker.check_model(model)
     return model
 

@@ -18,8 +18,6 @@ void RepeatedField<T>::PrintToStringStream(std::stringstream &ss,
   constexpr bool quote_strings = true;
   ss << "[ ";
   for (const auto &p : values_) {
-    if (short_repr_limit_reached(ss, options))
-      break;
     if constexpr (requires(const T &value) { value.PrintToStringStream(ss, options); }) {
       p.PrintToStringStream(ss, options);
     } else if constexpr (std::is_same_v<T, utils::String>) {
@@ -29,10 +27,9 @@ void RepeatedField<T>::PrintToStringStream(std::stringstream &ss,
     }
     ss << " ";
     if (enforce_short_repr_length(ss, options))
-      break;
+      return;
   }
-  if (!short_repr_limit_reached(ss, options))
-    ss << "]";
+  ss << "]";
 }
 
 template <typename T> void RepeatedProtoField<T>::clear() { values_.clear(); }
@@ -109,15 +106,12 @@ void RepeatedProtoField<T>::PrintToStringStream(std::stringstream &ss,
                                                 utils::PrintOptions &options) const {
   ss << "[ ";
   for (const auto &p : values_) {
-    if (short_repr_limit_reached(ss, options))
-      break;
     p->PrintToStringStream(ss, options);
     ss << " ";
     if (enforce_short_repr_length(ss, options))
-      break;
+      return;
   }
-  if (!short_repr_limit_reached(ss, options))
-    ss << "]";
+  ss << "]";
 }
 
 template <typename T> void OptionalField<T>::reset() { value_.reset(); }

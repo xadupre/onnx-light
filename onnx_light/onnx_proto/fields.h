@@ -40,18 +40,6 @@ inline bool is_inline_size(const PrintOptions &options, size_t size) {
 }
 
 /**
- * Returns true when ``options.max_short_repr_length`` is set and the text already accumulated in
- * ``ss`` has reached that bound. Printers use it to stop writing the remaining fields.
- */
-inline bool short_repr_limit_reached(std::stringstream &ss, const PrintOptions &options) {
-  if (options.max_short_repr_length == 0) {
-    return false;
-  }
-  const std::streampos pos = ss.tellp();
-  return pos >= 0 && static_cast<size_t>(pos) >= options.max_short_repr_length;
-}
-
-/**
  * Enforces ``options.max_short_repr_length`` on the text already accumulated in ``ss``. When the
  * bound is exceeded, the stream content is truncated in place and terminated with an ellipsis.
  *

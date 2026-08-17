@@ -91,12 +91,19 @@ The implementation is split into focused pull requests:
        lowers the cap and evicts immediately; the cap defaults to unbounded so
        existing behaviour is unchanged. Live and leased buffers are never
        evicted.
-   * - Current PR
+   * - `PR #4480 <https://github.com/xadupre/onnx-light/pull/4480>`_
      - Python runtime activation
      - Exposes ``IOArena`` and its accounting controls in the Python runtime
        bindings, adds the ``io_allocator`` argument to ``RuntimeContext``, and
        makes ``ReferenceEvaluator`` create persistent execution and I/O arenas
        by default while still accepting caller-provided allocators.
+   * - Current PR
+     - Output-slot routing
+     - Completes step 5: :cpp:func:`RuntimeSession::VerifyOutputAllocators`
+       resolves the allocation role of each output *slot* instead of the node as
+       a whole, so a node that produces both a declared graph output and an
+       intermediate keeps the declared output in the I/O arena and its
+       intermediate in the execution arena.
 
 Current behaviour
 +++++++++++++++++
@@ -200,8 +207,7 @@ belongs to the graph/session layer.
 Current implementation
 ----------------------
 
-PR #4447 does not yet implement per-output routing. Most kernels still allocate
-with code equivalent to:
+Kernels still allocate their outputs with code equivalent to:
 
 .. code-block:: cpp
 
@@ -217,20 +223,29 @@ execution allocator active. The kernel remains unaware of the graph-output
 classification, but every allocation it performs during that invocation uses
 the same selected arena.
 
-This current mechanism is sufficient for a single-output node. It is not the
-complete two-arena design:
+This node-scoped selection is sufficient for a single-output node and keeps the
+declared-output path zero-copy: a node that produces a declared output has the
+I/O allocator active, so its declared output is materialized directly in the I/O
+arena. It is not by itself the complete two-arena design, because a mixed-output
+node would allocate *all* of its outputs from the I/O arena.
 
-* a node with one final output and one intermediate output allocates both from
-  the I/O arena;
-* a temporary workspace allocated by such a kernel through
-  ``rt->allocator()`` also incorrectly uses the I/O arena;
-* the call to ``MakeOutputTensor`` carries no output identity, so the runtime
-  cannot correct either case at that point.
+Output-slot routing closes that gap after the kernel runs.
+``RuntimeSession::VerifyOutputAllocators`` now resolves the allocation role of
+each output *slot* individually: a declared graph output belongs to the I/O
+arena and every other (intermediate) output belongs to the execution arena. A
+declared output produced by a node routed to the I/O allocator is already in the
+right arena (no copy). Only the intermediates of a *mixed* node — a node that
+produces at least one declared output alongside an intermediate — are migrated
+back to the execution arena, so a rarely occurring mixed node no longer pins its
+intermediates in the I/O arena. Nodes with a uniform role (all declared, all
+intermediate) never trigger a migration.
 
-The current code is therefore node-scoped routing, not output-scoped routing.
-It is safe for ownership, because it conservatively gives mixed outputs the
-longer I/O lifetime, but it does not satisfy the intended arena separation or
-accounting.
+A remaining limitation is that migrating an intermediate copies its bytes once.
+The zero-copy ideal for a mixed-output intermediate still requires a slot-aware
+allocation API (see below) so the kernel writes each output directly into its
+final arena; a temporary workspace allocated by such a kernel through
+``rt->allocator()`` likewise still uses the node-scoped arena. Those changes are
+deferred; the observable per-slot ownership contract is satisfied today.
 
 Target output-slot contract
 ---------------------------
@@ -430,9 +445,11 @@ Implementation order
    <https://github.com/xadupre/onnx-light/pull/4447>`_ adds the dedicated I/O
    allocator and the initial node-scoped routing: ``RuntimeSession::Run``
    switches the active allocator for a kernel invocation when the node produces
-   a declared graph output. Complete this step with output-slot routing so a
-   mixed-output node allocates only its declared graph outputs from the I/O
-   arena and keeps its intermediate outputs in the execution arena.
+   a declared graph output. The current PR completes this step with output-slot
+   routing: ``RuntimeSession::VerifyOutputAllocators`` resolves the arena of
+   each output slot individually, so a mixed-output node keeps its declared
+   graph outputs in the I/O arena and its intermediate outputs in the execution
+   arena.
 6. Transfer each exported output handle to its NumPy capsule; remove the
    dependency on keeping the mutable :cpp:class:`RuntimeContext` as the data
    owner. The enabling mechanism lands first (`PR #4454
@@ -441,12 +458,13 @@ Implementation order
    the handle keeps its arena alive on its own and can be owned by a capsule
    independently of the context. The NumPy capsule wiring then lands in `PR #4457
    <https://github.com/xadupre/onnx-light/pull/4457>`_.
-7. Activate both arenas through the Python runtime path. This is implemented by
-   the current PR: ``IOArena`` and its accounting and retention controls are
-   exposed in the Python bindings, ``RuntimeContext`` accepts an
-   ``io_allocator`` argument, and ``ReferenceEvaluator`` creates or accepts
-   persistent execution and I/O arenas. Python runs now exercise the routing and
-   lease mechanisms from steps 5 and 6 end to end.
+7. Activate both arenas through the Python runtime path (`PR #4480
+   <https://github.com/xadupre/onnx-light/pull/4480>`_): ``IOArena`` and its
+   accounting and retention controls are exposed in the Python bindings,
+   ``RuntimeContext`` accepts an ``io_allocator`` argument, and
+   ``ReferenceEvaluator`` creates or accepts persistent execution and I/O
+   arenas. Python runs now exercise the routing and lease mechanisms from
+   steps 5 and 6 end to end.
 8. Add independent retention caps, LRU eviction, trimming, and accounting for
    both arenas. Trimming lands first (`PR #4465
    <https://github.com/xadupre/onnx-light/pull/4465>`_): ``ExecutionArena::Trim``
@@ -506,6 +524,10 @@ Pull requests
   both arenas to release retained free-buffer storage on demand.
 * `PR #4469 <https://github.com/xadupre/onnx-light/pull/4469>`_: adds a per-arena
   retention cap with least-recently-freed eviction to both arenas.
-* Current PR: activates the two-arena design in the Python runtime by exposing
-  ``IOArena``, wiring ``RuntimeContext.io_allocator``, and giving
-  ``ReferenceEvaluator`` persistent execution and I/O arenas.
+* `PR #4480 <https://github.com/xadupre/onnx-light/pull/4480>`_: activates the
+  two-arena design in the Python runtime by exposing ``IOArena``, wiring
+  ``RuntimeContext.io_allocator``, and giving ``ReferenceEvaluator`` persistent
+  execution and I/O arenas.
+* Current PR: completes output-slot routing so ``RuntimeSession`` resolves each
+  output slot's arena individually, keeping a mixed-output node's declared
+  outputs in the I/O arena and its intermediates in the execution arena.

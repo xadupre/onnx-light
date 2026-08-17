@@ -30,6 +30,7 @@ a smooth replacement.
     :maxdepth: 1
 
     kernel_tuning
+    arenas
 
 .. toctree::
     :caption: Test Coverage

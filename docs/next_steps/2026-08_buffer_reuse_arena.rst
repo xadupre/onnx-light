@@ -123,7 +123,7 @@ The implementation is split into focused pull requests:
        allocator, so scratch buffers never enter the I/O arena's retention
        budget. Completes the "plus a kernel workspace" test coverage the plan
        requires alongside the mixed-output slot routing.
-   * - Current PR
+   * - `PR #4511 <https://github.com/xadupre/onnx-light/pull/4511>`_
      - Built-in kernel allocation migration
      - Converts built-in kernels to allocate each result through the slot-aware
        :cpp:func:`RuntimeContext::MakeOutputTensor` API and routes their
@@ -287,7 +287,8 @@ stay in the execution arena even when the node is routed to the I/O allocator.
 of the facade: it always allocates from :cpp:func:`RuntimeContext::execution_allocator`
 regardless of which allocator is currently active, so scratch buffers that a
 declared-output kernel needs never enter the I/O arena's retention budget.
-The current PR converts the built-in kernels to the slot-aware
+`PR #4511 <https://github.com/xadupre/onnx-light/pull/4511>`_ converts the
+built-in kernels to the slot-aware
 :cpp:func:`RuntimeContext::MakeOutputTensor` and
 :cpp:func:`RuntimeContext::MakeTemporaryTensor` allocation paths.
 
@@ -506,9 +507,11 @@ Implementation order
    <https://github.com/xadupre/onnx-light/pull/4506>`_ adds the complementary
    ``RuntimeContext::MakeTemporaryTensor`` workspace overload, which always
    allocates from the execution arena so a declared-output kernel's scratch
-   buffers never enter the I/O arena. The current PR completes the kernel-facing
-   migration by assigning each built-in output allocation its ONNX output slot
-   and routing every built-in workspace through the execution arena.
+   buffers never enter the I/O arena. `PR #4511
+   <https://github.com/xadupre/onnx-light/pull/4511>`_ completes the
+   kernel-facing migration by assigning each built-in output allocation its
+   ONNX output slot and routing every built-in workspace through the execution
+   arena.
 6. Transfer each exported output handle to its NumPy capsule; remove the
    dependency on keeping the mutable :cpp:class:`RuntimeContext` as the data
    owner. The enabling mechanism lands first (`PR #4454
@@ -601,6 +604,7 @@ Pull requests
   (``RuntimeContext::MakeTemporaryTensor``) so a declared-output kernel allocates
   its scratch/workspace buffers from the execution arena, keeping them out of the
   I/O arena's retention budget.
-* Current PR: migrates built-in kernels to the slot-aware output and temporary
-  allocation APIs so mixed-output kernels avoid migration copies and workspaces
-  never consume the I/O arena retention budget.
+* `PR #4511 <https://github.com/xadupre/onnx-light/pull/4511>`_: migrates
+  built-in kernels to the slot-aware output and temporary allocation APIs so
+  mixed-output kernels avoid migration copies and workspaces never consume the
+  I/O arena retention budget.

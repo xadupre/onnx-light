@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/kernels/run_nodes_internal.h"
@@ -251,12 +252,18 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
       const uint8_t *output_bytes = output.bytes();
       EXT_ENFORCE(output_bytes != nullptr,
                   "RuntimeSession: output has non-zero size with a null data pointer.");
+      const int32_t output_data_type = output.data_type;
+      const Shape output_shape = output.shape;
+      const std::string output_name = output.name;
+      const std::vector<uint8_t> output_copy(output_bytes, output_bytes + output_size_bytes);
       Tensor migrated =
-          MakeOutputTensor(output.data_type, output.shape, output_size_bytes, expected);
-      migrated.name = output.name;
-      std::memcpy(migrated.mutable_bytes(), output_bytes, output_size_bytes);
-      rt.Put(name, std::move(migrated),
-             routed_to_io ? RuntimeEventKind::kOutput : RuntimeEventKind::kIntermediate);
+          MakeOutputTensor(output_data_type, output_shape, output_size_bytes, expected);
+      migrated.name = output_name;
+      std::memcpy(migrated.mutable_bytes(), output_copy.data(), output_size_bytes);
+      const RuntimeEventKind migrated_kind = output_names_set_.find(name) != output_names_set_.end()
+                                                 ? RuntimeEventKind::kOutput
+                                                 : RuntimeEventKind::kIntermediate;
+      rt.Put(name, std::move(migrated), migrated_kind);
     }
     const Tensor &verified_output = rt.Get(name);
     if (!verified_output.has_allocation()) {

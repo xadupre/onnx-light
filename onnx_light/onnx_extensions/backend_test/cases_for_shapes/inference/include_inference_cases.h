@@ -338,17 +338,6 @@ ONNX_LIGHT_BACKEND_TEST_LOCAL void
 RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registry,
                                              TestMode mode = TestMode::TEST);
 
-/// Registers the fused counterpart of
-/// :cpp:func:`RegisterQwen3_4LayersLikeShapeInferenceCases` (opset 23, IR 10).
-/// The model is identical in signature and architecture but expresses every
-/// RMSNorm with a single ``RMSNormalization`` node and the grouped-query
-/// attention core with a single ``Attention`` node, instead of spelling them
-/// out as explicit subgraphs. RoPE and the causal-mask construction remain
-/// explicit as they have no fused-operator equivalent.
-ONNX_LIGHT_BACKEND_TEST_LOCAL void
-RegisterQwen3_4LayersLikeFusedShapeInferenceCases(std::vector<TestCase> &registry,
-                                                  TestMode mode = TestMode::TEST);
-
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 /// @param include_big When ``false`` (the default), test cases whose name

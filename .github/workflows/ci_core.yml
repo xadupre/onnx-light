@@ -331,8 +331,11 @@ jobs:
     runs-on: windows-latest
     # Ninja honors the compiler launcher for MSVC, unlike the Visual Studio
     # platform generator previously used here. This lets the x86 build share
-    # the same persistent sccache strategy as the x64 Windows build.
-    timeout-minutes: 35
+    # the same persistent sccache strategy as the x64 Windows build. The
+    # sccache speedup only shows up once the cache is warm; the first (cold)
+    # build after this change still pays the full compile cost, so keep the
+    # same generous 60-minute timeout as the x64 Windows job to absorb that.
+    timeout-minutes: 60
     permissions:
       contents: read
       id-token: write

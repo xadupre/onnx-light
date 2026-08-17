@@ -202,9 +202,12 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
             Path(onnx.__file__).resolve().parent / "defs", target_version
         )
 
-        # SwiGLU (onnx#8202) may not yet be present in the installed onnx.
+        # SwiGLU (onnx#8202) and DynamicQuantizeLinear may not yet be present in
+        # the installed onnx source package.
         if "SwiGLU" not in onnx_schemas:
             onnx_light_schemas.pop("SwiGLU", None)
+        if "DynamicQuantizeLinear" not in onnx_schemas:
+            onnx_light_schemas.pop("DynamicQuantizeLinear", None)
 
         self.assertEqual(set(onnx_light_schemas), set(onnx_schemas))
         for op_name in sorted(onnx_schemas):

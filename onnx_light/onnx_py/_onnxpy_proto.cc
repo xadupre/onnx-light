@@ -660,10 +660,13 @@ std::string proto_repr_with_short_line(cls &self,
   if (repr.size() > max_short_repr_length) {
     static constexpr const char ellipsis[] = "...";
     static constexpr size_t ellipsis_length = sizeof(ellipsis) - 1;
-    size_t keep =
-        max_short_repr_length > ellipsis_length ? max_short_repr_length - ellipsis_length : 0;
-    repr.resize(keep);
-    repr += ellipsis;
+    if (max_short_repr_length <= ellipsis_length) {
+      // No room for both content and a full ellipsis; keep the leading characters only.
+      repr.resize(max_short_repr_length);
+    } else {
+      repr.resize(max_short_repr_length - ellipsis_length);
+      repr += ellipsis;
+    }
   }
   return repr;
 }

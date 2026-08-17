@@ -237,6 +237,9 @@ bool ResolveAxes(core::builder::GraphGraph &graph, const NodeProto &node,
 
 /// Returns ``true`` when ``axes`` is the contiguous range ``[min, max]``.
 bool IsContiguous(const std::vector<int64_t> &axes) {
+  if (axes.size() <= 1) {
+    return true;
+  }
   const auto minmax = std::minmax_element(axes.begin(), axes.end());
   const int64_t span = *minmax.second - *minmax.first + 1;
   if (span != static_cast<int64_t>(axes.size())) {

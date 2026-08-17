@@ -4,7 +4,7 @@ from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 import onnx
 import onnx.defs as onnx_defs
-import onnx_light.onnx
+import onnx_light.onnx.defs
 
 
 class TestSchemaSyncWithOnnxCode(ExtTestCase):
@@ -102,8 +102,32 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
         in_string = False
         escaped = False
         quote = ""
+        position = open_paren
+        while position < len(source):
+            if not in_string and source.startswith("//", position):
+                newline = source.find("\n", position + 2)
+                if newline < 0:
+                    return -1
+                position = newline + 1
+                continue
+            if not in_string and source.startswith("/*", position):
+                comment_end = source.find("*/", position + 2)
+                if comment_end < 0:
+                    return -1
+                position = comment_end + 2
+                continue
+            if not in_string and source.startswith('R"', position):
+                delimiter_end = source.find("(", position + 2)
+                if delimiter_end < 0:
+                    return -1
+                delimiter = source[position + 2 : delimiter_end]
+                closing = ")" + delimiter + '"'
+                raw_end = source.find(closing, delimiter_end + 1)
+                if raw_end < 0:
+                    return -1
+                position = raw_end + len(closing)
+                continue
 
-        for position in range(open_paren, len(source)):
             char = source[position]
             if in_string:
                 if escaped:
@@ -112,9 +136,7 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
                     escaped = True
                 elif char == quote:
                     in_string = False
-                continue
-
-            if char in {'"', "'"}:
+            elif char in {'"', "'"}:
                 in_string = True
                 quote = char
             elif char == "(":
@@ -123,6 +145,7 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
                 depth -= 1
                 if depth == 0:
                     return position
+            position += 1
 
         return -1
 

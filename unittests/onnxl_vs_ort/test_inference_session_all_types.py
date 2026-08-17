@@ -29,6 +29,7 @@ class TestInferenceSessionAllTypes(ExtTestCase):
                 [oh.make_tensor_value_info("Z", TensorProto.FLOAT, [3])],
             ),
             opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=13,
         )
 
         # Run inference
@@ -55,6 +56,7 @@ class TestInferenceSessionAllTypes(ExtTestCase):
                 [oh.make_tensor_value_info("Z", TensorProto.INT64, [3])],
             ),
             opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=13,
         )
 
         # Run inference
@@ -78,6 +80,7 @@ class TestInferenceSessionAllTypes(ExtTestCase):
                 [oh.make_tensor_value_info("Y", TensorProto.FLOAT16, [3])],
             ),
             opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=13,
         )
 
         # Run inference
@@ -105,6 +108,7 @@ class TestInferenceSessionAllTypes(ExtTestCase):
                 [oh.make_tensor_value_info("Y", TensorProto.INT2, [4])],
             ),
             opset_imports=[oh.make_opsetid("", 23)],
+            ir_version=13,
         )
 
         x = np.array([-2.0, -1.0, 0.0, 1.0], dtype=np.float32)
@@ -136,6 +140,7 @@ class TestInferenceSessionAllTypes(ExtTestCase):
                 [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [4])],
             ),
             opset_imports=[oh.make_opsetid("", 23)],
+            ir_version=13,
         )
 
         # Not every onnxruntime build registers a Cast kernel consuming INT2
@@ -169,6 +174,7 @@ class TestInferenceSessionAllTypes(ExtTestCase):
                 [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2])],
             ),
             opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=13,
         )
 
         # Run inference
@@ -192,6 +198,7 @@ class TestInferenceSessionAllTypes(ExtTestCase):
                 [onh.from_array(w, name="W")],
             ),
             opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=13,
         )
 
         # Run inference
@@ -214,6 +221,7 @@ class TestInferenceSessionAllTypes(ExtTestCase):
                 [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2])],
             ),
             opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=13,
         )
 
         # Run inference with explicit providers

@@ -114,6 +114,7 @@ def _principal_op(tc: TestCase) -> tuple[str, str]:
 #     ``Graph::SaveShapeValuesFromDataPropagation``. ORT versions predating
 #     microsoft/onnxruntime#28778 abort while loading the model.
 _ORT_SKIP_CASES = frozenset({"test_cc_shape_inference_shape_identity_unsqueeze"})
+_ORT_MAX_IR_VERSION = 13
 
 
 def _run_onnxruntime(tc: TestCase) -> tuple[float | None, bool, str | None]:
@@ -145,6 +146,15 @@ def _run_onnxruntime(tc: TestCase) -> tuple[float | None, bool, str | None]:
             "skipped: known to abort onnxruntime (see microsoft/onnxruntime#28778)",
         )
 
+    if tc.model.ir_version > _ORT_MAX_IR_VERSION:
+        return (
+            None,
+            False,
+            (
+                f"skipped: model IR version {tc.model.ir_version} exceeds "
+                f"onnxruntime maximum {_ORT_MAX_IR_VERSION}"
+            ),
+        )
     try:
         sess = ort.InferenceSession(
             tc.model.SerializeToString(), providers=["CPUExecutionProvider"]

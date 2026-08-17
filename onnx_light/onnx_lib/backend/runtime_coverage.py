@@ -230,16 +230,6 @@ def _run_onnxruntime(tc: TestCase) -> tuple[float | None, bool, str | None]:
             "skipped: known to abort onnxruntime (see microsoft/onnxruntime#28778)",
         )
 
-    max_ir_version = ort_max_ir_version()
-    if tc.model.ir_version > max_ir_version:
-        return (
-            None,
-            False,
-            (
-                f"skipped: model IR version {tc.model.ir_version} exceeds "
-                f"onnxruntime maximum {max_ir_version}"
-            ),
-        )
     max_opset_version = ort_max_opset_version()
     for opset in tc.model.opset_import:
         if opset.domain in ("", "ai.onnx") and opset.version > max_opset_version:
@@ -251,9 +241,21 @@ def _run_onnxruntime(tc: TestCase) -> tuple[float | None, bool, str | None]:
                     f"onnxruntime maximum {max_opset_version}"
                 ),
             )
+
+    # Freeze the model IR version to the highest value onnxruntime accepts.
+    # Backend test models track the latest ONNX IR version, which routinely runs
+    # ahead of the version the bundled onnxruntime supports. Without capping it,
+    # the coverage dashboard would report a large number of spurious "IR version
+    # exceeds onnxruntime maximum" skips whenever ONNX bumps its IR version.
+    max_ir_version = ort_max_ir_version()
+    run_model = tc.model
+    if max_ir_version and tc.model.ir_version > max_ir_version:
+        run_model = _clone_model(tc.model)
+        run_model.ir_version = max_ir_version
+
     try:
         sess = ort.InferenceSession(
-            tc.model.SerializeToString(), providers=["CPUExecutionProvider"]
+            run_model.SerializeToString(), providers=["CPUExecutionProvider"]
         )
     except Exception as exc:  # noqa: BLE001
         return (None, False, type(exc).__name__ + ": " + str(exc).splitlines()[0])

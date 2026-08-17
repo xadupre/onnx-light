@@ -177,18 +177,18 @@ class TestRuntimeCoverageOnnxruntime(ExtTestCase):
         tc.model.ir_version = ort_max_ir_version()
         return tc
 
-    def test_unsupported_ir_version_is_skipped(self):
+    def test_unsupported_ir_version_is_frozen(self):
         tc = self._make_identity_case("test_unsupported_ir", [1.0], [1.0])
         max_ir_version = ort_max_ir_version()
         tc.model.ir_version = max_ir_version + 1
         diff, ok, err = _run_onnxruntime(tc)
-        self.assertIsNone(diff)
-        self.assertFalse(ok)
-        self.assertEqual(
-            err,
-            f"skipped: model IR version {tc.model.ir_version} exceeds "
-            f"onnxruntime maximum {max_ir_version}",
-        )
+        # The model IR version is frozen to the onnxruntime maximum, so the
+        # case runs instead of being skipped.
+        self.assertIsNone(err)
+        self.assertTrue(ok)
+        self.assertEqual(diff, 0.0)
+        # The original test case is left untouched by the freeze.
+        self.assertEqual(tc.model.ir_version, max_ir_version + 1)
 
     def test_unsupported_opset_version_is_skipped(self):
         tc = self._make_identity_case("test_unsupported_opset", [1.0], [1.0])

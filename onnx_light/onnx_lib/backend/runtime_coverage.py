@@ -120,6 +120,7 @@ def _principal_op(tc: TestCase) -> tuple[str, str]:
 _ORT_SKIP_CASES = frozenset({"test_cc_shape_inference_shape_identity_unsqueeze"})
 
 
+@cache
 def _ort_fail_error() -> type[Exception] | None:
     """Returns the ONNX Runtime model-load failure exception type."""
     try:

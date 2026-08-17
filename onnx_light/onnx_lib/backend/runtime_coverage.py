@@ -23,9 +23,10 @@ domain and globally.
 
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass, field
 from functools import cache
-from typing import Any, Iterable
+from typing import Iterable
 
 import numpy as np
 
@@ -119,11 +120,16 @@ def _principal_op(tc: TestCase) -> tuple[str, str]:
 _ORT_SKIP_CASES = frozenset({"test_cc_shape_inference_shape_identity_unsqueeze"})
 
 
-def _ort_fail_error(ort: Any) -> type[Exception]:
+def _ort_fail_error() -> type[Exception] | None:
     """Returns the ONNX Runtime model-load failure exception type."""
-    capi = getattr(ort, "capi", None)
-    state = getattr(capi, "onnxruntime_pybind11_state", None)
-    return getattr(state, "Fail", Exception)
+    try:
+        state = importlib.import_module("onnxruntime.capi.onnxruntime_pybind11_state")
+    except ImportError:
+        return None
+    fail_error = getattr(state, "Fail", None)
+    if isinstance(fail_error, type) and issubclass(fail_error, Exception):
+        return fail_error
+    return None
 
 
 @cache
@@ -133,7 +139,9 @@ def ort_max_ir_version() -> int:
         import onnxruntime as ort
     except ImportError:
         return 0
-    fail_error = _ort_fail_error(ort)
+    fail_error = _ort_fail_error()
+    if fail_error is None:
+        return 0
 
     value_info = onnxl_helper.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [1])
     output_info = onnxl_helper.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [1])
@@ -163,7 +171,9 @@ def ort_max_opset_version() -> int:
         import onnxruntime as ort
     except ImportError:
         return 0
-    fail_error = _ort_fail_error(ort)
+    fail_error = _ort_fail_error()
+    if fail_error is None:
+        return 0
 
     value_info = onnxl_helper.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [1])
     output_info = onnxl_helper.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [1])

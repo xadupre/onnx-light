@@ -22,6 +22,7 @@
 #include "onnx_extensions/patterns/collections/split_pattern.h"
 #include "onnx_extensions/patterns/expand/expand_pattern.h"
 #include "onnx_extensions/patterns/expand/where_pattern.h"
+#include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
@@ -150,6 +151,14 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("ExpandUnsqueezeExpand",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ExpandUnsqueezeExpandPattern>();
+                                   });
+    core::builder::RegisterPattern("TransposeTranspose",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<TransposeTransposePattern>();
+                                   });
+    core::builder::RegisterPattern("TransposeGather",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<TransposeGatherPattern>();
                                    });
     return true;
   }();

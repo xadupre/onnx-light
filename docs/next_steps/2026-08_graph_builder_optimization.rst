@@ -120,6 +120,10 @@ requests:
      - Ports ``SwapExpandUnsqueezePattern`` and
        ``ExpandUnsqueezeExpandPattern`` with rewrite/rejection tests,
        registration, and Python bindings.
+   * - `Issue #4503 <https://github.com/xadupre/onnx-light/issues/4503>`_
+     - Transpose canonicalization and reordering
+     - Ports ``TransposeTransposePattern`` and ``TransposeGatherPattern`` with
+       rewrite/rejection tests, registration, and Python bindings.
 
 Graph structure on Graph
 ++++++++++++++++++++++++

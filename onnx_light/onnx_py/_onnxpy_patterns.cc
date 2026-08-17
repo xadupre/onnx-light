@@ -20,6 +20,7 @@
 #include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_extensions/patterns/expand/expand_pattern.h"
 #include "onnx_extensions/patterns/expand/where_pattern.h"
+#include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 
 #include <memory>
 #include <optional>
@@ -130,6 +131,12 @@ std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::str
   }
   if (name == "ExpandUnsqueezeExpand") {
     return std::make_shared<onnx_patterns::ExpandUnsqueezeExpandPattern>(priority.value_or(0));
+  }
+  if (name == "TransposeTranspose") {
+    return std::make_shared<onnx_patterns::TransposeTransposePattern>(priority.value_or(0));
+  }
+  if (name == "TransposeGather") {
+    return std::make_shared<onnx_patterns::TransposeGatherPattern>(priority.value_or(0));
   }
   throw std::invalid_argument("Unknown ONNX pattern '" + name + "'.");
 }
@@ -287,6 +294,16 @@ NB_MODULE(_onnxpypatterns, m) {
       m, "ExpandUnsqueezeExpandPattern",
       "Fuses ``Expand``, ``Unsqueeze`` and ``Expand`` into a single ``Unsqueeze`` "
       "followed by one ``Expand``.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::TransposeTransposePattern, core::builder::PatternOptimization>(
+      m, "TransposeTransposePattern",
+      "Merges two consecutive ``Transpose`` nodes into a single ``Transpose`` "
+      "or an ``Identity`` when the permutations cancel out.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::TransposeGatherPattern, core::builder::PatternOptimization>(
+      m, "TransposeGatherPattern",
+      "Removes or reorders a ``Transpose`` feeding a ``Gather`` with a scalar "
+      "index.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
 
   m.def(

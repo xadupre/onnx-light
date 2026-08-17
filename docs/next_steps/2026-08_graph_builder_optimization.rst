@@ -635,8 +635,9 @@ The upstream default list currently contains 104 enabled patterns.
 ``CastOpCastPattern``, ``ClipClipPattern``, ``ConstantToInitializerPattern``,
 ``ConvBiasNullPattern``, ``PadConvPattern``, ``DropoutPattern``,
 ``IdentityPattern``, ``NotNotPattern``, ``NotWherePattern``,
-``UnsqueezeEqualPattern``, and ``WhereAddPattern`` are already covered,
-leaving 90 patterns. They are grouped into nine cohesive pull requests below rather than
+``UnsqueezeEqualPattern``, ``WhereAddPattern``, ``ExpandPattern``,
+``ExpandBroadcastPattern``, and ``ExpandSwapPattern`` are already covered,
+leaving 87 patterns. They are grouped into nine cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;
 this keeps reviews and ``git bisect`` useful without creating 100 pull
@@ -652,14 +653,15 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ``GatherGatherPattern``, ``GathersSplitPattern``, ``GatherShapePattern``,
    ``SequenceConstructAtPattern``, ``SplitToSequenceSequenceAtPattern``,
    ``SliceSlicePattern``, ``SlicesSplitPattern``, and ``SplitConcatPattern``.
-#. **Expand, where, and equal (12 patterns remaining).**
-   ``ExpandPattern``, ``ExpandBroadcastPattern``, ``ExpandSwapPattern``,
+#. **Expand, where, and equal (9 patterns remaining).**
    ``ExpandUnsqueezeExpandPattern``, ``ShapeBasedConcatExpandPattern``,
    ``ShapeBasedExpandBroadcastPattern``,
    ``ShapeBasedExpandBroadcastMatMulPattern``,
    ``ShapeBasedExpandCastWhereSwapPattern``, ``ShapeBasedExpandSwapPattern``,
-   ``ShapeBasedStaticExpandPattern``, ``SwapExpandReshapePattern``,
-   ``SwapExpandUnsqueezePattern``.
+   ``ShapeBasedStaticExpandPattern``, ``SwapExpandReshapePattern``, and
+   ``SwapExpandUnsqueezePattern``. ``ExpandPattern``,
+   ``ExpandBroadcastPattern``, and ``ExpandSwapPattern`` are ported and
+   registered.
 #. **Reshape canonicalization (13 patterns).**
    ``ConcatReshapePattern``, ``ReshapePattern``, ``ReduceReshapePattern``,
    ``Reshape2Of3Pattern``, ``ReshapeReshapeBinaryPattern``,
@@ -739,3 +741,6 @@ Pull requests
 * `Issue #4477 <https://github.com/xadupre/onnx-light/issues/4477>`_: first
   ``Expand/Where/Equal`` rewrites (``NotWherePattern``,
   ``UnsqueezeEqualPattern``, and ``WhereAddPattern``).
+* `Issue #4490 <https://github.com/xadupre/onnx-light/issues/4490>`_: core
+  ``Expand`` rewrites (``ExpandPattern``, ``ExpandBroadcastPattern``, and
+  ``ExpandSwapPattern``).

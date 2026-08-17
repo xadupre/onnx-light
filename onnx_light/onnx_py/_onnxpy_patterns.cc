@@ -18,6 +18,7 @@
 #include "onnx_extensions/patterns/collections/slice_pattern.h"
 #include "onnx_extensions/patterns/collections/split_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
+#include "onnx_extensions/patterns/expand/expand_pattern.h"
 #include "onnx_extensions/patterns/expand/where_pattern.h"
 
 #include <memory>
@@ -114,6 +115,15 @@ std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::str
   }
   if (name == "WhereAdd") {
     return std::make_shared<onnx_patterns::WhereAddPattern>(priority.value_or(0));
+  }
+  if (name == "Expand") {
+    return std::make_shared<onnx_patterns::ExpandPattern>(priority.value_or(0));
+  }
+  if (name == "ExpandBroadcast") {
+    return std::make_shared<onnx_patterns::ExpandBroadcastPattern>(priority.value_or(0));
+  }
+  if (name == "ExpandSwap") {
+    return std::make_shared<onnx_patterns::ExpandSwapPattern>(priority.value_or(0));
   }
   throw std::invalid_argument("Unknown ONNX pattern '" + name + "'.");
 }
@@ -245,6 +255,22 @@ NB_MODULE(_onnxpypatterns, m) {
       .def(nb::init<int>(), nb::arg("priority") = 0);
   nb::class_<onnx_patterns::WhereAddPattern, core::builder::PatternOptimization>(
       m, "WhereAddPattern", "Factors a common additive term from Where branches built with Add.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+
+  nb::class_<onnx_patterns::ExpandPattern, core::builder::PatternOptimization>(
+      m, "ExpandPattern",
+      "Replaces ``Expand(x, shape)`` with ``Identity(x)`` when the target shape "
+      "equals the input shape.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ExpandBroadcastPattern, core::builder::PatternOptimization>(
+      m, "ExpandBroadcastPattern",
+      "Drops an ``Expand`` feeding an element-wise binary operator that already "
+      "broadcasts the pre-expanded input.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ExpandSwapPattern, core::builder::PatternOptimization>(
+      m, "ExpandSwapPattern",
+      "Moves an ``Expand`` past a following unary-like operator so the operator "
+      "runs on the smaller tensor.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
 
   m.def(

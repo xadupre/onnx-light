@@ -1258,11 +1258,15 @@ TEST(BackendTestCase, BenchmarkModeProducesLargeInputCases) {
   ASSERT_FALSE(registry.empty());
   size_t benchmark_cases = 0;
   size_t benchmark_float16_cases = 0;
+  size_t benchmark_bfloat16_cases = 0;
   for (const auto &c : registry) {
     if (c.name.find("_benchmark") != std::string::npos) {
       ++benchmark_cases;
       if (c.name.find("_benchmark_float16") != std::string::npos) {
         ++benchmark_float16_cases;
+      }
+      if (c.name.find("_benchmark_bfloat16") != std::string::npos) {
+        ++benchmark_bfloat16_cases;
       }
       // Lazy cases must not have been materialized during collection. Use the
       // introspection helpers (which do *not* trigger materialization) rather
@@ -1283,6 +1287,9 @@ TEST(BackendTestCase, BenchmarkModeProducesLargeInputCases) {
   // Float benchmark helpers also emit a FLOAT16 companion case, so at least one
   // ``*_benchmark_float16`` case must be present alongside the FLOAT ones.
   EXPECT_GT(benchmark_float16_cases, 0u);
+  // Operators that support BFLOAT16 (such as Abs) emit a BFLOAT16 companion
+  // case, so at least one ``*_benchmark_bfloat16`` case must be present.
+  EXPECT_GT(benchmark_bfloat16_cases, 0u);
 }
 
 TEST(BackendTestCase, TestModeHasNoBenchmarkCases) {

@@ -147,12 +147,17 @@ inline constexpr int64_t kBenchmarkElementwiseSize = 1 << 22;
  * When ``with_float16`` is true (the default) a second FLOAT16 benchmark case
  * named ``name + "_float16"`` is registered alongside the FLOAT one. Operators
  * whose kernel does not support FLOAT16 must pass ``with_float16 = false``.
+ *
+ * When ``with_bfloat16`` is true a third BFLOAT16 benchmark case named
+ * ``name + "_bfloat16"`` is registered as well. It defaults to false because
+ * not every float kernel supports BFLOAT16; operators whose kernel does
+ * (such as ``Abs``) should pass ``with_bfloat16 = true``.
  */
 template <typename Kernel>
 void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
                                const std::string &name, const OpsetId &opset,
                                std::vector<TestCase> &registry, bool with_float16 = true,
-                               int64_t size = kBenchmarkElementwiseSize,
+                               bool with_bfloat16 = false, int64_t size = kBenchmarkElementwiseSize,
                                uint64_t seed = 987654321ULL, const std::string &input_name = "x",
                                const std::string &output_name = "y") {
   NodeProto node;
@@ -178,6 +183,19 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
+  if (with_bfloat16) {
+    NodeProto nodebf16;
+    nodebf16.set_op_type(op_type);
+    nodebf16.add_input(input_name);
+    nodebf16.add_output(output_name);
+    Kernel kbf16 = kernel;
+    Expect(registry, std::move(nodebf16), name + "_bfloat16", {opset}, {size}, {size},
+           [kbf16, size, seed]() -> IoData {
+             Tensor x = MakeBfloat16Tensor("", {size}, Randn<float>({size}, seed));
+             Tensor y = kbf16(x);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
+  }
 }
 
 /**
@@ -191,11 +209,17 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
  * When ``with_float16`` is true (the default) a second FLOAT16 benchmark case
  * named ``name + "_float16"`` is registered alongside the FLOAT one. Operators
  * whose kernel does not support FLOAT16 must pass ``with_float16 = false``.
+ *
+ * When ``with_bfloat16`` is true a third BFLOAT16 benchmark case named
+ * ``name + "_bfloat16"`` is registered as well. It defaults to false because
+ * not every float kernel supports BFLOAT16; operators whose kernel does should
+ * pass ``with_bfloat16 = true``.
  */
 template <typename Kernel>
 void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel,
                                 const std::string &name, const OpsetId &opset,
                                 std::vector<TestCase> &registry, bool with_float16 = true,
+                                bool with_bfloat16 = false,
                                 int64_t size = kBenchmarkElementwiseSize,
                                 uint64_t seed = 987654321ULL) {
   NodeProto node;
@@ -223,6 +247,21 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel
              Tensor x = MakeFloat16Tensor("", {size}, Randn<float>({size}, seed));
              Tensor y = MakeFloat16Tensor("", {size}, Randn<float>({size}, seed + 1));
              Tensor z = k16(x, y);
+             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+           });
+  }
+  if (with_bfloat16) {
+    NodeProto nodebf16;
+    nodebf16.set_op_type(op_type);
+    nodebf16.add_input("x");
+    nodebf16.add_input("y");
+    nodebf16.add_output("z");
+    Kernel kbf16 = kernel;
+    Expect(registry, std::move(nodebf16), name + "_bfloat16", {opset}, {size, size}, {size},
+           [kbf16, size, seed]() -> IoData {
+             Tensor x = MakeBfloat16Tensor("", {size}, Randn<float>({size}, seed));
+             Tensor y = MakeBfloat16Tensor("", {size}, Randn<float>({size}, seed + 1));
+             Tensor z = kbf16(x, y);
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
   }

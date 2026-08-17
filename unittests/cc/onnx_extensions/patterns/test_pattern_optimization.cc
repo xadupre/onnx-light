@@ -85,6 +85,30 @@ public:
   }
 };
 
+class CountingFastOpTypePattern final : public core::builder::PatternOptimization {
+public:
+  CountingFastOpTypePattern() : PatternOptimization(1, "CountingFastOpType") {}
+
+  std::set<std::string> FastOpType() const override {
+    ++fast_op_type_calls;
+    return {"Add"};
+  }
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &,
+                                   const NodeProto &candidate) const override {
+    return core::builder::MatchResult{this, {&candidate}, &candidate};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &nodes) const override {
+    utils::RepeatedProtoField<NodeProto> replacements;
+    replacements.push_back(*nodes[0]);
+    return replacements;
+  }
+
+  mutable std::size_t fast_op_type_calls = 0;
+};
+
 class ScopedAddKernel {
 public:
   ScopedAddKernel() {
@@ -114,6 +138,22 @@ private:
 };
 
 } // namespace
+
+TEST(PatternOptimization, FastOpTypeIsCachedAcrossOptimizationIterations) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  builder.MakeNode("Add", {"x", "x"}, {"y"});
+  builder.MakeOutput("y");
+
+  auto pattern = std::make_shared<CountingFastOpTypePattern>();
+  std::vector<std::shared_ptr<core::builder::PatternOptimization>> patterns = {pattern};
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+
+  const std::vector<core::builder::LocalRewriting> rewrites = graph.Optimize(4);
+
+  EXPECT_EQ(rewrites.size(), 4u);
+  EXPECT_EQ(pattern->fast_op_type_calls, 1u);
+}
 
 TEST(PatternOptimization, CastCastCollapsesRedundantOuterCast) {
   core::builder::GraphBuilder builder("g", SchemaLookup());

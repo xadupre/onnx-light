@@ -186,6 +186,12 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
     }
   }
 
+  std::vector<std::set<std::string>> fast_op_types_by_pattern;
+  fast_op_types_by_pattern.reserve(patterns_.size());
+  for (const std::shared_ptr<PatternOptimization> &pattern : patterns_) {
+    fast_op_types_by_pattern.push_back(pattern->FastOpType());
+  }
+
   std::vector<LocalRewriting> applied;
   std::size_t rewrite_batch = 0;
   std::unordered_set<GraphBuilder *> optimized_subgraphs;
@@ -278,7 +284,7 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
       if (pattern->priority > current_priority) {
         break;
       }
-      const std::set<std::string> fast_op_types = pattern->FastOpType();
+      const std::set<std::string> &fast_op_types = fast_op_types_by_pattern[pattern_index];
       for (const NodeProto &candidate : builder_.nodes_) {
         if (!fast_op_types.empty() &&
             fast_op_types.find(candidate.op_type().value()) == fast_op_types.end()) {

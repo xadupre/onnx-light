@@ -329,25 +329,36 @@ jobs:
     needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: windows-latest
-    # Unlike the core (windows-latest, py3.13) job, this 32-bit build cannot use
-    # sccache: it uses the Visual Studio generator (-A Win32), which ignores
-    # CMAKE_CXX_COMPILER_LAUNCHER, so every run is a full cold build (~16-17
-    # min) with no cache to fall back on. Keep 60 minutes here as well to align
-    # timeout policy across Windows jobs and absorb runner variance.
-    timeout-minutes: 60
+    # Ninja honors the compiler launcher for MSVC, unlike the Visual Studio
+    # platform generator previously used here. This lets the x86 build share
+    # the same persistent sccache strategy as the x64 Windows build.
+    timeout-minutes: 35
     permissions:
       contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v7
 
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.10
+
+      - name: Set up x86 MSVC for Ninja
+        uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: x86
+
       - name: Configure 32-bit CMake build
+        env:
+          SCCACHE_GHA_ENABLED: "true"
         run: |
-          cmake -S . -B build-win32 -A Win32 -DCMAKE_BUILD_TYPE=Release -DONNX_LIGHT_BUILD_PYTHON=OFF -DONNX_LIGHT_BUILD_TESTS=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
+          cmake -S . -B build-win32 -G Ninja -DCMAKE_BUILD_TYPE=Release -DONNX_LIGHT_BUILD_PYTHON=OFF -DONNX_LIGHT_BUILD_TESTS=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
       - name: Build 32-bit CMake build
+        env:
+          SCCACHE_GHA_ENABLED: "true"
         run: |
-          cmake --build build-win32 --config Release --parallel
+          cmake --build build-win32 --parallel
 
       - name: Run C++ unit tests (32-bit)
         run: |
-          ctest --test-dir build-win32 --output-on-failure -C Release --timeout 240
+          ctest --test-dir build-win32 --output-on-failure --timeout 240

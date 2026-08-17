@@ -91,6 +91,12 @@ The implementation is split into focused pull requests:
        lowers the cap and evicts immediately; the cap defaults to unbounded so
        existing behaviour is unchanged. Live and leased buffers are never
        evicted.
+   * - Current PR
+     - Python runtime activation
+     - Exposes ``IOArena`` and its accounting controls in the Python runtime
+       bindings, adds the ``io_allocator`` argument to ``RuntimeContext``, and
+       makes ``ReferenceEvaluator`` create persistent execution and I/O arenas
+       by default while still accepting caller-provided allocators.
 
 Current behaviour
 +++++++++++++++++
@@ -435,13 +441,12 @@ Implementation order
    the handle keeps its arena alive on its own and can be owned by a capsule
    independently of the context. The NumPy capsule wiring then lands in `PR #4457
    <https://github.com/xadupre/onnx-light/pull/4457>`_.
-7. Activate both arenas through the Python runtime path. Expose ``IOArena`` and
-   its accounting and retention controls in the Python bindings; add an
-   ``io_allocator`` argument to ``RuntimeContext``; and make
-   ``ReferenceEvaluator`` create or accept persistent execution and I/O arenas.
-   Without this step, Python supplies only the execution ``allocator``, so
-   :cpp:func:`RuntimeContext::io_allocator` remains null and the routing and
-   lease mechanisms from steps 5 and 6 are not exercised end to end.
+7. Activate both arenas through the Python runtime path. This is implemented by
+   the current PR: ``IOArena`` and its accounting and retention controls are
+   exposed in the Python bindings, ``RuntimeContext`` accepts an
+   ``io_allocator`` argument, and ``ReferenceEvaluator`` creates or accepts
+   persistent execution and I/O arenas. Python runs now exercise the routing and
+   lease mechanisms from steps 5 and 6 end to end.
 8. Add independent retention caps, LRU eviction, trimming, and accounting for
    both arenas. Trimming lands first (`PR #4465
    <https://github.com/xadupre/onnx-light/pull/4465>`_): ``ExecutionArena::Trim``
@@ -501,3 +506,6 @@ Pull requests
   both arenas to release retained free-buffer storage on demand.
 * `PR #4469 <https://github.com/xadupre/onnx-light/pull/4469>`_: adds a per-arena
   retention cap with least-recently-freed eviction to both arenas.
+* Current PR: activates the two-arena design in the Python runtime by exposing
+  ``IOArena``, wiring ``RuntimeContext.io_allocator``, and giving
+  ``ReferenceEvaluator`` persistent execution and I/O arenas.

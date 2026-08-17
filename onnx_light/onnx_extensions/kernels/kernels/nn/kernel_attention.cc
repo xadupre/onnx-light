@@ -526,34 +526,34 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
     EXT_ENFORCE_INVALID(K.data_type == Q.data_type && V.data_type == Q.data_type,
                         "kernel::Attention: Q, K, V must share the same dtype.");
     const int32_t target_dtype = Q.data_type;
-    const Tensor Q_f = PromoteToFloat32(Q);
-    const Tensor K_f = PromoteToFloat32(K);
-    const Tensor V_f = PromoteToFloat32(V);
+    const Tensor Q_f = PromoteToFloat32(Q, rt);
+    const Tensor K_f = PromoteToFloat32(K, rt);
+    const Tensor V_f = PromoteToFloat32(V, rt);
     Tensor attn_mask_f;
     const Tensor *attn_mask_ptr = attn_mask;
     if (attn_mask != nullptr && IsHalfPrecision(attn_mask->data_type)) {
-      attn_mask_f = PromoteToFloat32(*attn_mask);
+      attn_mask_f = PromoteToFloat32(*attn_mask, rt);
       attn_mask_ptr = &attn_mask_f;
     }
     Tensor past_key_f;
     const Tensor *past_key_ptr = past_key;
     if (past_key != nullptr && IsHalfPrecision(past_key->data_type)) {
-      past_key_f = PromoteToFloat32(*past_key);
+      past_key_f = PromoteToFloat32(*past_key, rt);
       past_key_ptr = &past_key_f;
     }
     Tensor past_value_f;
     const Tensor *past_value_ptr = past_value;
     if (past_value != nullptr && IsHalfPrecision(past_value->data_type)) {
-      past_value_f = PromoteToFloat32(*past_value);
+      past_value_f = PromoteToFloat32(*past_value, rt);
       past_value_ptr = &past_value_f;
     }
     Result r_f = (*this)(Q_f, K_f, V_f, attrs, attn_mask_ptr, past_key_ptr, past_value_ptr,
                          nonpad_kv_seqlen, rt);
     Result r;
-    r.Y = DemoteFromFloat32(r_f.Y, target_dtype);
-    r.present_key = DemoteFromFloat32(r_f.present_key, target_dtype);
-    r.present_value = DemoteFromFloat32(r_f.present_value, target_dtype);
-    r.qk_matmul_output = DemoteFromFloat32(r_f.qk_matmul_output, target_dtype);
+    r.Y = DemoteFromFloat32(r_f.Y, target_dtype, rt);
+    r.present_key = DemoteFromFloat32(r_f.present_key, target_dtype, rt);
+    r.present_value = DemoteFromFloat32(r_f.present_value, target_dtype, rt);
+    r.qk_matmul_output = DemoteFromFloat32(r_f.qk_matmul_output, target_dtype, rt);
     return r;
   }
 
@@ -604,7 +604,7 @@ void Attention::Run(RuntimeContext &rt) {
 
   onnx_kernels::kernel::Attention kernel(rt.kernel_ctx());
   onnx_kernels::kernel::Attention::Result result =
-      kernel(q, k, v, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen);
+      kernel(q, k, v, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen, &rt);
   SetOutput(node, 0, std::move(result.Y), rt);
 
   auto set_optional_output = [&node, &rt](int index, Tensor output) {

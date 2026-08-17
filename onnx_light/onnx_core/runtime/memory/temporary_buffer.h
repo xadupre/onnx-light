@@ -29,6 +29,9 @@ template <typename T> struct TemporaryTypedBuffer {
 
   TemporaryTypedBuffer(std::size_t count, RawBufferAllocator *buffer_allocator, const char *name)
       : size(count) {
+    if (count == 0) {
+      return;
+    }
     if (buffer_allocator != nullptr) {
       RawBuffer *allocated = buffer_allocator->Allocate(count * sizeof(T));
       if (allocated == nullptr) {

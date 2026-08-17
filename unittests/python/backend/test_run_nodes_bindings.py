@@ -88,6 +88,7 @@ class TestRunNodesBindings(ExtTestCase):
             "RawBufferAllocator",
             "SimpleRawBufferAllocator",
             "ExecutionArena",
+            "IOArena",
             "OpsetId",
             "KernelContext",
             "RuntimeContext",
@@ -415,6 +416,33 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertGreater(released, 0)
         self.assertEqual(arena.retained_count, 0)
         self.assertEqual(arena.retained_size, 0)
+
+    def test_io_arena_is_accepted_as_runtime_io_allocator(self):
+        model = parser.parse_model(_MODEL_SRC)
+        execution_arena = rt.ExecutionArena(3)
+        io_arena = rt.IOArena(2)
+        ctx = rt.RuntimeContext(
+            rt.KernelContext(rt.default_opset(18)),
+            allocator=execution_arena,
+            io_allocator=io_arena,
+        )
+        ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.0]))
+        ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
+
+        rt.RuntimeSession(model).run(ctx)
+
+        self.assertEqual(execution_arena.allocated_count, 3)
+        self.assertEqual(io_arena.allocated_count, 1)
+        np.testing.assert_allclose(
+            np.array(_unpack_floats(ctx.get("y")), dtype=np.float32),
+            np.array([11.0, 22.0, 33.0], dtype=np.float32),
+        )
+
+        ctx.clear()
+        self.assertEqual(execution_arena.allocated_count, 0)
+        self.assertEqual(io_arena.allocated_count, 0)
+        self.assertEqual(execution_arena.retained_count, 3)
+        self.assertEqual(io_arena.retained_count, 1)
 
     def test_run_model_abs_then_add(self):
         model = parser.parse_model(_MODEL_SRC)

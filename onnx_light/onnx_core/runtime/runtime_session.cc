@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 
 #include "onnx_core/graph/graph_manipulations.h"
@@ -234,7 +235,10 @@ bool RuntimeSession::ProducesDeclaredOutput(const NodeProto &node) const {
 
 void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const {
   const bool routed_to_io = session_io_allocator_ != nullptr && ProducesDeclaredOutput(node);
-  const RawBufferAllocator *expected = routed_to_io ? session_io_allocator_ : session_allocator_;
+  RawBufferAllocator *expected = routed_to_io ? session_io_allocator_ : session_allocator_;
+  if (expected == nullptr) {
+    return;
+  }
   const char *expected_name =
       routed_to_io ? "the session's I/O allocator" : "the session's execution allocator";
   for (int i = 0; i < node.output_size(); ++i) {
@@ -242,11 +246,30 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
     if (name.empty() || !rt.Has(name)) {
       continue;
     }
-    const Tensor &output = rt.Get(name);
-    if (!output.has_allocation()) {
+    Tensor &output = rt.Get(name);
+    if (output.size_bytes() > 0 && static_cast<DataType>(output.data_type) != DataType::STRING &&
+        (!output.has_allocation() || output.allocation_owner() != expected)) {
+      const size_t output_size_bytes = output.size_bytes();
+      const uint8_t *output_bytes = output.bytes();
+      EXT_ENFORCE_INVALID(output_bytes != nullptr,
+                          "RuntimeSession: output has non-zero size with a null data pointer.");
+      const int32_t output_data_type = output.data_type;
+      const Shape output_shape = output.shape;
+      const std::string output_name = output.name;
+      Tensor migrated =
+          MakeOutputTensor(output_data_type, output_shape, output_size_bytes, expected);
+      migrated.name = output_name;
+      std::memcpy(migrated.mutable_bytes(), output_bytes, output_size_bytes);
+      const RuntimeEventKind migrated_kind = output_names_set_.find(name) != output_names_set_.end()
+                                                 ? RuntimeEventKind::kOutput
+                                                 : RuntimeEventKind::kIntermediate;
+      rt.Put(name, std::move(migrated), migrated_kind);
+    }
+    const Tensor &verified_output = rt.Get(name);
+    if (!verified_output.has_allocation()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(output.allocation_owner() == expected, "RuntimeSession: op '",
+    EXT_ENFORCE_INVALID(verified_output.allocation_owner() == expected, "RuntimeSession: op '",
                         node.op_type(), "' produced output '", name,
                         "' backed by an allocator other than ", expected_name, ".");
   }

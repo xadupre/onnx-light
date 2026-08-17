@@ -145,10 +145,10 @@ def _run_onnxruntime(tc: TestCase) -> tuple[float | None, bool, str | None]:
             "skipped: known to abort onnxruntime (see microsoft/onnxruntime#28778)",
         )
 
+    model = _clone_model(tc.model)
+    model.ir_version = min(model.ir_version, 13)
     try:
-        sess = ort.InferenceSession(
-            tc.model.SerializeToString(), providers=["CPUExecutionProvider"]
-        )
+        sess = ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
     except Exception as exc:  # noqa: BLE001
         return (None, False, type(exc).__name__ + ": " + str(exc).splitlines()[0])
 

@@ -109,10 +109,13 @@ void AttentionPropagateElemTypeFromInputToOutput(InferenceContext &ctx) {
         }
         int64_t q_num_heads = q_num_heads_attr->i();
         int64_t kv_num_heads = kv_num_heads_attr->i();
+        if (q_num_heads <= 0 || kv_num_heads <= 0) {
+          fail_type_inference("q_num_heads and kv_num_heads must be positive.");
+        }
         // Calculate v_head_size
         if (value_dims[2].has_dim_value() && kv_num_heads != 0) {
-          int64_t v_head_size = value_dims[2].dim_value() / kv_num_heads;
-          output_shape.add_dim()->set_dim_value(v_head_size * q_num_heads);
+          int64_t v_head_size = checkedDivide(value_dims[2].dim_value(), kv_num_heads);
+          output_shape.add_dim()->set_dim_value(checkedMultiply(v_head_size, q_num_heads));
         } else {
           output_shape.add_dim();
         }
@@ -152,7 +155,8 @@ void AttentionPropagateElemTypeFromInputToOutput(InferenceContext &ctx) {
         }
 
         if (kv_sequence_length > 0 && past_key_dims[2].has_dim_value()) {
-          int64_t total_sequence_length = kv_sequence_length + past_key_dims[2].dim_value();
+          int64_t total_sequence_length =
+              checkedAdd(kv_sequence_length, past_key_dims[2].dim_value());
 
           TensorShapeProto present_key_shape;
           for (const auto &dim : past_key_dims) {

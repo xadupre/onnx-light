@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cache
-from typing import Iterable
+from typing import Any, Iterable
 
 import numpy as np
 
@@ -119,14 +119,19 @@ def _principal_op(tc: TestCase) -> tuple[str, str]:
 _ORT_SKIP_CASES = frozenset({"test_cc_shape_inference_shape_identity_unsqueeze"})
 
 
+def _ort_fail_error(ort: Any) -> type[Exception]:
+    """Returns the ONNX Runtime model-load failure exception type."""
+    return ort.capi.onnxruntime_pybind11_state.Fail
+
+
 @cache
 def ort_max_ir_version() -> int:
     """Returns the highest ONNX IR version accepted by ONNX Runtime."""
     try:
         import onnxruntime as ort
-        from onnxruntime.capi.onnxruntime_pybind11_state import Fail
     except ImportError:
         return 0
+    fail_error = _ort_fail_error(ort)
 
     value_info = onnxl_helper.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [1])
     output_info = onnxl_helper.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [1])
@@ -142,7 +147,7 @@ def ort_max_ir_version() -> int:
         model = onnxl_helper.make_model(graph, ir_version=ir_version, opset_imports=opset_imports)
         try:
             ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
-        except Fail:
+        except fail_error:
             continue
         return ir_version
 
@@ -154,9 +159,9 @@ def ort_max_opset_version() -> int:
     """Returns the highest default-domain opset accepted by ONNX Runtime."""
     try:
         import onnxruntime as ort
-        from onnxruntime.capi.onnxruntime_pybind11_state import Fail
     except ImportError:
         return 0
+    fail_error = _ort_fail_error(ort)
 
     value_info = onnxl_helper.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [1])
     output_info = onnxl_helper.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [1])
@@ -176,7 +181,7 @@ def ort_max_opset_version() -> int:
         )
         try:
             ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
-        except Fail:
+        except fail_error:
             continue
         return opset_version
 

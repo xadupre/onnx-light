@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/nn/recurrent_common.h"
 
+#include "onnx_core/runtime/runtime_context.h"
 #include "onnx_light_helpers.h"
 
 #include <cstddef>
@@ -55,13 +56,14 @@ Tensor RecurrentTransposeInitialState(const Tensor &state, int64_t num_direction
 
 Tensor RecurrentPermuteYLayout1(const Tensor &y, int64_t seq_length, int64_t num_directions,
                                 int64_t batch_size, int64_t hidden_size,
-                                RawBufferAllocator *allocator) {
+                                RawBufferAllocator *allocator, RuntimeContext *rt,
+                                int output_slot) {
   const size_t n_bytes =
       static_cast<size_t>(seq_length * num_directions * batch_size * hidden_size) * sizeof(float);
+  const core::runtime::Shape shape{batch_size, seq_length, num_directions, hidden_size};
   Tensor out =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
-                       core::runtime::Shape{batch_size, seq_length, num_directions, hidden_size},
-                       n_bytes, allocator);
+      rt ? rt->MakeOutputTensor(output_slot, static_cast<int32_t>(DataType::FLOAT), shape, n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), shape, n_bytes, allocator);
   float *dst = out.AsFloat();
   const float *src = y.AsFloat();
   for (int64_t s = 0; s < seq_length; ++s) {
@@ -81,12 +83,14 @@ Tensor RecurrentPermuteYLayout1(const Tensor &y, int64_t seq_length, int64_t num
 }
 
 Tensor RecurrentPermuteStateLayout1(const Tensor &state, int64_t num_directions, int64_t batch_size,
-                                    int64_t hidden_size, RawBufferAllocator *allocator) {
+                                    int64_t hidden_size, RawBufferAllocator *allocator,
+                                    RuntimeContext *rt, int output_slot) {
   const size_t n_bytes =
       static_cast<size_t>(num_directions * batch_size * hidden_size) * sizeof(float);
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
-                                core::runtime::Shape{batch_size, num_directions, hidden_size},
-                                n_bytes, allocator);
+  const core::runtime::Shape shape{batch_size, num_directions, hidden_size};
+  Tensor out =
+      rt ? rt->MakeOutputTensor(output_slot, static_cast<int32_t>(DataType::FLOAT), shape, n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), shape, n_bytes, allocator);
   float *dst = out.AsFloat();
   const float *src = state.AsFloat();
   for (int64_t d = 0; d < num_directions; ++d) {

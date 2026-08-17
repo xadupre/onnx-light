@@ -62,36 +62,36 @@ void PRelu::RegisterTuningSchemas() {
 }
 
 Tensor PRelu::operator()(const Tensor &x, const Tensor &slope, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    const Shape out_shape = detail::BroadcastShape("kernel::PRelu", x.shape, slope.shape);
+    const int64_t out_count = out_shape.product();
+    Tensor output = rt->MakeOutputTensor(0, x.data_type, out_shape,
+                                         static_cast<size_t>(out_count) * ElementSize(x.data_type));
+    (*this)(x, slope, output);
+    return output;
+  }
   const int64_t grain = tuning().parallel_minimum_elements;
   switch (x.data_type) {
   case DataType::FLOAT:
-    return PReluAlloc<float>("FLOAT", DataType::FLOAT, x, slope, grain,
-                             rt ? rt->allocator() : nullptr);
+    return PReluAlloc<float>("FLOAT", DataType::FLOAT, x, slope, grain, nullptr);
   case DataType::DOUBLE:
-    return PReluAlloc<double>("DOUBLE", DataType::DOUBLE, x, slope, grain,
-                              rt ? rt->allocator() : nullptr);
+    return PReluAlloc<double>("DOUBLE", DataType::DOUBLE, x, slope, grain, nullptr);
   case DataType::INT32:
-    return PReluAlloc<int32_t>("INT32", DataType::INT32, x, slope, grain,
-                               rt ? rt->allocator() : nullptr);
+    return PReluAlloc<int32_t>("INT32", DataType::INT32, x, slope, grain, nullptr);
   case DataType::INT64:
-    return PReluAlloc<int64_t>("INT64", DataType::INT64, x, slope, grain,
-                               rt ? rt->allocator() : nullptr);
+    return PReluAlloc<int64_t>("INT64", DataType::INT64, x, slope, grain, nullptr);
   case DataType::UINT32:
-    return PReluAlloc<uint32_t>("UINT32", DataType::UINT32, x, slope, grain,
-                                rt ? rt->allocator() : nullptr);
+    return PReluAlloc<uint32_t>("UINT32", DataType::UINT32, x, slope, grain, nullptr);
   case DataType::UINT64:
-    return PReluAlloc<uint64_t>("UINT64", DataType::UINT64, x, slope, grain,
-                                rt ? rt->allocator() : nullptr);
+    return PReluAlloc<uint64_t>("UINT64", DataType::UINT64, x, slope, grain, nullptr);
   case DataType::FLOAT16:
     return detail::BinaryHalfElementwiseAlloc(
         kPReluName, "FLOAT16", DataType::FLOAT16, x, slope, Float16BitsToFloat, FloatToFloat16Bits,
-        [](float a, float b) { return PReluOp<float>(a, b); }, rt ? rt->allocator() : nullptr,
-        grain);
+        [](float a, float b) { return PReluOp<float>(a, b); }, nullptr, grain);
   case DataType::BFLOAT16:
     return detail::BinaryHalfElementwiseAlloc(
         kPReluName, "BFLOAT16", DataType::BFLOAT16, x, slope, Bfloat16BitsToFloat,
-        FloatToBfloat16Bits, [](float a, float b) { return PReluOp<float>(a, b); },
-        rt ? rt->allocator() : nullptr, grain);
+        FloatToBfloat16Bits, [](float a, float b) { return PReluOp<float>(a, b); }, nullptr, grain);
   default:
     EXT_THROW_INVALID(kPReluName, ": unsupported data type ", x.data_type, kSupportedPReluTypesMsg);
   }

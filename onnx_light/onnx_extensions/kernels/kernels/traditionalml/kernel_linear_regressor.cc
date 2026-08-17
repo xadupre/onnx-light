@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -18,8 +19,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 template <typename T>
 Tensor LinearRegressor::operator()(const Tensor &x, const ParamFloats &coefficients,
                                    const ParamFloats &intercepts, int64_t targets,
-                                   const std::string &post_transform,
-                                   RuntimeContext * /*rt*/) const {
+                                   const std::string &post_transform, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(targets >= 1, "kernel::LinearRegressor 'targets' must be >= 1.");
   EXT_ENFORCE_INVALID(post_transform == "NONE",
                       "kernel::LinearRegressor only supports post_transform == 'NONE'.");
@@ -48,7 +48,13 @@ Tensor LinearRegressor::operator()(const Tensor &x, const ParamFloats &coefficie
       predictions[static_cast<size_t>(n * targets + t)] = static_cast<float>(value);
     }
   }
-  return Tensor::FromFloat("", {sample_count, targets}, predictions, ctx_.allocator);
+  if (rt == nullptr) {
+    return Tensor::FromFloat("", {sample_count, targets}, predictions, ctx_.allocator);
+  }
+  Tensor out = rt->MakeOutputTensor(0, DataType::FLOAT, {sample_count, targets},
+                                    static_cast<size_t>(sample_count * targets) * sizeof(float));
+  std::copy(predictions.begin(), predictions.end(), out.AsFloat());
+  return out;
 }
 
 #define ONNX_LIGHT_INSTANTIATE_LINEAR_REGRESSOR(T)                                                 \
@@ -76,7 +82,7 @@ void LinearRegressor::Run(RuntimeContext &rt) {
   Tensor y = DispatchSVMByDataType(x, "LinearRegressor", [&](auto *tag) {
     using T = std::remove_pointer_t<decltype(tag)>;
     (void)tag;
-    return reg.template operator()<T>(x, coefficients, intercepts, targets, post_transform);
+    return reg.template operator()<T>(x, coefficients, intercepts, targets, post_transform, &rt);
   });
   SetOutput(node, 0, std::move(y), rt);
 }

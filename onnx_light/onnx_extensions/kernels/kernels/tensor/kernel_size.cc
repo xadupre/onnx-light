@@ -10,9 +10,14 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
-Tensor Size::operator()(const Tensor &data, RuntimeContext * /*rt*/) const {
+Tensor Size::operator()(const Tensor &data, RuntimeContext *rt) const {
   const int64_t n = data.shape.product();
-  return Tensor::FromInt64("", {}, {n}, ctx_.allocator);
+  if (rt == nullptr) {
+    return Tensor::FromInt64("", {}, {n}, ctx_.allocator);
+  }
+  Tensor out = rt->MakeOutputTensor(0, DataType::INT64, {}, sizeof(int64_t));
+  out.AsInt64()[0] = n;
+  return out;
 }
 
 void Size::operator()(const Tensor &data, Tensor &output) const {

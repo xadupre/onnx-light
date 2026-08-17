@@ -80,7 +80,7 @@ void LookupAndFill(const Tensor &x, const ParamStrings &cats_strings,
 template <typename InT, typename OutT>
 Tensor CategoryMapper::operator()(const Tensor &x, const ParamStrings &cats_strings,
                                   const std::vector<int64_t> &cats_int64s, OutT default_value,
-                                  RuntimeContext * /*rt*/) const {
+                                  RuntimeContext *rt) const {
   ValidateInputs<InT, OutT>(x, cats_strings, cats_int64s);
   const int64_t n = x.element_count();
   if constexpr (std::is_same_v<OutT, std::string>) {
@@ -88,10 +88,17 @@ Tensor CategoryMapper::operator()(const Tensor &x, const ParamStrings &cats_stri
     LookupAndFill<InT, OutT>(
         x, cats_strings, cats_int64s, default_value,
         [&sd](int64_t i, const std::string &v) { sd[static_cast<size_t>(i)] = v; });
-    return Tensor::MakeString("", x.shape, std::move(sd));
+    if (rt == nullptr) {
+      return Tensor::MakeString("", x.shape, std::move(sd));
+    }
+    Tensor out = rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::STRING), x.shape, 0);
+    out.string_data = std::move(sd);
+    return out;
   } else {
-    Tensor out = MakeOutputTensor(TensorElementType<OutT>::value, x.shape,
-                                  static_cast<size_t>(n) * sizeof(OutT), ctx_.allocator);
+    const size_t n_bytes = static_cast<size_t>(n) * sizeof(OutT);
+    Tensor out =
+        rt ? rt->MakeOutputTensor(0, TensorElementType<OutT>::value, x.shape, n_bytes)
+           : MakeOutputTensor(TensorElementType<OutT>::value, x.shape, n_bytes, ctx_.allocator);
     OutT *po = reinterpret_cast<OutT *>(out.mutable_bytes());
     LookupAndFill<InT, OutT>(x, cats_strings, cats_int64s, default_value,
                              [po](int64_t i, OutT v) { po[i] = v; });
@@ -167,11 +174,11 @@ void CategoryMapper::Run(RuntimeContext &rt) {
   switch (x.data_type) {
   case static_cast<int32_t>(DataType::STRING):
     y = category_mapper.operator()<std::string, int64_t>(x, cats_strings, cats_int64s,
-                                                         default_int64);
+                                                         default_int64, &rt);
     break;
   case static_cast<int32_t>(DataType::INT64):
     y = category_mapper.operator()<int64_t, std::string>(x, cats_strings, cats_int64s,
-                                                         default_string);
+                                                         default_string, &rt);
     break;
   default:
     EXT_THROW_INVALID("RunNode: CategoryMapper input X must have element type STRING or INT64.");

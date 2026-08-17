@@ -166,8 +166,9 @@ Tensor AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const
     n_out *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(n_out) * sizeof(float);
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes, nullptr);
   // Forward to the in-place overload with auto_pad already resolved into
   // explicit pads (so the in-place overload need not duplicate the
   // resolution logic).
@@ -361,7 +362,7 @@ void AveragePool::Run(RuntimeContext &rt) {
   onnx_kernels::kernel::AveragePool k(rt.kernel_ctx());
   SetOutput(node, 0,
             k(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode, count_include_pad, a.dilations,
-              a.auto_pad),
+              a.auto_pad, &rt),
             rt.tensors());
 }
 

@@ -10,6 +10,7 @@
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <unordered_set>
@@ -54,7 +55,6 @@ Tensor TreeEnsembleRegressor::operator()(const Tensor &x, int64_t n_targets,
                                          const std::string &post_transform,
                                          const std::vector<float> &base_values,
                                          RuntimeContext *rt) const {
-  (void)rt;
   EXT_ENFORCE_INVALID(n_targets >= 1, "kernel::TreeEnsembleRegressor: n_targets must be >= 1.");
   EXT_ENFORCE_INVALID(post_transform == "NONE",
                       "kernel::TreeEnsembleRegressor: only post_transform 'NONE' is supported.");
@@ -100,7 +100,13 @@ Tensor TreeEnsembleRegressor::operator()(const Tensor &x, int64_t n_targets,
     }
   }
 
-  return Tensor::FromFloat("", {sample_count, n_targets}, output_flat, ctx_.allocator);
+  if (rt == nullptr) {
+    return Tensor::FromFloat("", {sample_count, n_targets}, output_flat, ctx_.allocator);
+  }
+  Tensor out = rt->MakeOutputTensor(0, DataType::FLOAT, {sample_count, n_targets},
+                                    static_cast<size_t>(sample_count * n_targets) * sizeof(float));
+  std::copy(output_flat.begin(), output_flat.end(), out.AsFloat());
+  return out;
 }
 
 #define ONNX_LIGHT_INSTANTIATE_TREE_REGRESSOR(T)                                                   \
@@ -148,8 +154,8 @@ void TreeEnsembleRegressor::Run(RuntimeContext &rt) {
   Tensor y = DispatchTreeEnsembleClassicByDataType(x, "TreeEnsembleRegressor", [&](auto *tag) {
     using T = std::remove_pointer_t<decltype(tag)>;
     (void)tag;
-    return reg.template operator()<T>(x, n_targets, aggregate_function, post_transform,
-                                      base_values);
+    return reg.template operator()<T>(x, n_targets, aggregate_function, post_transform, base_values,
+                                      &rt);
   });
   SetOutput(node, 0, std::move(y), rt);
 }

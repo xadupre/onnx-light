@@ -99,7 +99,7 @@ public:
   using KernelBase::KernelBase;
 
   std::pair<Tensor, Tensor> operator()(const Tensor &x, const std::string &delimiter = "",
-                                       int64_t maxsplit = -1) const;
+                                       int64_t maxsplit = -1, RuntimeContext *rt = nullptr) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };

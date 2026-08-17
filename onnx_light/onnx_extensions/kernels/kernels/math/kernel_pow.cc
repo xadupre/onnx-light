@@ -340,10 +340,18 @@ void Pow::RegisterTuningSchemas() {
 }
 
 Tensor Pow::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    const Shape out_shape = detail::BroadcastShape("kernel::Pow", x.shape, y.shape);
+    const int64_t out_count = out_shape.product();
+    Tensor output = rt->MakeOutputTensor(0, x.data_type, out_shape,
+                                         static_cast<size_t>(out_count) * ElementSize(x.data_type));
+    (*this)(x, y, output);
+    return output;
+  }
   const detail::BroadcastInfo bi = BroadcastShape(x, y);
   const size_t elem_size = BaseDtypeSize(x.data_type);
   const size_t z_n_bytes = static_cast<size_t>(bi.element_count) * elem_size;
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = nullptr;
   Tensor z = MakeOutputTensor(x.data_type, bi.shape, z_n_bytes, allocator);
   PowDispatch(x, y, z, bi, allocator, tuning().parallel_minimum_elements);
   return z;

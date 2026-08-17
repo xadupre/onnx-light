@@ -73,11 +73,13 @@ void ValidateInputs(const Tensor &x, std::span<const KeyT> keys, std::span<const
 template <typename KeyT, typename ValueT>
 Tensor LabelEncoder::operator()(const Tensor &x, std::span<const KeyT> keys,
                                 std::span<const ValueT> values, ValueT default_value,
-                                RuntimeContext * /*rt*/) const {
+                                RuntimeContext *rt) const {
   ValidateInputs<KeyT, ValueT>(x, keys, values);
   const int64_t n = x.element_count();
-  Tensor out = MakeOutputTensor(TensorElementType<ValueT>::value, x.shape,
-                                static_cast<size_t>(n) * sizeof(ValueT), ctx_.allocator);
+  const size_t n_bytes = static_cast<size_t>(n) * sizeof(ValueT);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, TensorElementType<ValueT>::value, x.shape, n_bytes)
+         : MakeOutputTensor(TensorElementType<ValueT>::value, x.shape, n_bytes, ctx_.allocator);
   LookupAndFill<KeyT, ValueT>(x, keys, values, default_value,
                               reinterpret_cast<ValueT *>(out.mutable_bytes()));
   return out;
@@ -275,17 +277,17 @@ void LabelEncoder::Run(RuntimeContext &rt) {
   onnx_kernels::kernel::LabelEncoder label_encoder(rt.kernel_ctx());
   Tensor out;
   if (key_kind == KeyKind::Int64 && value_kind == ValueKind::Int64) {
-    out = label_encoder.operator()<int64_t, int64_t>(x, keys_i64, values_i64, default_i64);
+    out = label_encoder.operator()<int64_t, int64_t>(x, keys_i64, values_i64, default_i64, &rt);
   } else if (key_kind == KeyKind::Int64 && value_kind == ValueKind::Float) {
-    out = label_encoder.operator()<int64_t, float>(x, keys_i64, values_f32, default_f32);
+    out = label_encoder.operator()<int64_t, float>(x, keys_i64, values_f32, default_f32, &rt);
   } else if (key_kind == KeyKind::Float && value_kind == ValueKind::Int64) {
-    out = label_encoder.operator()<float, int64_t>(x, keys_f32, values_i64, default_i64);
+    out = label_encoder.operator()<float, int64_t>(x, keys_f32, values_i64, default_i64, &rt);
   } else if (key_kind == KeyKind::Float && value_kind == ValueKind::Float) {
-    out = label_encoder.operator()<float, float>(x, keys_f32, values_f32, default_f32);
+    out = label_encoder.operator()<float, float>(x, keys_f32, values_f32, default_f32, &rt);
   } else if (key_kind == KeyKind::String && value_kind == ValueKind::Int64) {
-    out = label_encoder.operator()<std::string, int64_t>(x, keys_str, values_i64, default_i64);
+    out = label_encoder.operator()<std::string, int64_t>(x, keys_str, values_i64, default_i64, &rt);
   } else if (key_kind == KeyKind::String && value_kind == ValueKind::Int16) {
-    out = label_encoder.operator()<std::string, int16_t>(x, keys_str, values_i16, default_i16);
+    out = label_encoder.operator()<std::string, int16_t>(x, keys_str, values_i16, default_i16, &rt);
   } else {
     EXT_THROW_INVALID("RunNode: LabelEncoder key/value type combination is not supported.");
   }

@@ -107,8 +107,10 @@ Tensor MelWeightMatrix::operator()(const Tensor &num_mel_bins, const Tensor &dft
   }
   const size_t total = static_cast<size_t>(num_spectrogram_bins * num_mel_bins_v);
   const size_t y_n_bytes = total * element_bytes;
-  Tensor y = MakeOutputTensor(output_dtype, {num_spectrogram_bins, num_mel_bins_v}, y_n_bytes,
-                              rt ? rt->allocator() : nullptr);
+  Tensor y =
+      rt ? rt->MakeOutputTensor(0, output_dtype, {num_spectrogram_bins, num_mel_bins_v}, y_n_bytes)
+         : MakeOutputTensor(output_dtype, {num_spectrogram_bins, num_mel_bins_v}, y_n_bytes,
+                            nullptr);
   (*this)(num_mel_bins, dft_length, sample_rate, lower_edge_hertz, upper_edge_hertz, output_dtype,
           y);
   return y;

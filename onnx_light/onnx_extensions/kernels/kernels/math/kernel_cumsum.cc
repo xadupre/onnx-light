@@ -161,10 +161,16 @@ struct ProdOp {
 
 Tensor CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse,
                           RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    Tensor output = rt->MakeOutputTensor(
+        0, x.data_type, x.shape, static_cast<size_t>(x.element_count()) * ElementSize(x.data_type));
+    (*this)(x, axis, exclusive, reverse, output);
+    return output;
+  }
   const int64_t rank = static_cast<int64_t>(x.shape.size());
   EXT_ENFORCE_INVALID(rank >= 1, kCumSumName, " requires a non-scalar input.");
   const int64_t a = ResolveAxis(kCumSumName, ReadAxisScalar(kCumSumName, axis), rank);
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = nullptr;
   Tensor out;
   switch (x.data_type) {
   case DataType::FLOAT:
@@ -198,10 +204,16 @@ void CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, boo
 
 Tensor CumProd::operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse,
                            RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    Tensor output = rt->MakeOutputTensor(
+        0, x.data_type, x.shape, static_cast<size_t>(x.element_count()) * ElementSize(x.data_type));
+    (*this)(x, axis, exclusive, reverse, output);
+    return output;
+  }
   const int64_t rank = static_cast<int64_t>(x.shape.size());
   EXT_ENFORCE_INVALID(rank >= 1, kCumProdName, " requires a non-scalar input.");
   const int64_t a = ResolveAxis(kCumProdName, ReadAxisScalar(kCumProdName, axis), rank);
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = nullptr;
   Tensor out;
   switch (x.data_type) {
   case DataType::FLOAT:

@@ -148,9 +148,10 @@ Tensor MeanVarianceNormalization::operator()(const Tensor &x, const Shape &axes,
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
                           x.data_type == static_cast<int32_t>(DataType::DOUBLE),
                       "kernel::MeanVarianceNormalization: X must be FLOAT or DOUBLE.");
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
   const size_t out_n_bytes = x.size_bytes();
-  Tensor out = MakeOutputTensor(x.data_type, x.shape, out_n_bytes, allocator);
+  Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, out_n_bytes)
+                  : MakeOutputTensor(x.data_type, x.shape, out_n_bytes, nullptr);
   DispatchMvn(x, out, axes, allocator);
   return out;
 }

@@ -77,7 +77,8 @@ Tensor BitCast::operator()(const Tensor &x, int32_t to, RuntimeContext *rt) cons
   // byte size for both input and output. Copy the underlying bytes and
   // relabel the dtype.
   const size_t y_n_bytes = x.size_bytes();
-  Tensor y = MakeOutputTensor(to, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor y = (rt ? rt->MakeOutputTensor(0, to, x.shape, y_n_bytes)
+                 : MakeOutputTensor(to, x.shape, y_n_bytes, nullptr));
   std::memcpy(y.mutable_bytes(), x.bytes(), y_n_bytes);
   return y;
 }

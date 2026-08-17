@@ -117,7 +117,7 @@ void FillStringOutput(std::span<const int64_t> input_keys, std::span<const V> in
 template <typename V, typename OutT>
 Tensor CastMap::operator()(std::span<const int64_t> input_keys, std::span<const V> input_values,
                            const std::string &cast_to, const std::string &map_form, int64_t max_map,
-                           RuntimeContext * /*rt*/) const {
+                           RuntimeContext *rt) const {
   ValidateAttributes(input_keys, input_values.size(), map_form, max_map);
   (void)cast_to; // cast_to is encoded in OutT; only validated by the caller.
 
@@ -126,12 +126,17 @@ Tensor CastMap::operator()(std::span<const int64_t> input_keys, std::span<const 
 
   if constexpr (std::is_same_v<OutT, std::string>) {
     Tensor out =
-        Tensor::FromStrings("", shape, std::vector<std::string>(static_cast<std::size_t>(n)));
+        rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::STRING), shape, 0)
+           : Tensor::FromStrings("", shape, std::vector<std::string>(static_cast<std::size_t>(n)));
+    out.string_data.assign(static_cast<std::size_t>(n), std::string());
     FillStringOutput<V>(input_keys, input_values, map_form, out.string_data);
     return out;
   } else {
-    Tensor out = MakeOutputTensor(static_cast<int32_t>(TensorElementType<OutT>::value), shape,
-                                  static_cast<std::size_t>(n) * sizeof(OutT), ctx_.allocator);
+    const size_t n_bytes = static_cast<std::size_t>(n) * sizeof(OutT);
+    Tensor out = rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(TensorElementType<OutT>::value),
+                                           shape, n_bytes)
+                    : MakeOutputTensor(static_cast<int32_t>(TensorElementType<OutT>::value), shape,
+                                       n_bytes, ctx_.allocator);
     // ``FillNumericOutput`` scatters SPARSE entries by key and leaves the
     // remaining positions untouched, so the output must start zeroed. Allocator
     // storage is no longer zero-initialised, so clear it explicitly.
@@ -216,22 +221,23 @@ void CastMap::Run(RuntimeContext &rt) {
   case static_cast<int32_t>(DataType::FLOAT): {
     const std::span<const float> values = TensorSpan<float>(x_values);
     if (cast_to == "TO_FLOAT") {
-      y = cast_map.operator()<float, float>(keys, values, cast_to, map_form, max_map);
+      y = cast_map.operator()<float, float>(keys, values, cast_to, map_form, max_map, &rt);
     } else if (cast_to == "TO_INT64") {
-      y = cast_map.operator()<float, int64_t>(keys, values, cast_to, map_form, max_map);
+      y = cast_map.operator()<float, int64_t>(keys, values, cast_to, map_form, max_map, &rt);
     } else {
-      y = cast_map.operator()<float, std::string>(keys, values, cast_to, map_form, max_map);
+      y = cast_map.operator()<float, std::string>(keys, values, cast_to, map_form, max_map, &rt);
     }
     break;
   }
   case static_cast<int32_t>(DataType::STRING): {
     const std::vector<std::string> &values = x_values.AsStrings();
     if (cast_to == "TO_FLOAT") {
-      y = cast_map.operator()<std::string, float>(keys, values, cast_to, map_form, max_map);
+      y = cast_map.operator()<std::string, float>(keys, values, cast_to, map_form, max_map, &rt);
     } else if (cast_to == "TO_INT64") {
-      y = cast_map.operator()<std::string, int64_t>(keys, values, cast_to, map_form, max_map);
+      y = cast_map.operator()<std::string, int64_t>(keys, values, cast_to, map_form, max_map, &rt);
     } else {
-      y = cast_map.operator()<std::string, std::string>(keys, values, cast_to, map_form, max_map);
+      y = cast_map.operator()<std::string, std::string>(keys, values, cast_to, map_form, max_map,
+                                                        &rt);
     }
     break;
   }

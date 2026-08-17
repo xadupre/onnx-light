@@ -108,13 +108,14 @@ template <typename T> void ApplyNormalizer(const Tensor &x, NormMode mode, float
 } // namespace
 
 template <typename T>
-Tensor Normalizer::operator()(const Tensor &x, const std::string &norm,
-                              RuntimeContext * /*rt*/) const {
+Tensor Normalizer::operator()(const Tensor &x, const std::string &norm, RuntimeContext *rt) const {
   ValidateInput<T>(x);
   const NormMode mode = ParseNorm(norm);
   const int64_t n = x.element_count();
-  Tensor out = MakeOutputTensor(TensorElementType<float>::value, x.shape,
-                                static_cast<size_t>(n) * sizeof(float), ctx_.allocator);
+  const size_t n_bytes = static_cast<size_t>(n) * sizeof(float);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, TensorElementType<float>::value, x.shape, n_bytes)
+         : MakeOutputTensor(TensorElementType<float>::value, x.shape, n_bytes, ctx_.allocator);
   ApplyNormalizer<T>(x, mode, reinterpret_cast<float *>(out.mutable_bytes()));
   return out;
 }
@@ -155,7 +156,7 @@ void Normalizer::Run(RuntimeContext &rt) {
   Tensor y = DispatchSVMByDataType(x, "Normalizer", [&](auto *tag) {
     using T = std::remove_pointer_t<decltype(tag)>;
     (void)tag;
-    return normalizer.template operator()<T>(x, norm);
+    return normalizer.template operator()<T>(x, norm, &rt);
   });
   SetOutput(node, 0, std::move(y), rt.tensors());
 }

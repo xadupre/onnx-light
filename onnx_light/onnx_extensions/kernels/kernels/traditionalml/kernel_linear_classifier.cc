@@ -8,6 +8,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -75,11 +76,11 @@ int64_t ArgMax(const float *scores, int64_t count) {
 } // namespace
 
 template <typename T>
-std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
-                                                       const ParamFloats &coefficients,
-                                                       const ParamFloats &intercepts,
-                                                       const std::vector<int64_t> &class_labels,
-                                                       const std::string &post_transform) const {
+std::pair<Tensor, Tensor>
+LinearClassifier::operator()(const Tensor &x, const ParamFloats &coefficients,
+                             const ParamFloats &intercepts,
+                             const std::vector<int64_t> &class_labels,
+                             const std::string &post_transform, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(post_transform == "NONE",
                       "kernel::LinearClassifier only supports post_transform == 'NONE'.");
   EXT_ENFORCE_INVALID(!class_labels.empty(),
@@ -89,17 +90,22 @@ std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
   ValidateFeatureMatrixShape(x, sample_count, feature_count);
   const int64_t raw_class_count =
       feature_count == 0 ? 0 : static_cast<int64_t>(coefficients.size()) / feature_count;
-  const Tensor x_values = ToDoubleRowMajorTensor<T>(x, sample_count, feature_count, ctx_.allocator);
+  RawBufferAllocator *execution_allocator = rt ? rt->execution_allocator() : ctx_.allocator;
+  const Tensor x_values =
+      ToDoubleRowMajorTensor<T>(x, sample_count, feature_count, execution_allocator);
   const bool binary_expand = raw_class_count == 1 && class_labels.size() == 2;
   const int64_t score_class_count = binary_expand ? 2 : raw_class_count;
   EXT_ENFORCE_INVALID(static_cast<int64_t>(class_labels.size()) == score_class_count,
                       "kernel::LinearClassifier class_labels size must match the number of "
                       "score columns.");
 
-  Tensor z = MakeOutputTensor(
-      TensorElementType<float>::value, {sample_count, score_class_count},
-      PackedByteSize(TensorElementType<float>::value, sample_count * score_class_count),
-      ctx_.allocator);
+  const onnx_kernels::Shape score_shape = {sample_count, score_class_count};
+  const size_t score_n_bytes =
+      PackedByteSize(TensorElementType<float>::value, sample_count * score_class_count);
+  Tensor z =
+      rt ? rt->MakeOutputTensor(1, TensorElementType<float>::value, score_shape, score_n_bytes)
+         : MakeOutputTensor(TensorElementType<float>::value, score_shape, score_n_bytes,
+                            ctx_.allocator);
   ComputeLinearScoresInto(x_values.As<double>(), sample_count, feature_count, coefficients,
                           intercepts, raw_class_count, binary_expand, z.As<float>());
 
@@ -109,7 +115,12 @@ std::pair<Tensor, Tensor> LinearClassifier::operator()(const Tensor &x,
     const int64_t idx = ArgMax(scores + n * score_class_count, score_class_count);
     labels[static_cast<size_t>(n)] = class_labels[static_cast<size_t>(idx)];
   }
-  Tensor y = Tensor::FromInt64("", {sample_count}, labels, ctx_.allocator);
+  Tensor y = rt ? rt->MakeOutputTensor(0, DataType::INT64, {sample_count},
+                                       static_cast<size_t>(sample_count) * sizeof(int64_t))
+                : Tensor::FromInt64("", {sample_count}, labels, ctx_.allocator);
+  if (rt != nullptr) {
+    std::copy(labels.begin(), labels.end(), y.AsInt64());
+  }
   return std::make_pair(std::move(y), std::move(z));
 }
 
@@ -117,7 +128,7 @@ template <typename T>
 std::pair<Tensor, Tensor>
 LinearClassifier::operator()(const Tensor &x, const ParamFloats &coefficients,
                              const ParamFloats &intercepts, const ParamStrings &class_labels,
-                             const std::string &post_transform) const {
+                             const std::string &post_transform, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(post_transform == "NONE",
                       "kernel::LinearClassifier only supports post_transform == 'NONE'.");
   EXT_ENFORCE_INVALID(!class_labels.empty(),
@@ -127,17 +138,22 @@ LinearClassifier::operator()(const Tensor &x, const ParamFloats &coefficients,
   ValidateFeatureMatrixShape(x, sample_count, feature_count);
   const int64_t raw_class_count =
       feature_count == 0 ? 0 : static_cast<int64_t>(coefficients.size()) / feature_count;
-  const Tensor x_values = ToDoubleRowMajorTensor<T>(x, sample_count, feature_count, ctx_.allocator);
+  RawBufferAllocator *execution_allocator = rt ? rt->execution_allocator() : ctx_.allocator;
+  const Tensor x_values =
+      ToDoubleRowMajorTensor<T>(x, sample_count, feature_count, execution_allocator);
   const bool binary_expand = raw_class_count == 1 && class_labels.size() == 2;
   const int64_t score_class_count = binary_expand ? 2 : raw_class_count;
   EXT_ENFORCE_INVALID(static_cast<int64_t>(class_labels.size()) == score_class_count,
                       "kernel::LinearClassifier class_labels size must match the number of "
                       "score columns.");
 
-  Tensor z = MakeOutputTensor(
-      TensorElementType<float>::value, {sample_count, score_class_count},
-      PackedByteSize(TensorElementType<float>::value, sample_count * score_class_count),
-      ctx_.allocator);
+  const onnx_kernels::Shape score_shape = {sample_count, score_class_count};
+  const size_t score_n_bytes =
+      PackedByteSize(TensorElementType<float>::value, sample_count * score_class_count);
+  Tensor z =
+      rt ? rt->MakeOutputTensor(1, TensorElementType<float>::value, score_shape, score_n_bytes)
+         : MakeOutputTensor(TensorElementType<float>::value, score_shape, score_n_bytes,
+                            ctx_.allocator);
   ComputeLinearScoresInto(x_values.As<double>(), sample_count, feature_count, coefficients,
                           intercepts, raw_class_count, binary_expand, z.As<float>());
 
@@ -147,17 +163,21 @@ LinearClassifier::operator()(const Tensor &x, const ParamFloats &coefficients,
     const int64_t idx = ArgMax(scores + n * score_class_count, score_class_count);
     labels[static_cast<size_t>(n)] = class_labels[static_cast<size_t>(idx)];
   }
-  Tensor y = Tensor::FromStrings("", {sample_count}, labels);
+  Tensor y = rt ? rt->MakeOutputTensor(0, DataType::STRING, {sample_count}, 0)
+                : Tensor::FromStrings("", {sample_count}, labels);
+  if (rt != nullptr) {
+    y.string_data = std::move(labels);
+  }
   return std::make_pair(std::move(y), std::move(z));
 }
 
 #define ONNX_LIGHT_INSTANTIATE_LINEAR_CLASSIFIER(T)                                                \
   template std::pair<Tensor, Tensor> LinearClassifier::operator()<T>(                              \
       const Tensor &, const ParamFloats &, const ParamFloats &, const std::vector<int64_t> &,      \
-      const std::string &) const;                                                                  \
+      const std::string &, RuntimeContext *) const;                                                \
   template std::pair<Tensor, Tensor> LinearClassifier::operator()<T>(                              \
       const Tensor &, const ParamFloats &, const ParamFloats &, const ParamStrings &,              \
-      const std::string &) const
+      const std::string &, RuntimeContext *) const
 
 ONNX_LIGHT_INSTANTIATE_LINEAR_CLASSIFIER(float);
 ONNX_LIGHT_INSTANTIATE_LINEAR_CLASSIFIER(double);
@@ -188,9 +208,9 @@ void LinearClassifier::Run(RuntimeContext &rt) {
     using T = std::remove_pointer_t<decltype(tag)>;
     (void)tag;
     return use_strings ? cls.template operator()<T>(x, coefficients, intercepts,
-                                                    classlabels_strings, post_transform)
+                                                    classlabels_strings, post_transform, &rt)
                        : cls.template operator()<T>(x, coefficients, intercepts, classlabels_ints,
-                                                    post_transform);
+                                                    post_transform, &rt);
   });
   SetOutput(node, 0, std::move(yz.first), rt);
   SetOutput(node, 1, std::move(yz.second), rt);

@@ -157,7 +157,8 @@ Tensor ReduceMinMax::operator()(const Tensor &data, bool keepdims, bool noop_wit
   const int32_t out_dtype =
       is_bool ? static_cast<int32_t>(DataType::BOOL) : static_cast<int32_t>(DataType::FLOAT);
   const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size;
-  Tensor out = MakeOutputTensor(out_dtype, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, out_dtype, out_shape, out_n_bytes)
+                  : MakeOutputTensor(out_dtype, out_shape, out_n_bytes, nullptr);
   (*this)(data, keepdims, noop_with_empty_axes, out);
   return out;
 }
@@ -214,7 +215,8 @@ Tensor ReduceMinMax::operator()(const Tensor &data, const Tensor &axes, bool kee
   const int32_t out_dtype =
       is_bool ? static_cast<int32_t>(DataType::BOOL) : static_cast<int32_t>(DataType::FLOAT);
   const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size;
-  Tensor out = MakeOutputTensor(out_dtype, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, out_dtype, out_shape, out_n_bytes)
+                  : MakeOutputTensor(out_dtype, out_shape, out_n_bytes, nullptr);
   (*this)(data, axes, keepdims, noop_with_empty_axes, out);
   return out;
 }

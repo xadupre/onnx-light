@@ -61,8 +61,9 @@ Tensor MakeUniform(const onnx_kernels::Shape &shape, double low, double high,
                    std::optional<uint64_t> seed, int32_t dtype, const char *op_name,
                    RuntimeContext *rt) {
   const int64_t count = CheckShape(shape, op_name);
-  Tensor out = MakeOutputTensor(dtype, shape, static_cast<size_t>(count) * ElementSize(dtype),
-                                rt ? rt->allocator() : nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, dtype, shape, static_cast<size_t>(count) * ElementSize(dtype))
+         : MakeOutputTensor(dtype, shape, static_cast<size_t>(count) * ElementSize(dtype), nullptr);
   if (static_cast<DataType>(dtype) == DataType::DOUBLE) {
     RandUniformInto<double>(reinterpret_cast<double *>(out.mutable_bytes()), count, low, high,
                             seed);
@@ -76,8 +77,9 @@ Tensor MakeNormal(const onnx_kernels::Shape &shape, double mean, double scale,
                   std::optional<uint64_t> seed, int32_t dtype, const char *op_name,
                   RuntimeContext *rt) {
   const int64_t count = CheckShape(shape, op_name);
-  Tensor out = MakeOutputTensor(dtype, shape, static_cast<size_t>(count) * ElementSize(dtype),
-                                rt ? rt->allocator() : nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, dtype, shape, static_cast<size_t>(count) * ElementSize(dtype))
+         : MakeOutputTensor(dtype, shape, static_cast<size_t>(count) * ElementSize(dtype), nullptr);
   if (static_cast<DataType>(dtype) == DataType::DOUBLE) {
     RandNormalInto<double>(reinterpret_cast<double *>(out.mutable_bytes()), count, mean, scale,
                            seed);

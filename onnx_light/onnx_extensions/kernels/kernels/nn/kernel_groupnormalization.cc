@@ -34,8 +34,9 @@ Tensor GroupNormalization::operator()(const Tensor &x, const Tensor &scale, cons
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::GroupNormalization: X must be FLOAT.");
   const size_t out_n_bytes = x.size_bytes();
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes, nullptr);
   (*this)(x, scale, bias, num_groups, out, epsilon);
   return out;
 }

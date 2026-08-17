@@ -31,16 +31,14 @@ int64_t ReadK(const Tensor *k) {
 } // namespace
 
 Tensor Trilu::operator()(const Tensor &input, const Tensor *k, const Trilu::Attributes &attrs,
-                         RuntimeContext * /*rt*/) const {
-  Tensor output;
-  output.name = "";
-  output.data_type = input.data_type;
-  output.shape = input.shape;
+                         RuntimeContext *rt) const {
+  const std::size_t n_bytes = input.data_type == static_cast<int32_t>(DataType::STRING)
+                                  ? 0
+                                  : PackedByteSize(input.data_type, input.element_count());
+  Tensor output = rt ? rt->MakeOutputTensor(0, input.data_type, input.shape, n_bytes)
+                     : MakeOutputTensor(input.data_type, input.shape, n_bytes, nullptr);
   if (input.data_type == static_cast<int32_t>(DataType::STRING)) {
     output.string_data.assign(static_cast<std::size_t>(input.element_count()), std::string());
-  } else {
-    output.data.assign(PackedByteSize(input.data_type, input.element_count()),
-                       static_cast<uint8_t>(0));
   }
   (*this)(input, k, attrs, output);
   return output;

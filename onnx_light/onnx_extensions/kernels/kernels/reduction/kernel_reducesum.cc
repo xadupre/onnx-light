@@ -135,8 +135,8 @@ Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_e
     return n;
   }();
   const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size;
-  Tensor out =
-      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr);
   (*this)(data, keepdims, noop_with_empty_axes, out);
   return out;
 }
@@ -201,8 +201,8 @@ Tensor ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdi
     out_count *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size;
-  Tensor out =
-      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr);
   (*this)(data, axes, keepdims, noop_with_empty_axes, out);
   return out;
 }

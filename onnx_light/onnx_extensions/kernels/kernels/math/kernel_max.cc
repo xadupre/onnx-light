@@ -147,8 +147,16 @@ void MaxFloat16InPlace(const Tensors &inputs, Tensor &output) {
 } // namespace
 
 Tensor Max::operator()(const Tensors &inputs, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    const Shape out_shape = ValidateAndBroadcastShape(inputs, "", inputs[0].data_type);
+    Tensor output = rt->MakeOutputTensor(0, inputs[0].data_type, out_shape,
+                                         static_cast<size_t>(out_shape.product()) *
+                                             ElementSize(inputs[0].data_type));
+    (*this)(inputs, output);
+    return output;
+  }
   EXT_ENFORCE_INVALID(!inputs.empty(), kMaxName, " requires at least one input.");
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = nullptr;
   switch (inputs[0].data_type) {
 #define ONNX_LIGHT_MAX_CASE_ALLOC(ENUM, CPP, NAME)                                                 \
   case DataType::ENUM:                                                                             \
@@ -156,7 +164,7 @@ Tensor Max::operator()(const Tensors &inputs, RuntimeContext *rt) const {
     ONNX_LIGHT_MAX_DISPATCH(ONNX_LIGHT_MAX_CASE_ALLOC)
 #undef ONNX_LIGHT_MAX_CASE_ALLOC
   case DataType::FLOAT16:
-    return MaxFloat16Alloc(inputs, rt ? rt->allocator() : nullptr);
+    return MaxFloat16Alloc(inputs, nullptr);
   default:
     EXT_THROW_INVALID(kMaxName, ": unsupported data type ", inputs[0].data_type,
                       kSupportedMaxTypesMsg);

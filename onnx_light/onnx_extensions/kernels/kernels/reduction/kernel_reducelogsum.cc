@@ -236,14 +236,14 @@ Tensor ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_w
   const size_t elem_size =
       (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
   const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size;
-  Tensor out =
-      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
-  (*this)(data, keepdims, noop_with_empty_axes, out);
+  Tensor out = rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr);
+  (*this)(data, keepdims, noop_with_empty_axes, out, rt ? rt->execution_allocator() : nullptr);
   return out;
 }
 
 void ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
-                                Tensor &output) const {
+                                Tensor &output, RawBufferAllocator *temporary_allocator) const {
   ValidateFloatOrDouble(data, "data");
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::ReduceLogSumOp: output dtype must match data dtype.");
@@ -269,7 +269,7 @@ void ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_wit
     return;
   }
   const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
-  LogSumReduce(data, is_reduced, out_shape_noreduce, mode_, output, ctx_.allocator);
+  LogSumReduce(data, is_reduced, out_shape_noreduce, mode_, output, temporary_allocator);
 }
 
 Tensor ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
@@ -300,14 +300,16 @@ Tensor ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool k
   const size_t elem_size =
       (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
   const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size;
-  Tensor out =
-      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
-  (*this)(data, axes, keepdims, noop_with_empty_axes, out);
+  Tensor out = rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr);
+  (*this)(data, axes, keepdims, noop_with_empty_axes, out,
+          rt ? rt->execution_allocator() : nullptr);
   return out;
 }
 
 void ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
-                                bool noop_with_empty_axes, Tensor &output) const {
+                                bool noop_with_empty_axes, Tensor &output,
+                                RawBufferAllocator *temporary_allocator) const {
   ValidateFloatOrDouble(data, "data");
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::ReduceLogSumOp: output dtype must match data dtype.");
@@ -345,7 +347,7 @@ void ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool kee
     return;
   }
   const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
-  LogSumReduce(data, is_reduced, out_shape_noreduce, mode_, output, ctx_.allocator);
+  LogSumReduce(data, is_reduced, out_shape_noreduce, mode_, output, temporary_allocator);
 }
 
 void ReduceLogSum::Run(RuntimeContext &rt) {

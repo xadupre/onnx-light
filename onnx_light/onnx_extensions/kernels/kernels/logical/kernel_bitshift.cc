@@ -85,7 +85,15 @@ void BitShift::RegisterTuningSchemas() {
 
 Tensor BitShift::operator()(const Tensor &x, const Tensor &y, Direction direction,
                             RuntimeContext *rt) const {
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  if (rt != nullptr) {
+    const Shape out_shape = detail::BroadcastShape("kernel::BitShift", x.shape, y.shape);
+    const int64_t out_count = out_shape.product();
+    Tensor output = rt->MakeOutputTensor(0, x.data_type, out_shape,
+                                         static_cast<size_t>(out_count) * ElementSize(x.data_type));
+    (*this)(x, y, direction, output);
+    return output;
+  }
+  RawBufferAllocator *allocator = nullptr;
   if (direction == Direction::kLeft) {
     return BitShiftAllocDispatch(x, y, kLeftShiftFn, tuning().parallel_minimum_elements, allocator);
   }

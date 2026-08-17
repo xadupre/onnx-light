@@ -56,22 +56,33 @@ Tensor RMSNormalization::operator()(const Tensor &x, const Tensor &scale, int64_
   // half-precision language models (e.g. the tiny Llama-style decoder) run
   // their RMSNorm layers through this kernel.
   if (IsHalfPrecision(x.data_type)) {
-    const Tensor x_f = PromoteToFloat32(x, rt);
-    const Tensor scale_f = PromoteToFloat32(scale, rt);
-    Tensor y = (*this)(x_f, scale_f, axis, epsilon, rt);
-    return DemoteFromFloat32(y, x.data_type, rt);
+    RuntimeContext scratch_rt(
+        rt ? rt->kernel_ctx() : ctx_,
+        RuntimeContextOptions{.allocator = rt ? rt->execution_allocator() : nullptr});
+    RuntimeContext *compute_rt = rt ? &scratch_rt : nullptr;
+    const Tensor x_f = PromoteToFloat32(x, compute_rt);
+    const Tensor scale_f = PromoteToFloat32(scale, compute_rt);
+    Tensor y = (*this)(x_f, scale_f, axis, epsilon, compute_rt);
+    Tensor demoted = DemoteFromFloat32(y, x.data_type, compute_rt);
+    Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, demoted.size_bytes())
+                    : MakeOutputTensor(x.data_type, x.shape, demoted.size_bytes(), nullptr);
+    if (demoted.size_bytes() != 0) {
+      std::memcpy(out.mutable_bytes(), demoted.bytes(), demoted.size_bytes());
+    }
+    return out;
   }
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::RMSNormalization: X must be FLOAT.");
   const size_t out_n_bytes = x.size_bytes();
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
-  (*this)(x, scale, out, axis, epsilon);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes, nullptr);
+  (*this)(x, scale, out, axis, epsilon, rt);
   return out;
 }
 
 void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &output,
-                                  int64_t axis, float epsilon) const {
+                                  int64_t axis, float epsilon, RuntimeContext *rt) const {
   if (IsHalfPrecision(x.data_type)) {
     EXT_ENFORCE_INVALID(output.data_type == x.data_type,
                         "kernel::RMSNormalization preallocated output must match the input dtype.");
@@ -123,7 +134,7 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
   // back to inline storage otherwise. ``TemporaryTypedBuffer`` leaves its
   // storage uninitialized, so any scratch that is read before being written is
   // cleared explicitly below.
-  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
+  RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
 
   // Pre-compute the per-element index into ``scale`` for every position in the
   // normalized block. A scalar ``scale`` (scale_rank == 0) broadcasts to index

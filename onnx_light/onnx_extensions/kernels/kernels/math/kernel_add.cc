@@ -99,47 +99,53 @@ void Add::Configure(const KernelTuningParameters &parameters) {
 }
 
 Tensor Add::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    const Shape out_shape = detail::BroadcastShape("kernel::Add", x.shape, y.shape);
+    const int64_t out_count = out_shape.product();
+    Tensor output = rt->MakeOutputTensor(0, x.data_type, out_shape,
+                                         static_cast<size_t>(out_count) * ElementSize(x.data_type));
+    (*this)(x, y, output);
+    return output;
+  }
   switch (x.data_type) {
   case DataType::FLOAT:
     return AddAlloc<float>("FLOAT", DataType::FLOAT, x, y, tuning_.parallel_minimum_elements,
-                           rt ? rt->allocator() : nullptr);
+                           nullptr);
   case DataType::DOUBLE:
     return AddAlloc<double>("DOUBLE", DataType::DOUBLE, x, y, tuning_.parallel_minimum_elements,
-                            rt ? rt->allocator() : nullptr);
+                            nullptr);
   case DataType::INT8:
     return AddAlloc<int8_t>("INT8", DataType::INT8, x, y, tuning_.parallel_minimum_elements,
-                            rt ? rt->allocator() : nullptr);
+                            nullptr);
   case DataType::INT16:
     return AddAlloc<int16_t>("INT16", DataType::INT16, x, y, tuning_.parallel_minimum_elements,
-                             rt ? rt->allocator() : nullptr);
+                             nullptr);
   case DataType::INT32:
     return AddAlloc<int32_t>("INT32", DataType::INT32, x, y, tuning_.parallel_minimum_elements,
-                             rt ? rt->allocator() : nullptr);
+                             nullptr);
   case DataType::INT64:
     return AddAlloc<int64_t>("INT64", DataType::INT64, x, y, tuning_.parallel_minimum_elements,
-                             rt ? rt->allocator() : nullptr);
+                             nullptr);
   case DataType::UINT8:
     return AddAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, tuning_.parallel_minimum_elements,
-                             rt ? rt->allocator() : nullptr);
+                             nullptr);
   case DataType::UINT16:
     return AddAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, tuning_.parallel_minimum_elements,
-                              rt ? rt->allocator() : nullptr);
+                              nullptr);
   case DataType::UINT32:
     return AddAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, tuning_.parallel_minimum_elements,
-                              rt ? rt->allocator() : nullptr);
+                              nullptr);
   case DataType::UINT64:
     return AddAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, tuning_.parallel_minimum_elements,
-                              rt ? rt->allocator() : nullptr);
+                              nullptr);
   case DataType::FLOAT16:
     return detail::BinaryHalfElementwiseAlloc(
         kAddName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat, FloatToFloat16Bits,
-        [](float a, float b) { return a + b; }, rt ? rt->allocator() : nullptr,
-        tuning_.parallel_minimum_elements);
+        [](float a, float b) { return a + b; }, nullptr, tuning_.parallel_minimum_elements);
   case DataType::BFLOAT16:
     return detail::BinaryHalfElementwiseAlloc(
         kAddName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-        [](float a, float b) { return a + b; }, rt ? rt->allocator() : nullptr,
-        tuning_.parallel_minimum_elements);
+        [](float a, float b) { return a + b; }, nullptr, tuning_.parallel_minimum_elements);
   default:
     EXT_THROW_INVALID(kAddName, ": unsupported data type ", x.data_type, kSupportedAddTypesMsg);
   }

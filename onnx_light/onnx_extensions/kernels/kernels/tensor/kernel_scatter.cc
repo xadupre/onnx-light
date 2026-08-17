@@ -10,8 +10,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor Scatter::operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
                            const Attributes &attrs, RuntimeContext *rt) const {
-  Tensor out = MakeOutputTensor(data.data_type, data.shape, data.size_bytes(),
-                                rt != nullptr ? rt->allocator() : nullptr);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, data.data_type, data.shape, data.size_bytes())
+                   : MakeOutputTensor(data.data_type, data.shape, data.size_bytes(), nullptr));
   (*this)(data, indices, updates, attrs, out);
   return out;
 }

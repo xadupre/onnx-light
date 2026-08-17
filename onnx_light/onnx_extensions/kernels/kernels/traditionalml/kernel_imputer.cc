@@ -73,12 +73,13 @@ void ApplyImputer(const Tensor &x, const std::vector<T> &imputed_values, T repla
 
 template <typename T>
 Tensor Imputer::operator()(const Tensor &x, const std::vector<T> &imputed_values, T replaced_value,
-                           RuntimeContext * /*rt*/) const {
+                           RuntimeContext *rt) const {
   ValidateInput<T>(x);
   ValidateImputedValues<T>(imputed_values, LastDim(x.shape));
   const int64_t n = x.element_count();
-  Tensor out = MakeOutputTensor(TensorElementType<T>::value, x.shape,
-                                static_cast<size_t>(n) * sizeof(T), ctx_.allocator);
+  const size_t n_bytes = static_cast<size_t>(n) * sizeof(T);
+  Tensor out = rt ? rt->MakeOutputTensor(0, TensorElementType<T>::value, x.shape, n_bytes)
+                  : MakeOutputTensor(TensorElementType<T>::value, x.shape, n_bytes, ctx_.allocator);
   ApplyImputer<T>(x, imputed_values, replaced_value, reinterpret_cast<T *>(out.mutable_bytes()));
   return out;
 }
@@ -135,16 +136,16 @@ void Imputer::Run(RuntimeContext &rt) {
     (void)tag;
     if constexpr (std::is_floating_point_v<T>) {
       std::vector<T> imputed_values(imputed_value_floats.begin(), imputed_value_floats.end());
-      return imputer.template operator()<T>(x, imputed_values,
-                                            static_cast<T>(replaced_value_float));
+      return imputer.template operator()<T>(x, imputed_values, static_cast<T>(replaced_value_float),
+                                            &rt);
     } else {
       std::vector<T> imputed_values;
       imputed_values.reserve(imputed_value_int64s.size());
       for (int64_t value : imputed_value_int64s) {
         imputed_values.push_back(static_cast<T>(value));
       }
-      return imputer.template operator()<T>(x, imputed_values,
-                                            static_cast<T>(replaced_value_int64));
+      return imputer.template operator()<T>(x, imputed_values, static_cast<T>(replaced_value_int64),
+                                            &rt);
     }
   });
   SetOutput(node, 0, std::move(y), rt.tensors());

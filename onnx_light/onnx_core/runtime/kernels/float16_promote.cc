@@ -28,9 +28,10 @@ Tensor PromoteToFloat32(const Tensor &src, RuntimeContext *rt, int64_t parallel_
 
   const int64_t n = src.element_count();
   const uint8_t *raw = src.bytes();
-  Tensor result =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), src.shape,
-                       static_cast<size_t>(n) * sizeof(float), rt ? rt->allocator() : nullptr);
+  Tensor result = rt ? rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT), src.shape,
+                                               static_cast<size_t>(n) * sizeof(float))
+                     : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), src.shape,
+                                        static_cast<size_t>(n) * sizeof(float), nullptr);
   result.name = src.name;
   float *dst = reinterpret_cast<float *>(result.mutable_bytes());
 
@@ -56,19 +57,20 @@ Tensor PromoteToFloat32(const Tensor &src, RuntimeContext *rt, int64_t parallel_
 }
 
 Tensor DemoteFromFloat32(const Tensor &src, int32_t target_dtype, RuntimeContext *rt) {
-  return DemoteFromFloat32(src, target_dtype, rt, std::numeric_limits<int64_t>::max());
+  return DemoteFromFloat32(src, target_dtype, rt, std::numeric_limits<int64_t>::max(), 0);
 }
 
 Tensor DemoteFromFloat32(const Tensor &src, int32_t target_dtype, RuntimeContext *rt,
-                         int64_t parallel_minimum_elements) {
+                         int64_t parallel_minimum_elements, int output_slot) {
   EXT_ENFORCE_INVALID(src.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "DemoteFromFloat32: source must be FLOAT, got ", src.data_type);
 
   const int64_t n = src.element_count();
   const float *fp32 = reinterpret_cast<const float *>(src.bytes());
-  Tensor result =
-      MakeOutputTensor(target_dtype, src.shape, static_cast<size_t>(n) * sizeof(uint16_t),
-                       rt ? rt->allocator() : nullptr);
+  Tensor result = rt ? rt->MakeOutputTensor(output_slot, target_dtype, src.shape,
+                                            static_cast<size_t>(n) * sizeof(uint16_t))
+                     : MakeOutputTensor(target_dtype, src.shape,
+                                        static_cast<size_t>(n) * sizeof(uint16_t), nullptr);
   result.name = src.name;
   uint16_t *dst = reinterpret_cast<uint16_t *>(result.mutable_bytes());
 

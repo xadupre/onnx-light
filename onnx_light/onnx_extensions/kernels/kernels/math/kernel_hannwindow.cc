@@ -19,7 +19,8 @@ Tensor HannWindow::operator()(const Tensor &size, bool periodic, RuntimeContext 
   const int32_t n = size.AsInt32()[0];
   EXT_ENFORCE_INVALID(n >= 0, "kernel::HannWindow size must be non-negative.");
   const size_t y_n_bytes = static_cast<size_t>(n) * sizeof(float);
-  Tensor y = MakeOutputTensor(DataType::FLOAT, {n}, y_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor y = rt ? rt->MakeOutputTensor(0, DataType::FLOAT, {n}, y_n_bytes)
+                : MakeOutputTensor(DataType::FLOAT, {n}, y_n_bytes, nullptr);
   (*this)(size, periodic, y);
   return y;
 }

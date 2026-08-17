@@ -199,8 +199,8 @@ public:
 
   Tensor operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs,
                     RuntimeContext *rt = nullptr) const;
-  void operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs,
-                  Tensor &output) const;
+  void operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs, Tensor &output,
+                  RawBufferAllocator *allocator = nullptr) const;
 
   /// Output shape differs from both inputs, so the output cannot share
   /// storage with any input buffer.
@@ -290,7 +290,8 @@ public:
                     const Tensor *axes = nullptr, const Tensor *steps = nullptr,
                     RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &data, const Tensor &starts, const Tensor &ends, const Tensor *axes,
-                  const Tensor *steps, Tensor &output) const;
+                  const Tensor *steps, Tensor &output,
+                  RawBufferAllocator *allocator = nullptr) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
@@ -598,7 +599,8 @@ public:
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const Tensor &indices, int64_t axis = 0,
                     RuntimeContext *rt = nullptr) const;
-  void operator()(const Tensor &data, const Tensor &indices, int64_t axis, Tensor &output) const;
+  void operator()(const Tensor &data, const Tensor &indices, int64_t axis, Tensor &output,
+                  RuntimeContext *rt = nullptr) const;
 
   /// Output shape differs from input shape in general.
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -618,7 +620,8 @@ public:
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const Tensor &indices, int64_t axis = 0,
                     RuntimeContext *rt = nullptr) const;
-  void operator()(const Tensor &data, const Tensor &indices, int64_t axis, Tensor &output) const;
+  void operator()(const Tensor &data, const Tensor &indices, int64_t axis, Tensor &output,
+                  RuntimeContext *rt = nullptr) const;
 
   /// Output shape matches ``indices`` and differs from ``data`` in general.
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -684,7 +687,8 @@ public:
   Tensor operator()(const Tensor &past_cache, const Tensor &update, const Tensor *write_indices,
                     const Attributes &attrs, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &past_cache, const Tensor &update, const Tensor *write_indices,
-                  const Attributes &attrs, Tensor &output) const;
+                  const Attributes &attrs, Tensor &output,
+                  RawBufferAllocator *allocator = nullptr) const;
 
   /// Output shape matches ``past_cache`` so the output buffer could share
   /// storage with the first input; the reference implementation always
@@ -717,7 +721,7 @@ public:
   Tensor operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
                     const Attributes &attrs, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
-                  const Attributes &attrs, Tensor &output) const;
+                  const Attributes &attrs, Tensor &output, RuntimeContext *rt = nullptr) const;
 
   /// Output shape matches ``data`` so the output buffer could share storage
   /// with the first input; the reference implementation always writes into a

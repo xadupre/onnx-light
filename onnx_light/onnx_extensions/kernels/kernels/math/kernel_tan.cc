@@ -22,7 +22,8 @@ constexpr const char *kName = "kernel::Tan";
 
 Tensor Tan::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
-  Tensor y = MakeOutputTensor(x.data_type, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor y = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, y_n_bytes)
+                : MakeOutputTensor(x.data_type, x.shape, y_n_bytes, nullptr);
   (*this)(x, y);
   return y;
 }

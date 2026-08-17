@@ -96,7 +96,7 @@ void FillScalarRepeat(const uint8_t *src, std::size_t elem_size, std::size_t cou
 } // namespace
 
 Tensor OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tensor &values,
-                          const OneHot::Attributes &attrs, RuntimeContext * /*rt*/) const {
+                          const OneHot::Attributes &attrs, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(values.shape.size() == 1 && values.element_count() == 2,
                       "kernel::OneHot: input 'values' must be a rank-1 tensor with exactly two "
                       "elements [off_value, on_value].");
@@ -105,14 +105,12 @@ Tensor OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tens
   const int64_t axis_pos = ResolveAxis(attrs.axis, out_rank);
   const onnx_kernels::Shape out_shape = ComputeOneHotShape(indices.shape, axis_pos, depth_val);
 
-  Tensor output;
-  output.name = "";
-  output.data_type = values.data_type;
-  output.shape = out_shape;
-  const int64_t out_count = output.element_count();
+  const int64_t out_count = out_shape.product();
   EXT_ENFORCE_INVALID(values.data_type != static_cast<int32_t>(DataType::STRING),
                       "kernel::OneHot: STRING element type is not supported.");
-  output.data.assign(PackedByteSize(values.data_type, out_count), static_cast<uint8_t>(0));
+  const std::size_t n_bytes = PackedByteSize(values.data_type, out_count);
+  Tensor output = rt ? rt->MakeOutputTensor(0, values.data_type, out_shape, n_bytes)
+                     : MakeOutputTensor(values.data_type, out_shape, n_bytes, nullptr);
   (*this)(indices, depth, values, attrs, output);
   return output;
 }

@@ -26,7 +26,8 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
 
 Tensor LogSoftmax::operator()(const Tensor &x, int64_t axis, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * sizeof(float);
-  Tensor y = MakeOutputTensor(DataType::FLOAT, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor y = rt ? rt->MakeOutputTensor(0, DataType::FLOAT, x.shape, y_n_bytes)
+                : MakeOutputTensor(DataType::FLOAT, x.shape, y_n_bytes, nullptr);
   (*this)(x, axis, y);
   return y;
 }

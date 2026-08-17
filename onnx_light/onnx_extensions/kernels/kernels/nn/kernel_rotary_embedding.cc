@@ -50,10 +50,8 @@ void CheckCacheShape(const Tensor &cache, const char *which, int64_t batch, int6
 Tensor RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache,
                                    const Tensor &sin_cache, const Tensor &position_ids,
                                    const Attributes &attrs, RuntimeContext *rt) const {
-  Tensor output;
-  output.data_type = X.data_type;
-  output.shape = X.shape;
-  output.data.assign(X.size_bytes(), 0);
+  Tensor output = rt ? rt->MakeOutputTensor(0, X.data_type, X.shape, X.size_bytes())
+                     : MakeOutputTensor(X.data_type, X.shape, X.size_bytes(), nullptr);
   const Tensor *pos =
       position_ids.shape.empty() && position_ids.size_bytes() == 0 && position_ids.data_type == 0
           ? nullptr
@@ -76,15 +74,20 @@ void RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache, const
     EXT_ENFORCE_INVALID(output.data_type == X.data_type && output.shape == X.shape,
                         "kernel::RotaryEmbedding: output buffer has mismatched type or shape.");
     const int32_t target_dtype = X.data_type;
-    const Tensor X_f = PromoteToFloat32(X);
-    const Tensor cos_f = PromoteToFloat32(cos_cache);
-    const Tensor sin_f = PromoteToFloat32(sin_cache);
+    RuntimeContext scratch_rt(
+        rt ? rt->kernel_ctx() : ctx_,
+        RuntimeContextOptions{.allocator = rt ? rt->execution_allocator() : nullptr});
+    RuntimeContext *compute_rt = rt ? &scratch_rt : nullptr;
+    const Tensor X_f = PromoteToFloat32(X, compute_rt);
+    const Tensor cos_f = PromoteToFloat32(cos_cache, compute_rt);
+    const Tensor sin_f = PromoteToFloat32(sin_cache, compute_rt);
     const size_t out_f_n_bytes = static_cast<size_t>(X.element_count()) * sizeof(float);
-    RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
     Tensor out_f =
-        MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), X.shape, out_f_n_bytes, allocator);
+        rt ? rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT), X.shape, out_f_n_bytes)
+           : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), X.shape, out_f_n_bytes,
+                              nullptr);
     (*this)(X_f, cos_f, sin_f, position_ids, attrs, out_f, rt);
-    Tensor demoted = DemoteFromFloat32(out_f, target_dtype);
+    Tensor demoted = DemoteFromFloat32(out_f, target_dtype, compute_rt);
     EXT_ENFORCE_INVALID(output.size_bytes() == demoted.size_bytes(),
                         "kernel::RotaryEmbedding: output buffer has wrong byte size.");
     std::memcpy(output.mutable_bytes(), demoted.bytes(), demoted.size_bytes());

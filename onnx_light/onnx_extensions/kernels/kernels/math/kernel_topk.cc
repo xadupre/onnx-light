@@ -169,7 +169,7 @@ std::pair<Tensor, Tensor> TopK::operator()(const Tensor &x, int64_t k, int64_t a
                       ": k is larger than the axis dimension.");
 
   const Shape out_shape = MakeOutputShape(x.shape, resolved_axis, k);
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
   const int64_t out_count = [&] {
     int64_t n = 1;
     for (int64_t d : out_shape) {
@@ -178,11 +178,16 @@ std::pair<Tensor, Tensor> TopK::operator()(const Tensor &x, int64_t k, int64_t a
     return n;
   }();
   Tensor values =
-      MakeOutputTensor(x.data_type, out_shape,
-                       static_cast<std::size_t>(out_count) * ElementSize(x.data_type), allocator);
+      rt ? rt->MakeOutputTensor(0, x.data_type, out_shape,
+                                static_cast<std::size_t>(out_count) * ElementSize(x.data_type))
+         : MakeOutputTensor(x.data_type, out_shape,
+                            static_cast<std::size_t>(out_count) * ElementSize(x.data_type),
+                            nullptr);
   Tensor indices =
-      MakeOutputTensor(static_cast<int32_t>(DataType::INT64), out_shape,
-                       static_cast<std::size_t>(out_count) * sizeof(int64_t), allocator);
+      rt ? rt->MakeOutputTensor(1, static_cast<int32_t>(DataType::INT64), out_shape,
+                                static_cast<std::size_t>(out_count) * sizeof(int64_t))
+         : MakeOutputTensor(static_cast<int32_t>(DataType::INT64), out_shape,
+                            static_cast<std::size_t>(out_count) * sizeof(int64_t), nullptr);
   RunTopK(x, k, resolved_axis, largest, sorted, values, indices, allocator);
   return std::pair<Tensor, Tensor>(std::move(values), std::move(indices));
 }
@@ -238,7 +243,7 @@ void TopK::Run(RuntimeContext &rt) {
   }
 
   onnx_kernels::kernel::TopK kernel(rt.kernel_ctx());
-  auto out = kernel(x, k, axis, largest, sorted);
+  auto out = kernel(x, k, axis, largest, sorted, &rt);
   SetOutput(node, 0, std::move(out.first), rt);
   SetOutput(node, 1, std::move(out.second), rt);
 }

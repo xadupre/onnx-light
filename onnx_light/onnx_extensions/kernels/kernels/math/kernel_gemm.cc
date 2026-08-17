@@ -185,10 +185,26 @@ void Gemm::Configure(const KernelTuningParameters &parameters) {
 Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
                         int64_t transA, int64_t transB, RuntimeContext *rt) const {
   switch (a.data_type) {
-  case DataType::FLOAT:
-    return GemmAlloc<float>(a, b, c, alpha, beta, transA, transB, tuning_, ctx_.allocator);
-  case DataType::DOUBLE:
-    return GemmAlloc<double>(a, b, c, alpha, beta, transA, transB, tuning_, ctx_.allocator);
+  case DataType::FLOAT: {
+    if (rt == nullptr) {
+      return GemmAlloc<float>(a, b, c, alpha, beta, transA, transB, tuning_);
+    }
+    const Shape shape{transA ? a.shape[1] : a.shape[0], transB ? b.shape[0] : b.shape[1]};
+    Tensor output = rt->MakeOutputTensor(0, DataType::FLOAT, shape,
+                                         static_cast<size_t>(shape[0] * shape[1]) * sizeof(float));
+    GemmInPlace<float>(a, b, c, alpha, beta, transA, transB, tuning_, output);
+    return output;
+  }
+  case DataType::DOUBLE: {
+    if (rt == nullptr) {
+      return GemmAlloc<double>(a, b, c, alpha, beta, transA, transB, tuning_);
+    }
+    const Shape shape{transA ? a.shape[1] : a.shape[0], transB ? b.shape[0] : b.shape[1]};
+    Tensor output = rt->MakeOutputTensor(0, DataType::DOUBLE, shape,
+                                         static_cast<size_t>(shape[0] * shape[1]) * sizeof(double));
+    GemmInPlace<double>(a, b, c, alpha, beta, transA, transB, tuning_, output);
+    return output;
+  }
   case DataType::FLOAT16:
   case DataType::BFLOAT16: {
     EXT_ENFORCE_INVALID(b.data_type == a.data_type, kGemmName,
@@ -203,7 +219,13 @@ Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float
       c_f = PromoteToFloat32(*c, rt, tuning_.conversion_parallel_minimum_elements);
       c_ptr = &c_f;
     }
-    Tensor y = GemmAlloc<float>(a_f, b_f, c_ptr, alpha, beta, transA, transB, tuning_);
+    const Shape shape{transA ? a.shape[1] : a.shape[0], transB ? b.shape[0] : b.shape[1]};
+    Tensor y =
+        rt ? rt->MakeTemporaryTensor(DataType::FLOAT, shape,
+                                     static_cast<size_t>(shape[0] * shape[1]) * sizeof(float))
+           : MakeOutputTensor(DataType::FLOAT, shape,
+                              static_cast<size_t>(shape[0] * shape[1]) * sizeof(float), nullptr);
+    GemmInPlace<float>(a_f, b_f, c_ptr, alpha, beta, transA, transB, tuning_, y);
     return DemoteFromFloat32(y, a.data_type, rt, tuning_.conversion_parallel_minimum_elements);
   }
   default:

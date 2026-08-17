@@ -64,25 +64,30 @@ void SwiGLU::RegisterTuningSchemas() {
 }
 
 Tensor SwiGLU::operator()(const Tensor &a, const Tensor &b, float alpha, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    const Shape out_shape = detail::BroadcastShape("kernel::SwiGLU", a.shape, b.shape);
+    const int64_t out_count = out_shape.product();
+    Tensor output = rt->MakeOutputTensor(0, a.data_type, out_shape,
+                                         static_cast<size_t>(out_count) * ElementSize(a.data_type));
+    (*this)(a, b, alpha, output);
+    return output;
+  }
   RequireEqualShapes(a, b);
   const int64_t grain = tuning().parallel_minimum_elements;
   switch (a.data_type) {
   case DataType::FLOAT:
-    return SwiGLUAlloc<float>("FLOAT", DataType::FLOAT, a, b, alpha, grain,
-                              rt ? rt->allocator() : nullptr);
+    return SwiGLUAlloc<float>("FLOAT", DataType::FLOAT, a, b, alpha, grain, nullptr);
   case DataType::DOUBLE:
     return SwiGLUAlloc<double>("DOUBLE", DataType::DOUBLE, a, b, static_cast<double>(alpha), grain,
-                               rt ? rt->allocator() : nullptr);
+                               nullptr);
   case DataType::FLOAT16:
     return detail::BinaryHalfElementwiseAlloc(
         kName, "FLOAT16", DataType::FLOAT16, a, b, Float16BitsToFloat, FloatToFloat16Bits,
-        [alpha](float x, float y) { return SwiGLUOp<float>(x, y, alpha); },
-        rt ? rt->allocator() : nullptr, grain);
+        [alpha](float x, float y) { return SwiGLUOp<float>(x, y, alpha); }, nullptr, grain);
   case DataType::BFLOAT16:
     return detail::BinaryHalfElementwiseAlloc(
         kName, "BFLOAT16", DataType::BFLOAT16, a, b, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-        [alpha](float x, float y) { return SwiGLUOp<float>(x, y, alpha); },
-        rt ? rt->allocator() : nullptr, grain);
+        [alpha](float x, float y) { return SwiGLUOp<float>(x, y, alpha); }, nullptr, grain);
   default:
     EXT_THROW_INVALID(kName, ": unsupported data type ", a.data_type, kSupportedTypesMsg);
   }

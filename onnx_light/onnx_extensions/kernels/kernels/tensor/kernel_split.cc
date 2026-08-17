@@ -87,9 +87,9 @@ Tensors Split::operator()(const Tensor &input, int64_t axis, std::span<const int
 
   Tensors outputs;
   outputs.reserve(sizes.size());
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   size_t offset = 0; // byte offset within each "row" of the input.
-  for (int64_t size : sizes) {
+  for (std::size_t output_slot = 0; output_slot < sizes.size(); ++output_slot) {
+    const int64_t size = sizes[output_slot];
     onnx_kernels::Shape out_shape = input.shape;
     out_shape[static_cast<size_t>(resolved_axis)] = size;
     int64_t total = 1;
@@ -97,7 +97,9 @@ Tensors Split::operator()(const Tensor &input, int64_t axis, std::span<const int
       total *= d;
     }
     const size_t out_n_bytes = static_cast<size_t>(total) * elem_size;
-    Tensor out = MakeOutputTensor(input.data_type, out_shape, out_n_bytes, allocator);
+    Tensor out = rt ? rt->MakeOutputTensor(static_cast<int>(output_slot), input.data_type,
+                                           out_shape, out_n_bytes)
+                    : MakeOutputTensor(input.data_type, out_shape, out_n_bytes, nullptr);
     const size_t out_row_bytes = static_cast<size_t>(size) * inner_bytes;
     for (int64_t o = 0; o < outer; ++o) {
       std::memcpy(out.mutable_bytes() + static_cast<size_t>(o) * out_row_bytes,

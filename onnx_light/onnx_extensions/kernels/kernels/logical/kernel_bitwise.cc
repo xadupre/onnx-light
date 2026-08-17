@@ -142,8 +142,16 @@ void BitwiseAnd::RegisterTuningSchemas() {
 }
 
 Tensor BitwiseAnd::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    const Shape out_shape = detail::BroadcastShape("kernel::BitwiseAnd", x.shape, y.shape);
+    const int64_t out_count = out_shape.product();
+    Tensor output = rt->MakeOutputTensor(0, x.data_type, out_shape,
+                                         static_cast<size_t>(out_count) * ElementSize(x.data_type));
+    (*this)(x, y, output);
+    return output;
+  }
   return BitwiseBinAllocDispatch(kBitwiseAndName, x, y, kAndFn, tuning().parallel_minimum_elements,
-                                 rt ? rt->allocator() : nullptr);
+                                 nullptr);
 }
 
 void BitwiseAnd::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
@@ -162,8 +170,16 @@ void BitwiseOr::RegisterTuningSchemas() {
 }
 
 Tensor BitwiseOr::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    const Shape out_shape = detail::BroadcastShape("kernel::BitwiseOr", x.shape, y.shape);
+    const int64_t out_count = out_shape.product();
+    Tensor output = rt->MakeOutputTensor(0, x.data_type, out_shape,
+                                         static_cast<size_t>(out_count) * ElementSize(x.data_type));
+    (*this)(x, y, output);
+    return output;
+  }
   return BitwiseBinAllocDispatch(kBitwiseOrName, x, y, kOrFn, tuning().parallel_minimum_elements,
-                                 rt ? rt->allocator() : nullptr);
+                                 nullptr);
 }
 
 void BitwiseOr::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
@@ -183,8 +199,16 @@ void BitwiseXor::RegisterTuningSchemas() {
 }
 
 Tensor BitwiseXor::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    const Shape out_shape = detail::BroadcastShape("kernel::BitwiseXor", x.shape, y.shape);
+    const int64_t out_count = out_shape.product();
+    Tensor output = rt->MakeOutputTensor(0, x.data_type, out_shape,
+                                         static_cast<size_t>(out_count) * ElementSize(x.data_type));
+    (*this)(x, y, output);
+    return output;
+  }
   return BitwiseBinAllocDispatch(kBitwiseXorName, x, y, kXorFn, tuning().parallel_minimum_elements,
-                                 rt ? rt->allocator() : nullptr);
+                                 nullptr);
 }
 
 void BitwiseXor::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
@@ -196,23 +220,29 @@ void BitwiseXor::operator()(const Tensor &x, const Tensor &y, Tensor &output) co
 // BitwiseNot (unary)
 // ---------------------------------------------------------------------------
 Tensor BitwiseNot::operator()(const Tensor &x, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    Tensor output = rt->MakeOutputTensor(
+        0, x.data_type, x.shape, static_cast<size_t>(x.element_count()) * ElementSize(x.data_type));
+    (*this)(x, output);
+    return output;
+  }
   switch (x.data_type) {
   case DataType::INT8:
-    return BitwiseNotAlloc<int8_t>("INT8", DataType::INT8, x, rt ? rt->allocator() : nullptr);
+    return BitwiseNotAlloc<int8_t>("INT8", DataType::INT8, x, nullptr);
   case DataType::INT16:
-    return BitwiseNotAlloc<int16_t>("INT16", DataType::INT16, x, rt ? rt->allocator() : nullptr);
+    return BitwiseNotAlloc<int16_t>("INT16", DataType::INT16, x, nullptr);
   case DataType::INT32:
-    return BitwiseNotAlloc<int32_t>("INT32", DataType::INT32, x, rt ? rt->allocator() : nullptr);
+    return BitwiseNotAlloc<int32_t>("INT32", DataType::INT32, x, nullptr);
   case DataType::INT64:
-    return BitwiseNotAlloc<int64_t>("INT64", DataType::INT64, x, rt ? rt->allocator() : nullptr);
+    return BitwiseNotAlloc<int64_t>("INT64", DataType::INT64, x, nullptr);
   case DataType::UINT8:
-    return BitwiseNotAlloc<uint8_t>("UINT8", DataType::UINT8, x, rt ? rt->allocator() : nullptr);
+    return BitwiseNotAlloc<uint8_t>("UINT8", DataType::UINT8, x, nullptr);
   case DataType::UINT16:
-    return BitwiseNotAlloc<uint16_t>("UINT16", DataType::UINT16, x, rt ? rt->allocator() : nullptr);
+    return BitwiseNotAlloc<uint16_t>("UINT16", DataType::UINT16, x, nullptr);
   case DataType::UINT32:
-    return BitwiseNotAlloc<uint32_t>("UINT32", DataType::UINT32, x, rt ? rt->allocator() : nullptr);
+    return BitwiseNotAlloc<uint32_t>("UINT32", DataType::UINT32, x, nullptr);
   case DataType::UINT64:
-    return BitwiseNotAlloc<uint64_t>("UINT64", DataType::UINT64, x, rt ? rt->allocator() : nullptr);
+    return BitwiseNotAlloc<uint64_t>("UINT64", DataType::UINT64, x, nullptr);
   default:
     ThrowUnsupportedBitwise(kBitwiseNotName, x.data_type);
   }

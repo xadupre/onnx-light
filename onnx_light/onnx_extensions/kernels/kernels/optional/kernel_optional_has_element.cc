@@ -17,8 +17,10 @@ namespace {
 // by the runtime context allocator when one is attached.
 Tensor MakeScalarBool(bool value, RuntimeContext *rt) {
   const size_t out_n_bytes = 1;
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), onnx_kernels::Shape{},
-                                out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::BOOL),
+                                          onnx_kernels::Shape{}, out_n_bytes)
+                   : MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), onnx_kernels::Shape{},
+                                      out_n_bytes, nullptr));
   *out.mutable_bytes() = value ? uint8_t{1} : uint8_t{0};
   return out;
 }

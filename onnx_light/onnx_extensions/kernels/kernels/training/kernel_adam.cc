@@ -196,8 +196,24 @@ void Adam::Run(RuntimeContext &rt) {
   const float norm_coefficient_post =
       GetAttributeFloatOrDefault(node, "norm_coefficient_post", 0.0f);
   onnx_kernels::kernel::Adam k(rt.kernel_ctx());
-  Tensors outs =
-      k(R, T, Xs, Gs, Vs, Hs, alpha, beta, epsilon, norm_coefficient, norm_coefficient_post);
+  Tensors outs;
+  outs.reserve(static_cast<size_t>(3 * n));
+  for (int64_t i = 0; i < n; ++i) {
+    const Tensor &X = Xs[static_cast<size_t>(i)];
+    outs.push_back(
+        rt.MakeOutputTensor(static_cast<int>(i), DataType::FLOAT, X.shape, X.size_bytes()));
+  }
+  for (int64_t i = 0; i < n; ++i) {
+    const Tensor &V = Vs[static_cast<size_t>(i)];
+    outs.push_back(
+        rt.MakeOutputTensor(static_cast<int>(n + i), DataType::FLOAT, V.shape, V.size_bytes()));
+  }
+  for (int64_t i = 0; i < n; ++i) {
+    const Tensor &H = Hs[static_cast<size_t>(i)];
+    outs.push_back(
+        rt.MakeOutputTensor(static_cast<int>(2 * n + i), DataType::FLOAT, H.shape, H.size_bytes()));
+  }
+  k(R, T, Xs, Gs, Vs, Hs, outs, alpha, beta, epsilon, norm_coefficient, norm_coefficient_post);
   for (int64_t i = 0; i < 3 * n; ++i) {
     SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]), rt.tensors());
   }

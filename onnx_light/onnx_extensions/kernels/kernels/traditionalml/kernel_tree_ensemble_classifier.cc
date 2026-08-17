@@ -113,7 +113,7 @@ template <typename T>
 std::pair<Tensor, Tensor>
 TreeEnsembleClassifier::operator()(const Tensor &x, const std::vector<int64_t> &classlabels_int64s,
                                    const std::vector<float> &base_values,
-                                   const std::string &post_transform) const {
+                                   const std::string &post_transform, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!classlabels_int64s.empty(),
                       "kernel::TreeEnsembleClassifier: classlabels_int64s must not be empty.");
 
@@ -124,9 +124,10 @@ TreeEnsembleClassifier::operator()(const Tensor &x, const std::vector<int64_t> &
   const int64_t n_classes = static_cast<int64_t>(classlabels_int64s.size());
   const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
 
-  Tensor z = MakeOutputTensor(DataType::FLOAT, {sample_count, n_classes},
-                              static_cast<size_t>(sample_count * n_classes) * sizeof(float),
-                              ctx_.allocator);
+  const size_t score_n_bytes = static_cast<size_t>(sample_count * n_classes) * sizeof(float);
+  Tensor z = rt ? rt->MakeOutputTensor(1, DataType::FLOAT, {sample_count, n_classes}, score_n_bytes)
+                : MakeOutputTensor(DataType::FLOAT, {sample_count, n_classes}, score_n_bytes,
+                                   ctx_.allocator);
   float *scores = z.AsFloat();
   ComputeClassifierScores(node_map_, leaf_map_, tree_ids_, x_values.data(), sample_count,
                           feature_count, n_classes, base_values, post_transform, scores);
@@ -137,7 +138,12 @@ TreeEnsembleClassifier::operator()(const Tensor &x, const std::vector<int64_t> &
     labels[static_cast<size_t>(n)] = classlabels_int64s[static_cast<size_t>(idx)];
   }
 
-  Tensor y = Tensor::FromInt64("", {sample_count}, labels, ctx_.allocator);
+  Tensor y = rt ? rt->MakeOutputTensor(0, DataType::INT64, {sample_count},
+                                       static_cast<size_t>(sample_count) * sizeof(int64_t))
+                : Tensor::FromInt64("", {sample_count}, labels, ctx_.allocator);
+  if (rt != nullptr) {
+    std::copy(labels.begin(), labels.end(), y.AsInt64());
+  }
   return std::make_pair(std::move(y), std::move(z));
 }
 
@@ -145,7 +151,7 @@ template <typename T>
 std::pair<Tensor, Tensor>
 TreeEnsembleClassifier::operator()(const Tensor &x, const ParamStrings &classlabels_strings,
                                    const std::vector<float> &base_values,
-                                   const std::string &post_transform) const {
+                                   const std::string &post_transform, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!classlabels_strings.empty(),
                       "kernel::TreeEnsembleClassifier: classlabels_strings must not be empty.");
 
@@ -156,9 +162,10 @@ TreeEnsembleClassifier::operator()(const Tensor &x, const ParamStrings &classlab
   const int64_t n_classes = static_cast<int64_t>(classlabels_strings.size());
   const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
 
-  Tensor z = MakeOutputTensor(DataType::FLOAT, {sample_count, n_classes},
-                              static_cast<size_t>(sample_count * n_classes) * sizeof(float),
-                              ctx_.allocator);
+  const size_t score_n_bytes = static_cast<size_t>(sample_count * n_classes) * sizeof(float);
+  Tensor z = rt ? rt->MakeOutputTensor(1, DataType::FLOAT, {sample_count, n_classes}, score_n_bytes)
+                : MakeOutputTensor(DataType::FLOAT, {sample_count, n_classes}, score_n_bytes,
+                                   ctx_.allocator);
   float *scores = z.AsFloat();
   ComputeClassifierScores(node_map_, leaf_map_, tree_ids_, x_values.data(), sample_count,
                           feature_count, n_classes, base_values, post_transform, scores);
@@ -169,16 +176,21 @@ TreeEnsembleClassifier::operator()(const Tensor &x, const ParamStrings &classlab
     labels[static_cast<size_t>(n)] = classlabels_strings[static_cast<size_t>(idx)];
   }
 
-  Tensor y = Tensor::FromStrings("", {sample_count}, labels);
+  Tensor y = rt ? rt->MakeOutputTensor(0, DataType::STRING, {sample_count}, 0)
+                : Tensor::FromStrings("", {sample_count}, labels);
+  if (rt != nullptr) {
+    y.string_data = std::move(labels);
+  }
   return std::make_pair(std::move(y), std::move(z));
 }
 
 #define ONNX_LIGHT_INSTANTIATE_TREE_CLASSIFIER(T)                                                  \
   template std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()<T>(                        \
       const Tensor &, const std::vector<int64_t> &, const std::vector<float> &,                    \
-      const std::string &) const;                                                                  \
+      const std::string &, RuntimeContext *) const;                                                \
   template std::pair<Tensor, Tensor> TreeEnsembleClassifier::operator()<T>(                        \
-      const Tensor &, const ParamStrings &, const std::vector<float> &, const std::string &) const
+      const Tensor &, const ParamStrings &, const std::vector<float> &, const std::string &,       \
+      RuntimeContext *) const
 
 ONNX_LIGHT_INSTANTIATE_TREE_CLASSIFIER(float);
 ONNX_LIGHT_INSTANTIATE_TREE_CLASSIFIER(double);
@@ -227,9 +239,10 @@ void TreeEnsembleClassifier::Run(RuntimeContext &rt) {
       DispatchTreeEnsembleClassicByDataType(x, "TreeEnsembleClassifier", [&](auto *tag) {
         using T = std::remove_pointer_t<decltype(tag)>;
         (void)tag;
-        return use_strings
-                   ? cls.template operator()<T>(x, classlabels_strings, base_values, post_transform)
-                   : cls.template operator()<T>(x, classlabels_int64s, base_values, post_transform);
+        return use_strings ? cls.template operator()<T>(x, classlabels_strings, base_values,
+                                                        post_transform, &rt)
+                           : cls.template operator()<T>(x, classlabels_int64s, base_values,
+                                                        post_transform, &rt);
       });
   SetOutput(node, 0, std::move(yz.first), rt);
   SetOutput(node, 1, std::move(yz.second), rt);

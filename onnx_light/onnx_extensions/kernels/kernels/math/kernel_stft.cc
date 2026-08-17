@@ -128,8 +128,8 @@ Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Te
   Shape out_shape = {batch_size, n_frames, dft_unique_bins, 2};
   int64_t out_total = batch_size * n_frames * dft_unique_bins * 2;
   const size_t output_n_bytes = static_cast<std::size_t>(out_total) * ElementSize(signal.data_type);
-  Tensor output =
-      MakeOutputTensor(signal.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor output = rt ? rt->MakeOutputTensor(0, signal.data_type, out_shape, output_n_bytes)
+                     : MakeOutputTensor(signal.data_type, out_shape, output_n_bytes, nullptr);
 
   if (window != nullptr) {
     EXT_ENFORCE_INVALID(window->data_type == signal.data_type, kSTFTName,

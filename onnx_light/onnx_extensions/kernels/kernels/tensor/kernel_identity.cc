@@ -13,8 +13,9 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor Identity::operator()(const Tensor &input, RuntimeContext *rt) const {
-  Tensor output = MakeOutputTensor(input.data_type, input.shape, input.size_bytes(),
-                                   rt ? rt->allocator() : nullptr);
+  Tensor output =
+      (rt ? rt->MakeOutputTensor(0, input.data_type, input.shape, input.size_bytes())
+          : MakeOutputTensor(input.data_type, input.shape, input.size_bytes(), nullptr));
   output.name = input.name;
   if (input.data_type == static_cast<int32_t>(DataType::STRING)) {
     output.string_data = input.string_data;

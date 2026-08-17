@@ -164,8 +164,8 @@ Tensor DeformConv::operator()(const Tensor &x, const Tensor &w, const Tensor &of
     total *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(float);
-  Tensor out =
-      MakeOutputTensor(x.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(x.data_type, out_shape, out_n_bytes, nullptr);
   (*this)(x, w, offset, b, mask, resolved, out);
   return out;
 }
@@ -285,7 +285,7 @@ void DeformConv::Run(RuntimeContext &rt) {
   onnx_kernels::kernel::DeformConv k(rt.kernel_ctx());
   SetOutput(
       node, 0,
-      k(x, w, offset, b != nullptr ? *b : Tensor{}, mask != nullptr ? *mask : Tensor{}, attrs),
+      k(x, w, offset, b != nullptr ? *b : Tensor{}, mask != nullptr ? *mask : Tensor{}, attrs, &rt),
       rt.tensors());
 }
 

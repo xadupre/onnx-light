@@ -1464,24 +1464,25 @@ Tensor ImageDecoder::operator()(const Tensor &encoded_stream, const std::string 
   int64_t height = 0;
   int64_t width = 0;
   RawByteBuffer pixels;
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
   if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels, allocator) ||
       TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels, allocator) ||
       TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels, allocator)) {
-    if (allocator == nullptr) {
+    if (rt == nullptr) {
       return Tensor::FromRawBytes("", DataType::UINT8, {height, width, channels},
                                   std::move(pixels));
     }
     Tensor output =
-        MakeOutputTensor(DataType::UINT8, {height, width, channels}, pixels.size(), allocator);
+        rt->MakeOutputTensor(0, DataType::UINT8, {height, width, channels}, pixels.size());
     std::memcpy(output.mutable_bytes(), pixels.data(), pixels.size());
     return output;
   }
 
   // Per the ONNX schema, fall back to an empty ``(0, 0, C)`` matrix when
   // the bytestream cannot be decoded.
-  return Tensor::FromUint8("", {0, 0, channels}, {}, allocator);
+  return rt ? rt->MakeOutputTensor(0, DataType::UINT8, {0, 0, channels}, 0)
+            : Tensor::FromUint8("", {0, 0, channels}, {});
 }
 
 void ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &pixel_format,

@@ -55,8 +55,8 @@ Tensor SequenceConstruct::operator()(const Tensors &inputs, RuntimeContext *rt) 
   ValidateInputsAndComputeShape(inputs, stacked_shape, total_bytes);
   const int32_t out_dtype = inputs.empty() ? 0 : inputs[0].data_type;
   const size_t out_n_bytes = total_bytes;
-  Tensor out =
-      MakeOutputTensor(out_dtype, stacked_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, out_dtype, stacked_shape, out_n_bytes)
+                   : MakeOutputTensor(out_dtype, stacked_shape, out_n_bytes, nullptr));
   (*this)(inputs, out);
   return out;
 }

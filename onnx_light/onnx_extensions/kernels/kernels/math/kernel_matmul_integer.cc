@@ -220,9 +220,11 @@ Tensor MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor 
     total *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(int32_t);
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::INT32), out_shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
-  ComputeMatMulInteger(a, b, a_zero_point, b_zero_point, out, rt ? rt->allocator() : nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::INT32), out_shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::INT32), out_shape, out_n_bytes, nullptr);
+  ComputeMatMulInteger(a, b, a_zero_point, b_zero_point, out,
+                       rt ? rt->execution_allocator() : nullptr);
   return out;
 }
 

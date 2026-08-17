@@ -55,7 +55,7 @@ onnx_kernels::Shape ComputeTileOutputShape(const onnx_kernels::Shape &in_shape,
 } // namespace
 
 Tensor Tile::operator()(const Tensor &input, const Tensor &repeats, RuntimeContext *rt) const {
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
   const Tensor reps = ReadTileRepeatsInput(repeats, input.shape.size(), allocator);
   const onnx_kernels::Shape out_shape = ComputeTileOutputShape(input.shape, reps.As<int64_t>());
   const std::size_t elem_size = ElementSize(input.data_type);
@@ -64,7 +64,8 @@ Tensor Tile::operator()(const Tensor &input, const Tensor &repeats, RuntimeConte
     total_elements *= d;
   }
   const size_t out_n_bytes = static_cast<std::size_t>(total_elements) * elem_size;
-  Tensor out = MakeOutputTensor(input.data_type, out_shape, out_n_bytes, allocator);
+  Tensor out = rt ? rt->MakeOutputTensor(0, input.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(input.data_type, out_shape, out_n_bytes, nullptr);
   (*this)(input, repeats, out);
   return out;
 }

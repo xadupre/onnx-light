@@ -106,8 +106,9 @@ Tensor ReduceProd::operator()(const Tensor &data, bool keepdims, bool noop_with_
     out_count *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(float);
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes, nullptr);
   (*this)(data, keepdims, noop_with_empty_axes, out);
   return out;
 }
@@ -165,8 +166,9 @@ Tensor ReduceProd::operator()(const Tensor &data, const Tensor &axes, bool keepd
     out_count *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(float);
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes, nullptr);
   (*this)(data, axes, keepdims, noop_with_empty_axes, out);
   return out;
 }

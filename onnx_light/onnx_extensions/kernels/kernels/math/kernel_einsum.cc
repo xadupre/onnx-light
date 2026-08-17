@@ -384,8 +384,9 @@ Tensor EinsumAlloc(const Tensors &inputs, const EinsumPlan &plan, int32_t dtype,
     out_count *= d;
   }
   const size_t z_n_bytes = static_cast<std::size_t>(out_count) * sizeof(T);
-  Tensor z = MakeOutputTensor(dtype, plan.output_shape, z_n_bytes, rt ? rt->allocator() : nullptr);
-  RunEinsum<T>(inputs, plan, z.As<T>(), rt ? rt->allocator() : nullptr);
+  Tensor z = rt ? rt->MakeOutputTensor(0, dtype, plan.output_shape, z_n_bytes)
+                : MakeOutputTensor(dtype, plan.output_shape, z_n_bytes, nullptr);
+  RunEinsum<T>(inputs, plan, z.As<T>(), rt ? rt->execution_allocator() : nullptr);
   return z;
 }
 

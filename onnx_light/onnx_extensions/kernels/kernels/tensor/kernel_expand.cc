@@ -108,8 +108,8 @@ Tensor Expand::operator()(const Tensor &input, const Tensor &shape, RuntimeConte
   const onnx_kernels::Shape target = ReadExpandShapeInput(shape);
   const ExpandLayout layout = ComputeExpandLayout(input, target);
   const size_t out_n_bytes = static_cast<std::size_t>(layout.total_elements) * layout.elem_size;
-  Tensor out = MakeOutputTensor(input.data_type, layout.out_shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, input.data_type, layout.out_shape, out_n_bytes)
+                   : MakeOutputTensor(input.data_type, layout.out_shape, out_n_bytes, nullptr));
   (*this)(input, shape, out);
   return out;
 }

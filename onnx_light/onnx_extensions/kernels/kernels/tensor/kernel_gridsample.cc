@@ -287,11 +287,10 @@ template <typename Fn> void ForEachIndex(const onnx_kernels::Shape &shape, int64
 // Main per-channel computation, templated on the element type ``T``.
 template <typename T>
 void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, bool align_corners,
-              RawBuffer &out_bytes, const onnx_kernels::Shape &out_shape,
-              RawBufferAllocator *allocator) {
+              Tensor &output, const onnx_kernels::Shape &out_shape, RawBufferAllocator *allocator) {
   const T *x_data = reinterpret_cast<const T *>(X.bytes());
   const T *grid_data = reinterpret_cast<const T *>(grid.bytes());
-  T *y_data = reinterpret_cast<T *>(out_bytes.data());
+  T *y_data = output.As<T>();
 
   const int64_t N = X.shape[0];
   const int64_t C = X.shape[1];
@@ -395,24 +394,24 @@ void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, b
 } // namespace
 
 Tensor GridSample::operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs,
-                              RuntimeContext * /*rt*/) const {
+                              RuntimeContext *rt) const {
   ValidateInputs(X, grid);
-  Tensor out;
-  out.data_type = X.data_type;
-  out.shape = ComputeOutputShape(X, grid);
+  const onnx_kernels::Shape out_shape = ComputeOutputShape(X, grid);
   int64_t total = 1;
-  for (int64_t d : out.shape) {
+  for (int64_t d : out_shape) {
     total *= d;
   }
   const size_t elt =
       X.data_type == static_cast<int32_t>(DataType::FLOAT) ? sizeof(float) : sizeof(double);
-  out.data.assign(static_cast<size_t>(total) * elt, 0);
-  (*this)(X, grid, attrs, out);
+  const std::size_t n_bytes = static_cast<size_t>(total) * elt;
+  Tensor out = rt ? rt->MakeOutputTensor(0, X.data_type, out_shape, n_bytes)
+                  : MakeOutputTensor(X.data_type, out_shape, n_bytes, nullptr);
+  (*this)(X, grid, attrs, out, rt ? rt->execution_allocator() : nullptr);
   return out;
 }
 
 void GridSample::operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs,
-                            Tensor &output) const {
+                            Tensor &output, RawBufferAllocator *allocator) const {
   (void)ctx_;
   ValidateInputs(X, grid);
   const onnx_kernels::Shape expected_shape = ComputeOutputShape(X, grid);
@@ -437,12 +436,10 @@ void GridSample::operator()(const Tensor &X, const Tensor &grid, const Attribute
     return;
   }
 
-  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
-
   if (X.data_type == static_cast<int32_t>(DataType::FLOAT)) {
-    RunTyped<float>(X, grid, interp, pad, align_corners, output.data, expected_shape, allocator);
+    RunTyped<float>(X, grid, interp, pad, align_corners, output, expected_shape, allocator);
   } else {
-    RunTyped<double>(X, grid, interp, pad, align_corners, output.data, expected_shape, allocator);
+    RunTyped<double>(X, grid, interp, pad, align_corners, output, expected_shape, allocator);
   }
 }
 

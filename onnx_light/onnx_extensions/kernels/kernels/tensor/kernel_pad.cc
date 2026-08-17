@@ -264,9 +264,9 @@ Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *con
     total *= d;
   }
   const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
-  Tensor out =
-      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
-  PadInto(data, pads, constant_value, axes, mode, out, rt ? rt->allocator() : nullptr);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
+                   : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr));
+  PadInto(data, pads, constant_value, axes, mode, out, rt ? rt->execution_allocator() : nullptr);
   return out;
 }
 

@@ -147,8 +147,8 @@ Tensor ConcatFromSequence::operator()(const Tensors &inputs, int64_t axis, int64
   const size_t total_bytes = static_cast<size_t>(elem_size) *
                              static_cast<size_t>(PrefixProduct(out_shape, out_shape.size()));
   const size_t out_n_bytes = total_bytes;
-  Tensor out =
-      MakeOutputTensor(inputs[0].data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, inputs[0].data_type, out_shape, out_n_bytes)
+                   : MakeOutputTensor(inputs[0].data_type, out_shape, out_n_bytes, nullptr));
   if (new_axis == 1) {
     // Stacking with identical input shapes is equivalent to concatenating
     // along ``resolved_axis`` after inserting a unit dim at that position

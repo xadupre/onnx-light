@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/runtime_context.h"
@@ -12,6 +13,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <vector>
 
@@ -931,6 +933,39 @@ TEST(KernelClass, AttentionUsesAllocatorForScratchBuffers) {
   const double p1 = e1 / (e0 + e1);
   EXPECT_NEAR(r.Y.AsFloat()[0], static_cast<float>(p0 * 1.0 + p1 * 3.0), 1e-6);
   EXPECT_NEAR(r.Y.AsFloat()[1], static_cast<float>(p0 * 2.0 + p1 * 4.0), 1e-6);
+}
+
+TEST(KernelClass, AttentionHalfPrecisionKeepsOmittedOutputsOutOfIOArena) {
+  auto make_float16 = [](const core::runtime::Shape &shape, const std::vector<float> &values) {
+    core::runtime::RawByteBuffer bytes(values.size() * sizeof(uint16_t));
+    for (size_t i = 0; i < values.size(); ++i) {
+      const uint16_t bits = core::runtime::FloatToFloat16Bits(values[i]);
+      std::memcpy(bytes.data() + i * sizeof(uint16_t), &bits, sizeof(bits));
+    }
+    return Tensor::FromRawBytes("", static_cast<int32_t>(core::runtime::DataType::FLOAT16), shape,
+                                std::move(bytes));
+  };
+
+  const Tensor Q = make_float16({1, 1, 1, 2}, {1.0f, 0.0f});
+  const Tensor K = make_float16({1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  const Tensor V = make_float16({1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+  SimpleRawBufferAllocator execution_alloc(32);
+  SimpleRawBufferAllocator io_alloc(8);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
+                                                         .io_allocator = &io_alloc});
+  rt.set_output_slot_io_roles({true});
+  rt.SetActiveAllocator(&io_alloc);
+
+  const Attention attention{AttentionKernelContext()};
+  Attention::Attributes attrs;
+  Attention::Result r = attention(Q, K, V, attrs, nullptr, nullptr, nullptr, nullptr, &rt);
+
+  EXPECT_EQ(r.Y.allocation_owner(), &io_alloc);
+  EXPECT_EQ(r.present_key.allocation_owner(), &execution_alloc);
+  EXPECT_EQ(r.present_value.allocation_owner(), &execution_alloc);
+  EXPECT_EQ(r.qk_matmul_output.allocation_owner(), &execution_alloc);
+  EXPECT_EQ(io_alloc.PeakAllocatedSize(), 2 * sizeof(uint16_t));
 }
 
 TEST(KernelClass, AttentionExplicitScaleMatchesDefault) {

@@ -21,23 +21,23 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 std::pair<Tensor, Tensor> CausalConvWithState::operator()(const Tensor &input, const Tensor &weight,
                                                           const Tensor &bias,
                                                           const Tensor &past_state,
-                                                          const Attributes &attrs) const {
-  Tensor output;
-  output.data_type = input.data_type;
-  output.shape = input.shape;
-  output.data.assign(static_cast<size_t>(output.element_count()) * output.element_size(), 0);
+                                                          const Attributes &attrs,
+                                                          RuntimeContext *rt) const {
+  const size_t output_n_bytes = static_cast<size_t>(input.element_count()) * input.element_size();
+  Tensor output = rt ? rt->MakeOutputTensor(0, input.data_type, input.shape, output_n_bytes)
+                     : MakeOutputTensor(input.data_type, input.shape, output_n_bytes, nullptr);
 
   // present_state shape = (B, C, K - 1).
   const int64_t K = weight.shape.size() >= 3 ? weight.shape[2] : 0;
   const int64_t Km1 = K > 0 ? K - 1 : 0;
-  Tensor present_state;
-  present_state.data_type = input.data_type;
-  present_state.shape = {input.shape.empty() ? 0 : input.shape[0],
-                         input.shape.size() > 1 ? input.shape[1] : 0, Km1};
-  present_state.data.assign(static_cast<size_t>(present_state.shape[0]) *
-                                static_cast<size_t>(present_state.shape[1]) *
-                                static_cast<size_t>(Km1) * present_state.element_size(),
-                            0);
+  const Shape present_shape{input.shape.empty() ? 0 : input.shape[0],
+                            input.shape.size() > 1 ? input.shape[1] : 0, Km1};
+  const size_t present_n_bytes = static_cast<size_t>(present_shape[0]) *
+                                 static_cast<size_t>(present_shape[1]) * static_cast<size_t>(Km1) *
+                                 input.element_size();
+  Tensor present_state =
+      rt ? rt->MakeOutputTensor(1, input.data_type, present_shape, present_n_bytes)
+         : MakeOutputTensor(input.data_type, present_shape, present_n_bytes, nullptr);
 
   const Tensor *bias_ptr =
       bias.shape.empty() && bias.size_bytes() == 0 && bias.data_type == 0 ? nullptr : &bias;
@@ -198,7 +198,7 @@ void CausalConvWithState::Run(RuntimeContext &rt) {
 
   onnx_kernels::kernel::CausalConvWithState kernel(rt.kernel_ctx());
   auto [output, present_state] = kernel(input, weight, bias != nullptr ? *bias : Tensor{},
-                                        past_state != nullptr ? *past_state : Tensor{}, attrs);
+                                        past_state != nullptr ? *past_state : Tensor{}, attrs, &rt);
   SetOutput(node, 0, std::move(output), rt);
   SetOutput(node, 1, std::move(present_state), rt);
 }

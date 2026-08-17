@@ -230,7 +230,7 @@ bool IsLinearMode(const std::string &mode) { return mode == "linear" || mode == 
 Tensor Upsample::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
                             RuntimeContext *rt) const {
   const Tensor scales_in =
-      ReadUpsampleScales(scales, X.shape.size(), rt ? rt->allocator() : nullptr);
+      ReadUpsampleScales(scales, X.shape.size(), rt ? rt->execution_allocator() : nullptr);
   const float *scales_vec = scales_in.As<float>();
   const onnx_kernels::Shape out_shape = ComputeUpsampleOutputShape(X.shape, scales_vec);
   int64_t total_elements = 1;
@@ -238,8 +238,8 @@ Tensor Upsample::operator()(const Tensor &X, const Tensor &scales, const Attribu
     total_elements *= d;
   }
   const size_t output_n_bytes = PackedByteSize(X.data_type, total_elements);
-  Tensor output =
-      MakeOutputTensor(X.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor output = (rt ? rt->MakeOutputTensor(0, X.data_type, out_shape, output_n_bytes)
+                      : MakeOutputTensor(X.data_type, out_shape, output_n_bytes, nullptr));
   (*this)(X, scales, attrs, output);
   return output;
 }

@@ -56,17 +56,22 @@ void Fill(std::span<const K> input_keys, std::span<const V> input_values,
 
 template <typename K, typename V>
 Tensor DictVectorizer::operator()(std::span<const K> input_keys, std::span<const V> input_values,
-                                  const std::vector<K> &vocabulary, RuntimeContext * /*rt*/) const {
+                                  const std::vector<K> &vocabulary, RuntimeContext *rt) const {
   const int64_t c = static_cast<int64_t>(vocabulary.size());
   const onnx_kernels::Shape shape{c};
   if constexpr (std::is_same_v<V, std::string>) {
-    Tensor out = Tensor::FromStrings("", shape, std::vector<std::string>(vocabulary.size()));
+    Tensor out = rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::STRING), shape, 0)
+                    : Tensor::FromStrings("", shape, std::vector<std::string>(vocabulary.size()));
+    out.string_data.assign(vocabulary.size(), std::string());
     FillImpl(input_keys, input_values, vocabulary,
              [&out](size_t pos, const std::string &value) { out.string_data[pos] = value; });
     return out;
   } else {
-    Tensor out = MakeOutputTensor(static_cast<int32_t>(TensorElementType<V>::value), shape,
-                                  static_cast<size_t>(c) * sizeof(V), ctx_.allocator);
+    const size_t n_bytes = static_cast<size_t>(c) * sizeof(V);
+    Tensor out = rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(TensorElementType<V>::value),
+                                           shape, n_bytes)
+                    : MakeOutputTensor(static_cast<int32_t>(TensorElementType<V>::value), shape,
+                                       n_bytes, ctx_.allocator);
     // ``Fill`` writes only the vocabulary positions present in the input and
     // leaves the rest untouched, so the output must start zeroed. Allocator
     // storage is no longer zero-initialised, so clear it explicitly.
@@ -149,15 +154,15 @@ void DictVectorizer::Run(RuntimeContext &rt) {
     }
     switch (x_values.data_type) {
     case static_cast<int32_t>(DataType::INT64): {
-      y = dict.operator()<std::string, int64_t>(keys, TensorSpan<int64_t>(x_values), vocab);
+      y = dict.operator()<std::string, int64_t>(keys, TensorSpan<int64_t>(x_values), vocab, &rt);
       break;
     }
     case static_cast<int32_t>(DataType::FLOAT): {
-      y = dict.operator()<std::string, float>(keys, TensorSpan<float>(x_values), vocab);
+      y = dict.operator()<std::string, float>(keys, TensorSpan<float>(x_values), vocab, &rt);
       break;
     }
     case static_cast<int32_t>(DataType::DOUBLE): {
-      y = dict.operator()<std::string, double>(keys, TensorSpan<double>(x_values), vocab);
+      y = dict.operator()<std::string, double>(keys, TensorSpan<double>(x_values), vocab, &rt);
       break;
     }
     default:
@@ -176,16 +181,16 @@ void DictVectorizer::Run(RuntimeContext &rt) {
     }
     switch (x_values.data_type) {
     case static_cast<int32_t>(DataType::FLOAT): {
-      y = dict.operator()<int64_t, float>(keys, TensorSpan<float>(x_values), vocab);
+      y = dict.operator()<int64_t, float>(keys, TensorSpan<float>(x_values), vocab, &rt);
       break;
     }
     case static_cast<int32_t>(DataType::DOUBLE): {
-      y = dict.operator()<int64_t, double>(keys, TensorSpan<double>(x_values), vocab);
+      y = dict.operator()<int64_t, double>(keys, TensorSpan<double>(x_values), vocab, &rt);
       break;
     }
     case static_cast<int32_t>(DataType::STRING): {
       const std::vector<std::string> &values = x_values.AsStrings();
-      y = dict.operator()<int64_t, std::string>(keys, values, vocab);
+      y = dict.operator()<int64_t, std::string>(keys, values, vocab, &rt);
       break;
     }
     default:

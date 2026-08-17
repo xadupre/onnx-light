@@ -250,13 +250,13 @@ public:
 
   Tensor operator()(const Tensor &data, bool keepdims = true, bool noop_with_empty_axes = false,
                     RuntimeContext *rt = nullptr) const;
-  void operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
-                  Tensor &output) const;
+  void operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes, Tensor &output,
+                  RawBufferAllocator *temporary_allocator = nullptr) const;
 
   Tensor operator()(const Tensor &data, const Tensor &axes, bool keepdims = true,
                     bool noop_with_empty_axes = false, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &data, const Tensor &axes, bool keepdims, bool noop_with_empty_axes,
-                  Tensor &output) const;
+                  Tensor &output, RawBufferAllocator *temporary_allocator = nullptr) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 

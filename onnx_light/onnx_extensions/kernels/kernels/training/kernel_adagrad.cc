@@ -164,7 +164,19 @@ void Adagrad::Run(RuntimeContext &rt) {
   const float decay_factor = GetAttributeFloatOrDefault(node, "decay_factor", 0.0f);
   const float norm_coefficient = GetAttributeFloatOrDefault(node, "norm_coefficient", 0.0f);
   onnx_kernels::kernel::Adagrad k(rt.kernel_ctx());
-  Tensors outs = k(R, T, Xs, Gs, Hs, epsilon, decay_factor, norm_coefficient);
+  Tensors outs;
+  outs.reserve(static_cast<size_t>(2 * n));
+  for (int64_t i = 0; i < n; ++i) {
+    const Tensor &X = Xs[static_cast<size_t>(i)];
+    outs.push_back(
+        rt.MakeOutputTensor(static_cast<int>(i), DataType::FLOAT, X.shape, X.size_bytes()));
+  }
+  for (int64_t i = 0; i < n; ++i) {
+    const Tensor &H = Hs[static_cast<size_t>(i)];
+    outs.push_back(
+        rt.MakeOutputTensor(static_cast<int>(n + i), DataType::FLOAT, H.shape, H.size_bytes()));
+  }
+  k(R, T, Xs, Gs, Hs, outs, epsilon, decay_factor, norm_coefficient);
   for (int64_t i = 0; i < 2 * n; ++i) {
     SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]), rt.tensors());
   }

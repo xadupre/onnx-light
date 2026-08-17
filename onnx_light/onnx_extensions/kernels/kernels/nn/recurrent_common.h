@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_core/runtime/memory/simple_tensor.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <cstdint>
 #include <string>
 
@@ -32,7 +33,9 @@ core::runtime::Tensor RecurrentTransposeInitialState(const core::runtime::Tensor
 core::runtime::Tensor RecurrentPermuteYLayout1(const core::runtime::Tensor &y, int64_t seq_length,
                                                int64_t num_directions, int64_t batch_size,
                                                int64_t hidden_size,
-                                               core::runtime::RawBufferAllocator *allocator);
+                                               core::runtime::RawBufferAllocator *allocator,
+                                               core::runtime::RuntimeContext *rt = nullptr,
+                                               int output_slot = 0);
 
 // Permutes a hidden/cell state output (``Y_h`` or ``Y_c``) from the time-major
 // layout ``[num_directions, batch_size, hidden_size]`` to the batch-major
@@ -40,7 +43,9 @@ core::runtime::Tensor RecurrentPermuteYLayout1(const core::runtime::Tensor &y, i
 core::runtime::Tensor RecurrentPermuteStateLayout1(const core::runtime::Tensor &state,
                                                    int64_t num_directions, int64_t batch_size,
                                                    int64_t hidden_size,
-                                                   core::runtime::RawBufferAllocator *allocator);
+                                                   core::runtime::RawBufferAllocator *allocator,
+                                                   core::runtime::RuntimeContext *rt = nullptr,
+                                                   int output_slot = 0);
 
 } // namespace recurrent
 } // namespace kernel

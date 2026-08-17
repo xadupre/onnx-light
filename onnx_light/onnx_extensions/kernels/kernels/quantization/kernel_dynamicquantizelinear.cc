@@ -35,15 +35,20 @@ inline float SaturateUint8(float v) {
 
 std::tuple<Tensor, Tensor, Tensor> DynamicQuantizeLinear::operator()(const Tensor &x,
                                                                      RuntimeContext *rt) const {
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   const size_t y_n_bytes = static_cast<size_t>(x.element_count());
-  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::UINT8), x.shape, y_n_bytes, allocator);
+  Tensor y =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::UINT8), x.shape, y_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::UINT8), x.shape, y_n_bytes, nullptr);
   const size_t y_scale_n_bytes = sizeof(float);
-  Tensor y_scale = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), /*shape=*/{},
-                                    y_scale_n_bytes, allocator);
+  Tensor y_scale = rt ? rt->MakeOutputTensor(1, static_cast<int32_t>(DataType::FLOAT), /*shape=*/{},
+                                             y_scale_n_bytes)
+                      : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), /*shape=*/{},
+                                         y_scale_n_bytes, nullptr);
   const size_t y_zero_point_n_bytes = 1;
-  Tensor y_zero_point = MakeOutputTensor(static_cast<int32_t>(DataType::UINT8), /*shape=*/{},
-                                         y_zero_point_n_bytes, allocator);
+  Tensor y_zero_point = rt ? rt->MakeOutputTensor(2, static_cast<int32_t>(DataType::UINT8),
+                                                  /*shape=*/{}, y_zero_point_n_bytes)
+                           : MakeOutputTensor(static_cast<int32_t>(DataType::UINT8), /*shape=*/{},
+                                              y_zero_point_n_bytes, nullptr);
   (*this)(x, y, y_scale, y_zero_point);
   return std::tuple<Tensor, Tensor, Tensor>(std::move(y), std::move(y_scale),
                                             std::move(y_zero_point));
@@ -130,7 +135,7 @@ void DynamicQuantizeLinear::Run(RuntimeContext &rt) {
   RequireOutputCount(node, 3);
   const Tensor &x = GetInput(node, 0, rt.tensors());
   onnx_kernels::kernel::DynamicQuantizeLinear k(rt.kernel_ctx());
-  auto out = k(x);
+  auto out = k(x, &rt);
   SetOutput(node, 0, std::move(std::get<0>(out)), rt);
   SetOutput(node, 1, std::move(std::get<1>(out)), rt);
   SetOutput(node, 2, std::move(std::get<2>(out)), rt);

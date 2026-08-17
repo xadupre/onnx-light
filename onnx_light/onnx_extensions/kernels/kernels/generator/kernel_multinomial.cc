@@ -128,8 +128,8 @@ Tensor Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t
   const int64_t n_out = batch_size * sample_size;
   const std::size_t out_n_bytes = static_cast<std::size_t>(n_out) * es;
 
-  Tensor out = MakeOutputTensor(out_dtype, {batch_size, sample_size}, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, out_dtype, {batch_size, sample_size}, out_n_bytes)
+                  : MakeOutputTensor(out_dtype, {batch_size, sample_size}, out_n_bytes, nullptr);
   (*this)(input, sample_size, seed, dtype, out, rt);
   return out;
 }
@@ -171,8 +171,8 @@ void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t s
   // buffer is sized to at least one element so an empty batch (``class_size``
   // == 0) never requests a zero-byte allocation.
   detail::TemporaryTypedBuffer<double> cdf_buf(
-      static_cast<std::size_t>(std::max<int64_t>(class_size, 1)), rt ? rt->allocator() : nullptr,
-      "kernel::Multinomial cdf");
+      static_cast<std::size_t>(std::max<int64_t>(class_size, 1)),
+      rt ? rt->execution_allocator() : nullptr, "kernel::Multinomial cdf");
   double *cdf = cdf_buf.data();
 
   // Dispatch on input dtype once, outside the batch loop, so that typed row

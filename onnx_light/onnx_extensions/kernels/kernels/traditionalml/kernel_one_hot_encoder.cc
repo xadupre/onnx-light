@@ -102,23 +102,29 @@ void ValidatePreallocatedOutput(const Tensor &output, const onnx_kernels::Shape 
 
 template <typename T>
 Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &cats, bool zeros,
-                                 RuntimeContext * /*rt*/) const {
+                                 RuntimeContext *rt) const {
   ValidateNumericInput<T>(x, cats);
   const onnx_kernels::Shape out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape,
-                                static_cast<size_t>(total) * sizeof(float), ctx_.allocator);
+  const size_t n_bytes = static_cast<size_t>(total) * sizeof(float);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, n_bytes,
+                            ctx_.allocator);
   FillOneHotNumeric<T>(x, cats, zeros, reinterpret_cast<float *>(out.mutable_bytes()));
   return out;
 }
 
 Tensor OneHotEncoder::operator()(const Tensor &x, const ParamStrings &cats, bool zeros,
-                                 RuntimeContext * /*rt*/) const {
+                                 RuntimeContext *rt) const {
   ValidateStringInput(x, cats);
   const onnx_kernels::Shape out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape,
-                                static_cast<size_t>(total) * sizeof(float), ctx_.allocator);
+  const size_t n_bytes = static_cast<size_t>(total) * sizeof(float);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, n_bytes,
+                            ctx_.allocator);
   FillOneHotString(x, cats, zeros, reinterpret_cast<float *>(out.mutable_bytes()));
   return out;
 }
@@ -182,7 +188,7 @@ void OneHotEncoder::Run(RuntimeContext &rt) {
     y = DispatchSVMByDataType(x, "OneHotEncoder", [&](auto *tag) {
       using T = std::remove_pointer_t<decltype(tag)>;
       (void)tag;
-      return one_hot.template operator()<T>(x, cats, zeros);
+      return one_hot.template operator()<T>(x, cats, zeros, &rt);
     });
   } else {
     ParamStrings cats;
@@ -193,7 +199,7 @@ void OneHotEncoder::Run(RuntimeContext &rt) {
     EXT_ENFORCE_INVALID(!(x.data_type != static_cast<int32_t>(DataType::STRING)),
                         "RunNode: OneHotEncoder with 'cats_strings' requires input X "
                         "of element type STRING.");
-    y = one_hot(x, cats, zeros);
+    y = one_hot(x, cats, zeros, &rt);
   }
   SetOutput(node, 0, std::move(y), rt.tensors());
 }

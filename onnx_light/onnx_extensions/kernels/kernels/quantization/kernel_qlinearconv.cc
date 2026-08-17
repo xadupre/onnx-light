@@ -147,8 +147,8 @@ Tensor QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Ten
     total *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(total) * ElementSize(y_zero_point.data_type);
-  Tensor out = MakeOutputTensor(y_zero_point.data_type, out_shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, y_zero_point.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(y_zero_point.data_type, out_shape, out_n_bytes, nullptr);
   (*this)(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point, B, resolved,
           out);
   return out;
@@ -362,7 +362,7 @@ void QLinearConv::Run(RuntimeContext &rt) {
   onnx_kernels::kernel::QLinearConv k(rt.kernel_ctx());
   SetOutput(node, 0,
             k(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point,
-              b != nullptr ? *b : Tensor{}, attrs),
+              b != nullptr ? *b : Tensor{}, attrs, &rt),
             rt);
 }
 

@@ -29,8 +29,16 @@ void Xor::RegisterTuningSchemas() {
 }
 
 Tensor Xor::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    const Shape out_shape = detail::BroadcastShape("kernel::Xor", x.shape, y.shape);
+    const int64_t out_count = out_shape.product();
+    Tensor output = rt->MakeOutputTensor(
+        0, DataType::BOOL, out_shape, static_cast<size_t>(out_count) * ElementSize(DataType::BOOL));
+    (*this)(x, y, output);
+    return output;
+  }
   return detail::BinaryElementwiseAlloc<uint8_t, uint8_t>(kXorName, kBoolName, DataType::BOOL, x, y,
-                                                          kXorOp, rt ? rt->allocator() : nullptr,
+                                                          kXorOp, nullptr,
                                                           tuning().parallel_minimum_elements);
 }
 

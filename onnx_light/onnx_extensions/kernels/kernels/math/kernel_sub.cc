@@ -58,40 +58,44 @@ void Sub::RegisterTuningSchemas() {
 }
 
 Tensor Sub::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    const Shape out_shape = detail::BroadcastShape("kernel::Sub", x.shape, y.shape);
+    const int64_t out_count = out_shape.product();
+    Tensor output = rt->MakeOutputTensor(0, x.data_type, out_shape,
+                                         static_cast<size_t>(out_count) * ElementSize(x.data_type));
+    (*this)(x, y, output);
+    return output;
+  }
   const int64_t grain = tuning().parallel_minimum_elements;
   switch (x.data_type) {
   case DataType::FLOAT:
-    return SubAlloc<float>("FLOAT", DataType::FLOAT, x, y, grain, rt ? rt->allocator() : nullptr);
+    return SubAlloc<float>("FLOAT", DataType::FLOAT, x, y, grain, nullptr);
   case DataType::DOUBLE:
-    return SubAlloc<double>("DOUBLE", DataType::DOUBLE, x, y, grain,
-                            rt ? rt->allocator() : nullptr);
+    return SubAlloc<double>("DOUBLE", DataType::DOUBLE, x, y, grain, nullptr);
   case DataType::INT8:
-    return SubAlloc<int8_t>("INT8", DataType::INT8, x, y, grain, rt ? rt->allocator() : nullptr);
+    return SubAlloc<int8_t>("INT8", DataType::INT8, x, y, grain, nullptr);
   case DataType::INT16:
-    return SubAlloc<int16_t>("INT16", DataType::INT16, x, y, grain, rt ? rt->allocator() : nullptr);
+    return SubAlloc<int16_t>("INT16", DataType::INT16, x, y, grain, nullptr);
   case DataType::INT32:
-    return SubAlloc<int32_t>("INT32", DataType::INT32, x, y, grain, rt ? rt->allocator() : nullptr);
+    return SubAlloc<int32_t>("INT32", DataType::INT32, x, y, grain, nullptr);
   case DataType::INT64:
-    return SubAlloc<int64_t>("INT64", DataType::INT64, x, y, grain, rt ? rt->allocator() : nullptr);
+    return SubAlloc<int64_t>("INT64", DataType::INT64, x, y, grain, nullptr);
   case DataType::UINT8:
-    return SubAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, grain, rt ? rt->allocator() : nullptr);
+    return SubAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, grain, nullptr);
   case DataType::UINT16:
-    return SubAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, grain,
-                              rt ? rt->allocator() : nullptr);
+    return SubAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, grain, nullptr);
   case DataType::UINT32:
-    return SubAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, grain,
-                              rt ? rt->allocator() : nullptr);
+    return SubAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, grain, nullptr);
   case DataType::UINT64:
-    return SubAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, grain,
-                              rt ? rt->allocator() : nullptr);
+    return SubAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, grain, nullptr);
   case DataType::FLOAT16:
     return detail::BinaryHalfElementwiseAlloc(
         kSubName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat, FloatToFloat16Bits,
-        [](float a, float b) { return a - b; }, rt ? rt->allocator() : nullptr, grain);
+        [](float a, float b) { return a - b; }, nullptr, grain);
   case DataType::BFLOAT16:
     return detail::BinaryHalfElementwiseAlloc(
         kSubName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-        [](float a, float b) { return a - b; }, rt ? rt->allocator() : nullptr, grain);
+        [](float a, float b) { return a - b; }, nullptr, grain);
   default:
     EXT_THROW_INVALID(kSubName, ": unsupported data type ", x.data_type, kSupportedSubTypesMsg);
   }

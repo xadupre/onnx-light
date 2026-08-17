@@ -84,4 +84,60 @@ public:
         const std::vector<const NodeProto *> &nodes) const override;
 };
 
+/**
+ * Swaps an ``Expand`` and a following ``Unsqueeze``.
+ *
+ * ``Expand(x, shape)`` followed by ``Unsqueeze(expanded, axes)`` becomes
+ * ``Unsqueeze(x, axes)`` followed by ``Expand(..., new_shape)`` where
+ * ``new_shape`` inserts a ``1`` at every ``axes`` position of the original
+ * ``shape``. The ``Unsqueeze`` then runs on the smaller, pre-expansion tensor.
+ */
+class SwapExpandUnsqueezePattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit SwapExpandUnsqueezePattern(int priority = 0)
+      : PatternOptimization(priority, "SwapExpandUnsqueeze") {}
+
+  /// Returns ``Expand`` as the only possible root operator.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds an ``Expand`` consumed by a single ``Unsqueeze`` with constant axes.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Emits the ``Unsqueeze`` first and re-expands its output.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
+ * Fuses ``Expand``, ``Unsqueeze`` and ``Expand`` into ``Unsqueeze`` then
+ * ``Expand``.
+ *
+ * ``Expand`` does not change the rank of a tensor, so the ``Unsqueeze`` axes are
+ * also valid for the original tensor. The first expansion and the new dimension
+ * are absorbed by a single trailing ``Expand`` whose target shape is the
+ * element-wise maximum of the first (unsqueezed) target shape and the second
+ * target shape.
+ */
+class ExpandUnsqueezeExpandPattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit ExpandUnsqueezeExpandPattern(int priority = 0)
+      : PatternOptimization(priority, "ExpandUnsqueezeExpand") {}
+
+  /// Returns ``Expand`` as the only possible root operator.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds ``Expand`` then ``Unsqueeze`` then ``Expand`` with constant shapes.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Emits ``Unsqueeze`` on the original tensor and a single trailing ``Expand``.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_patterns

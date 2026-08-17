@@ -143,6 +143,14 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ExpandSwapPattern>();
                                    });
+    core::builder::RegisterPattern("SwapExpandUnsqueeze",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<SwapExpandUnsqueezePattern>();
+                                   });
+    core::builder::RegisterPattern("ExpandUnsqueezeExpand",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ExpandUnsqueezeExpandPattern>();
+                                   });
     return true;
   }();
   (void)registered;

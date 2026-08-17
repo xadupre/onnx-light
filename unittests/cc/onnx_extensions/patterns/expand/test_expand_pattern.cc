@@ -37,6 +37,18 @@ void AddInt64Initializer(core::builder::GraphBuilder &builder, const std::string
   builder.MakeInitializer(MakeInitializer<int64_t>(name.c_str(), dims, values));
 }
 
+std::vector<int64_t> InitializerValues(const core::builder::GraphBuilder &builder,
+                                       const std::string &name) {
+  for (const TensorProto &tensor : builder.Initializers()) {
+    if (tensor.name().value() == name) {
+      std::vector<int64_t> values;
+      ReadIntegerValues(tensor, values);
+      return values;
+    }
+  }
+  return {};
+}
+
 TEST(ExpandPattern, RemovesRedundantExpand) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
@@ -140,6 +152,137 @@ TEST(ExpandSwapPattern, RejectsNonUnaryConsumer) {
 
   core::builder::GraphGraph graph(builder);
   onnx_patterns::ExpandSwapPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  EXPECT_EQ(match.pattern, nullptr);
+}
+
+TEST(SwapExpandUnsqueezePattern, MovesUnsqueezeBeforeExpand) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 5, 7}));
+  AddInt64Initializer(builder, "shape", {3, 1, 1});
+  AddInt64Initializer(builder, "axes", {1});
+  builder.MakeNode("Expand", {"x", "shape"}, {"xe"});
+  builder.MakeNode("Unsqueeze", {"xe", "axes"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::SwapExpandUnsqueezePattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  ASSERT_EQ(match.pattern, &pattern);
+
+  const utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 2u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Unsqueeze");
+  EXPECT_EQ(replacements[0].input()[0].value(), "x");
+  EXPECT_EQ(replacements[0].input()[1].value(), "axes");
+  EXPECT_EQ(replacements[1].op_type().value(), "Expand");
+  EXPECT_EQ(replacements[1].input()[0].value(), replacements[0].output()[0].value());
+  EXPECT_EQ(replacements[1].output()[0].value(), "out");
+  EXPECT_EQ(InitializerValues(builder, replacements[1].input()[1].value()),
+            (std::vector<int64_t>{3, 1, 1, 1}));
+}
+
+TEST(SwapExpandUnsqueezePattern, RejectsNonUnsqueezeConsumer) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 5, 7}));
+  AddInt64Initializer(builder, "shape", {3, 1, 1});
+  builder.MakeNode("Expand", {"x", "shape"}, {"xe"});
+  builder.MakeNode("Exp", {"xe"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::SwapExpandUnsqueezePattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  EXPECT_EQ(match.pattern, nullptr);
+}
+
+TEST(SwapExpandUnsqueezePattern, RejectsNonConstantAxes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 5, 7}));
+  builder.MakeInput("axes", core::symbolic::TensorType::kInt64, Shape({1}));
+  AddInt64Initializer(builder, "shape", {3, 1, 1});
+  builder.MakeNode("Expand", {"x", "shape"}, {"xe"});
+  builder.MakeNode("Unsqueeze", {"xe", "axes"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::SwapExpandUnsqueezePattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  EXPECT_EQ(match.pattern, nullptr);
+}
+
+TEST(SwapExpandUnsqueezePattern, RejectsOpsetBelow13) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 11);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 5, 7}));
+  AddInt64Initializer(builder, "shape", {3, 1, 1});
+  AddInt64Initializer(builder, "axes", {1});
+  builder.MakeNode("Expand", {"x", "shape"}, {"xe"});
+  builder.MakeNode("Unsqueeze", {"xe", "axes"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::SwapExpandUnsqueezePattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  EXPECT_EQ(match.pattern, nullptr);
+}
+
+TEST(ExpandUnsqueezeExpandPattern, FusesExpandUnsqueezeExpand) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 3, 4}));
+  AddInt64Initializer(builder, "shape1", {5, 3, 4});
+  AddInt64Initializer(builder, "axes", {1});
+  AddInt64Initializer(builder, "shape2", {5, 2, 3, 4});
+  builder.MakeNode("Expand", {"x", "shape1"}, {"xe"});
+  builder.MakeNode("Unsqueeze", {"xe", "axes"}, {"xu"});
+  builder.MakeNode("Expand", {"xu", "shape2"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ExpandUnsqueezeExpandPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  ASSERT_EQ(match.pattern, &pattern);
+
+  const utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 2u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Unsqueeze");
+  EXPECT_EQ(replacements[0].input()[0].value(), "x");
+  EXPECT_EQ(replacements[0].input()[1].value(), "axes");
+  EXPECT_EQ(replacements[1].op_type().value(), "Expand");
+  EXPECT_EQ(replacements[1].input()[0].value(), replacements[0].output()[0].value());
+  EXPECT_EQ(replacements[1].output()[0].value(), "out");
+  EXPECT_EQ(InitializerValues(builder, replacements[1].input()[1].value()),
+            (std::vector<int64_t>{5, 2, 3, 4}));
+}
+
+TEST(ExpandUnsqueezeExpandPattern, RejectsMissingSecondExpand) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 3, 4}));
+  AddInt64Initializer(builder, "shape1", {5, 3, 4});
+  AddInt64Initializer(builder, "axes", {1});
+  builder.MakeNode("Expand", {"x", "shape1"}, {"xe"});
+  builder.MakeNode("Unsqueeze", {"xe", "axes"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ExpandUnsqueezeExpandPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  EXPECT_EQ(match.pattern, nullptr);
+}
+
+TEST(ExpandUnsqueezeExpandPattern, RejectsRankMismatch) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 3, 4}));
+  AddInt64Initializer(builder, "shape1", {5, 3, 4});
+  AddInt64Initializer(builder, "axes", {1, 2});
+  AddInt64Initializer(builder, "shape2", {5, 2, 3, 4});
+  builder.MakeNode("Expand", {"x", "shape1"}, {"xe"});
+  builder.MakeNode("Unsqueeze", {"xe", "axes"}, {"xu"});
+  builder.MakeNode("Expand", {"xu", "shape2"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ExpandUnsqueezeExpandPattern pattern;
   const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
   EXPECT_EQ(match.pattern, nullptr);
 }

@@ -104,7 +104,7 @@ The implementation is split into focused pull requests:
        a whole, so a node that produces both a declared graph output and an
        intermediate keeps the declared output in the I/O arena and its
        intermediate in the execution arena.
-   * - Current PR
+   * - `PR #4497 <https://github.com/xadupre/onnx-light/pull/4497>`_
      - Slot-aware output allocation API
      - Adds :cpp:func:`RuntimeContext::AllocatorForOutput` and the slot-aware
        :cpp:func:`RuntimeContext::MakeOutputTensor` overload. Before each node's
@@ -114,6 +114,15 @@ The implementation is split into focused pull requests:
        declared outputs go to the I/O arena and its intermediates to the
        execution arena without the migration copy that
        :cpp:func:`RuntimeSession::VerifyOutputAllocators` would otherwise make.
+   * - Current PR
+     - Slot-aware temporary allocation API
+     - Adds :cpp:func:`RuntimeContext::MakeTemporaryTensor`, the
+       ``AllocateTemporary`` half of the slot-aware allocation facade. It always
+       allocates a kernel workspace from the execution arena, even while
+       :cpp:class:`RuntimeSession` routes a declared-output node through the I/O
+       allocator, so scratch buffers never enter the I/O arena's retention
+       budget. Completes the "plus a kernel workspace" test coverage the plan
+       requires alongside the mixed-output slot routing.
 
 Current behaviour
 +++++++++++++++++
@@ -263,8 +272,16 @@ place and performs no migration. Kernels that still use the node-scoped
 ``rt->allocator()`` path keep the previous behaviour: the runtime migrates a
 mixed node's intermediates back to the execution arena with a single copy, and a
 temporary workspace allocated through ``rt->allocator()`` uses the node-scoped
-arena. Converting the built-in kernels to the slot-aware overload is a
-follow-up.
+arena.
+
+A kernel workspace has the opposite requirement to a declared output: it must
+stay in the execution arena even when the node is routed to the I/O allocator.
+:cpp:func:`RuntimeContext::MakeTemporaryTensor` is the ``AllocateTemporary`` half
+of the facade: it always allocates from :cpp:func:`RuntimeContext::execution_allocator`
+regardless of which allocator is currently active, so scratch buffers a
+declared-output kernel needs never enter the I/O arena's retention budget.
+Converting the built-in kernels to the slot-aware :cpp:func:`RuntimeContext::MakeOutputTensor`
+and :cpp:func:`RuntimeContext::MakeTemporaryTensor` overloads is a follow-up.
 
 Target output-slot contract
 ---------------------------
@@ -314,7 +331,10 @@ This does require changing kernel allocation calls. A direct form is
 to pass an ``OutputAllocator`` facade into the kernel, with
 ``AllocateOutput(slot, ...)`` for results and ``AllocateTemporary(...)`` for
 workspaces. Retaining the current undifferentiated ``rt->allocator()`` API
-cannot implement correct mixed-output routing.
+cannot implement correct mixed-output routing. Both halves of the direct facade
+now exist: ``RuntimeContext::MakeOutputTensor(slot, ...)`` is
+``AllocateOutput`` and ``RuntimeContext::MakeTemporaryTensor(...)`` is
+``AllocateTemporary`` (it always allocates from the execution arena).
 
 The migration can preserve the existing plain ``MakeOutputTensor`` overload for
 standalone kernel calls and tests that explicitly supply an allocator. Runtime
@@ -469,11 +489,15 @@ Implementation order
    output-slot routing: ``RuntimeSession::VerifyOutputAllocators`` resolves the
    arena of each output slot individually, so a mixed-output node keeps its
    declared graph outputs in the I/O arena and its intermediate outputs in the
-   execution arena. The current PR adds the slot-aware allocation API that makes
-   this zero-copy: ``RuntimeContext::AllocatorForOutput`` and the slot-aware
-   ``RuntimeContext::MakeOutputTensor`` overload let a kernel materialize each
-   output directly in its final arena, so a mixed-output node produced through
-   that overload needs no migration copy.
+   execution arena. `PR #4497
+   <https://github.com/xadupre/onnx-light/pull/4497>`_ adds the slot-aware
+   allocation API that makes this zero-copy: ``RuntimeContext::AllocatorForOutput``
+   and the slot-aware ``RuntimeContext::MakeOutputTensor`` overload let a kernel
+   materialize each output directly in its final arena, so a mixed-output node
+   produced through that overload needs no migration copy. The current PR adds
+   the complementary ``RuntimeContext::MakeTemporaryTensor`` workspace overload,
+   which always allocates from the execution arena so a declared-output kernel's
+   scratch buffers never enter the I/O arena.
 6. Transfer each exported output handle to its NumPy capsule; remove the
    dependency on keeping the mutable :cpp:class:`RuntimeContext` as the data
    owner. The enabling mechanism lands first (`PR #4454
@@ -556,8 +580,12 @@ Pull requests
   output-slot routing so ``RuntimeSession`` resolves each output slot's arena
   individually, keeping a mixed-output node's declared outputs in the I/O arena
   and its intermediates in the execution arena.
-* Current PR: adds the slot-aware output allocation API
-  (``RuntimeContext::AllocatorForOutput`` and the slot-aware
-  ``RuntimeContext::MakeOutputTensor`` overload) so a kernel materializes each
-  output directly in its final arena, removing the migration copy for a
-  mixed-output node.
+* `PR #4497 <https://github.com/xadupre/onnx-light/pull/4497>`_: adds the
+  slot-aware output allocation API (``RuntimeContext::AllocatorForOutput`` and the
+  slot-aware ``RuntimeContext::MakeOutputTensor`` overload) so a kernel
+  materializes each output directly in its final arena, removing the migration
+  copy for a mixed-output node.
+* Current PR: adds the slot-aware temporary allocation API
+  (``RuntimeContext::MakeTemporaryTensor``) so a declared-output kernel allocates
+  its scratch/workspace buffers from the execution arena, keeping them out of the
+  I/O arena's retention budget.

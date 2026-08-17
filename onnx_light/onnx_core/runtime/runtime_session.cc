@@ -247,8 +247,7 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
       continue;
     }
     Tensor &output = rt.Get(name);
-    if (expected != nullptr && output.size_bytes() > 0 &&
-        static_cast<DataType>(output.data_type) != DataType::STRING &&
+    if (output.size_bytes() > 0 && static_cast<DataType>(output.data_type) != DataType::STRING &&
         (!output.has_allocation() || output.allocation_owner() != expected)) {
       const size_t output_size_bytes = output.size_bytes();
       const uint8_t *output_bytes = output.bytes();

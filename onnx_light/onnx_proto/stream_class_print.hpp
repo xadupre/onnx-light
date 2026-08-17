@@ -390,17 +390,17 @@ inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &option
 template <typename... Args>
 void write_proto_into_vector_string(std::stringstream &ss, utils::PrintOptions &options,
                                     const Args &...args) {
-  if (options.short_repr_truncated)
+  if (utils::short_repr_limit_reached(ss, options))
     return;
   ss << "{ ";
   auto append_arg = [&ss, &options](const auto &arg) mutable {
-    if (options.short_repr_truncated || !arg.exist)
+    if (!arg.exist || utils::short_repr_limit_reached(ss, options))
       return;
     write_into_stream(ss, options, arg.name, *arg.value);
     utils::enforce_short_repr_length(ss, options);
   };
   (append_arg(args), ...);
-  if (!options.short_repr_truncated)
+  if (!utils::short_repr_limit_reached(ss, options))
     ss << "}";
 }
 

@@ -32,9 +32,6 @@ struct PrintOptions {
    * ``__repr__``). Printing stops as soon as the output reaches this bound and the text is
    * terminated with an ellipsis. Zero (the default) means no limit. */
   size_t max_short_repr_length = 0;
-  /** Internal flag set to true once ``max_short_repr_length`` has been reached while printing. It
-   * is used to stop the remaining fields from being written. */
-  bool short_repr_truncated = false;
 };
 
 /** Returns true if a repeated field of the given size should be printed inline on a single row. */
@@ -43,16 +40,30 @@ inline bool is_inline_size(const PrintOptions &options, size_t size) {
 }
 
 /**
+ * Returns true when ``options.max_short_repr_length`` is set and the text already accumulated in
+ * ``ss`` has reached that bound. Printers use it to stop writing the remaining fields.
+ */
+inline bool short_repr_limit_reached(std::stringstream &ss, const PrintOptions &options) {
+  if (options.max_short_repr_length == 0) {
+    return false;
+  }
+  const std::streampos pos = ss.tellp();
+  return pos >= 0 && static_cast<size_t>(pos) >= options.max_short_repr_length;
+}
+
+/**
  * Enforces ``options.max_short_repr_length`` on the text already accumulated in ``ss``. When the
- * bound is exceeded, the stream content is truncated in place and terminated with an ellipsis, and
- * ``options.short_repr_truncated`` is set so callers can stop writing further fields.
+ * bound is exceeded, the stream content is truncated in place and terminated with an ellipsis.
  *
  * Returns:
  *   True when the content was truncated, false otherwise.
  */
-inline bool enforce_short_repr_length(std::stringstream &ss, PrintOptions &options) {
-  if (options.max_short_repr_length == 0 ||
-      static_cast<size_t>(ss.tellp()) <= options.max_short_repr_length) {
+inline bool enforce_short_repr_length(std::stringstream &ss, const PrintOptions &options) {
+  if (options.max_short_repr_length == 0) {
+    return false;
+  }
+  const std::streampos pos = ss.tellp();
+  if (pos < 0 || static_cast<size_t>(pos) <= options.max_short_repr_length) {
     return false;
   }
   static constexpr char ellipsis[] = "...";
@@ -67,7 +78,6 @@ inline bool enforce_short_repr_length(std::stringstream &ss, PrintOptions &optio
   }
   ss.str(content);
   ss.seekp(0, std::ios::end);
-  options.short_repr_truncated = true;
   return true;
 }
 

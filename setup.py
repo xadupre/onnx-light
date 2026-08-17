@@ -48,29 +48,6 @@ def _default_parallel_jobs():
     return os.cpu_count() or 1
 
 
-def _python_install_targets(no_kernels):
-    """Returns the CMake targets required to install the Python package.
-
-    These mirror the ``install(TARGETS ...)`` rules in ``CMakeLists.txt`` so the
-    Python package can be built and installed inplace independently of the C++
-    unit tests. When ``--cpp-tests`` is passed the C++ tests are built as well;
-    building the Python extensions on their own first guarantees the package is
-    installed inplace even if a C++ test fails to build. ``lib_onnx_patterns``
-    is included explicitly because no Python extension links it transitively.
-
-    Args:
-        no_kernels: Whether the kernel-runtime extensions are disabled
-            (``-DONNX_LIGHT_BUILD_KERNELS=OFF``).
-
-    Returns:
-        list[str]: The CMake target names needed by the Python package install.
-    """
-    targets = ["_onnxpyprotoop", "_onnxpyprotolib", "_onnxpycore", "lib_onnx_patterns"]
-    if not no_kernels:
-        targets += ["_onnxpykernels", "_onnxpybackend", "_onnxpygradient"]
-    return targets
-
-
 def _detect_upstream_onnx_prefix():
     """Returns the install prefix of the pip-installed upstream onnx package, if any.
 
@@ -258,24 +235,10 @@ except ModuleNotFoundError:
                     str(install_prefix),
                 ]
                 if cpp_tests:
-                    # Build and install the Python package first so that it is
-                    # always installed inplace, even if a C++ unit test fails to
-                    # build or run below.
-                    python_build_cmd = [
-                        "cmake",
-                        "--build",
-                        str(build_temp_path),
-                        "--config",
-                        "Release",
-                        "--target",
-                        *_python_install_targets(no_kernels),
-                    ]
-                    if parallel is not None:
-                        python_build_cmd += ["--parallel", str(parallel)]
-                    _spawn(python_build_cmd, dry_run)
-                    _spawn(install_cmd, dry_run)
-                    # Now build the C++ unit tests and run them with ctest.
+                    # Build every library, extension and C++ test in one CMake
+                    # invocation so progress is reported against one global total.
                     _spawn(build_cmd, dry_run)
+                    _spawn(install_cmd, dry_run)
                     ctest_cmd = [
                         "ctest",
                         "--test-dir",
@@ -397,24 +360,10 @@ class BuildExt(Command):
             build_cmd += ["--parallel", str(self.parallel)]
         install_cmd = ["cmake", "--install", str(build_temp), "--prefix", str(install_prefix)]
         if self.cpp_tests:
-            # Build and install the Python package first so that it is always
-            # installed inplace, even if a C++ unit test fails to build or run
-            # below.
-            python_build_cmd = [
-                "cmake",
-                "--build",
-                str(build_temp),
-                "--config",
-                "Release",
-                "--target",
-                *_python_install_targets(self.no_kernels),
-            ]
-            if self.parallel is not None:
-                python_build_cmd += ["--parallel", str(self.parallel)]
-            self.spawn(python_build_cmd)
-            self.spawn(install_cmd)
-            # Now build the C++ unit tests and run them with ctest.
+            # Build every library, extension and C++ test in one CMake
+            # invocation so progress is reported against one global total.
             self.spawn(build_cmd)
+            self.spawn(install_cmd)
             ctest_cmd = [
                 "ctest",
                 "--test-dir",

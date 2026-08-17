@@ -6,11 +6,9 @@
 
 #include "onnx_light_helpers.h"
 
-#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
-#include <memory>
 #include <mutex>
 #include <thread>
 #include <type_traits>
@@ -38,13 +36,7 @@ inline constexpr int64_t kParallelForGrainSize = 1 << 15; // 32768 elements
 ///
 /// Returns:
 ///   The effective participant count, always at least ``1``.
-inline int64_t ParallelForThreadCount() noexcept {
-  static const int64_t thread_count = []() {
-    const unsigned int cores = std::thread::hardware_concurrency();
-    return cores == 0 ? int64_t{1} : static_cast<int64_t>(cores);
-  }();
-  return thread_count;
-}
+int64_t ParallelForThreadCount() noexcept;
 
 /**
  * A persistent pool of worker threads that stay alive between parallel regions.
@@ -76,32 +68,12 @@ public:
   /// @param num_workers Number of worker threads to spawn. Values ``<= 0``
   ///                    create a pool with no workers, in which case
   ///                    :cpp:func:`Run` executes every block on the caller.
-  explicit ThreadPool(int64_t num_workers) {
-    if (num_workers < 0) {
-      num_workers = 0;
-    }
-    workers_.reserve(static_cast<size_t>(num_workers));
-    for (int64_t i = 0; i < num_workers; ++i) {
-      workers_.emplace_back([this, i]() { WorkerLoop(i); });
-    }
-  }
+  explicit ThreadPool(int64_t num_workers);
 
   ThreadPool(const ThreadPool &) = delete;
   ThreadPool &operator=(const ThreadPool &) = delete;
 
-  ~ThreadPool() {
-    {
-      std::lock_guard<std::mutex> lock(mu_);
-      stop_ = true;
-      ++generation_;
-    }
-    cv_work_.notify_all();
-    for (std::thread &worker : workers_) {
-      if (worker.joinable()) {
-        worker.join();
-      }
-    }
-  }
+  ~ThreadPool();
 
   /// Returns the number of worker threads (the calling thread is not counted).
   ///
@@ -123,86 +95,17 @@ public:
    * @param fn         Callable invoked as ``fn(int64_t block)``.
    */
   template <typename Fn> void Run(int64_t num_blocks, Fn &&fn) {
-    if (num_blocks <= 0) {
-      return;
-    }
-    if (workers_.empty() || num_blocks == 1 || InPool()) {
-      // No workers, a single block, or a nested call from within a running
-      // block: run inline serially to stay correct and deadlock-free.
-      for (int64_t b = 0; b < num_blocks; ++b) {
-        fn(b);
-      }
-      return;
-    }
-
     using Callable = std::remove_reference_t<Fn>;
     Callable &callable = fn;
-    TaskFn invoker = [](void *ctx, int64_t b) { (*static_cast<Callable *>(ctx))(b); };
-
-    // Serialize regions so a single set of shared fields describes one active
-    // region at a time, even when unrelated threads call Run concurrently.
-    std::lock_guard<std::mutex> region(region_mu_);
-    {
-      std::lock_guard<std::mutex> lock(mu_);
-      task_ctx_ = static_cast<void *>(std::addressof(callable));
-      task_fn_ = invoker;
-      num_blocks_ = num_blocks;
-      remaining_.store(num_blocks - 1, std::memory_order_relaxed);
-      ++generation_;
-    }
-    cv_work_.notify_all();
-
-    // The calling thread runs block 0. Mark it in-pool so a nested ParallelFor
-    // launched from fn falls back to the serial path.
-    bool &in_pool = InPoolFlag();
-    const bool was_in_pool = in_pool;
-    in_pool = true;
-    fn(static_cast<int64_t>(0));
-    in_pool = was_in_pool;
-
-    std::unique_lock<std::mutex> lock(mu_);
-    cv_done_.wait(lock, [this]() { return remaining_.load(std::memory_order_acquire) == 0; });
+    RunErased(num_blocks, static_cast<void *>(&callable),
+              [](void *ctx, int64_t b) { (*static_cast<Callable *>(ctx))(b); });
   }
 
 private:
-  static bool &InPoolFlag() noexcept {
-    thread_local bool in_pool = false;
-    return in_pool;
-  }
-  static bool InPool() noexcept { return InPoolFlag(); }
-
-  void WorkerLoop(int64_t worker_index) {
-    InPoolFlag() = true;
-    const int64_t my_block = worker_index + 1;
-    uint64_t last_generation = 0;
-    for (;;) {
-      void *ctx = nullptr;
-      TaskFn fn = nullptr;
-      int64_t num_blocks = 0;
-      {
-        // Snapshot the whole region under the lock so each wake processes
-        // exactly one generation and never mixes fields across regions.
-        std::unique_lock<std::mutex> lock(mu_);
-        cv_work_.wait(
-            lock, [this, last_generation]() { return stop_ || generation_ != last_generation; });
-        if (stop_) {
-          return;
-        }
-        last_generation = generation_;
-        ctx = task_ctx_;
-        fn = task_fn_;
-        num_blocks = num_blocks_;
-      }
-      if (my_block < num_blocks) {
-        fn(ctx, my_block);
-        if (remaining_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-          // Last worker block of the region finished: wake the waiting caller.
-          std::lock_guard<std::mutex> lock(mu_);
-          cv_done_.notify_one();
-        }
-      }
-    }
-  }
+  void RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn);
+  static bool &InPoolFlag() noexcept;
+  static bool InPool() noexcept;
+  void WorkerLoop(int64_t worker_index);
 
   std::vector<std::thread> workers_;
   std::mutex mu_;
@@ -226,10 +129,15 @@ private:
 ///
 /// Returns:
 ///   A reference to the shared thread pool.
-inline ThreadPool &GlobalThreadPool() {
-  static ThreadPool pool(ParallelForThreadCount() - 1);
-  return pool;
-}
+ThreadPool &GlobalThreadPool();
+
+namespace detail {
+
+using ParallelRangeFn = void (*)(void *, int64_t, int64_t);
+
+void ParallelForErased(int64_t total, int64_t grain_size, void *task_ctx, ParallelRangeFn task_fn);
+
+} // namespace detail
 
 /**
  * Splits the half-open range ``[0, total)`` into contiguous blocks and invokes
@@ -256,35 +164,9 @@ inline ThreadPool &GlobalThreadPool() {
  *                   each block, covering ``[begin, end)``.
  */
 template <typename Fn> void ParallelFor(int64_t total, int64_t grain_size, Fn fn) {
-  if (total <= 0) {
-    return;
-  }
-  EXT_ENFORCE_INVALID(grain_size > 0, "ParallelFor grain_size must be positive, got ", grain_size,
-                      ".");
-  const int64_t max_threads = ParallelForThreadCount();
-  if (total < grain_size || max_threads <= 1) {
-    fn(static_cast<int64_t>(0), total);
-    return;
-  }
-
-  // Use as many blocks as participants, but never so many that a block would
-  // hold fewer than grain_size iterations.
-  const int64_t max_useful_blocks = total / grain_size;
-  const int64_t num_blocks = std::min(max_threads, max_useful_blocks);
-  if (num_blocks <= 1) {
-    fn(static_cast<int64_t>(0), total);
-    return;
-  }
-
-  const int64_t block = (total + num_blocks - 1) / num_blocks;
-  GlobalThreadPool().Run(num_blocks, [&fn, block, total](int64_t b) {
-    const int64_t begin = b * block;
-    if (begin >= total) {
-      return;
-    }
-    const int64_t end = std::min(begin + block, total);
-    fn(begin, end);
-  });
+  detail::ParallelForErased(
+      total, grain_size, static_cast<void *>(&fn),
+      [](void *ctx, int64_t begin, int64_t end) { (*static_cast<Fn *>(ctx))(begin, end); });
 }
 
 /// Runs ``fn`` over ``[0, total)`` using the default grain size.

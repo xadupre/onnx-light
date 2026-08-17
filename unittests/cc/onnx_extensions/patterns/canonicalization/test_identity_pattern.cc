@@ -28,12 +28,6 @@ core::symbolic::SymShape Shape() {
   return shape;
 }
 
-core::symbolic::SymShape ScalarShape() {
-  core::symbolic::SymShape shape;
-  shape.PushBack(core::symbolic::SymDim(1));
-  return shape;
-}
-
 TEST(IdentityPattern, MatchesAddZeroScalar) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());

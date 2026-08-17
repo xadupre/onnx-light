@@ -100,8 +100,8 @@ class TestSetupBuildExt(ExtTestCase):
         self.assertIn("--output-on-failure", output)
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
-    def test_setup_build_ext_cpp_tests_installs_python_before_ctest(self):
-        """Tests that --cpp-tests installs the Python package inplace before running ctest."""
+    def test_setup_build_ext_cpp_tests_uses_one_build_before_ctest(self):
+        """Tests that --cpp-tests uses one global build before install and ctest."""
         root = Path(__file__).resolve().parents[2]
         command = [
             sys.executable,
@@ -118,15 +118,17 @@ class TestSetupBuildExt(ExtTestCase):
         )
         output = f"{proc.stdout}\n{proc.stderr}"
         lines = output.splitlines()
-        python_build_index = self._line_index(
-            lines, lambda line: "--target _onnxpyprotoop" in line, "the Python extension build"
+        build_lines = [i for i, line in enumerate(lines) if line.startswith("cmake --build ")]
+        self.assertEqual(
+            len(build_lines), 1, msg="Expected one global CMake build:\n" + "\n".join(lines)
         )
-        self.assertIn("lib_onnx_patterns", lines[python_build_index])
+        build_index = build_lines[0]
+        self.assertNotIn("--target", lines[build_index])
         install_index = self._line_index(
             lines, lambda line: "cmake --install" in line, "cmake --install"
         )
         ctest_index = self._line_index(lines, lambda line: line.startswith("ctest "), "ctest")
-        self.assertLess(python_build_index, install_index)
+        self.assertLess(build_index, install_index)
         self.assertLess(install_index, ctest_index)
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
@@ -210,8 +212,8 @@ class TestSetupBuildExt(ExtTestCase):
         self.assertIn("--output-on-failure", output)
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
-    def test_setup_build_ext_without_setuptools_installs_python_before_ctest(self):
-        """Tests --cpp-tests installs the Python package inplace before ctest (no setuptools)."""
+    def test_setup_build_ext_without_setuptools_uses_one_build_before_ctest(self):
+        """Tests --cpp-tests uses one global build before ctest without setuptools."""
         root = Path(__file__).resolve().parents[2]
         command = [
             sys.executable,
@@ -229,15 +231,17 @@ class TestSetupBuildExt(ExtTestCase):
         )
         output = f"{proc.stdout}\n{proc.stderr}"
         lines = output.splitlines()
-        python_build_index = self._line_index(
-            lines, lambda line: "--target _onnxpyprotoop" in line, "the Python extension build"
+        build_lines = [i for i, line in enumerate(lines) if line.startswith("cmake --build ")]
+        self.assertEqual(
+            len(build_lines), 1, msg="Expected one global CMake build:\n" + "\n".join(lines)
         )
-        self.assertIn("lib_onnx_patterns", lines[python_build_index])
+        build_index = build_lines[0]
+        self.assertNotIn("--target", lines[build_index])
         install_index = self._line_index(
             lines, lambda line: "cmake --install" in line, "cmake --install"
         )
         ctest_index = self._line_index(lines, lambda line: line.startswith("ctest "), "ctest")
-        self.assertLess(python_build_index, install_index)
+        self.assertLess(build_index, install_index)
         self.assertLess(install_index, ctest_index)
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")

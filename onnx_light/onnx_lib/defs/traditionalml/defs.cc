@@ -480,24 +480,29 @@ ONNX_ML_OPERATOR_SET_SCHEMA(
             class_count = 2;
           }
 
-          TensorShapeProto_Dimension batch_size_dim, class_count_dim;
-          class_count_dim.set_dim_value(class_count);
+          TensorShapeProto *label_shape =
+              ctx.getOutputType(0)->mutable_tensor_type()->mutable_shape();
+          TensorShapeProto *scores_shape =
+              ctx.getOutputType(1)->mutable_tensor_type()->mutable_shape();
+          TensorShapeProto_Dimension *label_batch_size = label_shape->add_dim();
+          TensorShapeProto_Dimension *scores_batch_size = scores_shape->add_dim();
 
           if (hasNInputShapes(ctx, 1)) {
             const auto &input_shape = ctx.getInputType(0)->tensor_type().shape();
             const auto input_rank = input_shape.dim_size();
             if (input_rank == 1) {
               // if input_rank is 1, batch_size is interpreted to be 1
-              batch_size_dim.set_dim_value(1);
+              label_batch_size->set_dim_value(1);
+              scores_batch_size->set_dim_value(1);
             } else if (input_rank == 2) {
-              batch_size_dim = input_shape.dim(0);
+              label_batch_size->CopyFrom(input_shape.dim(0));
+              scores_batch_size->CopyFrom(input_shape.dim(0));
             } else {
               fail_shape_inference("Input's shape should be 1D or 2D");
             }
           }
 
-          updateOutputShape(ctx, 0, {batch_size_dim});
-          updateOutputShape(ctx, 1, {batch_size_dim, class_count_dim});
+          scores_shape->add_dim()->set_dim_value(class_count);
         }));
 
 static constexpr const char *LinearRegressor_ver1_doc = R"DOC(

@@ -276,7 +276,10 @@ for row_index, result in enumerate(results):
         baseline = numpy_times
         baseline_name = "numpy"
 
-    speedup_axis.plot(sizes, baseline / numpy_times, "o--", label="numpy", color="#9b7ec8")
+    # The baseline itself is a flat line at 1.0, shown by the reference
+    # ``axhline`` below, so it is not plotted as its own series.
+    if ort_times is not None:
+        speedup_axis.plot(sizes, baseline / numpy_times, "o--", label="numpy", color="#9b7ec8")
     onnx_light_speedups = baseline / onnx_light_times
     speedup_axis.plot(sizes, onnx_light_speedups, "o-", label="onnx-light", color="#5cb85c")
     for size, speedup in zip(sizes, onnx_light_speedups, strict=True):
@@ -296,9 +299,9 @@ for row_index, result in enumerate(results):
         label="run_model (Tensor)",
         color="#1b5e20",
     )
-    if ort_times is not None:
-        speedup_axis.plot(sizes, baseline / ort_times, "o-", label="onnxruntime", color="#f4a259")
-    speedup_axis.axhline(1.0, color="grey", linewidth=0.8, linestyle=":")
+    speedup_axis.axhline(
+        1.0, color="grey", linewidth=0.8, linestyle=":", label=f"{baseline_name} (baseline)"
+    )
     speedup_axis.set_xscale("log")
     speedup_axis.set_xlabel("array size (elements)")
     speedup_axis.set_ylabel(f"speed-up vs {baseline_name}")

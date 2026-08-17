@@ -19,7 +19,8 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
   const onnx_kernels::kernel::Abs abs_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Abs", abs_kernel, "test_cc_abs_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat("Abs", abs_kernel, "test_cc_abs_benchmark", opset, registry,
+                              /*with_float16=*/true, /*with_bfloat16=*/true);
     return;
   }
 

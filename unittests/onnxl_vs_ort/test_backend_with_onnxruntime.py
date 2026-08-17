@@ -1,10 +1,9 @@
 import platform
-import re
 import sys
 import unittest
 import numpy as np
 from onnx_light.ext_test_case import import_or_skip, InferenceSessionAllTypes
-from onnx_light.onnx_lib.backend.runtime_coverage import _ORT_MAX_IR_VERSION
+from onnx_light.onnx_lib.backend.runtime_coverage import ort_max_ir_version, ort_max_opset_version
 
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
@@ -22,11 +21,19 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     Returns:
         List of output arrays from the model
     """
-    if model.ir_version > _ORT_MAX_IR_VERSION:
+    max_ir_version = ort_max_ir_version()
+    if model.ir_version > max_ir_version:
         raise unittest.SkipTest(
             f"model IR version {model.ir_version} exceeds "
-            f"onnxruntime maximum {_ORT_MAX_IR_VERSION}"
+            f"onnxruntime maximum {max_ir_version}"
         )
+    max_opset_version = ort_max_opset_version()
+    for opset in model.opset_import:
+        if opset.domain in ("", "ai.onnx") and opset.version > max_opset_version:
+            raise unittest.SkipTest(
+                f"model opset version {opset.version} exceeds "
+                f"onnxruntime maximum {max_opset_version}"
+            )
 
     sess = InferenceSessionAllTypes(model)
 
@@ -38,91 +45,6 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     outputs = sess.run(None, input_dict)
     return outputs
 
-
-# Highest default-domain (``ai.onnx``) opset version each ONNX Runtime release can
-# actually *load*. The registered operator schemas advertise the next,
-# still-under-development opset before the runtime is able to load a model
-# targeting it (e.g. ONNX Runtime 1.28 bundles ONNX 1.22, whose schemas report
-# ``since_version`` 27, yet ``InferenceSession`` rejects opset 27 with "Current
-# official support for domain ai.onnx is till opset 26"). A static mapping keeps
-# the exclusion list accurate without loading every backend test model.
-#
-# Values follow the ONNX Runtime <-> ONNX opset compatibility table
-# (https://onnxruntime.ai/docs/reference/compatibility.html) and, for the newest
-# releases, the ONNX version each runtime bundles (cmake/deps.txt).
-_ORT_VERSION_TO_MAX_OPSET = {
-    (1, 17): 20,
-    (1, 18): 21,
-    (1, 19): 21,
-    (1, 20): 21,
-    (1, 21): 22,
-    (1, 22): 22,
-    (1, 23): 23,
-    (1, 24): 24,
-    (1, 25): 26,
-    (1, 26): 26,
-    (1, 27): 26,
-    (1, 28): 26,
-}
-
-
-def ort_max_supported_opset() -> int:
-    """
-    Returns the highest default-domain opset version ONNX Runtime can load.
-
-    Looks up the installed ``onnxruntime`` ``(major, minor)`` version in
-    ``_ORT_VERSION_TO_MAX_OPSET``. This mirrors the official ONNX Runtime <-> ONNX
-    opset compatibility table and, unlike the registered operator schemas
-    (``get_all_operator_schema``), reflects the opset the runtime can actually
-    load rather than the next still-under-development opset it merely registers
-    schemas for.
-
-    For a version newer than the last tabulated entry, the ceiling of the highest
-    known version is used (never runs cases the runtime may not load); for an
-    older-than-tabulated version, the lowest known ceiling is used.
-
-    Returns:
-        The highest default-domain opset version ONNX Runtime can load.
-    """
-    import onnxruntime
-
-    parts = re.findall(r"\d+", onnxruntime.__version__)
-    major, minor = int(parts[0]), int(parts[1])
-    key = (major, minor)
-    if key in _ORT_VERSION_TO_MAX_OPSET:
-        return _ORT_VERSION_TO_MAX_OPSET[key]
-
-    known = sorted(_ORT_VERSION_TO_MAX_OPSET)
-    if key < known[0]:
-        return _ORT_VERSION_TO_MAX_OPSET[known[0]]
-    lower = max(version for version in known if version <= key)
-    return _ORT_VERSION_TO_MAX_OPSET[lower]
-
-
-# Opset version at which the cases below were introduced. They are only excluded
-# when the installed ONNX Runtime does not yet support that opset.
-OPSET_27 = 27
-OPSET_28 = 28
-
-# Exclusions that only apply when ONNX Runtime does not support the given opset.
-ORT_OPSET_GATED_EXCLUDE_REGEX = {
-    OPSET_27: [
-        # Range opset 27 cases.
-        r"^test_range_float16_type_positive_delta$",
-        r"^test_range_bfloat16_type_positive_delta$",
-        # LinearAttention is opset 27.
-        r"^test_cc_linear_attention_.*$",
-        # CausalConvWithState is opset 27.
-        r"^test_cc_causal_conv_with_state_.*$",
-    ],
-    OPSET_28: [
-        # Celu-28 adds float16/bfloat16 support; these test cases target opset 28.
-        r"^test_cc_celu_float16$",
-        r"^test_cc_celu_bfloat16$",
-        # SwiGLU is opset 28 (onnx#8202).
-        r"^test_cc_swiglu.*$",
-    ],
-}
 
 ORT_EXCLUDE_REGEX = [
     # ORT/reference parity mismatches in focused C++ cases.
@@ -296,12 +218,6 @@ ORT_EXCLUDE_REGEX = [
 _MACOS_ORT_EXCLUDE_REGEX = [r"^test_cc_cast(like)?_(FLOAT|FLOAT16|BFLOAT16)_to_UINT16$"]
 if sys.platform == "darwin":
     ORT_EXCLUDE_REGEX.extend(_MACOS_ORT_EXCLUDE_REGEX)
-
-# Add opset-gated exclusions only for opset versions ONNX Runtime cannot load yet.
-_ORT_MAX_OPSET = ort_max_supported_opset()
-for _opset, _patterns in ORT_OPSET_GATED_EXCLUDE_REGEX.items():
-    if _ORT_MAX_OPSET < _opset:
-        ORT_EXCLUDE_REGEX.extend(_patterns)
 
 # On Apple silicon (arm64), ONNX Runtime saturates out-of-range float -> UINT16
 # casts to 0 (the AArch64 ``fcvtzu`` instruction saturates), whereas onnx-light

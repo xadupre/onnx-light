@@ -184,15 +184,15 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
            });
   }
   if (with_bfloat16) {
-    NodeProto nodebf;
-    nodebf.set_op_type(op_type);
-    nodebf.add_input(input_name);
-    nodebf.add_output(output_name);
-    Kernel kbf = kernel;
-    Expect(registry, std::move(nodebf), name + "_bfloat16", {opset}, {size}, {size},
-           [kbf, size, seed]() -> IoData {
+    NodeProto nodebf16;
+    nodebf16.set_op_type(op_type);
+    nodebf16.add_input(input_name);
+    nodebf16.add_output(output_name);
+    Kernel kbf16 = kernel;
+    Expect(registry, std::move(nodebf16), name + "_bfloat16", {opset}, {size}, {size},
+           [kbf16, size, seed]() -> IoData {
              Tensor x = MakeBfloat16Tensor("", {size}, Randn<float>({size}, seed));
-             Tensor y = kbf(x);
+             Tensor y = kbf16(x);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -251,17 +251,17 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel
            });
   }
   if (with_bfloat16) {
-    NodeProto nodebf;
-    nodebf.set_op_type(op_type);
-    nodebf.add_input("x");
-    nodebf.add_input("y");
-    nodebf.add_output("z");
-    Kernel kbf = kernel;
-    Expect(registry, std::move(nodebf), name + "_bfloat16", {opset}, {size, size}, {size},
-           [kbf, size, seed]() -> IoData {
+    NodeProto nodebf16;
+    nodebf16.set_op_type(op_type);
+    nodebf16.add_input("x");
+    nodebf16.add_input("y");
+    nodebf16.add_output("z");
+    Kernel kbf16 = kernel;
+    Expect(registry, std::move(nodebf16), name + "_bfloat16", {opset}, {size, size}, {size},
+           [kbf16, size, seed]() -> IoData {
              Tensor x = MakeBfloat16Tensor("", {size}, Randn<float>({size}, seed));
              Tensor y = MakeBfloat16Tensor("", {size}, Randn<float>({size}, seed + 1));
-             Tensor z = kbf(x, y);
+             Tensor z = kbf16(x, y);
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
   }

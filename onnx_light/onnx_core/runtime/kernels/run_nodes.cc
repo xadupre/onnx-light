@@ -249,9 +249,9 @@ Tensors SubgraphSession::Run(std::vector<std::pair<std::string, Tensor>> binding
 namespace {
 
 void PropagateOutputsToCaller(const NodeProto &node, Tensors &&outputs, RuntimeContext &rt) {
-  EXT_ENFORCE_INVALID(outputs.size() == node.output_size(), "RunNode: op '", node.op_type(),
-                      "' produced ", outputs.size(), " output(s), node declares ",
-                      node.output_size(), ".");
+  EXT_ENFORCE_INVALID(outputs.size() == static_cast<std::size_t>(node.output_size()),
+                      "RunNode: op '", node.op_type(), "' produced ", outputs.size(),
+                      " output(s), node declares ", node.output_size(), ".");
   for (size_t i = 0; i < outputs.size(); ++i) {
     const std::string caller_name = node.output(i);
     if (caller_name.empty()) {
@@ -449,7 +449,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         std::vector<int64_t> per_iter_shape;
         if (tt.has_shape()) {
           per_iter_shape.reserve(tt.shape().dim().size());
-          for (int d = 0; d < tt.shape().dim().size(); ++d) {
+          for (std::size_t d = 0; d < tt.shape().dim().size(); ++d) {
             const auto &dim = tt.shape().dim()[d];
             per_iter_shape.push_back(dim.has_dim_value() ? static_cast<int64_t>(dim.dim_value())
                                                          : 0);
@@ -870,7 +870,7 @@ public:
     RuntimeContext child = rt.MakeFunctionContext();
 
     // Bind formal function inputs (borrow, no deep-copy).
-    for (size_t i = 0; i < func_.input_size(); ++i) {
+    for (size_t i = 0; i < static_cast<std::size_t>(func_.input_size()); ++i) {
       const std::string caller_name = node_->input(i);
       const std::string param_name = func_.input(i);
       if (caller_name.empty() || param_name.empty()) {
@@ -895,7 +895,7 @@ public:
     session_->Run(child);
 
     // Propagate formal outputs back to the caller's tensor map.
-    for (size_t i = 0; i < func_.output_size(); ++i) {
+    for (size_t i = 0; i < static_cast<std::size_t>(func_.output_size()); ++i) {
       const std::string caller_name = node_->output(i);
       const std::string param_name = func_.output(i);
       if (caller_name.empty()) {

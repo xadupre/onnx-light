@@ -67,12 +67,12 @@ void ComputeZipMapOutput(const Tensor &x, const std::vector<T> &class_labels, Te
 } // namespace
 
 Tensor ZipMap::operator()(const Tensor &x, const std::vector<int64_t> &class_labels,
-                          RuntimeContext *rt) const {
+                          RuntimeContext * /*rt*/) const {
   return ComputeZipMapOutput(x, class_labels, ctx_.allocator);
 }
 
 Tensor ZipMap::operator()(const Tensor &x, const ParamStrings &class_labels,
-                          RuntimeContext *rt) const {
+                          RuntimeContext * /*rt*/) const {
   return ComputeZipMapOutput(x, class_labels, ctx_.allocator);
 }
 

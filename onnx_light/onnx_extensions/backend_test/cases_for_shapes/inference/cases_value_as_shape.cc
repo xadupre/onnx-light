@@ -49,7 +49,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // The reference DataSet uses concrete sizes (``N=3, B=4``) so the case is
 // executable end-to-end by ``BackendTestCaseRunModel``.
 // ---------------------------------------------------------------------------
-void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(20);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 

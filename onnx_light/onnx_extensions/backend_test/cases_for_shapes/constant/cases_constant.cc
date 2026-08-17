@@ -40,7 +40,7 @@ template <typename T> void MarkConstant(T &value) {
 //      (constant); ``Add(X, K) → Y`` is not constant because ``X`` is a runtime
 //      input.
 // ---------------------------------------------------------------------------
-void RegisterConstantInfoCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterConstantInfoCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 

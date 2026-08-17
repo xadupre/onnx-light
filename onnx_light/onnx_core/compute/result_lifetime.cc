@@ -18,19 +18,19 @@ ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow
   // or must outlive the run. Declared graph inputs are protected unless
   // ``allow_input_overwrite`` explicitly opts into reusing them, in which case
   // only initializers and outputs stay protected.
-  for (int i = 0; i < graph.input().size(); ++i) {
+  for (std::size_t i = 0; i < graph.input().size(); ++i) {
     const std::string name = graph.input()[i].name();
     info.graph_inputs.insert(name);
     if (!allow_input_overwrite) {
       info.keep.insert(name);
     }
   }
-  for (int i = 0; i < graph.initializer().size(); ++i) {
+  for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
     const std::string name = graph.initializer()[i].name();
     info.graph_initializers.insert(name);
     info.keep.insert(name);
   }
-  for (int i = 0; i < graph.output().size(); ++i) {
+  for (std::size_t i = 0; i < graph.output().size(); ++i) {
     info.keep.insert(graph.output()[i].name());
     info.graph_outputs.insert(graph.output()[i].name());
   }

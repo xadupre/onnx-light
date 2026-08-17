@@ -186,7 +186,7 @@ GraphProto BuildPairwiseDistanceBody() {
 // each row and averaging them yields ``Y = [3.5, 4.0, 4.5]``.
 // ---------------------------------------------------------------------------
 void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry,
-                                                     TestMode mode) {
+                                                     TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
 
   const std::string name = "test_cc_shape_inference_topk_pairwise_distance";
@@ -304,7 +304,7 @@ void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
 // each row and averaging them yields ``Y = [3.5, 4.0, 4.5]``.
 // ---------------------------------------------------------------------------
 void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry,
-                                                         TestMode mode) {
+                                                         TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
 
   const std::string name = "test_cc_shape_inference_scan_topk_pairwise_distance";
@@ -416,7 +416,7 @@ void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
 // each row and averaging them yields ``Y = [3.5, 4.0, 4.5]``.
 // ---------------------------------------------------------------------------
 void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry,
-                                                         TestMode mode) {
+                                                         TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
 
   const std::string name = "test_cc_shape_inference_loop_topk_pairwise_distance";
@@ -532,7 +532,7 @@ void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
 // ``[10, 9]``, ``[15, 14]``; TopK2 (K=2 of 2 elements) is the identity;
 // ReduceMean gives ``Y = [4.5, 9.5, 14.5]``.
 // ---------------------------------------------------------------------------
-void RegisterTwoTopKSameKShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterTwoTopKSameKShapeInferenceCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
 
   const std::string name = "test_cc_shape_inference_two_topk_same_k";
@@ -625,7 +625,8 @@ void RegisterTwoTopKSameKShapeInferenceCases(std::vector<TestCase> &registry, Te
 // ``[5, 4]``, ``[10, 9]``, ``[15, 14]``; ReduceMean gives
 // ``Y = [4.5, 9.5, 14.5]``.
 // ---------------------------------------------------------------------------
-void RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registry,
+                                                  TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
 
   const std::string name = "test_cc_shape_inference_two_topk_different_k";

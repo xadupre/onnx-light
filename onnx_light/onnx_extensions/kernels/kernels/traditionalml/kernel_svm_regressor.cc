@@ -18,7 +18,7 @@ template <typename T>
 Tensor SVMRegressor::operator()(const Tensor &x, const std::vector<float> &support_vectors,
                                 const std::vector<float> &coefficients,
                                 const std::vector<float> &rho, const char *kernel_type, float gamma,
-                                float coef0, float degree, RuntimeContext *rt) const {
+                                float coef0, float degree, RuntimeContext * /*rt*/) const {
   int64_t sample_count = 0;
   int64_t feature_count = 0;
   ValidateFeatureMatrixShape(x, sample_count, feature_count);

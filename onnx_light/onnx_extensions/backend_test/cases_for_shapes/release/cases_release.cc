@@ -52,7 +52,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 //   * node 0 (Add):  ``onnx_light.not_used_after = "X;W"``.
 //   * node 1 (Relu): ``onnx_light.release_after = "T"``.
 // ---------------------------------------------------------------------------
-void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 

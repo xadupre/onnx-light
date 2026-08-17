@@ -311,7 +311,8 @@ Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_
                                    const std::vector<int64_t> &ngram_counts,
                                    const ParamInts &ngram_indexes, const ParamInts &pool_int64s,
                                    const std::vector<std::string> &pool_strings,
-                                   const std::vector<float> &weights, RuntimeContext *rt) const {
+                                   const std::vector<float> &weights,
+                                   RuntimeContext * /*rt*/) const {
   EXT_ENFORCE_INVALID(!ngram_indexes.empty(),
                       "kernel::TfIdfVectorizer: ngram_indexes must be non-empty.");
   EXT_ENFORCE_INVALID(min_gram_length >= 1,

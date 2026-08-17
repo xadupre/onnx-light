@@ -349,7 +349,7 @@ Tensors Loop::operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSes
     std::vector<int64_t> per_iter_shape;
     if (tt.has_shape()) {
       per_iter_shape.reserve(tt.shape().dim().size());
-      for (int d = 0; d < tt.shape().dim().size(); ++d) {
+      for (std::size_t d = 0; d < tt.shape().dim().size(); ++d) {
         const auto &dim = tt.shape().dim()[d];
         per_iter_shape.push_back(dim.has_dim_value() ? static_cast<int64_t>(dim.dim_value()) : 0);
       }

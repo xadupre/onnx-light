@@ -80,7 +80,7 @@ void RequireOutputCount(const NodeProto &node, int expected) {
                       node.output_size(), ".");
 }
 
-const AttributeProto *FindAttribute(const NodeProto &node, const std::string &name) {
+const AttributeProto *FindAttribute(const NodeProto &node, std::string_view name) {
   for (size_t i = 0; i < node.attribute().size(); ++i) {
     const AttributeProto &attr = node.attribute()[i];
     if (attr.name() == name) {
@@ -90,12 +90,12 @@ const AttributeProto *FindAttribute(const NodeProto &node, const std::string &na
   return nullptr;
 }
 
-const GraphProto &GetRequiredGraphAttribute(const NodeProto &node, const std::string &name) {
+const GraphProto &GetRequiredGraphAttribute(const NodeProto &node, std::string_view name) {
   const AttributeProto *attr = FindAttribute(node, name);
-  EXT_ENFORCE_INVALID(attr != nullptr, "RunNode: op '", node.op_type(), "' is missing '", name,
-                      "' graph attribute.");
+  EXT_ENFORCE_INVALID(attr != nullptr, "RunNode: op '", node.op_type(), "' is missing '",
+                      std::string(name), "' graph attribute.");
   EXT_ENFORCE_INVALID(!(attr->type() != AttributeProto::AttributeType::GRAPH),
-                      "RunNode: attribute '", name, "' of op '", node.op_type(),
+                      "RunNode: attribute '", std::string(name), "' of op '", node.op_type(),
                       "' must be a GRAPH.");
   return attr->ref_g();
 }

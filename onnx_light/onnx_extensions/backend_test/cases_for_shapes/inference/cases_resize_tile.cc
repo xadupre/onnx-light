@@ -59,7 +59,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 //   tile_out     float[10, 6]  (5*2=10, 3*2=6)
 //   output       float[10, 6]  (Max with 0 is identity for positive values)
 // ---------------------------------------------------------------------------
-void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(13);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 

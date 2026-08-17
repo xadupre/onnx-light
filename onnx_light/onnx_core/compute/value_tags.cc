@@ -18,7 +18,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::compute {
 namespace {
 
 template <typename T> void SetMetadataValue(T &obj, const char *key, const std::string &value) {
-  for (int i = 0; i < obj.metadata_props().size(); ++i) {
+  for (std::size_t i = 0; i < obj.metadata_props().size(); ++i) {
     if (obj.metadata_props()[i].key() == key) {
       obj.mutable_metadata_props(static_cast<std::size_t>(i))->set_value(value);
       return;
@@ -30,12 +30,12 @@ template <typename T> void SetMetadataValue(T &obj, const char *key, const std::
 }
 
 void RecurseSubgraphs(NodeProto &node) {
-  for (int i = 0; i < node.attribute().size(); ++i) {
+  for (std::size_t i = 0; i < node.attribute().size(); ++i) {
     AttributeProto *attr = node.mutable_attribute(static_cast<std::size_t>(i));
     if (attr->has_g()) {
       WriteValueAndNodeTagsToMetadata(*attr->mutable_g());
     }
-    for (int g = 0; g < attr->graphs().size(); ++g) {
+    for (std::size_t g = 0; g < attr->graphs().size(); ++g) {
       WriteValueAndNodeTagsToMetadata(*attr->mutable_graphs(static_cast<std::size_t>(g)));
     }
   }
@@ -75,8 +75,8 @@ std::vector<int> BackwardTagInputIndices(const NodeProto &node, const std::strin
     }
     std::vector<int> all_inputs;
     all_inputs.reserve(static_cast<std::size_t>(node.input().size()));
-    for (int i = 0; i < node.input().size(); ++i) {
-      all_inputs.push_back(i);
+    for (std::size_t i = 0; i < node.input().size(); ++i) {
+      all_inputs.push_back(static_cast<int>(i));
     }
     return all_inputs;
   }
@@ -159,7 +159,7 @@ bool TrySetValueTag(std::unordered_map<std::string, std::string> &value_tags,
 
 void CollectGraphSeedTags(const GraphProto &graph,
                           std::unordered_map<std::string, std::string> &value_tags) {
-  for (int i = 0; i < graph.input().size(); ++i) {
+  for (std::size_t i = 0; i < graph.input().size(); ++i) {
     const auto &value = graph.input()[i];
     std::string tag = ReadMetadataValue(value, kValueTagMetadataKey);
     if (tag.empty()) {
@@ -169,7 +169,7 @@ void CollectGraphSeedTags(const GraphProto &graph,
     }
     SetValueTag(value_tags, value.name(), tag);
   }
-  for (int i = 0; i < graph.initializer().size(); ++i) {
+  for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
     const auto &value = graph.initializer()[i];
     std::string tag = ReadMetadataValue(value, kValueTagMetadataKey);
     if (tag.empty()) {
@@ -177,11 +177,11 @@ void CollectGraphSeedTags(const GraphProto &graph,
     }
     SetValueTag(value_tags, value.name(), tag);
   }
-  for (int i = 0; i < graph.value_info().size(); ++i) {
+  for (std::size_t i = 0; i < graph.value_info().size(); ++i) {
     const auto &value = graph.value_info()[i];
     SetValueTag(value_tags, value.name(), ReadMetadataValue(value, kValueTagMetadataKey));
   }
-  for (int i = 0; i < graph.output().size(); ++i) {
+  for (std::size_t i = 0; i < graph.output().size(); ++i) {
     const auto &value = graph.output()[i];
     SetValueTag(value_tags, value.name(), ReadMetadataValue(value, kValueTagMetadataKey));
   }
@@ -259,7 +259,7 @@ bool ProcessNodeTags(const NodeProto &node, std::size_t n,
 
   std::string current_output_tag;
   bool output_tags_are_consistent = true;
-  for (int o = 0; o < node.output().size(); ++o) {
+  for (std::size_t o = 0; o < node.output().size(); ++o) {
     auto it = value_tags.find(node.output(o));
     if (it != value_tags.end()) {
       if (current_output_tag.empty()) {
@@ -285,7 +285,7 @@ bool ProcessNodeTags(const NodeProto &node, std::size_t n,
     bool has_tag = false;
     bool all_same = true;
     std::string first_known_tag;
-    for (int i = 0; i < node.input().size(); ++i) {
+    for (std::size_t i = 0; i < node.input().size(); ++i) {
       auto it = value_tags.find(node.input(i));
       if (it != value_tags.end() && !it->second.empty()) {
         if (it->second == "weight") {
@@ -331,7 +331,7 @@ bool ProcessNodeTags(const NodeProto &node, std::size_t n,
     changed = true;
   }
   if (!node_tag.empty()) {
-    for (int o = 0; o < node.output().size(); ++o) {
+    for (std::size_t o = 0; o < node.output().size(); ++o) {
       note(node.output(o), TrySetValueTag(value_tags, node.output(o), node_tag));
     }
   }
@@ -340,7 +340,7 @@ bool ProcessNodeTags(const NodeProto &node, std::size_t n,
   if (!backward_inputs.empty()) {
     if (output_tags_are_consistent && !current_output_tag.empty()) {
       for (int idx : backward_inputs) {
-        if (idx >= 0 && idx < node.input().size()) {
+        if (idx >= 0 && static_cast<std::size_t>(idx) < node.input().size()) {
           note(node.input(idx), TrySetValueTag(value_tags, node.input(idx), current_output_tag));
         }
       }
@@ -395,35 +395,35 @@ void WriteValueAndNodeTagsToMetadata(GraphProto &graph) {
       SetMetadataValue(*graph.mutable_node(i), kValueTagMetadataKey, node_tags[i]);
     }
   }
-  for (int i = 0; i < graph.input().size(); ++i) {
+  for (std::size_t i = 0; i < graph.input().size(); ++i) {
     auto it = value_tags.find(graph.input(i).name());
     if (it != value_tags.end()) {
       SetMetadataValue(*graph.mutable_input(static_cast<std::size_t>(i)), kValueTagMetadataKey,
                        it->second);
     }
   }
-  for (int i = 0; i < graph.value_info().size(); ++i) {
+  for (std::size_t i = 0; i < graph.value_info().size(); ++i) {
     auto it = value_tags.find(graph.value_info(i).name());
     if (it != value_tags.end()) {
       SetMetadataValue(*graph.mutable_value_info(static_cast<std::size_t>(i)), kValueTagMetadataKey,
                        it->second);
     }
   }
-  for (int i = 0; i < graph.output().size(); ++i) {
+  for (std::size_t i = 0; i < graph.output().size(); ++i) {
     auto it = value_tags.find(graph.output(i).name());
     if (it != value_tags.end()) {
       SetMetadataValue(*graph.mutable_output(static_cast<std::size_t>(i)), kValueTagMetadataKey,
                        it->second);
     }
   }
-  for (int i = 0; i < graph.initializer().size(); ++i) {
+  for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
     auto it = value_tags.find(graph.initializer(i).name());
     if (it != value_tags.end()) {
       SetMetadataValue(*graph.mutable_initializer(static_cast<std::size_t>(i)),
                        kValueTagMetadataKey, it->second);
     }
   }
-  for (int i = 0; i < graph.node().size(); ++i) {
+  for (std::size_t i = 0; i < graph.node().size(); ++i) {
     RecurseSubgraphs(*graph.mutable_node(static_cast<std::size_t>(i)));
   }
 }
@@ -441,14 +441,14 @@ void WriteValueAndNodeTagsToMetadata(FunctionProto &function) {
       SetMetadataValue(*function.mutable_node(i), kValueTagMetadataKey, node_tags[i]);
     }
   }
-  for (int i = 0; i < function.value_info().size(); ++i) {
+  for (std::size_t i = 0; i < function.value_info().size(); ++i) {
     auto it = value_tags.find(function.value_info(i).name());
     if (it != value_tags.end()) {
       SetMetadataValue(*function.mutable_value_info(static_cast<std::size_t>(i)),
                        kValueTagMetadataKey, it->second);
     }
   }
-  for (int i = 0; i < function.node().size(); ++i) {
+  for (std::size_t i = 0; i < function.node().size(); ++i) {
     RecurseSubgraphs(*function.mutable_node(static_cast<std::size_t>(i)));
   }
 }

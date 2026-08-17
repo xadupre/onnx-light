@@ -14,7 +14,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor ReverseSequence::operator()(const Tensor &input, const Tensor &sequence_lens,
                                    const ReverseSequence::Attributes &attrs,
-                                   RuntimeContext *rt) const {
+                                   RuntimeContext * /*rt*/) const {
   Tensor output;
   output.name = "";
   output.data_type = input.data_type;

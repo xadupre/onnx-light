@@ -635,6 +635,14 @@ LightOpSchema MakeSliceSchema(int since_version, const std::vector<TensorType> &
 }
 
 LightOpSchema MakeSqueezeSchema(int since_version, const std::vector<TensorType> &types) {
+  // GCC's -Wmaybe-uninitialized has a known false positive here: constructing the
+  // AttributeParam containing a std::variant default (std::monostate{}) as part of
+  // this aggregate-initialized LightOpSchema confuses its data-flow analysis, even
+  // though every branch fully initializes the schema before it is returned.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
   const bool axes_is_input = since_version >= 13;
   LightOpSchema schema(
       "Squeeze", kOnnxDomain, since_version, MakeSqueezeDoc(since_version),
@@ -683,6 +691,9 @@ LightOpSchema MakeSqueezeSchema(int since_version, const std::vector<TensorType>
            AttributeType::INTS, /*required=*/false, std::monostate{}},
       });
 }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 LightOpSchema MakeUnsqueezeSchema(int since_version, const std::vector<TensorType> &types) {
   if (since_version >= 13) {

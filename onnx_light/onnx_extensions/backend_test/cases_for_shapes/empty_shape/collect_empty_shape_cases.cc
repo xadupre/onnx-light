@@ -7,7 +7,7 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void CollectEmptyShapeTestCases(std::vector<TestCase> &registry, const std::string &op_type,
-                                TestMode mode) {
+                                TestMode /*mode*/) {
   if (op_type.empty() or op_type == "empty_shape") {
     RegisterAddEmptyShapeCases(registry);
     RegisterCompressEmptyShapeCases(registry);

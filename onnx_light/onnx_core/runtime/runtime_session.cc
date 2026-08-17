@@ -387,6 +387,25 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       const bool routed_to_io = session_io_allocator_ != nullptr && ProducesDeclaredOutput(node);
       rt.SetActiveAllocator(routed_to_io ? session_io_allocator_ : session_allocator_);
 
+      // Record the per-output-slot allocation roles so a slot-aware kernel can
+      // materialize each output directly in its final arena (a declared graph
+      // output in the I/O arena, every other output in the execution arena),
+      // avoiding the migration copy VerifyOutputAllocators would otherwise
+      // perform for a mixed-output node. Kernels that do not use the slot-aware
+      // MakeOutputTensor API are unaffected and keep node-scoped routing.
+      if (session_io_allocator_ != nullptr) {
+        std::vector<bool> io_roles(static_cast<size_t>(node.output_size()), false);
+        for (int slot = 0; slot < node.output_size(); ++slot) {
+          const std::string &output_name = node.output(slot);
+          io_roles[static_cast<size_t>(slot)] =
+              !output_name.empty() &&
+              output_names_set_.find(output_name) != output_names_set_.end();
+        }
+        rt.set_output_slot_io_roles(std::move(io_roles));
+      } else {
+        rt.clear_output_slot_io_roles();
+      }
+
       // Only capture timing when event logging is active.
       const bool logging = rt.events_enabled();
       int64_t start_time_ns = 0;
@@ -399,6 +418,11 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       }
 
       prepared.instance->Run(rt);
+
+      // The per-slot roles apply only to the node just dispatched; clear them so
+      // a later kernel that runs before the next node records its roles (for
+      // example a control-flow body) never observes stale routing.
+      rt.clear_output_slot_io_roles();
 
       if (logging) {
         const int64_t duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(

@@ -125,6 +125,12 @@ std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::str
   if (name == "ExpandSwap") {
     return std::make_shared<onnx_patterns::ExpandSwapPattern>(priority.value_or(0));
   }
+  if (name == "SwapExpandUnsqueeze") {
+    return std::make_shared<onnx_patterns::SwapExpandUnsqueezePattern>(priority.value_or(0));
+  }
+  if (name == "ExpandUnsqueezeExpand") {
+    return std::make_shared<onnx_patterns::ExpandUnsqueezeExpandPattern>(priority.value_or(0));
+  }
   throw std::invalid_argument("Unknown ONNX pattern '" + name + "'.");
 }
 
@@ -271,6 +277,16 @@ NB_MODULE(_onnxpypatterns, m) {
       m, "ExpandSwapPattern",
       "Moves an ``Expand`` past a following unary-like operator so the operator "
       "runs on the smaller tensor.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::SwapExpandUnsqueezePattern, core::builder::PatternOptimization>(
+      m, "SwapExpandUnsqueezePattern",
+      "Swaps ``Expand`` and a following ``Unsqueeze`` so the ``Unsqueeze`` runs "
+      "on the smaller, pre-expansion tensor.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ExpandUnsqueezeExpandPattern, core::builder::PatternOptimization>(
+      m, "ExpandUnsqueezeExpandPattern",
+      "Fuses ``Expand``, ``Unsqueeze`` and ``Expand`` into a single ``Unsqueeze`` "
+      "followed by one ``Expand``.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
 
   m.def(

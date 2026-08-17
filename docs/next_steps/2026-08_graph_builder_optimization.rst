@@ -110,6 +110,16 @@ requests:
      - Starts the next batch with ``NotWherePattern``,
       ``UnsqueezeEqualPattern``, and ``WhereAddPattern``, including
       rewrite/rejection tests, registration, and Python bindings.
+   * - `PR #4491 <https://github.com/xadupre/onnx-light/pull/4491>`_
+     - Redundant and broadcasting Expand
+     - Ports ``ExpandPattern``, ``ExpandBroadcastPattern``, and
+       ``ExpandSwapPattern`` with rewrite/rejection tests, registration, and
+       Python bindings.
+   * - `Issue #4494 <https://github.com/xadupre/onnx-light/issues/4494>`_
+     - Expand/Unsqueeze reordering and fusion
+     - Ports ``SwapExpandUnsqueezePattern`` and
+       ``ExpandUnsqueezeExpandPattern`` with rewrite/rejection tests,
+       registration, and Python bindings.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -636,8 +646,9 @@ The upstream default list currently contains 104 enabled patterns.
 ``ConvBiasNullPattern``, ``PadConvPattern``, ``DropoutPattern``,
 ``IdentityPattern``, ``NotNotPattern``, ``NotWherePattern``,
 ``UnsqueezeEqualPattern``, ``WhereAddPattern``, ``ExpandPattern``,
-``ExpandBroadcastPattern``, and ``ExpandSwapPattern`` are already covered,
-leaving 87 patterns. They are grouped into nine cohesive pull requests below rather than
+``ExpandBroadcastPattern``, ``ExpandSwapPattern``,
+``SwapExpandUnsqueezePattern``, and ``ExpandUnsqueezeExpandPattern`` are already
+covered, leaving 85 patterns. They are grouped into nine cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;
 this keeps reviews and ``git bisect`` useful without creating 100 pull
@@ -653,15 +664,15 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ``GatherGatherPattern``, ``GathersSplitPattern``, ``GatherShapePattern``,
    ``SequenceConstructAtPattern``, ``SplitToSequenceSequenceAtPattern``,
    ``SliceSlicePattern``, ``SlicesSplitPattern``, and ``SplitConcatPattern``.
-#. **Expand, where, and equal (9 patterns remaining).**
-   ``ExpandUnsqueezeExpandPattern``, ``ShapeBasedConcatExpandPattern``,
+#. **Expand, where, and equal (7 patterns remaining).**
+   ``ShapeBasedConcatExpandPattern``,
    ``ShapeBasedExpandBroadcastPattern``,
    ``ShapeBasedExpandBroadcastMatMulPattern``,
    ``ShapeBasedExpandCastWhereSwapPattern``, ``ShapeBasedExpandSwapPattern``,
-   ``ShapeBasedStaticExpandPattern``, ``SwapExpandReshapePattern``, and
-   ``SwapExpandUnsqueezePattern``. ``ExpandPattern``,
-   ``ExpandBroadcastPattern``, and ``ExpandSwapPattern`` are ported and
-   registered.
+   ``ShapeBasedStaticExpandPattern``, and ``SwapExpandReshapePattern``.
+   ``ExpandPattern``, ``ExpandBroadcastPattern``, ``ExpandSwapPattern``,
+   ``SwapExpandUnsqueezePattern``, and ``ExpandUnsqueezeExpandPattern`` are
+   ported and registered.
 #. **Reshape canonicalization (13 patterns).**
    ``ConcatReshapePattern``, ``ReshapePattern``, ``ReduceReshapePattern``,
    ``Reshape2Of3Pattern``, ``ReshapeReshapeBinaryPattern``,
@@ -744,3 +755,6 @@ Pull requests
 * `Issue #4490 <https://github.com/xadupre/onnx-light/issues/4490>`_: core
   ``Expand`` rewrites (``ExpandPattern``, ``ExpandBroadcastPattern``, and
   ``ExpandSwapPattern``).
+* `Issue #4494 <https://github.com/xadupre/onnx-light/issues/4494>`_:
+  ``Expand``/``Unsqueeze`` reordering and fusion
+  (``SwapExpandUnsqueezePattern`` and ``ExpandUnsqueezeExpandPattern``).

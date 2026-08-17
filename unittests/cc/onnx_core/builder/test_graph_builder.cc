@@ -562,6 +562,67 @@ TEST(GraphBuilder, RemoveDuplicateNodesRecursesIntoSubgraphs) {
   EXPECT_EQ(builder.Subgraph("body").Nodes()[1].input(1), n1[0]);
 }
 
+TEST(GraphBuilder, MoveShapeAndSizeNodesHoistsToProducer) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  const std::vector<std::string> p = builder.MakeNode("Neg", {"x"});
+  const std::vector<std::string> a = builder.MakeNode("Add", {p[0], p[0]});
+  // Shape reads p but is inserted after an unrelated node; the chained Size
+  // reads the Shape output, so both must move right after Neg in one pass.
+  const std::vector<std::string> sh = builder.MakeNode("Shape", {p[0]});
+  const std::vector<std::string> sz = builder.MakeNode("Size", {sh[0]});
+  builder.MakeOutput(a[0]);
+  builder.MakeOutput(sz[0]);
+
+  EXPECT_EQ(builder.MoveShapeAndSizeNodes(), 2u);
+  ASSERT_EQ(builder.Nodes().size(), 4u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Neg");
+  EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Shape");
+  EXPECT_EQ(builder.Nodes()[2].op_type().value(), "Size");
+  EXPECT_EQ(builder.Nodes()[3].op_type().value(), "Add");
+  // A second pass leaves the already-tightened graph untouched.
+  EXPECT_EQ(builder.MoveShapeAndSizeNodes(), 0u);
+}
+
+TEST(GraphBuilder, MoveShapeAndSizeNodesKeepsGraphInputReader) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  // Shape reads a graph input (no producing node), so it stays in place.
+  const std::vector<std::string> n = builder.MakeNode("Neg", {"x"});
+  const std::vector<std::string> sh = builder.MakeNode("Shape", {"x"});
+  builder.MakeOutput(n[0]);
+  builder.MakeOutput(sh[0]);
+
+  EXPECT_EQ(builder.MoveShapeAndSizeNodes(), 0u);
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Neg");
+  EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Shape");
+}
+
+TEST(GraphBuilder, MoveShapeAndSizeNodesRecursesIntoSubgraphs) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  core::builder::GraphBuilder &body = builder.MakeSubgraph("body");
+  body.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> p = body.MakeNode("Neg", {"a"});
+  const std::vector<std::string> u = body.MakeNode("Add", {p[0], p[0]});
+  const std::vector<std::string> sh = body.MakeNode("Shape", {p[0]});
+  body.MakeOutput(u[0]);
+  body.MakeOutput(sh[0]);
+
+  const std::vector<std::string> top = builder.MakeNode("Neg", {"x"});
+  builder.MakeOutput(top[0]);
+
+  EXPECT_EQ(builder.MoveShapeAndSizeNodes(), 1u);
+  ASSERT_EQ(builder.Subgraph("body").Nodes().size(), 3u);
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[0].op_type().value(), "Neg");
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[1].op_type().value(), "Shape");
+  EXPECT_EQ(builder.Subgraph("body").Nodes()[2].op_type().value(), "Add");
+}
+
 TEST(GraphBuilder, InlineLocalFunctionsExpandsCallSite) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
 

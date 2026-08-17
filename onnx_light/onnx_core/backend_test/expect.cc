@@ -20,7 +20,7 @@ namespace {
 // Default IR version stamped on test models. Matches ``Version::IR_VERSION``
 // in ``onnx_lib/onnx-data.pb.h`` but is duplicated here so this library does
 // not need to depend on ``lib_onnx_lib``.
-constexpr int64_t kDefaultIrVersion = 13;
+constexpr int64_t kDefaultIrVersion = 14;
 
 // Filters node.input/node.output, keeping only entries with a non-empty name.
 std::vector<std::string> NonEmpty(const utils::RepeatedField<utils::String> &names) {

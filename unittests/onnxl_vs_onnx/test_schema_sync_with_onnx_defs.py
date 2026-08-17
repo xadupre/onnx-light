@@ -2,7 +2,7 @@ import unittest
 from onnx_light.ext_test_case import ExtTestCase
 import onnx
 import onnx.defs as onnx_defs
-import onnx_light.onnx
+import onnx_light.onnx.defs
 
 
 class TestSchemaSyncWithOnnxDefs(ExtTestCase):

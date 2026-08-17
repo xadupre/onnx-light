@@ -17,6 +17,7 @@ render_rst_summary = _runtime_coverage.render_rst_summary
 render_rst_table_for_domain = _runtime_coverage.render_rst_table_for_domain
 _run_onnxruntime = _runtime_coverage._run_onnxruntime
 _format_discrepancy = _runtime_coverage._format_discrepancy
+_ORT_MAX_IR_VERSION = _runtime_coverage._ORT_MAX_IR_VERSION
 
 
 class TestRuntimeCoverage(ExtTestCase):
@@ -158,7 +159,21 @@ class TestRuntimeCoverageOnnxruntime(ExtTestCase):
             outputs=[np.array(expected, dtype=np.float32)],
             name=name,
         )
-        return self.ALL_TESTS[name]
+        tc = self.ALL_TESTS[name]
+        tc.model.ir_version = _ORT_MAX_IR_VERSION
+        return tc
+
+    def test_unsupported_ir_version_is_skipped(self):
+        tc = self._make_identity_case("test_unsupported_ir", [1.0], [1.0])
+        tc.model.ir_version = _ORT_MAX_IR_VERSION + 1
+        diff, ok, err = _run_onnxruntime(tc)
+        self.assertIsNone(diff)
+        self.assertFalse(ok)
+        self.assertEqual(
+            err,
+            f"skipped: model IR version {tc.model.ir_version} exceeds "
+            f"onnxruntime maximum {_ORT_MAX_IR_VERSION}",
+        )
 
     def test_tolerance_uses_relative_magnitude(self):
         # atol=1e-7, rtol=1e-3, expected magnitude 1000 -> allowed slack is

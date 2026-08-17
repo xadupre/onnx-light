@@ -654,7 +654,18 @@ std::string proto_repr_with_short_line(cls &self,
   utils::PrintOptions opts;
   std::stringstream ss;
   self.PrintToStringStream(ss, opts);
-  return ss.str();
+  std::string repr = ss.str();
+  // Keeps the representation on a single short line: overly long reprs are truncated and
+  // terminated with an ellipsis so they never exceed ``max_short_repr_length`` characters.
+  if (repr.size() > max_short_repr_length) {
+    static constexpr const char ellipsis[] = "...";
+    static constexpr size_t ellipsis_length = sizeof(ellipsis) - 1;
+    size_t keep =
+        max_short_repr_length > ellipsis_length ? max_short_repr_length - ellipsis_length : 0;
+    repr.resize(keep);
+    repr += ellipsis;
+  }
+  return repr;
 }
 
 template <typename T> void define_repeated_field_type(nb::class_<utils::RepeatedField<T>> &nbcls) {

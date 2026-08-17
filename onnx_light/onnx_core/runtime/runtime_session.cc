@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 
 #include "onnx_core/graph/graph_manipulations.h"
@@ -234,7 +235,7 @@ bool RuntimeSession::ProducesDeclaredOutput(const NodeProto &node) const {
 
 void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const {
   const bool routed_to_io = session_io_allocator_ != nullptr && ProducesDeclaredOutput(node);
-  const RawBufferAllocator *expected = routed_to_io ? session_io_allocator_ : session_allocator_;
+  RawBufferAllocator *expected = routed_to_io ? session_io_allocator_ : session_allocator_;
   const char *expected_name =
       routed_to_io ? "the session's I/O allocator" : "the session's execution allocator";
   for (int i = 0; i < node.output_size(); ++i) {
@@ -242,11 +243,24 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
     if (name.empty() || !rt.Has(name)) {
       continue;
     }
-    const Tensor &output = rt.Get(name);
-    if (!output.has_allocation()) {
+    Tensor &output = rt.Get(name);
+    if (expected != nullptr && static_cast<DataType>(output.data_type) != DataType::STRING &&
+        (!output.has_allocation() || output.allocation_owner() != expected)) {
+      Tensor migrated =
+          MakeOutputTensor(output.data_type, output.shape, output.size_bytes(), expected);
+      migrated.name = output.name;
+      if (output.size_bytes() > 0) {
+        EXT_ENFORCE(output.bytes() != nullptr,
+                    "RuntimeSession: output has non-zero size with a null data pointer.");
+        std::memcpy(migrated.mutable_bytes(), output.bytes(), output.size_bytes());
+      }
+      rt.Put(name, std::move(migrated), RuntimeEventKind::kIntermediate);
+    }
+    const Tensor &verified_output = rt.Get(name);
+    if (!verified_output.has_allocation()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(output.allocation_owner() == expected, "RuntimeSession: op '",
+    EXT_ENFORCE_INVALID(verified_output.allocation_owner() == expected, "RuntimeSession: op '",
                         node.op_type(), "' produced output '", name,
                         "' backed by an allocator other than ", expected_name, ".");
   }

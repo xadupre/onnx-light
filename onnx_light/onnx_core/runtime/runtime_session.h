@@ -306,11 +306,12 @@ private:
   /// read in :cpp:member:`required_inputs_`.
   void InitializeKernels(RuntimeContext &rt);
 
-  /// Verifies that every tensor output of ``node`` that is allocator-backed
-  /// is owned by :cpp:member:`session_allocator_`, or by
+  /// Normalizes every raw tensor output of ``node`` into
+  /// :cpp:member:`session_allocator_`, or into
   /// :cpp:member:`session_io_allocator_` when ``node`` produces a declared
-  /// graph output and an I/O allocator is attached. Called after a node's
-  /// kernel has run, once :cpp:member:`session_allocator_` has been captured.
+  /// graph output and an I/O allocator is attached, then verifies allocator
+  /// ownership. Called after a node's kernel has run, once
+  /// :cpp:member:`session_allocator_` has been captured.
   void VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const;
 
   /// Returns whether ``node`` produces at least one declared graph output

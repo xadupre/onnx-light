@@ -20,7 +20,7 @@ Sequence SequenceErase::operator()(const Sequence &input_sequence, const Tensor 
     EXT_ENFORCE_INVALID(n > 0, "kernel::SequenceErase: cannot erase from an empty sequence.");
     idx = n - 1;
   } else {
-    EXT_ENFORCE_INVALID(!position->data.empty() && position->shape.empty(),
+    EXT_ENFORCE_INVALID(position->size_bytes() > 0 && position->shape.empty(),
                         "kernel::SequenceErase: 'position' must be a scalar tensor.");
     if (position->data_type == static_cast<int32_t>(DataType::INT32)) {
       idx = static_cast<int64_t>(*position->AsInt32());

@@ -109,7 +109,7 @@ void ResolveAndValidate(const Tensors &inputs, int64_t axis, int64_t new_axis, i
 // output tensor; ``elem_size`` is the per-element byte size.
 void CopyConcatenated(const Tensors &inputs, int resolved_axis,
                       const onnx_kernels::Shape &out_shape, size_t elem_size,
-                      RawBuffer &output_bytes) {
+                      uint8_t *output_bytes) {
   // Block of consecutive bytes that the concat sees as a "row" of the
   // outer block: outer * inner * elem_size bytes per input contribute
   // a slab whose width along the concat axis equals the input's
@@ -129,7 +129,7 @@ void CopyConcatenated(const Tensors &inputs, int resolved_axis,
       const size_t slab_bytes = static_cast<size_t>(in_axis_dim * inner) * elem_size;
       const size_t in_offset = static_cast<size_t>(o) * slab_bytes;
       if (slab_bytes > 0) {
-        std::memcpy(output_bytes.data() + out_offset, in.bytes() + in_offset, slab_bytes);
+        std::memcpy(output_bytes + out_offset, in.bytes() + in_offset, slab_bytes);
       }
       out_offset += slab_bytes;
     }
@@ -161,9 +161,9 @@ Tensor ConcatFromSequence::operator()(const Tensors &inputs, int64_t axis, int64
       r.shape.insert(r.shape.begin() + resolved_axis, 1);
       reshaped.push_back(std::move(r));
     }
-    CopyConcatenated(reshaped, resolved_axis, out_shape, elem_size, out.data);
+    CopyConcatenated(reshaped, resolved_axis, out_shape, elem_size, out.mutable_bytes());
   } else {
-    CopyConcatenated(inputs, resolved_axis, out_shape, elem_size, out.data);
+    CopyConcatenated(inputs, resolved_axis, out_shape, elem_size, out.mutable_bytes());
   }
   return out;
 }
@@ -193,9 +193,9 @@ void ConcatFromSequence::operator()(const Tensors &inputs, int64_t axis, int64_t
       r.shape.insert(r.shape.begin() + resolved_axis, 1);
       reshaped.push_back(std::move(r));
     }
-    CopyConcatenated(reshaped, resolved_axis, out_shape, elem_size, output.data);
+    CopyConcatenated(reshaped, resolved_axis, out_shape, elem_size, output.mutable_bytes());
   } else {
-    CopyConcatenated(inputs, resolved_axis, out_shape, elem_size, output.data);
+    CopyConcatenated(inputs, resolved_axis, out_shape, elem_size, output.mutable_bytes());
   }
 }
 

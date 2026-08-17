@@ -402,9 +402,7 @@ class TestGraphBuilder(ExtTestCase):
 
         # to_onnx hoists Shape next to its producer before exporting.
         model = builder.to_onnx("model")
-        self.assertEqual(
-            [n.op_type for n in model.graph.node], ["Neg", "Shape", "Add"]
-        )
+        self.assertEqual([n.op_type for n in model.graph.node], ["Neg", "Shape", "Add"])
 
     def test_move_shape_and_size_nodes_recurses_into_subgraphs(self):
         builder = GraphBuilder("g")
@@ -421,9 +419,7 @@ class TestGraphBuilder(ExtTestCase):
         body.make_output(sh)
 
         self.assertEqual(builder.move_shape_and_size_nodes(), 1)
-        self.assertEqual(
-            [n.op_type for n in body.build_graph().node], ["Neg", "Shape", "Add"]
-        )
+        self.assertEqual([n.op_type for n in body.build_graph().node], ["Neg", "Shape", "Add"])
 
     def test_inline_local_functions(self):
         builder = GraphBuilder("g")

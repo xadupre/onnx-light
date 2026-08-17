@@ -55,14 +55,17 @@ std::vector<int64_t> InsertUnsqueezeOnes(const std::vector<int64_t> &base,
   std::vector<int64_t> sorted_axes;
   sorted_axes.reserve(axes.size());
   for (int64_t axis : axes) {
-    sorted_axes.push_back(axis < 0 ? axis + static_cast<int64_t>(rank_out) : axis);
+    int64_t normalized = axis < 0 ? axis + static_cast<int64_t>(rank_out) : axis;
+    // Clamp out-of-range axes so the insertion index below is always valid.
+    normalized =
+        std::max<int64_t>(0, std::min<int64_t>(normalized, static_cast<int64_t>(rank_out)));
+    sorted_axes.push_back(normalized);
   }
   std::sort(sorted_axes.begin(), sorted_axes.end());
 
   std::vector<int64_t> result = base;
   for (int64_t axis : sorted_axes) {
-    const std::size_t position =
-        axis < 0 ? 0 : std::min(static_cast<std::size_t>(axis), result.size());
+    const std::size_t position = std::min(static_cast<std::size_t>(axis), result.size());
     result.insert(result.begin() + static_cast<std::ptrdiff_t>(position), 1);
   }
   return result;

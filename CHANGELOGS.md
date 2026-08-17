@@ -20,10 +20,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Routed every built-in kernel output by output slot directly to its final arena and every
   workspace to the execution arena, eliminating the final execution-to-I/O copy on the normal
   runtime path, including for mixed-output nodes.
-- Stopped zero-initialising result buffers on allocation, zeroing explicitly only where kernels rely on it.
-- Reduced the binary size of `lib_onnx_proto` further across several passes.
-- Exported `ParseLimitExceeded` in the proto public API.
-- Fixed `get_cpp_build_info` for editable installs and static builds.
 - Improved runtime performance and expanded the Python NumPy kernel bindings.
 - Added a CPU descriptor exposing processor topology for processor-aware kernel thresholds.
 - Made the opaque type unconditional (propagated from onnx/onnx#8269).
@@ -38,7 +34,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Documentation & CI
 
 - Bumped the release version to `0.1.17`.
-- Added a next-steps design page for a C++ pattern-based `GraphBuilder` optimizer.
 - Added next-steps design pages for profiling and async execution, parallel model initialization with prepacking, prepared execution, a buffer-reuse arena allocator, processor-aware kernel thresholds, and wheel packaging.
 - Documented the kernel tuning workflow and graph pattern integration.
 - Added a benchmark for cold kernel tuning resolution and characterized allocator-backed output lifetime.
@@ -46,6 +41,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Switched C++ backend tests to `RandnTensor` instead of `Tensor::FromX` + `Randn`.
 - Improved schema-comparison coverage.
 - Removed the numpy `run_model` benchmark from the `plot_abs_benchmark` example and asserted onnx-light is slower than ONNX Runtime at the smallest size.
+
+## [0.1.16] – 2026-08-10
+
+### Improvements
+
+- Stopped zero-initialising result buffers on allocation, zeroing explicitly only where kernels rely on it.
+- Reduced the binary size of `lib_onnx_proto` further across several passes.
+- Exported `ParseLimitExceeded` in the proto public API.
+- Fixed `get_cpp_build_info` for editable installs and static builds.
+
+### Documentation & CI
+
+- Bumped the release version to `0.1.16`.
+- Added a next-steps design page for a C++ pattern-based `GraphBuilder` optimizer.
 - Added last-updated dates to the gallery examples and split `plot_onnx_time` into three separate figures.
 - Added backend run-model tests for previously untested logical kernels.
 - Improved test coverage for `run_nodes.cc`, `simple_tensor.cc`, `node_helpers`, and `onnx_light_helpers.cc`.

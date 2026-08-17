@@ -4739,6 +4739,84 @@ TEST(RunNodes, RuntimeSessionSlotAwareKernelAllocatesEachOutputInFinalArena) {
   EXPECT_FLOAT_EQ(ap[2], 103.0f);
 }
 
+// A slot-aware kernel that also needs a scratch/workspace buffer must keep the
+// workspace out of the I/O arena. During a declared-output node the runtime
+// routes the node's active allocator to the I/O arena, so a workspace taken
+// from the active allocator would be pinned in the I/O arena for the node's
+// duration. RuntimeContext::MakeTemporaryTensor always allocates from the
+// execution arena regardless of that routing, so the declared output lands in
+// the I/O arena while the workspace stays in the execution arena. This is the
+// "plus a kernel workspace" coverage required by the buffer-reuse arena plan
+// (see docs/next_steps/2026-08_buffer_reuse_arena.rst, "Target output-slot
+// contract").
+TEST(RunNodes, RuntimeSessionSlotAwareKernelWorkspaceStaysInExecutionArena) {
+  core::runtime::SimpleRawBufferAllocator execution_alloc(8);
+  core::runtime::SimpleRawBufferAllocator io_alloc(8);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
+                                                         .io_allocator = &io_alloc});
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}, &execution_alloc));
+
+  const core::runtime::RawBufferAllocator *workspace_owner = nullptr;
+  const core::runtime::RawBufferAllocator *active_during_kernel = nullptr;
+  rt.RegisterCustomKernel("my.domain", "Scale", [&](const NodeProto &node, RuntimeContext &ctx) {
+    const Tensor &in = ctx.Get(node.input(0));
+    const float *src = in.AsFloat();
+    const size_t n = static_cast<size_t>(in.element_count());
+    active_during_kernel = ctx.allocator();
+
+    // A scratch buffer that never leaves the kernel: it must come from the
+    // execution arena even though this node produces a declared output and
+    // is therefore routed to the I/O allocator.
+    Tensor scratch = ctx.MakeTemporaryTensor(static_cast<int32_t>(core::runtime::DataType::FLOAT),
+                                             in.shape, n * sizeof(float));
+    workspace_owner = scratch.allocation_owner();
+    float *sp = reinterpret_cast<float *>(scratch.mutable_bytes());
+    for (size_t i = 0; i < n; ++i) {
+      sp[i] = src[i] + 1.0f;
+    }
+
+    // The declared graph output is materialised directly in the I/O arena.
+    Tensor y = ctx.MakeOutputTensor(0, static_cast<int32_t>(core::runtime::DataType::FLOAT),
+                                    in.shape, n * sizeof(float));
+    float *yp = reinterpret_cast<float *>(y.mutable_bytes());
+    for (size_t i = 0; i < n; ++i) {
+      yp[i] = sp[i] * 2.0f;
+    }
+    y.name = node.output(0);
+    ctx.Put(node.output(0), std::move(y));
+  });
+
+  ModelProto model;
+  model.set_ir_version(10);
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *n = g->add_node();
+  n->set_op_type("Scale");
+  n->set_domain("my.domain");
+  n->add_input("x");
+  n->add_output("y"); // declared graph output -> I/O arena
+  g->add_output()->set_name("y");
+
+  RuntimeSession session(model);
+  session.Run(rt);
+
+  // The node was routed to the I/O allocator (it produces a declared output),
+  // yet the workspace still came from the execution arena.
+  EXPECT_EQ(active_during_kernel, &io_alloc);
+  EXPECT_EQ(workspace_owner, &execution_alloc);
+
+  ASSERT_TRUE(rt.Has("y"));
+  EXPECT_EQ(rt.Get("y").allocation_owner(), &io_alloc);
+  // The I/O arena only ever held the single declared output (3 floats); the
+  // workspace never touched it.
+  EXPECT_EQ(io_alloc.PeakAllocatedSize(), sizeof(float) * 3);
+  const float *yp = rt.Get("y").AsFloat();
+  EXPECT_FLOAT_EQ(yp[0], 4.0f);
+  EXPECT_FLOAT_EQ(yp[1], 6.0f);
+  EXPECT_FLOAT_EQ(yp[2], 8.0f);
+}
+
 // ---------------------------------------------------------------------------
 // Release-unused-intermediates tests
 // ---------------------------------------------------------------------------

@@ -555,6 +555,26 @@ public:
                                                                  AllocatorForOutput(slot));
   }
 
+  /// Allocates a temporary/workspace tensor that never crosses the runtime
+  /// boundary, always routing it through :cpp:func:`execution_allocator`
+  /// regardless of which allocator is currently active. This is the
+  /// ``AllocateTemporary`` half of the slot-aware allocation facade: while
+  /// :cpp:class:`RuntimeSession` routes a declared-output node through
+  /// :cpp:func:`io_allocator` (so :cpp:func:`allocator` reports the I/O arena as
+  /// active), a kernel scratch buffer must still come from the execution arena.
+  /// Using this overload keeps workspaces out of the I/O arena's retention
+  /// budget, whereas allocating a workspace through
+  /// ``MakeOutputTensor(dtype, shape, bytes, allocator())`` would pin it in the
+  /// I/O arena for the duration of that node. When no execution allocator was
+  /// supplied at construction time the tensor owns its bytes inline.
+  ///
+  /// @returns A tensor of the requested type and shape whose storage is owned by
+  ///          the execution arena (or inline when no execution allocator exists).
+  Tensor MakeTemporaryTensor(int32_t data_type, const Shape &shape, size_t n_bytes) {
+    return ONNX_LIGHT_NAMESPACE::core::runtime::MakeOutputTensor(data_type, shape, n_bytes,
+                                                                 allocator_);
+  }
+
   /// Logical device the graph is evaluated on (see
   /// :cpp:member:`RuntimeContextOptions::device`). The C++ reference runtime
   /// only ships CPU kernels; :cpp:enumerator:`symbolic::Device::kUndefined`

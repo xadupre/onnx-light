@@ -4375,9 +4375,9 @@ TEST(RunNodes, PerContextCustomKernelOverridesGlobalCustomKernel) {
 }
 
 // A node whose output is allocated from an allocator other than the session's
-// unique allocator is rejected by RuntimeSession::Run's default output
-// allocator check.
-TEST(RunNodes, RuntimeSessionRejectsOutputFromForeignAllocator) {
+// unique allocator is migrated back to the session allocator by
+// RuntimeSession::Run's default output allocator check.
+TEST(RunNodes, RuntimeSessionMigratesOutputFromForeignAllocator) {
   core::runtime::SimpleRawBufferAllocator session_alloc(8);
   core::runtime::SimpleRawBufferAllocator foreign_alloc(8);
   RuntimeContext rt(KernelContext(DefaultOpset(18)),
@@ -4389,7 +4389,11 @@ TEST(RunNodes, RuntimeSessionRejectsOutputFromForeignAllocator) {
   rt.RegisterCustomKernel(
       "my.domain", "Foreign", [&foreign_alloc](const NodeProto &node, RuntimeContext &ctx) {
         const Tensor &in = ctx.Get(node.input(0));
-        std::vector<float> out(static_cast<size_t>(in.element_count()), 0.0f);
+        std::vector<float> out(static_cast<size_t>(in.element_count()));
+        const float *src = in.AsFloat();
+        for (size_t i = 0; i < out.size(); ++i) {
+          out[i] = src[i] * 3.0f;
+        }
         ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, out, &foreign_alloc));
       });
 
@@ -4398,7 +4402,16 @@ TEST(RunNodes, RuntimeSessionRejectsOutputFromForeignAllocator) {
   utils::RepeatedProtoField<NodeProto> node_field(nodes);
   core::runtime::ExecutionPlan plan(node_field, {});
   core::runtime::RuntimeSession session(plan);
-  EXPECT_THROW(session.Run(rt), std::invalid_argument);
+  session.Run(rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  const Tensor &y = rt.Get("y");
+  ASSERT_EQ(y.element_count(), 3);
+  EXPECT_EQ(y.allocation_owner(), &session_alloc);
+  const float *yp = y.AsFloat();
+  EXPECT_FLOAT_EQ(yp[0], 3.0f);
+  EXPECT_FLOAT_EQ(yp[1], 6.0f);
+  EXPECT_FLOAT_EQ(yp[2], 9.0f);
 }
 
 // The same graph runs successfully when the session is built with

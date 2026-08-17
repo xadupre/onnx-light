@@ -14,6 +14,33 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+namespace utils {
+
+bool enforce_short_repr_length(std::stringstream &ss, const PrintOptions &options) {
+  if (options.max_short_repr_length == 0) {
+    return false;
+  }
+  const std::streampos pos = ss.tellp();
+  if (pos < 0 || static_cast<size_t>(pos) <= options.max_short_repr_length) {
+    return false;
+  }
+  static constexpr char ellipsis[] = "...";
+  static constexpr size_t ellipsis_length = sizeof(ellipsis) - 1;
+  std::string content = ss.str();
+  if (options.max_short_repr_length <= ellipsis_length) {
+    // No room for both content and a full ellipsis; keep the leading characters only.
+    content.resize(options.max_short_repr_length);
+  } else {
+    content.resize(options.max_short_repr_length - ellipsis_length);
+    content += ellipsis;
+  }
+  ss.str(content);
+  ss.seekp(0, std::ios::end);
+  return true;
+}
+
+} // namespace utils
+
 namespace {
 
 // Parses external-data numeric metadata (offset/size) without creating a temporary std::string.

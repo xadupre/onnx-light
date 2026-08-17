@@ -29,6 +29,15 @@ std::string MakeQuantizeLinearDoc(int since_version);
 std::string MakeDequantizeLinearDoc(int since_version);
 
 /**
+ * Returns the documentation string for the DynamicQuantizeLinear operator at
+ * the given opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the DynamicQuantizeLinear operator.
+ */
+std::string MakeDynamicQuantizeLinearDoc(int since_version);
+
+/**
  * Returns the documentation string for the QLinearConv operator at the
  * given opset version.
  *

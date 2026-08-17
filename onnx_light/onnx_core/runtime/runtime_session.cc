@@ -251,8 +251,8 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
         (!output.has_allocation() || output.allocation_owner() != expected)) {
       const size_t output_size_bytes = output.size_bytes();
       const uint8_t *output_bytes = output.bytes();
-      EXT_ENFORCE(output_bytes != nullptr,
-                  "RuntimeSession: output has non-zero size with a null data pointer.");
+      EXT_ENFORCE_INVALID(output_bytes != nullptr,
+                          "RuntimeSession: output has non-zero size with a null data pointer.");
       const int32_t output_data_type = output.data_type;
       const Shape output_shape = output.shape;
       const std::string output_name = output.name;

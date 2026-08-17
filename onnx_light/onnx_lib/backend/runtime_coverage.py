@@ -146,10 +146,19 @@ def _run_onnxruntime(tc: TestCase) -> tuple[float | None, bool, str | None]:
             "skipped: known to abort onnxruntime (see microsoft/onnxruntime#28778)",
         )
 
-    model = _clone_model(tc.model)
-    model.ir_version = min(model.ir_version, _ORT_MAX_IR_VERSION)
+    if tc.model.ir_version > _ORT_MAX_IR_VERSION:
+        return (
+            None,
+            False,
+            (
+                f"skipped: model IR version {tc.model.ir_version} exceeds "
+                f"onnxruntime maximum {_ORT_MAX_IR_VERSION}"
+            ),
+        )
     try:
-        sess = ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
+        sess = ort.InferenceSession(
+            tc.model.SerializeToString(), providers=["CPUExecutionProvider"]
+        )
     except Exception as exc:  # noqa: BLE001
         return (None, False, type(exc).__name__ + ": " + str(exc).splitlines()[0])
 

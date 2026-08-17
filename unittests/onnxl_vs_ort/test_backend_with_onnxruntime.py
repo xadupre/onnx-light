@@ -8,6 +8,7 @@ from onnx_light.ext_test_case import import_or_skip, InferenceSessionAllTypes
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
 make_test_class = import_or_skip("onnx_light.onnx.backend", "make_test_class")
+ORT_MAX_IR_VERSION = 13
 
 
 def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
@@ -21,6 +22,12 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     Returns:
         List of output arrays from the model
     """
+    if model.ir_version > ORT_MAX_IR_VERSION:
+        raise unittest.SkipTest(
+            f"model IR version {model.ir_version} exceeds "
+            f"onnxruntime maximum {ORT_MAX_IR_VERSION}"
+        )
+
     sess = InferenceSessionAllTypes(model)
 
     # Get input names and create feed dict

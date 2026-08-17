@@ -253,7 +253,8 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
       EXT_ENFORCE(output.bytes() != nullptr,
                   "RuntimeSession: output has non-zero size with a null data pointer.");
       std::memcpy(migrated.mutable_bytes(), output.bytes(), output.size_bytes());
-      rt.Put(name, std::move(migrated), RuntimeEventKind::kIntermediate);
+      rt.Put(name, std::move(migrated),
+             routed_to_io ? RuntimeEventKind::kOutput : RuntimeEventKind::kIntermediate);
     }
     const Tensor &verified_output = rt.Get(name);
     if (!verified_output.has_allocation()) {

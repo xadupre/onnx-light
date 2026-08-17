@@ -12,9 +12,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added constant folding to `GraphBuilder`, backed by the read-only `GraphGraph` index and build-time constant-information analysis.
 - Added a `RunModel` C++ helper for whole-model execution with `Tensor` I/O and exposed it in Python.
 - Exposed a public tensor comparison helper with `atol`/`rtol`.
+- Added persistent execution and I/O buffer-reuse arenas with independent retention controls,
+  output leases that safely outlive a runtime context, and Python runtime integration.
 
 ### Improvements
 
+- Routed every built-in kernel output by output slot directly to its final arena and every
+  workspace to the execution arena, eliminating the final execution-to-I/O copy on the normal
+  runtime path, including for mixed-output nodes.
 - Stopped zero-initialising result buffers on allocation, zeroing explicitly only where kernels rely on it.
 - Reduced the binary size of `lib_onnx_proto` further across several passes.
 - Exported `ParseLimitExceeded` in the proto public API.

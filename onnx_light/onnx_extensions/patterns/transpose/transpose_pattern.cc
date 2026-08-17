@@ -32,14 +32,11 @@ std::vector<int64_t> ApplyPerm(const std::vector<int64_t> &perm, const std::vect
   return result;
 }
 
-/// Composes ``second`` after ``first`` (``second`` is applied last).
+/// Composes ``second`` after ``first`` (``second`` is applied last), so that the
+/// result is equivalent to a single transpose: ``result[i] = first[second[i]]``.
 std::vector<int64_t> ComposePerms(const std::vector<int64_t> &first,
                                   const std::vector<int64_t> &second) {
-  std::vector<int64_t> identity(first.size(), 0);
-  for (std::size_t i = 0; i < identity.size(); ++i) {
-    identity[i] = static_cast<int64_t>(i);
-  }
-  return ApplyPerm(second, ApplyPerm(first, identity));
+  return ApplyPerm(second, first);
 }
 
 /// Returns ``true`` when ``perm`` is a valid permutation of ``[0, perm.size())``.

@@ -244,16 +244,15 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
       continue;
     }
     Tensor &output = rt.Get(name);
-    if (expected != nullptr && static_cast<DataType>(output.data_type) != DataType::STRING &&
+    if (expected != nullptr && output.size_bytes() > 0 &&
+        static_cast<DataType>(output.data_type) != DataType::STRING &&
         (!output.has_allocation() || output.allocation_owner() != expected)) {
       Tensor migrated =
           MakeOutputTensor(output.data_type, output.shape, output.size_bytes(), expected);
       migrated.name = output.name;
-      if (output.size_bytes() > 0) {
-        EXT_ENFORCE(output.bytes() != nullptr,
-                    "RuntimeSession: output has non-zero size with a null data pointer.");
-        std::memcpy(migrated.mutable_bytes(), output.bytes(), output.size_bytes());
-      }
+      EXT_ENFORCE(output.bytes() != nullptr,
+                  "RuntimeSession: output has non-zero size with a null data pointer.");
+      std::memcpy(migrated.mutable_bytes(), output.bytes(), output.size_bytes());
       rt.Put(name, std::move(migrated), RuntimeEventKind::kIntermediate);
     }
     const Tensor &verified_output = rt.Get(name);

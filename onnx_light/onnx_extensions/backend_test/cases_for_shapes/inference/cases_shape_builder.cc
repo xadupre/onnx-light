@@ -70,7 +70,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // dispatch table, the concrete shape tensors are resolved manually in the
 // DataSet builder below.
 // ---------------------------------------------------------------------------
-void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 
@@ -220,7 +220,7 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry, Test
 // executable (``c`` is even and divisible by 2 so the inferred ``c//2``
 // resolves to a concrete int64).
 // ---------------------------------------------------------------------------
-void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 
@@ -294,7 +294,7 @@ void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry, 
 // FLOAT[256, 256] initializers.
 // ---------------------------------------------------------------------------
 void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &registry,
-                                                    TestMode mode) {
+                                                    TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 

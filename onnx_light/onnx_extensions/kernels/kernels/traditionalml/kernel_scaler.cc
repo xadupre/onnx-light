@@ -57,7 +57,7 @@ int64_t LastDim(const onnx_kernels::Shape &shape) { return shape.empty() ? 1 : s
 
 template <typename T>
 Tensor Scaler::operator()(const Tensor &x, const std::vector<float> &offset,
-                          const std::vector<float> &scale, RuntimeContext *rt) const {
+                          const std::vector<float> &scale, RuntimeContext * /*rt*/) const {
   ValidateInput<T>(x);
   ValidateAttrs(offset, scale, LastDim(x.shape));
   const int64_t n = x.element_count();

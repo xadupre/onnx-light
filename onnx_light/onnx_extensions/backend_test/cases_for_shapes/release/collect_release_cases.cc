@@ -7,7 +7,7 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void CollectReleaseTestCases(std::vector<TestCase> &registry, const std::string &op_type,
-                             TestMode mode) {
+                             TestMode /*mode*/) {
   if (op_type.empty() or op_type == "release") {
     RegisterReleaseCases(registry);
   }

@@ -42,6 +42,8 @@ Shape BroadcastShape(const Shape &a, const Shape &b) {
   return out;
 }
 
+template <typename T> T AddOf(T a, T b) { return a + b; }
+
 // Computes the broadcast shape of every tensor in ``inputs``. ``inputs`` must
 // be non-empty and all tensors must share ``expected_dtype``.
 Shape ValidateAndBroadcastShape(const Tensors &inputs, const char *dtype_name,
@@ -57,8 +59,6 @@ Shape ValidateAndBroadcastShape(const Tensors &inputs, const char *dtype_name,
   }
   return shape;
 }
-
-template <typename T> T AddOf(T a, T b) { return a + b; }
 
 template <typename T>
 Tensor SumAlloc(const char *dtype_name, int32_t dtype, const Tensors &inputs,

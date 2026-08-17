@@ -1715,11 +1715,12 @@ ONNX_OPERATOR_SET_SCHEMA(
           if (blocksize <= 0) {
             fail_shape_inference("Blocksize must be positive");
           }
+          const auto block_area = checkedMultiply(blocksize, blocksize);
           if (hasInputShape(ctx, 0)) {
             auto &input_shape = getInputShape(ctx, 0);
             if (input_shape.dim_size() == 4) {
               updateOutputShape(ctx, 0,
-                                {input_shape.dim(0), input_shape.dim(1) * (blocksize * blocksize),
+                                {input_shape.dim(0), input_shape.dim(1) * block_area,
                                  input_shape.dim(2) / blocksize, input_shape.dim(3) / blocksize});
             } else {
               fail_shape_inference("Input tensor must be 4-dimensional");
@@ -1777,11 +1778,12 @@ ONNX_OPERATOR_SET_SCHEMA(
           if (blocksize <= 0) {
             fail_shape_inference("Blocksize must be positive");
           }
+          const auto block_area = checkedMultiply(blocksize, blocksize);
           if (hasInputShape(ctx, 0)) {
             auto &input_shape = getInputShape(ctx, 0);
             if (input_shape.dim_size() == 4) {
               updateOutputShape(ctx, 0,
-                                {input_shape.dim(0), input_shape.dim(1) / (blocksize * blocksize),
+                                {input_shape.dim(0), input_shape.dim(1) / block_area,
                                  input_shape.dim(2) * blocksize, input_shape.dim(3) * blocksize});
             } else {
               fail_shape_inference("Input tensor must be 4-dimensional");
@@ -1840,10 +1842,13 @@ ONNX_OPERATOR_SET_SCHEMA(
             }
 
             for (int i = 0; i < input_rank; ++i) {
+              if (repeats_data[i] < 0) {
+                fail_shape_inference("'Repeats' input must not contain negative values");
+              }
               const auto &input_dim = input_shape.dim(i);
               auto output_dim = output_shape->add_dim();
               if (input_dim.has_dim_value()) {
-                output_dim->set_dim_value(input_dim.dim_value() * repeats_data[i]);
+                output_dim->set_dim_value(checkedMultiply(input_dim.dim_value(), repeats_data[i]));
               }
             }
           } else {
@@ -3113,7 +3118,7 @@ ONNX_OPERATOR_SET_SCHEMA(
           }
 
           const auto last_index_dimension =
-              indices_shape.dim(indices_rank - 1).dim_value() + batch_dims_data;
+              checkedAdd(indices_shape.dim(indices_rank - 1).dim_value(), batch_dims_data);
 
           if (last_index_dimension > data_rank) {
             fail_shape_inference("Last dimension of `indices` input tensor in GatherND op "

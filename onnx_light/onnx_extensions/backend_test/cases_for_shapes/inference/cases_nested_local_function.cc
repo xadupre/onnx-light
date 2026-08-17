@@ -50,7 +50,7 @@ constexpr const char *kFuncOuterName = "func_outer_add";
 // from the inputs through the two levels of expansion to the output ``Z``.
 // ---------------------------------------------------------------------------
 void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry,
-                                                       TestMode mode) {
+                                                       TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext kctx{opset};
 

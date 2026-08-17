@@ -181,7 +181,7 @@ double BroadcastedMaskValue(const Tensor &mask, int64_t batch_size, int64_t q_nu
 // ``np.pad(..., constant_values=-inf)`` behaviour. Returns ``0.0`` when
 // ``mask == nullptr``.
 double MaskValuePadded(const Tensor *mask, int64_t batch_size, int64_t q_num_heads,
-                       int64_t q_seq_len, int64_t kv_seq_len, int64_t b, int64_t h, int64_t i,
+                       int64_t q_seq_len, int64_t /*kv_seq_len*/, int64_t b, int64_t h, int64_t i,
                        int64_t j) {
   if (mask == nullptr) {
     return 0.0;
@@ -479,7 +479,7 @@ Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
 }
 
 Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                             RuntimeContext *rt) const {
+                             RuntimeContext * /*rt*/) const {
   Attributes attrs;
   attrs.has_scale = true;
   attrs.scale = scale;
@@ -487,7 +487,7 @@ Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, 
 }
 
 Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                             const Tensor &attn_mask, RuntimeContext *rt) const {
+                             const Tensor &attn_mask, RuntimeContext * /*rt*/) const {
   Attributes attrs;
   attrs.has_scale = true;
   attrs.scale = scale;

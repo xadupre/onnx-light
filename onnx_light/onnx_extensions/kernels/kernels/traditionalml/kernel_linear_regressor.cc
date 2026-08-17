@@ -18,7 +18,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 template <typename T>
 Tensor LinearRegressor::operator()(const Tensor &x, const ParamFloats &coefficients,
                                    const ParamFloats &intercepts, int64_t targets,
-                                   const std::string &post_transform, RuntimeContext *rt) const {
+                                   const std::string &post_transform,
+                                   RuntimeContext * /*rt*/) const {
   EXT_ENFORCE_INVALID(targets >= 1, "kernel::LinearRegressor 'targets' must be >= 1.");
   EXT_ENFORCE_INVALID(post_transform == "NONE",
                       "kernel::LinearRegressor only supports post_transform == 'NONE'.");

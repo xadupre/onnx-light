@@ -40,7 +40,7 @@ constexpr int64_t kDefaultIrVersion = 10;
 // by the generic ``BackendTestCaseShapeInference`` tests.
 // ---------------------------------------------------------------------------
 void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &registry,
-                                                       TestMode mode) {
+                                                       TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const onnx_kernels::kernel::KernelContext ctx{opset};
 

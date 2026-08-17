@@ -52,7 +52,7 @@ namespace runtime {
  * fixed for the session's lifetime.
  */
 struct RuntimeSessionOptions {
-  RuntimeParameters parameters;
+  RuntimeParameters parameters = {};
   int verbose = 0;
   bool check_shapes = false;
   /// When ``false`` (the default), :cpp:func:`RuntimeSession::Run` verifies

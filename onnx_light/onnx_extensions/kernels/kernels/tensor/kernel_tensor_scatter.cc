@@ -40,7 +40,8 @@ onnx_kernels::Shape RowMajorStrides(const onnx_kernels::Shape &shape) {
 
 Tensor TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
                                  const Tensor *write_indices,
-                                 const TensorScatter::Attributes &attrs, RuntimeContext *rt) const {
+                                 const TensorScatter::Attributes &attrs,
+                                 RuntimeContext * /*rt*/) const {
   Tensor output;
   output.name = "";
   output.data_type = past_cache.data_type;

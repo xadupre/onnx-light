@@ -50,7 +50,7 @@ struct PatternOptimizationStatistics {
   /// Total time spent building replacement nodes, in nanoseconds.
   int64_t apply_time_ns = 0;
   /// Rejection conditions aggregated by source location and reason.
-  std::vector<PatternNoMatchStatistics> no_matches;
+  std::vector<PatternNoMatchStatistics> no_matches = {};
 
   /// Returns a concise summary of these statistics.
   std::string ToString() const;
@@ -161,7 +161,7 @@ struct MatchResult {
   /// Optional node before which the replacement should be inserted.
   const NodeProto *insert_at = nullptr;
   /// Diagnostic attached to an empty result, when the pattern supplied one.
-  std::optional<PatternNoMatch> no_match;
+  std::optional<PatternNoMatch> no_match = std::nullopt;
 
   /// Returns a concise summary of this match.
   std::string ToString() const;

@@ -30,7 +30,7 @@ template <typename T> void ValidateInput(const Tensor &x) {
 } // namespace
 
 template <typename T>
-Tensor Binarizer::operator()(const Tensor &x, T threshold, RuntimeContext *rt) const {
+Tensor Binarizer::operator()(const Tensor &x, T threshold, RuntimeContext * /*rt*/) const {
   ValidateInput<T>(x);
   const int64_t n = x.element_count();
   Tensor out = MakeOutputTensor(TensorElementType<T>::value, x.shape,

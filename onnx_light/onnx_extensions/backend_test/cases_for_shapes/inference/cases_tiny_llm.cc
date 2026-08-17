@@ -75,7 +75,7 @@ constexpr int64_t kIntermediateSize = 32;
 // :cpp:func:`shape_inference::InferShapes` recovers the recorded
 // ``value_info`` / output shapes.
 // ---------------------------------------------------------------------------
-void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(23);
 
   const std::string name = "test_cc_shape_inference_tiny_llm";
@@ -562,7 +562,7 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry, TestMod
 // dynamic ``batch`` / ``seq`` / ``past_seq`` / ``total_seq`` dims) as the fused
 // companion above.
 // ---------------------------------------------------------------------------
-void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(23);
 
   const std::string name = "test_cc_shape_inference_tiny_llm_inlined";

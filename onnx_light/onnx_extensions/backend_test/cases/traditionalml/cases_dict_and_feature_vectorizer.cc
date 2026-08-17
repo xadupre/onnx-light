@@ -43,7 +43,7 @@ void AddIntsAttr(NodeProto &node, const char *name, const std::vector<int64_t> &
 // The map input is passed as a ``Map`` object in ``IoData::maps``; the runtime
 // retrieves it by name from ``RuntimeContext::maps()``.
 // ---------------------------------------------------------------------------
-void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode mode) {
+void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
   const KernelContext ctx{opset};

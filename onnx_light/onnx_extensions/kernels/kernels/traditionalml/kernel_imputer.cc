@@ -73,7 +73,7 @@ void ApplyImputer(const Tensor &x, const std::vector<T> &imputed_values, T repla
 
 template <typename T>
 Tensor Imputer::operator()(const Tensor &x, const std::vector<T> &imputed_values, T replaced_value,
-                           RuntimeContext *rt) const {
+                           RuntimeContext * /*rt*/) const {
   ValidateInput<T>(x);
   ValidateImputedValues<T>(imputed_values, LastDim(x.shape));
   const int64_t n = x.element_count();

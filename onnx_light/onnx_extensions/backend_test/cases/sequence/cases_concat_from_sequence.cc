@@ -32,8 +32,9 @@ constexpr int64_t kDefaultIrVersion = 13;
 // harness feeds tensor data), so wrapping the inputs in an in-graph
 // ``SequenceConstruct`` lets the ``ConcatFromSequence`` schema be
 // exercised end-to-end with regular tensor inputs and outputs.
-void RegisterConcatFromSequenceCase(const std::string &name, const std::vector<int64_t> &elem_shape,
-                                    const Tensor &a, const Tensor &b, const Tensor &c, int64_t axis,
+void RegisterConcatFromSequenceCase(const std::string &name,
+                                    const std::vector<int64_t> & /*elem_shape*/, const Tensor &a,
+                                    const Tensor &b, const Tensor &c, int64_t axis,
                                     int64_t new_axis, const OpsetId &opset,
                                     std::vector<TestCase> &registry) {
   const KernelContext ctx{opset};

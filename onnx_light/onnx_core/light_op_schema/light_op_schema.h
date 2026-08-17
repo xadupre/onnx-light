@@ -185,7 +185,7 @@ struct AttributeParam {
   /// True if the attribute is required (no default value).
   bool required;
   /// Typed default value (``std::monostate`` when required or absent).
-  AttributeDefault default_value;
+  AttributeDefault default_value = {};
 };
 
 /// Re-exports ``onnx_proto::TensorType`` so that existing consumers of

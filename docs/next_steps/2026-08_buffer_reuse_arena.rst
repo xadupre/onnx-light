@@ -97,13 +97,23 @@ The implementation is split into focused pull requests:
        bindings, adds the ``io_allocator`` argument to ``RuntimeContext``, and
        makes ``ReferenceEvaluator`` create persistent execution and I/O arenas
        by default while still accepting caller-provided allocators.
-   * - Current PR
+   * - `PR #4493 <https://github.com/xadupre/onnx-light/pull/4493>`_
      - Output-slot routing
      - Completes step 5: :cpp:func:`RuntimeSession::VerifyOutputAllocators`
        resolves the allocation role of each output *slot* instead of the node as
        a whole, so a node that produces both a declared graph output and an
        intermediate keeps the declared output in the I/O arena and its
        intermediate in the execution arena.
+   * - Current PR
+     - Slot-aware output allocation API
+     - Adds :cpp:func:`RuntimeContext::AllocatorForOutput` and the slot-aware
+       :cpp:func:`RuntimeContext::MakeOutputTensor` overload. Before each node's
+       kernel runs, :cpp:class:`RuntimeSession` records which output slots carry
+       a declared graph output, so a kernel can materialize each output directly
+       in its final arena. A mixed-output node then needs no promotion copy: its
+       declared outputs go to the I/O arena and its intermediates to the
+       execution arena without the migration copy that
+       :cpp:func:`RuntimeSession::VerifyOutputAllocators` would otherwise make.
 
 Current behaviour
 +++++++++++++++++
@@ -240,12 +250,21 @@ back to the execution arena, so a rarely occurring mixed node no longer pins its
 intermediates in the I/O arena. Nodes with a uniform role (all declared, all
 intermediate) never trigger a migration.
 
-A remaining limitation is that migrating an intermediate copies its bytes once.
-The zero-copy ideal for a mixed-output intermediate still requires a slot-aware
-allocation API (see below) so the kernel writes each output directly into its
-final arena; a temporary workspace allocated by such a kernel through
-``rt->allocator()`` likewise still uses the node-scoped arena. Those changes are
-deferred; the observable per-slot ownership contract is satisfied today.
+A remaining limitation of output-slot routing alone is that migrating an
+intermediate copies its bytes once. The slot-aware allocation API removes that
+copy for kernels that adopt it: :cpp:func:`RuntimeContext::AllocatorForOutput`
+resolves an output slot's arena from the per-slot roles
+:cpp:class:`RuntimeSession` records before the kernel runs, and the slot-aware
+:cpp:func:`RuntimeContext::MakeOutputTensor` overload allocates each output
+directly in that arena. A kernel that produces its outputs through this overload
+therefore writes each result straight into its final arena, so
+:cpp:func:`RuntimeSession::VerifyOutputAllocators` finds every slot already in
+place and performs no migration. Kernels that still use the node-scoped
+``rt->allocator()`` path keep the previous behaviour: the runtime migrates a
+mixed node's intermediates back to the execution arena with a single copy, and a
+temporary workspace allocated through ``rt->allocator()`` uses the node-scoped
+arena. Converting the built-in kernels to the slot-aware overload is a
+follow-up.
 
 Target output-slot contract
 ---------------------------
@@ -445,11 +464,16 @@ Implementation order
    <https://github.com/xadupre/onnx-light/pull/4447>`_ adds the dedicated I/O
    allocator and the initial node-scoped routing: ``RuntimeSession::Run``
    switches the active allocator for a kernel invocation when the node produces
-   a declared graph output. The current PR completes this step with output-slot
-   routing: ``RuntimeSession::VerifyOutputAllocators`` resolves the arena of
-   each output slot individually, so a mixed-output node keeps its declared
-   graph outputs in the I/O arena and its intermediate outputs in the execution
-   arena.
+   a declared graph output. `PR #4493
+   <https://github.com/xadupre/onnx-light/pull/4493>`_ completes this step with
+   output-slot routing: ``RuntimeSession::VerifyOutputAllocators`` resolves the
+   arena of each output slot individually, so a mixed-output node keeps its
+   declared graph outputs in the I/O arena and its intermediate outputs in the
+   execution arena. The current PR adds the slot-aware allocation API that makes
+   this zero-copy: ``RuntimeContext::AllocatorForOutput`` and the slot-aware
+   ``RuntimeContext::MakeOutputTensor`` overload let a kernel materialize each
+   output directly in its final arena, so a mixed-output node produced through
+   that overload needs no migration copy.
 6. Transfer each exported output handle to its NumPy capsule; remove the
    dependency on keeping the mutable :cpp:class:`RuntimeContext` as the data
    owner. The enabling mechanism lands first (`PR #4454
@@ -528,6 +552,12 @@ Pull requests
   two-arena design in the Python runtime by exposing ``IOArena``, wiring
   ``RuntimeContext.io_allocator``, and giving ``ReferenceEvaluator`` persistent
   execution and I/O arenas.
-* Current PR: completes output-slot routing so ``RuntimeSession`` resolves each
-  output slot's arena individually, keeping a mixed-output node's declared
-  outputs in the I/O arena and its intermediates in the execution arena.
+* `PR #4493 <https://github.com/xadupre/onnx-light/pull/4493>`_: completes
+  output-slot routing so ``RuntimeSession`` resolves each output slot's arena
+  individually, keeping a mixed-output node's declared outputs in the I/O arena
+  and its intermediates in the execution arena.
+* Current PR: adds the slot-aware output allocation API
+  (``RuntimeContext::AllocatorForOutput`` and the slot-aware
+  ``RuntimeContext::MakeOutputTensor`` overload) so a kernel materializes each
+  output directly in its final arena, removing the migration copy for a
+  mixed-output node.

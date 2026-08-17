@@ -505,6 +505,56 @@ public:
     return previous;
   }
 
+  /// Records, for the node currently being dispatched, which of its output
+  /// slots produce a declared graph output (I/O role, ``true``) versus an
+  /// intermediate (execution role, ``false``). Set by :cpp:class:`RuntimeSession`
+  /// before each node's kernel runs so a kernel can allocate each output slot
+  /// directly into its final arena through :cpp:func:`AllocatorForOutput` /
+  /// :cpp:func:`MakeOutputTensor`, avoiding the post-hoc migration copy done by
+  /// :cpp:func:`RuntimeSession::VerifyOutputAllocators` for a mixed-output node.
+  /// An empty vector (the default, and the state after
+  /// :cpp:func:`clear_output_slot_io_roles`) means no per-slot roles are known,
+  /// so every slot falls back to the currently active allocator.
+  void set_output_slot_io_roles(std::vector<bool> io_roles) {
+    output_slot_io_roles_ = std::move(io_roles);
+  }
+
+  /// Clears the per-output-slot roles recorded by
+  /// :cpp:func:`set_output_slot_io_roles`, restoring node-scoped routing.
+  void clear_output_slot_io_roles() noexcept { output_slot_io_roles_.clear(); }
+
+  /// Per-output-slot I/O roles recorded for the node currently being
+  /// dispatched. See :cpp:func:`set_output_slot_io_roles`.
+  const std::vector<bool> &output_slot_io_roles() const noexcept { return output_slot_io_roles_; }
+
+  /// Returns the allocator a kernel should use to materialize output ``slot``
+  /// of the node currently being dispatched. When per-slot roles have been
+  /// recorded (see :cpp:func:`set_output_slot_io_roles`) and a dedicated I/O
+  /// allocator is attached, a declared-output slot resolves to
+  /// :cpp:func:`io_allocator` and every other slot to
+  /// :cpp:func:`execution_allocator`. Otherwise it falls back to the currently
+  /// active allocator, preserving node-scoped routing for kernels and slots
+  /// without a recorded role.
+  RawBufferAllocator *AllocatorForOutput(int slot) const noexcept {
+    if (io_allocator_ != nullptr && slot >= 0 &&
+        static_cast<size_t>(slot) < output_slot_io_roles_.size()) {
+      return output_slot_io_roles_[static_cast<size_t>(slot)] ? io_allocator_ : allocator_;
+    }
+    return active_allocator_;
+  }
+
+  /// Allocates an output tensor for ``slot`` of the node currently being
+  /// dispatched, routing it directly to the arena implied by that slot's role
+  /// (see :cpp:func:`AllocatorForOutput`). A kernel using this slot-aware form
+  /// writes each output straight into its final arena, so a mixed-output node
+  /// needs no promotion copy afterwards. Kernels that do not know their output
+  /// slot may keep using the free ``MakeOutputTensor(dtype, shape, bytes,
+  /// allocator)`` overload with :cpp:func:`allocator`.
+  Tensor MakeOutputTensor(int slot, int32_t data_type, const Shape &shape, size_t n_bytes) {
+    return ONNX_LIGHT_NAMESPACE::core::runtime::MakeOutputTensor(data_type, shape, n_bytes,
+                                                                 AllocatorForOutput(slot));
+  }
+
   /// Logical device the graph is evaluated on (see
   /// :cpp:member:`RuntimeContextOptions::device`). The C++ reference runtime
   /// only ships CPU kernels; :cpp:enumerator:`symbolic::Device::kUndefined`
@@ -837,6 +887,10 @@ private:
   /// Allocator currently reported by :cpp:func:`allocator`, switched by
   /// :cpp:func:`SetActiveAllocator`. Defaults to :cpp:var:`allocator_`.
   RawBufferAllocator *active_allocator_ = nullptr;
+  /// Per-output-slot I/O roles for the node currently being dispatched, set by
+  /// :cpp:class:`RuntimeSession` before each kernel runs. Empty when no roles
+  /// are known. See :cpp:func:`set_output_slot_io_roles`.
+  std::vector<bool> output_slot_io_roles_;
   /// Logical device the graph is evaluated on. See :cpp:func:`device`.
   symbolic::Device device_ = symbolic::Device::kUndefined;
 };

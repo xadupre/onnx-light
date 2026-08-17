@@ -4664,6 +4664,81 @@ TEST(RunNodes, RuntimeSessionKeepsSingleAllocatorBehaviorWithoutIOAllocator) {
   EXPECT_EQ(rt.Get("y").allocation_owner(), &execution_alloc);
 }
 
+// A slot-aware kernel allocates each of its outputs directly in that slot's
+// final arena via the RuntimeContext::MakeOutputTensor(slot, ...) API. For a
+// mixed-output node the declared graph output lands in the I/O arena and the
+// intermediate lands in the execution arena with no promotion copy, so
+// VerifyOutputAllocators never migrates either output. This exercises the
+// slot-aware output allocation API that completes the zero-copy path deferred
+// by the output-slot routing step (see
+// docs/next_steps/2026-08_buffer_reuse_arena.rst, "Target output-slot
+// contract"). The I/O arena's peak proves the intermediate never touched it:
+// the migration path would have allocated the intermediate in the I/O arena
+// first, doubling the peak.
+TEST(RunNodes, RuntimeSessionSlotAwareKernelAllocatesEachOutputInFinalArena) {
+  core::runtime::SimpleRawBufferAllocator execution_alloc(8);
+  core::runtime::SimpleRawBufferAllocator io_alloc(8);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
+                                                         .io_allocator = &io_alloc});
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}, &execution_alloc));
+
+  // The kernel asks the runtime for storage per output slot instead of using
+  // the node-scoped active allocator, so the runtime resolves each slot's arena
+  // up front and the kernel writes directly into the final buffer.
+  rt.RegisterCustomKernel("my.domain", "Fork", [](const NodeProto &node, RuntimeContext &ctx) {
+    const Tensor &in = ctx.Get(node.input(0));
+    const float *src = in.AsFloat();
+    const size_t n = static_cast<size_t>(in.element_count());
+    Tensor y = ctx.MakeOutputTensor(0, static_cast<int32_t>(core::runtime::DataType::FLOAT),
+                                    in.shape, n * sizeof(float));
+    Tensor aux = ctx.MakeOutputTensor(1, static_cast<int32_t>(core::runtime::DataType::FLOAT),
+                                      in.shape, n * sizeof(float));
+    float *yp = reinterpret_cast<float *>(y.mutable_bytes());
+    float *ap = reinterpret_cast<float *>(aux.mutable_bytes());
+    for (size_t i = 0; i < n; ++i) {
+      yp[i] = src[i] * 2.0f;
+      ap[i] = src[i] + 100.0f;
+    }
+    y.name = node.output(0);
+    aux.name = node.output(1);
+    ctx.Put(node.output(0), std::move(y));
+    ctx.Put(node.output(1), std::move(aux));
+  });
+
+  ModelProto model;
+  model.set_ir_version(10);
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *n = g->add_node();
+  n->set_op_type("Fork");
+  n->set_domain("my.domain");
+  n->add_input("x");
+  n->add_output("y");   // declared graph output -> I/O arena
+  n->add_output("aux"); // intermediate -> execution arena
+  g->add_output()->set_name("y");
+
+  RuntimeSession session(model);
+  session.Run(rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  ASSERT_TRUE(rt.Has("aux"));
+  EXPECT_EQ(rt.Get("y").allocation_owner(), &io_alloc);
+  EXPECT_EQ(rt.Get("aux").allocation_owner(), &execution_alloc);
+  // The intermediate was never allocated in the I/O arena, so the I/O arena's
+  // peak reflects only the single declared output (3 floats). A migration would
+  // have transiently held both outputs in the I/O arena.
+  EXPECT_EQ(io_alloc.PeakAllocatedSize(), sizeof(float) * 3);
+  const float *yp = rt.Get("y").AsFloat();
+  EXPECT_FLOAT_EQ(yp[0], 2.0f);
+  EXPECT_FLOAT_EQ(yp[1], 4.0f);
+  EXPECT_FLOAT_EQ(yp[2], 6.0f);
+  const float *ap = rt.Get("aux").AsFloat();
+  EXPECT_FLOAT_EQ(ap[0], 101.0f);
+  EXPECT_FLOAT_EQ(ap[1], 102.0f);
+  EXPECT_FLOAT_EQ(ap[2], 103.0f);
+}
+
 // ---------------------------------------------------------------------------
 // Release-unused-intermediates tests
 // ---------------------------------------------------------------------------

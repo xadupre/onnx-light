@@ -651,24 +651,14 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
 template <typename cls>
 std::string proto_repr_with_short_line(cls &self,
                                        size_t max_short_repr_length = MAX_SHORT_REPR_LENGTH) {
+  // Bound the representation while it is being produced: ``PrintToStringStream`` stops writing
+  // fields once the rendered text reaches ``max_short_repr_length`` and terminates it with an
+  // ellipsis, so the result always stays on a single short line.
   utils::PrintOptions opts;
+  opts.max_short_repr_length = max_short_repr_length;
   std::stringstream ss;
   self.PrintToStringStream(ss, opts);
-  std::string repr = ss.str();
-  // Keeps the representation on a single short line: overly long reprs are truncated and
-  // terminated with an ellipsis so they never exceed ``max_short_repr_length`` characters.
-  if (repr.size() > max_short_repr_length) {
-    static constexpr const char ellipsis[] = "...";
-    static constexpr size_t ellipsis_length = sizeof(ellipsis) - 1;
-    if (max_short_repr_length <= ellipsis_length) {
-      // No room for both content and a full ellipsis; keep the leading characters only.
-      repr.resize(max_short_repr_length);
-    } else {
-      repr.resize(max_short_repr_length - ellipsis_length);
-      repr += ellipsis;
-    }
-  }
-  return repr;
+  return ss.str();
 }
 
 template <typename T> void define_repeated_field_type(nb::class_<utils::RepeatedField<T>> &nbcls) {
@@ -1549,7 +1539,11 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
               "threshold")
       .def_rw("inline_threshold", &utils::PrintOptions::inline_threshold,
               "repeated fields with at most this many elements are printed as a bracketed list; "
-              "all output is flat (no newlines)");
+              "all output is flat (no newlines)")
+      .def_rw("max_short_repr_length", &utils::PrintOptions::max_short_repr_length,
+              "maximum number of characters produced when printing a short representation; "
+              "printing stops once this bound is reached and the text ends with an ellipsis; "
+              "zero (the default) means no limit");
 
   nb::class_<utils::String>(m, "String", "Simplified string with no final null character.")
       .def(nb::init<std::string>())

@@ -28,11 +28,47 @@ struct PrintOptions {
   /** Repeated fields with at most this many elements are printed as a bracketed list; all output
    * is always flat (no newlines). */
   int64_t inline_threshold = 9;
+  /** Maximum number of characters produced when printing a short representation (used by proto
+   * ``__repr__``). Printing stops as soon as the output reaches this bound and the text is
+   * terminated with an ellipsis. Zero (the default) means no limit. */
+  size_t max_short_repr_length = 0;
+  /** Internal flag set to true once ``max_short_repr_length`` has been reached while printing. It
+   * is used to stop the remaining fields from being written. */
+  bool short_repr_truncated = false;
 };
 
 /** Returns true if a repeated field of the given size should be printed inline on a single row. */
 inline bool is_inline_size(const PrintOptions &options, size_t size) {
   return static_cast<int64_t>(size) <= options.inline_threshold;
+}
+
+/**
+ * Enforces ``options.max_short_repr_length`` on the text already accumulated in ``ss``. When the
+ * bound is exceeded, the stream content is truncated in place and terminated with an ellipsis, and
+ * ``options.short_repr_truncated`` is set so callers can stop writing further fields.
+ *
+ * Returns:
+ *   True when the content was truncated, false otherwise.
+ */
+inline bool enforce_short_repr_length(std::stringstream &ss, PrintOptions &options) {
+  if (options.max_short_repr_length == 0 ||
+      static_cast<size_t>(ss.tellp()) <= options.max_short_repr_length) {
+    return false;
+  }
+  static constexpr char ellipsis[] = "...";
+  static constexpr size_t ellipsis_length = sizeof(ellipsis) - 1;
+  std::string content = ss.str();
+  if (options.max_short_repr_length <= ellipsis_length) {
+    // No room for both content and a full ellipsis; keep the leading characters only.
+    content.resize(options.max_short_repr_length);
+  } else {
+    content.resize(options.max_short_repr_length - ellipsis_length);
+    content += ellipsis;
+  }
+  ss.str(content);
+  ss.seekp(0, std::ios::end);
+  options.short_repr_truncated = true;
+  return true;
 }
 
 /** Minimal unique_ptr-like holder used by generated proto containers. */

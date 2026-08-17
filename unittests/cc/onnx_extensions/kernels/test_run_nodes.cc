@@ -4567,9 +4567,11 @@ TEST(RunNodes, RuntimeSessionRoutesMixedOutputsPerSlotDeclaredFirst) {
   EXPECT_EQ(rt.Get("aux").allocation_owner(), &execution_alloc);
   const float *yp = rt.Get("y").AsFloat();
   EXPECT_FLOAT_EQ(yp[0], 2.0f);
+  EXPECT_FLOAT_EQ(yp[1], 4.0f);
   EXPECT_FLOAT_EQ(yp[2], 6.0f);
   const float *ap = rt.Get("aux").AsFloat();
   EXPECT_FLOAT_EQ(ap[0], 101.0f);
+  EXPECT_FLOAT_EQ(ap[1], 102.0f);
   EXPECT_FLOAT_EQ(ap[2], 103.0f);
 }
 
@@ -4617,9 +4619,11 @@ TEST(RunNodes, RuntimeSessionRoutesMixedOutputsPerSlotIntermediateFirst) {
   EXPECT_EQ(rt.Get("aux").allocation_owner(), &execution_alloc);
   const float *yp = rt.Get("y").AsFloat();
   EXPECT_FLOAT_EQ(yp[0], 2.0f);
+  EXPECT_FLOAT_EQ(yp[1], 4.0f);
   EXPECT_FLOAT_EQ(yp[2], 6.0f);
   const float *ap = rt.Get("aux").AsFloat();
   EXPECT_FLOAT_EQ(ap[0], 101.0f);
+  EXPECT_FLOAT_EQ(ap[1], 102.0f);
   EXPECT_FLOAT_EQ(ap[2], 103.0f);
 }
 

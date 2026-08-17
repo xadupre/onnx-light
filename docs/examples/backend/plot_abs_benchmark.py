@@ -35,6 +35,7 @@ from onnx_light.onnx.reference import ReferenceEvaluator
 from onnx_light.onnx_py import _onnxpykernels
 
 runtime = _onnxpykernels.runtime
+ORT_MAX_IR_VERSION = 13
 
 
 def make_abs_model():
@@ -47,7 +48,7 @@ def make_abs_model():
         [helper.make_tensor_value_info("Y", TensorProto.FLOAT, ["N"])],
     )
     model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
-    model.ir_version = 13
+    model.ir_version = ORT_MAX_IR_VERSION
     checker.check_model(model)
     return model
 

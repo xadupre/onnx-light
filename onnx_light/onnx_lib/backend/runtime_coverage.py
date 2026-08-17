@@ -114,6 +114,7 @@ def _principal_op(tc: TestCase) -> tuple[str, str]:
 #     ``Graph::SaveShapeValuesFromDataPropagation``. ORT versions predating
 #     microsoft/onnxruntime#28778 abort while loading the model.
 _ORT_SKIP_CASES = frozenset({"test_cc_shape_inference_shape_identity_unsqueeze"})
+_ORT_MAX_IR_VERSION = 13
 
 
 def _run_onnxruntime(tc: TestCase) -> tuple[float | None, bool, str | None]:
@@ -146,7 +147,7 @@ def _run_onnxruntime(tc: TestCase) -> tuple[float | None, bool, str | None]:
         )
 
     model = _clone_model(tc.model)
-    model.ir_version = min(model.ir_version, 13)
+    model.ir_version = min(model.ir_version, _ORT_MAX_IR_VERSION)
     try:
         sess = ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
     except Exception as exc:  # noqa: BLE001

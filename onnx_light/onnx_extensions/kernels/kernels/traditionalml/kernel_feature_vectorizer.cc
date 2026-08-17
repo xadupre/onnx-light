@@ -125,7 +125,7 @@ void Compute(const Tensors &inputs, const std::vector<int64_t> &input_dims, int6
 
 Tensor FeatureVectorizer::operator()(const Tensors &inputs,
                                      const std::vector<int64_t> &inputdimensions,
-                                     RuntimeContext * /*rt*/) const {
+                                     RuntimeContext *rt) const {
   ValidateInputs(inputs, inputdimensions);
   const std::vector<int64_t> input_dims = ResolveInputDims(inputs, inputdimensions);
   const int64_t n = ResolveBatchSize(inputs);
@@ -133,9 +133,12 @@ Tensor FeatureVectorizer::operator()(const Tensors &inputs,
   for (int64_t d : input_dims) {
     total_features += d;
   }
-  std::vector<float> values(static_cast<size_t>(n * total_features), 0.0f);
-  Compute(inputs, input_dims, n, total_features, values.data());
-  return Tensor::FromFloat("", {n, total_features}, values, ctx_.allocator);
+  const onnx_kernels::Shape out_shape = {n, total_features};
+  const size_t n_bytes = static_cast<size_t>(n * total_features) * sizeof(float);
+  Tensor out = rt ? rt->MakeOutputTensor(0, DataType::FLOAT, out_shape, n_bytes)
+                  : MakeOutputTensor(DataType::FLOAT, out_shape, n_bytes, ctx_.allocator);
+  Compute(inputs, input_dims, n, total_features, out.AsFloat());
+  return out;
 }
 
 void FeatureVectorizer::operator()(const Tensors &inputs,
@@ -172,7 +175,7 @@ void FeatureVectorizer::Run(RuntimeContext &rt) {
   const std::vector<int64_t> inputdimensions =
       GetAttributeIntsOrDefault(node, "inputdimensions", {});
   onnx_kernels::kernel::FeatureVectorizer fv(rt.kernel_ctx());
-  SetOutput(node, 0, fv(inputs, inputdimensions), rt.tensors());
+  SetOutput(node, 0, fv(inputs, inputdimensions, &rt), rt.tensors());
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

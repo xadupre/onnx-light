@@ -311,8 +311,7 @@ Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_
                                    const std::vector<int64_t> &ngram_counts,
                                    const ParamInts &ngram_indexes, const ParamInts &pool_int64s,
                                    const std::vector<std::string> &pool_strings,
-                                   const std::vector<float> &weights,
-                                   RuntimeContext * /*rt*/) const {
+                                   const std::vector<float> &weights, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(!ngram_indexes.empty(),
                       "kernel::TfIdfVectorizer: ngram_indexes must be non-empty.");
   EXT_ENFORCE_INVALID(min_gram_length >= 1,
@@ -342,7 +341,7 @@ Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_
       NgramNode<int64_t> root =
           BuildTrie<int64_t>(pool_int64s, ngram_counts, min_gram_length, max_gram_length);
       if (!root.leaves.empty()) {
-        Int64RowBuffer row(ctx_.allocator, c_dim);
+        Int64RowBuffer row(rt ? rt->execution_allocator() : ctx_.allocator, c_dim);
         int64_t *row_data = row.data();
         for (int64_t r = 0; r < num_rows; ++r) {
           ReadIntRow(x, r, c_dim, row_data);
@@ -372,7 +371,15 @@ Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_
   onnx_kernels::Shape out_shape = ComputeOutputShape(x.shape, output_size);
   std::vector<float> out_values(static_cast<size_t>(num_rows * output_size), 0.0f);
   ApplyMode(num_rows, output_size, mode, frequencies, weights, out_values.data());
-  return Tensor::FromFloat("", out_shape, out_values, ctx_.allocator);
+  if (rt == nullptr) {
+    return Tensor::FromFloat("", out_shape, out_values, ctx_.allocator);
+  }
+  Tensor output =
+      rt->MakeOutputTensor(0, DataType::FLOAT, out_shape, out_values.size() * sizeof(float));
+  if (!out_values.empty()) {
+    std::copy(out_values.begin(), out_values.end(), output.AsFloat());
+  }
+  return output;
 }
 
 void TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_length,
@@ -412,7 +419,7 @@ void TfIdfVectorizer::Run(RuntimeContext &rt) {
   SetOutput(node, 0,
             k(x, onnx_kernels::kernel::TfIdfVectorizer::ParseMode(mode_attr), min_gram_length,
               max_gram_length, max_skip_count, ngram_counts, ngram_indexes, pool_int64s,
-              pool_strings, weights),
+              pool_strings, weights, &rt),
             rt);
 }
 

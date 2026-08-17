@@ -57,8 +57,10 @@ std::pair<Tensor, Tensor> Dropout::operator()(const Tensor &data, float ratio, b
   ValidateInput(data, ratio);
 
   const size_t mask_n_bytes = static_cast<std::size_t>(data.element_count());
-  Tensor mask = MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), data.shape, mask_n_bytes,
-                                 rt ? rt->allocator() : nullptr);
+  Tensor mask =
+      rt ? rt->MakeOutputTensor(1, static_cast<int32_t>(DataType::BOOL), data.shape, mask_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::BOOL), data.shape, mask_n_bytes,
+                            nullptr);
 
   Tensor output = (*this)(data, ratio, training_mode, mask, seed, rt);
   return {std::move(output), std::move(mask)};
@@ -74,8 +76,8 @@ Tensor Dropout::operator()(const Tensor &data, float ratio, bool training_mode, 
                       "kernel::Dropout: mask buffer must have one byte per input element.");
 
   const size_t output_n_bytes = data.size_bytes();
-  Tensor output =
-      MakeOutputTensor(data.data_type, data.shape, output_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor output = rt ? rt->MakeOutputTensor(0, data.data_type, data.shape, output_n_bytes)
+                     : MakeOutputTensor(data.data_type, data.shape, output_n_bytes, nullptr);
   const uint32_t engine_seed =
       (seed == kNoSeed) ? kDefaultDropoutSeed : static_cast<uint32_t>(seed);
 
@@ -132,13 +134,12 @@ void Dropout::Run(RuntimeContext &rt) {
 
   onnx_kernels::kernel::Dropout k(rt.kernel_ctx());
   if (node.output_size() == 2) {
-    auto out = k(data, ratio, training_mode, seed);
+    auto out = k(data, ratio, training_mode, seed, &rt);
     SetOutput(node, 0, std::move(out.first), rt);
     SetOutput(node, 1, std::move(out.second), rt);
   } else {
-    Tensor mask =
-        Tensor::FromRawBytes("", static_cast<int32_t>(DataType::BOOL), data.shape,
-                             RawByteBuffer(static_cast<std::size_t>(data.element_count()), 1));
+    Tensor mask = rt.MakeTemporaryTensor(static_cast<int32_t>(DataType::BOOL), data.shape,
+                                         static_cast<std::size_t>(data.element_count()));
     SetOutput(node, 0, k(data, ratio, training_mode, mask, seed, &rt), rt);
   }
 }

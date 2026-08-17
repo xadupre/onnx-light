@@ -49,14 +49,14 @@ Tensor GatherElements::operator()(const Tensor &data, const Tensor &indices, int
   const std::size_t elem_size = ElementSize(data.data_type);
   int64_t total = indices.element_count();
   const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
-  Tensor out =
-      MakeOutputTensor(data.data_type, indices.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
-  (*this)(data, indices, axis, out);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, data.data_type, indices.shape, out_n_bytes)
+                   : MakeOutputTensor(data.data_type, indices.shape, out_n_bytes, nullptr));
+  (*this)(data, indices, axis, out, rt);
   return out;
 }
 
 void GatherElements::operator()(const Tensor &data, const Tensor &indices, int64_t axis,
-                                Tensor &output) const {
+                                Tensor &output, RuntimeContext *rt) const {
   const int64_t r = static_cast<int64_t>(data.shape.size());
   EXT_ENFORCE_INVALID(r >= 1, "kernel::GatherElements: 'data' must have rank >= 1.");
   EXT_ENFORCE_INVALID(static_cast<int64_t>(indices.shape.size()) == r,
@@ -70,7 +70,8 @@ void GatherElements::operator()(const Tensor &data, const Tensor &indices, int64
   }
   EXT_ENFORCE_INVALID(axis >= 0 && axis < r, "kernel::GatherElements: axis out of range.");
 
-  const Tensor idx_tensor = ReadGatherElementsIndices(indices, ctx_.allocator);
+  const Tensor idx_tensor =
+      ReadGatherElementsIndices(indices, rt ? rt->execution_allocator() : ctx_.allocator);
   const int64_t *idx_values = idx_tensor.As<int64_t>();
   const int64_t axis_dim = data.shape[static_cast<std::size_t>(axis)];
   const std::size_t elem_size = ElementSize(data.data_type);

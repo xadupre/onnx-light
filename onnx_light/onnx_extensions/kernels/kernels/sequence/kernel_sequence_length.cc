@@ -12,11 +12,17 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
-Tensor SequenceLength::operator()(const Sequence &input_sequence, RuntimeContext * /*rt*/) const {
+Tensor SequenceLength::operator()(const Sequence &input_sequence, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(input_sequence.size() <=
                           static_cast<std::size_t>(std::numeric_limits<int64_t>::max()),
                       "kernel::SequenceLength: input sequence length exceeds int64_t range.");
-  return Tensor::FromInt64("", {}, {static_cast<int64_t>(input_sequence.size())}, ctx_.allocator);
+  const int64_t size = static_cast<int64_t>(input_sequence.size());
+  if (rt == nullptr) {
+    return Tensor::FromInt64("", {}, {size}, ctx_.allocator);
+  }
+  Tensor output = rt->MakeOutputTensor(0, DataType::INT64, {}, sizeof(int64_t));
+  output.AsInt64()[0] = size;
+  return output;
 }
 
 void SequenceLength::Run(RuntimeContext &rt) {

@@ -40,25 +40,24 @@ onnx_kernels::Shape RowMajorStrides(const onnx_kernels::Shape &shape) {
 
 Tensor TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
                                  const Tensor *write_indices,
-                                 const TensorScatter::Attributes &attrs,
-                                 RuntimeContext * /*rt*/) const {
-  Tensor output;
-  output.name = "";
-  output.data_type = past_cache.data_type;
-  output.shape = past_cache.shape;
+                                 const TensorScatter::Attributes &attrs, RuntimeContext *rt) const {
+  const std::size_t n_bytes =
+      past_cache.data_type == static_cast<int32_t>(DataType::STRING)
+          ? 0
+          : PackedByteSize(past_cache.data_type, past_cache.element_count());
+  Tensor output = rt ? rt->MakeOutputTensor(0, past_cache.data_type, past_cache.shape, n_bytes)
+                     : MakeOutputTensor(past_cache.data_type, past_cache.shape, n_bytes, nullptr);
   if (past_cache.data_type == static_cast<int32_t>(DataType::STRING)) {
     output.string_data.assign(static_cast<std::size_t>(past_cache.element_count()), std::string());
-  } else {
-    output.data.assign(PackedByteSize(past_cache.data_type, past_cache.element_count()),
-                       static_cast<uint8_t>(0));
   }
-  (*this)(past_cache, update, write_indices, attrs, output);
+  (*this)(past_cache, update, write_indices, attrs, output,
+          rt ? rt->execution_allocator() : nullptr);
   return output;
 }
 
 void TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
                                const Tensor *write_indices, const TensorScatter::Attributes &attrs,
-                               Tensor &output) const {
+                               Tensor &output, RawBufferAllocator *allocator) const {
   EXT_ENFORCE_INVALID(past_cache.data_type == update.data_type,
                       "kernel::TensorScatter: 'past_cache' and 'update' must share dtype.");
   EXT_ENFORCE_INVALID(output.data_type == past_cache.data_type,
@@ -97,8 +96,8 @@ void TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
   // Read write_indices (or default to all zeros). The scratch buffer is drawn
   // from the runtime allocator when one is available, falling back to inline
   // std::vector storage otherwise.
-  detail::TemporaryTypedBuffer<int64_t> writes_buf(static_cast<std::size_t>(batch_size),
-                                                   ctx_.allocator, "kernel::TensorScatter writes");
+  detail::TemporaryTypedBuffer<int64_t> writes_buf(static_cast<std::size_t>(batch_size), allocator,
+                                                   "kernel::TensorScatter writes");
   int64_t *writes = writes_buf.data();
   if (write_indices != nullptr) {
     EXT_ENFORCE_INVALID(write_indices->data_type == static_cast<int32_t>(DataType::INT64),

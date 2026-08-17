@@ -61,8 +61,8 @@ Tensor Transpose::operator()(const Tensor &data, const onnx_kernels::Shape &perm
   }
 
   const size_t output_n_bytes = PackedByteSize(data.data_type, data.element_count());
-  Tensor output =
-      MakeOutputTensor(data.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor output = (rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, output_n_bytes)
+                      : MakeOutputTensor(data.data_type, out_shape, output_n_bytes, nullptr));
   (*this)(data, perm, output);
   return output;
 }

@@ -39,8 +39,9 @@ Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p,
 
   const int64_t total = outer * dim * inner;
   const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(float);
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes, nullptr);
 
   const float *px = x.AsFloat();
   float *py = reinterpret_cast<float *>(out.mutable_bytes());

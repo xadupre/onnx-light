@@ -57,12 +57,14 @@ int64_t LastDim(const onnx_kernels::Shape &shape) { return shape.empty() ? 1 : s
 
 template <typename T>
 Tensor Scaler::operator()(const Tensor &x, const std::vector<float> &offset,
-                          const std::vector<float> &scale, RuntimeContext * /*rt*/) const {
+                          const std::vector<float> &scale, RuntimeContext *rt) const {
   ValidateInput<T>(x);
   ValidateAttrs(offset, scale, LastDim(x.shape));
   const int64_t n = x.element_count();
-  Tensor out = MakeOutputTensor(TensorElementType<float>::value, x.shape,
-                                static_cast<size_t>(n) * sizeof(float), ctx_.allocator);
+  const size_t n_bytes = static_cast<size_t>(n) * sizeof(float);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, TensorElementType<float>::value, x.shape, n_bytes)
+         : MakeOutputTensor(TensorElementType<float>::value, x.shape, n_bytes, ctx_.allocator);
   ApplyScaler<T>(x, offset, scale, reinterpret_cast<float *>(out.mutable_bytes()));
   return out;
 }
@@ -106,7 +108,7 @@ void Scaler::Run(RuntimeContext &rt) {
   Tensor y = DispatchSVMByDataType(x, "Scaler", [&](auto *tag) {
     using T = std::remove_pointer_t<decltype(tag)>;
     (void)tag;
-    return scaler.template operator()<T>(x, offset, scale);
+    return scaler.template operator()<T>(x, offset, scale, &rt);
   });
   SetOutput(node, 0, std::move(y), rt.tensors());
 }

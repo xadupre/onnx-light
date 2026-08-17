@@ -100,15 +100,30 @@ LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const Tenso
   }
   const size_t reduced_bytes = static_cast<size_t>(reduced_elem) * sizeof(float);
 
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   const size_t y_n_bytes = x.size_bytes();
-  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, y_n_bytes, allocator);
+  Tensor y =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), x.shape, y_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, y_n_bytes, nullptr);
+  const bool has_mean_output =
+      rt == nullptr || rt->output_slot_io_roles().empty() || rt->output_slot_io_roles().size() > 1;
+  const bool has_inv_std_output =
+      rt == nullptr || rt->output_slot_io_roles().empty() || rt->output_slot_io_roles().size() > 2;
   const size_t mean_n_bytes = reduced_bytes;
-  Tensor mean = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), reduced_shape, mean_n_bytes,
-                                 allocator);
+  Tensor mean =
+      rt ? (has_mean_output ? rt->MakeOutputTensor(1, static_cast<int32_t>(DataType::FLOAT),
+                                                   reduced_shape, mean_n_bytes)
+                            : rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT),
+                                                      reduced_shape, mean_n_bytes))
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), reduced_shape, mean_n_bytes,
+                            nullptr);
   const size_t inv_std_dev_n_bytes = reduced_bytes;
-  Tensor inv_std_dev = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), reduced_shape,
-                                        inv_std_dev_n_bytes, allocator);
+  Tensor inv_std_dev =
+      rt ? (has_inv_std_output ? rt->MakeOutputTensor(2, static_cast<int32_t>(DataType::FLOAT),
+                                                      reduced_shape, inv_std_dev_n_bytes)
+                               : rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT),
+                                                         reduced_shape, inv_std_dev_n_bytes))
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), reduced_shape,
+                            inv_std_dev_n_bytes, nullptr);
   (*this)(x, scale, b, y, mean, inv_std_dev, axis, epsilon);
   return {std::move(y), std::move(mean), std::move(inv_std_dev)};
 }
@@ -237,7 +252,7 @@ void LayerNormalization::Run(RuntimeContext &rt) {
   const Tensor *b = GetOptionalInput(node, 2, rt.tensors());
   onnx_kernels::kernel::LayerNormalization k(rt.kernel_ctx());
   auto [y, mean, inv_std_dev] =
-      k(x, scale, b != nullptr ? *b : Tensor{}, GetNormAxis(node), GetEpsilon(node));
+      k(x, scale, b != nullptr ? *b : Tensor{}, GetNormAxis(node), GetEpsilon(node), &rt);
   SetOutput(node, 0, std::move(y), rt.tensors());
   if (node.output_size() >= 2) {
     SetOutput(node, 1, std::move(mean), rt.tensors());

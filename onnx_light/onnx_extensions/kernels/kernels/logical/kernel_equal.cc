@@ -117,52 +117,50 @@ void Equal::RegisterTuningSchemas() {
 }
 
 Tensor Equal::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    const Shape out_shape = detail::BroadcastShape("kernel::Equal", x.shape, y.shape);
+    const int64_t out_count = out_shape.product();
+    Tensor output = rt->MakeOutputTensor(
+        0, DataType::BOOL, out_shape, static_cast<size_t>(out_count) * ElementSize(DataType::BOOL));
+    (*this)(x, y, output);
+    return output;
+  }
   const int64_t grain = tuning().parallel_minimum_elements;
   switch (x.data_type) {
   case DataType::BOOL:
-    return EqualAlloc<uint8_t>("BOOL", DataType::BOOL, x, y, grain, rt ? rt->allocator() : nullptr);
+    return EqualAlloc<uint8_t>("BOOL", DataType::BOOL, x, y, grain, nullptr);
   case DataType::FLOAT:
-    return EqualAlloc<float>("FLOAT", DataType::FLOAT, x, y, grain, rt ? rt->allocator() : nullptr);
+    return EqualAlloc<float>("FLOAT", DataType::FLOAT, x, y, grain, nullptr);
   case DataType::DOUBLE:
-    return EqualAlloc<double>("DOUBLE", DataType::DOUBLE, x, y, grain,
-                              rt ? rt->allocator() : nullptr);
+    return EqualAlloc<double>("DOUBLE", DataType::DOUBLE, x, y, grain, nullptr);
   case DataType::FLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kEqualName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; }, rt ? rt->allocator() : nullptr,
-        grain);
+        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; }, nullptr, grain);
   case DataType::BFLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; }, rt ? rt->allocator() : nullptr,
-        grain);
+        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; }, nullptr, grain);
   case DataType::INT8:
-    return EqualAlloc<int8_t>("INT8", DataType::INT8, x, y, grain, rt ? rt->allocator() : nullptr);
+    return EqualAlloc<int8_t>("INT8", DataType::INT8, x, y, grain, nullptr);
   case DataType::INT16:
-    return EqualAlloc<int16_t>("INT16", DataType::INT16, x, y, grain,
-                               rt ? rt->allocator() : nullptr);
+    return EqualAlloc<int16_t>("INT16", DataType::INT16, x, y, grain, nullptr);
   case DataType::INT32:
-    return EqualAlloc<int32_t>("INT32", DataType::INT32, x, y, grain,
-                               rt ? rt->allocator() : nullptr);
+    return EqualAlloc<int32_t>("INT32", DataType::INT32, x, y, grain, nullptr);
   case DataType::INT64:
-    return EqualAlloc<int64_t>("INT64", DataType::INT64, x, y, grain,
-                               rt ? rt->allocator() : nullptr);
+    return EqualAlloc<int64_t>("INT64", DataType::INT64, x, y, grain, nullptr);
   case DataType::UINT8:
-    return EqualAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, grain,
-                               rt ? rt->allocator() : nullptr);
+    return EqualAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, grain, nullptr);
   case DataType::UINT16:
-    return EqualAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, grain,
-                                rt ? rt->allocator() : nullptr);
+    return EqualAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, grain, nullptr);
   case DataType::UINT32:
-    return EqualAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, grain,
-                                rt ? rt->allocator() : nullptr);
+    return EqualAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, grain, nullptr);
   case DataType::UINT64:
-    return EqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, grain,
-                                rt ? rt->allocator() : nullptr);
+    return EqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, grain, nullptr);
   case DataType::STRING:
     EXT_ENFORCE_INVALID(y.data_type == static_cast<int32_t>(DataType::STRING),
                         "kernel::Equal inputs must share the same dtype.");
-    return EqualStringAlloc(x, y, grain, rt ? rt->allocator() : nullptr);
+    return EqualStringAlloc(x, y, grain, nullptr);
   default:
     EXT_THROW_INVALID(kEqualName, ": unsupported data type ", x.data_type,
                       ", only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, INT16, INT32, "

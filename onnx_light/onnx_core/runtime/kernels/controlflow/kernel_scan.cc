@@ -47,7 +47,8 @@ std::size_t ElementBytes(const Tensor &t) {
 // ONNX Scan "prepend" direction). When ``allocator`` is non-null, the
 // returned tensor stores its bytes in an allocator-owned ``RawBuffer``.
 Tensor StackScanOutput(const Tensors &per_iter, int64_t trip_count, int64_t axis_raw, bool reverse,
-                       RawBufferAllocator *allocator = nullptr) {
+                       RawBufferAllocator *allocator = nullptr, RuntimeContext *rt = nullptr,
+                       int output_slot = -1) {
   EXT_ENFORCE_INVALID(static_cast<int64_t>(per_iter.size()) >= trip_count,
                       "kernel::Scan: scan-output row is shorter than the trip count.");
 
@@ -86,7 +87,9 @@ Tensor StackScanOutput(const Tensors &per_iter, int64_t trip_count, int64_t axis
 
   const std::size_t out_n_bytes =
       trip_count > 0 ? static_cast<std::size_t>(trip_count) * per_iter[0].size_bytes() : 0;
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(dtype), out_shape, out_n_bytes, allocator);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(output_slot, static_cast<int32_t>(dtype), out_shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(dtype), out_shape, out_n_bytes, allocator);
   if (trip_count > 0 && elt_bytes > 0) {
     // outer = product of out_shape[0..axis-1] in the *output*; for each
     // outer index we copy ``trip_count`` element-blocks of size
@@ -135,8 +138,8 @@ Tensors AssembleScanOutputs(int64_t trip_count, const Tensors &initial_state,
                             const Tensors &final_state,
                             const std::vector<Tensors> &scan_values_per_iter,
                             const ParamInts &scan_output_axes,
-                            const ParamInts &scan_output_directions,
-                            RawBufferAllocator *allocator) {
+                            const ParamInts &scan_output_directions, RawBufferAllocator *allocator,
+                            RuntimeContext *rt = nullptr) {
   EXT_ENFORCE_INVALID(trip_count >= 0, "kernel::Scan: trip_count must be non-negative.");
   EXT_ENFORCE_INVALID(initial_state.size() == final_state.size(),
                       "kernel::Scan: 'final_state' must have the same number of tensors "
@@ -160,7 +163,8 @@ Tensors AssembleScanOutputs(int64_t trip_count, const Tensors &initial_state,
   for (std::size_t ki = 0; ki < k; ++ki) {
     const int64_t axis = scan_output_axes.empty() ? 0 : scan_output_axes[ki];
     const bool reverse = !scan_output_directions.empty() && scan_output_directions[ki] != 0;
-    out.push_back(StackScanOutput(scan_values_per_iter[ki], trip_count, axis, reverse, allocator));
+    out.push_back(StackScanOutput(scan_values_per_iter[ki], trip_count, axis, reverse, allocator,
+                                  rt, static_cast<int>(initial_state.size() + ki)));
   }
   return out;
 }
@@ -182,7 +186,8 @@ Tensors Scan::operator()(RuntimeContext &rt, int64_t trip_count, const Tensors &
                          const ParamInts &scan_output_axes,
                          const ParamInts &scan_output_directions) const {
   return AssembleScanOutputs(trip_count, initial_state, final_state, scan_values_per_iter,
-                             scan_output_axes, scan_output_directions, rt.allocator());
+                             scan_output_axes, scan_output_directions, rt.execution_allocator(),
+                             &rt);
 }
 
 Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, const Tensors &initial_state,
@@ -312,8 +317,8 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSes
       const int64_t elt_count = std::accumulate(slice_shape.begin(), slice_shape.end(), int64_t{1},
                                                 std::multiplies<int64_t>());
       const std::size_t n_bytes = PackedByteSize(scan_inputs[i].data_type, elt_count);
-      Tensor slice = MakeOutputTensor(static_cast<int32_t>(scan_inputs[i].data_type), slice_shape,
-                                      n_bytes, rt.allocator());
+      Tensor slice = rt.MakeTemporaryTensor(static_cast<int32_t>(scan_inputs[i].data_type),
+                                            slice_shape, n_bytes);
       if (n_bytes > 0) {
         // Allocator-backed buffers are not guaranteed zeroed; the dummy
         // slice must be zero-filled so the body sees deterministic input.
@@ -332,7 +337,7 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSes
   }
 
   return AssembleScanOutputs(trip_count, initial_state, state, scan_values, scan_output_axes,
-                             scan_output_directions, rt.allocator());
+                             scan_output_directions, rt.execution_allocator(), &rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

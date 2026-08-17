@@ -75,20 +75,21 @@ Tensor Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axi
   }
   const std::size_t elem_size = ElementSize(data.data_type);
   const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
-  Tensor out =
-      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
-  (*this)(data, indices, axis, out);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
+                   : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr));
+  (*this)(data, indices, axis, out, rt);
   return out;
 }
 
-void Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axis,
-                        Tensor &output) const {
+void Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axis, Tensor &output,
+                        RuntimeContext *rt) const {
   const int64_t r = static_cast<int64_t>(data.shape.size());
   const int64_t a = NormalizeAxis(axis, r);
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::Gather: preallocated output dtype must match data dtype.");
 
-  const Tensor idx_tensor = ReadIndicesAsInt64(indices, "Gather", ctx_.allocator);
+  const Tensor idx_tensor =
+      ReadIndicesAsInt64(indices, "Gather", rt ? rt->execution_allocator() : ctx_.allocator);
   const int64_t *idx_values = idx_tensor.As<int64_t>();
   const int64_t axis_dim = data.shape[static_cast<std::size_t>(a)];
 

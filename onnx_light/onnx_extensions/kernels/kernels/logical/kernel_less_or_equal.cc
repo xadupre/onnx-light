@@ -37,8 +37,15 @@ void LessOrEqual::RegisterTuningSchemas() {
 }
 
 Tensor LessOrEqual::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
-  return detail::BinaryComparisonAlloc(kLessOrEqualName, x, y, kLessOrEqualOp,
-                                       rt ? rt->allocator() : nullptr,
+  if (rt != nullptr) {
+    const Shape out_shape = detail::BroadcastShape("kernel::LessOrEqual", x.shape, y.shape);
+    const int64_t out_count = out_shape.product();
+    Tensor output = rt->MakeOutputTensor(
+        0, DataType::BOOL, out_shape, static_cast<size_t>(out_count) * ElementSize(DataType::BOOL));
+    (*this)(x, y, output);
+    return output;
+  }
+  return detail::BinaryComparisonAlloc(kLessOrEqualName, x, y, kLessOrEqualOp, nullptr,
                                        tuning().parallel_minimum_elements);
 }
 

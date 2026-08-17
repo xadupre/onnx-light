@@ -41,7 +41,7 @@ void CheckRank4Float(const Tensor &t, const char *label) {
 // internal kernel. Returns the promoted tensor; ``num_heads`` must divide
 // ``hidden_size``.
 Tensor PromoteRank3(const Tensor &t, int64_t num_heads, const char *label,
-                    RawBufferAllocator *allocator = nullptr) {
+                    RuntimeContext *rt = nullptr) {
   EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT, "kernel::Attention: '", label,
                       "' must be a FLOAT tensor.");
   EXT_ENFORCE_INVALID(t.shape.size() == 3, "kernel::Attention: '", label, "' must be rank-3.");
@@ -55,7 +55,9 @@ Tensor PromoteRank3(const Tensor &t, int64_t num_heads, const char *label,
   const int64_t head_size = hidden / num_heads;
   const size_t out_n_bytes = t.size_bytes();
   Tensor out =
-      MakeOutputTensor(DataType::FLOAT, {batch, num_heads, seq, head_size}, out_n_bytes, allocator);
+      rt ? rt->MakeTemporaryTensor(DataType::FLOAT, {batch, num_heads, seq, head_size}, out_n_bytes)
+         : MakeOutputTensor(DataType::FLOAT, {batch, num_heads, seq, head_size}, out_n_bytes,
+                            nullptr);
   const float *src = t.AsFloat();
   float *dst = out.AsFloat();
   // src strides: (seq*hidden, hidden, 1) over (batch, seq, hidden).
@@ -78,7 +80,7 @@ Tensor PromoteRank3(const Tensor &t, int64_t num_heads, const char *label,
 // Inverse of ``PromoteRank3``: collapses a rank-4 ``(batch, num_heads, seq,
 // head_size)`` tensor into the rank-3 fused layout
 // ``(batch, seq, num_heads * head_size)``.
-Tensor CollapseToRank3(const Tensor &t, RawBufferAllocator *allocator = nullptr) {
+Tensor CollapseToRank3(const Tensor &t, RuntimeContext *rt = nullptr) {
   EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT, "kernel::Attention: must be FLOAT.");
   EXT_ENFORCE_INVALID(t.shape.size() == 4, "kernel::Attention: must be rank-4.");
   const int64_t batch = t.shape[0];
@@ -87,7 +89,8 @@ Tensor CollapseToRank3(const Tensor &t, RawBufferAllocator *allocator = nullptr)
   const int64_t head_size = t.shape[3];
   const int64_t hidden = num_heads * head_size;
   const size_t out_n_bytes = t.size_bytes();
-  Tensor out = MakeOutputTensor(DataType::FLOAT, {batch, seq, hidden}, out_n_bytes, allocator);
+  Tensor out = rt ? rt->MakeOutputTensor(0, DataType::FLOAT, {batch, seq, hidden}, out_n_bytes)
+                  : MakeOutputTensor(DataType::FLOAT, {batch, seq, hidden}, out_n_bytes, nullptr);
   const float *src = t.AsFloat();
   float *dst = out.AsFloat();
   for (int64_t b = 0; b < batch; ++b) {
@@ -106,7 +109,25 @@ Tensor CollapseToRank3(const Tensor &t, RawBufferAllocator *allocator = nullptr)
 // Concatenates two rank-4 FLOAT tensors along axis 2 (the sequence axis).
 // Returns a new tensor whose shape equals ``a.shape`` with axis 2 = ``a[2] +
 // b[2]``; axes 0, 1, 3 must match between ``a`` and ``b``.
-Tensor ConcatAxis2(const Tensor &a, const Tensor &b, RawBufferAllocator *allocator = nullptr) {
+Tensor AllocateResult(RuntimeContext *rt, int output_slot, int32_t data_type, const Shape &shape,
+                      size_t n_bytes) {
+  if (rt == nullptr) {
+    return MakeOutputTensor(data_type, shape, n_bytes, nullptr);
+  }
+  const auto &roles = rt->output_slot_io_roles();
+  if (!roles.empty() && static_cast<size_t>(output_slot) >= roles.size()) {
+    return rt->MakeTemporaryTensor(data_type, shape, n_bytes);
+  }
+  return rt->MakeOutputTensor(output_slot, data_type, shape, n_bytes);
+}
+
+bool HasRecordedOutputSlot(const RuntimeContext *rt, int output_slot) {
+  return rt != nullptr && !rt->output_slot_io_roles().empty() && output_slot >= 0 &&
+         static_cast<size_t>(output_slot) < rt->output_slot_io_roles().size();
+}
+
+Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot,
+                   RuntimeContext *rt = nullptr) {
   EXT_ENFORCE_INVALID(a.shape.size() == 4 && b.shape.size() == 4,
                       "kernel::Attention: concat inputs must be rank-4.");
   EXT_ENFORCE_INVALID(a.shape[0] == b.shape[0] && a.shape[1] == b.shape[1] &&
@@ -119,7 +140,7 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, RawBufferAllocator *allocat
   const int64_t d = a.shape[3];
   const int64_t lc = la + lb;
   const size_t out_n_bytes = static_cast<size_t>(batch * heads * lc * d) * sizeof(float);
-  Tensor out = MakeOutputTensor(DataType::FLOAT, {batch, heads, lc, d}, out_n_bytes, allocator);
+  Tensor out = AllocateResult(rt, output_slot, DataType::FLOAT, {batch, heads, lc, d}, out_n_bytes);
   const float *pa = a.AsFloat();
   const float *pb = b.AsFloat();
   float *po = out.AsFloat();
@@ -132,6 +153,14 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, RawBufferAllocator *allocat
       const int64_t off_b = (bi * heads + h) * lb * d;
       std::copy(pb + off_b, pb + off_b + lb * d, po + off_o + la * d);
     }
+  }
+  return out;
+}
+
+Tensor CopyOutput(const Tensor &src, int output_slot, RuntimeContext *rt) {
+  Tensor out = AllocateResult(rt, output_slot, src.data_type, src.shape, src.size_bytes());
+  if (src.size_bytes() != 0) {
+    std::memcpy(out.mutable_bytes(), src.bytes(), src.size_bytes());
   }
   return out;
 }
@@ -203,8 +232,8 @@ double MaskValuePadded(const Tensor *mask, int64_t batch_size, int64_t q_num_hea
 Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, const Tensor &V4,
                                         const Attention::Attributes &attrs, const Tensor *attn_mask,
                                         const Tensor *past_key, const Tensor *past_value,
-                                        const Tensor *nonpad_kv_seqlen,
-                                        RawBufferAllocator *allocator) {
+                                        const Tensor *nonpad_kv_seqlen, RuntimeContext *rt,
+                                        bool temporary_y = false) {
   CheckRank4Float(Q4, "Q");
   CheckRank4Float(K4, "K");
   CheckRank4Float(V4, "V");
@@ -230,8 +259,12 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
   // ----- Build present_key / present_value -------------------------------
   // The upstream operator concatenates past_key/past_value with K/V along
   // the sequence axis. When neither is supplied, present == K/V.
-  Tensor present_key = past_key != nullptr ? ConcatAxis2(*past_key, K4, allocator) : K4;
-  Tensor present_value = past_value != nullptr ? ConcatAxis2(*past_value, V4, allocator) : V4;
+  Tensor present_key = past_key != nullptr
+                           ? ConcatAxis2(*past_key, K4, 1, rt)
+                           : (HasRecordedOutputSlot(rt, 1) ? CopyOutput(K4, 1, rt) : K4);
+  Tensor present_value = past_value != nullptr
+                             ? ConcatAxis2(*past_value, V4, 2, rt)
+                             : (HasRecordedOutputSlot(rt, 2) ? CopyOutput(V4, 2, rt) : V4);
   const int64_t total_kv_seq_len = present_key.shape[2];
   const int64_t past_kv_seq_len = past_key != nullptr ? past_key->shape[2] : 0;
   const int64_t v_head_size = present_value.shape[3];
@@ -258,13 +291,14 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
   // ----- Allocate outputs ------------------------------------------------
   const int64_t out_count_y = batch_size * q_num_heads * q_seq_len * v_head_size;
   const size_t Y_n_bytes = static_cast<size_t>(out_count_y) * sizeof(float);
-  Tensor Y = MakeOutputTensor(DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, v_head_size},
-                              Y_n_bytes, allocator);
+  const Shape y_shape{batch_size, q_num_heads, q_seq_len, v_head_size};
+  Tensor Y = temporary_y && rt ? rt->MakeTemporaryTensor(DataType::FLOAT, y_shape, Y_n_bytes)
+                               : AllocateResult(rt, 0, DataType::FLOAT, y_shape, Y_n_bytes);
   const int64_t qk_count = batch_size * q_num_heads * q_seq_len * total_kv_seq_len;
   const size_t qk_out_n_bytes = static_cast<size_t>(qk_count) * sizeof(float);
   Tensor qk_out =
-      MakeOutputTensor(DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, total_kv_seq_len},
-                       qk_out_n_bytes, allocator);
+      AllocateResult(rt, 3, DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, total_kv_seq_len},
+                     qk_out_n_bytes);
 
   // ----- Compute ---------------------------------------------------------
   const int64_t group_size = q_num_heads / kv_num_heads;
@@ -293,11 +327,14 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
   // back to inline storage when ``allocator`` is null.
   const size_t scratch_n_bytes = static_cast<size_t>(total_kv_seq_len) * sizeof(double);
   Tensor scores_buf =
-      MakeOutputTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes, allocator);
+      rt ? rt->MakeTemporaryTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes)
+         : MakeOutputTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes, nullptr);
   Tensor bias_buf =
-      MakeOutputTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes, allocator);
+      rt ? rt->MakeTemporaryTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes)
+         : MakeOutputTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes, nullptr);
   Tensor qkraw_buf =
-      MakeOutputTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes, allocator);
+      rt ? rt->MakeTemporaryTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes)
+         : MakeOutputTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes, nullptr);
   double *scores = scores_buf.AsDouble();
   double *bias = bias_buf.AsDouble();
   double *qkraw = qkraw_buf.AsDouble();
@@ -456,14 +493,13 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
 Attention::Result ComputeAttentionRank3(const Tensor &Q, const Tensor &K, const Tensor &V,
                                         const Attention::Attributes &attrs, const Tensor *attn_mask,
                                         const Tensor *past_key, const Tensor *past_value,
-                                        const Tensor *nonpad_kv_seqlen,
-                                        RawBufferAllocator *allocator) {
-  Tensor Q4 = PromoteRank3(Q, attrs.q_num_heads, "Q", allocator);
-  Tensor K4 = PromoteRank3(K, attrs.kv_num_heads, "K", allocator);
-  Tensor V4 = PromoteRank3(V, attrs.kv_num_heads, "V", allocator);
+                                        const Tensor *nonpad_kv_seqlen, RuntimeContext *rt) {
+  Tensor Q4 = PromoteRank3(Q, attrs.q_num_heads, "Q", rt);
+  Tensor K4 = PromoteRank3(K, attrs.kv_num_heads, "K", rt);
+  Tensor V4 = PromoteRank3(V, attrs.kv_num_heads, "V", rt);
   Attention::Result r = ComputeAttentionRank4(Q4, K4, V4, attrs, attn_mask, past_key, past_value,
-                                              nonpad_kv_seqlen, allocator);
-  r.Y = CollapseToRank3(r.Y, allocator);
+                                              nonpad_kv_seqlen, rt, /*temporary_y=*/true);
+  r.Y = CollapseToRank3(r.Y, rt);
   return r;
 }
 
@@ -479,21 +515,21 @@ Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
 }
 
 Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                             RuntimeContext * /*rt*/) const {
+                             RuntimeContext *rt) const {
   Attributes attrs;
   attrs.has_scale = true;
   attrs.scale = scale;
-  return (*this)(Q, K, V, attrs).Y;
+  return (*this)(Q, K, V, attrs, nullptr, nullptr, nullptr, nullptr, rt).Y;
 }
 
 Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
-                             const Tensor &attn_mask, RuntimeContext * /*rt*/) const {
+                             const Tensor &attn_mask, RuntimeContext *rt) const {
   Attributes attrs;
   attrs.has_scale = true;
   attrs.scale = scale;
   const Tensor *const mask_ptr =
       attn_mask.shape.empty() && attn_mask.size_bytes() == 0 ? nullptr : &attn_mask;
-  return (*this)(Q, K, V, attrs, mask_ptr).Y;
+  return (*this)(Q, K, V, attrs, mask_ptr, nullptr, nullptr, nullptr, rt).Y;
 }
 
 void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
@@ -516,7 +552,6 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
                                         const Attributes &attrs, const Tensor *attn_mask,
                                         const Tensor *past_key, const Tensor *past_value,
                                         const Tensor *nonpad_kv_seqlen, RuntimeContext *rt) const {
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   // ----- Half-precision fast path ----------------------------------------
   // FLOAT16 / BFLOAT16 inputs are promoted to FLOAT32 here, the reference
   // implementation runs in float32, and the result tensors are demoted
@@ -526,34 +561,47 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
     EXT_ENFORCE_INVALID(K.data_type == Q.data_type && V.data_type == Q.data_type,
                         "kernel::Attention: Q, K, V must share the same dtype.");
     const int32_t target_dtype = Q.data_type;
-    const Tensor Q_f = PromoteToFloat32(Q, rt);
-    const Tensor K_f = PromoteToFloat32(K, rt);
-    const Tensor V_f = PromoteToFloat32(V, rt);
+    RuntimeContext scratch_rt(
+        rt ? rt->kernel_ctx() : ctx_,
+        RuntimeContextOptions{.allocator = rt ? rt->execution_allocator() : nullptr});
+    RuntimeContext *compute_rt = rt ? &scratch_rt : nullptr;
+    const Tensor Q_f = PromoteToFloat32(Q, compute_rt);
+    const Tensor K_f = PromoteToFloat32(K, compute_rt);
+    const Tensor V_f = PromoteToFloat32(V, compute_rt);
     Tensor attn_mask_f;
     const Tensor *attn_mask_ptr = attn_mask;
     if (attn_mask != nullptr && IsHalfPrecision(attn_mask->data_type)) {
-      attn_mask_f = PromoteToFloat32(*attn_mask, rt);
+      attn_mask_f = PromoteToFloat32(*attn_mask, compute_rt);
       attn_mask_ptr = &attn_mask_f;
     }
     Tensor past_key_f;
     const Tensor *past_key_ptr = past_key;
     if (past_key != nullptr && IsHalfPrecision(past_key->data_type)) {
-      past_key_f = PromoteToFloat32(*past_key, rt);
+      past_key_f = PromoteToFloat32(*past_key, compute_rt);
       past_key_ptr = &past_key_f;
     }
     Tensor past_value_f;
     const Tensor *past_value_ptr = past_value;
     if (past_value != nullptr && IsHalfPrecision(past_value->data_type)) {
-      past_value_f = PromoteToFloat32(*past_value, rt);
+      past_value_f = PromoteToFloat32(*past_value, compute_rt);
       past_value_ptr = &past_value_f;
     }
     Result r_f = (*this)(Q_f, K_f, V_f, attrs, attn_mask_ptr, past_key_ptr, past_value_ptr,
-                         nonpad_kv_seqlen, rt);
+                         nonpad_kv_seqlen, compute_rt);
     Result r;
-    r.Y = DemoteFromFloat32(r_f.Y, target_dtype, rt);
-    r.present_key = DemoteFromFloat32(r_f.present_key, target_dtype, rt);
-    r.present_value = DemoteFromFloat32(r_f.present_value, target_dtype, rt);
-    r.qk_matmul_output = DemoteFromFloat32(r_f.qk_matmul_output, target_dtype, rt);
+    constexpr int64_t kSerialDemotion = std::numeric_limits<int64_t>::max();
+    auto demote_result = [&](const Tensor &value, int output_slot) {
+      const bool has_recorded_roles = rt != nullptr && !rt->output_slot_io_roles().empty();
+      const bool is_node_output = HasRecordedOutputSlot(rt, output_slot);
+      RuntimeContext *destination_rt = !has_recorded_roles || is_node_output ? rt : compute_rt;
+      const int destination_slot = is_node_output ? output_slot : 0;
+      return DemoteFromFloat32(value, target_dtype, destination_rt, kSerialDemotion,
+                               destination_slot);
+    };
+    r.Y = demote_result(r_f.Y, 0);
+    r.present_key = demote_result(r_f.present_key, 1);
+    r.present_value = demote_result(r_f.present_value, 2);
+    r.qk_matmul_output = demote_result(r_f.qk_matmul_output, 3);
     return r;
   }
 
@@ -568,10 +616,10 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
                       "kernel::Attention: Q, K, V must be rank-3 or rank-4.");
   if (Q.shape.size() == 3) {
     return ComputeAttentionRank3(Q, K, V, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen,
-                                 allocator);
+                                 rt);
   }
   return ComputeAttentionRank4(Q, K, V, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen,
-                               allocator);
+                               rt);
 }
 
 void Attention::Run(RuntimeContext &rt) {

@@ -83,8 +83,14 @@ std::pair<Tensor, Tensor> SoftmaxCrossEntropyLoss::operator()(
   // Compute log-softmax along the class axis once; reused for the optional
   // ``log_prob`` output and for indexing the loss.
   const size_t log_prob_n_bytes = static_cast<size_t>(scores.element_count()) * sizeof(float);
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
-  Tensor log_prob = MakeOutputTensor(DataType::FLOAT, scores.shape, log_prob_n_bytes, allocator);
+  RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
+  const bool produce_log_prob =
+      rt == nullptr || rt->output_slot_io_roles().empty() || rt->output_slot_io_roles().size() > 1;
+  Tensor log_prob =
+      rt ? (produce_log_prob
+                ? rt->MakeOutputTensor(1, DataType::FLOAT, scores.shape, log_prob_n_bytes)
+                : rt->MakeTemporaryTensor(DataType::FLOAT, scores.shape, log_prob_n_bytes))
+         : MakeOutputTensor(DataType::FLOAT, scores.shape, log_prob_n_bytes, nullptr);
   ComputeLogSoftmaxOverClassAxis(scores.AsFloat(), log_prob.AsFloat(), n_batch, n_classes, n_inner);
 
   const float *log_prob_ptr = log_prob.AsFloat();
@@ -128,7 +134,8 @@ std::pair<Tensor, Tensor> SoftmaxCrossEntropyLoss::operator()(
 
   if (reduction == "none") {
     const size_t loss_n_bytes = static_cast<size_t>(n_loss) * sizeof(float);
-    Tensor loss = MakeOutputTensor(DataType::FLOAT, labels.shape, loss_n_bytes, allocator);
+    Tensor loss = rt ? rt->MakeOutputTensor(0, DataType::FLOAT, labels.shape, loss_n_bytes)
+                     : MakeOutputTensor(DataType::FLOAT, labels.shape, loss_n_bytes, nullptr);
     float *out = loss.AsFloat();
     for (int64_t k = 0; k < n_loss; ++k) {
       out[static_cast<size_t>(k)] = per_sample_loss[static_cast<size_t>(k)];
@@ -154,7 +161,8 @@ std::pair<Tensor, Tensor> SoftmaxCrossEntropyLoss::operator()(
   }
 
   const size_t loss_n_bytes = sizeof(float);
-  Tensor loss = MakeOutputTensor(DataType::FLOAT, Shape{}, loss_n_bytes, allocator);
+  Tensor loss = rt ? rt->MakeOutputTensor(0, DataType::FLOAT, Shape{}, loss_n_bytes)
+                   : MakeOutputTensor(DataType::FLOAT, Shape{}, loss_n_bytes, nullptr);
   loss.AsFloat()[0] = reduced;
   return std::make_pair(std::move(loss), std::move(log_prob));
 }
@@ -170,7 +178,8 @@ void SoftmaxCrossEntropyLoss::Run(RuntimeContext &rt) {
   const bool has_ignore_index = FindAttribute(node, "ignore_index") != nullptr;
   const int64_t ignore_index = GetAttributeIntOrDefault(node, "ignore_index", 0);
   onnx_kernels::kernel::SoftmaxCrossEntropyLoss k(rt.kernel_ctx());
-  auto [loss, log_prob] = k(scores, labels, weights, reduction, has_ignore_index, ignore_index);
+  auto [loss, log_prob] =
+      k(scores, labels, weights, reduction, has_ignore_index, ignore_index, &rt);
   SetOutput(node, 0, std::move(loss), rt);
   if (node.output_size() >= 2) {
     SetOutput(node, 1, std::move(log_prob), rt);

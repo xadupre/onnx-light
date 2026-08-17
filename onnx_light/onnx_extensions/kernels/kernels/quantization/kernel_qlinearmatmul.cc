@@ -233,8 +233,8 @@ Tensor QLinearMatMul::operator()(const Tensor &a, const Tensor &a_scale, const T
     total *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(total);
-  Tensor out = MakeOutputTensor(y_zero_point.data_type, out_shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, y_zero_point.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(y_zero_point.data_type, out_shape, out_n_bytes, nullptr);
   (*this)(a, a_scale, a_zero_point, b, b_scale, b_zero_point, y_scale, y_zero_point, out);
   return out;
 }
@@ -279,8 +279,8 @@ void QLinearMatMul::Run(RuntimeContext &rt) {
   const Tensor &y_scale = GetInput(node, 6, rt.tensors());
   const Tensor &y_zero_point = GetInput(node, 7, rt.tensors());
   onnx_kernels::kernel::QLinearMatMul k(rt.kernel_ctx());
-  SetOutput(node, 0, k(a, a_scale, a_zero_point, b, b_scale, b_zero_point, y_scale, y_zero_point),
-            rt);
+  SetOutput(node, 0,
+            k(a, a_scale, a_zero_point, b, b_scale, b_zero_point, y_scale, y_zero_point, &rt), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

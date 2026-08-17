@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/preview/include_preview_kernels.h"
 
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
@@ -285,8 +286,9 @@ Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor 
   const int64_t v_head_size = V.shape[3];
   const int64_t out_count = batch_size * q_num_heads * q_seq_len * v_head_size;
   const size_t out_n_bytes = static_cast<size_t>(out_count) * ElementBytes(Q.data_type);
-  Tensor out = MakeOutputTensor(Q.data_type, {batch_size, q_num_heads, q_seq_len, v_head_size},
-                                out_n_bytes, rt ? rt->allocator() : nullptr);
+  const onnx_kernels::Shape out_shape = {batch_size, q_num_heads, q_seq_len, v_head_size};
+  Tensor out = rt ? rt->MakeOutputTensor(0, Q.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(Q.data_type, out_shape, out_n_bytes, nullptr);
   (*this)(Q, K, V, scale, score_mod, prob_mod, out);
   return out;
 }
@@ -315,18 +317,34 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
     EXT_ENFORCE_INVALID(output.data_type == Q.data_type,
                         "kernel::FlexAttention preallocated output must share Q's element type.");
     const int32_t target_dtype = Q.data_type;
-    const Tensor Q_f = PromoteToFloat32(Q);
-    const Tensor K_f = PromoteToFloat32(K);
-    const Tensor V_f = PromoteToFloat32(V);
+    const Tensor Q_f = PromoteToFloat32(Q, rt);
+    const Tensor K_f = PromoteToFloat32(K, rt);
+    const Tensor V_f = PromoteToFloat32(V, rt);
 
-    auto wrap_callback = [target_dtype](const ScoreModFn &cb) -> ScoreModFn {
+    auto wrap_callback = [target_dtype, rt](const ScoreModFn &cb) -> ScoreModFn {
       if (!cb) {
         return ScoreModFn{};
       }
-      return [cb, target_dtype](Tensor &scores_f) {
-        Tensor scores_half = DemoteFromFloat32(scores_f, target_dtype);
+      return [cb, target_dtype, rt](Tensor &scores_f) {
+        const int64_t n = scores_f.element_count();
+        Tensor scores_half =
+            rt ? rt->MakeTemporaryTensor(target_dtype, scores_f.shape,
+                                         static_cast<size_t>(n) * sizeof(uint16_t))
+               : MakeOutputTensor(target_dtype, scores_f.shape,
+                                  static_cast<size_t>(n) * sizeof(uint16_t), nullptr);
+        const float *src = scores_f.AsFloat();
+        uint16_t *dst = reinterpret_cast<uint16_t *>(scores_half.mutable_bytes());
+        if (target_dtype == static_cast<int32_t>(DataType::FLOAT16)) {
+          for (int64_t i = 0; i < n; ++i) {
+            dst[i] = FloatToFloat16Bits(src[i]);
+          }
+        } else {
+          for (int64_t i = 0; i < n; ++i) {
+            dst[i] = FloatToBfloat16Bits(src[i]);
+          }
+        }
         cb(scores_half);
-        scores_f = PromoteToFloat32(scores_half);
+        scores_f = PromoteToFloat32(scores_half, rt);
       };
     };
     ScoreModFn score_mod_wrapped = wrap_callback(score_mod);
@@ -335,18 +353,28 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
     const onnx_kernels::Shape out_shape = {Q.shape[0], Q.shape[1], Q.shape[2], V.shape[3]};
     const int64_t out_count = out_shape[0] * out_shape[1] * out_shape[2] * out_shape[3];
     const size_t out_f_n_bytes = static_cast<size_t>(out_count) * sizeof(float);
-    RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
-    Tensor out_f = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_f_n_bytes,
-                                    allocator);
+    Tensor out_f = rt ? rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT), out_shape,
+                                                out_f_n_bytes)
+                      : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape,
+                                         out_f_n_bytes, nullptr);
     (*this)(Q_f, K_f, V_f, scale, score_mod_wrapped, prob_mod_wrapped, out_f, rt);
-    Tensor demoted = DemoteFromFloat32(out_f, target_dtype);
-    EXT_ENFORCE_INVALID(output.shape == demoted.shape,
+    EXT_ENFORCE_INVALID(output.shape == out_f.shape,
                         "kernel::FlexAttention preallocated output shape must be (batch_size, "
                         "q_num_heads, q_seq_len, v_head_size).");
-    EXT_ENFORCE_INVALID(output.size_bytes() == demoted.size_bytes(),
+    EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(out_count) * sizeof(uint16_t),
                         "kernel::FlexAttention preallocated output buffer has unexpected size "
                         "in bytes.");
-    std::memcpy(output.mutable_bytes(), demoted.bytes(), demoted.size_bytes());
+    const float *src = out_f.AsFloat();
+    uint16_t *dst = reinterpret_cast<uint16_t *>(output.mutable_bytes());
+    if (target_dtype == static_cast<int32_t>(DataType::FLOAT16)) {
+      for (int64_t i = 0; i < out_count; ++i) {
+        dst[i] = FloatToFloat16Bits(src[i]);
+      }
+    } else {
+      for (int64_t i = 0; i < out_count; ++i) {
+        dst[i] = FloatToBfloat16Bits(src[i]);
+      }
+    }
     return;
   }
 
@@ -361,10 +389,10 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
   // promote/compute/demote fast path above.)
   if (Q.data_type == DataType::DOUBLE) {
     ComputeFlexAttentionTyped<double>(Q, K, V, scale, score_mod, prob_mod, output,
-                                      rt ? rt->allocator() : nullptr);
+                                      rt ? rt->execution_allocator() : nullptr);
   } else {
     ComputeFlexAttentionTyped<float>(Q, K, V, scale, score_mod, prob_mod, output,
-                                     rt ? rt->allocator() : nullptr);
+                                     rt ? rt->execution_allocator() : nullptr);
   }
 }
 
@@ -420,9 +448,9 @@ void FlexAttention::Run(RuntimeContext &rt) {
     };
   }
   if (score_mod_fn || prob_mod_fn) {
-    Y = flex(Q, K, V, scale, score_mod_fn, prob_mod_fn);
+    Y = flex(Q, K, V, scale, score_mod_fn, prob_mod_fn, &rt);
   } else {
-    Y = flex(Q, K, V, scale);
+    Y = flex(Q, K, V, scale, &rt);
   }
   SetOutput(node, 0, std::move(Y), rt.tensors());
 }

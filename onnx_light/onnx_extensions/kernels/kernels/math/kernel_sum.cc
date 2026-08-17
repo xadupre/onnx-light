@@ -118,8 +118,16 @@ void SumInPlace(const char *dtype_name, int32_t dtype, const Tensors &inputs, Te
 } // namespace
 
 Tensor Sum::operator()(const Tensors &inputs, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    const Shape out_shape = ValidateAndBroadcastShape(inputs, "", inputs[0].data_type);
+    Tensor output = rt->MakeOutputTensor(0, inputs[0].data_type, out_shape,
+                                         static_cast<size_t>(out_shape.product()) *
+                                             ElementSize(inputs[0].data_type));
+    (*this)(inputs, output);
+    return output;
+  }
   EXT_ENFORCE_INVALID(!inputs.empty(), kSumName, " requires at least one input.");
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = nullptr;
   switch (inputs[0].data_type) {
   case DataType::FLOAT:
     return SumAlloc<float>("FLOAT", DataType::FLOAT, inputs, allocator);

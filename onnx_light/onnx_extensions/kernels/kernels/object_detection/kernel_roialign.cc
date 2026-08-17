@@ -125,8 +125,8 @@ Tensor RoiAlign::operator()(const Tensor &x, const Tensor &rois, const Tensor &b
     out_elements *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(out_elements) * sizeof(float);
-  Tensor out =
-      MakeOutputTensor(x.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, x.data_type, out_shape, out_n_bytes)
+                   : MakeOutputTensor(x.data_type, out_shape, out_n_bytes, nullptr));
   (*this)(x, rois, batch_indices, attrs, out);
   return out;
 }

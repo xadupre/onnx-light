@@ -70,14 +70,15 @@ void GatherLastAxis(const Tensor &x, const Tensor &indices, const onnx_kernels::
 
 template <typename T>
 Tensor ArrayFeatureExtractor::operator()(const Tensor &x, const Tensor &indices,
-                                         RuntimeContext * /*rt*/) const {
+                                         RuntimeContext *rt) const {
   ValidateInput<T>(x);
   ValidateIndices(x, indices);
   const onnx_kernels::Shape out_shape = ComputeOutputShape(x, indices);
   const int64_t outer = OuterSize(x);
-  Tensor out = MakeOutputTensor(TensorElementType<T>::value, out_shape,
-                                static_cast<size_t>(indices.element_count() * outer) * sizeof(T),
-                                ctx_.allocator);
+  const size_t n_bytes = static_cast<size_t>(indices.element_count() * outer) * sizeof(T);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, TensorElementType<T>::value, out_shape, n_bytes)
+         : MakeOutputTensor(TensorElementType<T>::value, out_shape, n_bytes, ctx_.allocator);
   GatherLastAxis<T>(x, indices, out_shape, out.As<T>());
   return out;
 }
@@ -122,7 +123,7 @@ void ArrayFeatureExtractor::Run(RuntimeContext &rt) {
   Tensor z = DispatchSVMByDataType(x, "ArrayFeatureExtractor", [&](auto *tag) {
     using T = std::remove_pointer_t<decltype(tag)>;
     (void)tag;
-    return afe.template operator()<T>(x, y);
+    return afe.template operator()<T>(x, y, &rt);
   });
   SetOutput(node, 0, std::move(z), rt.tensors());
 }

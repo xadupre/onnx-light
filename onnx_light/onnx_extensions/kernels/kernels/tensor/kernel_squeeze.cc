@@ -58,11 +58,16 @@ onnx_kernels::Shape ComputeSqueezedShape(const Tensor &data, const onnx_kernels:
 } // namespace
 
 Tensor Squeeze::operator()(const Tensor &data, const onnx_kernels::Shape &axes,
-                           RuntimeContext * /*rt*/) const {
+                           RuntimeContext *rt) const {
   const onnx_kernels::Shape out_shape = ComputeSqueezedShape(data, axes);
-  Tensor output = data;
-  output.name.clear();
-  output.shape = out_shape;
+  const std::size_t n_bytes =
+      data.data_type == static_cast<int32_t>(DataType::STRING) ? 0 : data.size_bytes();
+  Tensor output = rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, n_bytes)
+                     : MakeOutputTensor(data.data_type, out_shape, n_bytes, nullptr);
+  if (data.data_type == static_cast<int32_t>(DataType::STRING)) {
+    output.string_data.resize(static_cast<std::size_t>(data.element_count()));
+  }
+  (*this)(data, axes, output);
   return output;
 }
 

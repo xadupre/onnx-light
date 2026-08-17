@@ -30,11 +30,12 @@ template <typename T> void ValidateInput(const Tensor &x) {
 } // namespace
 
 template <typename T>
-Tensor Binarizer::operator()(const Tensor &x, T threshold, RuntimeContext * /*rt*/) const {
+Tensor Binarizer::operator()(const Tensor &x, T threshold, RuntimeContext *rt) const {
   ValidateInput<T>(x);
   const int64_t n = x.element_count();
-  Tensor out = MakeOutputTensor(TensorElementType<T>::value, x.shape,
-                                static_cast<size_t>(n) * sizeof(T), ctx_.allocator);
+  const size_t n_bytes = static_cast<size_t>(n) * sizeof(T);
+  Tensor out = rt ? rt->MakeOutputTensor(0, TensorElementType<T>::value, x.shape, n_bytes)
+                  : MakeOutputTensor(TensorElementType<T>::value, x.shape, n_bytes, ctx_.allocator);
   ApplyThreshold<T>(x, threshold, reinterpret_cast<T *>(out.mutable_bytes()));
   return out;
 }
@@ -73,7 +74,7 @@ void Binarizer::Run(RuntimeContext &rt) {
   Tensor y = DispatchSVMByDataType(x, "Binarizer", [&](auto *tag) {
     using T = std::remove_pointer_t<decltype(tag)>;
     (void)tag;
-    return binarizer.template operator()<T>(x, static_cast<T>(threshold));
+    return binarizer.template operator()<T>(x, static_cast<T>(threshold), &rt);
   });
   SetOutput(node, 0, std::move(y), rt.tensors());
 }

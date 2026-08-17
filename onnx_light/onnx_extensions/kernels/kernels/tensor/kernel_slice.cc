@@ -179,19 +179,18 @@ SliceLayout ComputeSliceLayout(const Tensor &data, const Tensor &starts_t, const
 Tensor Slice::operator()(const Tensor &data, const Tensor &starts, const Tensor &ends,
                          const Tensor *axes, const Tensor *steps, RuntimeContext *rt) const {
   const SliceLayout layout =
-      ComputeSliceLayout(data, starts, ends, axes, steps, rt ? rt->allocator() : nullptr);
+      ComputeSliceLayout(data, starts, ends, axes, steps, rt ? rt->execution_allocator() : nullptr);
   const size_t out_n_bytes = static_cast<std::size_t>(layout.total_elements) * layout.elem_size;
-  Tensor out = MakeOutputTensor(data.data_type, layout.out_shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
-  (*this)(data, starts, ends, axes, steps, out);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, data.data_type, layout.out_shape, out_n_bytes)
+                   : MakeOutputTensor(data.data_type, layout.out_shape, out_n_bytes, nullptr));
+  (*this)(data, starts, ends, axes, steps, out, rt ? rt->execution_allocator() : nullptr);
   return out;
 }
 
 void Slice::operator()(const Tensor &data, const Tensor &starts, const Tensor &ends,
-                       const Tensor *axes, const Tensor *steps, Tensor &output) const {
-  const SliceLayout layout =
-      ComputeSliceLayout(data, starts, ends, axes, steps,
-                         output.has_allocation() ? output.allocation_owner() : nullptr);
+                       const Tensor *axes, const Tensor *steps, Tensor &output,
+                       RawBufferAllocator *allocator) const {
+  const SliceLayout layout = ComputeSliceLayout(data, starts, ends, axes, steps, allocator);
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::Slice: preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == layout.out_shape,

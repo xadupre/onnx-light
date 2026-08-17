@@ -4817,6 +4817,50 @@ TEST(RunNodes, RuntimeSessionSlotAwareKernelWorkspaceStaysInExecutionArena) {
   EXPECT_FLOAT_EQ(yp[2], 8.0f);
 }
 
+// Built-in kernels use the same slot-aware contract as custom kernels. TopK
+// exercises both halves: Values and Indices are distinct output slots, while
+// its sorting index buffer is temporary workspace. Declaring only Values as a
+// graph output must therefore leave the I/O arena holding exactly that tensor;
+// Indices and the workspace stay in the execution arena without migration.
+TEST(RunNodes, RuntimeSessionBuiltInTopKUsesSlotAwareOutputsAndExecutionWorkspace) {
+  core::runtime::SimpleRawBufferAllocator execution_alloc(8);
+  core::runtime::SimpleRawBufferAllocator io_alloc(8);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
+                                                         .io_allocator = &io_alloc});
+  rt.Set("x", Tensor::FromFloat("x", {4}, {4.0f, 1.0f, 3.0f, 2.0f}, &execution_alloc));
+  rt.Set("k", Tensor::FromInt64("k", {1}, {2}, &execution_alloc));
+
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset_import()->set_version(18);
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *n = g->add_node();
+  n->set_op_type("TopK");
+  n->add_input("x");
+  n->add_input("k");
+  n->add_output("values");  // declared graph output -> I/O arena
+  n->add_output("indices"); // intermediate -> execution arena
+  g->add_output()->set_name("values");
+
+  RuntimeSession session(model);
+  session.Run(rt);
+
+  ASSERT_TRUE(rt.Has("values"));
+  ASSERT_TRUE(rt.Has("indices"));
+  EXPECT_EQ(rt.Get("values").allocation_owner(), &io_alloc);
+  EXPECT_EQ(rt.Get("indices").allocation_owner(), &execution_alloc);
+  EXPECT_EQ(io_alloc.PeakAllocatedSize(), 2 * sizeof(float));
+
+  const float *values = rt.Get("values").AsFloat();
+  EXPECT_FLOAT_EQ(values[0], 4.0f);
+  EXPECT_FLOAT_EQ(values[1], 3.0f);
+  const int64_t *indices = rt.Get("indices").AsInt64();
+  EXPECT_EQ(indices[0], 0);
+  EXPECT_EQ(indices[1], 2);
+}
+
 // ---------------------------------------------------------------------------
 // Release-unused-intermediates tests
 // ---------------------------------------------------------------------------

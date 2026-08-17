@@ -202,7 +202,7 @@ public:
 
   void operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
                   const Tensor &input_mean, const Tensor &input_var, Tensor &output,
-                  float epsilon = 1e-5f) const;
+                  float epsilon = 1e-5f, RuntimeContext *rt = nullptr) const;
 
   /// Returns the training-mode outputs ``(Y, running_mean, running_var)``
   /// for ``training_mode = 1`` (opset 14+). The per-channel batch ``mean``
@@ -345,7 +345,7 @@ public:
                     RuntimeContext *rt = nullptr) const;
 
   void operator()(const Tensor &x, const Tensor &scale, Tensor &output, int64_t axis = -1,
-                  float epsilon = 1e-5f) const;
+                  float epsilon = 1e-5f, RuntimeContext *rt = nullptr) const;
 
   /// Output ``Y`` has the same shape as ``X`` so the output buffer may
   /// alias the input ``X`` buffer.
@@ -518,7 +518,8 @@ public:
                                         const Shape &strides = {}, const Shape &pads = {},
                                         bool ceil_mode = false, const Shape &dilations = {},
                                         int64_t storage_order = 0,
-                                        AutoPad auto_pad = AutoPad::kNotSet) const;
+                                        AutoPad auto_pad = AutoPad::kNotSet,
+                                        RuntimeContext *rt = nullptr) const;
 
   /// Output shape generally differs from the input shape.
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -1182,7 +1183,7 @@ public:
   /// optional inputs are missing.
   std::pair<Tensor, Tensor> operator()(const Tensor &input, const Tensor &weight,
                                        const Tensor &bias, const Tensor &past_state,
-                                       const Attributes &attrs) const;
+                                       const Attributes &attrs, RuntimeContext *rt = nullptr) const;
 
   /// In-place overload writing into caller-allocated output tensors.
   /// ``bias`` and ``past_state`` may be ``nullptr`` for the optional inputs.
@@ -1232,7 +1233,8 @@ public:
   /// Comprehensive overload covering every supported feature.
   Result operator()(const Tensor &query, const Tensor &key, const Tensor &value,
                     const Attributes &attrs, const Tensor *past_state = nullptr,
-                    const Tensor *decay = nullptr, const Tensor *beta = nullptr) const;
+                    const Tensor *decay = nullptr, const Tensor *beta = nullptr,
+                    RuntimeContext *rt = nullptr) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };

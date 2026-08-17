@@ -79,8 +79,8 @@ Tensor Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const 
     total *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(float);
-  Tensor out =
-      MakeOutputTensor(input.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, input.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(input.data_type, out_shape, out_n_bytes, nullptr);
   (*this)(input, image_shape, block_shape, attrs, out);
   return out;
 }

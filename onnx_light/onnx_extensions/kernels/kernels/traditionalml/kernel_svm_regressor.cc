@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include <algorithm>
 #include <cstdint>
 #include <vector>
 
@@ -18,7 +19,7 @@ template <typename T>
 Tensor SVMRegressor::operator()(const Tensor &x, const std::vector<float> &support_vectors,
                                 const std::vector<float> &coefficients,
                                 const std::vector<float> &rho, const char *kernel_type, float gamma,
-                                float coef0, float degree, RuntimeContext * /*rt*/) const {
+                                float coef0, float degree, RuntimeContext *rt) const {
   int64_t sample_count = 0;
   int64_t feature_count = 0;
   ValidateFeatureMatrixShape(x, sample_count, feature_count);
@@ -45,7 +46,13 @@ Tensor SVMRegressor::operator()(const Tensor &x, const std::vector<float> &suppo
     value += static_cast<double>(rho[0]);
     predictions[static_cast<size_t>(n)] = static_cast<float>(value);
   }
-  return Tensor::FromFloat("", {sample_count, 1}, predictions, ctx_.allocator);
+  if (rt == nullptr) {
+    return Tensor::FromFloat("", {sample_count, 1}, predictions, ctx_.allocator);
+  }
+  Tensor out = rt->MakeOutputTensor(0, DataType::FLOAT, {sample_count, 1},
+                                    static_cast<size_t>(sample_count) * sizeof(float));
+  std::copy(predictions.begin(), predictions.end(), out.AsFloat());
+  return out;
 }
 
 #define ONNX_LIGHT_INSTANTIATE_SVM_REGRESSOR(T)                                                    \
@@ -71,7 +78,7 @@ void SVMRegressor::Run(RuntimeContext &rt) {
     using T = std::remove_pointer_t<decltype(tag)>;
     (void)tag;
     return svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
-                                      a.kernel_type.c_str(), a.gamma, a.coef0, a.degree);
+                                      a.kernel_type.c_str(), a.gamma, a.coef0, a.degree, &rt);
   });
   SetOutput(node, 0, std::move(y), rt);
 }

@@ -147,9 +147,16 @@ void ComputeRangeHalfInto(const Tensor &start, const Tensor &limit, const Tensor
 
 Tensor Range::operator()(const Tensor &start, const Tensor &limit, const Tensor &delta,
                          RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    Tensor produced = (*this)(start, limit, delta, nullptr);
+    Tensor output =
+        rt->MakeOutputTensor(0, produced.data_type, produced.shape, produced.size_bytes());
+    (*this)(start, limit, delta, output);
+    return output;
+  }
   EXT_ENFORCE_INVALID(start.data_type == limit.data_type && start.data_type == delta.data_type,
                       "kernel::Range: 'start', 'limit' and 'delta' must share the same dtype.");
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = nullptr;
   switch (static_cast<DataType>(start.data_type)) {
   case DataType::FLOAT:
     return ComputeRange<float>(start, limit, delta, start.data_type, allocator);

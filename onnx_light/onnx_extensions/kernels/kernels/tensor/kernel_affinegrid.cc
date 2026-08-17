@@ -126,9 +126,11 @@ Tensor AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Att
   for (int64_t d : out_shape) {
     total *= d;
   }
-  RawBufferAllocator *allocator = (rt != nullptr) ? rt->allocator() : nullptr;
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape,
-                                static_cast<size_t>(total) * sizeof(float), allocator);
+  RawBufferAllocator *allocator = rt != nullptr ? rt->execution_allocator() : nullptr;
+  Tensor out = rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape,
+                                         static_cast<size_t>(total) * sizeof(float))
+                  : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape,
+                                     static_cast<size_t>(total) * sizeof(float), nullptr);
   (*this)(theta, size, attrs, out, allocator);
   return out;
 }

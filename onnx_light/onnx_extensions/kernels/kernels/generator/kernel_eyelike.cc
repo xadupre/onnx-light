@@ -131,7 +131,8 @@ Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype,
                            RuntimeContext *rt) const {
   const int32_t out_dtype = (dtype != 0) ? dtype : input.data_type;
   const size_t n_bytes = PackedByteSize(out_dtype, input.element_count());
-  Tensor output = MakeOutputTensor(out_dtype, input.shape, n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor output = rt ? rt->MakeOutputTensor(0, out_dtype, input.shape, n_bytes)
+                     : MakeOutputTensor(out_dtype, input.shape, n_bytes, nullptr);
   (*this)(input, k, out_dtype, output);
   return output;
 }

@@ -70,13 +70,14 @@ Tensor Det::operator()(const Tensor &x, RuntimeContext *rt) const {
   for (int64_t d : out_shape)
     batch *= d;
   const size_t y_n_bytes = static_cast<size_t>(batch) * sizeof(float);
-  Tensor y =
-      MakeOutputTensor(DataType::FLOAT, out_shape, y_n_bytes, rt ? rt->allocator() : nullptr);
-  (*this)(x, y);
+  Tensor y = rt ? rt->MakeOutputTensor(0, DataType::FLOAT, out_shape, y_n_bytes)
+                : MakeOutputTensor(DataType::FLOAT, out_shape, y_n_bytes, nullptr);
+  (*this)(x, y, rt ? rt->execution_allocator() : nullptr);
   return y;
 }
 
-void Det::operator()(const Tensor &x, Tensor &output) const {
+void Det::operator()(const Tensor &x, Tensor &output,
+                     RawBufferAllocator *temporary_allocator) const {
   EXT_ENFORCE_INVALID(x.data_type == DataType::FLOAT, "kernel::Det only supports FLOAT tensors.");
   EXT_ENFORCE_INVALID(output.data_type == DataType::FLOAT,
                       "kernel::Det preallocated output must be a FLOAT tensor.");
@@ -100,8 +101,8 @@ void Det::operator()(const Tensor &x, Tensor &output) const {
   const float *px = x.AsFloat();
   float *py = output.AsFloat();
   const int64_t matrix_size = m * m;
-  detail::TemporaryTypedBuffer<float> work(static_cast<std::size_t>(matrix_size), ctx_.allocator,
-                                           "kernel::Det work");
+  detail::TemporaryTypedBuffer<float> work(static_cast<std::size_t>(matrix_size),
+                                           temporary_allocator, "kernel::Det work");
   float *work_data = work.data();
   for (int64_t b = 0; b < batch; ++b) {
     const float *src = px + b * matrix_size;

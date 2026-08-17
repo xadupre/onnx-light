@@ -61,11 +61,16 @@ Tensor Shape::operator()(const Tensor &data, RuntimeContext *rt) const {
   return (*this)(data, Attributes{}, rt);
 }
 
-Tensor Shape::operator()(const Tensor &data, const Attributes &attrs,
-                         RuntimeContext * /*rt*/) const {
+Tensor Shape::operator()(const Tensor &data, const Attributes &attrs, RuntimeContext *rt) const {
   const onnx_kernels::Shape values = ComputeShapeSlice(data, attrs);
   const onnx_kernels::Shape out_shape{static_cast<int64_t>(values.size())};
-  return Tensor::FromInt64("", out_shape, values, ctx_.allocator);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, DataType::INT64, out_shape, values.size() * sizeof(int64_t))
+         : Tensor::FromInt64("", out_shape, values, ctx_.allocator);
+  if (rt != nullptr && !values.empty()) {
+    std::copy(values.begin(), values.end(), out.AsInt64());
+  }
+  return out;
 }
 
 void Shape::operator()(const Tensor &data, const Attributes &attrs, Tensor &output) const {

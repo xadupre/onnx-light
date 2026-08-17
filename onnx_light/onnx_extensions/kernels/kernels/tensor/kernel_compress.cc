@@ -42,8 +42,6 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
   const uint8_t *cond = ValidateCondition(condition);
   const std::size_t cond_len = static_cast<std::size_t>(condition.element_count());
   const std::size_t elem_size = ElementSize(input.data_type);
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
-
   if (!axis.has_value()) {
     // Flatten mode: select individual elements from the flattened input. The
     // selected elements are counted first, then copied in a single pass, so no
@@ -56,7 +54,8 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
       }
     }
     const size_t output_n_bytes = static_cast<std::size_t>(out_count) * elem_size;
-    Tensor output = MakeOutputTensor(input.data_type, {out_count}, output_n_bytes, allocator);
+    Tensor output = rt ? rt->MakeOutputTensor(0, input.data_type, {out_count}, output_n_bytes)
+                       : MakeOutputTensor(input.data_type, {out_count}, output_n_bytes, nullptr);
     int64_t k = 0;
     for (int64_t i = 0; i < total && static_cast<std::size_t>(i) < cond_len; ++i) {
       if (cond[static_cast<std::size_t>(i)]) {
@@ -92,7 +91,8 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
   }
 
   const size_t output_n_bytes = static_cast<std::size_t>(out_total) * elem_size;
-  Tensor output = MakeOutputTensor(input.data_type, out_shape, output_n_bytes, allocator);
+  Tensor output = rt ? rt->MakeOutputTensor(0, input.data_type, out_shape, output_n_bytes)
+                     : MakeOutputTensor(input.data_type, out_shape, output_n_bytes, nullptr);
 
   if (out_total == 0) {
     return output;

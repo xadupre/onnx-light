@@ -307,8 +307,8 @@ Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
                                ? sizeof(uint16_t)
                                : sizeof(float);
   const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * elem_size;
-  Tensor out =
-      MakeOutputTensor(x_scale.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, x_scale.data_type, x.shape, out_n_bytes)
+                  : MakeOutputTensor(x_scale.data_type, x.shape, out_n_bytes, nullptr);
   (*this)(x, x_scale, out);
   return out;
 }
@@ -380,8 +380,8 @@ Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
                                ? sizeof(uint16_t)
                                : sizeof(float);
   const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * elem_size;
-  Tensor out =
-      MakeOutputTensor(x_scale.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, x_scale.data_type, x.shape, out_n_bytes)
+                  : MakeOutputTensor(x_scale.data_type, x.shape, out_n_bytes, nullptr);
   (*this)(x, x_scale, x_zero_point, out);
   return out;
 }
@@ -472,14 +472,15 @@ Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
                                ? sizeof(uint16_t)
                                : sizeof(float);
   const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * elem_size;
-  Tensor out =
-      MakeOutputTensor(x_scale.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
-  (*this)(x, x_scale, x_zero_point, axis, out);
+  Tensor out = rt ? rt->MakeOutputTensor(0, x_scale.data_type, x.shape, out_n_bytes)
+                  : MakeOutputTensor(x_scale.data_type, x.shape, out_n_bytes, nullptr);
+  (*this)(x, x_scale, x_zero_point, axis, out, rt);
   return out;
 }
 
 void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
-                                  const Tensor &x_zero_point, int64_t axis, Tensor &output) const {
+                                  const Tensor &x_zero_point, int64_t axis, Tensor &output,
+                                  RuntimeContext *rt) const {
   if (x_scale.element_count() == 1) {
     return (*this)(x, x_scale, x_zero_point, output);
   }
@@ -523,7 +524,9 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
         x_scale.element_count() == axis_size,
         "kernel::DequantizeLinear: x_scale element count must equal axis dimension.");
   }
-  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
+  RawBufferAllocator *allocator =
+      rt ? rt->execution_allocator()
+         : (output.has_allocation() ? output.allocation_owner() : nullptr);
   detail::TemporaryTypedBuffer<int64_t> scale_index_buf(static_cast<std::size_t>(x.element_count()),
                                                         allocator,
                                                         "kernel::DequantizeLinear: scale-index");
@@ -605,9 +608,9 @@ Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int6
                                ? sizeof(uint16_t)
                                : sizeof(float);
   const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * elem_size;
-  Tensor out =
-      MakeOutputTensor(x_scale.data_type, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
-  (*this)(x, x_scale, axis, out);
+  Tensor out = rt ? rt->MakeOutputTensor(0, x_scale.data_type, x.shape, out_n_bytes)
+                  : MakeOutputTensor(x_scale.data_type, x.shape, out_n_bytes, nullptr);
+  (*this)(x, x_scale, axis, out, rt);
   return out;
 }
 
@@ -625,15 +628,15 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_
   // both per-axis (1-D) and blocked (N-D) layouts are handled.
   const int64_t scale_count = x_scale.element_count();
   const size_t zero_zero_point_n_bytes = PackedByteSize(x.data_type, scale_count);
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   Tensor zero_zero_point =
-      MakeOutputTensor(x.data_type, x_scale.shape, zero_zero_point_n_bytes, allocator);
+      rt ? rt->MakeTemporaryTensor(x.data_type, x_scale.shape, zero_zero_point_n_bytes)
+         : MakeOutputTensor(x.data_type, x_scale.shape, zero_zero_point_n_bytes, nullptr);
   // Allocator storage is no longer zero-initialised, so clear the synthetic
   // zero-point buffer explicitly: every supported element type decodes a zero
   // byte pattern to a zero point of 0.
   std::fill(zero_zero_point.mutable_bytes(),
             zero_zero_point.mutable_bytes() + zero_zero_point.size_bytes(), uint8_t{0u});
-  (*this)(x, x_scale, zero_zero_point, axis, output);
+  (*this)(x, x_scale, zero_zero_point, axis, output, rt);
 }
 
 void DequantizeLinear::Run(RuntimeContext &rt) {

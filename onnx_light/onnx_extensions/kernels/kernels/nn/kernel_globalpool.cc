@@ -49,8 +49,9 @@ Tensor GlobalAveragePool::operator()(const Tensor &x, RuntimeContext *rt) const 
   out_shape[1] = C;
 
   const size_t out_n_bytes = static_cast<size_t>(N * C) * sizeof(float);
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes, nullptr);
 
   const float *px = x.AsFloat();
   float *py = reinterpret_cast<float *>(out.mutable_bytes());
@@ -90,8 +91,9 @@ Tensor GlobalMaxPool::operator()(const Tensor &x, RuntimeContext *rt) const {
   out_shape[1] = C;
 
   const size_t out_n_bytes = static_cast<size_t>(N * C) * sizeof(float);
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes, nullptr);
 
   const float *px = x.AsFloat();
   float *py = reinterpret_cast<float *>(out.mutable_bytes());
@@ -130,8 +132,9 @@ Tensor GlobalLpPool::operator()(const Tensor &x, int64_t p, RuntimeContext *rt) 
   out_shape[1] = C;
 
   const size_t out_n_bytes = static_cast<size_t>(N * C) * sizeof(float);
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes, nullptr);
 
   const float *px = x.AsFloat();
   float *py = reinterpret_cast<float *>(out.mutable_bytes());

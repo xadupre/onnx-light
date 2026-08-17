@@ -243,7 +243,18 @@ void WhereInPlaceString(const Tensor &condition, const Tensor &x, const Tensor &
 
 Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y,
                          RuntimeContext *rt) const {
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  if (rt != nullptr) {
+    Tensor produced = (*this)(condition, x, y, nullptr);
+    Tensor output =
+        rt->MakeOutputTensor(0, produced.data_type, produced.shape, produced.size_bytes());
+    if (produced.data_type == static_cast<int32_t>(DataType::STRING)) {
+      output.string_data = std::move(produced.string_data);
+    } else {
+      (*this)(condition, x, y, output);
+    }
+    return output;
+  }
+  RawBufferAllocator *allocator = nullptr;
   switch (x.data_type) {
   case DataType::BOOL:
     return WhereAllocTyped<uint8_t>(condition, x, y, allocator);

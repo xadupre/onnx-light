@@ -38,6 +38,6 @@ Tensor DemoteFromFloat32(const Tensor &src, int32_t target_dtype, RuntimeContext
 
 /// Demotes FLOAT32 with a kernel-specific parallel threshold.
 Tensor DemoteFromFloat32(const Tensor &src, int32_t target_dtype, RuntimeContext *rt,
-                         int64_t parallel_minimum_elements);
+                         int64_t parallel_minimum_elements, int output_slot = 0);
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

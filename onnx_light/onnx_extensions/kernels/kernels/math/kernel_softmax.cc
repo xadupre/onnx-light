@@ -39,7 +39,8 @@ Tensor Softmax::operator()(const Tensor &x, int64_t axis, RuntimeContext *rt) co
   const size_t elem_size =
       (static_cast<DataType>(x.data_type) == DataType::DOUBLE) ? sizeof(double) : sizeof(float);
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * elem_size;
-  Tensor y = MakeOutputTensor(out_dtype, x.shape, y_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor y = rt ? rt->MakeOutputTensor(0, out_dtype, x.shape, y_n_bytes)
+                : MakeOutputTensor(out_dtype, x.shape, y_n_bytes, nullptr);
   (*this)(x, axis, y);
   return y;
 }

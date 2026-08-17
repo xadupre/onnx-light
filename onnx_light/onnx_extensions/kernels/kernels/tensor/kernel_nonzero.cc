@@ -27,7 +27,7 @@ bool IsElementNonZero(const uint8_t *bytes, std::size_t elem_size) {
 
 } // namespace
 
-Tensor NonZero::operator()(const Tensor &x, RuntimeContext * /*rt*/) const {
+Tensor NonZero::operator()(const Tensor &x, RuntimeContext *rt) const {
   switch (static_cast<DataType>(x.data_type)) {
   case DataType::FLOAT:
   case DataType::DOUBLE:
@@ -55,7 +55,8 @@ Tensor NonZero::operator()(const Tensor &x, RuntimeContext * /*rt*/) const {
   // inline storage otherwise), sized to the worst case of every element being
   // non-zero.
   detail::TemporaryTypedBuffer<int64_t> nz_indices_buf(
-      static_cast<std::size_t>(total > 0 ? total : 1), ctx_.allocator, "kernel::NonZero");
+      static_cast<std::size_t>(total > 0 ? total : 1),
+      rt != nullptr ? rt->execution_allocator() : ctx_.allocator, "kernel::NonZero");
   int64_t *nz_indices = nz_indices_buf.data();
   std::size_t nnz_count = 0;
   for (int64_t i = 0; i < total; ++i) {
@@ -75,8 +76,10 @@ Tensor NonZero::operator()(const Tensor &x, RuntimeContext * /*rt*/) const {
   // ``MakeOutputTensor`` and written in place, avoiding a separate
   // std::vector allocated outside the allocator.
   const std::size_t out_count = static_cast<std::size_t>(rank) * static_cast<std::size_t>(nnz);
-  Tensor result = MakeOutputTensor(static_cast<int32_t>(DataType::INT64), out_shape,
-                                   out_count * sizeof(int64_t), ctx_.allocator);
+  Tensor result = rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::INT64), out_shape,
+                                            out_count * sizeof(int64_t))
+                     : MakeOutputTensor(static_cast<int32_t>(DataType::INT64), out_shape,
+                                        out_count * sizeof(int64_t), ctx_.allocator);
   int64_t *values = result.AsInt64();
   for (std::size_t k = 0; k < nnz_count; ++k) {
     int64_t flat = nz_indices[k];

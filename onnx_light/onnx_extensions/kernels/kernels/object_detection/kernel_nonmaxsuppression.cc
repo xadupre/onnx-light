@@ -144,11 +144,13 @@ Tensor NonMaxSuppression::operator()(const Tensor &boxes, const Tensor &scores,
   // empty spatial/class/batch dimension), so the output is an empty
   // ``(0, kSelectedIndexTupleWidth)`` tensor and no working memory is needed.
   if (max_selected <= 0) {
-    return MakeOutputTensor(static_cast<int32_t>(DataType::INT64), {0, kSelectedIndexTupleWidth}, 0,
-                            rt != nullptr ? rt->allocator() : nullptr);
+    return (rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::INT64),
+                                      {0, kSelectedIndexTupleWidth}, 0)
+               : MakeOutputTensor(static_cast<int32_t>(DataType::INT64),
+                                  {0, kSelectedIndexTupleWidth}, 0, nullptr));
   }
 
-  RawBufferAllocator *allocator = rt != nullptr ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = rt != nullptr ? rt->execution_allocator() : nullptr;
 
   // Pre-compute the per-batch box coordinates in canonical corner form. The
   // scratch buffers below are drawn from the runtime allocator when one is
@@ -225,9 +227,11 @@ Tensor NonMaxSuppression::operator()(const Tensor &boxes, const Tensor &scores,
 
   const int64_t num_selected = selected_count / kSelectedIndexTupleWidth;
   const size_t selected_n_bytes = static_cast<size_t>(selected_count) * sizeof(int64_t);
-  Tensor output = MakeOutputTensor(static_cast<int32_t>(DataType::INT64),
-                                   {num_selected, kSelectedIndexTupleWidth}, selected_n_bytes,
-                                   rt != nullptr ? rt->allocator() : nullptr);
+  Tensor output =
+      (rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::INT64),
+                                 {num_selected, kSelectedIndexTupleWidth}, selected_n_bytes)
+          : MakeOutputTensor(static_cast<int32_t>(DataType::INT64),
+                             {num_selected, kSelectedIndexTupleWidth}, selected_n_bytes, nullptr));
   if (selected_count > 0) {
     std::memcpy(output.mutable_bytes(), selected, selected_n_bytes);
   }

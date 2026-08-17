@@ -38,15 +38,16 @@ Tensor BatchNormalization::operator()(const Tensor &x, const Tensor &scale, cons
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::BatchNormalization: X must be FLOAT.");
   const size_t out_n_bytes = x.size_bytes();
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
-  (*this)(x, scale, bias, input_mean, input_var, out, epsilon);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes, nullptr);
+  (*this)(x, scale, bias, input_mean, input_var, out, epsilon, rt);
   return out;
 }
 
 void BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
                                     const Tensor &input_mean, const Tensor &input_var,
-                                    Tensor &output, float epsilon) const {
+                                    Tensor &output, float epsilon, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::BatchNormalization: X must be FLOAT.");
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
@@ -83,7 +84,7 @@ void BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const 
   //     = x * (scale * inv_std) + (B - mean * scale * inv_std)
   // Scratch buffers are drawn from the runtime allocator backing ``output``
   // (when it is allocator-backed) and fall back to inline storage otherwise.
-  RawBufferAllocator *allocator = output.has_allocation() ? output.allocation_owner() : nullptr;
+  RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
   detail::TemporaryTypedBuffer<float> scale_inv_std_buf(static_cast<size_t>(C), allocator,
                                                         "kernel::BatchNormalization scale_inv_std");
   detail::TemporaryTypedBuffer<float> offset_buf(static_cast<size_t>(C), allocator,
@@ -150,13 +151,16 @@ BatchNormalization::TrainingForward(const Tensor &x, const Tensor &scale, const 
   // axis except the channel axis, matching the ONNX reference. The batch
   // statistics are written straight into the allocator-backed result tensors
   // so no extra scratch storage is required.
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
   const size_t saved_mean_t_n_bytes = static_cast<size_t>(C) * sizeof(float);
   Tensor saved_mean_t =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_mean_t_n_bytes, allocator);
+      rt ? rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_mean_t_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_mean_t_n_bytes,
+                            nullptr);
   const size_t saved_var_t_n_bytes = static_cast<size_t>(C) * sizeof(float);
   Tensor saved_var_t =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_var_t_n_bytes, allocator);
+      rt ? rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_var_t_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, saved_var_t_n_bytes,
+                            nullptr);
   float *saved_mean = saved_mean_t.AsFloat();
   float *saved_var = saved_var_t.AsFloat();
   if (x.shape.size() == 1u) {
@@ -199,12 +203,26 @@ BatchNormalization::TrainingForward(const Tensor &x, const Tensor &scale, const 
   Tensor y = (*this)(x, scale, bias, saved_mean_t, saved_var_t, epsilon, rt);
 
   // Update the running estimates: running = input * momentum + saved * (1 - m).
+  const bool has_running_mean_output =
+      rt == nullptr || rt->output_slot_io_roles().empty() || rt->output_slot_io_roles().size() > 1;
+  const bool has_running_var_output =
+      rt == nullptr || rt->output_slot_io_roles().empty() || rt->output_slot_io_roles().size() > 2;
   const size_t running_mean_n_bytes = static_cast<size_t>(C) * sizeof(float);
   Tensor running_mean =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, running_mean_n_bytes, allocator);
+      rt ? (has_running_mean_output ? rt->MakeOutputTensor(1, static_cast<int32_t>(DataType::FLOAT),
+                                                           {C}, running_mean_n_bytes)
+                                    : rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT),
+                                                              {C}, running_mean_n_bytes))
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, running_mean_n_bytes,
+                            nullptr);
   const size_t running_var_n_bytes = static_cast<size_t>(C) * sizeof(float);
   Tensor running_var =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, running_var_n_bytes, allocator);
+      rt ? (has_running_var_output ? rt->MakeOutputTensor(2, static_cast<int32_t>(DataType::FLOAT),
+                                                          {C}, running_var_n_bytes)
+                                   : rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT),
+                                                             {C}, running_var_n_bytes))
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {C}, running_var_n_bytes,
+                            nullptr);
   float *p_run_mean = running_mean.AsFloat();
   float *p_run_var = running_var.AsFloat();
   for (int64_t c = 0; c < C; ++c) {
@@ -229,7 +247,7 @@ void BatchNormalization::Run(RuntimeContext &rt) {
   if (GetAttributeIntOrDefault(node, "training_mode", 0) != 0) {
     const float momentum = GetAttributeFloatOrDefault(node, "momentum", 0.9f);
     auto [y, running_mean, running_var] =
-        k.TrainingForward(x, scale, bias, input_mean, input_var, GetEpsilon(node), momentum);
+        k.TrainingForward(x, scale, bias, input_mean, input_var, GetEpsilon(node), momentum, &rt);
     SetOutput(node, 0, std::move(y), rt.tensors());
     if (node.output_size() >= 2) {
       SetOutput(node, 1, std::move(running_mean), rt.tensors());

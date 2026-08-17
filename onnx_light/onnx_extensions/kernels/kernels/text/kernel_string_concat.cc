@@ -63,10 +63,15 @@ void StringConcat::RegisterTuningSchemas() {
                                         kParallelForGrainSize);
 }
 
-Tensor StringConcat::operator()(const Tensor &x, const Tensor &y, RuntimeContext * /*rt*/) const {
+Tensor StringConcat::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
   const StringBroadcast bi = CheckStringConcatInputs(x, y);
-  Tensor out = Tensor::MakeString("", bi.shape,
-                                  std::vector<std::string>(static_cast<size_t>(bi.element_count)));
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, DataType::STRING, bi.shape, 0)
+         : Tensor::MakeString("", bi.shape,
+                              std::vector<std::string>(static_cast<size_t>(bi.element_count)));
+  if (rt != nullptr) {
+    out.string_data.resize(static_cast<size_t>(bi.element_count));
+  }
   (*this)(x, y, out);
   return out;
 }

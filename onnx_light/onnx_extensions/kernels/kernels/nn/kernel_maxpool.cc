@@ -177,7 +177,7 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const Shape &kernel_shape,
                                      const Shape &strides_in, const Shape &pads_in, bool ceil_mode,
                                      const Shape &dilations_in, int64_t storage_order,
                                      AutoPad auto_pad, bool produce_indices,
-                                     RawBufferAllocator *allocator = nullptr) {
+                                     RuntimeContext *rt = nullptr) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
                           x.data_type == static_cast<int32_t>(DataType::DOUBLE) ||
                           x.data_type == static_cast<int32_t>(DataType::INT8) ||
@@ -261,12 +261,15 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const Shape &kernel_shape,
   }
   const size_t elem_size = ElementSize(x.data_type);
   const size_t y_n_bytes = static_cast<size_t>(n_out) * elem_size;
-  Tensor y = MakeOutputTensor(x.data_type, out_shape, y_n_bytes, allocator);
+  Tensor y = rt ? rt->MakeOutputTensor(0, x.data_type, out_shape, y_n_bytes)
+                : MakeOutputTensor(x.data_type, out_shape, y_n_bytes, nullptr);
   Tensor indices;
   if (produce_indices) {
     const size_t indices_n_bytes = static_cast<size_t>(n_out) * sizeof(int64_t);
-    indices = MakeOutputTensor(static_cast<int32_t>(DataType::INT64), out_shape, indices_n_bytes,
-                               allocator);
+    indices = rt ? rt->MakeOutputTensor(1, static_cast<int32_t>(DataType::INT64), out_shape,
+                                        indices_n_bytes)
+                 : MakeOutputTensor(static_cast<int32_t>(DataType::INT64), out_shape,
+                                    indices_n_bytes, nullptr);
   }
 
   const Shape in_strides = RowMajorStrides(x.shape);
@@ -334,16 +337,17 @@ Tensor MaxPool::operator()(const Tensor &x, const Shape &kernel_shape, const Sha
                            const Shape &pads, bool ceil_mode, const Shape &dilations,
                            int64_t storage_order, AutoPad auto_pad, RuntimeContext *rt) const {
   auto result = RunMaxPool(x, kernel_shape, strides, pads, ceil_mode, dilations, storage_order,
-                           auto_pad, /*produce_indices=*/false, rt ? rt->allocator() : nullptr);
+                           auto_pad, /*produce_indices=*/false, rt);
   return std::move(result.first);
 }
 
 std::pair<Tensor, Tensor> MaxPool::WithIndices(const Tensor &x, const Shape &kernel_shape,
                                                const Shape &strides, const Shape &pads,
                                                bool ceil_mode, const Shape &dilations,
-                                               int64_t storage_order, AutoPad auto_pad) const {
+                                               int64_t storage_order, AutoPad auto_pad,
+                                               RuntimeContext *rt) const {
   return RunMaxPool(x, kernel_shape, strides, pads, ceil_mode, dilations, storage_order, auto_pad,
-                    /*produce_indices=*/true);
+                    /*produce_indices=*/true, rt);
 }
 
 void MaxPool::Run(RuntimeContext &rt) {
@@ -359,7 +363,7 @@ void MaxPool::Run(RuntimeContext &rt) {
   const bool need_indices = node.output_size() == 2 && !node.output(1).empty();
   if (need_indices) {
     auto result = k.WithIndices(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode, a.dilations,
-                                storage_order, a.auto_pad);
+                                storage_order, a.auto_pad, &rt);
     SetOutput(node, 0, std::move(result.first), rt.tensors());
     const std::string indices_name = node.output(1);
     result.second.name = indices_name;
@@ -367,7 +371,7 @@ void MaxPool::Run(RuntimeContext &rt) {
   } else {
     SetOutput(node, 0,
               k(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode, a.dilations, storage_order,
-                a.auto_pad),
+                a.auto_pad, &rt),
               rt.tensors());
   }
 }

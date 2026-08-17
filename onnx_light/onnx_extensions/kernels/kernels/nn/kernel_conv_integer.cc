@@ -155,8 +155,9 @@ Tensor ConvInteger::operator()(const Tensor &x, const Tensor &w, const Tensor &x
     total *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(int32_t);
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::INT32), out_shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::INT32), out_shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::INT32), out_shape, out_n_bytes, nullptr);
   (*this)(x, w, x_zero_point, w_zero_point, resolved, out);
   return out;
 }
@@ -308,9 +309,10 @@ void ConvInteger::Run(RuntimeContext &rt) {
   attrs.auto_pad = onnx_kernels::kernel::AutoPadFromString(
       GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
   onnx_kernels::kernel::ConvInteger k(rt.kernel_ctx());
-  SetOutput(node, 0,
-            k(x, w, x_zp != nullptr ? *x_zp : Tensor{}, w_zp != nullptr ? *w_zp : Tensor{}, attrs),
-            rt.tensors());
+  SetOutput(
+      node, 0,
+      k(x, w, x_zp != nullptr ? *x_zp : Tensor{}, w_zp != nullptr ? *w_zp : Tensor{}, attrs, &rt),
+      rt.tensors());
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

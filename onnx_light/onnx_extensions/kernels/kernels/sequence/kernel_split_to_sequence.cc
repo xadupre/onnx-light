@@ -125,7 +125,7 @@ Sequence SplitToSequence::operator()(const Tensor &input, const Tensor *split, i
                       "kernel::SplitToSequence axis is out of range.");
 
   const int64_t axis_dim = input.shape[static_cast<std::size_t>(resolved_axis)];
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
 
   // ``sizes`` holds one entry per output chunk; its length scales with the
   // number of outputs, so it is drawn from the runtime allocator when one is
@@ -179,7 +179,8 @@ Sequence SplitToSequence::operator()(const Tensor &input, const Tensor *split, i
       total *= d;
     }
     const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
-    Tensor out = MakeOutputTensor(input.data_type, out_shape, out_n_bytes, allocator);
+    Tensor out = rt ? rt->MakeOutputTensor(0, input.data_type, out_shape, out_n_bytes)
+                    : MakeOutputTensor(input.data_type, out_shape, out_n_bytes, nullptr);
     const std::size_t out_row_bytes = static_cast<std::size_t>(size) * inner_bytes;
     for (int64_t o = 0; o < outer; ++o) {
       std::memcpy(out.mutable_bytes() + static_cast<std::size_t>(o) * out_row_bytes,

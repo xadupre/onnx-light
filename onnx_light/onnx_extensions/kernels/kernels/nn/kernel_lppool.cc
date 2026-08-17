@@ -162,8 +162,9 @@ Tensor LpPool::operator()(const Tensor &x, const Shape &kernel_shape, const Shap
     n_out *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(n_out) * sizeof(float);
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes, nullptr);
 
   const float *px = x.AsFloat();
   float *py = reinterpret_cast<float *>(out.mutable_bytes());
@@ -252,7 +253,7 @@ void LpPool::Run(RuntimeContext &rt) {
   const int64_t p = GetAttributeIntOrDefault(node, "p", 2);
   onnx_kernels::kernel::LpPool k(rt.kernel_ctx());
   SetOutput(node, 0,
-            k(x, a.kernel_shape, a.strides, a.pads, p, a.ceil_mode, a.dilations, a.auto_pad),
+            k(x, a.kernel_shape, a.strides, a.pads, p, a.ceil_mode, a.dilations, a.auto_pad, &rt),
             rt.tensors());
 }
 

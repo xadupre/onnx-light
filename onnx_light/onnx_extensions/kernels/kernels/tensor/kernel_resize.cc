@@ -776,7 +776,7 @@ void ComputeResizeFromScales(const Tensor &X, const float *scales_data,
 Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
                           RuntimeContext *rt) const {
   CheckSupportedAttrs(attrs);
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
   const std::size_t rank = X.shape.size();
   const onnx_kernels::Shape axes = NormaliseAxes(attrs.axes, rank);
   const Tensor scales_in = ReadResizeScales(scales, axes.size(), allocator);
@@ -795,7 +795,8 @@ Tensor Resize::operator()(const Tensor &X, const Tensor &scales, const Attribute
     total_elements *= d;
   }
   const size_t output_n_bytes = PackedByteSize(X.data_type, total_elements);
-  Tensor output = MakeOutputTensor(X.data_type, out_shape, output_n_bytes, allocator);
+  Tensor output = rt ? rt->MakeOutputTensor(0, X.data_type, out_shape, output_n_bytes)
+                     : MakeOutputTensor(X.data_type, out_shape, output_n_bytes, nullptr);
   ComputeResizeFromScales(X, scales_data, axes, attrs, output, allocator);
   return output;
 }
@@ -827,7 +828,7 @@ void Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes 
 Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attributes &attrs,
                            RuntimeContext *rt) const {
   CheckSupportedAttrs(attrs);
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
   const std::size_t rank = X.shape.size();
   const onnx_kernels::Shape axes = NormaliseAxes(attrs.axes, rank);
   const Tensor requested = ReadResizeSizes(sizes, axes.size(), allocator);
@@ -866,7 +867,8 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
     total_elements *= d;
   }
   const size_t output_n_bytes = PackedByteSize(X.data_type, total_elements);
-  Tensor output = MakeOutputTensor(X.data_type, out_shape, output_n_bytes, allocator);
+  Tensor output = rt ? rt->MakeOutputTensor(0, X.data_type, out_shape, output_n_bytes)
+                     : MakeOutputTensor(X.data_type, out_shape, output_n_bytes, nullptr);
   ComputeResizeFromScales(X, scales_data, axes, attrs, output, allocator);
   return output;
 }

@@ -57,45 +57,42 @@ void Greater::RegisterTuningSchemas() {
 }
 
 Tensor Greater::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    const Shape out_shape = detail::BroadcastShape("kernel::Greater", x.shape, y.shape);
+    const int64_t out_count = out_shape.product();
+    Tensor output = rt->MakeOutputTensor(
+        0, DataType::BOOL, out_shape, static_cast<size_t>(out_count) * ElementSize(DataType::BOOL));
+    (*this)(x, y, output);
+    return output;
+  }
   const int64_t grain = tuning().parallel_minimum_elements;
   switch (x.data_type) {
   case DataType::FLOAT:
-    return GreaterAlloc<float>("FLOAT", DataType::FLOAT, x, y, grain,
-                               rt ? rt->allocator() : nullptr);
+    return GreaterAlloc<float>("FLOAT", DataType::FLOAT, x, y, grain, nullptr);
   case DataType::FLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kGreaterName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; }, rt ? rt->allocator() : nullptr,
-        grain);
+        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; }, nullptr, grain);
   case DataType::BFLOAT16:
     return detail::BinaryHalfCompareElementwiseAlloc(
         kGreaterName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; }, rt ? rt->allocator() : nullptr,
-        grain);
+        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; }, nullptr, grain);
   case DataType::INT8:
-    return GreaterAlloc<int8_t>("INT8", DataType::INT8, x, y, grain,
-                                rt ? rt->allocator() : nullptr);
+    return GreaterAlloc<int8_t>("INT8", DataType::INT8, x, y, grain, nullptr);
   case DataType::INT16:
-    return GreaterAlloc<int16_t>("INT16", DataType::INT16, x, y, grain,
-                                 rt ? rt->allocator() : nullptr);
+    return GreaterAlloc<int16_t>("INT16", DataType::INT16, x, y, grain, nullptr);
   case DataType::INT32:
-    return GreaterAlloc<int32_t>("INT32", DataType::INT32, x, y, grain,
-                                 rt ? rt->allocator() : nullptr);
+    return GreaterAlloc<int32_t>("INT32", DataType::INT32, x, y, grain, nullptr);
   case DataType::INT64:
-    return GreaterAlloc<int64_t>("INT64", DataType::INT64, x, y, grain,
-                                 rt ? rt->allocator() : nullptr);
+    return GreaterAlloc<int64_t>("INT64", DataType::INT64, x, y, grain, nullptr);
   case DataType::UINT8:
-    return GreaterAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, grain,
-                                 rt ? rt->allocator() : nullptr);
+    return GreaterAlloc<uint8_t>("UINT8", DataType::UINT8, x, y, grain, nullptr);
   case DataType::UINT16:
-    return GreaterAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, grain,
-                                  rt ? rt->allocator() : nullptr);
+    return GreaterAlloc<uint16_t>("UINT16", DataType::UINT16, x, y, grain, nullptr);
   case DataType::UINT32:
-    return GreaterAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, grain,
-                                  rt ? rt->allocator() : nullptr);
+    return GreaterAlloc<uint32_t>("UINT32", DataType::UINT32, x, y, grain, nullptr);
   case DataType::UINT64:
-    return GreaterAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, grain,
-                                  rt ? rt->allocator() : nullptr);
+    return GreaterAlloc<uint64_t>("UINT64", DataType::UINT64, x, y, grain, nullptr);
   default:
     EXT_THROW_INVALID(kGreaterName, ": unsupported data type ", x.data_type,
                       ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "

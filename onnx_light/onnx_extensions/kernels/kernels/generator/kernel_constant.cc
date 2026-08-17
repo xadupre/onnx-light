@@ -68,7 +68,18 @@ void Constant::Run(RuntimeContext &rt) {
     EXT_THROW_INVALID("RunNode: op 'Constant' requires one of: value, value_float, "
                       "value_floats, value_int, value_ints, value_string, value_strings.");
   }
-  SetOutput(node, 0, std::move(y), rt.tensors());
+  if (y.is_borrowed()) {
+    SetOutput(node, 0, std::move(y), rt.tensors());
+    return;
+  }
+  Tensor output = rt.MakeOutputTensor(0, y.data_type, y.shape, y.size_bytes());
+  output.name = y.name;
+  if (y.data_type == static_cast<int32_t>(DataType::STRING)) {
+    output.string_data = std::move(y.string_data);
+  } else if (y.size_bytes() > 0) {
+    std::memcpy(output.mutable_bytes(), y.bytes(), y.size_bytes());
+  }
+  SetOutput(node, 0, std::move(output), rt.tensors());
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

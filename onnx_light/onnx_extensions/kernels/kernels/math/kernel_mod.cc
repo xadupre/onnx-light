@@ -169,50 +169,48 @@ void Mod::RegisterTuningSchemas() {
 }
 
 Tensor Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod, RuntimeContext *rt) const {
+  if (rt != nullptr) {
+    const Shape out_shape = detail::BroadcastShape("kernel::Mod", x.shape, y.shape);
+    const int64_t out_count = out_shape.product();
+    Tensor output = rt->MakeOutputTensor(0, x.data_type, out_shape,
+                                         static_cast<size_t>(out_count) * ElementSize(x.data_type));
+    (*this)(x, y, fmod, output);
+    return output;
+  }
   const int64_t grain = tuning().parallel_minimum_elements;
   switch (x.data_type) {
   case DataType::FLOAT16:
     EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
                         kFmodRequiredForFloatMsg);
-    return ModAllocFloat16(x, y, grain, rt ? rt->allocator() : nullptr);
+    return ModAllocFloat16(x, y, grain, nullptr);
   case DataType::BFLOAT16:
     EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
                         kFmodRequiredForFloatMsg);
-    return ModAllocBfloat16(x, y, grain, rt ? rt->allocator() : nullptr);
+    return ModAllocBfloat16(x, y, grain, nullptr);
   case DataType::FLOAT:
     EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
                         kFmodRequiredForFloatMsg);
-    return ModAllocFloat<float>("FLOAT", DataType::FLOAT, x, y, grain,
-                                rt ? rt->allocator() : nullptr);
+    return ModAllocFloat<float>("FLOAT", DataType::FLOAT, x, y, grain, nullptr);
   case DataType::DOUBLE:
     EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
                         kFmodRequiredForFloatMsg);
-    return ModAllocFloat<double>("DOUBLE", DataType::DOUBLE, x, y, grain,
-                                 rt ? rt->allocator() : nullptr);
+    return ModAllocFloat<double>("DOUBLE", DataType::DOUBLE, x, y, grain, nullptr);
   case DataType::INT8:
-    return ModAllocInt<int8_t>("INT8", DataType::INT8, x, y, fmod, grain,
-                               rt ? rt->allocator() : nullptr);
+    return ModAllocInt<int8_t>("INT8", DataType::INT8, x, y, fmod, grain, nullptr);
   case DataType::INT16:
-    return ModAllocInt<int16_t>("INT16", DataType::INT16, x, y, fmod, grain,
-                                rt ? rt->allocator() : nullptr);
+    return ModAllocInt<int16_t>("INT16", DataType::INT16, x, y, fmod, grain, nullptr);
   case DataType::INT32:
-    return ModAllocInt<int32_t>("INT32", DataType::INT32, x, y, fmod, grain,
-                                rt ? rt->allocator() : nullptr);
+    return ModAllocInt<int32_t>("INT32", DataType::INT32, x, y, fmod, grain, nullptr);
   case DataType::INT64:
-    return ModAllocInt<int64_t>("INT64", DataType::INT64, x, y, fmod, grain,
-                                rt ? rt->allocator() : nullptr);
+    return ModAllocInt<int64_t>("INT64", DataType::INT64, x, y, fmod, grain, nullptr);
   case DataType::UINT8:
-    return ModAllocInt<uint8_t>("UINT8", DataType::UINT8, x, y, fmod, grain,
-                                rt ? rt->allocator() : nullptr);
+    return ModAllocInt<uint8_t>("UINT8", DataType::UINT8, x, y, fmod, grain, nullptr);
   case DataType::UINT16:
-    return ModAllocInt<uint16_t>("UINT16", DataType::UINT16, x, y, fmod, grain,
-                                 rt ? rt->allocator() : nullptr);
+    return ModAllocInt<uint16_t>("UINT16", DataType::UINT16, x, y, fmod, grain, nullptr);
   case DataType::UINT32:
-    return ModAllocInt<uint32_t>("UINT32", DataType::UINT32, x, y, fmod, grain,
-                                 rt ? rt->allocator() : nullptr);
+    return ModAllocInt<uint32_t>("UINT32", DataType::UINT32, x, y, fmod, grain, nullptr);
   case DataType::UINT64:
-    return ModAllocInt<uint64_t>("UINT64", DataType::UINT64, x, y, fmod, grain,
-                                 rt ? rt->allocator() : nullptr);
+    return ModAllocInt<uint64_t>("UINT64", DataType::UINT64, x, y, fmod, grain, nullptr);
   default:
     EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type, kSupportedModTypesMsg);
   }

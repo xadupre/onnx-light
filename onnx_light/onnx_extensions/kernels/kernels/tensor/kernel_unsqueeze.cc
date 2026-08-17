@@ -56,8 +56,8 @@ onnx_kernels::Shape ComputeUnsqueezedShape(const Tensor &data, const onnx_kernel
 Tensor Unsqueeze::operator()(const Tensor &data, const onnx_kernels::Shape &axes,
                              RuntimeContext *rt) const {
   const onnx_kernels::Shape out_shape = ComputeUnsqueezedShape(data, axes);
-  Tensor output = MakeOutputTensor(data.data_type, out_shape, data.size_bytes(),
-                                   rt ? rt->allocator() : nullptr);
+  Tensor output = (rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, data.size_bytes())
+                      : MakeOutputTensor(data.data_type, out_shape, data.size_bytes(), nullptr));
   output.name.clear();
   if (data.data_type == static_cast<int32_t>(DataType::STRING)) {
     output.string_data = data.string_data;

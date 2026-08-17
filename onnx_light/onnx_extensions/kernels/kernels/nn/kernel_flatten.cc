@@ -39,8 +39,8 @@ onnx_kernels::Shape ComputeFlattenOutputShape(const onnx_kernels::Shape &in_shap
 Tensor Flatten::operator()(const Tensor &input, int64_t axis, RuntimeContext *rt) const {
   const onnx_kernels::Shape out_shape = ComputeFlattenOutputShape(input.shape, axis);
   const size_t output_n_bytes = PackedByteSize(input.data_type, input.element_count());
-  Tensor output =
-      MakeOutputTensor(input.data_type, out_shape, output_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor output = rt ? rt->MakeOutputTensor(0, input.data_type, out_shape, output_n_bytes)
+                     : MakeOutputTensor(input.data_type, out_shape, output_n_bytes, nullptr);
   (*this)(input, axis, output);
   return output;
 }

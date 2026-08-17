@@ -64,8 +64,8 @@ Tensor Concat::operator()(const Tensors &inputs, int64_t axis, RuntimeContext *r
     total *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(total) * layout.elem_size;
-  Tensor out = MakeOutputTensor(inputs[0].data_type, layout.shape, out_n_bytes,
-                                rt ? rt->allocator() : nullptr);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, inputs[0].data_type, layout.shape, out_n_bytes)
+                   : MakeOutputTensor(inputs[0].data_type, layout.shape, out_n_bytes, nullptr));
   (*this)(inputs, axis, out);
   return out;
 }

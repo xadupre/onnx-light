@@ -65,16 +65,17 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, c
   Tensor initial_h_storage;
   const Tensor *x_p = &x_in;
   const Tensor *initial_h_p = &initial_h_in;
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
   if (layout == 1) {
     const int64_t batch_size = x_in.shape[0];
     const int64_t seq_length = x_in.shape[1];
     const int64_t input_size = x_in.shape[2];
     const size_t x_n_bytes =
         static_cast<size_t>(batch_size * seq_length * input_size) * sizeof(float);
-    x_storage = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT),
-                                 onnx_kernels::Shape{seq_length, batch_size, input_size}, x_n_bytes,
-                                 allocator);
+    const onnx_kernels::Shape x_shape{seq_length, batch_size, input_size};
+    x_storage =
+        rt ? rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT), x_shape, x_n_bytes)
+           : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x_shape, x_n_bytes, nullptr);
     float *x_data = x_storage.AsFloat();
     const float *src = x_in.AsFloat();
     for (int64_t n = 0; n < batch_size; ++n) {
@@ -133,11 +134,23 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, c
   const onnx_kernels::Shape y_h_shape{num_directions, batch_size, hidden_size};
   const size_t y_n_bytes =
       static_cast<size_t>(seq_length * num_directions * batch_size * hidden_size) * sizeof(float);
-  Tensor y = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_shape, y_n_bytes, allocator);
+  const bool has_y_h_output =
+      rt == nullptr || rt->output_slot_io_roles().empty() || rt->output_slot_io_roles().size() > 1;
+  Tensor y =
+      rt ? (layout == 1
+                ? rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT), y_shape, y_n_bytes)
+                : rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), y_shape,
+                                       y_n_bytes))
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_shape, y_n_bytes, nullptr);
   const size_t y_h_n_bytes =
       static_cast<size_t>(num_directions * batch_size * hidden_size) * sizeof(float);
   Tensor y_h =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_h_shape, y_h_n_bytes, allocator);
+      rt ? (layout == 1 || !has_y_h_output
+                ? rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT), y_h_shape,
+                                          y_h_n_bytes)
+                : rt->MakeOutputTensor(1, static_cast<int32_t>(DataType::FLOAT), y_h_shape,
+                                       y_h_n_bytes))
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), y_h_shape, y_h_n_bytes, nullptr);
   float *py = y.AsFloat();
   float *py_h = y_h.AsFloat();
 
@@ -298,9 +311,11 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, c
     // Permute Y [seq, D, batch, hidden] -> [batch, seq, D, hidden] and
     // Y_h [D, batch, hidden] -> [batch, D, hidden].
     y = recurrent::RecurrentPermuteYLayout1(y, seq_length, num_directions, batch_size, hidden_size,
-                                            allocator);
-    y_h = recurrent::RecurrentPermuteStateLayout1(y_h, num_directions, batch_size, hidden_size,
-                                                  allocator);
+                                            allocator, rt, 0);
+    if (has_y_h_output) {
+      y_h = recurrent::RecurrentPermuteStateLayout1(y_h, num_directions, batch_size, hidden_size,
+                                                    allocator, rt, 1);
+    }
   }
 
   return std::pair<Tensor, Tensor>(std::move(y), std::move(y_h));
@@ -346,7 +361,7 @@ void GRU::Run(RuntimeContext &rt) {
   onnx_kernels::kernel::GRU kernel(rt.kernel_ctx());
   auto [y, y_h] =
       kernel(x, w, r, b != nullptr ? *b : Tensor{}, initial_h != nullptr ? *initial_h : Tensor{},
-             linear_before_reset, layout, direction);
+             linear_before_reset, layout, direction, &rt);
 
   auto set_optional_output = [&node, &rt](int index, Tensor output) {
     if (index >= node.output_size()) {

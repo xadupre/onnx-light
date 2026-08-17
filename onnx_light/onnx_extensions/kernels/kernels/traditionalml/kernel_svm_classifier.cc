@@ -10,6 +10,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -68,7 +69,7 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
                           const std::vector<float> &coefficients, const std::vector<float> &rho,
                           const std::vector<int64_t> &vectors_per_class,
                           const std::vector<int64_t> &class_labels, const char *kernel_type,
-                          float gamma, float coef0, float degree) const {
+                          float gamma, float coef0, float degree, RuntimeContext *rt) const {
   int64_t sample_count = 0;
   int64_t feature_count = 0;
   ValidateFeatureMatrixShape(x, sample_count, feature_count);
@@ -77,18 +78,26 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
   const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
   const Tensor scores_buf = ComputeBinaryDecisionScores(
       x_values, sample_count, feature_count, support_vectors, coefficients, rho, vectors_per_class,
-      kernel_type, gamma, coef0, degree, ctx_.allocator);
+      kernel_type, gamma, coef0, degree, rt ? rt->execution_allocator() : ctx_.allocator);
   const float *scores = scores_buf.AsFloat();
   std::vector<int64_t> labels(static_cast<size_t>(sample_count));
-  std::vector<float> expanded_scores(static_cast<size_t>(sample_count * 2));
+  const onnx_kernels::Shape score_shape = {sample_count, 2};
+  const size_t score_n_bytes = static_cast<size_t>(sample_count * 2) * sizeof(float);
+  Tensor z = rt ? rt->MakeOutputTensor(1, DataType::FLOAT, score_shape, score_n_bytes)
+                : MakeOutputTensor(DataType::FLOAT, score_shape, score_n_bytes, ctx_.allocator);
+  float *expanded_scores = z.AsFloat();
   for (int64_t i = 0; i < sample_count; ++i) {
     const float s = scores[static_cast<size_t>(i)];
     labels[static_cast<size_t>(i)] = s > 0.0f ? class_labels[0] : class_labels[1];
-    expanded_scores[static_cast<size_t>(i * 2)] = -s;
-    expanded_scores[static_cast<size_t>(i * 2 + 1)] = s;
+    expanded_scores[i * 2] = -s;
+    expanded_scores[i * 2 + 1] = s;
   }
-  Tensor y = Tensor::FromInt64("", {sample_count}, labels, ctx_.allocator);
-  Tensor z = Tensor::FromFloat("", {sample_count, 2}, expanded_scores, ctx_.allocator);
+  Tensor y = rt ? rt->MakeOutputTensor(0, DataType::INT64, {sample_count},
+                                       static_cast<size_t>(sample_count) * sizeof(int64_t))
+                : Tensor::FromInt64("", {sample_count}, labels, ctx_.allocator);
+  if (rt != nullptr) {
+    std::copy(labels.begin(), labels.end(), y.AsInt64());
+  }
   return std::make_pair(std::move(y), std::move(z));
 }
 
@@ -98,7 +107,7 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
                           const std::vector<float> &coefficients, const std::vector<float> &rho,
                           const std::vector<int64_t> &vectors_per_class,
                           const ParamStrings &class_labels, const char *kernel_type, float gamma,
-                          float coef0, float degree) const {
+                          float coef0, float degree, RuntimeContext *rt) const {
   int64_t sample_count = 0;
   int64_t feature_count = 0;
   ValidateFeatureMatrixShape(x, sample_count, feature_count);
@@ -107,18 +116,25 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
   const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
   const Tensor scores_buf = ComputeBinaryDecisionScores(
       x_values, sample_count, feature_count, support_vectors, coefficients, rho, vectors_per_class,
-      kernel_type, gamma, coef0, degree, ctx_.allocator);
+      kernel_type, gamma, coef0, degree, rt ? rt->execution_allocator() : ctx_.allocator);
   const float *scores = scores_buf.AsFloat();
   std::vector<std::string> labels(static_cast<size_t>(sample_count));
-  std::vector<float> expanded_scores(static_cast<size_t>(sample_count * 2));
+  const onnx_kernels::Shape score_shape = {sample_count, 2};
+  const size_t score_n_bytes = static_cast<size_t>(sample_count * 2) * sizeof(float);
+  Tensor z = rt ? rt->MakeOutputTensor(1, DataType::FLOAT, score_shape, score_n_bytes)
+                : MakeOutputTensor(DataType::FLOAT, score_shape, score_n_bytes, ctx_.allocator);
+  float *expanded_scores = z.AsFloat();
   for (int64_t i = 0; i < sample_count; ++i) {
     const float s = scores[static_cast<size_t>(i)];
     labels[static_cast<size_t>(i)] = s > 0.0f ? class_labels[0] : class_labels[1];
-    expanded_scores[static_cast<size_t>(i * 2)] = -s;
-    expanded_scores[static_cast<size_t>(i * 2 + 1)] = s;
+    expanded_scores[i * 2] = -s;
+    expanded_scores[i * 2 + 1] = s;
   }
-  Tensor y = Tensor::FromStrings("", {sample_count}, labels);
-  Tensor z = Tensor::FromFloat("", {sample_count, 2}, expanded_scores, ctx_.allocator);
+  Tensor y = rt ? rt->MakeOutputTensor(0, DataType::STRING, {sample_count}, 0)
+                : Tensor::FromStrings("", {sample_count}, labels);
+  if (rt != nullptr) {
+    y.string_data = std::move(labels);
+  }
   return std::make_pair(std::move(y), std::move(z));
 }
 
@@ -126,11 +142,11 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
   template std::pair<Tensor, Tensor> SVMClassifier::operator()<T>(                                 \
       const Tensor &, const std::vector<float> &, const std::vector<float> &,                      \
       const std::vector<float> &, const std::vector<int64_t> &, const std::vector<int64_t> &,      \
-      const char *, float, float, float) const;                                                    \
+      const char *, float, float, float, RuntimeContext *) const;                                  \
   template std::pair<Tensor, Tensor> SVMClassifier::operator()<T>(                                 \
       const Tensor &, const std::vector<float> &, const std::vector<float> &,                      \
       const std::vector<float> &, const std::vector<int64_t> &, const ParamStrings &,              \
-      const char *, float, float, float) const
+      const char *, float, float, float, RuntimeContext *) const
 
 ONNX_LIGHT_INSTANTIATE_SVM_CLASSIFIER(float);
 ONNX_LIGHT_INSTANTIATE_SVM_CLASSIFIER(double);
@@ -163,10 +179,10 @@ void SVMClassifier::Run(RuntimeContext &rt) {
     return use_strings
                ? svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
                                             vectors_per_class, classlabels_strings,
-                                            a.kernel_type.c_str(), a.gamma, a.coef0, a.degree)
+                                            a.kernel_type.c_str(), a.gamma, a.coef0, a.degree, &rt)
                : svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
                                             vectors_per_class, classlabels_ints,
-                                            a.kernel_type.c_str(), a.gamma, a.coef0, a.degree);
+                                            a.kernel_type.c_str(), a.gamma, a.coef0, a.degree, &rt);
   });
   SetOutput(node, 0, std::move(yz.first), rt);
   SetOutput(node, 1, std::move(yz.second), rt);

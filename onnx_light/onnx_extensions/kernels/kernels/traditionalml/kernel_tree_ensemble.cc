@@ -10,6 +10,7 @@
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -160,7 +161,6 @@ TreeEnsemble::TreeEnsemble(
 template <typename T>
 Tensor TreeEnsemble::operator()(const Tensor &x, int64_t n_targets, int64_t aggregate_function,
                                 int64_t post_transform, RuntimeContext *rt) const {
-  (void)rt;
   EXT_ENFORCE_INVALID(n_targets >= 1, "kernel::TreeEnsemble: n_targets must be >= 1.");
   EXT_ENFORCE_INVALID(post_transform == kPostNone || post_transform == kPostSoftmax,
                       "kernel::TreeEnsemble: only post_transform 0 (NONE) or 1 (SOFTMAX) "
@@ -222,7 +222,13 @@ Tensor TreeEnsemble::operator()(const Tensor &x, int64_t n_targets, int64_t aggr
     }
   }
 
-  return Tensor::From<T>("", {sample_count, n_targets}, output_flat, ctx_.allocator);
+  if (rt == nullptr) {
+    return Tensor::From<T>("", {sample_count, n_targets}, output_flat, ctx_.allocator);
+  }
+  Tensor out = rt->MakeOutputTensor(0, TensorElementType<T>::value, {sample_count, n_targets},
+                                    static_cast<size_t>(sample_count * n_targets) * sizeof(T));
+  std::copy(output_flat.begin(), output_flat.end(), out.As<T>());
+  return out;
 }
 
 #define ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE(T)                                                    \
@@ -302,10 +308,10 @@ void TreeEnsemble::Run(RuntimeContext &rt) {
   Tensor y;
   switch (x.data_type) {
   case static_cast<int32_t>(DataType::FLOAT):
-    y = tree_ens.operator()<float>(x, n_targets, aggregate_function, post_transform);
+    y = tree_ens.operator()<float>(x, n_targets, aggregate_function, post_transform, &rt);
     break;
   case static_cast<int32_t>(DataType::DOUBLE):
-    y = tree_ens.operator()<double>(x, n_targets, aggregate_function, post_transform);
+    y = tree_ens.operator()<double>(x, n_targets, aggregate_function, post_transform, &rt);
     break;
   default:
     EXT_THROW_INVALID("RunNode: TreeEnsemble input 'X' must be FLOAT or DOUBLE.");

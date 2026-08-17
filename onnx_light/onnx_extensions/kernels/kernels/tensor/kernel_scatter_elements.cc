@@ -92,14 +92,15 @@ void ApplyScatterElementsTyped(const Tensor &updates, uint8_t *out_bytes, const 
 
 Tensor ScatterElements::operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
                                    const Attributes &attrs, RuntimeContext *rt) const {
-  Tensor out = MakeOutputTensor(data.data_type, data.shape, data.size_bytes(),
-                                rt != nullptr ? rt->allocator() : nullptr);
-  (*this)(data, indices, updates, attrs, out);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, data.data_type, data.shape, data.size_bytes())
+                   : MakeOutputTensor(data.data_type, data.shape, data.size_bytes(), nullptr));
+  (*this)(data, indices, updates, attrs, out, rt);
   return out;
 }
 
 void ScatterElements::operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
-                                 const Attributes &attrs, Tensor &output) const {
+                                 const Attributes &attrs, Tensor &output,
+                                 RuntimeContext *rt) const {
   const int64_t r = static_cast<int64_t>(data.shape.size());
   EXT_ENFORCE_INVALID(r >= 1, "kernel::ScatterElements: 'data' must have rank >= 1.");
   EXT_ENFORCE_INVALID(static_cast<int64_t>(indices.shape.size()) == r,
@@ -126,7 +127,8 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
     std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
   }
 
-  const Tensor idx_tensor = ReadScatterElementsIndices(indices, ctx_.allocator);
+  const Tensor idx_tensor =
+      ReadScatterElementsIndices(indices, rt ? rt->execution_allocator() : ctx_.allocator);
   const int64_t *idx_values = idx_tensor.As<int64_t>();
   const int64_t total_indices = idx_tensor.element_count();
   const int64_t axis_dim = data.shape[static_cast<std::size_t>(axis)];

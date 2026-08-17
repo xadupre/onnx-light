@@ -107,8 +107,8 @@ Tensor Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype,
   EXT_ENFORCE_INVALID(n >= 0, "kernel::Bernoulli: input shape contains negative dimensions.");
   const std::size_t out_n_bytes = static_cast<std::size_t>(n) * es;
 
-  Tensor out =
-      MakeOutputTensor(out_dtype, input.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, out_dtype, input.shape, out_n_bytes)
+                  : MakeOutputTensor(out_dtype, input.shape, out_n_bytes, nullptr);
   (*this)(input, seed, dtype, out);
   return out;
 }

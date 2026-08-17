@@ -14,8 +14,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor OptionalGetElement::operator()(const Tensor &input, RuntimeContext *rt) const {
   const size_t out_n_bytes = input.size_bytes();
-  Tensor out =
-      MakeOutputTensor(input.data_type, input.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, input.data_type, input.shape, out_n_bytes)
+                   : MakeOutputTensor(input.data_type, input.shape, out_n_bytes, nullptr));
   (*this)(input, out);
   return out;
 }

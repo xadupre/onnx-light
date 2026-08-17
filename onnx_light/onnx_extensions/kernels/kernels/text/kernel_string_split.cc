@@ -75,7 +75,7 @@ std::vector<std::string> SplitString(const std::string &text, const std::string 
 } // namespace
 
 std::pair<Tensor, Tensor> StringSplit::operator()(const Tensor &x, const std::string &delimiter,
-                                                  int64_t maxsplit) const {
+                                                  int64_t maxsplit, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::StringSplit only supports STRING tensors.");
   EXT_ENFORCE_INVALID(static_cast<int64_t>(x.string_data.size()) == x.element_count(),
@@ -102,8 +102,19 @@ std::pair<Tensor, Tensor> StringSplit::operator()(const Tensor &x, const std::st
     y_data.insert(y_data.end(), static_cast<std::size_t>(max_length) - parts.size(), "");
   }
 
-  Tensor y = Tensor::MakeString("", std::move(y_shape), std::move(y_data));
-  Tensor z = Tensor::FromInt64("", x.shape, lengths, ctx_.allocator);
+  Tensor y;
+  if (rt != nullptr) {
+    y = rt->MakeOutputTensor(0, DataType::STRING, y_shape, 0);
+    y.string_data = std::move(y_data);
+  } else {
+    y = Tensor::MakeString("", y_shape, std::move(y_data));
+  }
+  Tensor z =
+      rt ? rt->MakeOutputTensor(1, DataType::INT64, x.shape, lengths.size() * sizeof(int64_t))
+         : Tensor::FromInt64("", x.shape, lengths, ctx_.allocator);
+  if (rt != nullptr && !lengths.empty()) {
+    std::copy(lengths.begin(), lengths.end(), z.AsInt64());
+  }
   return std::pair<Tensor, Tensor>(std::move(y), std::move(z));
 }
 
@@ -115,7 +126,7 @@ void StringSplit::Run(RuntimeContext &rt) {
   const std::string delimiter = GetAttributeStringOrDefault(node, "delimiter", "");
   const int64_t maxsplit = GetAttributeIntOrDefault(node, "maxsplit", -1);
   onnx_kernels::kernel::StringSplit k(rt.kernel_ctx());
-  auto out = k(x, delimiter, maxsplit);
+  auto out = k(x, delimiter, maxsplit, &rt);
   SetOutput(node, 0, std::move(out.first), rt);
   SetOutput(node, 1, std::move(out.second), rt);
 }

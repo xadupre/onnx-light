@@ -309,12 +309,14 @@ public:
   template <typename T>
   std::pair<Tensor, Tensor>
   operator()(const Tensor &x, const ParamFloats &coefficients, const ParamFloats &intercepts,
-             const std::vector<int64_t> &class_labels, const std::string &post_transform) const;
+             const std::vector<int64_t> &class_labels, const std::string &post_transform,
+             RuntimeContext *rt = nullptr) const;
 
   template <typename T>
   std::pair<Tensor, Tensor>
   operator()(const Tensor &x, const ParamFloats &coefficients, const ParamFloats &intercepts,
-             const ParamStrings &class_labels, const std::string &post_transform) const;
+             const ParamStrings &class_labels, const std::string &post_transform,
+             RuntimeContext *rt = nullptr) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
@@ -358,14 +360,15 @@ public:
              const std::vector<float> &coefficients, const std::vector<float> &rho,
              const std::vector<int64_t> &vectors_per_class,
              const std::vector<int64_t> &class_labels, const char *kernel_type, float gamma,
-             float coef0, float degree) const;
+             float coef0, float degree, RuntimeContext *rt = nullptr) const;
 
   template <typename T>
   std::pair<Tensor, Tensor>
   operator()(const Tensor &x, const std::vector<float> &support_vectors,
              const std::vector<float> &coefficients, const std::vector<float> &rho,
              const std::vector<int64_t> &vectors_per_class, const ParamStrings &class_labels,
-             const char *kernel_type, float gamma, float coef0, float degree) const;
+             const char *kernel_type, float gamma, float coef0, float degree,
+             RuntimeContext *rt = nullptr) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
@@ -590,12 +593,14 @@ public:
   template <typename T>
   std::pair<Tensor, Tensor>
   operator()(const Tensor &x, const std::vector<int64_t> &classlabels_int64s,
-             const std::vector<float> &base_values, const std::string &post_transform) const;
+             const std::vector<float> &base_values, const std::string &post_transform,
+             RuntimeContext *rt = nullptr) const;
 
   template <typename T>
   std::pair<Tensor, Tensor> operator()(const Tensor &x, const ParamStrings &classlabels_strings,
                                        const std::vector<float> &base_values,
-                                       const std::string &post_transform) const;
+                                       const std::string &post_transform,
+                                       RuntimeContext *rt = nullptr) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 

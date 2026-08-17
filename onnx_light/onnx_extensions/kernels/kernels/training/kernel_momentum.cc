@@ -168,7 +168,19 @@ void Momentum::Run(RuntimeContext &rt) {
                       "'.");
   }
   onnx_kernels::kernel::Momentum k(rt.kernel_ctx());
-  Tensors outs = k(R, T, Xs, Gs, Vs, alpha, beta, norm_coefficient, mode);
+  Tensors outs;
+  outs.reserve(static_cast<size_t>(2 * n));
+  for (int64_t i = 0; i < n; ++i) {
+    const Tensor &X = Xs[static_cast<size_t>(i)];
+    outs.push_back(
+        rt.MakeOutputTensor(static_cast<int>(i), DataType::FLOAT, X.shape, X.size_bytes()));
+  }
+  for (int64_t i = 0; i < n; ++i) {
+    const Tensor &V = Vs[static_cast<size_t>(i)];
+    outs.push_back(
+        rt.MakeOutputTensor(static_cast<int>(n + i), DataType::FLOAT, V.shape, V.size_bytes()));
+  }
+  k(R, T, Xs, Gs, Vs, outs, alpha, beta, norm_coefficient, mode);
   for (int64_t i = 0; i < 2 * n; ++i) {
     SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]), rt.tensors());
   }

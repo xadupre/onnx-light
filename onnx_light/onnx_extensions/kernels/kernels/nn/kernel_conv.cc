@@ -144,8 +144,8 @@ Tensor Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const
     total *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(total) * sizeof(float);
-  Tensor out =
-      MakeOutputTensor(x.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(x.data_type, out_shape, out_n_bytes, nullptr);
   (*this)(x, w, b, resolved, out);
   return out;
 }

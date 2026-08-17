@@ -366,14 +366,16 @@ Tensor Cast::operator()(const Tensor &x, int32_t to, bool saturate, RuntimeConte
     // buffer, so the allocator-backed buffer carries zero bytes; routing it
     // through ``MakeOutputTensor`` keeps the returned tensor allocator-backed
     // for consistency with the numeric path below.
-    Tensor out = MakeOutputTensor(to, x.shape, /*n_bytes=*/0, rt ? rt->allocator() : nullptr);
+    Tensor out = (rt ? rt->MakeOutputTensor(0, to, x.shape, /*n_bytes=*/0)
+                     : MakeOutputTensor(to, x.shape, /*n_bytes=*/0, nullptr));
     out.string_data.assign(static_cast<size_t>(x.element_count()), std::string());
     (*this)(x, to, saturate, out);
     return out;
   }
   const size_t out_bytes = PackedByteSize(to, x.element_count());
   const size_t out_n_bytes = out_bytes;
-  Tensor out = MakeOutputTensor(to, x.shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, to, x.shape, out_n_bytes)
+                   : MakeOutputTensor(to, x.shape, out_n_bytes, nullptr));
   (*this)(x, to, saturate, out);
   return out;
 }

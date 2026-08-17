@@ -170,25 +170,38 @@ template <typename T> void MatMulInPlace(const Tensor &a, const Tensor &b, Tenso
 Tensor MatMul::operator()(const Tensor &a, const Tensor &b, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(a.data_type == b.data_type, kMatMulName,
                       " inputs must share the same dtype.");
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  if (rt != nullptr && a.data_type != DataType::FLOAT16 && a.data_type != DataType::BFLOAT16) {
+    const Shape out_shape = ComputeMatMulOutputShape(a.shape, b.shape);
+    Tensor output = rt->MakeOutputTensor(0, a.data_type, out_shape,
+                                         static_cast<size_t>(NumElements(out_shape)) *
+                                             ElementSize(a.data_type));
+    (*this)(a, b, output);
+    return output;
+  }
   switch (a.data_type) {
   case DataType::FLOAT:
-    return MatMulAlloc<float>(a, b, allocator);
+    return MatMulAlloc<float>(a, b);
   case DataType::DOUBLE:
-    return MatMulAlloc<double>(a, b, allocator);
+    return MatMulAlloc<double>(a, b);
   case DataType::INT32:
-    return MatMulAlloc<int32_t>(a, b, allocator);
+    return MatMulAlloc<int32_t>(a, b);
   case DataType::INT64:
-    return MatMulAlloc<int64_t>(a, b, allocator);
+    return MatMulAlloc<int64_t>(a, b);
   case DataType::UINT32:
-    return MatMulAlloc<uint32_t>(a, b, allocator);
+    return MatMulAlloc<uint32_t>(a, b);
   case DataType::UINT64:
-    return MatMulAlloc<uint64_t>(a, b, allocator);
+    return MatMulAlloc<uint64_t>(a, b);
   case DataType::FLOAT16:
   case DataType::BFLOAT16: {
     const Tensor a_f = PromoteToFloat32(a, rt);
     const Tensor b_f = PromoteToFloat32(b, rt);
-    Tensor y = MatMulAlloc<float>(a_f, b_f, allocator);
+    const Shape out_shape = ComputeMatMulOutputShape(a_f.shape, b_f.shape);
+    Tensor y =
+        rt ? rt->MakeTemporaryTensor(DataType::FLOAT, out_shape,
+                                     static_cast<size_t>(NumElements(out_shape)) * sizeof(float))
+           : MakeOutputTensor(DataType::FLOAT, out_shape,
+                              static_cast<size_t>(NumElements(out_shape)) * sizeof(float), nullptr);
+    MatMulCompute<float>(a_f, b_f, y);
     return DemoteFromFloat32(y, a.data_type, rt);
   }
   default:

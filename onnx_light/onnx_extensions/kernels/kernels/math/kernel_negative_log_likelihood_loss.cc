@@ -52,7 +52,7 @@ Tensor NegativeLogLikelihoodLoss::operator()(const Tensor &input, const Tensor &
   const float *input_ptr = input.AsFloat();
   const float *weight_ptr = weight != nullptr ? weight->AsFloat() : nullptr;
 
-  RawBufferAllocator *allocator = rt ? rt->allocator() : nullptr;
+  RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
 
   // Per-sample loss and applied weight (prior to reduction). Backed by the
   // runtime allocator when available, falling back to inline storage otherwise.
@@ -93,7 +93,8 @@ Tensor NegativeLogLikelihoodLoss::operator()(const Tensor &input, const Tensor &
 
   if (reduction == "none") {
     const size_t loss_n_bytes = static_cast<size_t>(n_loss) * sizeof(float);
-    Tensor loss = MakeOutputTensor(DataType::FLOAT, target.shape, loss_n_bytes, allocator);
+    Tensor loss = rt ? rt->MakeOutputTensor(0, DataType::FLOAT, target.shape, loss_n_bytes)
+                     : MakeOutputTensor(DataType::FLOAT, target.shape, loss_n_bytes, nullptr);
     float *out = loss.AsFloat();
     for (int64_t k = 0; k < n_loss; ++k) {
       out[static_cast<size_t>(k)] = per_sample_loss[static_cast<size_t>(k)];
@@ -119,7 +120,8 @@ Tensor NegativeLogLikelihoodLoss::operator()(const Tensor &input, const Tensor &
   }
 
   const size_t loss_n_bytes = sizeof(float);
-  Tensor loss = MakeOutputTensor(DataType::FLOAT, Shape{}, loss_n_bytes, allocator);
+  Tensor loss = rt ? rt->MakeOutputTensor(0, DataType::FLOAT, Shape{}, loss_n_bytes)
+                   : MakeOutputTensor(DataType::FLOAT, Shape{}, loss_n_bytes, nullptr);
   loss.AsFloat()[0] = reduced;
   return loss;
 }

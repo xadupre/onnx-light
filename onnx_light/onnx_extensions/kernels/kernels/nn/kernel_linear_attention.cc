@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
@@ -33,7 +34,7 @@ void Check3DFloat(const Tensor &t, const char *label, int64_t &B, int64_t &T, in
 } // namespace
 
 Tensor LinearAttention::operator()(const Tensor &query, const Tensor &key, const Tensor &value,
-                                   RuntimeContext * /*rt*/) const {
+                                   RuntimeContext *rt) const {
   Attributes attrs;
   attrs.update_rule = "linear";
   attrs.q_num_heads = 0; // will be inferred below
@@ -47,13 +48,13 @@ Tensor LinearAttention::operator()(const Tensor &query, const Tensor &key, const
   // default to 1 head.
   attrs.q_num_heads = 1;
   attrs.kv_num_heads = 1;
-  return (*this)(query, key, value, attrs).output;
+  return (*this)(query, key, value, attrs, nullptr, nullptr, nullptr, rt).output;
 }
 
 LinearAttention::Result LinearAttention::operator()(const Tensor &query, const Tensor &key,
                                                     const Tensor &value, const Attributes &attrs,
                                                     const Tensor *past_state, const Tensor *decay,
-                                                    const Tensor *beta) const {
+                                                    const Tensor *beta, RuntimeContext *rt) const {
   // Half-precision fast path: promote FLOAT16/BFLOAT16 inputs to FLOAT32,
   // compute the recurrence in float32, then demote the outputs back to the
   // activation dtype. This mirrors the ONNX reference, which accumulates in
@@ -61,32 +62,60 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
   if (IsHalfPrecision(query.data_type)) {
     const int32_t out_dtype = query.data_type;
     const int32_t state_dtype = (past_state != nullptr) ? past_state->data_type : query.data_type;
-    const Tensor query_f = PromoteToFloat32(query);
-    const Tensor key_f = PromoteToFloat32(key);
-    const Tensor value_f = PromoteToFloat32(value);
+    RuntimeContext scratch_rt(
+        rt ? rt->kernel_ctx() : ctx_,
+        RuntimeContextOptions{.allocator = rt ? rt->execution_allocator() : nullptr});
+    RuntimeContext *compute_rt = rt ? &scratch_rt : nullptr;
+    const Tensor query_f = PromoteToFloat32(query, compute_rt);
+    const Tensor key_f = PromoteToFloat32(key, compute_rt);
+    const Tensor value_f = PromoteToFloat32(value, compute_rt);
     Tensor past_f, decay_f, beta_f;
     const Tensor *past_ptr = nullptr;
     const Tensor *decay_ptr_in = nullptr;
     const Tensor *beta_ptr_in = nullptr;
     if (past_state != nullptr) {
-      past_f = PromoteToFloat32(*past_state);
+      past_f = PromoteToFloat32(*past_state, compute_rt);
       past_ptr = &past_f;
     }
     if (decay != nullptr) {
-      decay_f = PromoteToFloat32(*decay);
+      decay_f = PromoteToFloat32(*decay, compute_rt);
       decay_ptr_in = &decay_f;
     }
     if (beta != nullptr) {
-      beta_f = PromoteToFloat32(*beta);
+      beta_f = PromoteToFloat32(*beta, compute_rt);
       beta_ptr_in = &beta_f;
     }
-    Result result_f = (*this)(query_f, key_f, value_f, attrs, past_ptr, decay_ptr_in, beta_ptr_in);
+    Result result_f =
+        (*this)(query_f, key_f, value_f, attrs, past_ptr, decay_ptr_in, beta_ptr_in, compute_rt);
     Result result;
-    result.output = IsHalfPrecision(out_dtype) ? DemoteFromFloat32(result_f.output, out_dtype)
-                                               : std::move(result_f.output);
-    result.present_state = IsHalfPrecision(state_dtype)
-                               ? DemoteFromFloat32(result_f.present_state, state_dtype)
+    Tensor output_demoted = IsHalfPrecision(out_dtype)
+                                ? DemoteFromFloat32(result_f.output, out_dtype, compute_rt)
+                                : std::move(result_f.output);
+    Tensor state_demoted = IsHalfPrecision(state_dtype)
+                               ? DemoteFromFloat32(result_f.present_state, state_dtype, compute_rt)
                                : std::move(result_f.present_state);
+    result.output = rt ? rt->MakeOutputTensor(0, output_demoted.data_type, output_demoted.shape,
+                                              output_demoted.size_bytes())
+                       : MakeOutputTensor(output_demoted.data_type, output_demoted.shape,
+                                          output_demoted.size_bytes(), nullptr);
+    const bool has_state_output = rt == nullptr || rt->output_slot_io_roles().empty() ||
+                                  rt->output_slot_io_roles().size() > 1;
+    result.present_state =
+        rt ? (!has_state_output
+                  ? rt->MakeTemporaryTensor(state_demoted.data_type, state_demoted.shape,
+                                            state_demoted.size_bytes())
+                  : rt->MakeOutputTensor(1, state_demoted.data_type, state_demoted.shape,
+                                         state_demoted.size_bytes()))
+           : MakeOutputTensor(state_demoted.data_type, state_demoted.shape,
+                              state_demoted.size_bytes(), nullptr);
+    if (output_demoted.size_bytes() != 0) {
+      std::memcpy(result.output.mutable_bytes(), output_demoted.bytes(),
+                  output_demoted.size_bytes());
+    }
+    if (state_demoted.size_bytes() != 0) {
+      std::memcpy(result.present_state.mutable_bytes(), state_demoted.bytes(),
+                  state_demoted.size_bytes());
+    }
     return result;
   }
 
@@ -180,9 +209,17 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
   // accumulates into it, so it is explicitly zero-initialized (or seeded from
   // ``past_state``) rather than relying on the allocator returning zeroed bytes.
   const int64_t state_size = B * kv_num_heads * d_k * d_v;
+  const Shape state_shape{B, kv_num_heads, d_k, d_v};
+  const size_t state_n_bytes = static_cast<size_t>(state_size) * sizeof(float);
+  const bool has_state_output =
+      rt == nullptr || rt->output_slot_io_roles().empty() || rt->output_slot_io_roles().size() > 1;
   Tensor state_tensor =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {B, kv_num_heads, d_k, d_v},
-                       static_cast<size_t>(state_size) * sizeof(float), ctx_.allocator);
+      rt ? (!has_state_output ? rt->MakeTemporaryTensor(static_cast<int32_t>(DataType::FLOAT),
+                                                        state_shape, state_n_bytes)
+                              : rt->MakeOutputTensor(1, static_cast<int32_t>(DataType::FLOAT),
+                                                     state_shape, state_n_bytes))
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), state_shape, state_n_bytes,
+                            nullptr);
   float *state = state_tensor.AsFloat();
   if (past_state != nullptr) {
     EXT_ENFORCE_INVALID(past_state->data_type == DataType::FLOAT,
@@ -203,8 +240,10 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
   const int64_t out_hidden = q_num_heads * d_v;
   const int64_t output_size = B * T * out_hidden;
   Tensor output_tensor =
-      MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {B, T, out_hidden},
-                       static_cast<size_t>(output_size) * sizeof(float), ctx_.allocator);
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), {B, T, out_hidden},
+                                static_cast<size_t>(output_size) * sizeof(float))
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), {B, T, out_hidden},
+                            static_cast<size_t>(output_size) * sizeof(float), nullptr);
   float *output = output_tensor.AsFloat();
 
   const float *q_ptr = query.AsFloat();
@@ -228,7 +267,8 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
         // Get decay for this head/timestep
         // decay_last == kv_num_heads*d_k: per-key-dim
         // decay_last == kv_num_heads: per-head scalar
-        detail::TemporaryTypedBuffer<float> g_exp_buf(static_cast<std::size_t>(d_k), ctx_.allocator,
+        detail::TemporaryTypedBuffer<float> g_exp_buf(static_cast<std::size_t>(d_k),
+                                                      rt ? rt->execution_allocator() : nullptr,
                                                       "kernel::LinearAttention g_exp");
         float *g_exp = g_exp_buf.data();
         std::fill(g_exp, g_exp + d_k, 1.0f);
@@ -280,7 +320,8 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
         } else if (rule == "delta") {
           // S_t = S_{t-1} + β_t * k_t ⊗ (v_t - S_{t-1}^T k_t)
           // S_{t-1}^T k_t = sum_i(S[i,:] * k_t[i]) => vector of d_v
-          detail::TemporaryTypedBuffer<float> Sk_buf(static_cast<std::size_t>(d_v), ctx_.allocator,
+          detail::TemporaryTypedBuffer<float> Sk_buf(static_cast<std::size_t>(d_v),
+                                                     rt ? rt->execution_allocator() : nullptr,
                                                      "kernel::LinearAttention Sk");
           float *Sk = Sk_buf.data();
           std::fill(Sk, Sk + d_v, 0.0f);
@@ -298,7 +339,8 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
         } else if (rule == "gated_delta") {
           // S_t = exp(g_t)*S_{t-1} + β_t * k_t ⊗ (v_t - exp(g_t)*S_{t-1}^T k_t)
           // First compute exp(g_t)*S_{t-1}^T k_t
-          detail::TemporaryTypedBuffer<float> gSk_buf(static_cast<std::size_t>(d_v), ctx_.allocator,
+          detail::TemporaryTypedBuffer<float> gSk_buf(static_cast<std::size_t>(d_v),
+                                                      rt ? rt->execution_allocator() : nullptr,
                                                       "kernel::LinearAttention gSk");
           float *gSk = gSk_buf.data();
           std::fill(gSk, gSk + d_v, 0.0f);
@@ -374,7 +416,7 @@ void LinearAttention::Run(RuntimeContext &rt) {
 
   onnx_kernels::kernel::LinearAttention k(rt.kernel_ctx());
   onnx_kernels::kernel::LinearAttention::Result result =
-      k(query, key, value, attrs, past_state, decay, beta);
+      k(query, key, value, attrs, past_state, decay, beta, &rt);
   SetOutput(node, 0, std::move(result.output), rt.tensors());
 
   if (node.output_size() >= 2) {

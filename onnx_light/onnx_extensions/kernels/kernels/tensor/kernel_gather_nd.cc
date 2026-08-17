@@ -53,8 +53,8 @@ Tensor GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t b
   }
   const std::size_t elem_size = ElementSize(data.data_type);
   const size_t out_n_bytes = static_cast<std::size_t>(total) * elem_size;
-  Tensor out =
-      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
+                   : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr));
   (*this)(data, indices, batch_dims, out);
   return out;
 }

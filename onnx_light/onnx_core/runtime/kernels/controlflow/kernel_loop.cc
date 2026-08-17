@@ -87,7 +87,8 @@ bool ParseInitialCond(const Tensor &cond) {
 // because the loop terminated early). When ``allocator`` is non-null, the
 // returned tensor stores its bytes in an allocator-owned ``RawBuffer``.
 Tensor StackScanOutput(const Tensors &per_iter, int64_t trip_count,
-                       RawBufferAllocator *allocator = nullptr) {
+                       RawBufferAllocator *allocator = nullptr, RuntimeContext *rt = nullptr,
+                       int output_slot = -1) {
   EXT_ENFORCE_INVALID(static_cast<int64_t>(per_iter.size()) >= trip_count,
                       "kernel::Loop: scan-output row is shorter than the effective trip count.");
   DataType dtype = DataType::UNDEFINED;
@@ -127,7 +128,9 @@ Tensor StackScanOutput(const Tensors &per_iter, int64_t trip_count,
   const std::size_t stacked_n_bytes =
       trip_count > 0 ? static_cast<std::size_t>(trip_count) * per_iter[0].size_bytes() : 0;
   Tensor stacked =
-      MakeOutputTensor(static_cast<int32_t>(dtype), stacked_shape, stacked_n_bytes, allocator);
+      rt ? rt->MakeOutputTensor(output_slot, static_cast<int32_t>(dtype), stacked_shape,
+                                stacked_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(dtype), stacked_shape, stacked_n_bytes, allocator);
   if (trip_count > 0 && elem_bytes > 0 && per_iter[0].size_bytes() > 0) {
     uint8_t *dst = stacked.mutable_bytes();
     for (int64_t t = 0; t < trip_count; ++t) {
@@ -150,14 +153,15 @@ Tensor StackScanOutput(const Tensors &per_iter, int64_t trip_count,
 Tensors AssembleLoopOutputs(int64_t trip_count, const Tensors &v_initial,
                             const Tensors &final_state,
                             const std::vector<Tensors> &scan_values_per_iter,
-                            RawBufferAllocator *allocator) {
+                            RawBufferAllocator *allocator, RuntimeContext *rt = nullptr) {
   Tensors out;
   out.reserve(final_state.size() + scan_values_per_iter.size());
   for (std::size_t i = 0; i < final_state.size(); ++i) {
     out.push_back(trip_count == 0 ? v_initial[i] : final_state[i]);
   }
-  for (const auto &row : scan_values_per_iter) {
-    out.push_back(StackScanOutput(row, trip_count, allocator));
+  for (std::size_t i = 0; i < scan_values_per_iter.size(); ++i) {
+    out.push_back(StackScanOutput(scan_values_per_iter[i], trip_count, allocator, rt,
+                                  static_cast<int>(final_state.size() + i)));
   }
   return out;
 }
@@ -172,7 +176,7 @@ Tensors AssembleLoopOutputs(int64_t trip_count, const Tensors &v_initial,
 //   * ``allocator`` specifies the optional allocator used for stacked scan outputs.
 Tensors RunLoopBody(const Tensor &M, const Tensor &cond, const Tensors &v_initial,
                     std::size_t num_scan_outputs, const Loop::BodyRunner &run_body,
-                    RawBufferAllocator *allocator) {
+                    RawBufferAllocator *allocator, RuntimeContext *rt = nullptr) {
   EXT_ENFORCE_INVALID(static_cast<bool>(run_body),
                       "kernel::Loop: 'run_body' callback must be callable.");
 
@@ -210,7 +214,7 @@ Tensors RunLoopBody(const Tensor &M, const Tensor &cond, const Tensors &v_initia
     ++trip_count;
   }
 
-  return AssembleLoopOutputs(trip_count, v_initial, state, scan_values, allocator);
+  return AssembleLoopOutputs(trip_count, v_initial, state, scan_values, allocator, rt);
 }
 
 } // namespace
@@ -280,7 +284,7 @@ Tensors Loop::operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond
 
   const int64_t trip_count = EffectiveTripCount(M, cond, per_iter_count);
   return AssembleLoopOutputs(trip_count, v_initial, final_state, scan_values_per_iter,
-                             rt.allocator());
+                             rt.execution_allocator(), &rt);
 }
 
 Tensors Loop::operator()(const Tensor &M, const Tensor &cond, const Tensors &v_initial,
@@ -291,7 +295,7 @@ Tensors Loop::operator()(const Tensor &M, const Tensor &cond, const Tensors &v_i
 Tensors Loop::operator()(RuntimeContext &rt, const Tensor &M, const Tensor &cond,
                          const Tensors &v_initial, std::size_t num_scan_outputs,
                          const BodyRunner &run_body) const {
-  return RunLoopBody(M, cond, v_initial, num_scan_outputs, run_body, rt.allocator());
+  return RunLoopBody(M, cond, v_initial, num_scan_outputs, run_body, rt.execution_allocator(), &rt);
 }
 
 Tensors Loop::operator()(RuntimeContext &rt, const GraphProto &body, const Tensor &M,
@@ -316,9 +320,9 @@ Tensors Loop::operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSes
     std::vector<std::pair<std::string, Tensor>> bindings;
     bindings.reserve(2 + n);
     bindings.emplace_back(body.input(0).name(),
-                          MakeInt64Scalar(body.input(0).name(), iter, rt.allocator()));
+                          MakeInt64Scalar(body.input(0).name(), iter, rt.execution_allocator()));
     bindings.emplace_back(body.input(1).name(),
-                          MakeBoolScalar(body.input(1).name(), cond_in, rt.allocator()));
+                          MakeBoolScalar(body.input(1).name(), cond_in, rt.execution_allocator()));
     for (std::size_t i = 0; i < n; ++i) {
       Tensor t = state[i];
       t.name = body.input(static_cast<int>(2 + i)).name();
@@ -327,7 +331,7 @@ Tensors Loop::operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSes
     return session.Run(std::move(bindings), rt, "body");
   };
 
-  Tensors outputs = RunLoopBody(M, cond, v_initial, k, run_body, rt.allocator());
+  Tensors outputs = RunLoopBody(M, cond, v_initial, k, run_body, rt.execution_allocator(), &rt);
 
   // When the loop runs zero iterations the kernel produces UNDEFINED-typed
   // empty scan outputs (it has no template to seed dtype/shape from). Patch

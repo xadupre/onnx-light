@@ -99,8 +99,8 @@ Tensor Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allo
     element_count *= d;
   }
   const size_t out_n_bytes = static_cast<std::size_t>(element_count) * elem_size;
-  Tensor out =
-      MakeOutputTensor(data.data_type, out_shape, out_n_bytes, rt ? rt->allocator() : nullptr);
+  Tensor out = (rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
+                   : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr));
   (*this)(data, shape, allowzero, out);
   return out;
 }

@@ -195,7 +195,8 @@ public:
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
-  void operator()(const Tensor &x, Tensor &output) const;
+  void operator()(const Tensor &x, Tensor &output,
+                  RawBufferAllocator *temporary_allocator = nullptr) const;
 
   /// The output buffer is smaller than the input (drops the trailing two
   /// dimensions); storage can never be shared with the input.

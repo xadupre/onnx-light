@@ -30,7 +30,7 @@ namespace {
 //      top-left corner of a zero buffer of shape ``output_shape``.
 Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices, const Shape &kernel_shape,
                     const Shape &strides_in, const Shape &pads_in,
-                    const Shape *explicit_output_shape, RawBufferAllocator *allocator) {
+                    const Shape *explicit_output_shape, RuntimeContext *rt) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::MaxUnpool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(indices.data_type == static_cast<int32_t>(DataType::INT64),
@@ -91,7 +91,8 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices, const Shape &kernel_
   // std::vector when no allocator is attached). The allocator-backed path is
   // not guaranteed zeroed, so the buffer is explicitly zero-filled before the
   // scatter below.
-  detail::TemporaryTypedBuffer<float> y_inferred_buf(static_cast<size_t>(inferred_total), allocator,
+  detail::TemporaryTypedBuffer<float> y_inferred_buf(static_cast<size_t>(inferred_total),
+                                                     rt ? rt->execution_allocator() : nullptr,
                                                      "kernel::MaxUnpool y_inferred");
   float *y_inferred = y_inferred_buf.data();
   std::fill(y_inferred, y_inferred + static_cast<size_t>(inferred_total), 0.0f);
@@ -106,8 +107,11 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices, const Shape &kernel_
   }
 
   if (explicit_output_shape == nullptr) {
-    Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), inferred_shape,
-                                  static_cast<size_t>(inferred_total) * sizeof(float), allocator);
+    const size_t out_n_bytes = static_cast<size_t>(inferred_total) * sizeof(float);
+    Tensor out = rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), inferred_shape,
+                                           out_n_bytes)
+                    : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), inferred_shape,
+                                       out_n_bytes, nullptr);
     std::memcpy(out.mutable_bytes(), y_inferred,
                 static_cast<size_t>(inferred_total) * sizeof(float));
     return out;
@@ -128,8 +132,11 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices, const Shape &kernel_
   for (int64_t d : *explicit_output_shape) {
     out_total *= d;
   }
-  Tensor out = MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), *explicit_output_shape,
-                                static_cast<size_t>(out_total) * sizeof(float), allocator);
+  const size_t out_n_bytes = static_cast<size_t>(out_total) * sizeof(float);
+  Tensor out = rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT),
+                                         *explicit_output_shape, out_n_bytes)
+                  : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), *explicit_output_shape,
+                                     out_n_bytes, nullptr);
   float *po = reinterpret_cast<float *>(out.mutable_bytes());
   std::fill(po, po + static_cast<size_t>(out_total), 0.0f);
 
@@ -166,7 +173,7 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices, const Shape &kernel_
 Tensor MaxUnpool::operator()(const Tensor &x, const Tensor &indices, const Shape &kernel_shape,
                              const Shape &strides, const Shape &pads, RuntimeContext *rt) const {
   return RunMaxUnpool(x, indices, kernel_shape, strides, pads, /*explicit_output_shape=*/nullptr,
-                      rt != nullptr ? rt->allocator() : nullptr);
+                      rt);
 }
 
 Tensor MaxUnpool::operator()(const Tensor &x, const Tensor &indices, const Tensor &output_shape,
@@ -184,8 +191,7 @@ Tensor MaxUnpool::operator()(const Tensor &x, const Tensor &indices, const Tenso
   for (size_t i = 0; i < shape_vec.size(); ++i) {
     shape_vec[i] = posh[i];
   }
-  return RunMaxUnpool(x, indices, kernel_shape, strides, pads, &shape_vec,
-                      rt != nullptr ? rt->allocator() : nullptr);
+  return RunMaxUnpool(x, indices, kernel_shape, strides, pads, &shape_vec, rt);
 }
 
 void MaxUnpool::Run(RuntimeContext &rt) {

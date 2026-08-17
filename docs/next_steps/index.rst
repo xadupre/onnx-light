@@ -11,7 +11,6 @@ Next Steps
     :caption: In progress
 
     2026-08_graph_builder_optimization
-    2026-08_buffer_reuse_arena
 
 .. toctree::
     :maxdepth: 1
@@ -38,3 +37,4 @@ Next Steps
     2026-07_onnxruntime_onnx_light
     2026-08_proto_binary_size
     2026-08_processor_aware_kernel_tuning
+    2026-08_buffer_reuse_arena

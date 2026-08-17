@@ -5,7 +5,9 @@ Buffer-reuse arenas
 
 :Date: 2026-08
 
-**implementation in progress**
+**implementation complete**
+
+The resulting arena design is described in :ref:`l-design-arenas`.
 
 Objective
 +++++++++

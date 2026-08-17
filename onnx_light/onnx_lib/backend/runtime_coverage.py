@@ -121,10 +121,9 @@ _ORT_SKIP_CASES = frozenset({"test_cc_shape_inference_shape_identity_unsqueeze"}
 
 def _ort_fail_error(ort: Any) -> type[Exception]:
     """Returns the ONNX Runtime model-load failure exception type."""
-    try:
-        return ort.capi.onnxruntime_pybind11_state.Fail
-    except AttributeError:
-        return Exception
+    capi = getattr(ort, "capi", None)
+    state = getattr(capi, "onnxruntime_pybind11_state", None)
+    return getattr(state, "Fail", Exception)
 
 
 @cache

@@ -5,8 +5,16 @@ Benchmark Abs: onnxruntime vs onnx-light
 ========================================
 
 This example compares the built-in :class:`Abs` kernel in ``onnx-light`` with
-``onnxruntime`` and :func:`numpy.abs` for ``float32`` vectors ranging from one
-hundred to one hundred million elements.
+``onnxruntime`` and :func:`numpy.abs` for vectors ranging from one hundred to
+one hundred million elements. The comparison is repeated for three element
+types: ``float32``, ``float16`` and ``bfloat16``. The ``bfloat16`` values rely
+on the :mod:`ml_dtypes` NumPy extension, which provides a native ``bfloat16``
+dtype.
+
+``onnxruntime`` only ships a CPU ``Abs`` implementation for ``float32`` and
+``float16``; there is no ``bfloat16`` kernel. The benchmark therefore skips the
+``onnxruntime`` measurement for ``bfloat16`` and uses :func:`numpy.abs` as the
+baseline for that element type instead.
 
 Initialization and execution are reported separately. Constructing an
 ``onnx-light`` :class:`~onnx_light.onnx.reference.ReferenceEvaluator` is
@@ -28,6 +36,7 @@ import os
 import time
 
 import matplotlib.pyplot
+import ml_dtypes
 import numpy
 import onnxruntime
 from onnx_light.onnx import TensorProto, checker, helper
@@ -37,15 +46,31 @@ from onnx_light.onnx_py import _onnxpykernels
 runtime = _onnxpykernels.runtime
 ORT_MAX_IR_VERSION = 13
 
+# %%
+# Element types under test
+# ------------------------
+#
+# Each entry holds the label used in the report, the ONNX ``TensorProto`` type,
+# the matching NumPy dtype and whether ``onnxruntime`` provides a CPU ``Abs``
+# kernel for that type. ``bfloat16`` is materialized through
+# :mod:`ml_dtypes`; ``onnxruntime`` has no ``bfloat16`` ``Abs`` kernel, so it is
+# excluded from that comparison.
 
-def make_abs_model():
-    """Creates a dynamic one-dimensional Abs model."""
+DTYPES = [
+    ("float32", TensorProto.FLOAT, numpy.dtype(numpy.float32), True),
+    ("float16", TensorProto.FLOAT16, numpy.dtype(numpy.float16), True),
+    ("bfloat16", TensorProto.BFLOAT16, numpy.dtype(ml_dtypes.bfloat16), False),
+]
+
+
+def make_abs_model(elem_type: int):
+    """Creates a dynamic one-dimensional Abs model for a given element type."""
 
     graph = helper.make_graph(
         [helper.make_node("Abs", ["X"], ["Y"])],
         "abs_benchmark",
-        [helper.make_tensor_value_info("X", TensorProto.FLOAT, ["N"])],
-        [helper.make_tensor_value_info("Y", TensorProto.FLOAT, ["N"])],
+        [helper.make_tensor_value_info("X", elem_type, ["N"])],
+        [helper.make_tensor_value_info("Y", elem_type, ["N"])],
     )
     model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
     model.ir_version = min(model.ir_version, ORT_MAX_IR_VERSION)
@@ -84,67 +109,11 @@ def measure_pair(first, second, repeat: int, warmup: int = 3) -> tuple[float, fl
 
 
 # %%
-# Create both runtimes
-# --------------------
-#
-# The model is serialized before either timer starts. The setup measurements
-# therefore compare runtime construction rather than model generation.
-
-model = make_abs_model()
-model_bytes = model.SerializeToString()
-
-start = time.perf_counter()
-ort_session = onnxruntime.InferenceSession(model_bytes, providers=["CPUExecutionProvider"])
-ort_setup_time = time.perf_counter() - start
-
-start = time.perf_counter()
-onnx_light_session = ReferenceEvaluator(model)
-onnx_light_setup_time = time.perf_counter() - start
-
-print(f"setup: onnxruntime InferenceSession = {ort_setup_time * 1e3:.2f} ms")
-print(f"setup: onnx-light ReferenceEvaluator = {onnx_light_setup_time * 1e3:.2f} ms")
-
-
-def run_onnx_light(values):
-    """Runs the built-in onnx-light Abs kernel."""
-
-    return onnx_light_session.run(None, {"X": values})[0]
-
-
-def make_input_tensor(values):
-    """Builds the named input :class:`Tensor` fed to ``runtime.run_model``."""
-
-    return runtime.tensor_from_numpy(
-        "X", int(TensorProto.FLOAT), list(values.shape), values.view(numpy.uint8)
-    )
-
-
-def run_onnx_light_run_model_tensor(tensor):
-    """Runs the whole model through ``runtime.run_model`` with a pre-built
-    :class:`Tensor` input and returns the output :class:`Tensor` directly.
-
-    No NumPy conversion happens inside the timed region: the input tensor is
-    constructed once beforehand and the output is left as a :class:`Tensor`, so
-    the measurement reflects the raw model-execution cost of the API.
-    """
-
-    (output,) = runtime.run_model(model, [tensor])
-    return output
-
-
-def run_onnxruntime(values):
-    """Runs the ONNX Runtime Abs kernel."""
-
-    return ort_session.run(None, {"X": values})[0]
-
-
-# %%
-# Measure steady-state execution
-# ------------------------------
+# Measurement grid
+# ----------------
 #
 # Normal execution uses the complete logarithmic grid. Documentation tests use
-# two small vectors to keep the gallery build fast. Both runtimes receive the
-# same input, are warmed before timing, and alternate which runtime runs first.
+# two small vectors to keep the gallery build fast.
 
 if os.environ.get("UNITTEST_GOING") == "1":
     size_grid = [100, 1_000]
@@ -155,96 +124,197 @@ else:
     minimum_repeat = 7
     warmup = 3
 
-random_generator = numpy.random.default_rng(0)
-rows = []
-for size in size_grid:
-    values = random_generator.uniform(-100.0, 100.0, size=size).astype(numpy.float32)
-    expected = numpy.abs(values)
-    repeat = max(minimum_repeat, min(200, 2_000_000 // size))
 
-    numpy_time = measure(lambda values=values: numpy.abs(values), repeat, warmup)
-    onnx_light_time, ort_time = measure_pair(
-        lambda values=values: run_onnx_light(values),
-        lambda values=values: run_onnxruntime(values),
-        repeat,
-        warmup,
-    )
-    input_tensor = make_input_tensor(values)
-    run_model_tensor_time = measure(
-        lambda tensor=input_tensor: run_onnx_light_run_model_tensor(tensor), repeat, warmup
-    )
+def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -> dict:
+    """Benchmarks the Abs kernel for a single element type.
 
-    numpy.testing.assert_array_equal(run_onnx_light(values), expected)
-    numpy.testing.assert_array_equal(run_onnxruntime(values), expected)
-    tensor_output = run_onnx_light_run_model_tensor(input_tensor)
-    numpy.testing.assert_array_equal(
-        runtime.tensor_to_numpy(tensor_output).view(numpy.float32).reshape(values.shape), expected
-    )
-    rows.append((size, numpy_time, onnx_light_time, ort_time, run_model_tensor_time))
-    print(
-        f"size={size:>9} | numpy={numpy_time * 1e6:10.2f} us | "
-        f"onnx-light={onnx_light_time * 1e6:10.2f} us | "
-        f"run_model(Tensor)={run_model_tensor_time * 1e6:10.2f} us | "
-        f"onnxruntime={ort_time * 1e6:10.2f} us | "
-        f"onnx-light / onnxruntime={onnx_light_time / ort_time:5.2f}x"
-    )
+    Both runtimes receive the same input, are warmed before timing, and
+    alternate which runtime runs first. ``onnxruntime`` is only exercised when
+    it provides a CPU ``Abs`` kernel for ``elem_type``.
 
-sizes = numpy.array([row[0] for row in rows])
-numpy_times = numpy.array([row[1] for row in rows])
-onnx_light_times = numpy.array([row[2] for row in rows])
-ort_times = numpy.array([row[3] for row in rows])
-run_model_tensor_times = numpy.array([row[4] for row in rows])
+    Returns:
+        A mapping with the measured ``sizes`` and, for each backend, the
+        median execution times. ``onnxruntime`` times are ``None`` when the
+        element type is unsupported.
+    """
+
+    model = make_abs_model(elem_type)
+    model_bytes = model.SerializeToString()
+
+    onnx_light_session = ReferenceEvaluator(model)
+    ort_session = None
+    if ort_supported:
+        ort_session = onnxruntime.InferenceSession(
+            model_bytes, providers=["CPUExecutionProvider"]
+        )
+
+    def run_onnx_light(values):
+        """Runs the built-in onnx-light Abs kernel."""
+
+        return onnx_light_session.run(None, {"X": values})[0]
+
+    def make_input_tensor(values):
+        """Builds the named input :class:`Tensor` fed to ``runtime.run_model``."""
+
+        return runtime.tensor_from_numpy(
+            "X", int(elem_type), list(values.shape), values.view(numpy.uint8)
+        )
+
+    def run_onnx_light_run_model_tensor(tensor):
+        """Runs the whole model through ``runtime.run_model`` with a pre-built
+        :class:`Tensor` input and returns the output :class:`Tensor` directly."""
+
+        (output,) = runtime.run_model(model, [tensor])
+        return output
+
+    def run_onnxruntime(values):
+        """Runs the ONNX Runtime Abs kernel."""
+
+        return ort_session.run(None, {"X": values})[0]
+
+    random_generator = numpy.random.default_rng(0)
+    rows = []
+    for size in size_grid:
+        values = random_generator.uniform(-100.0, 100.0, size=size).astype(np_dtype)
+        expected = numpy.abs(values)
+        repeat = max(minimum_repeat, min(200, 2_000_000 // size))
+
+        numpy_time = measure(lambda values=values: numpy.abs(values), repeat, warmup)
+        if ort_supported:
+            onnx_light_time, ort_time = measure_pair(
+                lambda values=values: run_onnx_light(values),
+                lambda values=values: run_onnxruntime(values),
+                repeat,
+                warmup,
+            )
+        else:
+            onnx_light_time = measure(
+                lambda values=values: run_onnx_light(values), repeat, warmup
+            )
+            ort_time = None
+        input_tensor = make_input_tensor(values)
+        run_model_tensor_time = measure(
+            lambda tensor=input_tensor: run_onnx_light_run_model_tensor(tensor), repeat, warmup
+        )
+
+        numpy.testing.assert_array_equal(run_onnx_light(values), expected)
+        if ort_supported:
+            numpy.testing.assert_array_equal(run_onnxruntime(values), expected)
+        tensor_output = run_onnx_light_run_model_tensor(input_tensor)
+        numpy.testing.assert_array_equal(
+            runtime.tensor_to_numpy(tensor_output).view(np_dtype).reshape(values.shape), expected
+        )
+        rows.append((size, numpy_time, onnx_light_time, ort_time, run_model_tensor_time))
+        ort_report = "n/a" if ort_time is None else f"{ort_time * 1e6:10.2f} us"
+        ratio_report = "n/a" if ort_time is None else f"{onnx_light_time / ort_time:5.2f}x"
+        print(
+            f"[{label:>8}] size={size:>9} | numpy={numpy_time * 1e6:10.2f} us | "
+            f"onnx-light={onnx_light_time * 1e6:10.2f} us | "
+            f"run_model(Tensor)={run_model_tensor_time * 1e6:10.2f} us | "
+            f"onnxruntime={ort_report} | onnx-light / onnxruntime={ratio_report}"
+        )
+
+    return {
+        "label": label,
+        "ort_supported": ort_supported,
+        "sizes": numpy.array([row[0] for row in rows]),
+        "numpy_times": numpy.array([row[1] for row in rows]),
+        "onnx_light_times": numpy.array([row[2] for row in rows]),
+        "ort_times": None if not ort_supported else numpy.array([row[3] for row in rows]),
+        "run_model_tensor_times": numpy.array([row[4] for row in rows]),
+    }
+
+
+# %%
+# Measure steady-state execution for every element type
+# -----------------------------------------------------
+
+results = [benchmark_dtype(*entry) for entry in DTYPES]
 
 # %%
 # Plot execution time and relative speed
 # --------------------------------------
 #
-# The left panel shows raw inference time. The right panel divides the
-# ONNX Runtime time by each backend's time: values above one are faster than
-# ONNX Runtime, while values below one are slower.
+# One row is drawn per element type. The left panel shows raw inference time.
+# The right panel shows the speed-up relative to a baseline: ``onnxruntime``
+# when it provides a kernel, otherwise :func:`numpy.abs`. Values above one are
+# faster than the baseline, while values below one are slower.
 
-figure, (time_axis, speedup_axis) = matplotlib.pyplot.subplots(1, 2, figsize=(12, 4.5))
-
-time_axis.plot(sizes, numpy_times * 1e6, "o--", label="numpy", color="#9b7ec8")
-time_axis.plot(sizes, onnx_light_times * 1e6, "o-", label="onnx-light", color="#5cb85c")
-time_axis.plot(
-    sizes, run_model_tensor_times * 1e6, "s:", label="run_model (Tensor)", color="#1b5e20"
+figure, axes = matplotlib.pyplot.subplots(
+    len(results), 2, figsize=(12, 4.5 * len(results)), squeeze=False
 )
-time_axis.plot(sizes, ort_times * 1e6, "o-", label="onnxruntime", color="#f4a259")
-time_axis.set_xscale("log")
-time_axis.set_yscale("log")
-time_axis.set_xlabel("array size (elements)")
-time_axis.set_ylabel("time (microseconds)")
-time_axis.set_title("Abs execution time")
-time_axis.legend()
 
-speedup_axis.plot(sizes, ort_times / numpy_times, "o--", label="numpy", color="#9b7ec8")
-onnx_light_speedups = ort_times / onnx_light_times
-assert onnx_light_speedups[0] > 1.0, (
-    "onnx-light is expected to be faster than onnxruntime for the first (smallest) size, "
-    f"got a speed-up of {onnx_light_speedups[0]:.2f}x for size {sizes[0]}"
-)
-speedup_axis.plot(sizes, onnx_light_speedups, "o-", label="onnx-light", color="#5cb85c")
-for size, speedup in zip(sizes, onnx_light_speedups, strict=True):
-    speedup_axis.annotate(
-        f"{speedup:.2f}x",
-        (size, speedup),
-        xytext=(0, 6),
-        textcoords="offset points",
-        ha="center",
-        fontsize=7,
-        color="#3d803d",
+for row_index, result in enumerate(results):
+    label = result["label"]
+    sizes = result["sizes"]
+    numpy_times = result["numpy_times"]
+    onnx_light_times = result["onnx_light_times"]
+    ort_times = result["ort_times"]
+    run_model_tensor_times = result["run_model_tensor_times"]
+
+    time_axis = axes[row_index][0]
+    speedup_axis = axes[row_index][1]
+
+    time_axis.plot(sizes, numpy_times * 1e6, "o--", label="numpy", color="#9b7ec8")
+    time_axis.plot(sizes, onnx_light_times * 1e6, "o-", label="onnx-light", color="#5cb85c")
+    time_axis.plot(
+        sizes, run_model_tensor_times * 1e6, "s:", label="run_model (Tensor)", color="#1b5e20"
     )
-speedup_axis.plot(
-    sizes, ort_times / run_model_tensor_times, "s:", label="run_model (Tensor)", color="#1b5e20"
+    if ort_times is not None:
+        time_axis.plot(sizes, ort_times * 1e6, "o-", label="onnxruntime", color="#f4a259")
+    time_axis.set_xscale("log")
+    time_axis.set_yscale("log")
+    time_axis.set_xlabel("array size (elements)")
+    time_axis.set_ylabel("time (microseconds)")
+    time_axis.set_title(f"Abs execution time ({label})")
+    time_axis.legend()
+
+    if ort_times is not None:
+        baseline = ort_times
+        baseline_name = "onnxruntime"
+    else:
+        baseline = numpy_times
+        baseline_name = "numpy"
+
+    speedup_axis.plot(sizes, baseline / numpy_times, "o--", label="numpy", color="#9b7ec8")
+    onnx_light_speedups = baseline / onnx_light_times
+    speedup_axis.plot(sizes, onnx_light_speedups, "o-", label="onnx-light", color="#5cb85c")
+    for size, speedup in zip(sizes, onnx_light_speedups, strict=True):
+        speedup_axis.annotate(
+            f"{speedup:.2f}x",
+            (size, speedup),
+            xytext=(0, 6),
+            textcoords="offset points",
+            ha="center",
+            fontsize=7,
+            color="#3d803d",
+        )
+    speedup_axis.plot(
+        sizes,
+        baseline / run_model_tensor_times,
+        "s:",
+        label="run_model (Tensor)",
+        color="#1b5e20",
+    )
+    if ort_times is not None:
+        speedup_axis.plot(sizes, baseline / ort_times, "o-", label="onnxruntime", color="#f4a259")
+    speedup_axis.axhline(1.0, color="grey", linewidth=0.8, linestyle=":")
+    speedup_axis.set_xscale("log")
+    speedup_axis.set_xlabel("array size (elements)")
+    speedup_axis.set_ylabel(f"speed-up vs {baseline_name}")
+    speedup_axis.set_title(f"Abs speed-up ({label}, {baseline_name} = 1)")
+    speedup_axis.legend()
+
+# %%
+# ``onnx-light`` is expected to beat ``onnxruntime`` on the smallest ``float32``
+# vector, where the fixed per-call overhead dominates.
+
+float32_result = results[0]
+float32_speedups = float32_result["ort_times"] / float32_result["onnx_light_times"]
+assert float32_speedups[0] > 1.0, (
+    "onnx-light is expected to be faster than onnxruntime for the first (smallest) size, "
+    f"got a speed-up of {float32_speedups[0]:.2f}x for size {float32_result['sizes'][0]}"
 )
-speedup_axis.plot(sizes, ort_times / ort_times, "o-", label="onnxruntime", color="#f4a259")
-speedup_axis.axhline(1.0, color="grey", linewidth=0.8, linestyle=":")
-speedup_axis.set_xscale("log")
-speedup_axis.set_xlabel("array size (elements)")
-speedup_axis.set_ylabel("speed-up vs onnxruntime")
-speedup_axis.set_title("Abs speed-up (onnxruntime = 1)")
-speedup_axis.legend()
 
 figure.tight_layout()
 figure.savefig("plot_abs_benchmark.png")

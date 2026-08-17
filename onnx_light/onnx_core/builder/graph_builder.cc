@@ -992,6 +992,125 @@ std::size_t GraphBuilder::RemoveDuplicateNodesImpl(
   return removed + local_removed;
 }
 
+namespace {
+
+// Returns true when ``node`` is a default-domain Shape or Size node reading a
+// single named input, i.e. a node that only inspects its input's metadata.
+bool IsShapeOrSizeNode(const NodeProto &node) {
+  const std::string domain = node.domain().empty() ? std::string() : node.domain().value();
+  if (!domain.empty()) {
+    return false;
+  }
+  const std::string &op_type = node.op_type().value();
+  if (op_type != "Shape" && op_type != "Size") {
+    return false;
+  }
+  return node.input().size() == 1 && !std::string(node.input(0)).empty();
+}
+
+} // namespace
+
+std::size_t GraphBuilder::MoveShapeAndSizeNodes() { return MoveShapeAndSizeNodesImpl(true); }
+
+std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive) {
+  // Reorder nested builders first so each scope hoists its own Shape/Size nodes.
+  std::size_t moved = 0;
+  if (recursive) {
+    for (const auto &function : local_functions_) {
+      moved += function->MoveShapeAndSizeNodes();
+    }
+    for (const auto &subgraph : subgraphs_) {
+      moved += subgraph->MoveShapeAndSizeNodes();
+    }
+  }
+
+  const std::size_t num_nodes = nodes_.size();
+  if (num_nodes == 0) {
+    return moved;
+  }
+
+  // Maps a value name to the index of the node producing it.
+  std::unordered_map<std::string, std::size_t> producer_of;
+  for (std::size_t i = 0; i < num_nodes; ++i) {
+    const NodeProto &node = nodes_[i];
+    for (std::size_t j = 0; j < node.output().size(); ++j) {
+      std::string out(node.output(static_cast<std::size_t>(j)));
+      if (!out.empty()) {
+        producer_of.emplace(std::move(out), i);
+      }
+    }
+  }
+
+  // For each Shape/Size node whose input has a producing node, record it as a
+  // child to emit right after that producer, preserving their relative order.
+  std::vector<std::vector<std::size_t>> children(num_nodes);
+  std::vector<bool> is_relocatable(num_nodes, false);
+  std::size_t relocatable = 0;
+  for (std::size_t i = 0; i < num_nodes; ++i) {
+    const NodeProto &node = nodes_[i];
+    if (!IsShapeOrSizeNode(node)) {
+      continue;
+    }
+    auto it = producer_of.find(std::string(node.input(0)));
+    // A producer always precedes its consumer in the insertion (topological)
+    // order, so it < i; guard against unexpected forward references anyway.
+    if (it == producer_of.end() || it->second >= i) {
+      continue;
+    }
+    children[it->second].push_back(i);
+    is_relocatable[i] = true;
+    ++relocatable;
+  }
+
+  if (relocatable == 0) {
+    return moved;
+  }
+
+  // Emit node indices in order; after emitting a node, emit its attached
+  // Shape/Size children (which may themselves have attached children, e.g. a
+  // Size reading a Shape output), so chains are relocated in a single pass.
+  std::vector<std::size_t> order;
+  order.reserve(num_nodes);
+  std::vector<std::size_t> stack;
+  for (std::size_t i = 0; i < num_nodes; ++i) {
+    if (is_relocatable[i]) {
+      continue;
+    }
+    stack.push_back(i);
+    while (!stack.empty()) {
+      const std::size_t index = stack.back();
+      stack.pop_back();
+      order.push_back(index);
+      const std::vector<std::size_t> &kids = children[index];
+      // Push children in reverse so they are emitted in their recorded order.
+      for (std::size_t k = kids.size(); k > 0; --k) {
+        stack.push_back(kids[k - 1]);
+      }
+    }
+  }
+
+  // Count only relocatable nodes whose position actually changed, so a second
+  // pass over an already-tightened graph reports nothing moved.
+  std::size_t local_moved = 0;
+  for (std::size_t new_index = 0; new_index < order.size(); ++new_index) {
+    if (is_relocatable[order[new_index]] && order[new_index] != new_index) {
+      ++local_moved;
+    }
+  }
+  if (local_moved == 0) {
+    return moved;
+  }
+
+  utils::RepeatedProtoField<NodeProto> ordered;
+  ordered.reserve(num_nodes);
+  for (std::size_t index : order) {
+    ordered.push_back(std::move(nodes_[index]));
+  }
+  nodes_ = std::move(ordered);
+
+  return moved + local_moved;
+}
+
 GraphBuilder *GraphBuilder::FindCalledFunction(const std::vector<GraphBuilder *> &functions,
                                                const NodeProto &node) {
   const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
@@ -1783,6 +1902,9 @@ void GraphBuilder::Finalize(GraphProto &graph) {
 }
 
 GraphProto GraphBuilder::ToGraph() {
+  // Hoist Shape/Size nodes next to their producers before exporting so the
+  // finalisation analyses (in-place reuse, peak memory) see the tighter order.
+  MoveShapeAndSizeNodes();
   GraphProto graph = BuildGraph();
   Finalize(graph);
   return graph;

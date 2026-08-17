@@ -357,6 +357,70 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(body_graph.node[1].input[0], n1)
         self.assertEqual(body_graph.node[1].input[1], n1)
 
+    def test_move_shape_and_size_nodes(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 3])
+        (p,) = builder.make_node("Neg", ["x"])
+        (a,) = builder.make_node("Add", [p, p])
+        # Shape reads p but is inserted after an unrelated node; it must move
+        # right after its producer, and the Size chained on it follows.
+        (sh,) = builder.make_node("Shape", [p])
+        (sz,) = builder.make_node("Size", [sh])
+        builder.make_output(a)
+        builder.make_output(sz)
+
+        self.assertEqual(
+            [n.op_type for n in builder.build_graph().node], ["Neg", "Add", "Shape", "Size"]
+        )
+        self.assertEqual(builder.move_shape_and_size_nodes(), 2)
+        self.assertEqual(
+            [n.op_type for n in builder.build_graph().node], ["Neg", "Shape", "Size", "Add"]
+        )
+        # A second pass leaves the already-tightened graph untouched.
+        self.assertEqual(builder.move_shape_and_size_nodes(), 0)
+
+    def test_move_shape_and_size_nodes_keeps_graph_input_reader(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 3])
+        # Shape reads a graph input (no producing node), so it stays in place.
+        (n,) = builder.make_node("Neg", ["x"])
+        (sh,) = builder.make_node("Shape", ["x"])
+        builder.make_output(n)
+        builder.make_output(sh)
+
+        self.assertEqual(builder.move_shape_and_size_nodes(), 0)
+        self.assertEqual([n.op_type for n in builder.build_graph().node], ["Neg", "Shape"])
+
+    def test_move_shape_and_size_nodes_runs_on_export(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 3])
+        (p,) = builder.make_node("Neg", ["x"])
+        (a,) = builder.make_node("Add", [p, p])
+        (sh,) = builder.make_node("Shape", [p])
+        builder.make_output(a)
+        builder.make_output(sh)
+
+        # to_onnx hoists Shape next to its producer before exporting.
+        model = builder.to_onnx("model")
+        self.assertEqual([n.op_type for n in model.graph.node], ["Neg", "Shape", "Add"])
+
+    def test_move_shape_and_size_nodes_recurses_into_subgraphs(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2, 3])
+        (top,) = builder.make_node("Neg", ["x"])
+        builder.make_output(top)
+
+        body = builder.make_subgraph("body")
+        body.make_input("a", FLOAT, [2, 3])
+        (p,) = body.make_node("Neg", ["a"])
+        (u,) = body.make_node("Add", [p, p])
+        (sh,) = body.make_node("Shape", [p])
+        body.make_output(u)
+        body.make_output(sh)
+
+        self.assertEqual(builder.move_shape_and_size_nodes(), 1)
+        self.assertEqual([n.op_type for n in body.build_graph().node], ["Neg", "Shape", "Add"])
+
     def test_inline_local_functions(self):
         builder = GraphBuilder("g")
         # A local function computing Neg(Add(a, b)).

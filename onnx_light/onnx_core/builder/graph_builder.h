@@ -390,6 +390,31 @@ public:
   ///         pruned from nested subgraphs and local functions.
   std::size_t RemoveDuplicateNodes();
 
+  /// Moves every :onnx:`Shape` and :onnx:`Size` node right after the node that
+  /// produces the tensor it reads.
+  ///
+  /// A default-domain ``Shape`` or ``Size`` node only inspects the metadata
+  /// (shape / element count) of its single input, so it can run as soon as that
+  /// input exists. Emitting it immediately after its producer -- instead of
+  /// wherever it happened to be inserted -- lets the producer's output be
+  /// released as early as possible, which improves the peak-memory analysis run
+  /// at finalisation. This pass is called automatically before the builder is
+  /// exported into an ONNX proto.
+  ///
+  /// Each such node is relocated to directly follow the node producing its
+  /// input, preserving the relative order of several ``Shape`` / ``Size`` nodes
+  /// that share the same producer. A node whose input is a graph input or an
+  /// initializer (i.e. it has no producing node) is left in place. Because the
+  /// producer always precedes its consumer in the insertion (topological) order,
+  /// a node is only ever moved earlier, so the result stays topologically valid.
+  ///
+  /// The pass is recursive: it descends into nested subgraphs and local
+  /// functions to reorder their own ``Shape`` / ``Size`` nodes as well.
+  ///
+  /// @return The total number of ``Shape`` / ``Size`` nodes moved, including
+  ///         those moved in nested subgraphs and local functions.
+  std::size_t MoveShapeAndSizeNodes();
+
   /// Inlines calls to local functions into the calling graph.
   ///
   /// A node calls a local function when its operator type and domain match a
@@ -573,6 +598,8 @@ private:
   std::size_t
   RemoveDuplicateNodesImpl(bool recursive,
                            std::unordered_map<std::string, std::string> *applied_renames = nullptr);
+
+  std::size_t MoveShapeAndSizeNodesImpl(bool recursive);
 
   std::size_t ConstantFoldNodes(const ConstantFoldingOptions &options,
                                 const std::unordered_set<std::string> &included_outputs);

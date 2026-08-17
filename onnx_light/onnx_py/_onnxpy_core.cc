@@ -2085,6 +2085,13 @@ void AddOnnxPyBuilder(nb::module_ &m) {
            "output is a declared graph output is kept, and nodes referencing control-flow "
            "subgraphs are never merged. The removal descends into nested subgraphs and local "
            "functions, and returns the total number of nodes removed.")
+      .def("move_shape_and_size_nodes", &GraphBuilder::MoveShapeAndSizeNodes,
+           "Moves every default-domain Shape or Size node right after the node producing the "
+           "tensor it reads, so the producer's output can be released as early as possible. Nodes "
+           "sharing a producer keep their relative order, and a node reading a graph input or "
+           "initializer (no producing node) is left in place. This pass runs automatically before "
+           "the builder is exported into an ONNX proto. It descends into nested subgraphs and "
+           "local functions, and returns the total number of nodes moved.")
       .def("inline_local_functions", &GraphBuilder::InlineLocalFunctions,
            nb::arg("include") = std::vector<std::pair<std::string, std::string>>{},
            nb::arg("exclude") = std::vector<std::pair<std::string, std::string>>{},

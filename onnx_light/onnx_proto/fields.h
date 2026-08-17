@@ -28,12 +28,25 @@ struct PrintOptions {
   /** Repeated fields with at most this many elements are printed as a bracketed list; all output
    * is always flat (no newlines). */
   int64_t inline_threshold = 9;
+  /** Maximum number of characters produced when printing a short representation (used by proto
+   * ``__repr__``). Printing stops as soon as the output reaches this bound and the text is
+   * terminated with an ellipsis. Zero (the default) means no limit. */
+  size_t max_short_repr_length = 0;
 };
 
 /** Returns true if a repeated field of the given size should be printed inline on a single row. */
 inline bool is_inline_size(const PrintOptions &options, size_t size) {
   return static_cast<int64_t>(size) <= options.inline_threshold;
 }
+
+/**
+ * Enforces ``options.max_short_repr_length`` on the text already accumulated in ``ss``. When the
+ * bound is exceeded, the stream content is truncated in place and terminated with an ellipsis.
+ *
+ * Returns:
+ *   True when the content was truncated, false otherwise.
+ */
+bool enforce_short_repr_length(std::stringstream &ss, const PrintOptions &options);
 
 /** Minimal unique_ptr-like holder used by generated proto containers. */
 template <typename T> class simple_unique_ptr {

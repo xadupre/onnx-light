@@ -464,6 +464,17 @@ class TestProtoRepr(ExtTestCase):
         value = repr(node)
         self.assertNotIn("\n", value)
 
+    def test_node_repr_long_is_truncated_with_ellipsis(self):
+        """Tests that a long NodeProto repr is truncated to the short length with an ellipsis."""
+        node = m.NodeProto()
+        node.op_type = "Relu"
+        node.input.extend(["x" * 30])
+        node.output.extend(["y" * 30])
+        value = repr(node)
+        self.assertNotIn("\n", value)
+        self.assertLessEqual(len(value), MAX_SHORT_REPR_LENGTH)
+        self.assertTrue(value.endswith("..."))
+
     def test_node_repr_no_double_comma_with_attribute(self):
         """Tests that NodeProto repr with attributes does not contain double commas."""
         node = m.NodeProto()
@@ -509,6 +520,15 @@ class TestProtoRepr(ExtTestCase):
         model.producer_name = "a" * 60
         value = repr(model)
         self.assertNotIn("\n", value)
+
+    def test_model_repr_long_is_truncated_with_ellipsis(self):
+        """Tests that a long ModelProto repr is truncated to the short length with an ellipsis."""
+        model = m.ModelProto()
+        model.producer_name = "a" * 60
+        value = repr(model)
+        self.assertNotIn("\n", value)
+        self.assertLessEqual(len(value), MAX_SHORT_REPR_LENGTH)
+        self.assertTrue(value.endswith("..."))
 
     def test_attribute_data_type(self):
         dt = m.AttributeProto.AttributeType.UNDEFINED

@@ -391,13 +391,18 @@ template <typename... Args>
 void write_proto_into_vector_string(std::stringstream &ss, utils::PrintOptions &options,
                                     const Args &...args) {
   ss << "{ ";
-  auto append_arg = [&ss, &options](const auto &arg) mutable {
-    if (arg.exist) {
-      write_into_stream(ss, options, arg.name, *arg.value);
+  bool truncated = false;
+  auto append_arg = [&ss, &options, &truncated](const auto &arg) mutable {
+    if (truncated || !arg.exist) {
+      return;
     }
+    write_into_stream(ss, options, arg.name, *arg.value);
+    truncated = utils::enforce_short_repr_length(ss, options);
   };
   (append_arg(args), ...);
-  ss << "}";
+  if (!truncated) {
+    ss << "}";
+  }
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

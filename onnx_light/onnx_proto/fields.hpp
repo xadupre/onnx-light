@@ -26,6 +26,8 @@ void RepeatedField<T>::PrintToStringStream(std::stringstream &ss,
       ss << p;
     }
     ss << " ";
+    if (enforce_short_repr_length(ss, options))
+      return;
   }
   ss << "]";
 }
@@ -106,6 +108,8 @@ void RepeatedProtoField<T>::PrintToStringStream(std::stringstream &ss,
   for (const auto &p : values_) {
     p->PrintToStringStream(ss, options);
     ss << " ";
+    if (enforce_short_repr_length(ss, options))
+      return;
   }
   ss << "]";
 }

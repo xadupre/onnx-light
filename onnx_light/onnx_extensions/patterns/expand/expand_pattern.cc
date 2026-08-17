@@ -310,7 +310,7 @@ ExpandSwapPattern::Apply(core::builder::GraphGraph &graph,
   }
 
   NodeProto unary = MakeNode(next_node.op_type().value().c_str(), unary_inputs, {new_name},
-                             next_node.domain().value().c_str(), name.c_str());
+                             next_node.domain().value().c_str(), (name + "--unary").c_str());
   for (const AttributeProto &attribute : next_node.attribute()) {
     unary.mutable_attribute()->push_back(attribute);
   }
@@ -318,7 +318,8 @@ ExpandSwapPattern::Apply(core::builder::GraphGraph &graph,
   utils::RepeatedProtoField<NodeProto> replacements;
   replacements.push_back(std::move(unary));
   replacements.push_back(MakeNode("Expand", {new_name, expand.input()[1].value()},
-                                  {next_node.output()[0].value()}, "", name.c_str()));
+                                  {next_node.output()[0].value()}, "",
+                                  (name + "--expand").c_str()));
   return replacements;
 }
 

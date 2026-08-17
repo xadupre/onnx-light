@@ -124,6 +124,10 @@ requests:
      - Transpose canonicalization and reordering
      - Ports ``TransposeTransposePattern`` and ``TransposeGatherPattern`` with
        rewrite/rejection tests, registration, and Python bindings.
+   * - `Issue #4509 <https://github.com/xadupre/onnx-light/issues/4509>`_
+     - Unsqueeze/Squeeze simplification
+     - Ports ``UnsqueezeUnsqueezePattern`` and ``SqueezeUnsqueezePattern`` with
+       rewrite/rejection tests, registration, and Python bindings.
 
 Graph structure on Graph
 ++++++++++++++++++++++++

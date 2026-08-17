@@ -306,12 +306,14 @@ private:
   /// read in :cpp:member:`required_inputs_`.
   void InitializeKernels(RuntimeContext &rt);
 
-  /// Normalizes every raw tensor output of ``node`` into
-  /// :cpp:member:`session_allocator_`, or into
-  /// :cpp:member:`session_io_allocator_` when ``node`` produces a declared
-  /// graph output and an I/O allocator is attached, then verifies allocator
-  /// ownership. Called after a node's kernel has run, once
-  /// :cpp:member:`session_allocator_` has been captured.
+  /// Normalizes every raw tensor output of ``node`` into the arena implied by
+  /// that output slot's role: a declared graph output (a name present in
+  /// :cpp:member:`output_names_set_`) is normalized into
+  /// :cpp:member:`session_io_allocator_` when an I/O allocator is attached,
+  /// every other (intermediate) output into :cpp:member:`session_allocator_`.
+  /// This is output-slot routing: a node producing both a declared output and
+  /// an intermediate keeps each value in its own arena. Called after a node's
+  /// kernel has run, once :cpp:member:`session_allocator_` has been captured.
   void VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const;
 
   /// Returns whether ``node`` produces at least one declared graph output

@@ -4516,6 +4516,117 @@ TEST(RunNodes, RuntimeSessionRoutesDeclaredOutputsToIOAllocator) {
   EXPECT_FLOAT_EQ(yp[2], 6.0f);
 }
 
+// A single node that produces BOTH a declared graph output and an intermediate
+// value routes each output slot to its own arena: the declared output stays in
+// the I/O allocator while the intermediate is kept in (migrated back to) the
+// execution allocator. This exercises the output-slot routing completion of
+// step 5 of the buffer-reuse arena plan: a mixed-output node must not pin its
+// intermediates in the I/O arena. Both output orders are covered — declared
+// first / intermediate second here, and the reverse in the next test.
+TEST(RunNodes, RuntimeSessionRoutesMixedOutputsPerSlotDeclaredFirst) {
+  core::runtime::SimpleRawBufferAllocator execution_alloc(8);
+  core::runtime::SimpleRawBufferAllocator io_alloc(8);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
+                                                         .io_allocator = &io_alloc});
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}, &execution_alloc));
+
+  // A single kernel produces two outputs from one node using the active
+  // allocator for both. The runtime resolves each slot's arena afterwards.
+  rt.RegisterCustomKernel("my.domain", "Fork", [](const NodeProto &node, RuntimeContext &ctx) {
+    const Tensor &in = ctx.Get(node.input(0));
+    const float *src = in.AsFloat();
+    std::vector<float> a(static_cast<size_t>(in.element_count()));
+    std::vector<float> b(static_cast<size_t>(in.element_count()));
+    for (size_t i = 0; i < a.size(); ++i) {
+      a[i] = src[i] * 2.0f;
+      b[i] = src[i] + 100.0f;
+    }
+    ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, a, ctx.allocator()));
+    ctx.Put(node.output(1), Tensor::FromFloat(node.output(1), in.shape, b, ctx.allocator()));
+  });
+
+  ModelProto model;
+  model.set_ir_version(10);
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *n = g->add_node();
+  n->set_op_type("Fork");
+  n->set_domain("my.domain");
+  n->add_input("x");
+  n->add_output("y");   // declared graph output
+  n->add_output("aux"); // intermediate, not a declared output
+  g->add_output()->set_name("y");
+
+  RuntimeSession session(model);
+  session.Run(rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  ASSERT_TRUE(rt.Has("aux"));
+  EXPECT_EQ(rt.Get("y").allocation_owner(), &io_alloc);
+  EXPECT_EQ(rt.Get("aux").allocation_owner(), &execution_alloc);
+  const float *yp = rt.Get("y").AsFloat();
+  EXPECT_FLOAT_EQ(yp[0], 2.0f);
+  EXPECT_FLOAT_EQ(yp[1], 4.0f);
+  EXPECT_FLOAT_EQ(yp[2], 6.0f);
+  const float *ap = rt.Get("aux").AsFloat();
+  EXPECT_FLOAT_EQ(ap[0], 101.0f);
+  EXPECT_FLOAT_EQ(ap[1], 102.0f);
+  EXPECT_FLOAT_EQ(ap[2], 103.0f);
+}
+
+// Same as above but with the reverse slot order (intermediate first, declared
+// output second), confirming the routing is per-slot and independent of order.
+TEST(RunNodes, RuntimeSessionRoutesMixedOutputsPerSlotIntermediateFirst) {
+  core::runtime::SimpleRawBufferAllocator execution_alloc(8);
+  core::runtime::SimpleRawBufferAllocator io_alloc(8);
+  RuntimeContext rt(KernelContext(DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
+                                                         .io_allocator = &io_alloc});
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}, &execution_alloc));
+
+  rt.RegisterCustomKernel("my.domain", "Fork", [](const NodeProto &node, RuntimeContext &ctx) {
+    const Tensor &in = ctx.Get(node.input(0));
+    const float *src = in.AsFloat();
+    std::vector<float> a(static_cast<size_t>(in.element_count()));
+    std::vector<float> b(static_cast<size_t>(in.element_count()));
+    for (size_t i = 0; i < a.size(); ++i) {
+      a[i] = src[i] + 100.0f;
+      b[i] = src[i] * 2.0f;
+    }
+    ctx.Put(node.output(0), Tensor::FromFloat(node.output(0), in.shape, a, ctx.allocator()));
+    ctx.Put(node.output(1), Tensor::FromFloat(node.output(1), in.shape, b, ctx.allocator()));
+  });
+
+  ModelProto model;
+  model.set_ir_version(10);
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *n = g->add_node();
+  n->set_op_type("Fork");
+  n->set_domain("my.domain");
+  n->add_input("x");
+  n->add_output("aux"); // intermediate, not a declared output
+  n->add_output("y");   // declared graph output
+  g->add_output()->set_name("y");
+
+  RuntimeSession session(model);
+  session.Run(rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  ASSERT_TRUE(rt.Has("aux"));
+  EXPECT_EQ(rt.Get("y").allocation_owner(), &io_alloc);
+  EXPECT_EQ(rt.Get("aux").allocation_owner(), &execution_alloc);
+  const float *yp = rt.Get("y").AsFloat();
+  EXPECT_FLOAT_EQ(yp[0], 2.0f);
+  EXPECT_FLOAT_EQ(yp[1], 4.0f);
+  EXPECT_FLOAT_EQ(yp[2], 6.0f);
+  const float *ap = rt.Get("aux").AsFloat();
+  EXPECT_FLOAT_EQ(ap[0], 101.0f);
+  EXPECT_FLOAT_EQ(ap[1], 102.0f);
+  EXPECT_FLOAT_EQ(ap[2], 103.0f);
+}
+
 // Without a dedicated I/O allocator (the pre-existing single-allocator
 // configuration), every output — declared or intermediate — keeps allocating
 // from the execution allocator, preserving prior behaviour.

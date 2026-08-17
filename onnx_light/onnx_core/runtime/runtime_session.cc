@@ -234,18 +234,29 @@ bool RuntimeSession::ProducesDeclaredOutput(const NodeProto &node) const {
 }
 
 void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const {
-  const bool routed_to_io = session_io_allocator_ != nullptr && ProducesDeclaredOutput(node);
-  RawBufferAllocator *expected = routed_to_io ? session_io_allocator_ : session_allocator_;
-  if (expected == nullptr) {
-    return;
-  }
-  const char *expected_name =
-      routed_to_io ? "the session's I/O allocator" : "the session's execution allocator";
   for (int i = 0; i < node.output_size(); ++i) {
     const std::string &name = node.output(i);
     if (name.empty() || !rt.Has(name)) {
       continue;
     }
+    // Resolve the allocation role of this individual output slot rather than of
+    // the node as a whole. A declared graph output belongs to the I/O arena;
+    // every other (intermediate) output belongs to the execution arena. This is
+    // output-slot routing: a node that produces both a declared output and an
+    // intermediate keeps each value in its own arena instead of sharing the
+    // node-scoped allocator. The kernel invocation was routed node-scoped
+    // through the I/O allocator when the node produces any declared output, so
+    // the declared outputs are already in the I/O arena (no copy); only the
+    // intermediates of such a mixed node are migrated back to the execution
+    // arena here.
+    const bool declared_output = output_names_set_.find(name) != output_names_set_.end();
+    const bool slot_to_io = session_io_allocator_ != nullptr && declared_output;
+    RawBufferAllocator *expected = slot_to_io ? session_io_allocator_ : session_allocator_;
+    if (expected == nullptr) {
+      continue;
+    }
+    const char *expected_name =
+        slot_to_io ? "the session's I/O allocator" : "the session's execution allocator";
     Tensor &output = rt.Get(name);
     if (output.size_bytes() > 0 && static_cast<DataType>(output.data_type) != DataType::STRING &&
         (!output.has_allocation() || output.allocation_owner() != expected)) {
@@ -260,9 +271,8 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
           MakeOutputTensor(output_data_type, output_shape, output_size_bytes, expected);
       migrated.name = output_name;
       std::memcpy(migrated.mutable_bytes(), output_bytes, output_size_bytes);
-      const RuntimeEventKind migrated_kind = output_names_set_.find(name) != output_names_set_.end()
-                                                 ? RuntimeEventKind::kOutput
-                                                 : RuntimeEventKind::kIntermediate;
+      const RuntimeEventKind migrated_kind =
+          declared_output ? RuntimeEventKind::kOutput : RuntimeEventKind::kIntermediate;
       rt.Put(name, std::move(migrated), migrated_kind);
     }
     const Tensor &verified_output = rt.Get(name);

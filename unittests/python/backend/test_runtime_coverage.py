@@ -17,7 +17,8 @@ render_rst_summary = _runtime_coverage.render_rst_summary
 render_rst_table_for_domain = _runtime_coverage.render_rst_table_for_domain
 _run_onnxruntime = _runtime_coverage._run_onnxruntime
 _format_discrepancy = _runtime_coverage._format_discrepancy
-_ORT_MAX_IR_VERSION = _runtime_coverage._ORT_MAX_IR_VERSION
+ort_max_ir_version = _runtime_coverage.ort_max_ir_version
+ort_max_opset_version = _runtime_coverage.ort_max_opset_version
 
 
 class TestRuntimeCoverage(ExtTestCase):
@@ -148,6 +149,19 @@ class TestRuntimeCoverageOnnxruntime(ExtTestCase):
     def tearDown(self):
         self.ALL_TESTS.clear()
 
+    def test_detects_and_caches_maximum_versions(self):
+        ir_cache_hits = ort_max_ir_version.cache_info().hits
+        max_ir_version = ort_max_ir_version()
+        self.assertGreater(max_ir_version, 0)
+        self.assertEqual(ort_max_ir_version(), max_ir_version)
+        self.assertGreater(ort_max_ir_version.cache_info().hits, ir_cache_hits)
+
+        opset_cache_hits = ort_max_opset_version.cache_info().hits
+        max_opset_version = ort_max_opset_version()
+        self.assertGreater(max_opset_version, 0)
+        self.assertEqual(ort_max_opset_version(), max_opset_version)
+        self.assertGreater(ort_max_opset_version.cache_info().hits, opset_cache_hits)
+
     def _make_identity_case(self, name, ort_output, expected):
         np = self.np
         node = self.onnxl.helper.make_node("Identity", inputs=["x"], outputs=["y"])
@@ -160,19 +174,33 @@ class TestRuntimeCoverageOnnxruntime(ExtTestCase):
             name=name,
         )
         tc = self.ALL_TESTS[name]
-        tc.model.ir_version = _ORT_MAX_IR_VERSION
+        tc.model.ir_version = ort_max_ir_version()
         return tc
 
     def test_unsupported_ir_version_is_skipped(self):
         tc = self._make_identity_case("test_unsupported_ir", [1.0], [1.0])
-        tc.model.ir_version = _ORT_MAX_IR_VERSION + 1
+        max_ir_version = ort_max_ir_version()
+        tc.model.ir_version = max_ir_version + 1
         diff, ok, err = _run_onnxruntime(tc)
         self.assertIsNone(diff)
         self.assertFalse(ok)
         self.assertEqual(
             err,
             f"skipped: model IR version {tc.model.ir_version} exceeds "
-            f"onnxruntime maximum {_ORT_MAX_IR_VERSION}",
+            f"onnxruntime maximum {max_ir_version}",
+        )
+
+    def test_unsupported_opset_version_is_skipped(self):
+        tc = self._make_identity_case("test_unsupported_opset", [1.0], [1.0])
+        max_opset_version = ort_max_opset_version()
+        tc.model.opset_import[0].version = max_opset_version + 1
+        diff, ok, err = _run_onnxruntime(tc)
+        self.assertIsNone(diff)
+        self.assertFalse(ok)
+        self.assertEqual(
+            err,
+            f"skipped: model opset version {tc.model.opset_import[0].version} exceeds "
+            f"onnxruntime maximum {max_opset_version}",
         )
 
     def test_tolerance_uses_relative_magnitude(self):

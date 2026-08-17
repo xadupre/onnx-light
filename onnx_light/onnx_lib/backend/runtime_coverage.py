@@ -24,11 +24,14 @@ domain and globally.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import cache
 from typing import Iterable
 
 import numpy as np
 
 from ... import onnx as onnxl
+from ...onnx_proto import _helper as onnxl_helper
+from ..defs import onnx_ir_version, onnx_opset_version
 from ...onnx_lib.shape_inference import infer_shapes
 from .test.case import collect_test_case
 from .test.case.base import TestCase
@@ -114,7 +117,70 @@ def _principal_op(tc: TestCase) -> tuple[str, str]:
 #     ``Graph::SaveShapeValuesFromDataPropagation``. ORT versions predating
 #     microsoft/onnxruntime#28778 abort while loading the model.
 _ORT_SKIP_CASES = frozenset({"test_cc_shape_inference_shape_identity_unsqueeze"})
-_ORT_MAX_IR_VERSION = 13
+
+
+@cache
+def ort_max_ir_version() -> int:
+    """Returns the highest ONNX IR version accepted by ONNX Runtime."""
+    try:
+        import onnxruntime as ort
+        from onnxruntime.capi.onnxruntime_pybind11_state import Fail
+    except ImportError:
+        return 0
+
+    value_info = onnxl_helper.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [1])
+    output_info = onnxl_helper.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [1])
+    graph = onnxl_helper.make_graph(
+        [onnxl_helper.make_node("Identity", ["x"], ["y"])],
+        "onnxruntime_ir_version_probe",
+        [value_info],
+        [output_info],
+    )
+    opset_imports = [onnxl_helper.make_opsetid("", 13)]
+
+    for ir_version in range(onnx_ir_version(), 0, -1):
+        model = onnxl_helper.make_model(graph, ir_version=ir_version, opset_imports=opset_imports)
+        try:
+            ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
+        except Fail:
+            continue
+        return ir_version
+
+    raise RuntimeError("onnxruntime does not accept any supported ONNX IR version")
+
+
+@cache
+def ort_max_opset_version() -> int:
+    """Returns the highest default-domain opset accepted by ONNX Runtime."""
+    try:
+        import onnxruntime as ort
+        from onnxruntime.capi.onnxruntime_pybind11_state import Fail
+    except ImportError:
+        return 0
+
+    value_info = onnxl_helper.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [1])
+    output_info = onnxl_helper.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [1])
+    graph = onnxl_helper.make_graph(
+        [onnxl_helper.make_node("Identity", ["x"], ["y"])],
+        "onnxruntime_opset_version_probe",
+        [value_info],
+        [output_info],
+    )
+    ir_version = ort_max_ir_version()
+
+    for opset_version in range(onnx_opset_version(), 0, -1):
+        model = onnxl_helper.make_model(
+            graph,
+            ir_version=ir_version,
+            opset_imports=[onnxl_helper.make_opsetid("", opset_version)],
+        )
+        try:
+            ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
+        except Fail:
+            continue
+        return opset_version
+
+    raise RuntimeError("onnxruntime does not accept any supported default-domain opset")
 
 
 def _run_onnxruntime(tc: TestCase) -> tuple[float | None, bool, str | None]:
@@ -146,15 +212,27 @@ def _run_onnxruntime(tc: TestCase) -> tuple[float | None, bool, str | None]:
             "skipped: known to abort onnxruntime (see microsoft/onnxruntime#28778)",
         )
 
-    if tc.model.ir_version > _ORT_MAX_IR_VERSION:
+    max_ir_version = ort_max_ir_version()
+    if tc.model.ir_version > max_ir_version:
         return (
             None,
             False,
             (
                 f"skipped: model IR version {tc.model.ir_version} exceeds "
-                f"onnxruntime maximum {_ORT_MAX_IR_VERSION}"
+                f"onnxruntime maximum {max_ir_version}"
             ),
         )
+    max_opset_version = ort_max_opset_version()
+    for opset in tc.model.opset_import:
+        if opset.domain in ("", "ai.onnx") and opset.version > max_opset_version:
+            return (
+                None,
+                False,
+                (
+                    f"skipped: model opset version {opset.version} exceeds "
+                    f"onnxruntime maximum {max_opset_version}"
+                ),
+            )
     try:
         sess = ort.InferenceSession(
             tc.model.SerializeToString(), providers=["CPUExecutionProvider"]

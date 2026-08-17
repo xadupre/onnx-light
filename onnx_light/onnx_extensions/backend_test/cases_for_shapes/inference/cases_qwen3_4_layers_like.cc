@@ -19,11 +19,12 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 // ---------------------------------------------------------------------------
-// ``qwen3_4_layers_like`` — a 4-layer Qwen3-style causal language model.
+// ``qwen3_4_layers_like`` — a 4-layer Qwen3-style causal language model built
+// with the fused ``Attention`` and ``RMSNormalization`` operators.
 //
-// Reproduces the structure of a Qwen3 model with 4 transformer layers, but
-// the two building blocks that used to be spelled out as explicit subgraphs
-// are expressed with their fused ONNX operators instead:
+// Reproduces the structure of a Qwen3 model with 4 transformer layers, with
+// the two building blocks that could be spelled out as explicit subgraphs
+// expressed with their fused ONNX operators instead:
 //
 //   * every RMSNorm (``Cast + Pow + ReduceMean + Add + Sqrt + Reciprocal +
 //     Mul + Cast + Mul``) collapses to a single ``RMSNormalization`` node —
@@ -149,9 +150,9 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
   AddInitializer<uint16_t>(*graph, "lm_head.weight", {INT64_C(32000), INT64_C(1024)}, {});
 
   // ---- RoPE tables + causal mask (shared across the transformer layers) ----
-  // This section is identical to the inlined case: it derives the RoPE
-  // cos/sin tables (``unsqueeze_16`` / ``unsqueeze_17``) and the boolean
-  // causal mask (``and_2``) that every layer feeds into ``Attention``.
+  // Derives the RoPE cos/sin tables (``unsqueeze_16`` / ``unsqueeze_17``) and
+  // the boolean causal mask (``and_2``) that every layer feeds into
+  // ``Attention``.
   {
     NodeProto &n = AddNode(*graph, "Shape", {"input_ids"}, {"input_ids::Shape1:2"});
     AddAttribute<int64_t>(n, "end", INT64_C(2));

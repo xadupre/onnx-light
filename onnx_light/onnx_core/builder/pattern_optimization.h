@@ -185,7 +185,8 @@ public:
   /// Returns a concise summary of this pattern.
   std::string ToString() const;
 
-  /// Returns operator types from which this pattern can start.
+  /// Returns the invariant operator types from which this pattern can start.
+  /// The optimization driver caches this value once per optimization.
   virtual std::set<std::string> FastOpType() const { return {}; }
 
   /// Returns the match rooted at ``candidate``. A null pattern means no match.

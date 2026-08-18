@@ -234,5 +234,21 @@ TEST(UnsqueezeShapePattern, RejectsWhenNoShapeConsumer) {
   EXPECT_EQ(match.pattern, nullptr);
 }
 
+TEST(UnsqueezeShapePattern, RejectsNonConstantAxes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::symbolic::SymShape axes_shape;
+  axes_shape.PushBack(core::symbolic::SymDim(1));
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
+  builder.MakeInput("axes", core::symbolic::TensorType::kInt64, axes_shape);
+  builder.MakeNode("Unsqueeze", {"x", "axes"}, {"xu"});
+  builder.MakeNode("Shape", {"xu"}, {"y"});
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::UnsqueezeShapePattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  EXPECT_EQ(match.pattern, nullptr);
+}
+
 } // namespace
 } // namespace Test

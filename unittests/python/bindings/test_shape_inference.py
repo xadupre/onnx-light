@@ -971,8 +971,10 @@ class TestShapeInference(ExtTestCase):
 
         checker.check_model(model)
         inferred = shape_inference.infer_shapes(model, strict_mode=True)
-        assert inferred.graph.output[0].type.tensor_type.elem_type == onnxl.TensorProto.FLOAT
-        assert len(inferred.graph.output[0].type.tensor_type.shape.dim) == 0
+        self.assertEqual(
+            inferred.graph.output[0].type.tensor_type.elem_type, onnxl.TensorProto.FLOAT
+        )
+        self.assertEqual(len(inferred.graph.output[0].type.tensor_type.shape.dim), 0)
 
 
 if __name__ == "__main__":

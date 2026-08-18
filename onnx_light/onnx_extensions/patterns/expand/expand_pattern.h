@@ -60,6 +60,48 @@ public:
 };
 
 /**
+ * Simplifies a dynamic ``Concat`` used as an ``Expand`` target shape.
+ *
+ * When the input and output shapes differ in exactly one dimension, every
+ * other ``Concat`` input can be replaced by ``[1]``:
+ *
+ *      Shape(x)[0]   two
+ *           \        /
+ *            Concat
+ *               |
+ *        x --> Expand
+ *
+ * becomes:
+ *
+ *          [1]      two
+ *           \        /
+ *            Concat
+ *               |
+ *        x --> Expand
+ *
+ * This keeps the expanded dimension while avoiding unnecessary dynamic shape
+ * computations for dimensions preserved by broadcasting.
+ */
+class ShapeBasedConcatExpandPattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit ShapeBasedConcatExpandPattern(int priority = 0)
+      : PatternOptimization(priority, "ShapeBasedConcatExpand") {}
+
+  /// Returns ``Expand`` as the only possible root operator.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds an ``Expand`` whose dynamic Concat target changes one dimension.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Rebuilds the target shape with ``[1]`` for every unchanged dimension.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
  * Moves an ``Expand`` past a following unary-like operator.
  *
  * ``Expand(x, shape)`` followed by a shape-preserving unary operator ``Op``

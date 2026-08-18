@@ -141,6 +141,10 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ExpandBroadcastPattern>();
                                    });
+    core::builder::RegisterPattern("ShapeBasedConcatExpand",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ShapeBasedConcatExpandPattern>();
+                                   });
     core::builder::RegisterPattern("ExpandSwap",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ExpandSwapPattern>();

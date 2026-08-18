@@ -3,6 +3,7 @@ import unittest
 from typing import Any
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
+import onnx_light.onnx.checker as checker
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.parser as parser
@@ -929,6 +930,51 @@ class TestShapeInference(ExtTestCase):
             """)
         with self.assertRaisesRegex(shape_inference.InferenceError, "narrow"):
             shape_inference.infer_shapes(model, strict_mode=True)
+
+    def test_function_missing_input_used_as_output_does_not_crash(self) -> None:
+        """A missing model-local function input reused as an output must not crash.
+
+        Mirrors the fix from https://github.com/onnx/onnx/pull/8305: shape
+        inference could dereference a null pointer for a missing function input.
+        """
+        model = parser.parse_model("""
+            <ir_version: 8, opset_import: ["": 25, "local": 1]>
+            g (bool condition) => (float output) { output = local.F(condition) }
+            <opset_import: ["": 25], domain: "local">
+            F (condition, missing) => (missing) { unused = Identity(condition) }
+            """)
+
+        checker.check_model(model)
+        shape_inference.infer_shapes(model, strict_mode=True)
+
+    def test_function_subgraph_initializer_replaces_missing_outer_type(self) -> None:
+        """A subgraph initializer shadowing a missing function input must infer.
+
+        Mirrors the fix from https://github.com/onnx/onnx/pull/8305: shape
+        inference could dereference a null pointer when a missing model-local
+        function input shares its name with an initializer inside a nested
+        subgraph.
+        """
+        model = parser.parse_model("""
+            <ir_version: 8, opset_import: ["": 25, "local": 1]>
+            g (bool condition) => (float output) { output = local.F(condition) }
+            <opset_import: ["": 25], domain: "local">
+            F (condition, missing) => (output) {
+                output = If(condition) <
+                    then_branch = then () => (float output)
+                        <float missing = {1.0}> { output = Identity(missing) },
+                    else_branch = else () => (float output)
+                        <float one = {1.0}> { output = Identity(one) }
+                >
+            }
+            """)
+
+        checker.check_model(model)
+        inferred = shape_inference.infer_shapes(model, strict_mode=True)
+        self.assertEqual(
+            inferred.graph.output[0].type.tensor_type.elem_type, onnxl.TensorProto.FLOAT
+        )
+        self.assertEqual(len(inferred.graph.output[0].type.tensor_type.shape.dim), 0)
 
 
 if __name__ == "__main__":

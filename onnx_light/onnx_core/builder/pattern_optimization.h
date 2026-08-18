@@ -116,6 +116,8 @@ struct LocalRewriting {
   std::vector<std::size_t> matched_nodes;
   /// Replacement nodes owned by this record.
   utils::RepeatedProtoField<NodeProto> added_nodes;
+  /// Positions occupied by added nodes after this rewrite batch.
+  std::vector<std::size_t> added_nodes_positions;
   /// Initializers created while applying the pattern.
   utils::RepeatedProtoField<TensorProto> added_initializers;
   /// Positions occupied by added initializers after this rewrite batch.
@@ -124,8 +126,6 @@ struct LocalRewriting {
   std::vector<std::size_t> removed_initializers;
   /// Value-name replacements applied to node inputs and nested captures.
   std::vector<std::pair<std::string, std::string>> value_renames;
-  /// Insertion position in the batch-local graph; ``-1`` means the first matched position.
-  std::ptrdiff_t insert_at = -1;
   /// Ordered rewrite batch; records with the same value are applied together.
   std::size_t iteration = 0;
   /// Time spent recognizing this match, in nanoseconds.

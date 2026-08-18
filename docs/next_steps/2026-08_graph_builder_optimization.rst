@@ -136,6 +136,11 @@ requests:
      - Shape-based Concat/Expand simplification
      - Ports ``ShapeBasedConcatExpandPattern`` with symbolic-shape rewrite and
        rejection tests, registration, and Python bindings.
+   * - `PR #4534 <https://github.com/xadupre/onnx-light/pull/4534>`_
+     - Shape-based Expand broadcast elimination
+     - Ports ``ShapeBasedExpandBroadcastPattern`` and
+       ``ShapeBasedExpandBroadcastMatMulPattern`` with optional positional
+       match roles, symbolic-shape guards, tests, registration, and bindings.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -791,3 +796,7 @@ Pull requests
 * `PR #4532 <https://github.com/xadupre/onnx-light/pull/4532>`_:
   ``ShapeBasedConcatExpandPattern`` simplifying dynamic ``Expand`` target
   shapes when exactly one dimension changes.
+* `PR #4534 <https://github.com/xadupre/onnx-light/pull/4534>`_:
+  ``ShapeBasedExpandBroadcastPattern`` and
+  ``ShapeBasedExpandBroadcastMatMulPattern`` removing unnecessary dynamic
+  ``Expand`` nodes before element-wise binary operators and ``MatMul``.

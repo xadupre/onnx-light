@@ -102,6 +102,58 @@ public:
 };
 
 /**
+ * Removes dynamic ``Expand`` nodes before a broadcasting binary operator.
+ *
+ * The input, pre-expansion, and output symbolic shapes are used to prove that
+ * the binary operator itself performs the same broadcast. Shared ``Expand``
+ * nodes are preserved for their other consumers while the binary operator
+ * bypasses them.
+ */
+class ShapeBasedExpandBroadcastPattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit ShapeBasedExpandBroadcastPattern(int priority = 0)
+      : PatternOptimization(priority, "ShapeBasedExpandBroadcast") {}
+
+  /// Returns broadcasting binary operators as possible roots.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds a binary operator whose input Expand nodes are unnecessary.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Rebuilds the binary operator on the pre-expanded inputs.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
+ * Removes dynamic ``Expand`` nodes before ``MatMul``.
+ *
+ * Only the batch dimensions are checked for broadcast compatibility; the two
+ * matrix dimensions retain the standard ``MatMul`` semantics.
+ */
+class ShapeBasedExpandBroadcastMatMulPattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit ShapeBasedExpandBroadcastMatMulPattern(int priority = 0)
+      : PatternOptimization(priority, "ShapeBasedExpandBroadcastMatMul") {}
+
+  /// Returns ``MatMul`` as the only possible root operator.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds a MatMul whose input Expand nodes are unnecessary.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Rebuilds MatMul on the pre-expanded inputs.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
  * Moves an ``Expand`` past a following unary-like operator.
  *
  * ``Expand(x, shape)`` followed by a shape-preserving unary operator ``Op``

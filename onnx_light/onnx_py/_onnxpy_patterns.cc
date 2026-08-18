@@ -127,6 +127,13 @@ std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::str
   if (name == "ShapeBasedConcatExpand") {
     return std::make_shared<onnx_patterns::ShapeBasedConcatExpandPattern>(priority.value_or(0));
   }
+  if (name == "ShapeBasedExpandBroadcast") {
+    return std::make_shared<onnx_patterns::ShapeBasedExpandBroadcastPattern>(priority.value_or(0));
+  }
+  if (name == "ShapeBasedExpandBroadcastMatMul") {
+    return std::make_shared<onnx_patterns::ShapeBasedExpandBroadcastMatMulPattern>(
+        priority.value_or(0));
+  }
   if (name == "ExpandSwap") {
     return std::make_shared<onnx_patterns::ExpandSwapPattern>(priority.value_or(0));
   }
@@ -299,6 +306,15 @@ NB_MODULE(_onnxpypatterns, m) {
   nb::class_<onnx_patterns::ShapeBasedConcatExpandPattern, core::builder::PatternOptimization>(
       m, "ShapeBasedConcatExpandPattern",
       "Simplifies a dynamic ``Concat`` target when ``Expand`` changes one dimension.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ShapeBasedExpandBroadcastPattern, core::builder::PatternOptimization>(
+      m, "ShapeBasedExpandBroadcastPattern",
+      "Removes dynamic ``Expand`` nodes before a broadcasting binary operator.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ShapeBasedExpandBroadcastMatMulPattern,
+             core::builder::PatternOptimization>(
+      m, "ShapeBasedExpandBroadcastMatMulPattern",
+      "Removes dynamic ``Expand`` nodes from the batch dimensions of ``MatMul``.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
   nb::class_<onnx_patterns::ExpandSwapPattern, core::builder::PatternOptimization>(
       m, "ExpandSwapPattern",

@@ -136,6 +136,11 @@ requests:
      - Shape-based Concat/Expand simplification
      - Ports ``ShapeBasedConcatExpandPattern`` with symbolic-shape rewrite and
        rejection tests, registration, and Python bindings.
+   * - `PR #4534 <https://github.com/xadupre/onnx-light/pull/4534>`_
+     - Shape-based Expand broadcast elimination
+     - Ports ``ShapeBasedExpandBroadcastPattern`` and
+       ``ShapeBasedExpandBroadcastMatMulPattern`` with optional positional
+       match roles, symbolic-shape guards, tests, registration, and bindings.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -684,7 +689,9 @@ The upstream default list currently contains 104 enabled patterns.
 ``GatherGatherPattern``, ``GathersSplitPattern``, ``GatherShapePattern``,
 ``SequenceConstructAtPattern``, ``SplitToSequenceSequenceAtPattern``,
 ``SliceSlicePattern``, ``SlicesSplitPattern``, ``SplitConcatPattern``, and
-``ShapeBasedConcatExpandPattern`` are already covered, leaving 66 patterns.
+``ShapeBasedConcatExpandPattern``, ``ShapeBasedExpandBroadcastPattern``, and
+``ShapeBasedExpandBroadcastMatMulPattern`` are already covered, leaving 64
+patterns.
 They are grouped into cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;
@@ -701,14 +708,14 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ``GatherGatherPattern``, ``GathersSplitPattern``, ``GatherShapePattern``,
    ``SequenceConstructAtPattern``, ``SplitToSequenceSequenceAtPattern``,
    ``SliceSlicePattern``, ``SlicesSplitPattern``, and ``SplitConcatPattern``.
-#. **Expand, where, and equal (6 patterns remaining).**
-   ``ShapeBasedExpandBroadcastPattern``,
-   ``ShapeBasedExpandBroadcastMatMulPattern``,
+#. **Expand, where, and equal (4 patterns remaining).**
    ``ShapeBasedExpandCastWhereSwapPattern``, ``ShapeBasedExpandSwapPattern``,
    ``ShapeBasedStaticExpandPattern``, and ``SwapExpandReshapePattern``.
    ``ExpandPattern``, ``ExpandBroadcastPattern``, ``ExpandSwapPattern``,
    ``SwapExpandUnsqueezePattern``, and ``ExpandUnsqueezeExpandPattern`` are
-   ported and registered, together with ``ShapeBasedConcatExpandPattern``.
+   ported and registered, together with ``ShapeBasedConcatExpandPattern``,
+   ``ShapeBasedExpandBroadcastPattern``, and
+   ``ShapeBasedExpandBroadcastMatMulPattern``.
 #. **Reshape canonicalization (13 patterns).**
    ``ConcatReshapePattern``, ``ReshapePattern``, ``ReduceReshapePattern``,
    ``Reshape2Of3Pattern``, ``ReshapeReshapeBinaryPattern``,
@@ -801,3 +808,7 @@ Pull requests
 * `PR #4532 <https://github.com/xadupre/onnx-light/pull/4532>`_:
   ``ShapeBasedConcatExpandPattern`` simplifying dynamic ``Expand`` target
   shapes when exactly one dimension changes.
+* `PR #4534 <https://github.com/xadupre/onnx-light/pull/4534>`_:
+  ``ShapeBasedExpandBroadcastPattern`` and
+  ``ShapeBasedExpandBroadcastMatMulPattern`` removing unnecessary dynamic
+  ``Expand`` nodes before element-wise binary operators and ``MatMul``.

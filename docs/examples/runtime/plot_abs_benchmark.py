@@ -13,8 +13,7 @@ dtype.
 
 ``onnxruntime`` only ships a CPU ``Abs`` implementation for ``float32`` and
 ``float16``; there is no ``bfloat16`` kernel. The benchmark therefore skips the
-``onnxruntime`` measurement for ``bfloat16`` and uses :func:`numpy.abs` as the
-baseline for that element type instead.
+``onnxruntime`` measurement and speed-up plot for ``bfloat16``.
 
 The execution benchmark warms each runtime and reports median durations.
 ``onnx-light`` is measured before the ONNX Runtime session is constructed:
@@ -192,9 +191,9 @@ results = [benchmark_dtype(*entry) for entry in DTYPES]
 # --------------------------------------
 #
 # One row is drawn per element type. The left panel shows raw inference time.
-# The right panel shows the speed-up relative to a baseline: ``onnxruntime``
-# when it provides a kernel, otherwise :func:`numpy.abs`. Values above one are
-# faster than the baseline, while values below one are slower.
+# The right panel shows the speed-up relative to ``onnxruntime`` when it
+# provides a CPU kernel. No speed-up is reported for ``bfloat16`` because
+# changing the baseline to NumPy would make that row incomparable.
 
 figure, axes = matplotlib.pyplot.subplots(
     len(results), 2, figsize=(12, 4.5 * len(results)), squeeze=False
@@ -221,18 +220,22 @@ for row_index, result in enumerate(results):
     time_axis.set_title(f"Abs execution time ({label})")
     time_axis.legend()
 
-    if ort_times is not None:
-        baseline = ort_times
-        baseline_name = "onnxruntime"
-    else:
-        baseline = numpy_times
-        baseline_name = "numpy"
+    if ort_times is None:
+        speedup_axis.axis("off")
+        speedup_axis.text(
+            0.5,
+            0.5,
+            "No ONNX Runtime CPU bfloat16 Abs kernel\nspeed-up not reported",
+            ha="center",
+            va="center",
+            transform=speedup_axis.transAxes,
+        )
+        continue
 
     # The baseline itself is a flat line at 1.0, shown by the reference
     # ``axhline`` below, so it is not plotted as its own series.
-    if ort_times is not None:
-        speedup_axis.plot(sizes, baseline / numpy_times, "o--", label="numpy", color="#9b7ec8")
-    onnx_light_speedups = baseline / onnx_light_times
+    speedup_axis.plot(sizes, ort_times / numpy_times, "o--", label="numpy", color="#9b7ec8")
+    onnx_light_speedups = ort_times / onnx_light_times
     speedup_axis.plot(sizes, onnx_light_speedups, "o-", label="onnx-light", color="#5cb85c")
     for size, speedup in zip(sizes, onnx_light_speedups, strict=True):
         speedup_axis.annotate(
@@ -245,12 +248,12 @@ for row_index, result in enumerate(results):
             color="#3d803d",
         )
     speedup_axis.axhline(
-        1.0, color="grey", linewidth=0.8, linestyle=":", label=f"{baseline_name} (baseline)"
+        1.0, color="grey", linewidth=0.8, linestyle=":", label="onnxruntime (baseline)"
     )
     speedup_axis.set_xscale("log")
     speedup_axis.set_xlabel("array size (elements)")
-    speedup_axis.set_ylabel(f"speed-up vs {baseline_name}")
-    speedup_axis.set_title(f"Abs speed-up ({label}, {baseline_name} = 1)")
+    speedup_axis.set_ylabel("speed-up vs onnxruntime")
+    speedup_axis.set_title(f"Abs speed-up ({label}, onnxruntime = 1)")
     speedup_axis.legend()
 
 # %%

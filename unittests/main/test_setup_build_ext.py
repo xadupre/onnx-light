@@ -466,6 +466,44 @@ class TestSetupBuildExt(ExtTestCase):
         )
         self.assertIn("--run-cpp-tests", f"{proc.stdout}\n{proc.stderr}")
 
+    @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
+    def test_setup_build_ext_install_uses_release_config(self):
+        """Verifies setup.py build_ext installs with --config Release, never Debug."""
+        root = Path(__file__).resolve().parents[2]
+        command = [sys.executable, "setup.py", "build_ext", "--inplace", "--dry-run"]
+        proc = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)
+
+        self.assertEqual(
+            proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
+        )
+        output = f"{proc.stdout}\n{proc.stderr}"
+        lines = output.splitlines()
+        install_index = self._line_index(
+            lines, lambda line: "cmake --install" in line, "cmake --install"
+        )
+        install_line = lines[install_index]
+        self.assertIn("--config Release", install_line)
+        self.assertNotIn("Debug", install_line)
+
+    @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
+    def test_setup_build_ext_without_setuptools_install_uses_release_config(self):
+        """Verifies build_ext installs with --config Release without setuptools."""
+        root = Path(__file__).resolve().parents[2]
+        command = [sys.executable, "-S", "setup.py", "build_ext", "--inplace", "--dry-run"]
+        proc = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)
+
+        self.assertEqual(
+            proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
+        )
+        output = f"{proc.stdout}\n{proc.stderr}"
+        lines = output.splitlines()
+        install_index = self._line_index(
+            lines, lambda line: "cmake --install" in line, "cmake --install"
+        )
+        install_line = lines[install_index]
+        self.assertIn("--config Release", install_line)
+        self.assertNotIn("Debug", install_line)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -231,6 +231,8 @@ except ModuleNotFoundError:
                     "cmake",
                     "--install",
                     str(build_temp_path),
+                    "--config",
+                    "Release",
                     "--prefix",
                     str(install_prefix),
                 ]
@@ -358,7 +360,15 @@ class BuildExt(Command):
         build_cmd = ["cmake", "--build", str(build_temp), "--config", "Release"]
         if self.parallel is not None:
             build_cmd += ["--parallel", str(self.parallel)]
-        install_cmd = ["cmake", "--install", str(build_temp), "--prefix", str(install_prefix)]
+        install_cmd = [
+            "cmake",
+            "--install",
+            str(build_temp),
+            "--config",
+            "Release",
+            "--prefix",
+            str(install_prefix),
+        ]
         if self.cpp_tests:
             # Build every library, extension and C++ test in one CMake
             # invocation so progress is reported against one global total.

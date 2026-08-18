@@ -207,10 +207,10 @@ class ReferenceEvaluator:
 
     The class is constructed from a ``ModelProto`` / ``GraphProto`` /
     ``FunctionProto`` (or the bytes / file path of a serialised
-    ``ModelProto``). :meth:`run` then takes a ``{name: ndarray}``
-    feed dictionary and returns the requested outputs as a list of
-    NumPy arrays, mirroring the calling convention of
-    :class:`onnx.reference.ReferenceEvaluator` (and
+    ``ModelProto``). :meth:`run` then takes a feed dictionary whose tensor
+    values may be NumPy arrays or runtime ``Tensor`` objects and returns the
+    requested outputs as a list of NumPy arrays, mirroring the calling
+    convention of :class:`onnx.reference.ReferenceEvaluator` (and
     :class:`onnxruntime.InferenceSession`).
 
     Parameters
@@ -663,10 +663,12 @@ class ReferenceEvaluator:
             "every declared output, in declaration order".
         feed_inputs:
             Mapping of input name to value. Tensor inputs are fed as a
-            :class:`numpy.ndarray`; ``seq(T)`` inputs are fed as a ``list``
-            (or ``tuple``) of arrays, one per sequence element; ``map(K, V)``
-            inputs are fed as a Python ``dict`` (e.g. ``{"x": {10: 1.5}}``).
-            Every name listed by :attr:`input_names` must be present.
+            :class:`numpy.ndarray` or a runtime ``Tensor``; both forms may be
+            mixed in one call. ``seq(T)`` inputs are fed as a ``list`` (or
+            ``tuple``) of arrays or runtime tensors, one per sequence element;
+            ``map(K, V)`` inputs are fed as a Python ``dict`` (e.g.
+            ``{"x": {10: 1.5}}``). Every name listed by :attr:`input_names`
+            must be present.
 
         Returns
         -------

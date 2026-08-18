@@ -19,7 +19,8 @@ The execution benchmark warms each runtime and reports median durations.
 ``onnx-light`` is measured before the ONNX Runtime session is constructed:
 keeping both persistent CPU pools in one process while alternating calls causes
 one runtime's spinning workers to perturb the other runtime's measurement.
-
+The two ``onnx-light`` series use the same prepared evaluator with either a
+NumPy array or a pre-built runtime ``Tensor`` as input.
 """
 
 from __future__ import annotations
@@ -33,7 +34,9 @@ import numpy
 import onnxruntime
 from onnx_light.onnx import TensorProto, checker, helper
 from onnx_light.onnx.reference import ReferenceEvaluator
+from onnx_light.onnx_py import _onnxpykernels
 
+runtime = _onnxpykernels.runtime
 ORT_MAX_IR_VERSION = 13
 
 # %%
@@ -124,6 +127,18 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
 
         return onnx_light_session.run(None, {"X": values})[0]
 
+    def run_onnx_light_tensor(tensor):
+        """Runs onnx-light with a pre-built runtime Tensor."""
+
+        return onnx_light_session.run(None, {"X": tensor})[0]
+
+    def make_input_tensor(values):
+        """Creates a zero-copy runtime Tensor over a NumPy input."""
+
+        return runtime.tensor_from_numpy(
+            "X", int(elem_type), list(values.shape), values.view(numpy.uint8), copy=False
+        )
+
     def run_onnxruntime(values):
         """Runs the ONNX Runtime Abs kernel."""
 
@@ -141,8 +156,13 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
         onnx_light_time = measure(
             lambda values=values: run_onnx_light(values), repeat, warmup, number
         )
+        input_tensor = make_input_tensor(values)
+        onnx_light_tensor_time = measure(
+            lambda tensor=input_tensor: run_onnx_light_tensor(tensor), repeat, warmup, number
+        )
         numpy.testing.assert_array_equal(run_onnx_light(values), expected)
-        rows_by_size[size] = [size, numpy_time, onnx_light_time, None]
+        numpy.testing.assert_array_equal(run_onnx_light_tensor(input_tensor), expected)
+        rows_by_size[size] = [size, numpy_time, onnx_light_time, onnx_light_tensor_time, None]
 
     if ort_supported:
         ort_session = onnxruntime.InferenceSession(
@@ -158,15 +178,16 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
                 lambda values=values: run_onnxruntime(values), repeat, warmup, number
             )
             numpy.testing.assert_array_equal(run_onnxruntime(values), expected)
-            rows_by_size[size][3] = ort_time
+            rows_by_size[size][4] = ort_time
 
     rows = [tuple(rows_by_size[size]) for size in size_grid]
-    for size, numpy_time, onnx_light_time, ort_time in rows:
+    for size, numpy_time, onnx_light_time, onnx_light_tensor_time, ort_time in rows:
         ort_report = "n/a" if ort_time is None else f"{ort_time * 1e6:10.2f} us"
         ratio_report = "n/a" if ort_time is None else f"{onnx_light_time / ort_time:5.2f}x"
         print(
             f"[{label:>8}] size={size:>9} | numpy={numpy_time * 1e6:10.2f} us | "
             f"onnx-light={onnx_light_time * 1e6:10.2f} us | "
+            f"onnx-light (Tensor)={onnx_light_tensor_time * 1e6:10.2f} us | "
             f"onnxruntime={ort_report} | onnx-light / onnxruntime={ratio_report}"
         )
 
@@ -176,7 +197,8 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
         "sizes": numpy.array([row[0] for row in rows]),
         "numpy_times": numpy.array([row[1] for row in rows]),
         "onnx_light_times": numpy.array([row[2] for row in rows]),
-        "ort_times": None if not ort_supported else numpy.array([row[3] for row in rows]),
+        "onnx_light_tensor_times": numpy.array([row[3] for row in rows]),
+        "ort_times": None if not ort_supported else numpy.array([row[4] for row in rows]),
     }
 
 
@@ -204,6 +226,7 @@ for row_index, result in enumerate(results):
     sizes = result["sizes"]
     numpy_times = result["numpy_times"]
     onnx_light_times = result["onnx_light_times"]
+    onnx_light_tensor_times = result["onnx_light_tensor_times"]
     ort_times = result["ort_times"]
 
     time_axis = axes[row_index][0]
@@ -211,6 +234,9 @@ for row_index, result in enumerate(results):
 
     time_axis.plot(sizes, numpy_times * 1e6, "o--", label="numpy", color="#9b7ec8")
     time_axis.plot(sizes, onnx_light_times * 1e6, "o-", label="onnx-light", color="#5cb85c")
+    time_axis.plot(
+        sizes, onnx_light_tensor_times * 1e6, "s:", label="onnx-light (Tensor)", color="#1b5e20"
+    )
     if ort_times is not None:
         time_axis.plot(sizes, ort_times * 1e6, "o-", label="onnxruntime", color="#f4a259")
     time_axis.set_xscale("log")
@@ -247,6 +273,13 @@ for row_index, result in enumerate(results):
             fontsize=7,
             color="#3d803d",
         )
+    speedup_axis.plot(
+        sizes,
+        ort_times / onnx_light_tensor_times,
+        "s:",
+        label="onnx-light (Tensor)",
+        color="#1b5e20",
+    )
     speedup_axis.axhline(
         1.0, color="grey", linewidth=0.8, linestyle=":", label="onnxruntime (baseline)"
     )

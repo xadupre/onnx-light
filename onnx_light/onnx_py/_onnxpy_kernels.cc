@@ -233,6 +233,27 @@ Tensor TensorFromNumpy(const std::string &name, nb::handle value, std::vector<nb
   return Tensor::Borrow(name, data_type, std::move(shape), data, byte_count);
 }
 
+Tensor TensorFromPythonInput(const std::string &name, nb::handle value,
+                             std::vector<nb::object> &owners) {
+  if (!nb::isinstance<Tensor>(value)) {
+    return TensorFromNumpy(name, value, owners);
+  }
+
+  const Tensor &source = nb::cast<const Tensor &>(value);
+  Tensor input;
+  if (static_cast<TensorProto::DataType>(source.data_type) == TensorProto::STRING) {
+    input = Tensor::BorrowStrings(name, source.shape, source.AsStrings());
+  } else if (source.shape.empty()) {
+    input = source.ToOwned();
+    input.name = name;
+  } else {
+    input =
+        Tensor::Borrow(name, source.data_type, source.shape, source.bytes(), source.size_bytes());
+  }
+  owners.emplace_back(nb::borrow<nb::object>(value));
+  return input;
+}
+
 void PutMapFromDict(RuntimeContext &rt, const std::string &name, nb::dict dictionary) {
   int64_t size = static_cast<int64_t>(dictionary.size());
   if (size == 0) {
@@ -533,12 +554,12 @@ public:
           throw nb::type_error(("Sequence input '" + name + "' must be a list or tuple.").c_str());
         Tensors tensors;
         for (nb::handle element : nb::borrow<nb::sequence>(value))
-          tensors.push_back(TensorFromNumpy(name, element, input_owners_));
+          tensors.push_back(TensorFromPythonInput(name, element, input_owners_));
         int32_t element_type =
             tensors.empty() ? 0 : static_cast<int32_t>(tensors.front().data_type);
         rt.PutSequence(name, Sequence(name, element_type, std::move(tensors)));
       } else {
-        rt.Set(name, TensorFromNumpy(name, value, input_owners_));
+        rt.Set(name, TensorFromPythonInput(name, value, input_owners_));
       }
     }
 

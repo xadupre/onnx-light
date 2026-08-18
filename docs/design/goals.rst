@@ -29,4 +29,4 @@ library: it provides a runtime ``struct Tensor``, ``RunGraph`` /
 under ``onnx_light/onnx_extensions/kernels/kernels/``.  The same kernels are used
 both to compute the expected outputs of every backend test case and to
 evaluate arbitrary models in C++ without pulling in a third-party
-runtime (see :doc:`runtime_coverage`).
+runtime (see :doc:`runtime/runtime_coverage`).

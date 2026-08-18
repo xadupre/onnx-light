@@ -9,7 +9,7 @@ def _load_example_module():
     import_or_skip("onnx_light.onnx.backend")
     import_or_skip("onnxruntime")
     root = pathlib.Path(__file__).resolve().parents[2]
-    source_path = root / "docs" / "examples" / "backend" / "plot_qwen3_init_benchmark.py"
+    source_path = root / "docs" / "examples" / "runtime" / "plot_qwen3_init_benchmark.py"
     module_spec = importlib.util.spec_from_file_location(source_path.stem, source_path)
     if module_spec is None or module_spec.loader is None:
         raise FileNotFoundError(source_path)

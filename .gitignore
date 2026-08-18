@@ -89,7 +89,7 @@ benchmarks/*.xlsx
 # Sphinx documentation
 docs/_build/
 docs/auto_examples
-docs/examples/backend/plot*.png
+docs/examples/runtime/plot*.png
 docs/examples/proto/plot*.png
 docs/examples/core/plot*.png
 docs/sg_execution_times.rst

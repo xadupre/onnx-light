@@ -1,3 +1,5 @@
+.. _l-design-runtime:
+
 Runtime Design
 ==============
 

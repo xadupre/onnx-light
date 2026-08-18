@@ -12,7 +12,7 @@ license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=2.1",
-    "ml-dtypes",
+    "ml-dtypes>=0.5.0",
 ]
 
 [project.optional-dependencies]

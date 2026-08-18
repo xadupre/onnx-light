@@ -5,6 +5,7 @@
 #include "onnx_extensions/patterns/expand/expand_pattern.h"
 
 #include <algorithm>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -303,6 +304,90 @@ ApplyShapeBasedBroadcast(const char *pattern_name, core::builder::GraphGraph &gr
       MakeNode(binary.op_type().value().c_str(), inputs, {binary.output()[0].value()}, "",
                (std::string(pattern_name) + "--" + binary.name().value()).c_str()));
   return replacements;
+}
+
+std::optional<core::symbolic::SymShape> BroadcastShape(const core::symbolic::SymShape &left,
+                                                       const core::symbolic::SymShape &right) {
+  const std::size_t rank = std::max(left.Rank(), right.Rank());
+  const core::symbolic::SymDim one(1);
+  core::symbolic::SymShape result;
+  for (std::size_t i = 0; i < rank; ++i) {
+    const core::symbolic::SymDim &l = AlignedDim(left, rank, i, one);
+    const core::symbolic::SymDim &r = AlignedDim(right, rank, i, one);
+    if (l == r) {
+      result.PushBack(l);
+    } else if (l.IsInt() && l.AsInt() == 1) {
+      result.PushBack(r);
+    } else if (r.IsInt() && r.AsInt() == 1) {
+      result.PushBack(l);
+    } else {
+      return std::nullopt;
+    }
+  }
+  return result;
+}
+
+bool StaticExpandTarget(const core::symbolic::SymShape &input,
+                        const core::symbolic::SymShape &output, std::vector<int64_t> &target) {
+  if (input.Rank() != output.Rank()) {
+    return false;
+  }
+  target.clear();
+  target.reserve(output.Rank());
+  for (std::size_t i = 0; i < output.Rank(); ++i) {
+    if (input[i] == output[i]) {
+      target.push_back(1);
+    } else if (input[i].IsInt() && output[i].IsInt()) {
+      target.push_back(output[i].AsInt());
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool CanSwapOneExpand(const core::symbolic::SymShape &before,
+                      const core::symbolic::SymShape &expanded,
+                      const core::symbolic::SymShape &other,
+                      const core::symbolic::SymShape &output) {
+  if (before == expanded || expanded == other || output != expanded) {
+    return false;
+  }
+  return BroadcastShape(before, other).has_value();
+}
+
+bool CanSwapTwoExpands(const core::symbolic::SymShape &left,
+                       const core::symbolic::SymShape &left_expanded,
+                       const core::symbolic::SymShape &right,
+                       const core::symbolic::SymShape &right_expanded,
+                       const core::symbolic::SymShape &output) {
+  if (left_expanded != right_expanded || left_expanded != output || left.Rank() != right.Rank() ||
+      left == left_expanded || left_expanded == right) {
+    return false;
+  }
+  const std::optional<core::symbolic::SymShape> broadcast = BroadcastShape(left, right);
+  return broadcast.has_value() && *broadcast != output;
+}
+
+bool CompatibleCastWhereShapes(const core::symbolic::SymShape &condition,
+                               const core::symbolic::SymShape &other,
+                               const core::symbolic::SymShape &output,
+                               const core::symbolic::SymShape &before) {
+  if (condition != output) {
+    return false;
+  }
+  const std::optional<core::symbolic::SymShape> broadcast = BroadcastShape(before, other);
+  if (!broadcast.has_value() || broadcast->Rank() != output.Rank()) {
+    return false;
+  }
+  const core::symbolic::SymDim one(1);
+  for (std::size_t i = 0; i < output.Rank(); ++i) {
+    const core::symbolic::SymDim &before_dim = AlignedDim(before, output.Rank(), i, one);
+    if ((*broadcast)[i] != output[i] && (*broadcast)[i] != before_dim) {
+      return false;
+    }
+  }
+  return true;
 }
 
 } // namespace
@@ -613,6 +698,243 @@ ShapeBasedExpandBroadcastMatMulPattern::Apply(core::builder::GraphGraph &graph,
   return ApplyShapeBasedBroadcast("ShapeBasedExpandBroadcastMatMulPattern", graph, nodes);
 }
 
+std::set<std::string> ShapeBasedStaticExpandPattern::FastOpType() const { return {"Expand"}; }
+
+core::builder::MatchResult ShapeBasedStaticExpandPattern::Match(core::builder::GraphGraph &graph,
+                                                                const NodeProto &candidate) const {
+  if (!IsDefaultOp(candidate, "Expand") || candidate.input_size() != 2 ||
+      candidate.output_size() != 1) {
+    return NoMatch(candidate, "candidate is not a default-domain Expand with two inputs");
+  }
+  if (graph.IsConstant(candidate.input()[1].value())) {
+    return NoMatch(candidate, "the Expand target shape is already constant");
+  }
+  if (!graph.HasShape(candidate.input()[0].value()) ||
+      !graph.HasShape(candidate.output()[0].value())) {
+    return NoMatch(candidate, "the Expand input or output shape is unknown");
+  }
+  std::vector<int64_t> target;
+  if (!StaticExpandTarget(graph.GetShape(candidate.input()[0].value()).Shape(),
+                          graph.GetShape(candidate.output()[0].value()).Shape(), target)) {
+    return NoMatch(candidate, "the effective Expand target is not fully static");
+  }
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
+}
+
+utils::RepeatedProtoField<NodeProto>
+ShapeBasedStaticExpandPattern::Apply(core::builder::GraphGraph &graph,
+                                     const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 1 || nodes[0] == nullptr) {
+    throw BuilderError("ShapeBasedStaticExpandPattern::Apply expects one Expand node.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[0]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError(
+        "ShapeBasedStaticExpandPattern::Apply received an unsafe or inconsistent match.");
+  }
+  const NodeProto &expand = *nodes[0];
+  std::vector<int64_t> target;
+  if (!StaticExpandTarget(graph.GetShape(expand.input()[0].value()).Shape(),
+                          graph.GetShape(expand.output()[0].value()).Shape(), target)) {
+    throw BuilderError("ShapeBasedStaticExpandPattern::Apply could not derive a static target.");
+  }
+
+  core::builder::GraphBuilder &builder = graph.Builder();
+  const std::string name = "ShapeBasedStaticExpandPattern--" + expand.name().value();
+  const std::string shape_name = FreeInitializerName(builder, name + "_shape");
+  builder.MakeInitializer(MakeInitializerShape(shape_name.c_str(), target));
+
+  utils::RepeatedProtoField<NodeProto> replacements;
+  NodeProto replacement = MakeNode("Expand", {expand.input()[0].value(), shape_name},
+                                   {expand.output()[0].value()}, "", name.c_str());
+  replacement.set_doc_string(expand.doc_string().value());
+  replacements.push_back(std::move(replacement));
+  return replacements;
+}
+
+std::set<std::string> ShapeBasedExpandSwapPattern::FastOpType() const { return BinaryOpTypes(); }
+
+core::builder::MatchResult ShapeBasedExpandSwapPattern::Match(core::builder::GraphGraph &graph,
+                                                              const NodeProto &candidate) const {
+  if (BinaryOpTypes().find(candidate.op_type().value()) == BinaryOpTypes().end() ||
+      NormaliseDomain(candidate.domain().value()) != kDefaultOnnxDomain ||
+      candidate.input_size() != 2 || candidate.output_size() != 1 ||
+      candidate.attribute_size() != 0) {
+    return NoMatch(candidate, "candidate is not an attribute-free broadcasting binary operator");
+  }
+  if (!graph.HasShape(candidate.input()[0].value()) ||
+      !graph.HasShape(candidate.input()[1].value()) ||
+      !graph.HasShape(candidate.output()[0].value())) {
+    return NoMatch(candidate, "the binary input or output shape is unknown");
+  }
+
+  const NodeProto *left_expand = InputExpand(graph, candidate, 0);
+  const NodeProto *right_expand = InputExpand(graph, candidate, 1);
+  if (left_expand == nullptr && right_expand == nullptr) {
+    return NoMatch(candidate, "neither binary input is produced by Expand");
+  }
+
+  const core::symbolic::SymShape &left_expanded =
+      graph.GetShape(candidate.input()[0].value()).Shape();
+  const core::symbolic::SymShape &right_expanded =
+      graph.GetShape(candidate.input()[1].value()).Shape();
+  const core::symbolic::SymShape &output = graph.GetShape(candidate.output()[0].value()).Shape();
+  if (left_expand == nullptr || right_expand == nullptr) {
+    const NodeProto &expand = *(left_expand == nullptr ? right_expand : left_expand);
+    const std::string &before_name = expand.input()[0].value();
+    if (!graph.HasShape(before_name)) {
+      return NoMatch(candidate, "the pre-expansion input shape is unknown");
+    }
+    const core::symbolic::SymShape &before = graph.GetShape(before_name).Shape();
+    const core::symbolic::SymShape &expanded =
+        left_expand == nullptr ? right_expanded : left_expanded;
+    const core::symbolic::SymShape &other = left_expand == nullptr ? left_expanded : right_expanded;
+    if (!CanSwapOneExpand(before, expanded, other, output)) {
+      return NoMatch(candidate, "the binary operation cannot safely run before Expand");
+    }
+  } else {
+    if (left_expand->input()[1].value() != right_expand->input()[1].value()) {
+      return NoMatch(candidate, "the two Expand nodes use different target values");
+    }
+    if (!graph.HasShape(left_expand->input()[0].value()) ||
+        !graph.HasShape(right_expand->input()[0].value())) {
+      return NoMatch(candidate, "a pre-expansion input shape is unknown");
+    }
+    if (!CanSwapTwoExpands(graph.GetShape(left_expand->input()[0].value()).Shape(), left_expanded,
+                           graph.GetShape(right_expand->input()[0].value()).Shape(), right_expanded,
+                           output)) {
+      return NoMatch(candidate, "the two expansions cannot safely move after the binary operator");
+    }
+  }
+  return core::builder::MatchResult{this, {left_expand, right_expand, &candidate}, nullptr};
+}
+
+utils::RepeatedProtoField<NodeProto>
+ShapeBasedExpandSwapPattern::Apply(core::builder::GraphGraph &graph,
+                                   const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 3 || nodes[2] == nullptr || (nodes[0] == nullptr && nodes[1] == nullptr)) {
+    throw BuilderError(
+        "ShapeBasedExpandSwapPattern::Apply expects two Expand slots and one binary node.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[2]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError(
+        "ShapeBasedExpandSwapPattern::Apply received an unsafe or inconsistent match.");
+  }
+  const NodeProto *left_expand = nodes[0];
+  const NodeProto *right_expand = nodes[1];
+  const NodeProto &binary = *nodes[2];
+  const NodeProto &target_expand = right_expand == nullptr ? *left_expand : *right_expand;
+  core::builder::GraphBuilder &builder = graph.Builder();
+  const std::string name = "ShapeBasedExpandSwapPattern--" + binary.name().value();
+  const std::string binary_output = builder.UniqueName(name + "_binary");
+
+  utils::RepeatedProtoField<NodeProto> replacements;
+  if (left_expand != nullptr && graph.IsUsedMoreThanOnce(left_expand->output()[0].value())) {
+    replacements.push_back(*left_expand);
+  }
+  if (right_expand != nullptr && right_expand != left_expand &&
+      graph.IsUsedMoreThanOnce(right_expand->output()[0].value())) {
+    replacements.push_back(*right_expand);
+  }
+  replacements.push_back(MakeNode(
+      binary.op_type().value().c_str(),
+      {left_expand == nullptr ? binary.input()[0].value() : left_expand->input()[0].value(),
+       right_expand == nullptr ? binary.input()[1].value() : right_expand->input()[0].value()},
+      {binary_output}, "", (name + "--binary").c_str()));
+  replacements.push_back(MakeNode("Expand", {binary_output, target_expand.input()[1].value()},
+                                  {binary.output()[0].value()}, "", (name + "--expand").c_str()));
+  return replacements;
+}
+
+std::set<std::string> ShapeBasedExpandCastWhereSwapPattern::FastOpType() const { return {"Where"}; }
+
+core::builder::MatchResult
+ShapeBasedExpandCastWhereSwapPattern::Match(core::builder::GraphGraph &graph,
+                                            const NodeProto &candidate) const {
+  if (!IsDefaultOp(candidate, "Where") || candidate.input_size() != 3 ||
+      candidate.output_size() != 1) {
+    return NoMatch(candidate, "candidate is not a default-domain Where with three inputs");
+  }
+  if (graph.IsUsedMoreThanOnce(candidate.input()[0].value())) {
+    return NoMatch(candidate, "the Where condition is shared");
+  }
+  const NodeProto *cast = graph.NodeBefore(candidate.input()[0].value());
+  if (cast == nullptr || !IsDefaultOp(*cast, "Cast") || cast->input_size() != 1 ||
+      cast->output_size() != 1) {
+    return NoMatch(candidate, "the Where condition is not produced by Cast");
+  }
+  const int branch = candidate.input()[1].value() == cast->input()[0].value()   ? 1
+                     : candidate.input()[2].value() == cast->input()[0].value() ? 2
+                                                                                : 0;
+  if (branch == 0) {
+    return NoMatch(candidate, "the Cast input is not a Where value branch");
+  }
+  const NodeProto *expand = graph.NodeBefore(cast->input()[0].value());
+  if (!IsExpand(expand)) {
+    return NoMatch(candidate, "the Cast input is not produced by Expand");
+  }
+  const std::vector<const NodeProto *> &consumers = graph.NextNodes(expand->output()[0].value());
+  if (consumers.size() != 2) {
+    return NoMatch(candidate, "the Expand output is not used only by Cast and Where");
+  }
+
+  const std::string &other = candidate.input()[3 - branch].value();
+  if (!graph.HasShape(candidate.input()[0].value()) || !graph.HasShape(other) ||
+      !graph.HasShape(candidate.output()[0].value()) ||
+      !graph.HasShape(expand->input()[0].value())) {
+    return NoMatch(candidate, "a required Cast/Where shape is unknown");
+  }
+  if (!CompatibleCastWhereShapes(graph.GetShape(candidate.input()[0].value()).Shape(),
+                                 graph.GetShape(other).Shape(),
+                                 graph.GetShape(candidate.output()[0].value()).Shape(),
+                                 graph.GetShape(expand->input()[0].value()).Shape())) {
+    return NoMatch(candidate, "the pre-expansion Where does not preserve the output shape");
+  }
+  return core::builder::MatchResult{this, {expand, cast, &candidate}, nullptr};
+}
+
+utils::RepeatedProtoField<NodeProto>
+ShapeBasedExpandCastWhereSwapPattern::Apply(core::builder::GraphGraph &graph,
+                                            const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 3 || nodes[0] == nullptr || nodes[1] == nullptr || nodes[2] == nullptr) {
+    throw BuilderError("ShapeBasedExpandCastWhereSwapPattern::Apply expects Expand, Cast, and "
+                       "Where nodes.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[2]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError("ShapeBasedExpandCastWhereSwapPattern::Apply received an unsafe or "
+                       "inconsistent match.");
+  }
+  const NodeProto &expand = *nodes[0];
+  const NodeProto &cast = *nodes[1];
+  const NodeProto &where = *nodes[2];
+  const int branch = where.input()[1].value() == expand.output()[0].value() ? 1 : 2;
+  core::builder::GraphBuilder &builder = graph.Builder();
+  const std::string name = "ShapeBasedExpandCastWhereSwapPattern--" + where.name().value();
+  const std::string cast_output = builder.UniqueName(name + "_cast");
+  const std::string where_output = builder.UniqueName(name + "_where");
+
+  NodeProto replacement_cast =
+      MakeNode("Cast", {expand.input()[0].value()}, {cast_output}, "", (name + "--cast").c_str());
+  for (const AttributeProto &attribute : cast.attribute()) {
+    replacement_cast.mutable_attribute()->push_back(attribute);
+  }
+  const std::vector<std::string> where_inputs =
+      branch == 1 ? std::vector<std::string>{cast_output, expand.input()[0].value(),
+                                             where.input()[2].value()}
+                  : std::vector<std::string>{cast_output, where.input()[1].value(),
+                                             expand.input()[0].value()};
+
+  utils::RepeatedProtoField<NodeProto> replacements;
+  replacements.push_back(std::move(replacement_cast));
+  replacements.push_back(
+      MakeNode("Where", where_inputs, {where_output}, "", (name + "--where").c_str()));
+  replacements.push_back(MakeNode("Expand", {where_output, expand.input()[1].value()},
+                                  {where.output()[0].value()}, "", (name + "--expand").c_str()));
+  return replacements;
+}
+
 std::set<std::string> ExpandSwapPattern::FastOpType() const { return {"Expand"}; }
 
 core::builder::MatchResult ExpandSwapPattern::Match(core::builder::GraphGraph &graph,
@@ -868,6 +1190,67 @@ ExpandUnsqueezeExpandPattern::Apply(core::builder::GraphGraph &graph,
                                   {new_name}, "", (name + "--unsqueeze").c_str()));
   replacements.push_back(MakeNode("Expand", {new_name, shape_init}, {expand2.output()[0].value()},
                                   "", (name + "--expand").c_str()));
+  return replacements;
+}
+
+std::set<std::string> SwapExpandReshapePattern::FastOpType() const { return {"Reshape"}; }
+
+core::builder::MatchResult SwapExpandReshapePattern::Match(core::builder::GraphGraph &graph,
+                                                           const NodeProto &candidate) const {
+  if (!IsDefaultOp(candidate, "Reshape") || candidate.input_size() != 2 ||
+      candidate.output_size() != 1) {
+    return NoMatch(candidate, "candidate is not a default-domain Reshape with two inputs");
+  }
+  std::vector<int64_t> reshape_target;
+  if (!ReadConstantShape(graph, candidate.input()[1].value(), reshape_target) ||
+      reshape_target != std::vector<int64_t>({0, 1, -1})) {
+    return NoMatch(candidate, "the Reshape target is not the constant [0, 1, -1]");
+  }
+  if (graph.IsUsedMoreThanOnce(candidate.input()[0].value())) {
+    return NoMatch(candidate, "the Expand output is shared");
+  }
+  const NodeProto *expand = graph.NodeBefore(candidate.input()[0].value());
+  if (!IsExpand(expand)) {
+    return NoMatch(candidate, "the Reshape input is not produced by Expand");
+  }
+  if (!graph.HasShape(expand->input()[0].value()) ||
+      graph.GetShape(expand->input()[0].value()).Shape().Rank() != 3) {
+    return NoMatch(candidate, "the pre-expansion input does not have rank three");
+  }
+  if (!graph.HasShape(expand->input()[1].value())) {
+    return NoMatch(candidate, "the Expand target has no inferred shape value");
+  }
+  const core::symbolic::SymTensor &target = graph.GetShape(expand->input()[1].value());
+  if (!target.HasValueAsShape() || target.ValueAsShape().Rank() != 3 ||
+      !target.ValueAsShape()[1].IsInt() || target.ValueAsShape()[1].AsInt() != 1 ||
+      !target.ValueAsShape()[2].IsInt() || target.ValueAsShape()[2].AsInt() != 1) {
+    return NoMatch(candidate, "the Expand target does not end with [1, 1]");
+  }
+  return core::builder::MatchResult{this, {expand, &candidate}, &candidate};
+}
+
+utils::RepeatedProtoField<NodeProto>
+SwapExpandReshapePattern::Apply(core::builder::GraphGraph &graph,
+                                const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
+    throw BuilderError("SwapExpandReshapePattern::Apply expects one Expand and one Reshape.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[1]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError("SwapExpandReshapePattern::Apply received an unsafe or inconsistent match.");
+  }
+  const NodeProto &expand = *nodes[0];
+  const NodeProto &reshape = *nodes[1];
+  core::builder::GraphBuilder &builder = graph.Builder();
+  const std::string name = "SwapExpandReshapePattern--" + reshape.name().value();
+  const std::string reshape_output = builder.UniqueName(name + "_reshape");
+
+  utils::RepeatedProtoField<NodeProto> replacements;
+  replacements.push_back(MakeNode("Reshape",
+                                  {expand.input()[0].value(), reshape.input()[1].value()},
+                                  {reshape_output}, "", (name + "--reshape").c_str()));
+  replacements.push_back(MakeNode("Expand", {reshape_output, expand.input()[1].value()},
+                                  {reshape.output()[0].value()}, "", (name + "--expand").c_str()));
   return replacements;
 }
 

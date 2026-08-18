@@ -23,16 +23,12 @@ a smooth replacement.
     cplusplus_linking
 
 .. toctree::
-    :caption: Runtime
+    :caption: Core
     :maxdepth: 1
 
-    runtime/index
-
-.. toctree::
-    :caption: Shape Inference
-    :maxdepth: 1
-
+    builder/index
     shape_inference/index
+    runtime/index
 
 .. toctree::
     :caption: Fuzzing

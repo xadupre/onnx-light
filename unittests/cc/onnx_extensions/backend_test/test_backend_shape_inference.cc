@@ -2621,4 +2621,50 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
       << "no big-model backend case carried expected in-place-reuse metadata";
 }
 
+// Verifies that the fused Qwen3 case exists alongside its inlined sibling and
+// that it truly expresses the two building blocks with their fused operators
+// (``Attention`` and ``RMSNormalization``) instead of the explicit subgraphs
+// used by ``test_cc_shape_inference_big_qwen3_4_layers_like``.
+TEST(BackendTestCaseShapeInference, Qwen3FusedUsesFusedOperators) {
+  const std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  const TestCase *fused = nullptr;
+  const TestCase *inlined = nullptr;
+  for (const TestCase &tc : cases) {
+    if (tc.name == "test_cc_shape_inference_big_qwen3_4_layers_like_fused") {
+      fused = &tc;
+    } else if (tc.name == "test_cc_shape_inference_big_qwen3_4_layers_like") {
+      inlined = &tc;
+    }
+  }
+  ASSERT_NE(fused, nullptr) << "fused qwen3 big-model case was not collected";
+  ASSERT_NE(inlined, nullptr) << "inlined qwen3 big-model case was not collected";
+
+  const auto count_op = [](const TestCase &tc, const std::string &op_type) {
+    size_t count = 0;
+    for (const auto &node : tc.model().ref_graph().ref_node()) {
+      if (node.op_type() == op_type) {
+        ++count;
+      }
+    }
+    return count;
+  };
+
+  // One Attention node per transformer layer (4 layers).
+  EXPECT_EQ(count_op(*fused, "Attention"), 4u);
+  // Per layer: the pre-attention (input) norm, the per-head Q and K norms and
+  // the post-attention norm — four RMSNormalization nodes — plus the single
+  // final norm: 4 * 4 + 1 = 17 RMSNormalization nodes.
+  EXPECT_EQ(count_op(*fused, "RMSNormalization"), 17u);
+
+  // The inlined sibling must not use the fused operators; it spells them out.
+  EXPECT_EQ(count_op(*inlined, "Attention"), 0u);
+  EXPECT_EQ(count_op(*inlined, "RMSNormalization"), 0u);
+
+  // Both variants share the same public signature (inputs / outputs).
+  EXPECT_EQ(fused->model().ref_graph().ref_input().size(),
+            inlined->model().ref_graph().ref_input().size());
+  EXPECT_EQ(fused->model().ref_graph().ref_output().size(),
+            inlined->model().ref_graph().ref_output().size());
+}
+
 } // namespace Test

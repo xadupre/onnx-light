@@ -196,6 +196,26 @@ void RegisterReduceMaxCases(std::vector<TestCase> &registry, TestMode mode) {
       return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
     });
   }
+
+  // BOOL input with an empty reduced dimension: the minimum BOOL value is
+  // ``False``, so an empty ReduceMax must yield all ``False`` (not ``True``,
+  // which casting ``-inf`` would wrongly produce). Mirrors upstream
+  // ``test_reduce_max_empty_set_bool``.
+  {
+    const OpsetId opset = DefaultOpset(20);
+    NodeProto node;
+    node.set_op_type("ReduceMax");
+    node.add_input("data");
+    node.add_input("axes");
+    node.add_output("reduced");
+    AddAttribute<int64_t>(node, "keepdims", 1);
+    Expect(registry, std::move(node), "test_reduce_max_empty_set_bool", {opset}, [=]() -> IoData {
+      Tensor data = Tensor::FromBool("", {2, 0, 4}, {});
+      Tensor axes = Tensor::FromInt64("", {1}, {1});
+      Tensor reduced = reduce_max_kernel(data, axes, /*keepdims=*/true, /*noop=*/false);
+      return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+    });
+  }
 }
 
 void RegisterReduceMinCases(std::vector<TestCase> &registry, TestMode mode) {

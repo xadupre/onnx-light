@@ -141,6 +141,10 @@ requests:
      - Ports ``ShapeBasedExpandBroadcastPattern`` and
        ``ShapeBasedExpandBroadcastMatMulPattern`` with optional positional
        match roles, symbolic-shape guards, tests, registration, and bindings.
+   * - `PR #4539 <https://github.com/xadupre/onnx-light/pull/4539>`_
+     - Final rewrite coordinates
+     - Resolves ``MatchResult::insert_at`` while applying each batch, records
+       final ``added_nodes_positions``, and replays only from those coordinates.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -645,7 +649,8 @@ Implementation order
 12. Resolve every ``MatchResult::insert_at`` while applying its rewrite batch,
     record exact ``added_nodes_positions`` in the returned ``LocalRewriting``,
     and make ``Replay`` use only those final coordinates; test multiple
-    disjoint replacements and multiple nodes added by one pattern.
+    disjoint replacements and multiple nodes added by one pattern
+    (`PR #4539 <https://github.com/xadupre/onnx-light/pull/4539>`_).
 
 Remaining pattern batches
 +++++++++++++++++++++++++

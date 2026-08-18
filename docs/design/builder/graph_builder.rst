@@ -71,3 +71,13 @@ API reference
 * **Python API**:
   :class:`onnx_light.onnx_core.graph_builder.GraphBuilder`.
 * **C++ API**: :doc:`/api/cpp/onnx_core/builder/index`.
+
+Examples
+--------
+
+* :ref:`l-example-plot-pretty-onnx` inspects a model built and rendered
+  through the builder.
+* :ref:`l-example-plot-compute-context-memory` and
+  :ref:`l-example-plot-initializer-statistics` use the builder to report
+  the peak-memory and initializer statistics it estimates.
+

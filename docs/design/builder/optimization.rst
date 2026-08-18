@@ -70,3 +70,12 @@ API reference
   list of registered patterns is available through
   :func:`~onnx_light.onnx_core.optimization.standard_pattern_names`.
 * **C++ API**: :doc:`/api/cpp/onnx_core/builder/index`.
+
+Examples
+--------
+
+* :ref:`l-example-plot-pattern-optimization` is a runnable example
+  covering statistics and replay of the pattern optimizer.
+* :ref:`l-howto-add-custom-pattern` is a Python/C++ how-to on writing a
+  custom pattern and choosing its priority.
+

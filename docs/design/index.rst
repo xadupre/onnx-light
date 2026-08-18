@@ -26,8 +26,7 @@ a smooth replacement.
     :caption: Core
     :maxdepth: 1
 
-    graph_builder
-    optimization
+    builder/index
     shape_inference/index
     runtime/index
 

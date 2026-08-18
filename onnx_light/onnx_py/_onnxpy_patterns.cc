@@ -124,6 +124,9 @@ std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::str
   if (name == "ExpandBroadcast") {
     return std::make_shared<onnx_patterns::ExpandBroadcastPattern>(priority.value_or(0));
   }
+  if (name == "ShapeBasedConcatExpand") {
+    return std::make_shared<onnx_patterns::ShapeBasedConcatExpandPattern>(priority.value_or(0));
+  }
   if (name == "ExpandSwap") {
     return std::make_shared<onnx_patterns::ExpandSwapPattern>(priority.value_or(0));
   }
@@ -292,6 +295,10 @@ NB_MODULE(_onnxpypatterns, m) {
       m, "ExpandBroadcastPattern",
       "Drops an ``Expand`` feeding an element-wise binary operator that already "
       "broadcasts the pre-expanded input.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ShapeBasedConcatExpandPattern, core::builder::PatternOptimization>(
+      m, "ShapeBasedConcatExpandPattern",
+      "Simplifies a dynamic ``Concat`` target when ``Expand`` changes one dimension.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
   nb::class_<onnx_patterns::ExpandSwapPattern, core::builder::PatternOptimization>(
       m, "ExpandSwapPattern",

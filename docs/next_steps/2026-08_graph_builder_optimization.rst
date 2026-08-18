@@ -662,8 +662,14 @@ The upstream default list currently contains 104 enabled patterns.
 ``SwapExpandUnsqueezePattern``, ``ExpandUnsqueezeExpandPattern``,
 ``TransposeTransposePattern``, ``TransposeGatherPattern``,
 ``UnsqueezeUnsqueezePattern``, ``SqueezeUnsqueezePattern``,
-``ShapeTransposePattern``, and ``UnsqueezeShapePattern`` are already
-covered, leaving 79 patterns. They are grouped into nine cohesive pull requests below rather than
+``ShapeTransposePattern``, ``UnsqueezeShapePattern``,
+``ConcatEmptyPattern``, ``ConcatGatherPattern``,
+``ConcatTwiceUnaryPattern``, ``GatherConcatPattern``,
+``GatherGatherPattern``, ``GathersSplitPattern``, ``GatherShapePattern``,
+``SequenceConstructAtPattern``, ``SplitToSequenceSequenceAtPattern``,
+``SliceSlicePattern``, ``SlicesSplitPattern``, ``SplitConcatPattern``, and
+``ShapeBasedConcatExpandPattern`` are already covered, leaving 66 patterns.
+They are grouped into cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;
 this keeps reviews and ``git bisect`` useful without creating 100 pull
@@ -673,21 +679,20 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ``ConstantToInitializerPattern``, ``ConvBiasNullPattern``,
    ``PadConvPattern``, ``DropoutPattern``, ``IdentityPattern``, and
    ``NotNotPattern`` are ported and registered.
-#. **Concat, gather, split, slice, and sequence (12 patterns).**
+#. **Concat, gather, split, slice, and sequence (done).**
    ``ConcatEmptyPattern``, ``ConcatGatherPattern``,
    ``ConcatTwiceUnaryPattern``, ``GatherConcatPattern``,
    ``GatherGatherPattern``, ``GathersSplitPattern``, ``GatherShapePattern``,
    ``SequenceConstructAtPattern``, ``SplitToSequenceSequenceAtPattern``,
    ``SliceSlicePattern``, ``SlicesSplitPattern``, and ``SplitConcatPattern``.
-#. **Expand, where, and equal (7 patterns remaining).**
-   ``ShapeBasedConcatExpandPattern``,
+#. **Expand, where, and equal (6 patterns remaining).**
    ``ShapeBasedExpandBroadcastPattern``,
    ``ShapeBasedExpandBroadcastMatMulPattern``,
    ``ShapeBasedExpandCastWhereSwapPattern``, ``ShapeBasedExpandSwapPattern``,
    ``ShapeBasedStaticExpandPattern``, and ``SwapExpandReshapePattern``.
    ``ExpandPattern``, ``ExpandBroadcastPattern``, ``ExpandSwapPattern``,
    ``SwapExpandUnsqueezePattern``, and ``ExpandUnsqueezeExpandPattern`` are
-   ported and registered.
+   ported and registered, together with ``ShapeBasedConcatExpandPattern``.
 #. **Reshape canonicalization (13 patterns).**
    ``ConcatReshapePattern``, ``ReshapePattern``, ``ReduceReshapePattern``,
    ``Reshape2Of3Pattern``, ``ReshapeReshapeBinaryPattern``,
@@ -696,13 +701,17 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ``ShapeBasedReshapeIsSqueezePattern``, ``ShapedBasedReshapePattern``,
    ``StaticConcatReshapePattern``, ``UnsqueezeOrSqueezeReshapePattern``, and
    ``UnsqueezeReshapePattern``.
-#. **Squeeze, unsqueeze, and transpose (12 patterns).**
+#. **Squeeze, unsqueeze, and transpose (6 patterns remaining).**
    ``MulUnsqueezeUnsqueezePattern``, ``SqueezeAddPattern``,
    ``SqueezeBinaryUnsqueezePattern``, ``SqueezeUnsqueezePattern``,
    ``UnsqueezeUnsqueezePattern``, ``SwapUnsqueezeTransposePattern``,
    ``TransposeEqualReshapePattern``, ``TransposeGatherPattern``,
    ``TransposeReshapeTransposePattern``, ``TransposeTransposePattern``,
    ``ShapeTransposePattern``, and ``UnsqueezeShapePattern``.
+   ``SqueezeUnsqueezePattern``, ``UnsqueezeUnsqueezePattern``,
+   ``TransposeGatherPattern``, ``TransposeTransposePattern``,
+   ``ShapeTransposePattern``, and ``UnsqueezeShapePattern`` are ported and
+   registered.
 #. **Generic algebra, reduction, and graph identities (12 patterns).**
    ``MulMulMulScalarPattern``, ``SwitchOrderBinaryPattern``,
    ``SwapRangeAddScalarPattern``, ``ReduceArgTopKPattern``,

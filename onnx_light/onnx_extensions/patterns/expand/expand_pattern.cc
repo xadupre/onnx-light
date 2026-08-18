@@ -302,6 +302,124 @@ ExpandBroadcastPattern::Apply(core::builder::GraphGraph &graph,
   return replacements;
 }
 
+std::set<std::string> ShapeBasedConcatExpandPattern::FastOpType() const { return {"Expand"}; }
+
+core::builder::MatchResult ShapeBasedConcatExpandPattern::Match(core::builder::GraphGraph &graph,
+                                                                const NodeProto &candidate) const {
+  if (!IsDefaultOp(candidate, "Expand") || candidate.input_size() != 2 ||
+      candidate.output_size() != 1) {
+    return NoMatch(candidate, "candidate is not a default-domain Expand with two inputs");
+  }
+  const std::string &target = candidate.input()[1].value();
+  if (graph.IsConstant(target)) {
+    return NoMatch(candidate, "the Expand target shape is already constant");
+  }
+  if (graph.IsUsedMoreThanOnce(target)) {
+    return NoMatch(candidate, "the Expand target shape is shared");
+  }
+
+  const NodeProto *concat = graph.NodeBefore(target);
+  if (concat == nullptr || !IsDefaultOp(*concat, "Concat") || concat->output_size() != 1 ||
+      GetAttributeOr<int64_t>(*concat, "axis", 0) != 0) {
+    return NoMatch(candidate, "the target shape is not produced by an axis-0 Concat");
+  }
+  if (!graph.HasShape(candidate.input()[0].value()) ||
+      !graph.HasShape(candidate.output()[0].value())) {
+    return NoMatch(candidate, "the Expand input or output shape is unknown");
+  }
+
+  const core::symbolic::SymShape &input_shape =
+      graph.GetShape(candidate.input()[0].value()).Shape();
+  const core::symbolic::SymShape &output_shape =
+      graph.GetShape(candidate.output()[0].value()).Shape();
+  if (input_shape.Rank() != output_shape.Rank() ||
+      output_shape.Rank() != static_cast<std::size_t>(concat->input_size())) {
+    return NoMatch(candidate, "the input, output, and Concat target ranks differ");
+  }
+
+  std::size_t changed_index = output_shape.Rank();
+  for (std::size_t i = 0; i < output_shape.Rank(); ++i) {
+    const std::string &name = concat->input()[static_cast<int>(i)].value();
+    if (!graph.HasShape(name)) {
+      return NoMatch(candidate, "a Concat input has no known shape");
+    }
+    const core::symbolic::SymShape &part_shape = graph.GetShape(name).Shape();
+    if (part_shape.Rank() != 1 || !part_shape[0].IsInt() || part_shape[0].AsInt() != 1) {
+      return NoMatch(candidate, "each Concat input must be a one-element vector");
+    }
+    if (input_shape[i] != output_shape[i]) {
+      if (changed_index != output_shape.Rank()) {
+        return NoMatch(candidate, "the Expand changes more than one dimension");
+      }
+      changed_index = i;
+    }
+  }
+  if (changed_index == output_shape.Rank()) {
+    return NoMatch(candidate, "the Expand does not change any dimension");
+  }
+
+  bool simplifies_target = false;
+  for (std::size_t i = 0; i < output_shape.Rank(); ++i) {
+    if (i != changed_index &&
+        !graph.IsConstantScalar(concat->input()[static_cast<int>(i)].value(), 1.0, false)) {
+      simplifies_target = true;
+      break;
+    }
+  }
+  if (!simplifies_target) {
+    return NoMatch(candidate, "the unchanged target dimensions are already constant ones");
+  }
+
+  return core::builder::MatchResult{this, {concat, &candidate}, &candidate};
+}
+
+utils::RepeatedProtoField<NodeProto>
+ShapeBasedConcatExpandPattern::Apply(core::builder::GraphGraph &graph,
+                                     const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
+    throw BuilderError(
+        "ShapeBasedConcatExpandPattern::Apply expects one Concat and one Expand node.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[1]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError(
+        "ShapeBasedConcatExpandPattern::Apply received an unsafe or inconsistent match.");
+  }
+  const NodeProto &concat = *nodes[0];
+  const NodeProto &expand = *nodes[1];
+  const core::symbolic::SymShape &input_shape = graph.GetShape(expand.input()[0].value()).Shape();
+  const core::symbolic::SymShape &output_shape = graph.GetShape(expand.output()[0].value()).Shape();
+
+  std::size_t changed_index = output_shape.Rank();
+  for (std::size_t i = 0; i < output_shape.Rank(); ++i) {
+    if (input_shape[i] != output_shape[i]) {
+      changed_index = i;
+      break;
+    }
+  }
+  if (changed_index == output_shape.Rank()) {
+    throw BuilderError("ShapeBasedConcatExpandPattern::Apply found no expanded dimension.");
+  }
+
+  core::builder::GraphBuilder &builder = graph.Builder();
+  const std::string name = "ShapeBasedConcatExpandPattern--" + expand.name().value();
+  const std::string one = FreeInitializerName(builder, name + "_one");
+  builder.MakeInitializer(MakeInitializerShape(one.c_str(), {1}));
+
+  std::vector<std::string> target_inputs(static_cast<std::size_t>(concat.input_size()), one);
+  target_inputs[changed_index] = concat.input()[static_cast<int>(changed_index)].value();
+  const std::string new_target = builder.UniqueName(name + "_shape");
+  NodeProto replacement_concat =
+      MakeNode("Concat", target_inputs, {new_target}, "", (name + "--concat").c_str());
+  AddAttribute<int64_t>(replacement_concat, "axis", 0);
+
+  utils::RepeatedProtoField<NodeProto> replacements;
+  replacements.push_back(std::move(replacement_concat));
+  replacements.push_back(MakeNode("Expand", {expand.input()[0].value(), new_target},
+                                  {expand.output()[0].value()}, "", (name + "--expand").c_str()));
+  return replacements;
+}
+
 std::set<std::string> ExpandSwapPattern::FastOpType() const { return {"Expand"}; }
 
 core::builder::MatchResult ExpandSwapPattern::Match(core::builder::GraphGraph &graph,

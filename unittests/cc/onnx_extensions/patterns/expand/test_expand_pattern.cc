@@ -118,6 +118,79 @@ TEST(ExpandBroadcastPattern, KeepsExpandWhenOperandsDoNotBroadcast) {
   EXPECT_EQ(match.pattern, nullptr);
 }
 
+TEST(ShapeBasedConcatExpandPattern, ReplacesUnchangedTargetDimensionsWithOnes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat,
+                    core::symbolic::SymShape({core::symbolic::SymDim("a"), 1}));
+  AddInt64Initializer(builder, "two", {2});
+  NodeProto shape = MakeNode("Shape", {"x"}, {"first"});
+  AddAttribute<int64_t>(shape, "start", 0);
+  AddAttribute<int64_t>(shape, "end", 1);
+  builder.MakeNode("Shape", {"x"}, {"first"}, "", "", shape.attribute());
+  NodeProto concat = MakeNode("Concat", {"first", "two"}, {"target"});
+  AddAttribute<int64_t>(concat, "axis", 0);
+  builder.MakeNode("Concat", {"first", "two"}, {"target"}, "", "", concat.attribute());
+  builder.MakeNode("Expand", {"x", "target"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ShapeBasedConcatExpandPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[2]);
+  ASSERT_EQ(match.pattern, &pattern);
+
+  const utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 2u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Concat");
+  ASSERT_EQ(replacements[0].input_size(), 2);
+  EXPECT_EQ(InitializerValues(builder, replacements[0].input()[0].value()),
+            (std::vector<int64_t>{1}));
+  EXPECT_EQ(replacements[0].input()[1].value(), "two");
+  EXPECT_EQ(replacements[1].op_type().value(), "Expand");
+  EXPECT_EQ(replacements[1].input()[0].value(), "x");
+  EXPECT_EQ(replacements[1].input()[1].value(), replacements[0].output()[0].value());
+  EXPECT_EQ(replacements[1].output()[0].value(), "out");
+}
+
+TEST(ShapeBasedConcatExpandPattern, RejectsTwoChangedDimensions) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 1}));
+  AddInt64Initializer(builder, "two", {2});
+  AddInt64Initializer(builder, "three", {3});
+  NodeProto concat = MakeNode("Concat", {"two", "three"}, {"target"});
+  AddAttribute<int64_t>(concat, "axis", 0);
+  builder.MakeNode("Concat", {"two", "three"}, {"target"}, "", "", concat.attribute());
+  builder.MakeNode("Expand", {"x", "target"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ShapeBasedConcatExpandPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
+  EXPECT_EQ(match.pattern, nullptr);
+}
+
+TEST(ShapeBasedConcatExpandPattern, RejectsSharedTargetShape) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat,
+                    core::symbolic::SymShape({core::symbolic::SymDim("a"), 1}));
+  AddInt64Initializer(builder, "two", {2});
+  NodeProto shape = MakeNode("Shape", {"x"}, {"first"});
+  AddAttribute<int64_t>(shape, "start", 0);
+  AddAttribute<int64_t>(shape, "end", 1);
+  builder.MakeNode("Shape", {"x"}, {"first"}, "", "", shape.attribute());
+  NodeProto concat = MakeNode("Concat", {"first", "two"}, {"target"});
+  AddAttribute<int64_t>(concat, "axis", 0);
+  builder.MakeNode("Concat", {"first", "two"}, {"target"}, "", "", concat.attribute());
+  builder.MakeNode("Expand", {"x", "target"}, {"out"});
+  builder.MakeNode("Identity", {"target"}, {"saved_target"});
+  builder.MakeOutput("out");
+  builder.MakeOutput("saved_target");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ShapeBasedConcatExpandPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[2]);
+  EXPECT_EQ(match.pattern, nullptr);
+}
+
 TEST(ExpandSwapPattern, MovesExpandPastUnary) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 5, 7}));

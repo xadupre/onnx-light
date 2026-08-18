@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -37,5 +38,13 @@ std::vector<std::string> RegisteredPatternNames();
 
 /// Creates one pattern instance from every registered factory.
 std::vector<std::unique_ptr<PatternOptimization>> CreateRegisteredPatterns();
+
+/**
+ * Creates one registered pattern by name.
+ *
+ * When ``priority`` is specified, it overrides the pattern default.
+ */
+std::unique_ptr<PatternOptimization>
+CreateRegisteredPattern(const std::string &name, std::optional<int> priority = std::nullopt);
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::builder

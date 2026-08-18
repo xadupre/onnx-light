@@ -162,6 +162,19 @@ void RegisterPatterns() {
         []() -> std::unique_ptr<core::builder::PatternOptimization> {
           return std::make_unique<ShapeBasedExpandBroadcastMatMulPattern>();
         });
+    core::builder::RegisterPattern("ShapeBasedStaticExpand",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ShapeBasedStaticExpandPattern>();
+                                   });
+    core::builder::RegisterPattern("ShapeBasedExpandSwap",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ShapeBasedExpandSwapPattern>();
+                                   });
+    core::builder::RegisterPattern(
+        "ShapeBasedExpandCastWhereSwap",
+        []() -> std::unique_ptr<core::builder::PatternOptimization> {
+          return std::make_unique<ShapeBasedExpandCastWhereSwapPattern>();
+        });
     core::builder::RegisterPattern("ExpandSwap",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ExpandSwapPattern>();
@@ -239,6 +252,10 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("ShapeBasedShapeShapeAdd", [] {
       return std::make_unique<ShapeBasedShapeShapeAddPattern>();
     });
+    core::builder::RegisterPattern("SwapExpandReshape",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<SwapExpandReshapePattern>();
+                                   });
     core::builder::RegisterPattern("TransposeTranspose",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<TransposeTransposePattern>();
@@ -266,6 +283,12 @@ void RegisterPatterns() {
     return true;
   }();
   (void)registered;
+}
+
+std::unique_ptr<core::builder::PatternOptimization> CreatePattern(const std::string &name,
+                                                                  std::optional<int> priority) {
+  RegisterPatterns();
+  return core::builder::CreateRegisteredPattern(name, priority);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_patterns

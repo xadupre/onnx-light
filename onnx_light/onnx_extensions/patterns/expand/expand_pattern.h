@@ -154,6 +154,82 @@ public:
 };
 
 /**
+ * Replaces a dynamic ``Expand`` target with an equivalent constant target.
+ *
+ * Dimensions that are unchanged become ``1``; changed dimensions must be
+ * statically known and become their output size.
+ */
+class ShapeBasedStaticExpandPattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit ShapeBasedStaticExpandPattern(int priority = 0)
+      : PatternOptimization(priority, "ShapeBasedStaticExpand") {}
+
+  /// Returns ``Expand`` as the only possible root operator.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds a dynamic Expand whose effective broadcast target is static.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Rebuilds Expand with a constant broadcast target.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
+ * Moves input ``Expand`` nodes after a broadcasting binary operator.
+ *
+ * The binary operator runs on the smaller pre-expansion inputs and one trailing
+ * ``Expand`` restores its original output shape.
+ */
+class ShapeBasedExpandSwapPattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit ShapeBasedExpandSwapPattern(int priority = 0)
+      : PatternOptimization(priority, "ShapeBasedExpandSwap") {}
+
+  /// Returns broadcasting binary operators as possible roots.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds a binary operator whose input expansions can be delayed.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Emits the binary operator before one trailing Expand.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
+ * Moves an ``Expand`` after ``Cast`` and ``Where``.
+ *
+ * ``Where(Cast(Expand(x)), Expand(x), other)`` becomes
+ * ``Expand(Where(Cast(x), x, other))`` when symbolic shapes prove that the
+ * smaller Where broadcasts to the same output.
+ */
+class ShapeBasedExpandCastWhereSwapPattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit ShapeBasedExpandCastWhereSwapPattern(int priority = 0)
+      : PatternOptimization(priority, "ShapeBasedExpandCastWhereSwap") {}
+
+  /// Returns ``Where`` as the only possible root operator.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds an Expand/Cast/Where chain that can run before expansion.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Emits Cast and Where on the pre-expanded input, then expands the result.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
  * Moves an ``Expand`` past a following unary-like operator.
  *
  * ``Expand(x, shape)`` followed by a shape-preserving unary operator ``Op``
@@ -229,6 +305,32 @@ public:
                                    const NodeProto &candidate) const override;
 
   /// Emits ``Unsqueeze`` on the original tensor and a single trailing ``Expand``.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
+ * Swaps an ``Expand`` with a following constant-shape ``Reshape``.
+ *
+ * The specialized rank-three form ``Reshape(Expand(x, s), [0, 1, -1])`` becomes
+ * ``Expand(Reshape(x, [0, 1, -1]), s)`` when the trailing dimensions of ``s``
+ * are both one.
+ */
+class SwapExpandReshapePattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit SwapExpandReshapePattern(int priority = 0)
+      : PatternOptimization(priority, "SwapExpandReshape") {}
+
+  /// Returns ``Reshape`` as the only possible root operator.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds the supported Expand/Reshape rank-three form.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Emits Reshape before Expand.
   utils::RepeatedProtoField<NodeProto>
   Apply(core::builder::GraphGraph &graph,
         const std::vector<const NodeProto *> &nodes) const override;

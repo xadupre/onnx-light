@@ -13,7 +13,7 @@ does not recognise and raises :class:`ValueError`.
 *onnx-light* lets you plug in a callback that handles the shape
 inference for any ``(domain, op_type)`` pair, in Python and in C++. Once
 registered, the callback is invoked transparently by
-:cpp:func:`~onnx_light.onnx_core.shape_inference.compute_shape_node` and
+:func:`~onnx_light.onnx_core.shape_inference.compute_shape_node` and
 :func:`~onnx_light.onnx_core.shape_inference.compute_shape_model` in
 Python, and by
 :cpp:func:`onnx_light::core::shapes::ShapesContext::ComputeShapeNode` and

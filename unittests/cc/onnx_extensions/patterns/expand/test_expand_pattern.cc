@@ -336,6 +336,135 @@ TEST(ShapeBasedExpandBroadcastMatMulPattern, RejectsIncompatibleBatchDimensions)
   EXPECT_EQ(match.pattern, nullptr);
 }
 
+TEST(ShapeBasedStaticExpandPattern, ReplacesDynamicTargetWithConstantShape) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat,
+                    core::symbolic::SymShape({2, 3, core::symbolic::SymDim("d"), 1}));
+  AddInt64Initializer(builder, "four", {4});
+  NodeProto shape = MakeNode("Shape", {"x"}, {"prefix"});
+  AddAttribute<int64_t>(shape, "start", 0);
+  AddAttribute<int64_t>(shape, "end", -1);
+  builder.MakeNode("Shape", {"x"}, {"prefix"}, "", "", shape.attribute());
+  NodeProto concat = MakeNode("Concat", {"prefix", "four"}, {"target"});
+  AddAttribute<int64_t>(concat, "axis", 0);
+  builder.MakeNode("Concat", {"prefix", "four"}, {"target"}, "", "", concat.attribute());
+  builder.MakeNode("Expand", {"x", "target"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ShapeBasedStaticExpandPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[2]);
+  ASSERT_EQ(match.pattern, &pattern);
+
+  const utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 1u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Expand");
+  EXPECT_EQ(replacements[0].input()[0].value(), "x");
+  EXPECT_EQ(InitializerValues(builder, replacements[0].input()[1].value()),
+            (std::vector<int64_t>{1, 1, 1, 4}));
+}
+
+TEST(ShapeBasedStaticExpandPattern, RejectsSymbolicChangedDimension) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat,
+                    core::symbolic::SymShape({core::symbolic::SymDim("a"), 1}));
+  builder.MakeInput("target", core::symbolic::TensorType::kInt64, Shape({2}));
+  builder.MakeNode("Expand", {"x", "target"}, {"out"});
+  builder.MakeOutput("out", core::symbolic::TensorType::kFloat,
+                     core::symbolic::SymShape({core::symbolic::SymDim("b"), 4}));
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ShapeBasedStaticExpandPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, nullptr);
+}
+
+TEST(ShapeBasedExpandSwapPattern, MovesBinaryBeforeExpand) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({4, 1}));
+  AddInt64Initializer(builder, "target", {4, 4});
+  builder.MakeInitializer(MakeInitializer<float>("one", {1}, {1.0f}));
+  builder.MakeNode("Expand", {"x", "target"}, {"xe"});
+  builder.MakeNode("Add", {"xe", "one"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ShapeBasedExpandSwapPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
+  ASSERT_EQ(match.pattern, &pattern);
+  ASSERT_EQ(match.nodes.size(), 3u);
+  EXPECT_EQ(match.nodes[0], &builder.Nodes()[0]);
+  EXPECT_EQ(match.nodes[1], nullptr);
+
+  const utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 2u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Add");
+  EXPECT_EQ(replacements[0].input()[0].value(), "x");
+  EXPECT_EQ(replacements[1].op_type().value(), "Expand");
+  EXPECT_EQ(replacements[1].input()[1].value(), "target");
+  EXPECT_EQ(replacements[1].output()[0].value(), "out");
+}
+
+TEST(ShapeBasedExpandSwapPattern, RejectsRedundantInputExpand) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({4, 4}));
+  AddInt64Initializer(builder, "target", {4, 4});
+  builder.MakeInitializer(MakeInitializer<float>("one", {1}, {1.0f}));
+  builder.MakeNode("Expand", {"x", "target"}, {"xe"});
+  builder.MakeNode("Add", {"xe", "one"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ShapeBasedExpandSwapPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+}
+
+TEST(ShapeBasedExpandCastWhereSwapPattern, MovesWhereBeforeExpand) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 1}));
+  AddInt64Initializer(builder, "target", {2, 3});
+  builder.MakeInitializer(MakeInitializer<float>("zero", {1}, {0.0f}));
+  builder.MakeNode("Expand", {"x", "target"}, {"xe"});
+  NodeProto cast = MakeNode("Cast", {"xe"}, {"condition"});
+  AddAttribute<int64_t>(cast, "to", static_cast<int64_t>(TensorProto::DataType::BOOL));
+  builder.MakeNode("Cast", {"xe"}, {"condition"}, "", "", cast.attribute());
+  builder.MakeNode("Where", {"condition", "xe", "zero"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ShapeBasedExpandCastWhereSwapPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[2]);
+  ASSERT_EQ(match.pattern, &pattern);
+
+  const utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 3u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Cast");
+  EXPECT_EQ(replacements[0].input()[0].value(), "x");
+  EXPECT_EQ(replacements[1].op_type().value(), "Where");
+  EXPECT_EQ(replacements[1].input()[1].value(), "x");
+  EXPECT_EQ(replacements[2].op_type().value(), "Expand");
+  EXPECT_EQ(replacements[2].input()[1].value(), "target");
+  EXPECT_EQ(replacements[2].output()[0].value(), "out");
+}
+
+TEST(ShapeBasedExpandCastWhereSwapPattern, RejectsAdditionalExpandConsumer) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 1}));
+  AddInt64Initializer(builder, "target", {2, 3});
+  builder.MakeInitializer(MakeInitializer<float>("zero", {1}, {0.0f}));
+  builder.MakeNode("Expand", {"x", "target"}, {"xe"});
+  NodeProto cast = MakeNode("Cast", {"xe"}, {"condition"});
+  AddAttribute<int64_t>(cast, "to", static_cast<int64_t>(TensorProto::DataType::BOOL));
+  builder.MakeNode("Cast", {"xe"}, {"condition"}, "", "", cast.attribute());
+  builder.MakeNode("Where", {"condition", "xe", "zero"}, {"out"});
+  builder.MakeNode("Identity", {"xe"}, {"saved"});
+  builder.MakeOutput("out");
+  builder.MakeOutput("saved");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ShapeBasedExpandCastWhereSwapPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[2]).pattern, nullptr);
+}
+
 TEST(ExpandSwapPattern, MovesExpandPastUnary) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 5, 7}));
@@ -503,6 +632,43 @@ TEST(ExpandUnsqueezeExpandPattern, RejectsRankMismatch) {
   onnx_patterns::ExpandUnsqueezeExpandPattern pattern;
   const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
   EXPECT_EQ(match.pattern, nullptr);
+}
+
+TEST(SwapExpandReshapePattern, MovesReshapeBeforeExpand) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 4, 1}));
+  AddInt64Initializer(builder, "expand_shape", {3, 1, 1});
+  AddInt64Initializer(builder, "reshape_shape", {0, 1, -1});
+  builder.MakeNode("Expand", {"x", "expand_shape"}, {"xe"});
+  builder.MakeNode("Reshape", {"xe", "reshape_shape"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::SwapExpandReshapePattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
+  ASSERT_EQ(match.pattern, &pattern);
+
+  const utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 2u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Reshape");
+  EXPECT_EQ(replacements[0].input()[0].value(), "x");
+  EXPECT_EQ(replacements[1].op_type().value(), "Expand");
+  EXPECT_EQ(replacements[1].input()[1].value(), "expand_shape");
+  EXPECT_EQ(replacements[1].output()[0].value(), "out");
+}
+
+TEST(SwapExpandReshapePattern, RejectsExpandTargetWithoutTrailingOnes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 1, 1}));
+  AddInt64Initializer(builder, "expand_shape", {3, 2, 1});
+  AddInt64Initializer(builder, "reshape_shape", {0, 1, -1});
+  builder.MakeNode("Expand", {"x", "expand_shape"}, {"xe"});
+  builder.MakeNode("Reshape", {"xe", "reshape_shape"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::SwapExpandReshapePattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
 }
 
 } // namespace

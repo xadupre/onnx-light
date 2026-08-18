@@ -630,4 +630,4 @@ Implementation order
 9. Add ``DerivedWeightRecipe``, compatible prepared-entry resolution, and
    ``RequiredPayloadManifest`` closure.
 10. Add the validation and benchmark cases above before wiring the result into
-   :ref:`l-next-steps-prepared-execution`.
+    :ref:`l-next-steps-prepared-execution`.

@@ -188,15 +188,21 @@ std::vector<TensorType> ConstantOfShapeTypesV9() {
   };
 }
 
+// The ConstantOfShape T2 type sets below are spelled out in full per version
+// rather than built incrementally from the previous version with
+// ``reserve()``/``push_back()``. Growing a vector that was copied from a
+// fixed-size initializer-list literal triggers a false-positive
+// ``-Warray-bounds`` in GCC (observed with gcc-toolset-14 on manylinux), so
+// each list is written explicitly to avoid the vector-grow code path.
 std::vector<TensorType> ConstantOfShapeTypesV20() {
-  std::vector<TensorType> types = ConstantOfShapeTypesV9();
-  types.reserve(types.size() + 5);
-  types.push_back(TensorType::kBfloat16);
-  types.push_back(TensorType::kFloat8e4m3fn);
-  types.push_back(TensorType::kFloat8e4m3fnuz);
-  types.push_back(TensorType::kFloat8e5m2);
-  types.push_back(TensorType::kFloat8e5m2fnuz);
-  return types;
+  return {
+      TensorType::kFloat16,    TensorType::kFloat,          TensorType::kDouble,
+      TensorType::kInt8,       TensorType::kInt16,          TensorType::kInt32,
+      TensorType::kInt64,      TensorType::kUint8,          TensorType::kUint16,
+      TensorType::kUint32,     TensorType::kUint64,         TensorType::kBool,
+      TensorType::kBfloat16,   TensorType::kFloat8e4m3fn,   TensorType::kFloat8e4m3fnuz,
+      TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz,
+  };
 }
 
 // From v21 upstream inserts ``uint4, int4`` *before* ``bool`` in the T2 list.
@@ -213,25 +219,40 @@ std::vector<TensorType> ConstantOfShapeTypesV21() {
 }
 
 std::vector<TensorType> ConstantOfShapeTypesV23() {
-  std::vector<TensorType> types = ConstantOfShapeTypesV21();
-  types.reserve(types.size() + 1);
-  types.push_back(TensorType::kFloat4e2m1);
-  return types;
+  return {
+      TensorType::kFloat16,        TensorType::kFloat,          TensorType::kDouble,
+      TensorType::kInt8,           TensorType::kInt16,          TensorType::kInt32,
+      TensorType::kInt64,          TensorType::kUint8,          TensorType::kUint16,
+      TensorType::kUint32,         TensorType::kUint64,         TensorType::kUint4,
+      TensorType::kInt4,           TensorType::kBool,           TensorType::kBfloat16,
+      TensorType::kFloat8e4m3fn,   TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2,
+      TensorType::kFloat8e5m2fnuz, TensorType::kFloat4e2m1,
+  };
 }
 
 std::vector<TensorType> ConstantOfShapeTypesV24() {
-  std::vector<TensorType> types = ConstantOfShapeTypesV23();
-  types.reserve(types.size() + 1);
-  types.push_back(TensorType::kFloat8e8m0);
-  return types;
+  return {
+      TensorType::kFloat16,        TensorType::kFloat,          TensorType::kDouble,
+      TensorType::kInt8,           TensorType::kInt16,          TensorType::kInt32,
+      TensorType::kInt64,          TensorType::kUint8,          TensorType::kUint16,
+      TensorType::kUint32,         TensorType::kUint64,         TensorType::kUint4,
+      TensorType::kInt4,           TensorType::kBool,           TensorType::kBfloat16,
+      TensorType::kFloat8e4m3fn,   TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2,
+      TensorType::kFloat8e5m2fnuz, TensorType::kFloat4e2m1,     TensorType::kFloat8e8m0,
+  };
 }
 
 std::vector<TensorType> ConstantOfShapeTypesV25() {
-  std::vector<TensorType> types = ConstantOfShapeTypesV24();
-  types.reserve(types.size() + 2);
-  types.push_back(TensorType::kUint2);
-  types.push_back(TensorType::kInt2);
-  return types;
+  return {
+      TensorType::kFloat16,        TensorType::kFloat,          TensorType::kDouble,
+      TensorType::kInt8,           TensorType::kInt16,          TensorType::kInt32,
+      TensorType::kInt64,          TensorType::kUint8,          TensorType::kUint16,
+      TensorType::kUint32,         TensorType::kUint64,         TensorType::kUint4,
+      TensorType::kInt4,           TensorType::kBool,           TensorType::kBfloat16,
+      TensorType::kFloat8e4m3fn,   TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2,
+      TensorType::kFloat8e5m2fnuz, TensorType::kFloat4e2m1,     TensorType::kFloat8e8m0,
+      TensorType::kUint2,          TensorType::kInt2,
+  };
 }
 
 std::vector<TensorType> ConstantOfShapeTypes(int since_version) {

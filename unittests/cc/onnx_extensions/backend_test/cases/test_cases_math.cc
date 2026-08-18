@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -1284,12 +1285,16 @@ TEST(BackendTestCase, BenchmarkModeProducesLargeInputCases) {
     }
   }
   EXPECT_GT(benchmark_cases, 0u);
-  // Float benchmark helpers also emit a FLOAT16 companion case, so at least one
-  // ``*_benchmark_float16`` case must be present alongside the FLOAT ones.
   EXPECT_GT(benchmark_float16_cases, 0u);
-  // Operators that support BFLOAT16 (such as Abs) emit a BFLOAT16 companion
-  // case, so at least one ``*_benchmark_bfloat16`` case must be present.
   EXPECT_GT(benchmark_bfloat16_cases, 0u);
+  for (const std::string &name :
+       std::initializer_list<std::string>{"test_cc_acos_benchmark", "test_cc_add_benchmark"}) {
+    EXPECT_NE(FindCase(registry, name), nullptr) << "missing FLOAT benchmark case: " << name;
+    EXPECT_NE(FindCase(registry, name + "_float16"), nullptr)
+        << "benchmark case missing FLOAT16 companion: " << name;
+    EXPECT_NE(FindCase(registry, name + "_bfloat16"), nullptr)
+        << "benchmark case missing BFLOAT16 companion: " << name;
+  }
 }
 
 TEST(BackendTestCase, TestModeHasNoBenchmarkCases) {

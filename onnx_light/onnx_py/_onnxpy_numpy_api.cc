@@ -34,7 +34,7 @@ OnnxLightNumpyDtype *OnnxLightNumpyArrayDtype(OnnxLightNumpyArray *array) {
   return reinterpret_cast<OnnxLightNumpyDtype *>(PyArray_DESCR(Array(array)));
 }
 
-char OnnxLightNumpyDtypeKind(OnnxLightNumpyDtype *dtype) { return PyDataType_KIND(Dtype(dtype)); }
+char OnnxLightNumpyDtypeKind(OnnxLightNumpyDtype *dtype) { return Dtype(dtype)->kind; }
 
 std::ptrdiff_t OnnxLightNumpyDtypeSize(OnnxLightNumpyDtype *dtype) {
   return PyDataType_ELSIZE(Dtype(dtype));

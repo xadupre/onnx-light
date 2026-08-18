@@ -132,6 +132,10 @@ requests:
      - Shape-based Transpose and Unsqueeze elimination
      - Ports ``ShapeTransposePattern`` and ``UnsqueezeShapePattern`` with
        rewrite/rejection tests, registration, and Python bindings.
+   * - `PR #4532 <https://github.com/xadupre/onnx-light/pull/4532>`_
+     - Shape-based Concat/Expand simplification
+     - Ports ``ShapeBasedConcatExpandPattern`` with symbolic-shape rewrite and
+       rejection tests, registration, and Python bindings.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -782,3 +786,6 @@ Pull requests
 * `Issue #4494 <https://github.com/xadupre/onnx-light/issues/4494>`_:
   ``Expand``/``Unsqueeze`` reordering and fusion
   (``SwapExpandUnsqueezePattern`` and ``ExpandUnsqueezeExpandPattern``).
+* `PR #4532 <https://github.com/xadupre/onnx-light/pull/4532>`_:
+  ``ShapeBasedConcatExpandPattern`` simplifying dynamic ``Expand`` target
+  shapes when exactly one dimension changes.

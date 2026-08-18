@@ -206,6 +206,10 @@ ORT_EXCLUDE_REGEX = [
     r"sequence.*",
     # ONNX Runtime's Where kernel does not implement these dtypes.
     r"^test_cc_where_(bool|int8|int16|uint16|uint32|uint64)$",
+    # ONNX Runtime's ReduceMax does not implement the empty-set reduction for
+    # the bool type ("ReduceMax is not defined for empty set with bool type"),
+    # whereas onnx-light follows the ONNX reference (onnx/onnx#8312).
+    r"^test_reduce_max_empty_set_bool$",
 ]
 
 # Exclusions that only apply on a given platform. On macOS/arm64 ONNX Runtime

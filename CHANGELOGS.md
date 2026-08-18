@@ -22,6 +22,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   runtime path, including for mixed-output nodes.
 - Improved runtime performance and expanded the Python NumPy kernel bindings.
 - Added a CPU descriptor exposing processor topology for processor-aware kernel thresholds.
+- Kept `ReferenceEvaluator` NumPy inputs zero-copy across repeated runs, including
+  non-contiguous inputs, while preserving their lifetime and allocator accounting.
+- Improved element-wise steady-state performance with a persistent low-latency thread pool,
+  physical-core-aware defaults, and calibration that matches the runtime thread count.
+- Optimized the `Abs` kernel for floating-point types with sign-bit masking and a lower,
+  tunable parallel-execution threshold.
 - Made the opaque type unconditional (propagated from onnx/onnx#8269).
 - Corrected optional input/output presence in `InferenceContextImpl` (propagated from onnx/onnx#8271).
 - Made `ScopedResource` use a `Traits` type to avoid a pointer non-type template parameter (propagated from onnx/onnx#8279).
@@ -37,6 +43,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added next-steps design pages for profiling and async execution, parallel model initialization with prepacking, prepared execution, a buffer-reuse arena allocator, processor-aware kernel thresholds, and wheel packaging.
 - Documented the kernel tuning workflow and graph pattern integration.
 - Added a benchmark for cold kernel tuning resolution and characterized allocator-backed output lifetime.
+- Updated the `Abs` benchmark to compare steady-state execution fairly across supported
+  element types and omit incomparable `bfloat16` speed-ups.
 - Updated the formatting and typing tools.
 - Switched C++ backend tests to `RandnTensor` instead of `Tensor::FromX` + `Randn`.
 - Improved schema-comparison coverage.

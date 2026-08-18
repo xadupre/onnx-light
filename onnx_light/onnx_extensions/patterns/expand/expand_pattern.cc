@@ -7,10 +7,12 @@
 #include <algorithm>
 #include <optional>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "onnx_core/builder/graph_graph.h"
+#include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -306,25 +308,16 @@ ApplyShapeBasedBroadcast(const char *pattern_name, core::builder::GraphGraph &gr
   return replacements;
 }
 
-std::optional<core::symbolic::SymShape> BroadcastShape(const core::symbolic::SymShape &left,
-                                                       const core::symbolic::SymShape &right) {
-  const std::size_t rank = std::max(left.Rank(), right.Rank());
-  const core::symbolic::SymDim one(1);
-  core::symbolic::SymShape result;
-  for (std::size_t i = 0; i < rank; ++i) {
-    const core::symbolic::SymDim &l = AlignedDim(left, rank, i, one);
-    const core::symbolic::SymDim &r = AlignedDim(right, rank, i, one);
-    if (l == r) {
-      result.PushBack(l);
-    } else if (l.IsInt() && l.AsInt() == 1) {
-      result.PushBack(r);
-    } else if (r.IsInt() && r.AsInt() == 1) {
-      result.PushBack(l);
-    } else {
-      return std::nullopt;
-    }
+std::optional<core::symbolic::SymShape>
+StrictBroadcastShape(const core::symbolic::SymShape &left, const core::symbolic::SymShape &right) {
+  try {
+    core::symbolic::SymShape result = core::shapes::BroadcastShapes(left, right);
+    return BroadcastsTo(left, right, result)
+               ? std::optional<core::symbolic::SymShape>(std::move(result))
+               : std::nullopt;
+  } catch (const std::invalid_argument &) {
+    return std::nullopt;
   }
-  return result;
 }
 
 bool StaticExpandTarget(const core::symbolic::SymShape &input,
@@ -353,7 +346,7 @@ bool CanSwapOneExpand(const core::symbolic::SymShape &before,
   if (before == expanded || expanded == other || output != expanded) {
     return false;
   }
-  return BroadcastShape(before, other).has_value();
+  return StrictBroadcastShape(before, other).has_value();
 }
 
 bool CanSwapTwoExpands(const core::symbolic::SymShape &left,
@@ -365,7 +358,7 @@ bool CanSwapTwoExpands(const core::symbolic::SymShape &left,
       left == left_expanded || left_expanded == right) {
     return false;
   }
-  const std::optional<core::symbolic::SymShape> broadcast = BroadcastShape(left, right);
+  const std::optional<core::symbolic::SymShape> broadcast = StrictBroadcastShape(left, right);
   return broadcast.has_value() && *broadcast != output;
 }
 
@@ -376,7 +369,7 @@ bool CompatibleCastWhereShapes(const core::symbolic::SymShape &condition,
   if (condition != output) {
     return false;
   }
-  const std::optional<core::symbolic::SymShape> broadcast = BroadcastShape(before, other);
+  const std::optional<core::symbolic::SymShape> broadcast = StrictBroadcastShape(before, other);
   if (!broadcast.has_value() || broadcast->Rank() != output.Rank()) {
     return false;
   }

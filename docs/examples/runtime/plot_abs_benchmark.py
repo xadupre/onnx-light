@@ -24,10 +24,24 @@ and reports median durations so the comparison does not confuse startup cost
 with steady-state inference cost.
 
 The benchmark also exercises the low-level
-:func:`onnx_light.onnx_py._onnxpykernels.runtime.run_model` entry point, which
-runs a whole model end-to-end from :class:`Tensor` inputs to :class:`Tensor`
-outputs. ``run_model (Tensor)`` reuses a pre-built input :class:`Tensor` and
-keeps the output as a :class:`Tensor`, isolating the raw model-execution cost.
+:class:`onnx_light.onnx_py._onnxpykernels.runtime.RuntimeSession` entry point,
+which runs a whole model end-to-end from :class:`Tensor` inputs to
+:class:`Tensor` outputs. The ``run (RuntimeSession)`` series reuses a *pre-built*
+:class:`RuntimeSession` and :class:`RuntimeContext`, feeds them a pre-built
+input :class:`Tensor`, and keeps the output as a :class:`Tensor`, isolating the
+raw model-execution cost.
+
+The convenience helper
+:func:`onnx_light.onnx_py._onnxpykernels.runtime.run_model` is deliberately
+*not* used inside the timing loop: it rebuilds the whole
+:class:`RuntimeSession` on every call — parsing the model, registering its
+functions and building a fresh :class:`~onnx_light.onnx_py._onnxpykernels.runtime.ExecutionPlan`
+— so timing it would measure session-construction cost, not steady-state
+execution. That one-time setup dwarfs the elementwise ``Abs`` work and would
+make the low-level series look many times slower than it really is (a very bad,
+far-below-one speed-up). Building the session once and running it repeatedly
+brings the measurement back to the raw kernel cost, close to the other
+``onnx-light`` line.
 """
 
 from __future__ import annotations
@@ -45,6 +59,7 @@ from onnx_light.onnx_py import _onnxpykernels
 
 runtime = _onnxpykernels.runtime
 ORT_MAX_IR_VERSION = 13
+OPSET_VERSION = 18
 
 # %%
 # Element types under test
@@ -72,7 +87,7 @@ def make_abs_model(elem_type: int):
         [helper.make_tensor_value_info("X", elem_type, ["N"])],
         [helper.make_tensor_value_info("Y", elem_type, ["N"])],
     )
-    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", OPSET_VERSION)])
     model.ir_version = min(model.ir_version, ORT_MAX_IR_VERSION)
     checker.check_model(model)
     return model
@@ -142,6 +157,7 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
     model_bytes = model.SerializeToString()
 
     onnx_light_session = ReferenceEvaluator(model)
+    runtime_session = runtime.RuntimeSession(model)
     ort_session = None
     if ort_supported:
         ort_session = onnxruntime.InferenceSession(
@@ -153,19 +169,35 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
 
         return onnx_light_session.run(None, {"X": values})[0]
 
-    def make_input_tensor(values):
-        """Builds the named input :class:`Tensor` fed to ``runtime.run_model``."""
+    def make_input_context(values):
+        """Builds a :class:`RuntimeContext` seeded with the input :class:`Tensor`.
 
-        return runtime.tensor_from_numpy(
+        The context is built once per size, outside the timing loop, so that the
+        measured ``runtime_session.run`` call only pays for the model execution
+        and not for building the input tensor or the context.
+        """
+
+        input_tensor = runtime.tensor_from_numpy(
             "X", int(elem_type), list(values.shape), values.view(numpy.uint8)
         )
+        context = runtime.RuntimeContext(
+            runtime.KernelContext(runtime.default_opset(OPSET_VERSION))
+        )
+        context.set("X", input_tensor, "input")
+        return context
 
-    def run_onnx_light_run_model_tensor(tensor):
-        """Runs the whole model through ``runtime.run_model`` with a pre-built
-        :class:`Tensor` input and returns the output :class:`Tensor` directly."""
+    def run_onnx_light_session(context):
+        """Runs the whole model through a reused :class:`RuntimeSession`.
 
-        (output,) = runtime.run_model(model, [tensor])
-        return output
+        The session and context are built once and reused across iterations, so
+        this measures the raw model-execution cost. Using the
+        :func:`runtime.run_model` convenience helper here instead would rebuild
+        the session on every call and dominate the measurement with
+        session-construction overhead.
+        """
+
+        runtime_session.run(context)
+        return context.get("Y")
 
     def run_onnxruntime(values):
         """Runs the ONNX Runtime Abs kernel."""
@@ -192,15 +224,15 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
                 lambda values=values: run_onnx_light(values), repeat, warmup
             )
             ort_time = None
-        input_tensor = make_input_tensor(values)
+        input_context = make_input_context(values)
         run_model_tensor_time = measure(
-            lambda tensor=input_tensor: run_onnx_light_run_model_tensor(tensor), repeat, warmup
+            lambda context=input_context: run_onnx_light_session(context), repeat, warmup
         )
 
         numpy.testing.assert_array_equal(run_onnx_light(values), expected)
         if ort_supported:
             numpy.testing.assert_array_equal(run_onnxruntime(values), expected)
-        tensor_output = run_onnx_light_run_model_tensor(input_tensor)
+        tensor_output = run_onnx_light_session(input_context)
         numpy.testing.assert_array_equal(
             runtime.tensor_to_numpy(tensor_output).view(np_dtype).reshape(values.shape), expected
         )
@@ -210,7 +242,7 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
         print(
             f"[{label:>8}] size={size:>9} | numpy={numpy_time * 1e6:10.2f} us | "
             f"onnx-light={onnx_light_time * 1e6:10.2f} us | "
-            f"run_model(Tensor)={run_model_tensor_time * 1e6:10.2f} us | "
+            f"run(RuntimeSession)={run_model_tensor_time * 1e6:10.2f} us | "
             f"onnxruntime={ort_report} | onnx-light / onnxruntime={ratio_report}"
         )
 
@@ -258,7 +290,7 @@ for row_index, result in enumerate(results):
     time_axis.plot(sizes, numpy_times * 1e6, "o--", label="numpy", color="#9b7ec8")
     time_axis.plot(sizes, onnx_light_times * 1e6, "o-", label="onnx-light", color="#5cb85c")
     time_axis.plot(
-        sizes, run_model_tensor_times * 1e6, "s:", label="run_model (Tensor)", color="#1b5e20"
+        sizes, run_model_tensor_times * 1e6, "s:", label="run (RuntimeSession)", color="#1b5e20"
     )
     if ort_times is not None:
         time_axis.plot(sizes, ort_times * 1e6, "o-", label="onnxruntime", color="#f4a259")
@@ -296,7 +328,7 @@ for row_index, result in enumerate(results):
         sizes,
         baseline / run_model_tensor_times,
         "s:",
-        label="run_model (Tensor)",
+        label="run (RuntimeSession)",
         color="#1b5e20",
     )
     speedup_axis.axhline(

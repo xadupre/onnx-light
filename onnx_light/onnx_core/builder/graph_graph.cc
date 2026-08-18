@@ -314,15 +314,21 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
         }
 
         bool skip = false;
+        bool has_node = false;
         for (const NodeProto *node : match.nodes) {
           if (node == nullptr) {
-            throw BuilderError("GraphGraph::Optimize: a matched node must not be null.");
+            continue;
           }
+          has_node = true;
           Position(*node);
           if (marked.find(node) != marked.end() || (do_not_remove_ && do_not_remove_(*node))) {
             skip = true;
             break;
           }
+        }
+        if (!has_node) {
+          throw BuilderError(
+              "GraphGraph::Optimize: a match must contain at least one non-null node.");
         }
         if (skip) {
           continue;
@@ -330,7 +336,11 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
         if (match.insert_at != nullptr) {
           Position(*match.insert_at);
         }
-        marked.insert(match.nodes.begin(), match.nodes.end());
+        for (const NodeProto *node : match.nodes) {
+          if (node != nullptr) {
+            marked.insert(node);
+          }
+        }
         if (report != nullptr) {
           ++report->patterns[pattern_index].matches;
         }
@@ -356,7 +366,9 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
         position = Position(*match.insert_at);
       } else {
         for (const NodeProto *node : match.nodes) {
-          position = std::min(position, Position(*node));
+          if (node != nullptr) {
+            position = std::min(position, Position(*node));
+          }
         }
       }
       const std::size_t initializers_before = builder_.initializers_.size();
@@ -381,8 +393,11 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
       rewriting.apply_time_ns = apply_time_ns;
       rewriting.added_nodes = replacement_nodes;
       rewriting.matched_nodes.reserve(match.nodes.size());
+      std::unordered_set<const NodeProto *> persisted_nodes;
       for (const NodeProto *node : match.nodes) {
-        rewriting.matched_nodes.push_back(Position(*node));
+        if (node != nullptr && persisted_nodes.insert(node).second) {
+          rewriting.matched_nodes.push_back(Position(*node));
+        }
       }
       for (std::size_t i = initializers_before; i < builder_.initializers_.size(); ++i) {
         rewriting.added_initializers.push_back(builder_.initializers_[i]);
@@ -390,7 +405,11 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
       }
       replacements.push_back(
           PendingReplacement{position, std::move(replacement_nodes), std::move(rewriting)});
-      removed.insert(match.nodes.begin(), match.nodes.end());
+      for (const NodeProto *node : match.nodes) {
+        if (node != nullptr) {
+          removed.insert(node);
+        }
+      }
       if (report != nullptr) {
         report->patterns[timed_match.pattern_index].apply_time_ns += apply_time_ns;
       }

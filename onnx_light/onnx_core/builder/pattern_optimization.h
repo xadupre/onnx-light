@@ -156,7 +156,12 @@ struct PatternNoMatch {
 struct MatchResult {
   /// Pattern that produced this match.
   const PatternOptimization *pattern = nullptr;
-  /// Nodes involved in the rewrite, in the order expected by Apply.
+  /**
+   * Nodes involved in the rewrite, in the order expected by Apply.
+   *
+   * A null pointer is an ignored positional placeholder for an optional role.
+   * It is not positioned, marked, removed, or persisted in the rewrite.
+   */
   std::vector<const NodeProto *> nodes;
   /// Optional node before which the replacement should be inserted.
   const NodeProto *insert_at = nullptr;

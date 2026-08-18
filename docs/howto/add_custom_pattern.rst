@@ -66,6 +66,9 @@ The running example collapses two consecutive ``Neg`` nodes into an
       order ``apply`` expects them) and where the replacement should be
       inserted; ``self.no_match(candidate, reason)`` records a rejection for
       the statistics shown in :ref:`l-example-plot-pattern-optimization`.
+      A ``None``/``nullptr`` entry may reserve an optional positional role;
+      the optimizer passes it to ``apply`` but ignores it for positioning,
+      marking, removal, and replay.
 
    .. tab-item:: C++
       :sync: cpp

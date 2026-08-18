@@ -109,6 +109,29 @@ public:
   mutable std::size_t fast_op_type_calls = 0;
 };
 
+class NullPlaceholderPattern final : public core::builder::PatternOptimization {
+public:
+  NullPlaceholderPattern() : PatternOptimization(1, "NullPlaceholder") {}
+
+  std::set<std::string> FastOpType() const override { return {"Identity"}; }
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &,
+                                   const NodeProto &candidate) const override {
+    return core::builder::MatchResult{this, {nullptr, &candidate}, &candidate};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &nodes) const override {
+    if (nodes.size() != 2 || nodes[0] != nullptr || nodes[1] == nullptr) {
+      throw core::builder::BuilderError("NullPlaceholderPattern received invalid role slots.");
+    }
+    utils::RepeatedProtoField<NodeProto> replacements;
+    replacements.push_back(
+        MakeNode("Relu", {nodes[1]->input()[0].value()}, {nodes[1]->output()[0].value()}));
+    return replacements;
+  }
+};
+
 class ScopedAddKernel {
 public:
   ScopedAddKernel() {
@@ -138,6 +161,23 @@ private:
 };
 
 } // namespace
+
+TEST(PatternOptimization, IgnoresNullPositionalPlaceholders) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  builder.MakeNode("Identity", {"x"}, {"y"});
+  builder.MakeOutput("y");
+
+  auto pattern = std::make_shared<NullPlaceholderPattern>();
+  core::builder::GraphGraph graph(
+      builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{pattern});
+  const std::vector<core::builder::LocalRewriting> rewrites = graph.Optimize(1);
+
+  ASSERT_EQ(rewrites.size(), 1u);
+  EXPECT_EQ(rewrites[0].matched_nodes, std::vector<std::size_t>({0}));
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Relu");
+}
 
 TEST(PatternOptimization, FastOpTypeIsCachedAcrossOptimizationIterations) {
   core::builder::GraphBuilder builder("g", SchemaLookup());

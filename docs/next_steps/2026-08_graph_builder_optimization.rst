@@ -149,6 +149,10 @@ requests:
      - Remaining Expand rewrites
      - Ports the four remaining shape-based and Reshape-adjacent ``Expand``
        patterns with tests, registration, and Python bindings.
+   * - `PR #4551 <https://github.com/xadupre/onnx-light/pull/4551>`_
+     - Tensor layout and algebra rewrites
+     - Ports 13 Reshape, 6 layout, and 12 algebra/reduction/identity classes,
+       including the intentionally inactive upstream placeholder.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -727,7 +731,7 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ported and registered, together with ``ShapeBasedConcatExpandPattern``,
    ``ShapeBasedExpandBroadcastPattern``, and
    ``ShapeBasedExpandBroadcastMatMulPattern``.
-#. **Reshape canonicalization (done).**
+#. **Reshape canonicalization (done in PR #4551).**
    ``ConcatReshapePattern``, ``ReshapePattern``, ``ReduceReshapePattern``,
    ``Reshape2Of3Pattern``, ``ReshapeReshapeBinaryPattern``,
    ``ReshapeReshapePattern``, ``ReshapeSqueezePattern``,
@@ -735,7 +739,7 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ``ShapeBasedReshapeIsSqueezePattern``, ``ShapedBasedReshapePattern``,
    ``StaticConcatReshapePattern``, ``UnsqueezeOrSqueezeReshapePattern``, and
    ``UnsqueezeReshapePattern``.
-#. **Squeeze, unsqueeze, and transpose (done).**
+#. **Squeeze, unsqueeze, and transpose (done in PR #4551).**
    ``MulUnsqueezeUnsqueezePattern``, ``SqueezeAddPattern``,
    ``SqueezeBinaryUnsqueezePattern``, ``SqueezeUnsqueezePattern``,
    ``UnsqueezeUnsqueezePattern``, ``SwapUnsqueezeTransposePattern``,
@@ -746,7 +750,7 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ``TransposeGatherPattern``, ``TransposeTransposePattern``,
    ``ShapeTransposePattern``, and ``UnsqueezeShapePattern`` are ported and
    registered.
-#. **Generic algebra, reduction, and graph identities (done).**
+#. **Generic algebra, reduction, and graph identities (done in PR #4551).**
    ``MulMulMulScalarPattern``, ``SwitchOrderBinaryPattern``,
    ``SwapRangeAddScalarPattern``, ``ReduceArgTopKPattern``,
    ``ReduceSumNormalizePattern``, ``Sub1MulPattern``, ``SwapUnaryPattern``,
@@ -830,3 +834,5 @@ Pull requests
   ``LocalRewriting`` coordinates and deterministic replay.
 * `PR #4542 <https://github.com/xadupre/onnx-light/pull/4542>`_: remaining
   shape-based and Reshape-adjacent ``Expand`` patterns.
+* `PR #4551 <https://github.com/xadupre/onnx-light/pull/4551>`_: Reshape,
+  remaining layout, algebra, reduction, and graph-identity patterns.

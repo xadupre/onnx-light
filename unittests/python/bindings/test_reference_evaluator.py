@@ -72,6 +72,61 @@ def _make_raw_data_constant_model():
 
 
 class TestReferenceEvaluator(ExtTestCase):
+    def test_runtime_tensor_input_remains_zero_copy_and_alive(self):
+        """Borrows a runtime Tensor input and retains its Python owner."""
+        model = parser.parse_model(_ABS_MODEL_SRC)
+        execution_arena = runtime.ExecutionArena(1)
+        io_arena = runtime.IOArena(2)
+        evaluator = ReferenceEvaluator(model, allocator=execution_arena, io_allocator=io_arena)
+        source = np.array([-1.0, 2.0, -3.0], dtype=np.float32)
+        tensor = runtime.tensor_from_numpy(
+            "ignored", int(TensorProto.FLOAT), [3], source.view(np.uint8)
+        )
+
+        (output,) = evaluator.run(None, {"x": tensor})
+
+        self.assertEqual(execution_arena.allocated_count, 0)
+        self.assertTrue(evaluator._ctx.get("x").has_borrowed_data())
+        np.testing.assert_array_equal(output, np.array([1.0, 2.0, 3.0], dtype=np.float32))
+
+        del tensor
+        del source
+        gc.collect()
+        stored_input = runtime.tensor_to_numpy(evaluator._ctx.get("x")).view(np.float32)
+        np.testing.assert_array_equal(stored_input, np.array([-1.0, 2.0, -3.0], dtype=np.float32))
+
+    def test_mixed_numpy_and_runtime_tensor_inputs(self):
+        """Accepts NumPy arrays and runtime Tensors in the same feed."""
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        evaluator = ReferenceEvaluator(model)
+        x = np.array([-1.0, 2.0, -3.0], dtype=np.float32)
+        x_tensor = runtime.tensor_from_numpy(
+            "not-the-feed-name", int(TensorProto.FLOAT), [3], x.view(np.uint8)
+        )
+
+        (output,) = evaluator.run(
+            None, {"x": x_tensor, "z": np.array([10.0, 20.0, 30.0], dtype=np.float32)}
+        )
+
+        np.testing.assert_array_equal(output, np.array([11.0, 22.0, 33.0], dtype=np.float32))
+
+    def test_runtime_tensor_scalar_input(self):
+        """Copies a runtime Tensor scalar into scalar-compatible storage."""
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "agraph (float x) => (float y) { y = Abs(x) }\n"
+        )
+        evaluator = ReferenceEvaluator(model)
+        source = np.array(-2.0, dtype=np.float32)
+        tensor = runtime.tensor_from_numpy(
+            "x", int(TensorProto.FLOAT), [], source.reshape(1).view(np.uint8)
+        )
+
+        (output,) = evaluator.run(None, {"x": tensor})
+
+        self.assertFalse(evaluator._ctx.get("x").has_borrowed_data())
+        np.testing.assert_array_equal(output, np.array(2.0, dtype=np.float32))
+
     def test_numpy_input_remains_zero_copy_and_alive(self):
         """Borrows a NumPy input without consuming an ExecutionArena slot."""
         model = parser.parse_model(_ABS_MODEL_SRC)
@@ -880,8 +935,8 @@ sess.run(
     def test_sequence_map_with_sequence_graph_input(self):
         # Regression test for feeding a ``seq(tensor)`` graph input directly:
         # the SequenceMap node consumes a top-level sequence input ``x`` and the
-        # ReferenceEvaluator.run() feed boundary must accept a list of numpy
-        # arrays (one per element) via ``put_sequence`` rather than the
+        # ReferenceEvaluator.run() feed boundary must accept a list mixing
+        # NumPy arrays and runtime Tensors via ``put_sequence`` rather than the
         # single-tensor ``set`` path.
         from onnx_light.onnx import helper
 
@@ -902,15 +957,18 @@ sess.run(
 
         sess = ReferenceEvaluator(model)
         self.assertEqual(sess.input_names, ["x"])
-        elements = [
-            np.array([1.0, 2.0], dtype=np.float32),
-            np.array([3.0, 4.0, 5.0], dtype=np.float32),
-        ]
+        first = np.array([1.0, 2.0], dtype=np.float32)
+        second = np.array([3.0, 4.0, 5.0], dtype=np.float32)
+        second_tensor = runtime.tensor_from_numpy(
+            "ignored", int(TensorProto.FLOAT), [3], second.view(np.uint8)
+        )
+        elements = [first, second_tensor]
+        expected = [first, second]
         got = sess.run(None, {"x": elements})
         self.assertEqual(len(got), 1)
         self.assertIsInstance(got[0], list)
         self.assertEqual(len(got[0]), len(elements))
-        for got_elem, expected_elem in zip(got[0], elements):
+        for got_elem, expected_elem in zip(got[0], expected):
             np.testing.assert_allclose(got_elem, expected_elem)
 
     def test_sequence_input_must_be_list(self):

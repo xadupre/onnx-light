@@ -48,6 +48,13 @@ _INITIALIZER_MODEL_SRC = (
     "{ y = Add(x, b) }\n"
 )
 
+_ABS_MODEL_SRC = (
+    '<ir_version: 10, opset_import: ["" : 18]>\n'
+    "agraph (float[3] x) => (float[3] y) {\n"
+    "  y = Abs(x)\n"
+    "}\n"
+)
+
 
 # A ``Constant`` graph output borrows its bytes directly from the model proto's
 # attribute when the value tensor stores ``raw_data`` (see
@@ -65,6 +72,25 @@ def _make_raw_data_constant_model():
 
 
 class TestReferenceEvaluator(ExtTestCase):
+    def test_numpy_input_remains_zero_copy_and_alive(self):
+        """Borrows a NumPy input without consuming an ExecutionArena slot."""
+        model = parser.parse_model(_ABS_MODEL_SRC)
+        execution_arena = runtime.ExecutionArena(1)
+        io_arena = runtime.IOArena(2)
+        evaluator = ReferenceEvaluator(model, allocator=execution_arena, io_allocator=io_arena)
+        source = np.array([-1.0, 99.0, 2.0, 99.0, -3.0], dtype=np.float32)[::2]
+
+        (output,) = evaluator.run(None, {"x": source})
+
+        self.assertEqual(execution_arena.allocated_count, 0)
+        self.assertEqual(execution_arena.retained_count, 0)
+        np.testing.assert_array_equal(output, np.array([1.0, 2.0, 3.0], dtype=np.float32))
+
+        del source
+        gc.collect()
+        stored_input = runtime.tensor_to_numpy(evaluator._ctx.get("x")).view(np.float32)
+        np.testing.assert_array_equal(stored_input, np.array([-1.0, 2.0, -3.0], dtype=np.float32))
+
     def test_allocator_output_remains_live_after_context_clear(self):
         """Pins an exported allocator output across ``RuntimeContext.clear``."""
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)

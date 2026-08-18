@@ -188,6 +188,12 @@ std::vector<TensorType> ConstantOfShapeTypesV9() {
   };
 }
 
+// The ConstantOfShape T2 type sets below are spelled out in full per version
+// rather than built incrementally from the previous version with
+// ``reserve()``/``push_back()``. Growing a vector that was copied from a
+// fixed-size initializer-list literal triggers a false-positive
+// ``-Warray-bounds`` in GCC (observed with gcc-toolset-14 on manylinux), so
+// each list is written explicitly to avoid the vector-grow code path.
 std::vector<TensorType> ConstantOfShapeTypesV20() {
   return {
       TensorType::kFloat16,    TensorType::kFloat,          TensorType::kDouble,

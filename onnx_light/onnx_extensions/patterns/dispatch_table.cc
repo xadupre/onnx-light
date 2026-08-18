@@ -154,6 +154,19 @@ void RegisterPatterns() {
         []() -> std::unique_ptr<core::builder::PatternOptimization> {
           return std::make_unique<ShapeBasedExpandBroadcastMatMulPattern>();
         });
+    core::builder::RegisterPattern("ShapeBasedStaticExpand",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ShapeBasedStaticExpandPattern>();
+                                   });
+    core::builder::RegisterPattern("ShapeBasedExpandSwap",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ShapeBasedExpandSwapPattern>();
+                                   });
+    core::builder::RegisterPattern(
+        "ShapeBasedExpandCastWhereSwap",
+        []() -> std::unique_ptr<core::builder::PatternOptimization> {
+          return std::make_unique<ShapeBasedExpandCastWhereSwapPattern>();
+        });
     core::builder::RegisterPattern("ExpandSwap",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ExpandSwapPattern>();
@@ -165,6 +178,10 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("ExpandUnsqueezeExpand",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ExpandUnsqueezeExpandPattern>();
+                                   });
+    core::builder::RegisterPattern("SwapExpandReshape",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<SwapExpandReshapePattern>();
                                    });
     core::builder::RegisterPattern("TransposeTranspose",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {

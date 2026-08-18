@@ -823,6 +823,10 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
   EXPECT_EQ(std::count(names.begin(), names.end(), "Identity"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "NotNot"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "PadConv"), 1);
+  EXPECT_EQ(std::count(names.begin(), names.end(), "ShapeBasedExpandCastWhereSwap"), 1);
+  EXPECT_EQ(std::count(names.begin(), names.end(), "ShapeBasedExpandSwap"), 1);
+  EXPECT_EQ(std::count(names.begin(), names.end(), "ShapeBasedStaticExpand"), 1);
+  EXPECT_EQ(std::count(names.begin(), names.end(), "SwapExpandReshape"), 1);
 
   onnx_patterns::RegisterPatterns();
   EXPECT_EQ(core::builder::RegisteredPatternNames(), names);

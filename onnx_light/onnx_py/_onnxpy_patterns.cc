@@ -134,6 +134,16 @@ std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::str
     return std::make_shared<onnx_patterns::ShapeBasedExpandBroadcastMatMulPattern>(
         priority.value_or(0));
   }
+  if (name == "ShapeBasedStaticExpand") {
+    return std::make_shared<onnx_patterns::ShapeBasedStaticExpandPattern>(priority.value_or(0));
+  }
+  if (name == "ShapeBasedExpandSwap") {
+    return std::make_shared<onnx_patterns::ShapeBasedExpandSwapPattern>(priority.value_or(0));
+  }
+  if (name == "ShapeBasedExpandCastWhereSwap") {
+    return std::make_shared<onnx_patterns::ShapeBasedExpandCastWhereSwapPattern>(
+        priority.value_or(0));
+  }
   if (name == "ExpandSwap") {
     return std::make_shared<onnx_patterns::ExpandSwapPattern>(priority.value_or(0));
   }
@@ -142,6 +152,9 @@ std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::str
   }
   if (name == "ExpandUnsqueezeExpand") {
     return std::make_shared<onnx_patterns::ExpandUnsqueezeExpandPattern>(priority.value_or(0));
+  }
+  if (name == "SwapExpandReshape") {
+    return std::make_shared<onnx_patterns::SwapExpandReshapePattern>(priority.value_or(0));
   }
   if (name == "TransposeTranspose") {
     return std::make_shared<onnx_patterns::TransposeTransposePattern>(priority.value_or(0));
@@ -316,6 +329,19 @@ NB_MODULE(_onnxpypatterns, m) {
       m, "ShapeBasedExpandBroadcastMatMulPattern",
       "Removes dynamic ``Expand`` nodes from the batch dimensions of ``MatMul``.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ShapeBasedStaticExpandPattern, core::builder::PatternOptimization>(
+      m, "ShapeBasedStaticExpandPattern",
+      "Replaces a dynamic ``Expand`` target with an equivalent constant target.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ShapeBasedExpandSwapPattern, core::builder::PatternOptimization>(
+      m, "ShapeBasedExpandSwapPattern",
+      "Moves input ``Expand`` nodes after a broadcasting binary operator.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ShapeBasedExpandCastWhereSwapPattern,
+             core::builder::PatternOptimization>(
+      m, "ShapeBasedExpandCastWhereSwapPattern",
+      "Moves an ``Expand`` after a compatible ``Cast`` and ``Where`` chain.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
   nb::class_<onnx_patterns::ExpandSwapPattern, core::builder::PatternOptimization>(
       m, "ExpandSwapPattern",
       "Moves an ``Expand`` past a following unary-like operator so the operator "
@@ -330,6 +356,10 @@ NB_MODULE(_onnxpypatterns, m) {
       m, "ExpandUnsqueezeExpandPattern",
       "Fuses ``Expand``, ``Unsqueeze`` and ``Expand`` into a single ``Unsqueeze`` "
       "followed by one ``Expand``.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::SwapExpandReshapePattern, core::builder::PatternOptimization>(
+      m, "SwapExpandReshapePattern",
+      "Swaps a supported ``Expand`` and constant-shape ``Reshape`` pair.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
   nb::class_<onnx_patterns::TransposeTransposePattern, core::builder::PatternOptimization>(
       m, "TransposeTransposePattern",

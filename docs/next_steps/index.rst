@@ -23,6 +23,7 @@ Next Steps
     2026-08_mutable_cache
     2026-08_compiled_tensor
     2026-08_parallel_for_profiling
+    2026-08_model_resolution
     2026-08_prepared_execution
     2026-08_split_wheels
 

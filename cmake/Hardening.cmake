@@ -181,13 +181,24 @@ else()
 
   # _FORTIFY_SOURCE requires an optimization level (>= -O1); GCC otherwise
   # warns. Use level 3 when available, fall back to 2.
+  #
+  # Some toolchains (notably the Red Hat gcc-toolset shipped in the
+  # manylinux_2_28 images used for the release wheels) already predefine
+  # ``_FORTIFY_SOURCE`` in their default spec. Passing ``-D_FORTIFY_SOURCE=...``
+  # then emits a ``"_FORTIFY_SOURCE" redefined`` warning for every translation
+  # unit. Emit the level as an ``-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=<n>`` pair
+  # of compile options (rather than a bare compile definition) so the undefine
+  # immediately precedes the redefinition on the command line, silencing the
+  # redefinition warning while still enabling the hardened level.
   _onnx_light_try_cxx_flag("-D_FORTIFY_SOURCE=3" _have_fortify3)
   if(_have_fortify3)
-    list(APPEND _onnx_light_hardening_compile_definitions "_FORTIFY_SOURCE=3")
+    list(APPEND _onnx_light_hardening_compile_options
+         "-U_FORTIFY_SOURCE" "-D_FORTIFY_SOURCE=3")
   else()
     _onnx_light_try_cxx_flag("-D_FORTIFY_SOURCE=2" _have_fortify2)
     if(_have_fortify2)
-      list(APPEND _onnx_light_hardening_compile_definitions "_FORTIFY_SOURCE=2")
+      list(APPEND _onnx_light_hardening_compile_options
+           "-U_FORTIFY_SOURCE" "-D_FORTIFY_SOURCE=2")
     endif()
   endif()
   # libstdc++ runtime assertions (bounds checks on containers).

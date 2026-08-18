@@ -47,6 +47,20 @@ int64_t GetRank(core::builder::GraphGraph &graph, const std::string &name) {
   return static_cast<int64_t>(graph.GetShape(name).Shape().Rank());
 }
 
+// Resolves the effective ``[start, end)`` range covered by a ``Shape`` node.
+//
+// Reads the optional ``start`` / ``end`` attributes (defaulting to ``0`` and
+// ``rank``), normalises negative values against ``rank``, and clamps the result
+// to ``[0, rank]``.
+void ResolveShapeStartEnd(const NodeProto &shape, int64_t rank, int64_t &start, int64_t &end) {
+  int64_t raw_start = 0;
+  int64_t raw_end = rank;
+  TryGetAttr(shape, "start", raw_start);
+  TryGetAttr(shape, "end", raw_end);
+  start = ClampDim(raw_start, rank);
+  end = ClampDim(raw_end, rank);
+}
+
 } // namespace
 
 std::set<std::string> GatherShapePattern::FastOpType() const { return {"Gather"}; }
@@ -173,6 +187,200 @@ GatherShapePattern::Apply(core::builder::GraphGraph &graph,
   AddAttribute<int64_t>(new_shape, "start", new_start);
   AddAttribute<int64_t>(new_shape, "end", new_end);
   replacements.push_back(new_shape);
+  return replacements;
+}
+
+std::set<std::string> ShapeTransposePattern::FastOpType() const { return {"Shape"}; }
+
+core::builder::MatchResult ShapeTransposePattern::Match(core::builder::GraphGraph &graph,
+                                                        const NodeProto &candidate) const {
+  if (!IsDefaultOp(candidate, "Shape")) {
+    return NoMatch(candidate, "candidate is not a default-domain Shape");
+  }
+  const NodeProto *transpose = graph.NodeBefore(candidate.input()[0].value());
+  if (transpose == nullptr || !IsDefaultOp(*transpose, "Transpose")) {
+    return NoMatch(candidate, "the shaped value is not produced by a Transpose");
+  }
+  std::vector<int64_t> perm;
+  if (!GetAttributeInts(*transpose, "perm", perm)) {
+    return NoMatch(candidate, "the Transpose does not define a perm attribute");
+  }
+  int64_t start = 0;
+  int64_t end = 0;
+  ResolveShapeStartEnd(candidate, static_cast<int64_t>(perm.size()), start, end);
+  if (start >= end) {
+    return NoMatch(candidate, "the Shape start/end range is empty");
+  }
+  return core::builder::MatchResult{this, {transpose, &candidate}, transpose};
+}
+
+utils::RepeatedProtoField<NodeProto>
+ShapeTransposePattern::Apply(core::builder::GraphGraph &graph,
+                             const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
+    throw BuilderError("ShapeTransposePattern::Apply expects a Transpose and a Shape node.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[1]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError("ShapeTransposePattern::Apply received an unsafe or inconsistent match.");
+  }
+  const NodeProto &transpose = *nodes[0];
+  const NodeProto &shape = *nodes[1];
+
+  std::vector<int64_t> perm;
+  if (!GetAttributeInts(transpose, "perm", perm)) {
+    throw BuilderError("ShapeTransposePattern::Apply could not read the perm attribute.");
+  }
+  int64_t start = 0;
+  int64_t end = 0;
+  ResolveShapeStartEnd(shape, static_cast<int64_t>(perm.size()), start, end);
+  const std::vector<int64_t> perm_subset(perm.begin() + start, perm.begin() + end);
+
+  core::builder::GraphBuilder &builder = graph.Builder();
+  const std::string name = "ShapeTransposePattern--" + shape.name().value();
+  utils::RepeatedProtoField<NodeProto> replacements;
+  if (graph.IsUsedMoreThanOnce(transpose.output()[0].value())) {
+    replacements.add() = transpose;
+  }
+
+  const std::string shape_out = builder.UniqueName(name + "_sx");
+  replacements.push_back(MakeNode("Shape", {transpose.input()[0].value()}, {shape_out}, "",
+                                  (name + "--shape").c_str()));
+
+  const std::string perm_name = FreeInitializerName(builder, name + "_perm");
+  builder.MakeInitializer(MakeInitializerShape(perm_name.c_str(), perm_subset));
+  NodeProto gather =
+      MakeNode("Gather", {shape_out, perm_name}, {shape.output()[0].value()}, "", name.c_str());
+  AddAxisAttribute(gather, 0);
+  replacements.push_back(gather);
+  return replacements;
+}
+
+std::set<std::string> UnsqueezeShapePattern::FastOpType() const { return {"Unsqueeze"}; }
+
+core::builder::MatchResult UnsqueezeShapePattern::Match(core::builder::GraphGraph &graph,
+                                                        const NodeProto &candidate) const {
+  if (!IsDefaultOp(candidate, "Unsqueeze")) {
+    return NoMatch(candidate, "candidate is not a default-domain Unsqueeze");
+  }
+  if (candidate.input_size() < 2 || !graph.IsConstant(candidate.input()[1].value())) {
+    return NoMatch(candidate, "the Unsqueeze axes are not a constant second input");
+  }
+  const TensorProto *axes = graph.GetComputedConstant(candidate.input()[1].value());
+  std::vector<int64_t> axes_values;
+  if (axes == nullptr || !ReadIntegerValues(*axes, axes_values) || axes_values.empty()) {
+    return NoMatch(candidate, "the Unsqueeze axes could not be read");
+  }
+  const std::string &x_name = candidate.input()[0].value();
+  if (!HasRank(graph, x_name)) {
+    return NoMatch(candidate, "the Unsqueeze input rank is required to normalise axes");
+  }
+  const NodeProto *shape = nullptr;
+  for (const NodeProto *consumer : graph.NextNodes(candidate.output()[0].value())) {
+    if (consumer != nullptr && IsDefaultOp(*consumer, "Shape")) {
+      shape = consumer;
+      break;
+    }
+  }
+  if (shape == nullptr) {
+    return NoMatch(candidate, "the Unsqueeze output is not consumed by a Shape");
+  }
+  const int64_t output_rank = GetRank(graph, x_name) + static_cast<int64_t>(axes_values.size());
+  int64_t start = 0;
+  int64_t end = 0;
+  ResolveShapeStartEnd(*shape, output_rank, start, end);
+  if (start >= end) {
+    return NoMatch(candidate, "the Shape start/end range is empty");
+  }
+  return core::builder::MatchResult{this, {&candidate, shape}, &candidate};
+}
+
+utils::RepeatedProtoField<NodeProto>
+UnsqueezeShapePattern::Apply(core::builder::GraphGraph &graph,
+                             const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
+    throw BuilderError("UnsqueezeShapePattern::Apply expects an Unsqueeze and a Shape node.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[0]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError("UnsqueezeShapePattern::Apply received an unsafe or inconsistent match.");
+  }
+  const NodeProto &unsqueeze = *nodes[0];
+  const NodeProto &shape = *nodes[1];
+
+  const std::string &x_name = unsqueeze.input()[0].value();
+  const TensorProto *axes = graph.GetComputedConstant(unsqueeze.input()[1].value());
+  std::vector<int64_t> axes_values;
+  if (axes == nullptr || !ReadIntegerValues(*axes, axes_values) || axes_values.empty()) {
+    throw BuilderError("UnsqueezeShapePattern::Apply could not read the Unsqueeze axes.");
+  }
+  const int64_t input_rank = GetRank(graph, x_name);
+  const int64_t output_rank = input_rank + static_cast<int64_t>(axes_values.size());
+  std::vector<int64_t> sorted_axes;
+  sorted_axes.reserve(axes_values.size());
+  for (const int64_t axis : axes_values) {
+    sorted_axes.push_back(((axis % output_rank) + output_rank) % output_rank);
+  }
+  std::sort(sorted_axes.begin(), sorted_axes.end());
+
+  int64_t shape_start = 0;
+  int64_t shape_end = 0;
+  ResolveShapeStartEnd(shape, output_rank, shape_start, shape_end);
+
+  core::builder::GraphBuilder &builder = graph.Builder();
+  const std::string name = "UnsqueezeShapePattern--" + shape.name().value();
+
+  std::vector<std::string> concat_inputs;
+  utils::RepeatedProtoField<NodeProto> extra_nodes;
+  int64_t x_cursor = 0;   // next un-consumed position in X's dimension space
+  int64_t out_cursor = 0; // next un-consumed position in the unsqueezed output
+
+  const auto emit_shape_segment = [&](int64_t seg_out_start, int64_t seg_out_end) {
+    seg_out_start = std::max(seg_out_start, shape_start);
+    seg_out_end = std::min(seg_out_end, shape_end);
+    if (seg_out_start >= seg_out_end) {
+      return;
+    }
+    const int64_t x_seg_start = x_cursor + (seg_out_start - out_cursor);
+    const int64_t x_seg_end = x_cursor + (seg_out_end - out_cursor);
+    const std::string seg_name = builder.UniqueName(name + "_s" + std::to_string(x_seg_start));
+    NodeProto seg = MakeNode("Shape", {x_name}, {seg_name}, "",
+                             (name + "--shape" + std::to_string(x_seg_start)).c_str());
+    AddAttribute<int64_t>(seg, "start", x_seg_start);
+    AddAttribute<int64_t>(seg, "end", x_seg_end);
+    extra_nodes.push_back(seg);
+    concat_inputs.push_back(seg_name);
+  };
+
+  for (const int64_t axis : sorted_axes) {
+    const int64_t run_len = axis - out_cursor;
+    if (run_len > 0) {
+      emit_shape_segment(out_cursor, axis);
+      x_cursor += run_len;
+    }
+    if (shape_start <= axis && axis < shape_end) {
+      const std::string one_name = FreeInitializerName(builder, name + "_one");
+      builder.MakeInitializer(MakeInitializerShape(one_name.c_str(), {1}));
+      concat_inputs.push_back(one_name);
+    }
+    out_cursor = axis + 1;
+  }
+  if (x_cursor < input_rank) {
+    emit_shape_segment(out_cursor, output_rank);
+  }
+
+  NodeProto concat =
+      MakeNode("Concat", concat_inputs, {shape.output()[0].value()}, "", name.c_str());
+  AddAxisAttribute(concat, 0);
+
+  utils::RepeatedProtoField<NodeProto> replacements;
+  if (graph.IsUsedMoreThanOnce(unsqueeze.output()[0].value())) {
+    replacements.add() = unsqueeze;
+  }
+  for (const NodeProto &node : extra_nodes) {
+    replacements.push_back(node);
+  }
+  replacements.push_back(concat);
   return replacements;
 }
 

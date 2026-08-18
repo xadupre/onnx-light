@@ -169,6 +169,14 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<SqueezeUnsqueezePattern>();
                                    });
+    core::builder::RegisterPattern("ShapeTranspose",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ShapeTransposePattern>();
+                                   });
+    core::builder::RegisterPattern("UnsqueezeShape",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<UnsqueezeShapePattern>();
+                                   });
     return true;
   }();
   (void)registered;

@@ -36,4 +36,88 @@ public:
         const std::vector<const NodeProto *> &nodes) const override;
 };
 
+/**
+ * Replaces ``Shape(Transpose(X, perm))`` by ``Gather(Shape(X), perm)`` so the
+ * expensive ``Transpose`` on the full data tensor is avoided.
+ *
+ * @code
+ * Before:                       After:
+ *
+ *   X                             X
+ *   |                             |
+ *   Transpose(perm)               Shape
+ *   |                             |
+ *   Shape                         Gather(perm[start:end], axis=0)
+ *   |                             |
+ *   Y                             Y
+ * @endcode
+ *
+ * The permutation is a compile-time attribute of the ``Transpose`` node, so the
+ * requested dimensions are read directly from ``Shape(X)``. The optional
+ * ``start`` / ``end`` attributes of the ``Shape`` node select the sub-range
+ * ``perm[start:end]`` used as the ``Gather`` indices. The ``Transpose`` is
+ * preserved when its output is consumed elsewhere.
+ */
+class ShapeTransposePattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit ShapeTransposePattern(int priority = 0)
+      : PatternOptimization(priority, "ShapeTranspose") {}
+
+  /// Returns ``Shape`` as the only possible root operator.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds a ``Shape`` consuming the output of a ``Transpose`` with a perm.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Rewrites the pair into ``Gather(Shape(X), perm)``.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
+ * Replaces ``Shape(Unsqueeze(X, axes))`` by a ``Concat`` of ``Shape(X)`` slices
+ * interleaved with constant ``[1]`` tensors at the inserted axis positions.
+ *
+ * @code
+ * Before:                       After (X of rank 3, axes=[1]):
+ *
+ *   X                             X          X
+ *   |                             |          |
+ *   Unsqueeze(axes)               Shape(0,1) Shape(1,3)
+ *   |                              \    |    /
+ *   Shape                           Concat([s0, [1], s1], axis=0)
+ *   |                               |
+ *   Y                               Y
+ * @endcode
+ *
+ * ``Shape(Unsqueeze(X, axes))`` equals ``Shape(X)`` with ``1`` entries inserted
+ * at the ``axes`` positions, so the (potentially large) ``Unsqueeze`` on the
+ * data tensor is avoided entirely while the shape vector stays identical. The
+ * ``axes`` input must be a one-dimensional constant and the rank of ``X`` must
+ * be known. The optional ``start`` / ``end`` attributes of the ``Shape`` node
+ * are honoured. The ``Unsqueeze`` is preserved when its output is consumed
+ * elsewhere.
+ */
+class UnsqueezeShapePattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit UnsqueezeShapePattern(int priority = 0)
+      : PatternOptimization(priority, "UnsqueezeShape") {}
+
+  /// Returns ``Unsqueeze`` as the only possible root operator.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds an ``Unsqueeze`` whose output feeds a ``Shape`` node.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Rewrites the pair into a ``Concat`` of ranged ``Shape`` slices and ``[1]``s.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_patterns

@@ -145,6 +145,12 @@ std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::str
   if (name == "SqueezeUnsqueeze") {
     return std::make_shared<onnx_patterns::SqueezeUnsqueezePattern>(priority.value_or(0));
   }
+  if (name == "ShapeTranspose") {
+    return std::make_shared<onnx_patterns::ShapeTransposePattern>(priority.value_or(0));
+  }
+  if (name == "UnsqueezeShape") {
+    return std::make_shared<onnx_patterns::UnsqueezeShapePattern>(priority.value_or(0));
+  }
   throw std::invalid_argument("Unknown ONNX pattern '" + name + "'.");
 }
 
@@ -320,6 +326,15 @@ NB_MODULE(_onnxpypatterns, m) {
       m, "SqueezeUnsqueezePattern",
       "Simplifies a ``Squeeze``/``Unsqueeze`` pair into an ``Identity`` or a "
       "single ``Squeeze``.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ShapeTransposePattern, core::builder::PatternOptimization>(
+      m, "ShapeTransposePattern",
+      "Rewrites ``Shape(Transpose(X, perm))`` into ``Gather(Shape(X), perm)``.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::UnsqueezeShapePattern, core::builder::PatternOptimization>(
+      m, "UnsqueezeShapePattern",
+      "Rewrites ``Shape(Unsqueeze(X, axes))`` into a ``Concat`` of ranged "
+      "``Shape`` slices interleaved with constant ``[1]`` tensors.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
 
   m.def(

@@ -128,6 +128,10 @@ requests:
      - Unsqueeze/Squeeze simplification
      - Ports ``UnsqueezeUnsqueezePattern`` and ``SqueezeUnsqueezePattern`` with
        rewrite/rejection tests, registration, and Python bindings.
+   * - `Issue #4525 <https://github.com/xadupre/onnx-light/issues/4525>`_
+     - Shape-based Transpose and Unsqueeze elimination
+     - Ports ``ShapeTransposePattern`` and ``UnsqueezeShapePattern`` with
+       rewrite/rejection tests, registration, and Python bindings.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -655,8 +659,11 @@ The upstream default list currently contains 104 enabled patterns.
 ``IdentityPattern``, ``NotNotPattern``, ``NotWherePattern``,
 ``UnsqueezeEqualPattern``, ``WhereAddPattern``, ``ExpandPattern``,
 ``ExpandBroadcastPattern``, ``ExpandSwapPattern``,
-``SwapExpandUnsqueezePattern``, and ``ExpandUnsqueezeExpandPattern`` are already
-covered, leaving 85 patterns. They are grouped into nine cohesive pull requests below rather than
+``SwapExpandUnsqueezePattern``, ``ExpandUnsqueezeExpandPattern``,
+``TransposeTransposePattern``, ``TransposeGatherPattern``,
+``UnsqueezeUnsqueezePattern``, ``SqueezeUnsqueezePattern``,
+``ShapeTransposePattern``, and ``UnsqueezeShapePattern`` are already
+covered, leaving 79 patterns. They are grouped into nine cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;
 this keeps reviews and ``git bisect`` useful without creating 100 pull

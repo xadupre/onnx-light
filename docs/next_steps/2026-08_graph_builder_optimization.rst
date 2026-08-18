@@ -616,10 +616,6 @@ Implementation order
 9. Document the core/extension boundary, registration and selection APIs,
    linking requirements, and a custom-pattern example
    (`PR #4427 <https://github.com/xadupre/onnx-light/pull/4427>`_).
-10. Resolve every ``MatchResult::insert_at`` while applying its rewrite batch,
-    record exact ``added_nodes_positions`` in the returned ``LocalRewriting``,
-    and make ``Replay`` use only those final coordinates; test multiple
-    disjoint replacements and multiple nodes added by one pattern.
 10. Add Python bindings for the optimizer classes and reports, expose the
     standard ONNX pattern classes through ``_onnxpypatterns``, and support
     globally or locally registered Python-defined ``PatternOptimization``
@@ -637,6 +633,10 @@ Implementation order
     `PR #4433 <https://github.com/xadupre/onnx-light/pull/4433>`_, and
     ``ClipClipPattern`` continues it in
     `PR #4455 <https://github.com/xadupre/onnx-light/pull/4455>`_.
+12. Resolve every ``MatchResult::insert_at`` while applying its rewrite batch,
+    record exact ``added_nodes_positions`` in the returned ``LocalRewriting``,
+    and make ``Replay`` use only those final coordinates; test multiple
+    disjoint replacements and multiple nodes added by one pattern.
 
 Remaining pattern batches
 +++++++++++++++++++++++++

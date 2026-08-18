@@ -115,6 +115,29 @@ The third design is required. The plan is one immutable graph; the distinction
 between initialization and inference remains only as task scope and mutable
 execution state.
 
+Comparison with ONNX Runtime
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+ONNX Runtime uses a session-owned ``SequentialExecutionPlan`` attached to
+``SessionState`` and executes a run through ``utils::ExecuteGraph`` with
+run-specific feeds/fetches management. In that design, the execution plan
+primarily describes kernel launch order, allocation/reuse policy, release
+actions, stream notifications, and synchronization.
+
+The scoped ``PreparedExecutionPlan`` proposed here stays aligned with ONNX
+Runtime on static planning and session-owned immutable metadata, while extending
+the model with explicit session-scoped and invocation-scoped task descriptors
+in one dependency graph. This is the main semantic difference:
+
+* ONNX Runtime keeps initialization/finalization concerns largely around
+  ``SessionState`` construction and run-time feed/fetch orchestration.
+* This design represents deferred load/prepack work and regular inference tasks
+  uniformly as schedulable nodes with scope-aware state.
+
+The practical goal is compatibility of planning principles (static descriptors,
+allocator-aware execution order) while enabling first-inference overlap with
+background preparation without introducing a second ad hoc plan format.
+
 Construction and execution lifecycle
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

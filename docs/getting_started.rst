@@ -70,6 +70,21 @@ Load a model with parallel tensor parsing:
     model = onnx_light.onnx.load("model.onnx", num_threads=4)
     print(model.ir_version)
 
+Run a model with the C++ reference runtime, using the same
+``ReferenceEvaluator`` API as :epkg:`onnx`:
+
+.. code-block:: python
+
+    import numpy
+    from onnx_light.onnx.reference import ReferenceEvaluator
+
+    session = ReferenceEvaluator(model)
+    outputs = session.run(None, {"X": numpy.array([-1.0, 2.0], dtype=numpy.float32)})
+    print(outputs)
+
+See :ref:`l-design-runtime` for the runtime design and
+:ref:`l-example-plot-abs-benchmark` for a benchmark against :epkg:`onnxruntime`.
+
 Replace ``onnx`` by ``onnx_light.onnx``
 ---------------------------------------
 

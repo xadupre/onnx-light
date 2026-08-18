@@ -327,13 +327,18 @@ ONNX_LIGHT_BACKEND_TEST_LOCAL void
 RegisterUnsqueezeVasReshapeShapeInferenceCases(std::vector<TestCase> &registry,
                                                TestMode mode = TestMode::TEST);
 
-/// Registers a 4-layer Qwen3-style causal language model (opset 21, IR 10)
-/// reproduced from a PyTorch-exported graph. The model uses GQA-style
-/// attention (16 Q / 8 KV heads, head-dim 128), manual RMSNorm, RoPE
-/// embeddings, causal masking and a SwiGLU MLP per layer.  External weight
-/// initializers are replaced with deterministic random FP16 values;
-/// doc_strings are omitted.  The test exercises shape inference on a
-/// realistic multi-layer transformer graph.
+/// Registers a 4-layer Qwen3-style causal language model (IR 10) reproduced
+/// from a PyTorch-exported graph, in two variants selected by an internal
+/// switch: an unfused variant
+/// (``test_cc_shape_inference_big_qwen3_4_layers_like``, opset 21) that spells
+/// out RMSNorm and the grouped-query attention core as explicit subgraphs, and
+/// a fused variant (``..._fused``, opset 23) that expresses every RMSNorm with
+/// a single ``RMSNormalization`` node and the attention core with a single
+/// ``Attention`` node. Both share the same signature and architecture (GQA
+/// with 16 Q / 8 KV heads, head-dim 128, RoPE, causal masking and a SwiGLU
+/// MLP per layer); RoPE and the causal-mask construction remain explicit in
+/// both as they have no fused-operator equivalent. External weight
+/// initializers carry shape/dtype metadata only; doc_strings are omitted.
 ONNX_LIGHT_BACKEND_TEST_LOCAL void
 RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registry,
                                              TestMode mode = TestMode::TEST);

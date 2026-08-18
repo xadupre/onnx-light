@@ -27,7 +27,24 @@ The benchmark also exercises the low-level
 :func:`onnx_light.onnx_py._onnxpykernels.runtime.run_model` entry point, which
 runs a whole model end-to-end from :class:`Tensor` inputs to :class:`Tensor`
 outputs. ``run_model (Tensor)`` reuses a pre-built input :class:`Tensor` and
-keeps the output as a :class:`Tensor`, isolating the raw model-execution cost.
+keeps the output as a :class:`Tensor`, so it avoids the NumPy conversions on
+both the input and output side.
+
+Despite that, ``run_model (Tensor)`` is consistently *slower* than the reused
+``onnx-light`` :class:`~onnx_light.onnx.reference.ReferenceEvaluator` (and than
+:func:`numpy.abs`) for small vectors, and the gap is most visible for
+``bfloat16`` where the arrays are tiny. The reason is that ``run_model``
+rebuilds the whole runtime on **every** call: it constructs a fresh
+``RuntimeContext``, re-registers the model-local functions, re-seeds the graph
+initializers, and builds a brand-new ``RuntimeSession`` — which in turn
+recomputes the graph's ``ExecutionPlan`` from scratch. A
+:class:`~onnx_light.onnx.reference.ReferenceEvaluator`, by contrast, builds the
+``ExecutionPlan`` and ``RuntimeSession`` once and reuses them across every
+:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run` call. For small
+arrays this constant per-call setup cost dominates the actual Abs computation,
+so ``run_model (Tensor)`` measures setup + execution rather than execution
+alone. The overhead is amortized only once the arrays grow large enough for the
+Abs computation to outweigh the fixed setup cost.
 """
 
 from __future__ import annotations
@@ -162,7 +179,12 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
 
     def run_onnx_light_run_model_tensor(tensor):
         """Runs the whole model through ``runtime.run_model`` with a pre-built
-        :class:`Tensor` input and returns the output :class:`Tensor` directly."""
+        :class:`Tensor` input and returns the output :class:`Tensor` directly.
+
+        Unlike ``onnx_light_session.run`` above, ``run_model`` rebuilds the whole
+        runtime (``RuntimeContext``, model-function registration, initializer
+        seeding and a fresh ``RuntimeSession`` / ``ExecutionPlan``) on every
+        call, so this measurement includes that per-call setup overhead."""
 
         (output,) = runtime.run_model(model, [tensor])
         return output

@@ -108,8 +108,8 @@ requests:
    * - `Issue #4477 <https://github.com/xadupre/onnx-light/issues/4477>`_
      - Expand/Where/Equal batch start
      - Starts the next batch with ``NotWherePattern``,
-       ``UnsqueezeEqualPattern``, and ``WhereAddPattern``, including
-       rewrite/rejection tests, registration, and Python bindings.
+      ``UnsqueezeEqualPattern``, and ``WhereAddPattern``, including
+      rewrite/rejection tests, registration, and Python bindings.
    * - `PR #4491 <https://github.com/xadupre/onnx-light/pull/4491>`_
      - Redundant and broadcasting Expand
      - Ports ``ExpandPattern``, ``ExpandBroadcastPattern``, and
@@ -146,9 +146,13 @@ requests:
      - Resolves ``MatchResult::insert_at`` while applying each batch, records
        final ``added_nodes_positions``, and replays only from those coordinates.
    * - `PR #4542 <https://github.com/xadupre/onnx-light/pull/4542>`_
-     - Final shape-based Expand rewrites
-     - Ports the four remaining Expand patterns, with symbolic-shape guards,
-       shared-use preservation, tests, registration, and Python bindings.
+     - Remaining Expand rewrites
+     - Ports the four remaining shape-based and Reshape-adjacent ``Expand``
+       patterns with tests, registration, and Python bindings.
+   * - `PR #4551 <https://github.com/xadupre/onnx-light/pull/4551>`_
+     - Tensor layout and algebra rewrites
+     - Ports 13 Reshape, 6 layout, and 12 algebra/reduction/identity classes,
+       including the intentionally inactive upstream placeholder.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -699,10 +703,14 @@ The upstream default list currently contains 104 enabled patterns.
 ``SequenceConstructAtPattern``, ``SplitToSequenceSequenceAtPattern``,
 ``SliceSlicePattern``, ``SlicesSplitPattern``, ``SplitConcatPattern``, and
 ``ShapeBasedConcatExpandPattern``, ``ShapeBasedExpandBroadcastPattern``, and
-``ShapeBasedExpandBroadcastMatMulPattern``,
-``ShapeBasedExpandCastWhereSwapPattern``, ``ShapeBasedExpandSwapPattern``,
-``ShapeBasedStaticExpandPattern``, and ``SwapExpandReshapePattern`` are already
-covered, leaving 60 patterns.
+``ShapeBasedExpandBroadcastMatMulPattern`` are already covered. PR #4542 adds
+the last four ``Expand`` patterns, and the tensor-layout/algebra batch adds 30
+active rewrites plus the upstream-compatible
+``ShapeBasedShapeShapeAddPattern`` placeholder. This leaves 29 patterns.
+They will be delivered in two final pull requests: one combining matrix
+multiplication with normalization/activation, and one for attention. Together
+with PR #4551, the post-Expand work therefore remains limited to three pull
+requests.
 They are grouped into cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;
@@ -719,17 +727,15 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ``GatherGatherPattern``, ``GathersSplitPattern``, ``GatherShapePattern``,
    ``SequenceConstructAtPattern``, ``SplitToSequenceSequenceAtPattern``,
    ``SliceSlicePattern``, ``SlicesSplitPattern``, and ``SplitConcatPattern``.
-#. **Expand, where, and equal (done).**
+#. **Expand, where, and equal (done in PR #4542).**
    ``ShapeBasedExpandCastWhereSwapPattern``, ``ShapeBasedExpandSwapPattern``,
-   ``ShapeBasedStaticExpandPattern``, and ``SwapExpandReshapePattern`` are
-   ported and registered in
-   `PR #4542 <https://github.com/xadupre/onnx-light/pull/4542>`_.
+   ``ShapeBasedStaticExpandPattern``, and ``SwapExpandReshapePattern``.
    ``ExpandPattern``, ``ExpandBroadcastPattern``, ``ExpandSwapPattern``,
    ``SwapExpandUnsqueezePattern``, and ``ExpandUnsqueezeExpandPattern`` are
    ported and registered, together with ``ShapeBasedConcatExpandPattern``,
    ``ShapeBasedExpandBroadcastPattern``, and
    ``ShapeBasedExpandBroadcastMatMulPattern``.
-#. **Remaining PR 1: tensor canonicalization and algebra (31 patterns).**
+#. **Reshape canonicalization (done in PR #4551).**
    ``ConcatReshapePattern``, ``ReshapePattern``, ``ReduceReshapePattern``,
    ``Reshape2Of3Pattern``, ``ReshapeReshapeBinaryPattern``,
    ``ReshapeReshapePattern``, ``ReshapeSqueezePattern``,
@@ -737,40 +743,50 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ``ShapeBasedReshapeIsSqueezePattern``, ``ShapedBasedReshapePattern``,
    ``StaticConcatReshapePattern``, ``UnsqueezeOrSqueezeReshapePattern``, and
    ``UnsqueezeReshapePattern``.
+#. **Squeeze, unsqueeze, and transpose (done in PR #4551).**
    ``MulUnsqueezeUnsqueezePattern``, ``SqueezeAddPattern``,
-   ``SqueezeBinaryUnsqueezePattern``, ``SwapUnsqueezeTransposePattern``,
-   ``TransposeEqualReshapePattern``, and ``TransposeReshapeTransposePattern``.
+   ``SqueezeBinaryUnsqueezePattern``, ``SqueezeUnsqueezePattern``,
+   ``UnsqueezeUnsqueezePattern``, ``SwapUnsqueezeTransposePattern``,
+   ``TransposeEqualReshapePattern``, ``TransposeGatherPattern``,
+   ``TransposeReshapeTransposePattern``, ``TransposeTransposePattern``,
+   ``ShapeTransposePattern``, and ``UnsqueezeShapePattern``.
+   ``SqueezeUnsqueezePattern``, ``UnsqueezeUnsqueezePattern``,
+   ``TransposeGatherPattern``, ``TransposeTransposePattern``,
+   ``ShapeTransposePattern``, and ``UnsqueezeShapePattern`` are ported and
+   registered.
+#. **Generic algebra, reduction, and graph identities (done in PR #4551).**
    ``MulMulMulScalarPattern``, ``SwitchOrderBinaryPattern``,
    ``SwapRangeAddScalarPattern``, ``ReduceArgTopKPattern``,
    ``ReduceSumNormalizePattern``, ``Sub1MulPattern``, ``SwapUnaryPattern``,
    ``SameChildrenPattern``, ``SameChildrenFromInputPattern``,
    ``ShapeBasedIdentityPattern``, ``ShapeBasedSameChildrenPattern``, and
    ``ShapeBasedShapeShapeAddPattern``.
-#. **Remaining PR 2: linear algebra, normalization, and activations
-   (20 patterns).**
+   The last class deliberately preserves the upstream placeholder contract:
+   it is exposed and registered but never matches because upstream defines no
+   proven rewrite.
+#. **Matrix multiplication and linear algebra (9 patterns).**
    ``GemmTransposePattern``, ``MatMulAddPattern``,
    ``MatMulReshape2Of3Pattern``, ``MulMulMatMulPattern``,
    ``ReshapeMatMulReshapePattern``, ``ShapeBasedMatMulToMulPattern``,
    ``SwitchReshapeActivationPattern``, ``TransposeMatMulPattern``, and
    ``TransposeReshapeMatMulPattern``.
+#. **Normalization and activations (11 patterns).**
    ``BatchNormalizationPattern``, ``BatchNormalizationTrainingPattern``,
    ``CastLayerNormalizationCastPattern``, ``LayerNormalizationPattern``,
    ``LayerNormalizationScalePattern``, ``RMSNormalizationPattern``,
    ``RMSNormalizationMulPattern``, ``GeluPattern``, ``LeakyReluPattern``,
    ``MaxReluPattern``, and ``SoftmaxCrossEntropyLossCastPattern``.
-#. **Remaining PR 3: rotary embedding and attention functions (9 patterns).**
+#. **Rotary embedding and attention functions (9 patterns).**
    ``RotaryEmbeddingPattern``, ``RotaryConcatPartPattern``,
    ``FunctionCausalMaskPattern``, ``FunctionCausalMaskMulAddPattern``,
    ``FunctionCosSinCachePattern``, ``FunctionHalfRotaryEmbeddingPattern``,
    ``FunctionAttentionPattern``, ``FunctionAttentionGQAPattern``, and
    ``AttentionGQAPattern``.
 
-The 60 remaining patterns are deliberately consolidated into three pull
-requests, keeping completion below four additional PRs. They are ordered from
-local, low-dependency rewrites toward shape-sensitive and model-specific
-fusions. If a batch exposes a missing generic graph query, that query is added
-and tested in the same pull request; model-specific shortcuts are not added to
-the optimizer core.
+The batches are ordered from local, low-dependency rewrites toward
+shape-sensitive and model-specific fusions. If a batch exposes a missing
+generic graph query, that query is added and tested in the same pull request;
+model-specific shortcuts are not added to the optimizer core.
 
 Pull requests
 +++++++++++++
@@ -818,7 +834,9 @@ Pull requests
   ``ShapeBasedExpandBroadcastPattern`` and
   ``ShapeBasedExpandBroadcastMatMulPattern`` removing unnecessary dynamic
   ``Expand`` nodes before element-wise binary operators and ``MatMul``.
-* `PR #4542 <https://github.com/xadupre/onnx-light/pull/4542>`_:
-  ``ShapeBasedExpandCastWhereSwapPattern``, ``ShapeBasedExpandSwapPattern``,
-  ``ShapeBasedStaticExpandPattern``, and ``SwapExpandReshapePattern``, completing
-  the Expand batch.
+* `PR #4539 <https://github.com/xadupre/onnx-light/pull/4539>`_: final
+  ``LocalRewriting`` coordinates and deterministic replay.
+* `PR #4542 <https://github.com/xadupre/onnx-light/pull/4542>`_: remaining
+  shape-based and Reshape-adjacent ``Expand`` patterns.
+* `PR #4551 <https://github.com/xadupre/onnx-light/pull/4551>`_: Reshape,
+  remaining layout, algebra, reduction, and graph-identity patterns.

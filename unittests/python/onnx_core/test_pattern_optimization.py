@@ -171,6 +171,51 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(list(optimized.graph.node[0].input), ["x", "mn", "mx"])
         self.assertEqual(rewrites[0].pattern_name, "ClipClip")
 
+    def test_tensor_layout_algebra_patterns_are_selectable(self):
+        names = (
+            "ConcatReshape",
+            "Reshape",
+            "ReduceReshape",
+            "Reshape2Of3",
+            "ReshapeReshapeBinary",
+            "ReshapeReshape",
+            "ReshapeSqueeze",
+            "ShapeBasedEditDistanceReshape",
+            "ShapeBasedReshapeIsSqueeze",
+            "ShapedBasedReshape",
+            "StaticConcatReshape",
+            "UnsqueezeOrSqueezeReshape",
+            "UnsqueezeReshape",
+            "MulUnsqueezeUnsqueeze",
+            "SqueezeAdd",
+            "SqueezeBinaryUnsqueeze",
+            "SwapUnsqueezeTranspose",
+            "TransposeEqualReshape",
+            "TransposeReshapeTranspose",
+            "MulMulMulScalar",
+            "SwitchOrderBinary",
+            "SwapRangeAddScalar",
+            "ReduceArgTopK",
+            "ReduceSumNormalize",
+            "Sub1Mul",
+            "SwapUnary",
+            "SameChildren",
+            "SameChildrenFromInput",
+            "ShapeBasedIdentity",
+            "ShapeBasedSameChildren",
+            "ShapeBasedShapeShapeAdd",
+        )
+        registered = optim.standard_pattern_names()
+        for name in names:
+            with self.subTest(name=name):
+                self.assertIn(name, registered)
+                self.assertIsInstance(
+                    optim.standard_patterns([name])[0], optim.PatternOptimization
+                )
+                self.assertIsInstance(
+                    getattr(optim, f"{name}Pattern")(), optim.PatternOptimization
+                )
+
     def test_python_pattern_runs_recursively_in_subgraph(self):
         then_branch = helper.make_graph(
             [

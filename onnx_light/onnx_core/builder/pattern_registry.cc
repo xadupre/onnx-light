@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <mutex>
+#include <unordered_map>
 #include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
@@ -20,6 +21,7 @@ struct PatternRegistration {
 struct PatternRegistry {
   std::mutex mutex;
   std::vector<PatternRegistration> registrations;
+  std::unordered_map<std::string, std::size_t> indices;
 };
 
 PatternRegistry &MutablePatternRegistry() {
@@ -50,14 +52,13 @@ void RegisterPattern(const std::string &name, PatternFactory factory) {
 
   PatternRegistry &registry = MutablePatternRegistry();
   std::lock_guard<std::mutex> lock(registry.mutex);
-  const auto existing = std::find_if(
-      registry.registrations.begin(), registry.registrations.end(),
-      [&name](const PatternRegistration &registration) { return registration.name == name; });
-  if (existing != registry.registrations.end()) {
+  if (registry.indices.contains(name)) {
     throw PatternRegistrationError("RegisterPattern: pattern '" + name +
                                    "' is already registered.");
   }
+  const std::size_t index = registry.registrations.size();
   registry.registrations.push_back(PatternRegistration{name, std::move(factory)});
+  registry.indices.insert({name, index});
 }
 
 std::vector<std::string> RegisteredPatternNames() {
@@ -91,6 +92,36 @@ std::vector<std::unique_ptr<PatternOptimization>> CreateRegisteredPatterns() {
     patterns.push_back(std::move(pattern));
   }
   return patterns;
+}
+
+std::unique_ptr<PatternOptimization> CreateRegisteredPattern(const std::string &name,
+                                                             std::optional<int> priority) {
+  if (name.empty()) {
+    throw PatternRegistrationError("CreateRegisteredPattern: pattern name cannot be empty.");
+  }
+
+  PatternFactory factory;
+  {
+    PatternRegistry &registry = MutablePatternRegistry();
+    std::lock_guard<std::mutex> lock(registry.mutex);
+    const auto index = registry.indices.find(name);
+    if (index == registry.indices.end()) {
+      throw PatternRegistrationError("CreateRegisteredPattern: pattern '" + name +
+                                     "' is not registered.");
+    }
+    factory = registry.registrations[index->second].factory;
+  }
+
+  std::unique_ptr<PatternOptimization> pattern = factory();
+  if (pattern == nullptr) {
+    throw PatternRegistrationError("CreateRegisteredPattern: factory for '" + name +
+                                   "' returned null.");
+  }
+  pattern->SetRegisteredName(name);
+  if (priority.has_value()) {
+    pattern->priority = *priority;
+  }
+  return pattern;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::builder

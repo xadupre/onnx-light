@@ -47,6 +47,17 @@ TEST(PatternRegistry, RegistersAndCreatesCustomPattern) {
       core::builder::CreateRegisteredPatterns();
   ASSERT_EQ(patterns.size(), names.size());
   EXPECT_NE(dynamic_cast<CustomPattern *>(patterns.back().get()), nullptr);
+
+  std::unique_ptr<core::builder::PatternOptimization> by_name =
+      core::builder::CreateRegisteredPattern("test.CustomPattern");
+  ASSERT_NE(by_name, nullptr);
+  EXPECT_EQ(by_name->Name(), "test.CustomPattern");
+
+  std::unique_ptr<core::builder::PatternOptimization> by_name_with_priority =
+      core::builder::CreateRegisteredPattern("test.CustomPattern", 7);
+  ASSERT_NE(by_name_with_priority, nullptr);
+  EXPECT_EQ(by_name_with_priority->Name(), "test.CustomPattern");
+  EXPECT_EQ(by_name_with_priority->priority, 7);
 }
 
 TEST(PatternRegistry, RejectsDuplicateName) {
@@ -62,6 +73,9 @@ TEST(PatternRegistry, RejectsInvalidRegistration) {
       core::builder::RegisterPattern("", []() { return std::make_unique<CustomPattern>(); }),
       core::builder::PatternRegistrationError);
   EXPECT_THROW(core::builder::RegisterPattern("test.EmptyFactory", {}),
+               core::builder::PatternRegistrationError);
+  EXPECT_THROW(core::builder::CreateRegisteredPattern(""), core::builder::PatternRegistrationError);
+  EXPECT_THROW(core::builder::CreateRegisteredPattern("test.UnknownPattern"),
                core::builder::PatternRegistrationError);
 }
 

@@ -142,9 +142,9 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
     }
     axes = *axes_opt;
   } else {
-    axes.resize(starts.size());
+    axes.reserve(starts.size());
     for (size_t i = 0; i < starts.size(); ++i) {
-      axes[i] = static_cast<int64_t>(i);
+      axes.push_back(static_cast<int64_t>(i));
     }
   }
   EXT_ENFORCE_INVALID(axes.size() == starts.size(),

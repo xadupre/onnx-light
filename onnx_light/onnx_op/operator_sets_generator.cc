@@ -43,6 +43,7 @@ std::vector<TensorType> AllTensorTypesIr9() {
 
 std::vector<TensorType> AllTensorTypesIr10() {
   std::vector<TensorType> types = AllTensorTypesIr9();
+  types.reserve(types.size() + 2);
   types.push_back(TensorType::kUint4);
   types.push_back(TensorType::kInt4);
   return types;
@@ -50,18 +51,21 @@ std::vector<TensorType> AllTensorTypesIr10() {
 
 std::vector<TensorType> AllTensorTypesIr11() {
   std::vector<TensorType> types = AllTensorTypesIr10();
+  types.reserve(types.size() + 1);
   types.push_back(TensorType::kFloat4e2m1);
   return types;
 }
 
 std::vector<TensorType> AllTensorTypesIr12() {
   std::vector<TensorType> types = AllTensorTypesIr11();
+  types.reserve(types.size() + 1);
   types.push_back(TensorType::kFloat8e8m0);
   return types;
 }
 
 std::vector<TensorType> AllTensorTypesIr13() {
   std::vector<TensorType> types = AllTensorTypesIr12();
+  types.reserve(types.size() + 2);
   types.push_back(TensorType::kUint2);
   types.push_back(TensorType::kInt2);
   return types;
@@ -186,6 +190,7 @@ std::vector<TensorType> ConstantOfShapeTypesV9() {
 
 std::vector<TensorType> ConstantOfShapeTypesV20() {
   std::vector<TensorType> types = ConstantOfShapeTypesV9();
+  types.reserve(types.size() + 5);
   types.push_back(TensorType::kBfloat16);
   types.push_back(TensorType::kFloat8e4m3fn);
   types.push_back(TensorType::kFloat8e4m3fnuz);
@@ -209,18 +214,21 @@ std::vector<TensorType> ConstantOfShapeTypesV21() {
 
 std::vector<TensorType> ConstantOfShapeTypesV23() {
   std::vector<TensorType> types = ConstantOfShapeTypesV21();
+  types.reserve(types.size() + 1);
   types.push_back(TensorType::kFloat4e2m1);
   return types;
 }
 
 std::vector<TensorType> ConstantOfShapeTypesV24() {
   std::vector<TensorType> types = ConstantOfShapeTypesV23();
+  types.reserve(types.size() + 1);
   types.push_back(TensorType::kFloat8e8m0);
   return types;
 }
 
 std::vector<TensorType> ConstantOfShapeTypesV25() {
   std::vector<TensorType> types = ConstantOfShapeTypesV24();
+  types.reserve(types.size() + 2);
   types.push_back(TensorType::kUint2);
   types.push_back(TensorType::kInt2);
   return types;

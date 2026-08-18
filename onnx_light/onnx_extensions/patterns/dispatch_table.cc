@@ -29,6 +29,9 @@
 #include "onnx_extensions/patterns/expand/expand_pattern.h"
 #include "onnx_extensions/patterns/expand/where_pattern.h"
 #include "onnx_extensions/patterns/layout/layout_pattern.h"
+#include "onnx_extensions/patterns/matmul/matmul_pattern.h"
+#include "onnx_extensions/patterns/normalization/activation_pattern.h"
+#include "onnx_extensions/patterns/normalization/normalization_pattern.h"
 #include "onnx_extensions/patterns/reshape/reshape_pattern.h"
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 #include "onnx_extensions/patterns/unsqueeze/unsqueeze_pattern.h"
@@ -251,6 +254,49 @@ void RegisterPatterns() {
         "ShapeBasedSameChildren", [] { return std::make_unique<ShapeBasedSameChildrenPattern>(); });
     core::builder::RegisterPattern("ShapeBasedShapeShapeAdd", [] {
       return std::make_unique<ShapeBasedShapeShapeAddPattern>();
+    });
+    core::builder::RegisterPattern("GemmTranspose",
+                                   [] { return std::make_unique<GemmTransposePattern>(); });
+    core::builder::RegisterPattern("MatMulAdd",
+                                   [] { return std::make_unique<MatMulAddPattern>(); });
+    core::builder::RegisterPattern("MatMulReshape2Of3",
+                                   [] { return std::make_unique<MatMulReshape2Of3Pattern>(); });
+    core::builder::RegisterPattern("MulMulMatMul",
+                                   [] { return std::make_unique<MulMulMatMulPattern>(); });
+    core::builder::RegisterPattern("ReshapeMatMulReshape",
+                                   [] { return std::make_unique<ReshapeMatMulReshapePattern>(); });
+    core::builder::RegisterPattern("ShapeBasedMatMulToMul",
+                                   [] { return std::make_unique<ShapeBasedMatMulToMulPattern>(); });
+    core::builder::RegisterPattern("SwitchReshapeActivation", [] {
+      return std::make_unique<SwitchReshapeActivationPattern>();
+    });
+    core::builder::RegisterPattern("TransposeMatMul",
+                                   [] { return std::make_unique<TransposeMatMulPattern>(); });
+    core::builder::RegisterPattern(
+        "TransposeReshapeMatMul", [] { return std::make_unique<TransposeReshapeMatMulPattern>(); });
+    core::builder::RegisterPattern("BatchNormalization",
+                                   [] { return std::make_unique<BatchNormalizationPattern>(); });
+    core::builder::RegisterPattern("BatchNormalizationTraining", [] {
+      return std::make_unique<BatchNormalizationTrainingPattern>();
+    });
+    core::builder::RegisterPattern("CastLayerNormalizationCast", [] {
+      return std::make_unique<CastLayerNormalizationCastPattern>();
+    });
+    core::builder::RegisterPattern("LayerNormalization",
+                                   [] { return std::make_unique<LayerNormalizationPattern>(); });
+    core::builder::RegisterPattern("LayerNormalizationScale", [] {
+      return std::make_unique<LayerNormalizationScalePattern>();
+    });
+    core::builder::RegisterPattern("RMSNormalization",
+                                   [] { return std::make_unique<RMSNormalizationPattern>(); });
+    core::builder::RegisterPattern("RMSNormalizationMul",
+                                   [] { return std::make_unique<RMSNormalizationMulPattern>(); });
+    core::builder::RegisterPattern("Gelu", [] { return std::make_unique<GeluPattern>(); });
+    core::builder::RegisterPattern("LeakyRelu",
+                                   [] { return std::make_unique<LeakyReluPattern>(); });
+    core::builder::RegisterPattern("MaxRelu", [] { return std::make_unique<MaxReluPattern>(); });
+    core::builder::RegisterPattern("SoftmaxCrossEntropyLossCast", [] {
+      return std::make_unique<SoftmaxCrossEntropyLossCastPattern>();
     });
     core::builder::RegisterPattern("SwapExpandReshape",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {

@@ -27,6 +27,9 @@
 #include "onnx_extensions/patterns/expand/expand_pattern.h"
 #include "onnx_extensions/patterns/expand/where_pattern.h"
 #include "onnx_extensions/patterns/layout/layout_pattern.h"
+#include "onnx_extensions/patterns/matmul/matmul_pattern.h"
+#include "onnx_extensions/patterns/normalization/activation_pattern.h"
+#include "onnx_extensions/patterns/normalization/normalization_pattern.h"
 #include "onnx_extensions/patterns/reshape/reshape_pattern.h"
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 #include "onnx_extensions/patterns/unsqueeze/unsqueeze_pattern.h"
@@ -306,6 +309,47 @@ NB_MODULE(_onnxpypatterns, m) {
   BindPattern<onnx_patterns::ShapeBasedShapeShapeAddPattern>(
       m, "ShapeBasedShapeShapeAddPattern",
       "Exposes the upstream placeholder for additions of two Shape outputs.");
+  BindPattern<onnx_patterns::GemmTransposePattern>(m, "GemmTransposePattern",
+                                                   "Folds input transposes into a Gemm operation.");
+  BindPattern<onnx_patterns::MatMulAddPattern>(m, "MatMulAddPattern",
+                                               "Replaces a compatible MatMul and Add with Gemm.");
+  BindPattern<onnx_patterns::MatMulReshape2Of3Pattern>(
+      m, "MatMulReshape2Of3Pattern", "Simplifies compatible reshapes around MatMul.");
+  BindPattern<onnx_patterns::MulMulMatMulPattern>(
+      m, "MulMulMatMulPattern", "Moves compatible scalar multiplications across MatMul.");
+  BindPattern<onnx_patterns::ReshapeMatMulReshapePattern>(
+      m, "ReshapeMatMulReshapePattern", "Simplifies reshape, MatMul, and reshape sequences.");
+  BindPattern<onnx_patterns::ShapeBasedMatMulToMulPattern>(
+      m, "ShapeBasedMatMulToMulPattern", "Replaces shape-proven scalar MatMul with Mul.");
+  BindPattern<onnx_patterns::SwitchReshapeActivationPattern>(
+      m, "SwitchReshapeActivationPattern", "Moves compatible activations before Reshape.");
+  BindPattern<onnx_patterns::TransposeMatMulPattern>(m, "TransposeMatMulPattern",
+                                                     "Folds compatible transposes into MatMul.");
+  BindPattern<onnx_patterns::TransposeReshapeMatMulPattern>(
+      m, "TransposeReshapeMatMulPattern", "Simplifies transpose and reshape inputs to MatMul.");
+  BindPattern<onnx_patterns::BatchNormalizationPattern>(
+      m, "BatchNormalizationPattern", "Fuses an inference batch-normalization subgraph.");
+  BindPattern<onnx_patterns::BatchNormalizationTrainingPattern>(
+      m, "BatchNormalizationTrainingPattern", "Fuses a training batch-normalization subgraph.");
+  BindPattern<onnx_patterns::CastLayerNormalizationCastPattern>(
+      m, "CastLayerNormalizationCastPattern",
+      "Removes redundant casts surrounding LayerNormalization.");
+  BindPattern<onnx_patterns::LayerNormalizationPattern>(m, "LayerNormalizationPattern",
+                                                        "Fuses a layer-normalization subgraph.");
+  BindPattern<onnx_patterns::LayerNormalizationScalePattern>(
+      m, "LayerNormalizationScalePattern", "Fuses layer normalization with its scale.");
+  BindPattern<onnx_patterns::RMSNormalizationPattern>(m, "RMSNormalizationPattern",
+                                                      "Fuses an RMS-normalization subgraph.");
+  BindPattern<onnx_patterns::RMSNormalizationMulPattern>(
+      m, "RMSNormalizationMulPattern", "Fuses RMS normalization with a following scale.");
+  BindPattern<onnx_patterns::GeluPattern>(m, "GeluPattern", "Fuses a GELU activation subgraph.");
+  BindPattern<onnx_patterns::LeakyReluPattern>(m, "LeakyReluPattern",
+                                               "Fuses a LeakyRelu activation subgraph.");
+  BindPattern<onnx_patterns::MaxReluPattern>(m, "MaxReluPattern",
+                                             "Replaces a compatible maximum with Relu.");
+  BindPattern<onnx_patterns::SoftmaxCrossEntropyLossCastPattern>(
+      m, "SoftmaxCrossEntropyLossCastPattern",
+      "Moves a compatible label cast into SoftmaxCrossEntropyLoss.");
   BindPattern<onnx_patterns::SwapExpandReshapePattern>(
       m, "SwapExpandReshapePattern",
       "Swaps a supported ``Expand`` and constant-shape ``Reshape`` pair.");

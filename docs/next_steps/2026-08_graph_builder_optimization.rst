@@ -153,6 +153,10 @@ requests:
      - Tensor layout and algebra rewrites
      - Ports 13 Reshape, 6 layout, and 12 algebra/reduction/identity classes,
        including the intentionally inactive upstream placeholder.
+   * - This pull request
+     - MatMul, normalization, and activation rewrites
+     - Ports 9 matrix-multiplication and 11 normalization/activation patterns
+       with rewrite/rejection tests, registration, and Python bindings.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -706,11 +710,9 @@ The upstream default list currently contains 104 enabled patterns.
 ``ShapeBasedExpandBroadcastMatMulPattern`` are already covered. PR #4542 adds
 the last four ``Expand`` patterns, and the tensor-layout/algebra batch adds 30
 active rewrites plus the upstream-compatible
-``ShapeBasedShapeShapeAddPattern`` placeholder. This leaves 29 patterns.
-They will be delivered in two final pull requests: one combining matrix
-multiplication with normalization/activation, and one for attention. Together
-with PR #4551, the post-Expand work therefore remains limited to three pull
-requests.
+``ShapeBasedShapeShapeAddPattern`` placeholder. This pull request adds the 20
+matrix-multiplication and normalization/activation patterns, leaving only the
+9 attention patterns for the final pull request.
 They are grouped into cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;
@@ -764,13 +766,13 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    The last class deliberately preserves the upstream placeholder contract:
    it is exposed and registered but never matches because upstream defines no
    proven rewrite.
-#. **Matrix multiplication and linear algebra (9 patterns).**
+#. **Matrix multiplication and linear algebra (done in this pull request).**
    ``GemmTransposePattern``, ``MatMulAddPattern``,
    ``MatMulReshape2Of3Pattern``, ``MulMulMatMulPattern``,
    ``ReshapeMatMulReshapePattern``, ``ShapeBasedMatMulToMulPattern``,
    ``SwitchReshapeActivationPattern``, ``TransposeMatMulPattern``, and
    ``TransposeReshapeMatMulPattern``.
-#. **Normalization and activations (11 patterns).**
+#. **Normalization and activations (done in this pull request).**
    ``BatchNormalizationPattern``, ``BatchNormalizationTrainingPattern``,
    ``CastLayerNormalizationCastPattern``, ``LayerNormalizationPattern``,
    ``LayerNormalizationScalePattern``, ``RMSNormalizationPattern``,
@@ -840,3 +842,5 @@ Pull requests
   shape-based and Reshape-adjacent ``Expand`` patterns.
 * `PR #4551 <https://github.com/xadupre/onnx-light/pull/4551>`_: Reshape,
   remaining layout, algebra, reduction, and graph-identity patterns.
+* This pull request: matrix multiplication, normalization, and activation
+  patterns.

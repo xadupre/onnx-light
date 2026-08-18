@@ -53,7 +53,6 @@ template <typename T> void BindPattern(nb::module_ &m, const char *name, const c
 
 std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::string &name,
                                                                   std::optional<int> priority) {
-  onnx_patterns::RegisterPatterns();
   std::unique_ptr<core::builder::PatternOptimization> pattern =
       onnx_patterns::CreatePattern(name, priority);
   return std::shared_ptr<core::builder::PatternOptimization>(std::move(pattern));

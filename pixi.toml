@@ -11,8 +11,8 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 
 [dependencies]
 python = ">=3.11"
-numpy = ">=2.1"
-ml_dtypes = "*"
+numpy = ">=2.2"
+ml_dtypes = ">=0.5.0"
 cmake = ">=3.27"
 ninja = "*"
 cxx-compiler = "*"

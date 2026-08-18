@@ -707,6 +707,10 @@ The upstream default list currently contains 104 enabled patterns.
 the last four ``Expand`` patterns, and the tensor-layout/algebra batch adds 30
 active rewrites plus the upstream-compatible
 ``ShapeBasedShapeShapeAddPattern`` placeholder. This leaves 29 patterns.
+They will be delivered in two final pull requests: one combining matrix
+multiplication with normalization/activation, and one for attention. Together
+with PR #4551, the post-Expand work therefore remains limited to three pull
+requests.
 They are grouped into cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;

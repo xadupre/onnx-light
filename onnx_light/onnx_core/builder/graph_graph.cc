@@ -387,7 +387,6 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
       }
       rewriting.pattern = *pattern_owner;
       rewriting.graph_path = graph_path;
-      rewriting.insert_at = static_cast<std::ptrdiff_t>(position);
       rewriting.iteration = rewrite_batch;
       rewriting.match_time_ns = timed_match.match_time_ns;
       rewriting.apply_time_ns = apply_time_ns;
@@ -493,7 +492,42 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
         replacement.rewriting.added_nodes = std::move(unfolded_nodes);
       }
 
+      std::unordered_map<std::string, std::size_t> output_positions;
+      for (std::size_t position = 0; position < builder_.nodes_.size(); ++position) {
+        const NodeProto &node = builder_.nodes_[position];
+        for (std::size_t output_index = 0; output_index < node.output().size(); ++output_index) {
+          const std::string output(node.output(output_index));
+          if (!output.empty()) {
+            output_positions.emplace(output, position);
+          }
+        }
+      }
       for (PendingReplacement &replacement : replacements) {
+        replacement.rewriting.added_nodes_positions.reserve(
+            replacement.rewriting.added_nodes.size());
+        for (const NodeProto &node : replacement.rewriting.added_nodes) {
+          std::size_t position = builder_.nodes_.size();
+          for (std::size_t output_index = 0; output_index < node.output().size(); ++output_index) {
+            const std::string output(node.output(output_index));
+            if (output.empty()) {
+              continue;
+            }
+            const auto found = output_positions.find(output);
+            if (found == output_positions.end()) {
+              throw BuilderError("GraphGraph::Optimize: added node output '" + output +
+                                 "' is missing after applying the rewrite batch.");
+            }
+            if (position != builder_.nodes_.size() && position != found->second) {
+              throw BuilderError(
+                  "GraphGraph::Optimize: outputs of one added node have different positions.");
+            }
+            position = found->second;
+          }
+          if (position == builder_.nodes_.size()) {
+            throw BuilderError("GraphGraph::Optimize: an added node must produce a named value.");
+          }
+          replacement.rewriting.added_nodes_positions.push_back(position);
+        }
         applied.push_back(std::move(replacement.rewriting));
       }
       ++rewrite_batch;
@@ -543,9 +577,12 @@ std::size_t GraphGraph::Cleanup(std::vector<LocalRewriting> &rewrites, std::size
       rewriting.matched_nodes.push_back(i);
     }
     rewriting.added_nodes = builder_.nodes_;
+    rewriting.added_nodes_positions.reserve(builder_.nodes_.size());
+    for (std::size_t i = 0; i < builder_.nodes_.size(); ++i) {
+      rewriting.added_nodes_positions.push_back(i);
+    }
     rewriting.value_renames.assign(applied_renames.begin(), applied_renames.end());
     std::sort(rewriting.value_renames.begin(), rewriting.value_renames.end());
-    rewriting.insert_at = node_count == 0 ? -1 : 0;
     rewriting.iteration = rewrite_batch++;
     rewrites.push_back(std::move(rewriting));
     return removed;
@@ -573,6 +610,10 @@ std::size_t GraphGraph::Cleanup(std::vector<LocalRewriting> &rewrites, std::size
       rewriting.matched_nodes.push_back(i);
     }
     rewriting.added_nodes = builder_.nodes_;
+    rewriting.added_nodes_positions.reserve(builder_.nodes_.size());
+    for (std::size_t i = 0; i < builder_.nodes_.size(); ++i) {
+      rewriting.added_nodes_positions.push_back(i);
+    }
     rewriting.removed_initializers.reserve(initializer_count);
     for (std::size_t i = 0; i < initializer_count; ++i) {
       rewriting.removed_initializers.push_back(i);
@@ -584,7 +625,6 @@ std::size_t GraphGraph::Cleanup(std::vector<LocalRewriting> &rewrites, std::size
     }
     rewriting.value_renames.assign(applied_renames.begin(), applied_renames.end());
     std::sort(rewriting.value_renames.begin(), rewriting.value_renames.end());
-    rewriting.insert_at = node_count == 0 ? -1 : 0;
     rewriting.iteration = rewrite_batch++;
     rewrites.push_back(std::move(rewriting));
     cleaned += removed_initializers;
@@ -604,7 +644,11 @@ void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites
     bool replaces_matched_output;
   };
   std::vector<AddedInitializer> added_initializers;
-  std::unordered_map<std::size_t, std::vector<std::size_t>> insertions;
+  struct AddedNode {
+    std::size_t position;
+    const NodeProto *node;
+  };
+  std::vector<AddedNode> added_nodes;
   std::size_t replacement_nodes = 0;
   for (std::size_t i = begin; i < end; ++i) {
     const LocalRewriting &rewrite = rewrites[i];
@@ -616,7 +660,6 @@ void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites
         rewrite.value_renames.empty()) {
       throw BuilderError("Replay: an empty rewrite is not allowed.");
     }
-    std::size_t first_matched = builder_.nodes_.size();
     for (const std::size_t position : rewrite.matched_nodes) {
       if (position >= builder_.nodes_.size()) {
         throw BuilderError("Replay: matched node position " + std::to_string(position) +
@@ -626,21 +669,13 @@ void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites
         throw BuilderError("Replay: rewrites in one iteration overlap at node position " +
                            std::to_string(position) + ".");
       }
-      first_matched = std::min(first_matched, position);
     }
-    if (rewrite.insert_at < -1) {
-      throw BuilderError("Replay: insertion position must be at least -1.");
+    if (rewrite.added_nodes_positions.size() != rewrite.added_nodes.size()) {
+      throw BuilderError("Replay: added node positions must align with added nodes.");
     }
-    if (!rewrite.added_nodes.empty()) {
-      if (rewrite.matched_nodes.empty()) {
-        throw BuilderError("Replay: adding nodes requires at least one matched node.");
-      }
-      const std::size_t insertion_position =
-          rewrite.insert_at == -1 ? first_matched : static_cast<std::size_t>(rewrite.insert_at);
-      if (insertion_position >= builder_.nodes_.size()) {
-        throw BuilderError("Replay: insertion position is outside the graph.");
-      }
-      insertions[insertion_position].push_back(i);
+    for (std::size_t node_index = 0; node_index < rewrite.added_nodes.size(); ++node_index) {
+      added_nodes.push_back(
+          AddedNode{rewrite.added_nodes_positions[node_index], &rewrite.added_nodes[node_index]});
     }
     for (const std::size_t position : rewrite.removed_initializers) {
       if (position >= builder_.initializers_.size()) {
@@ -690,6 +725,20 @@ void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites
     replacement_nodes += rewrite.added_nodes.size();
   }
 
+  const std::size_t final_node_count = builder_.nodes_.size() - removed.size() + replacement_nodes;
+  std::vector<const NodeProto *> nodes_by_position(final_node_count, nullptr);
+  for (const AddedNode &addition : added_nodes) {
+    if (addition.position >= final_node_count) {
+      throw BuilderError("Replay: added node position " + std::to_string(addition.position) +
+                         " is outside the rewritten graph.");
+    }
+    if (nodes_by_position[addition.position] != nullptr) {
+      throw BuilderError("Replay: added node positions overlap at position " +
+                         std::to_string(addition.position) + ".");
+    }
+    nodes_by_position[addition.position] = addition.node;
+  }
+
   builder_.RewriteInitializerReferences(value_renames);
 
   if (!removed_initializers.empty()) {
@@ -726,18 +775,30 @@ void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites
   }
 
   utils::RepeatedProtoField<NodeProto> rebuilt;
-  rebuilt.reserve(builder_.nodes_.size() - removed.size() + replacement_nodes);
-  for (std::size_t i = 0; i < builder_.nodes_.size(); ++i) {
-    const auto insertion = insertions.find(i);
-    if (insertion != insertions.end()) {
-      for (const std::size_t rewrite_index : insertion->second) {
-        rebuilt.extend(rewrites[rewrite_index].added_nodes);
-      }
+  rebuilt.reserve(final_node_count);
+  std::size_t original_position = 0;
+  for (std::size_t position = 0; position < final_node_count; ++position) {
+    if (nodes_by_position[position] != nullptr) {
+      rebuilt.push_back(*nodes_by_position[position]);
+      continue;
     }
-    if (removed.find(&builder_.nodes_[i]) == removed.end()) {
-      rebuilt.add();
-      rebuilt.get(rebuilt.size() - 1) = builder_.nodes_.shared_at(i);
+    while (original_position < builder_.nodes_.size() &&
+           removed.find(&builder_.nodes_[original_position]) != removed.end()) {
+      ++original_position;
     }
+    if (original_position == builder_.nodes_.size()) {
+      throw BuilderError("Replay: added node positions leave no slot for a retained node.");
+    }
+    rebuilt.add();
+    rebuilt.get(rebuilt.size() - 1) = builder_.nodes_.shared_at(original_position++);
+  }
+  while (original_position < builder_.nodes_.size() &&
+         removed.find(&builder_.nodes_[original_position]) != removed.end()) {
+    ++original_position;
+  }
+  if (original_position != builder_.nodes_.size()) {
+    throw BuilderError(
+        "Replay: added node positions do not leave enough slots for retained nodes.");
   }
   builder_.nodes_ = std::move(rebuilt);
   Rebuild();

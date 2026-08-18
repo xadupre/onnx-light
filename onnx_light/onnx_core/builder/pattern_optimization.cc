@@ -135,7 +135,14 @@ std::string LocalRewriting::ToString() const {
   }
   os << "], added_nodes=";
   AppendNodes(os, added_nodes);
-  os << ", added_initializers=[";
+  os << ", added_nodes_positions=[";
+  for (std::size_t i = 0; i < added_nodes_positions.size(); ++i) {
+    if (i != 0) {
+      os << ", ";
+    }
+    os << added_nodes_positions[i];
+  }
+  os << "], added_initializers=[";
   for (std::size_t i = 0; i < added_initializers.size(); ++i) {
     if (i != 0) {
       os << ", ";
@@ -163,8 +170,8 @@ std::string LocalRewriting::ToString() const {
     }
     os << value_renames[i].first << "->" << value_renames[i].second;
   }
-  os << "], insert_at=" << insert_at << ", iteration=" << iteration
-     << ", match_time_ns=" << match_time_ns << ", apply_time_ns=" << apply_time_ns << ")";
+  os << "], iteration=" << iteration << ", match_time_ns=" << match_time_ns
+     << ", apply_time_ns=" << apply_time_ns << ")";
   return os.str();
 }
 

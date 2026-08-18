@@ -4,15 +4,30 @@
 
 #include "onnx_core/runtime/kernels/parallel_for.h"
 
+#include "onnx_core/runtime/tuning/runtime_parameters.h"
+
 #include <algorithm>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
+namespace {
+
+// Covers the Python/runtime dispatch gap between nearby inference calls.
+constexpr int64_t kParallelForSpinCount = 1000000;
+
+void CpuRelax() noexcept {
+#if defined(__x86_64__) || defined(__i386__)
+  __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+  __asm__ volatile("yield");
+#else
+  std::atomic_signal_fence(std::memory_order_seq_cst);
+#endif
+}
+
+} // namespace
 
 int64_t ParallelForThreadCount() noexcept {
-  static const int64_t thread_count = []() {
-    const unsigned int cores = std::thread::hardware_concurrency();
-    return cores == 0 ? int64_t{1} : static_cast<int64_t>(cores);
-  }();
+  static const int64_t thread_count = RuntimeParameters().EffectiveNumThreads();
   return thread_count;
 }
 
@@ -29,8 +44,8 @@ ThreadPool::ThreadPool(int64_t num_workers) {
 ThreadPool::~ThreadPool() {
   {
     std::lock_guard<std::mutex> lock(mu_);
-    stop_ = true;
-    ++generation_;
+    stop_.store(true, std::memory_order_release);
+    generation_.fetch_add(1, std::memory_order_release);
   }
   cv_work_.notify_all();
   for (std::thread &worker : workers_) {
@@ -65,7 +80,7 @@ void ThreadPool::RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn) {
     task_fn_ = task_fn;
     num_blocks_ = num_blocks;
     remaining_.store(num_blocks - 1, std::memory_order_relaxed);
-    ++generation_;
+    generation_.fetch_add(1, std::memory_order_release);
   }
   cv_work_.notify_all();
 
@@ -75,6 +90,12 @@ void ThreadPool::RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn) {
   task_fn(task_ctx, static_cast<int64_t>(0));
   in_pool = was_in_pool;
 
+  for (int64_t spin = 0; spin < kParallelForSpinCount; ++spin) {
+    if (remaining_.load(std::memory_order_acquire) == 0) {
+      return;
+    }
+    CpuRelax();
+  }
   std::unique_lock<std::mutex> lock(mu_);
   cv_done_.wait(lock, [this]() { return remaining_.load(std::memory_order_acquire) == 0; });
 }
@@ -84,17 +105,26 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
   const int64_t my_block = worker_index + 1;
   uint64_t last_generation = 0;
   for (;;) {
+    for (int64_t spin = 0; spin < kParallelForSpinCount; ++spin) {
+      if (stop_.load(std::memory_order_acquire) ||
+          generation_.load(std::memory_order_acquire) != last_generation) {
+        break;
+      }
+      CpuRelax();
+    }
     void *ctx = nullptr;
     TaskFn fn = nullptr;
     int64_t num_blocks = 0;
     {
       std::unique_lock<std::mutex> lock(mu_);
-      cv_work_.wait(lock,
-                    [this, last_generation]() { return stop_ || generation_ != last_generation; });
-      if (stop_) {
+      cv_work_.wait(lock, [this, last_generation]() {
+        return stop_.load(std::memory_order_acquire) ||
+               generation_.load(std::memory_order_acquire) != last_generation;
+      });
+      if (stop_.load(std::memory_order_acquire)) {
         return;
       }
-      last_generation = generation_;
+      last_generation = generation_.load(std::memory_order_acquire);
       ctx = task_ctx_;
       fn = task_fn_;
       num_blocks = num_blocks_;
@@ -102,7 +132,6 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
     if (my_block < num_blocks) {
       fn(ctx, my_block);
       if (remaining_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-        std::lock_guard<std::mutex> lock(mu_);
         cv_done_.notify_one();
       }
     }

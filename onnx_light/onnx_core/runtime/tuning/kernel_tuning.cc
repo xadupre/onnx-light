@@ -907,7 +907,7 @@ CalibrationBatchReport CalibrateRegisteredKernels(const KernelCalibrationSelecti
   const KernelTuningRegistrySnapshot before = registry.Snapshot();
   const platform::CpuDescriptor &processor = platform::GetCpuDescriptor();
   CpuExecutionDescriptor execution = options.execution.value_or(
-      CpuExecutionDescriptor{processor, processor.logical_cores.value_or(uint32_t{1})});
+      CpuExecutionDescriptor{processor, static_cast<uint32_t>(ParallelForThreadCount())});
   if (options.maximum_threads.has_value()) {
     if (*options.maximum_threads == 0) {
       throw std::invalid_argument("Calibration maximum_threads must be positive.");

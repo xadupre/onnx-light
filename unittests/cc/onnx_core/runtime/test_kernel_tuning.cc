@@ -402,6 +402,26 @@ TEST(KernelCalibration, SelectsReportsAndPublishesCallbacks) {
             64);
 }
 
+TEST(KernelCalibration, DefaultExecutionMatchesParallelForThreadCount) {
+  KernelTuningParameters defaults = MakeDefaults();
+  defaults.key.library = "calibration_default_execution_test";
+  defaults.key.kernel = "DefaultExecution";
+  RegisterKernelTuningSchema(KernelTuningSchema(defaults));
+  RegisterKernelCalibrationFunction(
+      defaults.key, [defaults](const KernelTuningKey &, const CpuExecutionDescriptor &execution,
+                               const CalibrationOptions &, CalibrationReporter &) {
+        EXPECT_EQ(execution.effective_threads, static_cast<uint32_t>(ParallelForThreadCount()));
+        return defaults;
+      });
+
+  KernelCalibrationSelection selection;
+  selection.library = defaults.key.library;
+  const CalibrationBatchReport report = CalibrateRegisteredKernels(selection);
+
+  ASSERT_EQ(report.calibrated.size(), 1u);
+  EXPECT_EQ(report.calibrated[0].key, defaults.key);
+}
+
 TEST(KernelCalibration, BuildsUnaryAndBroadcastingBinaryCases) {
   const std::vector<KernelCalibrationCase> unary =
       MakeElementwiseCalibrationCases(DataType::FLOAT, 1, 16, 16, false);

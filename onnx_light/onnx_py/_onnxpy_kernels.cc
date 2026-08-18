@@ -514,8 +514,8 @@ public:
         std::all_of(outputs.begin(), outputs.end(),
                     [this](const std::string &name) { return output_names_set_.contains(name); });
     rt.Clear();
+    input_owners_.clear();
     rt.set_release_intermediates(release_intermediates && outputs_are_declared);
-    std::vector<nb::object> input_owners;
 
     for (auto [key, value] : feeds) {
       std::string name = nb::cast<std::string>(key);
@@ -533,12 +533,12 @@ public:
           throw nb::type_error(("Sequence input '" + name + "' must be a list or tuple.").c_str());
         Tensors tensors;
         for (nb::handle element : nb::borrow<nb::sequence>(value))
-          tensors.push_back(TensorFromNumpy(name, element, input_owners));
+          tensors.push_back(TensorFromNumpy(name, element, input_owners_));
         int32_t element_type =
             tensors.empty() ? 0 : static_cast<int32_t>(tensors.front().data_type);
         rt.PutSequence(name, Sequence(name, element_type, std::move(tensors)));
       } else {
-        rt.Set(name, TensorFromNumpy(name, value, input_owners));
+        rt.Set(name, TensorFromNumpy(name, value, input_owners_));
       }
     }
 
@@ -598,6 +598,9 @@ private:
   std::unordered_set<std::string> sequence_inputs_;
   std::vector<std::string> output_names_;
   std::unordered_set<std::string> output_names_set_;
+  // Keeps borrowed NumPy buffers alive while the persistent RuntimeContext may
+  // still expose its input tensors after Run returns.
+  std::vector<nb::object> input_owners_;
   std::unique_ptr<ExecutionPlan> plan_;
   std::unique_ptr<RuntimeSession> session_;
 };

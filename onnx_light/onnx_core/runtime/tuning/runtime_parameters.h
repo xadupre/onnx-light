@@ -29,8 +29,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
  */
 struct RuntimeParameters {
   /** Number of threads used to parallelize the execution of a graph.
-   *  - ``0`` (default): use the number of CPU cores reported by
-   *    ``std::thread::hardware_concurrency()``.
+   *  - ``0`` (default): use one thread per detected physical CPU core.
    *  - ``1``: no parallelization, everything runs on the calling thread.
    *  - ``> 1``: use exactly this many worker threads.
    *  - ``< 0``: treated the same as ``0`` (use the number of CPU cores). */
@@ -43,10 +42,10 @@ struct RuntimeParameters {
    * Returns the concrete number of threads to use, resolving the special
    * ``num_threads`` values to an actual count.
    *
-   * ``0`` and any negative value resolve to the number of CPU cores
-   * reported by ``std::thread::hardware_concurrency()`` (falling back to
-   * ``1`` when the hardware count is not available); every other value is
-   * returned unchanged. The result is always ``>= 1``.
+   * ``0`` and any negative value resolve to the detected physical-core count,
+   * falling back to the logical-core count, then
+   * ``std::thread::hardware_concurrency()``, and finally ``1``. Every other
+   * value is returned unchanged. The result is always ``>= 1``.
    *
    * Returns:
    *   The effective number of threads, always at least ``1``.

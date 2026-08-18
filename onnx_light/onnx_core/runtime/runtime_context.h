@@ -635,7 +635,9 @@ public:
   /// :cpp:enumerator:`RuntimeEventAction::kAdd` and the supplied ``kind``
   /// is appended to the event log on successful insertion. ``kind``
   /// defaults to :cpp:enumerator:`RuntimeEventKind::kInput`, which is
-  /// the typical role of values seeded by the caller before running.
+  /// the typical role of values seeded by the caller before running. A
+  /// borrowed input remains zero-copy; its backing storage must outlive its
+  /// use by this context.
   void Set(const std::string &name, Tensor tensor,
            RuntimeEventKind kind = RuntimeEventKind::kInput);
 
@@ -646,6 +648,8 @@ public:
   /// entry was overwritten. ``kind`` defaults to
   /// :cpp:enumerator:`RuntimeEventKind::kIntermediate`, the typical role
   /// of values written by node kernels through :cpp:func:`SetOutput`.
+  /// Borrowed tensors remain zero-copy only when ``kind`` is
+  /// :cpp:enumerator:`RuntimeEventKind::kInput`.
   void Put(const std::string &name, Tensor tensor,
            RuntimeEventKind kind = RuntimeEventKind::kIntermediate);
 

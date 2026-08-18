@@ -55,7 +55,7 @@ TEST(OnnxKernelsDispatchTable, RegisterKernelFunctionsPopulatesCoreDispatchTable
 TEST(OnnxKernelsDispatchTable, RegistersAbsCalibrationFunctions) {
   ::onnx_light::onnx_kernels::RegisterKernelFunctions();
   const core::runtime::KernelTuningKey key = onnx_kernels::tuning::MakePortableTuningKey(
-      "Abs", static_cast<int32_t>(TensorProto::DataType::FLOAT));
+      "Abs", static_cast<int32_t>(TensorProto::DataType::FLOAT), 2);
   core::runtime::KernelCalibrationFunction calibrate =
       core::runtime::GetKernelTuningRegistry().FindCalibrationFunction(key);
   ASSERT_TRUE(calibrate);

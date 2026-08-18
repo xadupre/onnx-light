@@ -4,6 +4,7 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/compute/execution_plan.h"
+#include "onnx_core/platform/cpu_descriptor.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
@@ -32,8 +33,15 @@ namespace {
 // Resolves the number of CPU cores the same way RuntimeParameters does so the
 // tests do not hard-code an expected value that depends on the test host.
 int32_t ExpectedCores() {
-  unsigned int cores = std::thread::hardware_concurrency();
-  return cores == 0 ? 1 : static_cast<int32_t>(cores);
+  const core::platform::CpuDescriptor &descriptor = core::platform::GetCpuDescriptor();
+  if (descriptor.physical_cores.has_value() && *descriptor.physical_cores != 0) {
+    return static_cast<int32_t>(*descriptor.physical_cores);
+  }
+  if (descriptor.logical_cores.has_value() && *descriptor.logical_cores != 0) {
+    return static_cast<int32_t>(*descriptor.logical_cores);
+  }
+  const unsigned int threads = std::thread::hardware_concurrency();
+  return threads == 0 ? 1 : static_cast<int32_t>(threads);
 }
 
 } // namespace

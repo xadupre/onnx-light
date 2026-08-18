@@ -830,6 +830,41 @@ TEST(RuntimeContextAllocator, SetStoresAllocatorBackedTensorData) {
   EXPECT_EQ(alloc.allocated_count(), 1u);
 }
 
+TEST(RuntimeContextAllocator, SetPreservesBorrowedInputWithoutAllocation) {
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext ctx(RuntimeContextOptions{.allocator = &alloc});
+  const int32_t values[] = {1, 2};
+  const auto *bytes = reinterpret_cast<const uint8_t *>(values);
+
+  ctx.Set("x",
+          Tensor::Borrow("", static_cast<int32_t>(core::runtime::DataType::INT32), {2}, bytes,
+                         sizeof(values)),
+          core::runtime::RuntimeEventKind::kInput);
+
+  const Tensor &stored = ctx.Get("x");
+  EXPECT_TRUE(stored.is_borrowed());
+  EXPECT_EQ(stored.bytes(), bytes);
+  EXPECT_EQ(alloc.allocated_count(), 0u);
+}
+
+TEST(RuntimeContextAllocator, PutMaterializesBorrowedIntermediate) {
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext ctx(RuntimeContextOptions{.allocator = &alloc});
+  const int32_t values[] = {3, 4};
+  const auto *bytes = reinterpret_cast<const uint8_t *>(values);
+
+  ctx.Put("x",
+          Tensor::Borrow("", static_cast<int32_t>(core::runtime::DataType::INT32), {2}, bytes,
+                         sizeof(values)),
+          core::runtime::RuntimeEventKind::kIntermediate);
+
+  const Tensor &stored = ctx.Get("x");
+  EXPECT_FALSE(stored.is_borrowed());
+  EXPECT_TRUE(stored.has_allocation());
+  EXPECT_NE(stored.bytes(), bytes);
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+}
+
 TEST(RuntimeContextAllocator, PutReplacesAndReleasesPreviousAllocation) {
   SimpleRawBufferAllocator alloc(2);
   RuntimeContext ctx(RuntimeContextOptions{.allocator = &alloc});

@@ -5,6 +5,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.19] – Unreleased
 
+### Improvements
+
+- Kept `ReferenceEvaluator` NumPy inputs zero-copy across repeated runs, including
+  non-contiguous inputs, while preserving their lifetime and allocator accounting.
+- Improved element-wise steady-state performance with a persistent low-latency thread pool,
+  physical-core-aware defaults, and calibration that matches the runtime thread count.
+- Optimized the `Abs` kernel for floating-point types with sign-bit masking and a lower,
+  tunable parallel-execution threshold.
+
+### Documentation & CI
+
+- Updated the `Abs` benchmark to compare steady-state execution fairly across supported
+  element types and omit incomparable `bfloat16` speed-ups.
+
+## [0.1.18] – 2026-08-18
+
+### Improvements
+
+- Kept backend benchmark models compatible with ONNX IR version 13.
+- Generated `BFLOAT16` backend benchmark cases by default.
+- Declared `ml_dtypes>=0.5.0` as a package dependency.
+
+### Fixes
+
+- Fixed release builds against older NumPy versions that do not expose `PyDataType_KIND`.
+
+### Documentation & CI
+
+- Bumped the release version to `0.1.18`.
+- Added a design page for buffer-reuse arenas and marked the I/O arena plan complete.
+- Reorganized the design documentation and runtime examples.
+
+## [0.1.17] – 2026-08-17
+
 ### New Features
 
 - Added a pattern-based `GraphBuilder` optimizer: a `GraphGraph` read-only index, a `PatternOptimization` engine that matches and rewrites subgraphs (recursively, including nested subgraphs), a pattern registry and dispatch table, a dedicated patterns library, and canonicalization patterns for redundant `Cast`, binary `Cast`, and `Cast`-op-`Cast`.
@@ -33,7 +67,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Documentation & CI
 
-- Bumped the release version to `0.1.19`.
+- Bumped the release version to `0.1.17`.
 - Added next-steps design pages for profiling and async execution, parallel model initialization with prepacking, prepared execution, a buffer-reuse arena allocator, processor-aware kernel thresholds, and wheel packaging.
 - Documented the kernel tuning workflow and graph pattern integration.
 - Added a benchmark for cold kernel tuning resolution and characterized allocator-backed output lifetime.

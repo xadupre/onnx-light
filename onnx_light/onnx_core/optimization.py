@@ -72,6 +72,26 @@ SameChildrenFromInputPattern: TypeAlias = _patterns.SameChildrenFromInputPattern
 ShapeBasedIdentityPattern: TypeAlias = _patterns.ShapeBasedIdentityPattern
 ShapeBasedSameChildrenPattern: TypeAlias = _patterns.ShapeBasedSameChildrenPattern
 ShapeBasedShapeShapeAddPattern: TypeAlias = _patterns.ShapeBasedShapeShapeAddPattern
+GemmTransposePattern: TypeAlias = _patterns.GemmTransposePattern
+MatMulAddPattern: TypeAlias = _patterns.MatMulAddPattern
+MatMulReshape2Of3Pattern: TypeAlias = _patterns.MatMulReshape2Of3Pattern
+MulMulMatMulPattern: TypeAlias = _patterns.MulMulMatMulPattern
+ReshapeMatMulReshapePattern: TypeAlias = _patterns.ReshapeMatMulReshapePattern
+ShapeBasedMatMulToMulPattern: TypeAlias = _patterns.ShapeBasedMatMulToMulPattern
+SwitchReshapeActivationPattern: TypeAlias = _patterns.SwitchReshapeActivationPattern
+TransposeMatMulPattern: TypeAlias = _patterns.TransposeMatMulPattern
+TransposeReshapeMatMulPattern: TypeAlias = _patterns.TransposeReshapeMatMulPattern
+BatchNormalizationPattern: TypeAlias = _patterns.BatchNormalizationPattern
+BatchNormalizationTrainingPattern: TypeAlias = _patterns.BatchNormalizationTrainingPattern
+CastLayerNormalizationCastPattern: TypeAlias = _patterns.CastLayerNormalizationCastPattern
+LayerNormalizationPattern: TypeAlias = _patterns.LayerNormalizationPattern
+LayerNormalizationScalePattern: TypeAlias = _patterns.LayerNormalizationScalePattern
+RMSNormalizationPattern: TypeAlias = _patterns.RMSNormalizationPattern
+RMSNormalizationMulPattern: TypeAlias = _patterns.RMSNormalizationMulPattern
+GeluPattern: TypeAlias = _patterns.GeluPattern
+LeakyReluPattern: TypeAlias = _patterns.LeakyReluPattern
+MaxReluPattern: TypeAlias = _patterns.MaxReluPattern
+SoftmaxCrossEntropyLossCastPattern: TypeAlias = _patterns.SoftmaxCrossEntropyLossCastPattern
 
 
 def standard_pattern_names() -> list[str]:
@@ -202,8 +222,11 @@ def replay(
 
 
 __all__ = [
+    "BatchNormalizationPattern",
+    "BatchNormalizationTrainingPattern",
     "CastCastBinaryPattern",
     "CastCastPattern",
+    "CastLayerNormalizationCastPattern",
     "CastOpCastPattern",
     "CastPattern",
     "ClipClipPattern",
@@ -218,11 +241,20 @@ __all__ = [
     "GatherGatherPattern",
     "GatherShapePattern",
     "GathersSplitPattern",
+    "GeluPattern",
+    "GemmTransposePattern",
     "GraphBuilder",
     "GraphGraph",
     "IdentityPattern",
+    "LayerNormalizationPattern",
+    "LayerNormalizationScalePattern",
+    "LeakyReluPattern",
     "LocalRewriting",
+    "MatMulAddPattern",
+    "MatMulReshape2Of3Pattern",
     "MatchResult",
+    "MaxReluPattern",
+    "MulMulMatMulPattern",
     "MulMulMulScalarPattern",
     "MulUnsqueezeUnsqueezePattern",
     "NotNotPattern",
@@ -230,10 +262,13 @@ __all__ = [
     "OptimizationReport",
     "PadConvPattern",
     "PatternOptimization",
+    "RMSNormalizationMulPattern",
+    "RMSNormalizationPattern",
     "ReduceArgTopKPattern",
     "ReduceReshapePattern",
     "ReduceSumNormalizePattern",
     "Reshape2Of3Pattern",
+    "ReshapeMatMulReshapePattern",
     "ReshapePattern",
     "ReshapeReshapeBinaryPattern",
     "ReshapeReshapePattern",
@@ -243,12 +278,14 @@ __all__ = [
     "SequenceConstructAtPattern",
     "ShapeBasedEditDistanceReshapePattern",
     "ShapeBasedIdentityPattern",
+    "ShapeBasedMatMulToMulPattern",
     "ShapeBasedReshapeIsSqueezePattern",
     "ShapeBasedSameChildrenPattern",
     "ShapeBasedShapeShapeAddPattern",
     "ShapedBasedReshapePattern",
     "SliceSlicePattern",
     "SlicesSplitPattern",
+    "SoftmaxCrossEntropyLossCastPattern",
     "SplitConcatPattern",
     "SplitToSequenceSequenceAtPattern",
     "SqueezeAddPattern",
@@ -259,7 +296,10 @@ __all__ = [
     "SwapUnaryPattern",
     "SwapUnsqueezeTransposePattern",
     "SwitchOrderBinaryPattern",
+    "SwitchReshapeActivationPattern",
     "TransposeEqualReshapePattern",
+    "TransposeMatMulPattern",
+    "TransposeReshapeMatMulPattern",
     "TransposeReshapeTransposePattern",
     "UnsqueezeEqualPattern",
     "UnsqueezeOrSqueezeReshapePattern",

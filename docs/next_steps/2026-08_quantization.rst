@@ -176,6 +176,164 @@ Format coverage summary
      - ``Codebook``
      - ✅
 
+CPU prepacking coverage
++++++++++++++++++++++++
+
+The formats above describe values and portable physical layouts. They do not
+cover every representation produced by a CPU kernel prepacker. A prepacked
+tensor is tied to an operand role, a microkernel ABI, and an exact processor
+feature set; it must therefore be stored as a :ref:`l-next-steps-compiled-tensor`
+cache entry while the original initializer remains the portable fallback.
+Prepacking is useful for floating-point and integer tensors, not only INT4.
+
+The first CPU implementation should cover the following persistent matrix
+packing families. ``B`` denotes the usually constant right-hand operand.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 22 25 35
+
+   * - Input family
+     - CPU target
+     - Packed representation
+     - Main consumers
+   * - FP32 / FP64
+     - SSE, AVX2, AVX-512F
+     - Transposed or blocked ``B`` panels, padded and interleaved by the
+       microkernel ``N`` and ``K`` tiles
+     - ``Gemm``, ``MatMul``, batched ``MatMul``, linear projections
+   * - BF16
+     - AVX-512 BF16
+     - K-paired BF16 words arranged for ``VDPBF16PS``, with an FP32
+       accumulation tile
+     - ``Gemm``, ``MatMul``, attention projections
+   * - FP16
+     - AVX-512 FP16
+     - FP16 ``B`` panels in the kernel's ``K × N`` lane order
+     - ``Gemm``, ``MatMul``, attention projections
+   * - INT8 / UINT8
+     - AVX2
+     - K-paired or K-quad interleaving for the selected emulated dot-product
+       kernel, plus correction sums when required
+     - ``QLinearMatMul``, ``MatMulInteger``, quantized ``Gemm``
+   * - INT8 / UINT8
+     - AVX-512 VNNI
+     - Four K values per dot-product group in VNNI lane order, with per-column
+       sums and zero-point correction data
+     - ``QLinearMatMul``, ``MatMulInteger``, quantized ``Gemm``
+   * - INT4 / UINT4
+     - AVX2, AVX-512F/BW
+     - Nibble-interleaved ``B`` panels with scales, zero points, and optional
+       group metadata placed in the order consumed by vector unpacking
+     - ``MatMulNBits``, GPTQ, AWQ, HQQ, weight-only ``Gemm``
+   * - INT4 / UINT4
+     - AVX-512 VNNI
+     - INT4 panels expanded or streamed into K-quad VNNI groups, with
+       per-group scales and corrections adjacent to their tiles
+     - Weight-only ``Gemm`` and ``MatMul`` with INT8 activations
+   * - INT2--INT7, codebook, binary, ternary
+     - AVX2, AVX-512 BW/VBMI/VBMI2/VPOPCNTDQ
+     - Bit planes, lane-interleaved codes, lookup tables, scales, and sparse
+       outliers arranged for unpack, lookup, or population-count kernels
+     - AQLM, NF4/IQ, BitNet, TQ, SpQR, and other low-bit ``MatMul`` kernels
+   * - BF16 / INT8
+     - AMX BF16 / AMX INT8
+     - Tile-major ``B`` panels matching AMX tile geometry and K grouping
+     - Large ``Gemm``, ``MatMul``, and fused projections
+
+Feature names in this table are compatibility requirements, not format names.
+For example, AVX-512F, AVX-512 BW, AVX-512 VNNI, AVX-512 BF16, AVX-512 FP16,
+VBMI, VBMI2, VPOPCNTDQ, and AMX must be distinguished. An
+``avx512-int4`` label is insufficient because two kernels may require different
+subsets or use different ``MR × NR × KR`` tiles.
+
+Operator-specific prepacking
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Matrix-panel packing is the base layer, but the plan must also register
+prepackers for every constant operand whose reuse amortizes preparation:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 34 46
+
+   * - Operator family
+     - Persistent inputs
+     - Required prepacking
+   * - ``Gemm`` / ``MatMul``
+     - Constant ``B`` and optional bias
+     - Transpose while packing, create K/N panels, pad tails, interleave
+       quantization parameters and correction sums, and optionally fuse bias
+       and epilogue constants
+   * - Batched ``MatMul``
+     - Shared or constant batched ``B``
+     - Pack each distinct batch matrix, retain batch/head strides, and share
+       one packed object when broadcasting makes the logical ``B`` identical
+   * - ``QLinearMatMul`` / ``MatMulInteger`` / ``MatMulNBits``
+     - Quantized ``B``, scales, zero points, bias, sparse outliers
+     - Pack codes and all auxiliary data in consumption order; precompute
+       column sums and zero-point compensation when the kernel ABI uses them
+   * - ``Conv`` / ``QLinearConv``
+     - Weights, bias, scales, zero points
+     - Reorder OIHW/HWIO weights into output-channel, input-channel, and
+       spatial tiles for direct, 1x1-GEMM, im2col-GEMM, grouped, or depthwise
+       kernels; each algorithm has a separate packed cache key
+   * - Attention projections
+     - Q, K, V, and output projection weights
+     - Pack separate matrices or one fused QKV panel, preserving head and
+       grouped-query-attention boundaries and the selected quantization groups
+   * - Attention score/value products
+     - Constant masks or reusable encoder K/V tensors
+     - Store K in the transposed blocked layout used by ``Q × K^T`` and V in
+       the blocked layout used by ``P × V``; include head, sequence, and head
+       dimension tiles in the compatibility key
+   * - Fused/flash attention
+     - Projection weights and reusable K/V blocks
+     - Pack by the fused kernel's query, key, value, head, and sequence tiles;
+       precompute causal or constant-mask tiles only when they are model
+       constants
+   * - ``Gather`` / embedding
+     - Quantized embedding table
+     - Pack row-local codes, scales, and zero points so one row remains
+       independently addressable without decoding neighboring rows
+   * - Mixture-of-experts
+     - Expert projection weights
+     - Pack each expert with the common matrix format and add an expert index
+       without merging independently loadable experts into one mandatory blob
+
+Mutable decoder K/V caches are not compiled initializers. Their blocked or
+quantized runtime layout belongs to :ref:`l-next-steps-prepared-execution` and
+must encode the same head, sequence-tile, feature, and kernel-ABI constraints.
+A cache populated during inference must never be published as a
+``CompiledTensorProto`` for a model initializer.
+
+Packed-format contract
+^^^^^^^^^^^^^^^^^^^^^^
+
+Every registered prepacker must describe enough information to reject an
+incompatible cache entry without inspecting implementation-specific bytes:
+
+* source tensor digest, logical shape, element type, and quantization profile;
+* operator and operand role, including transpose flags and broadcast rules;
+* exact required CPU features and, when relevant, cache-line or alignment
+  requirements;
+* kernel library, kernel ABI, packed-format name, and format version;
+* ``MR``, ``NR``, ``KR``, outer tile order, lane interleave, padding, and tail
+  policy;
+* placement and type of scales, zero points, codebooks, bias, column sums,
+  compensation values, and sparse outliers;
+* supported dynamic-shape bounds, batch/head sharing, and fused epilogue;
+* payload size and alignment, plus the source digest required by
+  :ref:`l-next-steps-compiled-tensor`.
+
+Packed entries must use specific names such as
+``matmul-b-int4-avx512-vnni-nr64-kr4-v2`` or
+``attention-qkv-bf16-amx-tile16-v1`` rather than broad names such as
+``INT4_AVX512``. Selection first matches the exact kernel ABI and CPU features,
+then applies the :ref:`l-next-steps-processor-aware-kernel-tuning` packing
+threshold. On a miss, the runtime prepacks from the portable initializer; it
+may also execute an unpacked kernel when packing would cost more than it saves.
+
 QuantizedTensorProto
 ++++++++++++++++++++
 

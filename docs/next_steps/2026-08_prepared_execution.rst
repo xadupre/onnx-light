@@ -10,13 +10,11 @@ Prepared and asynchronous execution
 Objective
 +++++++++
 
-The first objective is to reduce model loading time. Initialization follows
-four steps:
-
-1. load the graph and initializer metadata without loading weight payloads;
-2. run shape inference and determine which results are constant;
-3. initialize every kernel and ask it what data preparation it requires;
-4. add preparation and inference tasks to one scoped plan and submit ready work.
+The first objective is to reduce model loading time. This plan starts from the
+immutable ``ResolvedModel`` produced by
+:ref:`l-next-steps-model-resolution`. Its transformed graph, kernel choices,
+prepared-object bindings, and minimal payload manifest are frozen before this
+plan creates or submits any weight-read task.
 
 The execution plan may be submitted as soon as its structure and prepared-object
 requirements are known. It does not wait for every initialization task: each
@@ -34,8 +32,9 @@ Plan architecture
 Decision: one scoped execution plan
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Initialization and inference must be represented in **one dependency graph**.
-Every task declares its lifetime scope:
+After ``ResolvedModel`` is frozen, initialization and inference must be
+represented in **one dependency graph**. Every task declares its lifetime
+scope:
 
 .. code-block:: cpp
 
@@ -143,18 +142,19 @@ Construction and execution lifecycle
 
 The prepared session is built and used in this order:
 
-1. parse model metadata and build weight descriptors;
-2. infer shapes and constant-result information;
-3. select one execution kernel and device placement per node;
-4. ask selected kernels for initialization tasks and prepared-object keys;
-5. build one ``PreparedExecutionPlan`` containing session- and
-   invocation-scoped tasks and all dependencies between them;
-6. optionally submit session-scoped tasks eagerly;
-7. create a fresh submission state for every inference and attach each
+1. obtain the frozen ``ResolvedModel`` from
+   :ref:`l-next-steps-model-resolution`;
+2. build one ``PreparedExecutionPlan`` containing
+   session- and invocation-scoped tasks and all dependencies between them;
+3. optionally submit session-scoped tasks eagerly;
+4. create a fresh submission state for every inference and attach each
    inference task to the completion events of only the prepared objects it
    consumes;
-8. run the ready inference prefix while later weights are still loading or
-   being prepacked.
+5. run the ready inference prefix while later selected payloads are still
+    loading or being prepacked.
+
+Plan construction must reject a mutable or incomplete resolved model. It may
+create read tasks only for active entries in the frozen payload manifest.
 
 ``RunAsync`` never blocks while creating the submission and does not reject a
 session merely because preparation is still running. An inference task waiting
@@ -318,161 +318,8 @@ scratch, prepared residency, execution, and I/O retention, with per-domain
 limits so speculative loading cannot consume memory required by an active
 inference. Disk persistence is a cache tier, not an arena.
 
-Step 1: load the model without weights
-++++++++++++++++++++++++++++++++++++++
-
-``ParseOptions.skip_raw_data`` already loads the model structure while
-skipping large ``raw_data`` fields. For external data, every initializer still
-provides the information needed by the following steps:
-
-.. code-block:: text
-
-    name
-    element type
-    dimensions
-    external file
-    offset
-    length
-
-Loading produces a ``WeightDescriptor`` for every initializer instead of a
-runtime tensor:
-
-.. code-block:: cpp
-
-    struct WeightDescriptor {
-      std::string name;
-      int32_t element_type;
-      std::vector<int64_t> dimensions;
-      std::string location;
-      uint64_t offset;
-      uint64_t length;
-    };
-
-The descriptor identifies the bytes but does not read them. Large models
-should use external data because inline ``raw_data`` can be skipped but cannot
-later be recovered from the metadata-only ``ModelProto`` without retaining a
-reference to the original model file and its byte offsets.
-
-Step 2: infer all available information
-+++++++++++++++++++++++++++++++++++++++
-
-Shape inference runs before any weight payload is loaded. It uses graph
-inputs, initializer types and dimensions, operator attributes, and inferred
-intermediate shapes.
-
-Initialization also needs a constant-result analysis. This is distinct from
-constant folding: the first analysis determines that a result is constant
-without necessarily computing its bytes.
-
-The analysis processes nodes in topological order:
-
-1. graph initializers and outputs of ``Constant`` are constant;
-2. a node output is constant when all required inputs are constant and the
-   operator is deterministic and has no external state;
-3. a shape result may be constant from shape information alone, even when the
-   corresponding tensor payload is unavailable;
-4. an output is not marked constant when it depends on a graph input, random
-   state, mutable state, or an unsupported control-flow condition.
-
-Every operator schema should expose a property such as
-``CanPropagateConstant``. Operators such as ``Shape``, ``Size``, ``Gather`` on
-a known shape, and simple arithmetic on constant shape tensors can additionally
-provide a small-value evaluator. This evaluator computes only values required
-for initialization; it does not load or fold every large constant tensor.
-
-The result is:
-
-.. code-block:: text
-
-    value name -> dynamic
-                constant, bytes not materialized
-                constant, small value known
-
-This information tells kernels whether an input can be prepared once and
-which weight payloads will eventually be needed.
-
-Step 3: ask kernels what they need
-++++++++++++++++++++++++++++++++++
-
-Kernel initialization must not load weights directly. Each kernel receives
-the node, inferred types and shapes, and the constant-result information. It
-returns a list of initialization tasks:
-
-.. code-block:: cpp
-
-    struct KernelInitialization {
-      std::vector<InitializationTask> tasks;
-    };
-
-    KernelInitialization Kernel::Initialize(
-        const NodeProto &node,
-        const InferredGraph &graph,
-        const WeightDescriptors &weights);
-
-A task declares:
-
-* its input weight ranges;
-* its output prepared object;
-* its dependencies on other tasks;
-* the resource on which it runs: I/O, CPU, or a specific accelerator;
-* an estimated amount of work and peak memory;
-* the prepared-object key it publishes and whether a fallback implementation
-  exists while that object is unavailable.
-
-Dependencies identify the produced object or completion event a consumer
-requires. The scheduler derives waits from these edges. A barrier is reserved
-for an external synchronization requirement that cannot be represented by
-ordinary data dependencies; plans must not insert a manual ``wait`` before
-every consumer.
-
-A kernel that needs no preparation returns no task. A kernel may request only
-loading, loading followed by prepack, or a more expensive computation.
-
-The cost estimate should not be limited to a ``linear`` or ``quadratic`` enum.
-The kernel should return concrete estimates when possible:
-
-.. code-block:: text
-
-    bytes_to_read
-    bytes_to_write
-    estimated_operations
-    peak_temporary_bytes
-    parallelism_limit
-
-An asymptotic class may be reported for diagnostics, but the scheduler needs
-estimated bytes and operations to choose task granularity and avoid excessive
-memory use.
-
-``Gemm`` example
-^^^^^^^^^^^^^^^^
-
-For:
-
-.. code-block:: text
-
-    Y = alpha * op(A) * op(B) + beta * C
-
-if ``B`` is constant, ``Gemm`` may request a prepack task for ``B``. The task
-includes ``transB`` because the required representation is that of ``op(B)``,
-not always that of the stored tensor.
-
-The model loader does not transpose ``B``. The selected kernel decides whether
-to:
-
-* use the original layout and pass ``transB`` to the GEMM library;
-* transpose while packing;
-* build another backend-specific packed representation.
-
-The original bytes remain unchanged. If the same initializer is consumed by
-two nodes with different ``transB`` values, the kernels may request two
-different prepared objects.
-
-For the usual dense case, reading and transposing or packing ``B`` is linear
-in the number of elements. A kernel that requests a quadratic preprocessing
-step must declare that cost and its temporary memory explicitly.
-
-Step 4: build and submit the scoped plan
-+++++++++++++++++++++++++++++++++++++++
+Building from a resolved model
+++++++++++++++++++++++++++++++
 
 All kernel preparation requests and inference actions are merged into one
 dependency graph. Identical session-scoped requests share one task:
@@ -659,9 +506,10 @@ Prepacking
 ++++++++++
 
 A prepack task turns a source weight into the physical representation a kernel
-consumes at run time. The source bytes are never modified: the graph continues
-to reference the original initializer, which remains the portable fallback. The
-prepacked object is a derived, kernel- and device-specific value.
+consumes at run time. Source bytes are never modified: the graph continues to
+reference the transformed model's logical value, while its portable or derived
+recipe remains the fallback. The prepacked object is a derived, kernel- and
+device-specific value.
 
 Prepacked object contract
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -671,9 +519,8 @@ A prepack task produces a prepared object described by:
 .. code-block:: cpp
 
     struct PrepackRequest {
-      std::string source_name;   // initializer to read
-      int32_t element_type;      // source element type
-      std::vector<int64_t> dimensions;
+      std::string logical_value;
+      std::vector<SourceIdentity> source_lineage;
       std::string layout;        // requested packed layout key
       int32_t device;            // index into ModelProto.devices
     };
@@ -685,13 +532,13 @@ A prepack task produces a prepared object described by:
 
 The ``layout`` key captures every parameter that changes the packed bytes, such
 as the ``transB`` flag of ``Gemm``, a block size, or a tiling shape. Two kernels
-that request the same ``(source_name, layout, device)`` share one prepacked
+that request the same ``(source_lineage, layout, device)`` share one prepacked
 object; two kernels that disagree on any of these fields receive distinct
-objects. This is the deduplication rule already illustrated by the
-``read W0 -> prepack W0`` / ``prepack W0'`` fan-out of Step 4.
+objects. This is the deduplication rule illustrated by the
+``read W0 -> prepack W0`` / ``prepack W0'`` fan-out of Step 6.
 
-Because a ``PrepackRequest`` is a pure function of the source tensor and the
-layout key, it also defines the cache identity used for persistence.
+Because a ``PrepackRequest`` is a pure function of its ordered source lineage
+and layout key, it also defines the cache identity used for persistence.
 
 Reusing a persisted prepack
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -713,7 +560,8 @@ A companion ONNX model stores each packed representation as a standard
       data_location: EXTERNAL
       external_data: { location, offset, length, checksum }
       metadata_props: {
-        "onnx_light.prepack.source_digest": ...
+        "onnx_light.prepack.source_lineage_digest": ...
+        "onnx_light.prepack.source_lineage": ...
         "onnx_light.prepack.layout": ...
         "onnx_light.prepack.device": ...
         "onnx_light.prepack.kernel_abi": ...
@@ -737,24 +585,27 @@ rewriting the portable model during inference:
           layout + device ABI + runtime version -> TensorProto payload
 
 The model identity only partitions lookup; correctness comes from
-``source_digest``, layout, device compatibility, packed-format version, payload
-checksum, and kernel/runtime ABI.
+``source_lineage_digest``, layout, device compatibility, packed-format version,
+payload checksum, and kernel/runtime ABI.
 The cache may be a companion ONNX ``ModelProto`` or be embedded in an
 explicitly compiled copy of the source model. Ordinary loading and offloading
 never mutate the portable source model.
 
 Prepacking reuses that cache instead of introducing a second format:
 
-* the cache key is ``(source_digest, layout, device)``, where ``source_digest``
-  covers source element type, dimensions, and canonical content, while
-  ``layout``/``device`` come from the ``PrepackRequest``;
+* the cache key is ``(source_lineage_digest, layout, device)``, where
+  ``source_lineage_digest`` covers the ordered identities, element types,
+  dimensions, and canonical content of every source used to derive the
+  prepared object, while ``layout``/``device`` come from the
+  ``PrepackRequest``;
 * on a cache hit with compatible device, format, and kernel ABI metadata, the
   scheduler replaces the ``prepack`` task with a read or memory map of the
   cached bytes, followed by a device upload when required, and skips the
   packing work;
-* on a cache miss, or when the persisted ``source_digest`` no longer matches the
-  current initializer, the prepack task runs normally, publishes the resident
-  object immediately, and schedules a lower-priority cache write;
+* on a cache miss, or when the persisted ``source_lineage_digest`` no longer
+  matches the current transformed sources, the prepack task runs normally,
+  publishes the resident object immediately, and schedules a lower-priority
+  cache write;
 * an incompatible runtime or device ignores the cached value and falls back to
   the portable initializer.
 
@@ -779,14 +630,17 @@ The sidecar separates a small index from the packed payloads:
     manifest
       model identity
       source name -> source digest, type, dimensions
-      prepared key -> payload path, layout, device ABI, size, checksum
+      prepared key -> source lineage and digest, payload path, layout,
+                      device ABI, size, checksum
 
     payload files
       packed bytes, loaded only when their consumer approaches execution
 
 At the next model load, the runtime reads only model metadata and this manifest.
-It builds ``WeightDescriptor`` and plan tasks without materializing initializer
-payloads. For every prepared-object requirement:
+It first builds ``WeightDescriptor`` objects, applies the transformation
+pipeline, and freezes ``ResolvedModel`` without materializing initializer
+payloads. It then builds plan tasks from the resolved payload manifest. For
+every prepared-object requirement:
 
 1. if the manifest has a compatible entry, the plan uses ``read packed
    payload -> optional device upload`` and never reads the portable source
@@ -798,19 +652,21 @@ payloads. For every prepared-object requirement:
 4. prefetch submits only entries inside the bounded look-ahead window, so later
    layers remain metadata-only until inference approaches them.
 
-The source digest must be available without rereading the source payload.
-Preferred sources are a checksum carried by external-data metadata or a trusted
-content-addressed model-package manifest. The first successful source read may
-compute the digest and persist it in the sidecar for that immutable model
-identity. File path, modification time, offset, and length may accelerate
-change detection but are not sufficient cache identity for correctness.
+Every component source digest, and therefore the aggregate lineage digest, must
+be available without rereading source payloads. Preferred sources are checksums
+carried by external-data metadata or a trusted content-addressed model-package
+manifest. The first successful source read may compute a missing digest and
+persist it in the sidecar for that immutable model identity. File path,
+modification time, offset, and length may accelerate change detection but are
+not sufficient cache identity for correctness.
 
-When no trusted source digest is available, the runtime has only two correct
-choices: read and hash the source before accepting the cached prepack, or treat
-the cache entry as unverified and rebuild it. It must not silently trust file
-timestamps. Packaging models with external-weight digests is therefore
-required to obtain both strict validation and zero source-weight reads on the
-next session.
+When any trusted source digest is unavailable, preliminary resolution treats
+the cache entry as unverified and selects the portable source/prepack recipe.
+It does not read and hash a weight merely to decide the manifest. The later
+source-read task computes and persists the missing digest while rebuilding the
+prepared object. File timestamps must not be trusted as cache identity.
+Packaging models with external-weight digests is therefore required to obtain
+both strict validation and zero source-weight reads on the next session.
 
 After a cache miss, publishing the resident object unblocks inference
 immediately. A background task then serializes the packed representation and
@@ -853,8 +709,11 @@ The API makes cache behavior explicit:
     };
 
     PreparedExecutionPlan BuildPreparedExecutionPlan(
-        const ModelProto &source,
-        const PreparedModelOptions &prepared);
+        ResolvedModel resolved);
+
+``ResolveModel`` and ``ModelResolutionOptions`` are defined by
+:ref:`l-next-steps-model-resolution`; this plan only consumes their frozen
+result.
 
 ``kBuildIfMissing`` is the explicit answer to whether the second model should
 be constructed. When ``model`` is null, it creates a new companion model; when
@@ -868,9 +727,11 @@ The plan builder consumes only cache metadata and creates demand-driven
 ``read packed payload`` tasks. ``RuntimeSession`` owns or receives a shared
 ``PreparedModelStore`` that keeps the companion model and external-data reader
 alive, resolves payload descriptors, and accepts completed prepack writes under
-``kBuildIfMissing``. The prepared model should not be passed independently to
-the plan and runtime as two unrelated objects, because they could observe
-different cache generations.
+``kBuildIfMissing``. ``ResolvedModel`` owns or shares the source and prepared
+stores needed by its descriptors so they outlive the plan. The prepared model
+should not be passed independently to resolution, plan construction, and the
+runtime as unrelated objects, because they could observe different cache
+generations.
 
 Updating a prepared model never rewrites it in place. Packed payloads are
 written to temporary external-data files and atomically published first; a new
@@ -878,11 +739,12 @@ prepared ``ModelProto`` manifest is then serialized and atomically replaces the
 old manifest. An interrupted update therefore leaves either the previous
 complete generation or the new complete generation visible.
 
-The source-model digest, every ``source_digest``, layout, packed-format version,
-device description, kernel/runtime ABI, payload size, and payload checksum are
-validated before an entry is accepted. Structural corruption is an error.
-Ordinary incompatibility is a cache miss under ``kReadOnly`` or
-``kBuildIfMissing`` and an error under ``kRequireComplete``.
+The source-model digest, complete source lineage and aggregate digest, layout,
+packed-format version, device description, kernel/runtime ABI, payload size,
+and payload checksum are validated before an entry is accepted. Structural
+corruption is an error. Ordinary incompatibility is a cache miss under
+``kReadOnly`` or ``kBuildIfMissing`` and an error under
+``kRequireComplete``.
 
 For offloading, eviction first checks whether a valid persisted entry exists.
 If it does, resident CPU or device storage can be released immediately. If it
@@ -1406,7 +1268,8 @@ consumer. A background task then writes an external payload and adds a standard
         checksum: ...
       }
       metadata_props: {
-        "onnx_light.prepack.source_digest": "..."
+        "onnx_light.prepack.source_lineage_digest": "..."
+        "onnx_light.prepack.source_lineage": "layer0.qkv.weight"
         "onnx_light.prepack.layout": "matmul-nbits-avx2-block32"
         "onnx_light.prepack.device": "cpu:x86_64:avx2"
         "onnx_light.prepack.kernel_abi": "onnx-light-cpu-v1"
@@ -1467,10 +1330,16 @@ The next process supplies both ONNX models:
         PreparedModelPolicy::kBuildIfMissing,
         "tiny-llm.prepared.onnx",
     };
+    ModelResolutionOptions resolution{
+        StandardRuntimeTransformations(),
+        prepared,
+    };
+    ResolvedModel resolved = ResolveModel(portable_model, resolution);
     PreparedExecutionPlan plan =
-        BuildPreparedExecutionPlan(portable_model, prepared);
+        BuildPreparedExecutionPlan(std::move(resolved));
 
-Both models are parsed metadata-only. For a compatible entry, the plan uses:
+Both models are parsed metadata-only, transformations and cleanup run, and the
+minimal payload manifest is frozen. For a compatible entry, the plan uses:
 
 .. code-block:: text
 
@@ -1514,17 +1383,18 @@ Benchmark
 +++++++++
 
 The benchmark must start from a valid serialized model and must not modify its
-graph or synthesize weights. The current Qwen3-like backend fixture contains
-metadata-only initializers, so materializing random weights, inlining
-functions, and deleting ``value_info`` changes the workload. It may remain a
-session microbenchmark, but it is not the loading benchmark for this work.
+graph or synthesize weights outside the configured preliminary transformation
+pipeline. The current Qwen3-like backend fixture contains metadata-only
+initializers, so materializing random weights, inlining functions, and deleting
+``value_info`` before resolution changes the workload. It may remain a session
+microbenchmark, but it is not the loading benchmark for this work.
 
-The loading benchmark should use a deterministic model with real external
-weights and measure:
+Resolution is benchmarked separately by
+:ref:`l-next-steps-model-resolution`. The prepared-execution benchmark starts
+from its frozen output and uses a deterministic model with real external
+weights. It measures:
 
-* metadata-only parsing;
-* shape and constant-result inference;
-* kernel initialization and task-graph construction;
+* execution-plan and task-graph construction;
 * weight reads;
 * prepack and device transfers;
 * time to first runnable inference node and time to first output;
@@ -1546,9 +1416,9 @@ Implementation order
 
 #. Add a valid external-data model benchmark that is never rewritten by the
    benchmark.
-#. Build ``WeightDescriptor`` objects while parsing with
-   ``skip_raw_data=true``.
-#. Add constant-result propagation without payload materialization.
+#. Consume the frozen ``ResolvedModel`` from
+   :ref:`l-next-steps-model-resolution` and reject every read not present in its
+   active payload manifest.
 #. Extract a persistent ``WorkerPool`` below the current ``onnx_proto``
    ``ThreadPool`` API, then add the common task, dependency, resource,
    completion, scope, and diagnostic types used by the unified runtime plan;
@@ -1556,7 +1426,8 @@ Implementation order
 #. Add ``PreparedExecution``, the residency-state ``PreparedObjectStore``,
    ``PreparationArena``, ``PreparedArena``, and the explicit
    prepared-object requirement/publish contract.
-#. Add the kernel initialization query and an empty default implementation.
+#. Expand selected materialization recipes into load, prepack, publish, and
+   dormant-fallback task descriptors.
 #. Implement initialization tasks for one CPU ``Gemm`` with a constant ``B``,
    including both ``transB`` values.
 #. Merge kernel preparation and node execution into one

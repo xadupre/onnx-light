@@ -370,13 +370,15 @@ instead of only mutating the builder in place:
 
 A ``LocalRewriting`` no longer refers to live node pointers: it records the
 positions selected by the match and owns the nodes and initializers it adds,
-as well as the initializer positions it removes. Positions are relative to the
-graph at the start of the recorded rewrite batch, not to the original model,
-because earlier batches may create or remove nodes. It also shares ownership
-of the stateless pattern or cleanup operation that produced it, so callers can
-inspect that operation after ``GraphGraph`` is destroyed. Its stable name
-remains available through ``pattern->Name()`` for logging or serialization
-without storing a redundant copy:
+the exact resulting positions of added nodes, and the initializer positions it
+removes. Match positions are relative to the graph at the start of the recorded
+rewrite batch, while added-node positions are relative to the graph after that
+batch. Neither refers to the original model because earlier batches may create
+or remove nodes. It also shares ownership of the stateless pattern or cleanup
+operation that produced it, so callers can inspect that operation after
+``GraphGraph`` is destroyed. Its stable name remains available through
+``pattern->Name()`` for logging or serialization without storing a redundant
+copy:
 
 .. code-block:: cpp
 
@@ -386,11 +388,11 @@ without storing a redundant copy:
       // positions in the original model because prior rewrites may add nodes.
       std::vector<std::size_t> matched_nodes;
       utils::RepeatedProtoField<NodeProto> added_nodes;   // replacement nodes
+      std::vector<std::size_t> added_nodes_positions;     // positions after the batch
       utils::RepeatedProtoField<TensorProto> added_initializers;
       std::vector<std::size_t> added_initializer_positions;
       std::vector<std::size_t> removed_initializers;
       std::vector<std::pair<std::string, std::string>> value_renames;
-      std::ptrdiff_t insert_at = -1;              // -1 means first matched node
       std::size_t iteration = 0;                  // ordered rewrite batch
 
       std::string ToString() const;
@@ -415,12 +417,18 @@ re-running the matching phase:
                       const std::vector<LocalRewriting> &rewrites);
 
 Replay groups consecutive records from the same rewrite batch, drops their
-matched nodes and removed initializers, and splices their additions at
-``insert_at`` in one rebuild. Cleanup passes are records in the sequence too;
-replay does not rerun them. This preserves simultaneous disjoint rewrites and
-gives a cheap, deterministic way to cache and reproduce an optimization, to
-audit exactly which rewrites fired, and to apply a captured sequence to a fresh
-``ModelProto`` without paying the cost of matching or cleanup again.
+matched nodes and removed initializers, and places every added node at its
+recorded ``added_nodes_positions`` in one rebuild. ``MatchResult::insert_at``
+remains the pattern's match-time insertion request, but ``GraphGraph`` resolves
+it while applying the batch. The final ``LocalRewriting`` records do not contain
+``insert_at``.
+``added_nodes_positions`` has exactly one entry per ``added_nodes`` value;
+positions are unique and in range for the graph after the batch. Cleanup passes
+are records in the sequence too; replay does not rerun them. This preserves
+simultaneous disjoint rewrites and gives a cheap, deterministic way to cache and
+reproduce an optimization, to audit exactly which rewrites fired, and to apply
+a captured sequence to a fresh ``ModelProto`` without paying the cost of
+matching or cleanup again.
 
 Cleanup and convergence
 ++++++++++++++++++++++++
@@ -629,6 +637,10 @@ Implementation order
     `PR #4433 <https://github.com/xadupre/onnx-light/pull/4433>`_, and
     ``ClipClipPattern`` continues it in
     `PR #4455 <https://github.com/xadupre/onnx-light/pull/4455>`_.
+12. Resolve every ``MatchResult::insert_at`` while applying its rewrite batch,
+    record exact ``added_nodes_positions`` in the returned ``LocalRewriting``,
+    and make ``Replay`` use only those final coordinates; test multiple
+    disjoint replacements and multiple nodes added by one pattern.
 
 Remaining pattern batches
 +++++++++++++++++++++++++

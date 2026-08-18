@@ -179,6 +179,19 @@ TEST(BackendTestCase, ReduceMaxCasesRegistered) {
   const TestCase *empty_nr = FindCase(cases, "test_cc_reducemax_empty_set_non_reduced_axis_zero");
   ASSERT_NE(empty_nr, nullptr);
   EXPECT_EQ(empty_nr->data_sets()[0].outputs[0].data.size(), 0u);
+
+  // Reducing an empty BOOL axis: the minimum BOOL value is ``False``, so every
+  // output element must be ``0`` (not ``True``). Regression test mirroring
+  // upstream ``test_reduce_max_empty_set_bool`` (onnx/onnx#8312).
+  const TestCase *empty_bool = FindCase(cases, "test_reduce_max_empty_set_bool");
+  ASSERT_NE(empty_bool, nullptr);
+  const auto &eb_ds = empty_bool->data_sets()[0];
+  EXPECT_EQ(eb_ds.outputs[0].shape, (std::vector<int64_t>{2, 1, 4}));
+  ASSERT_EQ(eb_ds.outputs[0].data.size(), 2u * 1u * 4u * sizeof(uint8_t));
+  const uint8_t *peb = reinterpret_cast<const uint8_t *>(eb_ds.outputs[0].data.data());
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_EQ(peb[i], static_cast<uint8_t>(0)) << "at index " << i;
+  }
 }
 
 TEST(BackendTestCase, ReduceMinCasesRegistered) {

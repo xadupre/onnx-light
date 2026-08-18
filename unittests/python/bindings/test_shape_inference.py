@@ -937,14 +937,12 @@ class TestShapeInference(ExtTestCase):
         Mirrors the fix from https://github.com/onnx/onnx/pull/8305: shape
         inference could dereference a null pointer for a missing function input.
         """
-        model = parser.parse_model(
-            """
+        model = parser.parse_model("""
             <ir_version: 8, opset_import: ["": 25, "local": 1]>
             g (bool condition) => (float output) { output = local.F(condition) }
             <opset_import: ["": 25], domain: "local">
             F (condition, missing) => (missing) { unused = Identity(condition) }
-            """
-        )
+            """)
 
         checker.check_model(model)
         shape_inference.infer_shapes(model, strict_mode=True)
@@ -957,8 +955,7 @@ class TestShapeInference(ExtTestCase):
         function input shares its name with an initializer inside a nested
         subgraph.
         """
-        model = parser.parse_model(
-            """
+        model = parser.parse_model("""
             <ir_version: 8, opset_import: ["": 25, "local": 1]>
             g (bool condition) => (float output) { output = local.F(condition) }
             <opset_import: ["": 25], domain: "local">
@@ -970,8 +967,7 @@ class TestShapeInference(ExtTestCase):
                         <float one = {1.0}> { output = Identity(one) }
                 >
             }
-            """
-        )
+            """)
 
         checker.check_model(model)
         inferred = shape_inference.infer_shapes(model, strict_mode=True)

@@ -87,7 +87,7 @@ independent from each other while sharing the same core engine.
 - Outputs are always generated with a C++ kernel.
 - The kernels can be used without the backend tests.
 
-## Runtime, optimization and gradients
+## Runtime, Optimization and Gradients
 
 - **Reference runtime** – the kernels double as a self-contained C++ runtime
   for the ONNX operator set, so a model can be evaluated in C++ or from Python

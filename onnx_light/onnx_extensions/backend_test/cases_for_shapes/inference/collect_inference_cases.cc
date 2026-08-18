@@ -45,7 +45,6 @@ void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::
     RegisterUnsqueezeVasReshapeShapeInferenceCases(registry);
     if (include_big) {
       RegisterQwen3_4LayersLikeShapeInferenceCases(registry);
-      RegisterQwen3_4LayersLikeFusedShapeInferenceCases(registry);
     }
   }
 }

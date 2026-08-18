@@ -230,30 +230,27 @@ At the C++ / low-level binding layer the same is achieved with
 which erases the custom entry so :cpp:func:`RunNode` falls back to the built-in
 kernel.
 
-   .. tab-item:: C++
-      :sync: cpp
+.. code-block:: cpp
 
-      .. code-block:: cpp
+    using namespace onnx_light::core::runtime;
 
-          using namespace onnx_light::core::runtime;
+    RuntimeContext rt(KernelContext(/*opset=*/18));
+    rt.Set("x", Tensor::FromFloat("x", {3}, {-1.0f, -2.0f, -3.0f}));
 
-          RuntimeContext rt(KernelContext(/*opset=*/18));
-          rt.Set("x", Tensor::FromFloat("x", {3}, {-1.0f, -2.0f, -3.0f}));
-
-          // The empty domain is normalised to "ai.onnx", so this overrides
-          // the built-in Abs entry with a negation.
-          rt.RegisterCustomKernel(
-              "", "Abs", [](const NodeProto &node, RuntimeContext &ctx) {
-                const Tensor &in = ctx.Get(node.input(0));
-                std::vector<float> out(static_cast<size_t>(in.element_count()));
-                const float *src = in.AsFloat();
-                for (size_t i = 0; i < out.size(); ++i) {
-                  out[i] = -src[i];
-                }
-                ctx.Put(node.output(0),
-                        Tensor::FromFloat(node.output(0), in.shape, out));
-              });
-          // Abs replaced by negation: y == [1., 2., 3.]
+    // The empty domain is normalised to "ai.onnx", so this overrides
+    // the built-in Abs entry with a negation.
+    rt.RegisterCustomKernel(
+        "", "Abs", [](const NodeProto &node, RuntimeContext &ctx) {
+          const Tensor &in = ctx.Get(node.input(0));
+          std::vector<float> out(static_cast<size_t>(in.element_count()));
+          const float *src = in.AsFloat();
+          for (size_t i = 0; i < out.size(); ++i) {
+            out[i] = -src[i];
+          }
+          ctx.Put(node.output(0),
+                  Tensor::FromFloat(node.output(0), in.shape, out));
+        });
+    // Abs replaced by negation: y == [1., 2., 3.]
 
 Use the low-level context binding
 ---------------------------------

@@ -182,7 +182,7 @@ the next run. Retaining free buffers in an arena keeps those pages available
 for similarly sized allocations.
 
 Design
-+++++
+++++++
 
 Introduce two arenas behind a common allocation-handle abstraction:
 

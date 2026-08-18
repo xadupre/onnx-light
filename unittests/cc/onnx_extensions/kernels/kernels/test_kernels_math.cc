@@ -121,6 +121,24 @@ TEST(KernelClass, AbsKeepsSignedMinimumRepresentable) {
   EXPECT_EQ(int64.AsInt64()[0], std::numeric_limits<int64_t>::min());
 }
 
+TEST(KernelClass, AbsClearsHalfPrecisionSignBitExactly) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Abs abs_kernel{ctx};
+
+  for (const auto &[data_type, input_bits, expected_bits] :
+       std::array{std::tuple{DataType::FLOAT16, std::array<uint16_t, 3>{0xbc00, 0x8000, 0xfe01},
+                             std::array<uint16_t, 3>{0x3c00, 0x0000, 0x7e01}},
+                  std::tuple{DataType::BFLOAT16, std::array<uint16_t, 3>{0xbf80, 0x8000, 0xffc1},
+                             std::array<uint16_t, 3>{0x3f80, 0x0000, 0x7fc1}}}) {
+    Tensor input("", data_type, {3}, std::vector<uint8_t>(sizeof(input_bits)));
+    std::memcpy(input.mutable_bytes(), input_bits.data(), sizeof(input_bits));
+
+    const Tensor output = abs_kernel(input);
+
+    EXPECT_EQ(std::memcmp(output.bytes(), expected_bits.data(), sizeof(expected_bits)), 0);
+  }
+}
+
 TEST(KernelClass, AbsClassParallelPathMatchesReference) {
   // Exercises the multi-threaded ParallelFor path used by the Abs kernel: the
   // element count is large enough to exceed the grain size so several worker
@@ -161,7 +179,7 @@ TEST(KernelClass, AbsUsesTypedParallelTuningPerElementType) {
   ASSERT_NE(float_schema, nullptr);
   ASSERT_NE(double_schema, nullptr);
   EXPECT_EQ(float_schema->portable_defaults().Get<int64_t>("parallel.minimum_elements"),
-            32 * core::runtime::kParallelForGrainSize);
+            core::runtime::kParallelForGrainSize);
 
   core::runtime::KernelTuningParameters tuned{float_key,
                                               {{"parallel.minimum_elements", int64_t{17}}}};

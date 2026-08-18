@@ -18,7 +18,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 
 constexpr const char *kName = "kernel::Abs";
-constexpr uint32_t kTuningAbi = 1;
+constexpr uint32_t kTuningAbi = 2;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
 
 constexpr std::array<int32_t, 8> kSupportedElementTypes = {
     static_cast<int32_t>(DataType::FLOAT),   static_cast<int32_t>(DataType::DOUBLE),
@@ -38,13 +39,12 @@ KernelTuningParameters CalibrateAbs(const KernelTuningKey &key,
                                     const CpuExecutionDescriptor &execution,
                                     const CalibrationOptions &options,
                                     CalibrationReporter &reporter) {
-  const int64_t portable_minimum = 32 * core::runtime::kParallelForGrainSize;
   const KernelContext context{DefaultOpset(13)};
   Abs reference{context};
   Abs candidate{context};
   KernelCalibrationBenchmark benchmark;
   benchmark.portable_parameters = {
-      key, {{std::string(tuning::kParallelMinimumElements), portable_minimum}}};
+      key, {{std::string(tuning::kParallelMinimumElements), kPortableParallelMinimum}}};
   benchmark.parameter_name = std::string(tuning::kParallelMinimumElements);
   benchmark.cases = MakeElementwiseCalibrationCases(key.element_type, 1, int64_t{1} << 14,
                                                     int64_t{1} << 23, false);
@@ -65,12 +65,11 @@ KernelTuningParameters CalibrateAbs(const KernelTuningKey &key,
 
 } // namespace
 
-Abs::Abs(const KernelContext &ctx)
-    : KernelBase(ctx), tuning_(32 * core::runtime::kParallelForGrainSize) {}
+Abs::Abs(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
 
 void Abs::RegisterTuningSchemas() {
-  tuning::RegisterParallelTuningSchemas("Abs", kSupportedElementTypes,
-                                        32 * core::runtime::kParallelForGrainSize, kTuningAbi);
+  tuning::RegisterParallelTuningSchemas("Abs", kSupportedElementTypes, kPortableParallelMinimum,
+                                        kTuningAbi);
   for (int32_t element_type : kSupportedElementTypes) {
     const KernelTuningKey key = tuning::MakePortableTuningKey("Abs", element_type, kTuningAbi);
     core::runtime::RegisterKernelCalibrationFunction(key, CalibrateAbs);
@@ -104,21 +103,21 @@ void Abs::operator()(const Tensor &x, Tensor &output) const {
   const int64_t n = x.element_count();
   switch (static_cast<DataType>(x.data_type)) {
   case DataType::FLOAT: {
-    const float *px = x.AsFloat();
-    float *py = output.AsFloat();
+    const uint32_t *px = reinterpret_cast<const uint32_t *>(x.bytes());
+    uint32_t *py = reinterpret_cast<uint32_t *>(output.mutable_bytes());
     ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
-        py[i] = std::fabs(px[i]);
+        py[i] = px[i] & UINT32_C(0x7fffffff);
       }
     });
     return;
   }
   case DataType::DOUBLE: {
-    const double *px = x.AsDouble();
-    double *py = output.AsDouble();
+    const uint64_t *px = reinterpret_cast<const uint64_t *>(x.bytes());
+    uint64_t *py = reinterpret_cast<uint64_t *>(output.mutable_bytes());
     ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
-        py[i] = std::fabs(px[i]);
+        py[i] = px[i] & UINT64_C(0x7fffffffffffffff);
       }
     });
     return;
@@ -128,7 +127,7 @@ void Abs::operator()(const Tensor &x, Tensor &output) const {
     uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
     ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
-        py[i] = FloatToFloat16Bits(std::fabs(Float16BitsToFloat(px[i])));
+        py[i] = static_cast<uint16_t>(px[i] & UINT16_C(0x7fff));
       }
     });
     return;
@@ -138,7 +137,7 @@ void Abs::operator()(const Tensor &x, Tensor &output) const {
     uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
     ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
-        py[i] = FloatToBfloat16Bits(std::fabs(Bfloat16BitsToFloat(px[i])));
+        py[i] = static_cast<uint16_t>(px[i] & UINT16_C(0x7fff));
       }
     });
     return;

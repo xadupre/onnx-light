@@ -30,9 +30,10 @@ inline constexpr int64_t kParallelForGrainSize = 1 << 15; // 32768 elements
 
 /// Returns the number of participating threads :cpp:func:`ParallelFor` may use.
 ///
-/// Resolves to ``std::thread::hardware_concurrency()``, falling back to ``1``
-/// when the hardware count is not available. The result is always ``>= 1`` and
-/// counts the calling thread, which always participates in the work.
+/// Resolves to one participant per detected physical core, falling back to the
+/// detected logical-core count and then ``std::thread::hardware_concurrency()``.
+/// The result is always ``>= 1`` and counts the calling thread, which always
+/// participates in the work.
 ///
 /// Returns:
 ///   The effective participant count, always at least ``1``.
@@ -42,9 +43,9 @@ int64_t ParallelForThreadCount() noexcept;
  * A persistent pool of worker threads that stay alive between parallel regions.
  *
  * Unlike spawning fresh ``std::thread`` objects per call, the workers are
- * created once and parked on a condition variable, so dispatching a region only
- * costs a notify plus a wait instead of thread creation/teardown. This keeps the
- * per-call overhead low for kernels invoked many times.
+ * created once and briefly spin before parking on a condition variable. Nearby
+ * regions therefore avoid scheduler wakeup latency without busy-waiting
+ * indefinitely.
  *
  * The pool exposes a single primitive, :cpp:func:`Run`, that executes a set of
  * indexed blocks with a static assignment: block ``0`` runs on the calling
@@ -116,8 +117,8 @@ private:
   TaskFn task_fn_ = nullptr;
   int64_t num_blocks_ = 0;
   std::atomic<int64_t> remaining_{0};
-  uint64_t generation_ = 0;
-  bool stop_ = false;
+  std::atomic<uint64_t> generation_{0};
+  std::atomic<bool> stop_{false};
 };
 
 /// Returns the process-wide :cpp:class:`ThreadPool` used by :cpp:func:`ParallelFor`.

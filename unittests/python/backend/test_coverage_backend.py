@@ -70,7 +70,11 @@ class TestCoverage(ExtTestCase):
             if "qwen3" in name:
                 model = tc.model
                 self.assertIsInstance(model, onnxl.ModelProto)
-                self.assertGreater(len(model.graph.node), 300)
+                # The fused variant collapses each RMSNorm/attention subgraph
+                # into a single ``RMSNormalization``/``Attention`` node, so it is
+                # much smaller than the inlined variant.
+                min_nodes = 150 if "fused" in name else 300
+                self.assertGreater(len(model.graph.node), min_nodes)
                 qwen3 += 1
             if tc.tag not in counts:
                 counts[tc.tag] = 0

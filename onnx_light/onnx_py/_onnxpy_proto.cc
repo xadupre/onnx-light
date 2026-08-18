@@ -1121,7 +1121,7 @@ void AddOnnxPyProto(nb::module_ &m) {
           nb::for_setter(nb::arg("value").none()))
       .def(
           "__call__",
-          [](RawDataCallback &self, TensorProto &tensor, nb::object graph) -> nb::object {
+          [](RawDataCallback &self, TensorProto &tensor, nb::object /*graph*/) -> nb::object {
             if (self.on_tensor.is_valid() && !self.on_tensor.is_none()) {
               self.on_tensor(nb::cast(&tensor, nb::rv_policy::reference));
             }

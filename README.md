@@ -67,7 +67,8 @@ can link only what it needs:
   checker, inliner, shape inference and version converter.
 - `onnx_light::lib_onnx_shape` – shape-inference dispatch table, expression
   engine and graph optimization helpers.
-- `onnx_light::lib_onnx_kernels` – C++ kernels used to generate the beckend
+- `onnx_light::lib_onnx_kernels` – C++ kernels used to generate the backend
+  test outputs and to evaluate models with the reference runtime.
 - `onnx_light::lib_onnx_backend_test` – C++ backend test infrastructure and
   reference operator kernels.
 
@@ -81,10 +82,28 @@ independent from each other while sharing the same core engine.
 ## Kernels and Backend Tests
 
 - Each operator has a corresponding runtime implementation in C++,
-  it is used to generated the C++ output of the backend tests.
+  it is used to generate the C++ output of the backend tests.
 - Fully written in C++, it can be used in any language.
 - Outputs are always generated with a C++ kernel.
 - The kernels can be used without the backend tests.
+
+## Runtime, optimization and gradients
+
+- **Reference runtime** – the kernels double as a self-contained C++ runtime
+  for the ONNX operator set, so a model can be evaluated in C++ or from Python
+  without a third-party runtime. A `RuntimeSession` parses a model once, builds
+  an execution plan and can then be run repeatedly on runtime `Tensor` inputs.
+- **Graph optimization** – a model is optimized by repeatedly matching small
+  `PatternOptimization` subgraphs and replacing them with a simplified
+  equivalent. Patterns are implemented in C++ and registered into a shared
+  dispatch table so a downstream project can add its own; every applied rewrite
+  is recorded and can be replayed.
+- **Gradients** – gradients of an ONNX graph can be computed and used to train
+  a model.
+- **Encrypted save / load** – models can be encrypted with AES-256-CBC
+  (`ONNXCRY1`) or ChaCha20-Poly1305 (`ONNXCRY2`), both using PBKDF2-HMAC-SHA256
+  key derivation, and saved to a single self-contained `.onnxc` file or
+  serialized to an in-memory `bytes` object.
 
 ## Software Bill of Materials (SBOM)
 

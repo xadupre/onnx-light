@@ -141,6 +141,45 @@ file.
     :width: 600
     :alt: A backend test
 
+Running models
+++++++++++++++
+
+The kernels are more than a way to produce the expected outputs of the
+backend tests: together they form a self-contained C++ **reference runtime**
+for the ONNX operator set. A model can be evaluated in C++ (or from Python)
+without pulling in a third-party runtime. The runtime exposes a
+``RuntimeSession`` that parses a model once, builds an execution plan and
+can then be run repeatedly on runtime ``Tensor`` inputs, which avoids rebuilding
+the plan on every call. See :ref:`l-design-runtime` for the design and
+:ref:`l-example-plot-abs-benchmark` for a benchmark comparing ``onnx-light``
+with :epkg:`onnxruntime`.
+
+Graph optimization
+++++++++++++++++++
+
+``onnx-light`` optimizes a model by repeatedly matching small
+:class:`~onnx_light.onnx_core.optimization.PatternOptimization` subgraphs and
+replacing them with a simplified equivalent (removing useless ``Cast`` nodes,
+consecutive ``Neg``, ...). Patterns are implemented in C++ and registered into a
+shared dispatch table so a downstream project can add its own. Every applied
+rewrite is recorded and can be replayed from the original model. See
+:ref:`l-example-plot-pattern-optimization` for the workflow and
+:ref:`l-howto-add-custom-pattern` for writing a custom pattern.
+
+Gradients
++++++++++
+
+Gradients of an ONNX graph can be computed and used to train a model. See
+:ref:`l-example-gradient-linear-regression` for a linear-regression example.
+
+Encrypted save / load
++++++++++++++++++++++
+
+Models can be encrypted with AES-256-CBC (``ONNXCRY1``) or ChaCha20-Poly1305
+(``ONNXCRY2``), both using PBKDF2-HMAC-SHA256 key derivation, and saved to a
+single self-contained ``.onnxc`` file or serialized to an in-memory ``bytes``
+object.
+
 Shape inference tests
 +++++++++++++++++++++
 
@@ -183,8 +222,12 @@ may differ.
 Next steps
 ++++++++++
 
-- implement a switch in ir-py to check it is compatible with
-  ``onnx_light.onnx``,
-- do the same for :epkg:`onnxruntime` and validate the C++ API,
-- support more loading / saving scenarios,
-- expose standard graph transformations (dead-end removal, ...).
+Several of the original goals are now implemented: a C++ reference runtime,
+graph-rewriting optimizations, gradient computation, encrypted save / load and
+the :epkg:`onnxruntime` :epkg:`FlatBuffers` format. Compatibility with ``ir-py``
+and with the standard ``onnx`` API is checked continuously in CI. Work still in
+progress and under discussion is tracked in :ref:`l-next-steps`, and includes:
+
+- extending the runtime with session execution pools and prepared execution,
+- quantization and custom tensor types,
+- more graph transformations and model-resolution scenarios.

@@ -140,6 +140,32 @@ Every output is generated with a C++ implementation of the operator.
 Kernels can be used without the backend tests but the backend tests rely
 on the kernels to produce the expected outputs.
 
+Running models
+++++++++++++++
+
+The kernels double as a self-contained C++ **reference runtime** for the ONNX
+operator set, so a model can be evaluated in C++ (or from Python) without a
+third-party runtime. A ``RuntimeSession`` parses a model once, builds an
+execution plan and can then be run repeatedly on runtime ``Tensor`` inputs.
+See :ref:`l-design-runtime` for the design and
+:ref:`l-example-plot-abs-benchmark` for a benchmark against :epkg:`onnxruntime`.
+
+Graph optimization
+++++++++++++++++++
+
+A model is optimized by repeatedly matching small
+:class:`~onnx_light.onnx_core.optimization.PatternOptimization` subgraphs and
+replacing them with a simplified equivalent. Patterns are implemented in C++,
+registered into a shared dispatch table (a downstream project can add its own)
+and every applied rewrite is recorded and can be replayed. See
+:ref:`l-example-plot-pattern-optimization` for the workflow.
+
+Gradients
++++++++++
+
+Gradients of an ONNX graph can be computed and used to train a model. See
+:ref:`l-example-gradient-linear-regression` for an example.
+
 .. toctree::
     :maxdepth: 1
     :caption: Contents

@@ -45,6 +45,17 @@ arrays this constant per-call setup cost dominates the actual Abs computation,
 so ``run_model (Tensor)`` measures setup + execution rather than execution
 alone. The overhead is amortized only once the arrays grow large enough for the
 Abs computation to outweigh the fixed setup cost.
+
+To run a model repeatedly on :class:`Tensor` inputs **without** paying that
+per-call rebuild, keep a :class:`~onnx_light.onnx_py._onnxpykernels.runtime.RuntimeSession`
+and its :class:`~onnx_light.onnx_py._onnxpykernels.runtime.RuntimeContext` alive
+and reuse them. The ``run_session (Tensor)`` series below builds the session,
+context and execution plan once (registering the model-local functions on the
+context), then for every call merely clears the context, feeds the pre-built
+input :class:`Tensor` with :meth:`RuntimeContext.set`, runs the cached session
+and reads the output :class:`Tensor` with :meth:`RuntimeContext.get`. This keeps
+the :class:`Tensor`-in / :class:`Tensor`-out path of ``run_model`` while
+matching the steady-state speed of the reused ``ReferenceEvaluator``.
 """
 
 from __future__ import annotations
@@ -189,6 +200,33 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
         (output,) = runtime.run_model(model, [tensor])
         return output
 
+    # Reusable session over Tensor I/O: the RuntimeContext, model-local function
+    # registry, RuntimeSession and its ExecutionPlan are built once here and
+    # reused for every call below, so this path pays no per-call rebuild cost —
+    # unlike ``run_model`` — while keeping the Tensor-in / Tensor-out interface.
+    opset_version = next(
+        (opset.version for opset in model.opset_import if opset.domain in ("", "ai.onnx")), 18
+    )
+    reusable_context = runtime.RuntimeContext(
+        runtime.KernelContext(runtime.default_opset(opset_version))
+    )
+    runtime.register_model_functions(model, reusable_context)
+    reusable_session = runtime.RuntimeSession(model)
+
+    def run_onnx_light_session_tensor(tensor):
+        """Runs the model through a reused :class:`RuntimeSession` with a pre-built
+        :class:`Tensor` input and returns the output :class:`Tensor` directly.
+
+        The context is cleared, the input :class:`Tensor` is fed with
+        :meth:`RuntimeContext.set`, the cached session runs, and the output
+        :class:`Tensor` is read back with :meth:`RuntimeContext.get`. No runtime
+        state is rebuilt, so this isolates the raw model-execution cost."""
+
+        reusable_context.clear()
+        reusable_context.set("X", tensor, "input")
+        reusable_session.run(reusable_context)
+        return reusable_context.get("Y")
+
     def run_onnxruntime(values):
         """Runs the ONNX Runtime Abs kernel."""
 
@@ -218,6 +256,9 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
         run_model_tensor_time = measure(
             lambda tensor=input_tensor: run_onnx_light_run_model_tensor(tensor), repeat, warmup
         )
+        run_session_tensor_time = measure(
+            lambda tensor=input_tensor: run_onnx_light_session_tensor(tensor), repeat, warmup
+        )
 
         numpy.testing.assert_array_equal(run_onnx_light(values), expected)
         if ort_supported:
@@ -226,13 +267,27 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
         numpy.testing.assert_array_equal(
             runtime.tensor_to_numpy(tensor_output).view(np_dtype).reshape(values.shape), expected
         )
-        rows.append((size, numpy_time, onnx_light_time, ort_time, run_model_tensor_time))
+        session_output = run_onnx_light_session_tensor(input_tensor)
+        numpy.testing.assert_array_equal(
+            runtime.tensor_to_numpy(session_output).view(np_dtype).reshape(values.shape), expected
+        )
+        rows.append(
+            (
+                size,
+                numpy_time,
+                onnx_light_time,
+                ort_time,
+                run_model_tensor_time,
+                run_session_tensor_time,
+            )
+        )
         ort_report = "n/a" if ort_time is None else f"{ort_time * 1e6:10.2f} us"
         ratio_report = "n/a" if ort_time is None else f"{onnx_light_time / ort_time:5.2f}x"
         print(
             f"[{label:>8}] size={size:>9} | numpy={numpy_time * 1e6:10.2f} us | "
             f"onnx-light={onnx_light_time * 1e6:10.2f} us | "
             f"run_model(Tensor)={run_model_tensor_time * 1e6:10.2f} us | "
+            f"run_session(Tensor)={run_session_tensor_time * 1e6:10.2f} us | "
             f"onnxruntime={ort_report} | onnx-light / onnxruntime={ratio_report}"
         )
 
@@ -244,6 +299,7 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
         "onnx_light_times": numpy.array([row[2] for row in rows]),
         "ort_times": None if not ort_supported else numpy.array([row[3] for row in rows]),
         "run_model_tensor_times": numpy.array([row[4] for row in rows]),
+        "run_session_tensor_times": numpy.array([row[5] for row in rows]),
     }
 
 
@@ -273,6 +329,7 @@ for row_index, result in enumerate(results):
     onnx_light_times = result["onnx_light_times"]
     ort_times = result["ort_times"]
     run_model_tensor_times = result["run_model_tensor_times"]
+    run_session_tensor_times = result["run_session_tensor_times"]
 
     time_axis = axes[row_index][0]
     speedup_axis = axes[row_index][1]
@@ -281,6 +338,9 @@ for row_index, result in enumerate(results):
     time_axis.plot(sizes, onnx_light_times * 1e6, "o-", label="onnx-light", color="#5cb85c")
     time_axis.plot(
         sizes, run_model_tensor_times * 1e6, "s:", label="run_model (Tensor)", color="#1b5e20"
+    )
+    time_axis.plot(
+        sizes, run_session_tensor_times * 1e6, "D-", label="run_session (Tensor)", color="#2b8cbe"
     )
     if ort_times is not None:
         time_axis.plot(sizes, ort_times * 1e6, "o-", label="onnxruntime", color="#f4a259")
@@ -320,6 +380,13 @@ for row_index, result in enumerate(results):
         "s:",
         label="run_model (Tensor)",
         color="#1b5e20",
+    )
+    speedup_axis.plot(
+        sizes,
+        baseline / run_session_tensor_times,
+        "D-",
+        label="run_session (Tensor)",
+        color="#2b8cbe",
     )
     speedup_axis.axhline(
         1.0, color="grey", linewidth=0.8, linestyle=":", label=f"{baseline_name} (baseline)"

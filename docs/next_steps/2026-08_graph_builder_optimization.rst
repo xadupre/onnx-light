@@ -145,6 +145,10 @@ requests:
      - Final rewrite coordinates
      - Resolves ``MatchResult::insert_at`` while applying each batch, records
        final ``added_nodes_positions``, and replays only from those coordinates.
+   * - `PR #4542 <https://github.com/xadupre/onnx-light/pull/4542>`_
+     - Remaining Expand rewrites
+     - Ports the four remaining shape-based and Reshape-adjacent ``Expand``
+       patterns with tests, registration, and Python bindings.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -695,8 +699,10 @@ The upstream default list currently contains 104 enabled patterns.
 ``SequenceConstructAtPattern``, ``SplitToSequenceSequenceAtPattern``,
 ``SliceSlicePattern``, ``SlicesSplitPattern``, ``SplitConcatPattern``, and
 ``ShapeBasedConcatExpandPattern``, ``ShapeBasedExpandBroadcastPattern``, and
-``ShapeBasedExpandBroadcastMatMulPattern`` are already covered, leaving 64
-patterns.
+``ShapeBasedExpandBroadcastMatMulPattern`` are already covered. PR #4542 adds
+the last four ``Expand`` patterns, and the tensor-layout/algebra batch adds 30
+active rewrites plus the upstream-compatible
+``ShapeBasedShapeShapeAddPattern`` placeholder. This leaves 29 patterns.
 They are grouped into cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;
@@ -713,7 +719,7 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ``GatherGatherPattern``, ``GathersSplitPattern``, ``GatherShapePattern``,
    ``SequenceConstructAtPattern``, ``SplitToSequenceSequenceAtPattern``,
    ``SliceSlicePattern``, ``SlicesSplitPattern``, and ``SplitConcatPattern``.
-#. **Expand, where, and equal (4 patterns remaining).**
+#. **Expand, where, and equal (done in PR #4542).**
    ``ShapeBasedExpandCastWhereSwapPattern``, ``ShapeBasedExpandSwapPattern``,
    ``ShapeBasedStaticExpandPattern``, and ``SwapExpandReshapePattern``.
    ``ExpandPattern``, ``ExpandBroadcastPattern``, ``ExpandSwapPattern``,
@@ -721,7 +727,7 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ported and registered, together with ``ShapeBasedConcatExpandPattern``,
    ``ShapeBasedExpandBroadcastPattern``, and
    ``ShapeBasedExpandBroadcastMatMulPattern``.
-#. **Reshape canonicalization (13 patterns).**
+#. **Reshape canonicalization (done).**
    ``ConcatReshapePattern``, ``ReshapePattern``, ``ReduceReshapePattern``,
    ``Reshape2Of3Pattern``, ``ReshapeReshapeBinaryPattern``,
    ``ReshapeReshapePattern``, ``ReshapeSqueezePattern``,
@@ -729,7 +735,7 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ``ShapeBasedReshapeIsSqueezePattern``, ``ShapedBasedReshapePattern``,
    ``StaticConcatReshapePattern``, ``UnsqueezeOrSqueezeReshapePattern``, and
    ``UnsqueezeReshapePattern``.
-#. **Squeeze, unsqueeze, and transpose (6 patterns remaining).**
+#. **Squeeze, unsqueeze, and transpose (done).**
    ``MulUnsqueezeUnsqueezePattern``, ``SqueezeAddPattern``,
    ``SqueezeBinaryUnsqueezePattern``, ``SqueezeUnsqueezePattern``,
    ``UnsqueezeUnsqueezePattern``, ``SwapUnsqueezeTransposePattern``,
@@ -740,13 +746,16 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ``TransposeGatherPattern``, ``TransposeTransposePattern``,
    ``ShapeTransposePattern``, and ``UnsqueezeShapePattern`` are ported and
    registered.
-#. **Generic algebra, reduction, and graph identities (12 patterns).**
+#. **Generic algebra, reduction, and graph identities (done).**
    ``MulMulMulScalarPattern``, ``SwitchOrderBinaryPattern``,
    ``SwapRangeAddScalarPattern``, ``ReduceArgTopKPattern``,
    ``ReduceSumNormalizePattern``, ``Sub1MulPattern``, ``SwapUnaryPattern``,
    ``SameChildrenPattern``, ``SameChildrenFromInputPattern``,
    ``ShapeBasedIdentityPattern``, ``ShapeBasedSameChildrenPattern``, and
    ``ShapeBasedShapeShapeAddPattern``.
+   The last class deliberately preserves the upstream placeholder contract:
+   it is exposed and registered but never matches because upstream defines no
+   proven rewrite.
 #. **Matrix multiplication and linear algebra (9 patterns).**
    ``GemmTransposePattern``, ``MatMulAddPattern``,
    ``MatMulReshape2Of3Pattern``, ``MulMulMatMulPattern``,
@@ -817,3 +826,7 @@ Pull requests
   ``ShapeBasedExpandBroadcastPattern`` and
   ``ShapeBasedExpandBroadcastMatMulPattern`` removing unnecessary dynamic
   ``Expand`` nodes before element-wise binary operators and ``MatMul``.
+* `PR #4539 <https://github.com/xadupre/onnx-light/pull/4539>`_: final
+  ``LocalRewriting`` coordinates and deterministic replay.
+* `PR #4542 <https://github.com/xadupre/onnx-light/pull/4542>`_: remaining
+  shape-based and Reshape-adjacent ``Expand`` patterns.

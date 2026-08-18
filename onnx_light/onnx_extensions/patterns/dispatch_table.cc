@@ -7,6 +7,12 @@
 #include <memory>
 
 #include "onnx_core/builder/pattern_registry.h"
+#include "onnx_extensions/patterns/algebra/common_pattern.h"
+#include "onnx_extensions/patterns/algebra/mul_pattern.h"
+#include "onnx_extensions/patterns/algebra/range_pattern.h"
+#include "onnx_extensions/patterns/algebra/reduce_pattern.h"
+#include "onnx_extensions/patterns/algebra/shape_pattern.h"
+#include "onnx_extensions/patterns/algebra/sub_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/constant_pattern.h"
@@ -22,6 +28,8 @@
 #include "onnx_extensions/patterns/collections/split_pattern.h"
 #include "onnx_extensions/patterns/expand/expand_pattern.h"
 #include "onnx_extensions/patterns/expand/where_pattern.h"
+#include "onnx_extensions/patterns/layout/layout_pattern.h"
+#include "onnx_extensions/patterns/reshape/reshape_pattern.h"
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 #include "onnx_extensions/patterns/unsqueeze/unsqueeze_pattern.h"
 
@@ -166,6 +174,71 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ExpandUnsqueezeExpandPattern>();
                                    });
+    core::builder::RegisterPattern("ConcatReshape",
+                                   [] { return std::make_unique<ConcatReshapePattern>(); });
+    core::builder::RegisterPattern("Reshape", [] { return std::make_unique<ReshapePattern>(); });
+    core::builder::RegisterPattern("ReduceReshape",
+                                   [] { return std::make_unique<ReduceReshapePattern>(); });
+    core::builder::RegisterPattern("Reshape2Of3",
+                                   [] { return std::make_unique<Reshape2Of3Pattern>(); });
+    core::builder::RegisterPattern("ReshapeReshapeBinary",
+                                   [] { return std::make_unique<ReshapeReshapeBinaryPattern>(); });
+    core::builder::RegisterPattern("ReshapeReshape",
+                                   [] { return std::make_unique<ReshapeReshapePattern>(); });
+    core::builder::RegisterPattern("ReshapeSqueeze",
+                                   [] { return std::make_unique<ReshapeSqueezePattern>(); });
+    core::builder::RegisterPattern("ShapeBasedEditDistanceReshape", [] {
+      return std::make_unique<ShapeBasedEditDistanceReshapePattern>();
+    });
+    core::builder::RegisterPattern("ShapeBasedReshapeIsSqueeze", [] {
+      return std::make_unique<ShapeBasedReshapeIsSqueezePattern>();
+    });
+    core::builder::RegisterPattern("ShapedBasedReshape",
+                                   [] { return std::make_unique<ShapedBasedReshapePattern>(); });
+    core::builder::RegisterPattern("StaticConcatReshape",
+                                   [] { return std::make_unique<StaticConcatReshapePattern>(); });
+    core::builder::RegisterPattern("UnsqueezeOrSqueezeReshape", [] {
+      return std::make_unique<UnsqueezeOrSqueezeReshapePattern>();
+    });
+    core::builder::RegisterPattern("UnsqueezeReshape",
+                                   [] { return std::make_unique<UnsqueezeReshapePattern>(); });
+    core::builder::RegisterPattern("MulUnsqueezeUnsqueeze",
+                                   [] { return std::make_unique<MulUnsqueezeUnsqueezePattern>(); });
+    core::builder::RegisterPattern("SqueezeAdd",
+                                   [] { return std::make_unique<SqueezeAddPattern>(); });
+    core::builder::RegisterPattern(
+        "SqueezeBinaryUnsqueeze", [] { return std::make_unique<SqueezeBinaryUnsqueezePattern>(); });
+    core::builder::RegisterPattern(
+        "SwapUnsqueezeTranspose", [] { return std::make_unique<SwapUnsqueezeTransposePattern>(); });
+    core::builder::RegisterPattern("TransposeEqualReshape",
+                                   [] { return std::make_unique<TransposeEqualReshapePattern>(); });
+    core::builder::RegisterPattern("TransposeReshapeTranspose", [] {
+      return std::make_unique<TransposeReshapeTransposePattern>();
+    });
+    core::builder::RegisterPattern("MulMulMulScalar",
+                                   [] { return std::make_unique<MulMulMulScalarPattern>(); });
+    core::builder::RegisterPattern("SwitchOrderBinary",
+                                   [] { return std::make_unique<SwitchOrderBinaryPattern>(); });
+    core::builder::RegisterPattern("SwapRangeAddScalar",
+                                   [] { return std::make_unique<SwapRangeAddScalarPattern>(); });
+    core::builder::RegisterPattern("ReduceArgTopK",
+                                   [] { return std::make_unique<ReduceArgTopKPattern>(); });
+    core::builder::RegisterPattern("ReduceSumNormalize",
+                                   [] { return std::make_unique<ReduceSumNormalizePattern>(); });
+    core::builder::RegisterPattern("Sub1Mul", [] { return std::make_unique<Sub1MulPattern>(); });
+    core::builder::RegisterPattern("SwapUnary",
+                                   [] { return std::make_unique<SwapUnaryPattern>(); });
+    core::builder::RegisterPattern("SameChildren",
+                                   [] { return std::make_unique<SameChildrenPattern>(); });
+    core::builder::RegisterPattern("SameChildrenFromInput",
+                                   [] { return std::make_unique<SameChildrenFromInputPattern>(); });
+    core::builder::RegisterPattern("ShapeBasedIdentity",
+                                   [] { return std::make_unique<ShapeBasedIdentityPattern>(); });
+    core::builder::RegisterPattern(
+        "ShapeBasedSameChildren", [] { return std::make_unique<ShapeBasedSameChildrenPattern>(); });
+    core::builder::RegisterPattern("ShapeBasedShapeShapeAdd", [] {
+      return std::make_unique<ShapeBasedShapeShapeAddPattern>();
+    });
     core::builder::RegisterPattern("TransposeTranspose",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<TransposeTransposePattern>();

@@ -823,6 +823,42 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
   EXPECT_EQ(std::count(names.begin(), names.end(), "Identity"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "NotNot"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "PadConv"), 1);
+  const std::vector<std::string> new_pattern_names = {
+      "ConcatReshape",
+      "Reshape",
+      "ReduceReshape",
+      "Reshape2Of3",
+      "ReshapeReshapeBinary",
+      "ReshapeReshape",
+      "ReshapeSqueeze",
+      "ShapeBasedEditDistanceReshape",
+      "ShapeBasedReshapeIsSqueeze",
+      "ShapedBasedReshape",
+      "StaticConcatReshape",
+      "UnsqueezeOrSqueezeReshape",
+      "UnsqueezeReshape",
+      "MulUnsqueezeUnsqueeze",
+      "SqueezeAdd",
+      "SqueezeBinaryUnsqueeze",
+      "SwapUnsqueezeTranspose",
+      "TransposeEqualReshape",
+      "TransposeReshapeTranspose",
+      "MulMulMulScalar",
+      "SwitchOrderBinary",
+      "SwapRangeAddScalar",
+      "ReduceArgTopK",
+      "ReduceSumNormalize",
+      "Sub1Mul",
+      "SwapUnary",
+      "SameChildren",
+      "SameChildrenFromInput",
+      "ShapeBasedIdentity",
+      "ShapeBasedSameChildren",
+      "ShapeBasedShapeShapeAdd",
+  };
+  for (const std::string &name : new_pattern_names) {
+    EXPECT_EQ(std::count(names.begin(), names.end(), name), 1) << name;
+  }
 
   onnx_patterns::RegisterPatterns();
   EXPECT_EQ(core::builder::RegisteredPatternNames(), names);

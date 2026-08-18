@@ -4,6 +4,12 @@
 
 #include "onnx_core/builder/pattern_optimization.h"
 #include "onnx_core/builder/pattern_registry.h"
+#include "onnx_extensions/patterns/algebra/common_pattern.h"
+#include "onnx_extensions/patterns/algebra/mul_pattern.h"
+#include "onnx_extensions/patterns/algebra/range_pattern.h"
+#include "onnx_extensions/patterns/algebra/reduce_pattern.h"
+#include "onnx_extensions/patterns/algebra/shape_pattern.h"
+#include "onnx_extensions/patterns/algebra/sub_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/constant_pattern.h"
@@ -20,6 +26,8 @@
 #include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_extensions/patterns/expand/expand_pattern.h"
 #include "onnx_extensions/patterns/expand/where_pattern.h"
+#include "onnx_extensions/patterns/layout/layout_pattern.h"
+#include "onnx_extensions/patterns/reshape/reshape_pattern.h"
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 #include "onnx_extensions/patterns/unsqueeze/unsqueeze_pattern.h"
 
@@ -37,6 +45,11 @@ namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace {
+
+template <typename T> void BindPattern(nb::module_ &m, const char *name, const char *doc) {
+  nb::class_<T, core::builder::PatternOptimization>(m, name, doc)
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+}
 
 std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::string &name,
                                                                   std::optional<int> priority) {
@@ -143,6 +156,69 @@ std::shared_ptr<core::builder::PatternOptimization> CreatePattern(const std::str
   if (name == "ExpandUnsqueezeExpand") {
     return std::make_shared<onnx_patterns::ExpandUnsqueezeExpandPattern>(priority.value_or(0));
   }
+  if (name == "ConcatReshape")
+    return std::make_shared<onnx_patterns::ConcatReshapePattern>(priority.value_or(0));
+  if (name == "Reshape")
+    return std::make_shared<onnx_patterns::ReshapePattern>(priority.value_or(0));
+  if (name == "ReduceReshape")
+    return std::make_shared<onnx_patterns::ReduceReshapePattern>(priority.value_or(0));
+  if (name == "Reshape2Of3")
+    return std::make_shared<onnx_patterns::Reshape2Of3Pattern>(priority.value_or(0));
+  if (name == "ReshapeReshapeBinary")
+    return std::make_shared<onnx_patterns::ReshapeReshapeBinaryPattern>(priority.value_or(0));
+  if (name == "ReshapeReshape")
+    return std::make_shared<onnx_patterns::ReshapeReshapePattern>(priority.value_or(0));
+  if (name == "ReshapeSqueeze")
+    return std::make_shared<onnx_patterns::ReshapeSqueezePattern>(priority.value_or(0));
+  if (name == "ShapeBasedEditDistanceReshape")
+    return std::make_shared<onnx_patterns::ShapeBasedEditDistanceReshapePattern>(
+        priority.value_or(0));
+  if (name == "ShapeBasedReshapeIsSqueeze")
+    return std::make_shared<onnx_patterns::ShapeBasedReshapeIsSqueezePattern>(priority.value_or(0));
+  if (name == "ShapedBasedReshape")
+    return std::make_shared<onnx_patterns::ShapedBasedReshapePattern>(priority.value_or(0));
+  if (name == "StaticConcatReshape")
+    return std::make_shared<onnx_patterns::StaticConcatReshapePattern>(priority.value_or(0));
+  if (name == "UnsqueezeOrSqueezeReshape")
+    return std::make_shared<onnx_patterns::UnsqueezeOrSqueezeReshapePattern>(priority.value_or(0));
+  if (name == "UnsqueezeReshape")
+    return std::make_shared<onnx_patterns::UnsqueezeReshapePattern>(priority.value_or(0));
+  if (name == "MulUnsqueezeUnsqueeze")
+    return std::make_shared<onnx_patterns::MulUnsqueezeUnsqueezePattern>(priority.value_or(0));
+  if (name == "SqueezeAdd")
+    return std::make_shared<onnx_patterns::SqueezeAddPattern>(priority.value_or(0));
+  if (name == "SqueezeBinaryUnsqueeze")
+    return std::make_shared<onnx_patterns::SqueezeBinaryUnsqueezePattern>(priority.value_or(0));
+  if (name == "SwapUnsqueezeTranspose")
+    return std::make_shared<onnx_patterns::SwapUnsqueezeTransposePattern>(priority.value_or(0));
+  if (name == "TransposeEqualReshape")
+    return std::make_shared<onnx_patterns::TransposeEqualReshapePattern>(priority.value_or(0));
+  if (name == "TransposeReshapeTranspose")
+    return std::make_shared<onnx_patterns::TransposeReshapeTransposePattern>(priority.value_or(0));
+  if (name == "MulMulMulScalar")
+    return std::make_shared<onnx_patterns::MulMulMulScalarPattern>(priority.value_or(0));
+  if (name == "SwitchOrderBinary")
+    return std::make_shared<onnx_patterns::SwitchOrderBinaryPattern>(priority.value_or(0));
+  if (name == "SwapRangeAddScalar")
+    return std::make_shared<onnx_patterns::SwapRangeAddScalarPattern>(priority.value_or(0));
+  if (name == "ReduceArgTopK")
+    return std::make_shared<onnx_patterns::ReduceArgTopKPattern>(priority.value_or(0));
+  if (name == "ReduceSumNormalize")
+    return std::make_shared<onnx_patterns::ReduceSumNormalizePattern>(priority.value_or(0));
+  if (name == "Sub1Mul")
+    return std::make_shared<onnx_patterns::Sub1MulPattern>(priority.value_or(0));
+  if (name == "SwapUnary")
+    return std::make_shared<onnx_patterns::SwapUnaryPattern>(priority.value_or(0));
+  if (name == "SameChildren")
+    return std::make_shared<onnx_patterns::SameChildrenPattern>(priority.value_or(0));
+  if (name == "SameChildrenFromInput")
+    return std::make_shared<onnx_patterns::SameChildrenFromInputPattern>(priority.value_or(0));
+  if (name == "ShapeBasedIdentity")
+    return std::make_shared<onnx_patterns::ShapeBasedIdentityPattern>(priority.value_or(0));
+  if (name == "ShapeBasedSameChildren")
+    return std::make_shared<onnx_patterns::ShapeBasedSameChildrenPattern>(priority.value_or(0));
+  if (name == "ShapeBasedShapeShapeAdd")
+    return std::make_shared<onnx_patterns::ShapeBasedShapeShapeAddPattern>(priority.value_or(0));
   if (name == "TransposeTranspose") {
     return std::make_shared<onnx_patterns::TransposeTransposePattern>(priority.value_or(0));
   }
@@ -331,6 +407,74 @@ NB_MODULE(_onnxpypatterns, m) {
       "Fuses ``Expand``, ``Unsqueeze`` and ``Expand`` into a single ``Unsqueeze`` "
       "followed by one ``Expand``.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
+  BindPattern<onnx_patterns::ConcatReshapePattern>(
+      m, "ConcatReshapePattern", "Simplifies concatenations that construct reshape shapes.");
+  BindPattern<onnx_patterns::ReshapePattern>(m, "ReshapePattern",
+                                             "Removes or simplifies redundant reshape operations.");
+  BindPattern<onnx_patterns::ReduceReshapePattern>(
+      m, "ReduceReshapePattern", "Simplifies reshape operations around reductions.");
+  BindPattern<onnx_patterns::Reshape2Of3Pattern>(
+      m, "Reshape2Of3Pattern", "Simplifies two compatible reshapes among three branches.");
+  BindPattern<onnx_patterns::ReshapeReshapeBinaryPattern>(
+      m, "ReshapeReshapeBinaryPattern", "Moves compatible reshapes across binary operations.");
+  BindPattern<onnx_patterns::ReshapeReshapePattern>(m, "ReshapeReshapePattern",
+                                                    "Collapses consecutive compatible reshapes.");
+  BindPattern<onnx_patterns::ReshapeSqueezePattern>(m, "ReshapeSqueezePattern",
+                                                    "Simplifies a reshape followed by squeeze.");
+  BindPattern<onnx_patterns::ShapeBasedEditDistanceReshapePattern>(
+      m, "ShapeBasedEditDistanceReshapePattern",
+      "Rewrites reshapes according to the distance between known shapes.");
+  BindPattern<onnx_patterns::ShapeBasedReshapeIsSqueezePattern>(
+      m, "ShapeBasedReshapeIsSqueezePattern", "Replaces eligible reshapes with squeeze.");
+  BindPattern<onnx_patterns::ShapedBasedReshapePattern>(
+      m, "ShapedBasedReshapePattern",
+      "Simplifies reshapes using inferred input and output shapes.");
+  BindPattern<onnx_patterns::StaticConcatReshapePattern>(
+      m, "StaticConcatReshapePattern", "Folds static concatenated reshape shapes.");
+  BindPattern<onnx_patterns::UnsqueezeOrSqueezeReshapePattern>(
+      m, "UnsqueezeOrSqueezeReshapePattern",
+      "Simplifies reshape operations adjacent to squeeze or unsqueeze.");
+  BindPattern<onnx_patterns::UnsqueezeReshapePattern>(
+      m, "UnsqueezeReshapePattern", "Simplifies an unsqueeze followed by reshape.");
+  BindPattern<onnx_patterns::MulUnsqueezeUnsqueezePattern>(
+      m, "MulUnsqueezeUnsqueezePattern", "Simplifies multiplication of unsqueezed inputs.");
+  BindPattern<onnx_patterns::SqueezeAddPattern>(
+      m, "SqueezeAddPattern", "Moves compatible squeeze operations across addition.");
+  BindPattern<onnx_patterns::SqueezeBinaryUnsqueezePattern>(
+      m, "SqueezeBinaryUnsqueezePattern",
+      "Simplifies squeeze, binary operation, and unsqueeze sequences.");
+  BindPattern<onnx_patterns::SwapUnsqueezeTransposePattern>(
+      m, "SwapUnsqueezeTransposePattern", "Swaps compatible unsqueeze and transpose operations.");
+  BindPattern<onnx_patterns::TransposeEqualReshapePattern>(
+      m, "TransposeEqualReshapePattern", "Replaces shape-equivalent transposes with reshapes.");
+  BindPattern<onnx_patterns::TransposeReshapeTransposePattern>(
+      m, "TransposeReshapeTransposePattern",
+      "Simplifies transpose, reshape, and transpose sequences.");
+  BindPattern<onnx_patterns::MulMulMulScalarPattern>(
+      m, "MulMulMulScalarPattern", "Combines scalar factors in multiplication chains.");
+  BindPattern<onnx_patterns::SwitchOrderBinaryPattern>(
+      m, "SwitchOrderBinaryPattern", "Reorders compatible consecutive binary operations.");
+  BindPattern<onnx_patterns::SwapRangeAddScalarPattern>(
+      m, "SwapRangeAddScalarPattern", "Moves scalar addition into compatible range operations.");
+  BindPattern<onnx_patterns::ReduceArgTopKPattern>(
+      m, "ReduceArgTopKPattern", "Simplifies compatible reduction, arg, and TopK operations.");
+  BindPattern<onnx_patterns::ReduceSumNormalizePattern>(
+      m, "ReduceSumNormalizePattern", "Simplifies reduce-sum normalization subgraphs.");
+  BindPattern<onnx_patterns::Sub1MulPattern>(
+      m, "Sub1MulPattern", "Simplifies multiplication involving one minus a value.");
+  BindPattern<onnx_patterns::SwapUnaryPattern>(m, "SwapUnaryPattern",
+                                               "Swaps compatible unary operations.");
+  BindPattern<onnx_patterns::SameChildrenPattern>(m, "SameChildrenPattern",
+                                                  "Eliminates equivalent child computations.");
+  BindPattern<onnx_patterns::SameChildrenFromInputPattern>(
+      m, "SameChildrenFromInputPattern", "Eliminates equivalent computations from one input.");
+  BindPattern<onnx_patterns::ShapeBasedIdentityPattern>(
+      m, "ShapeBasedIdentityPattern", "Eliminates shape-proven identity operations.");
+  BindPattern<onnx_patterns::ShapeBasedSameChildrenPattern>(
+      m, "ShapeBasedSameChildrenPattern", "Eliminates shape-equivalent child computations.");
+  BindPattern<onnx_patterns::ShapeBasedShapeShapeAddPattern>(
+      m, "ShapeBasedShapeShapeAddPattern",
+      "Exposes the upstream placeholder for additions of two Shape outputs.");
   nb::class_<onnx_patterns::TransposeTransposePattern, core::builder::PatternOptimization>(
       m, "TransposeTransposePattern",
       "Merges two consecutive ``Transpose`` nodes into a single ``Transpose`` "

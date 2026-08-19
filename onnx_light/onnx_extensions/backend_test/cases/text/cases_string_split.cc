@@ -29,7 +29,7 @@ void RegisterStringSplitCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t count = 131072;
     constexpr int64_t substring_count = count * 2;
     Expect(registry, std::move(node), "test_cc_string_split_basic_benchmark", {opset}, {count},
-           {substring_count, count}, [string_split, count]() -> IoData {
+           {substring_count, count}, [string_split]() -> IoData {
              std::vector<std::string> values(static_cast<size_t>(count));
              for (size_t i = 0; i < values.size(); ++i) {
                values[i] = (i % 2 == 0) ? "abc.com" : "def.net";

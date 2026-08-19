@@ -60,8 +60,7 @@ void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode
     constexpr int64_t output_count = 7;
     Expect(registry, std::move(node), "test_cc_tfidfvectorizer_tf_only_bigrams_skip0_benchmark",
            {opset}, {input_count}, {output_count},
-           [tf_idf, default_pool, default_ngram_counts, default_ngram_indexes,
-            input_count]() -> IoData {
+           [tf_idf, default_pool, default_ngram_counts, default_ngram_indexes]() -> IoData {
              std::vector<int32_t> values(static_cast<size_t>(input_count));
              const std::vector<int32_t> base{1, 1, 3, 3, 3, 7, 8, 6, 7, 5, 6, 8};
              for (size_t i = 0; i < values.size(); ++i) {

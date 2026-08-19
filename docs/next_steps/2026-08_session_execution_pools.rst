@@ -502,8 +502,9 @@ Implementation sequence
        <https://github.com/xadupre/onnx-light/pull/4594>`_)
    * - Pool PR07
      - Both repositories: compatibility and performance gate.
-     - Policy matrix, concurrent sessions, registered/standalone kernels, and
-       tuning caches pass; default latency and throughput do not regress.
+     - The private ``onnx-light-cpu`` scheduler is absent; standalone kernels
+       are serial; registered kernels use only the session executor; the
+       cross-repository policy and compatibility gates pass.
      - PR06
      - In review (`onnx-light-cpu#271
        <https://github.com/xadupre/onnx-light-cpu/pull/271>`_)
@@ -512,4 +513,5 @@ Pool PR07 is the final roadmap PR. Its cross-repository gate builds
 ``onnx-light`` from ``main`` and validates ``onnx-light-cpu`` against that exact
 runtime on Linux, macOS, and Windows. Documentation remains a Linux-only build;
 the integration matrix varies only the operating system, not stable external
-dependency versions.
+dependency versions. It also removes ``onnx-light-cpu``'s private
+``parallel_for`` implementation so runtime policy has a single scheduler.

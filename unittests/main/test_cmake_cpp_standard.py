@@ -30,7 +30,7 @@ class TestCMakeCppStandard(unittest.TestCase):
     def test_project_cmake_treats_warnings_as_errors(self):
         root = Path(__file__).resolve().parents[2]
         content = (root / "CMakeLists.txt").read_text(encoding="utf-8")
-        self.assertIn('option(ONNX_LIGHT_WERROR\n', content)
+        self.assertIn("option(ONNX_LIGHT_WERROR\n", content)
         self.assertRegex(
             content,
             (

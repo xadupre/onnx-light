@@ -37,6 +37,102 @@ except ImportError:  # pragma: no cover - ml_dtypes is a runtime dependency
     _ml_dtypes = None  # type: ignore[assignment]
 
 
+_CPU_EXECUTION_KEYS = {
+    "num_threads",
+    "spin_policy",
+    "spin_budget",
+    "affinity_policy",
+    "cpu_set",
+    "allow_nested_parallelism",
+}
+_CPU_SPIN_POLICIES = {
+    "adaptive": _runtime.CpuSpinPolicy.ADAPTIVE,
+    "fixed_iterations": _runtime.CpuSpinPolicy.FIXED_ITERATIONS,
+    "fixed_duration": _runtime.CpuSpinPolicy.FIXED_DURATION,
+    "park_immediately": _runtime.CpuSpinPolicy.PARK_IMMEDIATELY,
+}
+_CPU_AFFINITY_POLICIES = {
+    "none": _runtime.CpuAffinityPolicy.NONE,
+    "physical_cores": _runtime.CpuAffinityPolicy.PHYSICAL_CORES,
+    "performance_cores": _runtime.CpuAffinityPolicy.PERFORMANCE_CORES,
+    "physical_then_smt": _runtime.CpuAffinityPolicy.PHYSICAL_THEN_SMT,
+    "explicit": _runtime.CpuAffinityPolicy.EXPLICIT,
+}
+
+
+def _parse_cpu_execution(cpu_execution: Any) -> Any:
+    """Validates and converts a CPU execution policy."""
+    if cpu_execution is None:
+        return None
+    if isinstance(cpu_execution, _runtime.CpuExecutionPolicy):
+        _runtime.resolve_cpu_execution_policy(cpu_execution)
+        return cpu_execution
+    if not isinstance(cpu_execution, dict):
+        raise TypeError(
+            "cpu_execution must be a dict, CpuExecutionPolicy, or None, "
+            f"not {type(cpu_execution).__name__}."
+        )
+    unknown = set(cpu_execution) - _CPU_EXECUTION_KEYS
+    if unknown:
+        raise ValueError(f"Unknown cpu_execution keys: {', '.join(sorted(unknown))}.")
+
+    policy = _runtime.CpuExecutionPolicy()
+    if "num_threads" in cpu_execution:
+        value = cpu_execution["num_threads"]
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise TypeError("cpu_execution['num_threads'] must be an integer.")
+        policy.num_threads = value
+    if "spin_policy" in cpu_execution:
+        value = cpu_execution["spin_policy"]
+        if isinstance(value, str):
+            if value not in _CPU_SPIN_POLICIES:
+                raise ValueError(f"Unknown CPU spin policy {value!r}.")
+            value = _CPU_SPIN_POLICIES[value]
+        policy.spin_policy = value
+    if "spin_budget" in cpu_execution:
+        value = cpu_execution["spin_budget"]
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise ValueError("cpu_execution['spin_budget'] must be a non-negative integer.")
+        policy.spin_budget = value
+    if "affinity_policy" in cpu_execution:
+        value = cpu_execution["affinity_policy"]
+        if isinstance(value, str):
+            if value not in _CPU_AFFINITY_POLICIES:
+                raise ValueError(f"Unknown CPU affinity policy {value!r}.")
+            value = _CPU_AFFINITY_POLICIES[value]
+        policy.affinity_policy = value
+    if "cpu_set" in cpu_execution:
+        processors = []
+        for value in cpu_execution["cpu_set"]:
+            if isinstance(value, _runtime.CpuLogicalProcessor):
+                processors.append(value)
+            elif isinstance(value, int) and not isinstance(value, bool):
+                processors.append(_runtime.CpuLogicalProcessor(value))
+            elif isinstance(value, dict):
+                unknown_processor_keys = set(value) - {"id", "group"}
+                if unknown_processor_keys or "id" not in value:
+                    raise ValueError(
+                        "Each cpu_set mapping must contain 'id' and may contain only 'group'."
+                    )
+                processors.append(
+                    _runtime.CpuLogicalProcessor(value["id"], value.get("group", 0))
+                )
+            else:
+                raise TypeError(
+                    "cpu_execution['cpu_set'] entries must be integers, mappings, "
+                    "or CpuLogicalProcessor objects."
+                )
+        policy.cpu_set = processors
+    if "allow_nested_parallelism" in cpu_execution:
+        value = cpu_execution["allow_nested_parallelism"]
+        if not isinstance(value, bool):
+            raise TypeError("cpu_execution['allow_nested_parallelism'] must be a bool.")
+        policy.allow_nested_parallelism = value
+
+    _runtime.resolve_cpu_execution_policy(policy)
+    return policy
+
+
 # ---------------------------------------------------------------------------
 # Tensor / numpy conversion helpers
 # ---------------------------------------------------------------------------
@@ -270,6 +366,8 @@ class ReferenceEvaluator:
         release_intermediates: bool = True,
         allocator: Any = None,
         io_allocator: Any = None,
+        cpu_execution: Any = None,
+        cpu_execution_counters: bool = False,
     ) -> None:
         proto = self._load_proto(proto)
         if not isinstance(verbose, int):
@@ -283,6 +381,9 @@ class ReferenceEvaluator:
         self._verbose = verbose
         self._events_enabled = events_enabled
         self._release_intermediates = release_intermediates
+        self._cpu_execution = _parse_cpu_execution(cpu_execution)
+        if not isinstance(cpu_execution_counters, bool):
+            raise TypeError("cpu_execution_counters must be a bool.")
 
         if isinstance(proto, ModelProto):
             self._model = proto
@@ -422,6 +523,9 @@ class ReferenceEvaluator:
             self._map_inputs,
             self._sequence_inputs | self._optional_sequence_inputs,
             self._output_names,
+            _runtime.RuntimeSessionOptions(
+                cpu_execution=self._cpu_execution, cpu_execution_counters=cpu_execution_counters
+            ),
         )
         self._last_ctx = self._ctx
 
@@ -650,6 +754,31 @@ class ReferenceEvaluator:
         :meth:`run`.
         """
         return self._runner.used_kernels()
+
+    @property
+    def cpu_execution_policy(self) -> Any:
+        """Returns the requested CPU execution policy."""
+        return self._runner.cpu_execution_policy
+
+    @property
+    def cpu_execution_resolution(self) -> Any:
+        """Returns the immutable CPU policy resolved for this evaluator."""
+        return self._runner.cpu_execution_resolution
+
+    @property
+    def cpu_execution_identity(self) -> Any:
+        """Returns the sharing key of this evaluator's leased executor."""
+        return self._runner.cpu_execution_identity
+
+    @property
+    def cpu_execution_counters(self) -> Any:
+        """Returns cumulative counters for the shared executor.
+
+        Compatible evaluators lease the same executor, so enabling counters on
+        any lease enables them for that executor and the snapshot includes
+        dispatches from every compatible leaseholder.
+        """
+        return self._runner.cpu_execution_counters
 
     def run(
         self, output_names: list[str] | None, feed_inputs: dict[str, Any]

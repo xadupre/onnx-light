@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/kernels/parallel_for.h"
+#include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
 
@@ -20,6 +21,23 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
+
+class CalibrationExecutorScope {
+public:
+  explicit CalibrationExecutorScope(uint32_t threads)
+      : executor_(Acquire(threads)), scope_(executor_.get()) {}
+
+private:
+  static std::shared_ptr<CpuExecutor> Acquire(uint32_t threads) {
+    CpuExecutionPolicy policy;
+    policy.num_threads = static_cast<int32_t>(threads);
+    policy.affinity_policy = CpuAffinityPolicy::kNone;
+    return GlobalCpuExecutorRegistry().Acquire(policy);
+  }
+
+  std::shared_ptr<CpuExecutor> executor_;
+  CpuExecutorScope scope_;
+};
 
 KernelTuningKey MakeKey() { return {"onnx_light_cpu", "Gemm", "blocked_avx2", 1, Device::kCPU, 3}; }
 
@@ -369,6 +387,7 @@ TEST(KernelCalibration, SelectsReportsAndPublishesCallbacks) {
   options.maximum_duration_ms = 50;
   const uint64_t generation_before = GetKernelTuningRegistry().Snapshot().generation();
 
+  CalibrationExecutorScope executor_scope(3);
   CalibrationBatchReport report = CalibrateRegisteredKernels(selection, options);
 
   ASSERT_EQ(report.calibrated.size(), 1u);
@@ -504,6 +523,7 @@ TEST(KernelCalibration, CallbackFailurePropagatesWithoutPublishingBatch) {
   options.execution = MakeExecution();
   const uint64_t generation_before = GetKernelTuningRegistry().Snapshot().generation();
 
+  CalibrationExecutorScope executor_scope(options.execution->effective_threads);
   EXPECT_THROW(CalibrateRegisteredKernels(selection, options), std::runtime_error);
 
   const KernelTuningRegistrySnapshot after = GetKernelTuningRegistry().Snapshot();
@@ -529,15 +549,19 @@ TEST(KernelCalibration, OnlyMissingSkipsPublishedProfile) {
   selection.library = defaults.key.library;
   CalibrationOptions options;
   options.execution = MakeExecution();
-  EXPECT_EQ(CalibrateRegisteredKernels(selection, options).calibrated.size(), 1u);
+  {
+    CalibrationExecutorScope executor_scope(options.execution->effective_threads);
+    EXPECT_EQ(CalibrateRegisteredKernels(selection, options).calibrated.size(), 1u);
 
-  selection.only_missing = true;
-  CalibrationBatchReport report = CalibrateRegisteredKernels(selection, options);
-  EXPECT_TRUE(report.calibrated.empty());
-  EXPECT_EQ(report.skipped, std::vector<KernelTuningKey>({defaults.key}));
+    selection.only_missing = true;
+    CalibrationBatchReport report = CalibrateRegisteredKernels(selection, options);
+    EXPECT_TRUE(report.calibrated.empty());
+    EXPECT_EQ(report.skipped, std::vector<KernelTuningKey>({defaults.key}));
+  }
 
   options.execution->effective_threads = 2;
-  report = CalibrateRegisteredKernels(selection, options);
+  CalibrationExecutorScope executor_scope(options.execution->effective_threads);
+  CalibrationBatchReport report = CalibrateRegisteredKernels(selection, options);
   EXPECT_EQ(report.calibrated.size(), 1u);
   EXPECT_TRUE(report.skipped.empty());
 }
@@ -553,6 +577,11 @@ TEST(KernelCalibration, RejectsInvalidRegistrationAndOptions) {
 
   CalibrationOptions options;
   options.maximum_threads = 0;
+  EXPECT_THROW(CalibrateRegisteredKernels({}, options), std::invalid_argument);
+
+  options.maximum_threads.reset();
+  options.execution = CpuExecutionDescriptor{platform::GetCpuDescriptor(),
+                                             static_cast<uint32_t>(ParallelForThreadCount()) + 1};
   EXPECT_THROW(CalibrateRegisteredKernels({}, options), std::invalid_argument);
 }
 

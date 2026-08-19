@@ -66,7 +66,8 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
                                                        : DefaultCpuExecutionPolicy(parameters_)),
-      cpu_execution_explicit_(options.cpu_execution.has_value()), verbose_(options.verbose) {
+      cpu_execution_explicit_(options.cpu_execution.has_value()),
+      cpu_execution_counters_(options.cpu_execution_counters), verbose_(options.verbose) {
   SetDeclaredShapes(model.graph());
 }
 
@@ -89,11 +90,15 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions 
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
                                                        : DefaultCpuExecutionPolicy(parameters_)),
-      cpu_execution_explicit_(options.cpu_execution.has_value()), verbose_(options.verbose) {}
+      cpu_execution_explicit_(options.cpu_execution.has_value()),
+      cpu_execution_counters_(options.cpu_execution_counters), verbose_(options.verbose) {}
 
 const std::shared_ptr<CpuExecutor> &RuntimeSession::cpu_executor() {
   if (!cpu_executor_) {
     cpu_executor_ = GlobalCpuExecutorRegistry().Acquire(cpu_execution_);
+    if (cpu_execution_counters_) {
+      cpu_executor_->EnableCounters();
+    }
   }
   return cpu_executor_;
 }

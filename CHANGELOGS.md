@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Made the requested degree of parallelism effective: a runtime session now leases a shared
   CPU executor matching its execution policy and every parallel region its kernels launch
   runs on exactly those participants instead of a process-wide thread pool.
+- Exposed typed CPU execution requests, immutable resolutions, executor sharing identities,
+  and optional dispatch counters through the Python runtime and `ReferenceEvaluator`.
+- Made calibration use an explicitly selected CPU executor and reject execution descriptors
+  that disagree with the active participants.
 
 ### Documentation & CI
 

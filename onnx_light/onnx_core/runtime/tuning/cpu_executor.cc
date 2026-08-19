@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/kernels/parallel_for.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <cstring>
 #include <limits>
@@ -126,6 +127,24 @@ CpuExecutor *&CurrentCpuExecutorSlot() noexcept {
   return current;
 }
 
+CpuExecutor *&ActiveCpuExecutorRegionSlot() noexcept {
+  thread_local CpuExecutor *active = nullptr;
+  return active;
+}
+
+class CpuExecutorRegionScope {
+public:
+  explicit CpuExecutorRegionScope(CpuExecutor *executor) noexcept
+      : previous_(ActiveCpuExecutorRegionSlot()) {
+    ActiveCpuExecutorRegionSlot() = executor;
+  }
+
+  ~CpuExecutorRegionScope() { ActiveCpuExecutorRegionSlot() = previous_; }
+
+private:
+  CpuExecutor *previous_;
+};
+
 } // namespace
 
 CpuExecutor *CurrentCpuExecutor() noexcept { return CurrentCpuExecutorSlot(); }
@@ -149,6 +168,12 @@ CpuExecutorKey MakeCpuExecutorKey(const ResolvedCpuExecutionPolicy &policy) {
 }
 
 struct CpuExecutor::Impl {
+  struct CounterState {
+    std::atomic<uint64_t> dispatches{0};
+    std::atomic<uint64_t> nested_inline_dispatches{0};
+    std::atomic<uint64_t> limited_inline_dispatches{0};
+  };
+
   explicit Impl(ResolvedCpuExecutionPolicy resolved)
       : policy(std::move(resolved)), executor_key(MakeCpuExecutorKey(policy)),
         process_id(CurrentProcessId()) {
@@ -174,6 +199,9 @@ struct CpuExecutor::Impl {
   CpuExecutorKey executor_key;
   uint64_t process_id;
   std::unique_ptr<ThreadPool> pool;
+  std::mutex counters_mutex;
+  std::unique_ptr<CounterState> counters_storage;
+  std::atomic<CounterState *> counters{nullptr};
 };
 
 CpuExecutor::CpuExecutor(ResolvedCpuExecutionPolicy policy)
@@ -186,6 +214,33 @@ uint32_t CpuExecutor::effective_threads() const noexcept { return impl_->policy.
 const ResolvedCpuExecutionPolicy &CpuExecutor::policy() const noexcept { return impl_->policy; }
 
 const CpuExecutorKey &CpuExecutor::key() const noexcept { return impl_->executor_key; }
+
+void CpuExecutor::EnableCounters() {
+  if (impl_->counters.load(std::memory_order_acquire) != nullptr) {
+    return;
+  }
+  std::lock_guard lock(impl_->counters_mutex);
+  if (impl_->counters_storage == nullptr) {
+    impl_->counters_storage = std::make_unique<Impl::CounterState>();
+    impl_->counters.store(impl_->counters_storage.get(), std::memory_order_release);
+  }
+}
+
+bool CpuExecutor::counters_enabled() const noexcept {
+  return impl_->counters.load(std::memory_order_relaxed) != nullptr;
+}
+
+CpuExecutorCounters CpuExecutor::counters() const noexcept {
+  const Impl::CounterState *counters = impl_->counters.load(std::memory_order_acquire);
+  if (counters == nullptr) {
+    return {};
+  }
+  return CpuExecutorCounters{
+      counters->dispatches.load(std::memory_order_relaxed),
+      counters->nested_inline_dispatches.load(std::memory_order_relaxed),
+      counters->limited_inline_dispatches.load(std::memory_order_relaxed),
+  };
+}
 
 void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, ParallelRangeFn function,
                               uint32_t maximum_participants) {
@@ -202,6 +257,11 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
   if (function == nullptr) {
     throw std::invalid_argument("CpuExecutor ParallelFor function must not be null.");
   }
+  Impl::CounterState *counters = impl_->counters.load(std::memory_order_relaxed);
+  if (counters != nullptr) {
+    counters->dispatches.fetch_add(1, std::memory_order_relaxed);
+  }
+  const bool nested = ActiveCpuExecutorRegionSlot() == this;
   if (impl_->policy.caller_processor.has_value()) {
     std::string error;
     if (!PinCurrentThread(*impl_->policy.caller_processor, error)) {
@@ -216,7 +276,19 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
   const uint32_t participant_limit =
       maximum_participants == 0 ? impl_->policy.effective_threads
                                 : std::min(maximum_participants, impl_->policy.effective_threads);
+  if (nested) {
+    if (counters != nullptr) {
+      counters->nested_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
+    }
+    CpuExecutorRegionScope region_scope(this);
+    function(context, 0, total);
+    return;
+  }
   if (total < grain || participant_limit <= 1) {
+    if (counters != nullptr) {
+      counters->limited_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
+    }
+    CpuExecutorRegionScope region_scope(this);
     function(context, 0, total);
     return;
   }
@@ -224,6 +296,10 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
   const int64_t num_blocks =
       std::min<int64_t>(static_cast<int64_t>(participant_limit), useful_blocks);
   if (num_blocks <= 1) {
+    if (counters != nullptr) {
+      counters->limited_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
+    }
+    CpuExecutorRegionScope region_scope(this);
     function(context, 0, total);
     return;
   }
@@ -236,6 +312,7 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
   };
   impl_->pool->Run(num_blocks, [&range, this](int64_t block_index) {
     CpuExecutorScope block_scope(this);
+    CpuExecutorRegionScope region_scope(this);
     const int64_t begin =
         block_index * range.base_block_size + std::min(block_index, range.extra_blocks);
     const int64_t end = begin + range.base_block_size + (block_index < range.extra_blocks ? 1 : 0);

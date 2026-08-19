@@ -37,6 +37,12 @@
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::runtime::CpuAffinityPolicy;
+using core::runtime::CpuExecutionPolicy;
+using core::runtime::CpuExecutorCounters;
+using core::runtime::CpuExecutorKey;
+using core::runtime::CpuLogicalProcessor;
+using core::runtime::CpuSpinPolicy;
 using core::runtime::ExecuteAction;
 using core::runtime::ExecuteActionKind;
 using core::runtime::ExecutionArena;
@@ -46,6 +52,8 @@ using core::runtime::KernelContext;
 using core::runtime::Map;
 using core::runtime::OpsetId;
 using core::runtime::RawBufferAllocator;
+using core::runtime::ResolvedCpuExecutionPolicy;
+using core::runtime::ResolvedSpinPolicy;
 using core::runtime::RuntimeContext;
 using core::runtime::RuntimeParameters;
 using core::runtime::RuntimeSession;
@@ -497,19 +505,21 @@ public:
   ReferenceEvaluatorRunner(const GraphProto &graph, std::vector<std::string> input_names,
                            std::unordered_set<std::string> map_inputs,
                            std::unordered_set<std::string> sequence_inputs,
-                           std::vector<std::string> output_names)
+                           std::vector<std::string> output_names, RuntimeSessionOptions options)
       : graph_(&graph), input_names_(std::move(input_names)), map_inputs_(std::move(map_inputs)),
         sequence_inputs_(std::move(sequence_inputs)), output_names_(std::move(output_names)),
-        output_names_set_(output_names_.begin(), output_names_.end()) {}
+        output_names_set_(output_names_.begin(), output_names_.end()),
+        options_(std::move(options)) {}
 
   ReferenceEvaluatorRunner(const FunctionProto &function, std::vector<std::string> input_names,
                            std::unordered_set<std::string> map_inputs,
                            std::unordered_set<std::string> sequence_inputs,
-                           std::vector<std::string> output_names)
+                           std::vector<std::string> output_names, RuntimeSessionOptions options)
       : function_(&function), input_names_(std::move(input_names)),
         map_inputs_(std::move(map_inputs)), sequence_inputs_(std::move(sequence_inputs)),
         output_names_(std::move(output_names)),
-        output_names_set_(output_names_.begin(), output_names_.end()) {}
+        output_names_set_(output_names_.begin(), output_names_.end()),
+        options_(std::move(options)) {}
 
   void Reset() {
     session_.reset();
@@ -518,6 +528,26 @@ public:
 
   std::vector<std::string> UsedKernels() const {
     return session_ == nullptr ? std::vector<std::string>() : session_->used_kernels();
+  }
+
+  const CpuExecutionPolicy &CpuExecutionPolicyRequest() {
+    EnsureSession();
+    return session_->cpu_execution_policy();
+  }
+
+  const ResolvedCpuExecutionPolicy &CpuExecutionResolution() {
+    EnsureSession();
+    return session_->cpu_executor()->policy();
+  }
+
+  const CpuExecutorKey &CpuExecutionIdentity() {
+    EnsureSession();
+    return session_->cpu_executor()->key();
+  }
+
+  CpuExecutorCounters CpuExecutionCounters() {
+    EnsureSession();
+    return session_->cpu_executor()->counters();
   }
 
   nb::list Run(RuntimeContext &rt, nb::object requested_outputs, nb::dict feeds,
@@ -604,11 +634,11 @@ private:
       return;
     if (graph_ != nullptr) {
       plan_ = std::make_unique<ExecutionPlan>(*graph_);
-      session_ = std::make_unique<RuntimeSession>(*plan_);
+      session_ = std::make_unique<RuntimeSession>(*plan_, options_);
       session_->SetDeclaredShapes(*graph_);
     } else {
       plan_ = std::make_unique<ExecutionPlan>(*function_);
-      session_ = std::make_unique<RuntimeSession>(*plan_);
+      session_ = std::make_unique<RuntimeSession>(*plan_, options_);
     }
   }
 
@@ -619,6 +649,7 @@ private:
   std::unordered_set<std::string> sequence_inputs_;
   std::vector<std::string> output_names_;
   std::unordered_set<std::string> output_names_set_;
+  RuntimeSessionOptions options_;
   // Keeps borrowed NumPy buffers alive while the persistent RuntimeContext may
   // still expose its input tensors after Run returns.
   std::vector<nb::object> input_owners_;
@@ -1047,34 +1078,131 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "``node``. ``node`` must be one of the nodes the plan was built from "
           "(lookup is by identity); otherwise this is a no-op.");
 
+  nb::enum_<CpuSpinPolicy>(rt_mod, "CpuSpinPolicy", "Worker spin-before-park policy.")
+      .value("ADAPTIVE", CpuSpinPolicy::kAdaptive)
+      .value("FIXED_ITERATIONS", CpuSpinPolicy::kFixedIterations)
+      .value("FIXED_DURATION", CpuSpinPolicy::kFixedDuration)
+      .value("PARK_IMMEDIATELY", CpuSpinPolicy::kParkImmediately);
+
+  nb::enum_<CpuAffinityPolicy>(rt_mod, "CpuAffinityPolicy", "CPU participant placement policy.")
+      .value("NONE", CpuAffinityPolicy::kNone)
+      .value("PHYSICAL_CORES", CpuAffinityPolicy::kPhysicalCores)
+      .value("PERFORMANCE_CORES", CpuAffinityPolicy::kPerformanceCores)
+      .value("PHYSICAL_THEN_SMT", CpuAffinityPolicy::kPhysicalThenSmt)
+      .value("EXPLICIT", CpuAffinityPolicy::kExplicit);
+
+  nb::class_<CpuLogicalProcessor>(rt_mod, "CpuLogicalProcessor",
+                                  "Stable operating-system logical processor identifier.")
+      .def(nb::init<>())
+      .def(nb::init<uint32_t, uint16_t>(), nb::arg("id"), nb::arg("group") = 0)
+      .def_rw("id", &CpuLogicalProcessor::id)
+      .def_rw("group", &CpuLogicalProcessor::group);
+
+  nb::class_<CpuExecutionPolicy>(rt_mod, "CpuExecutionPolicy",
+                                 "Mutable requested per-session CPU execution policy.")
+      .def(nb::init<>())
+      .def_rw("num_threads", &CpuExecutionPolicy::num_threads)
+      .def_rw("spin_policy", &CpuExecutionPolicy::spin_policy)
+      .def_rw("spin_budget", &CpuExecutionPolicy::spin_budget)
+      .def_rw("affinity_policy", &CpuExecutionPolicy::affinity_policy)
+      .def_rw("cpu_set", &CpuExecutionPolicy::cpu_set)
+      .def_rw("allow_nested_parallelism", &CpuExecutionPolicy::allow_nested_parallelism);
+
+  nb::class_<ResolvedSpinPolicy>(rt_mod, "ResolvedSpinPolicy",
+                                 "Immutable resolved spin-before-park behavior.")
+      .def_prop_ro("policy", [](const ResolvedSpinPolicy &spin) { return spin.policy; })
+      .def_prop_ro("iterations", [](const ResolvedSpinPolicy &spin) { return spin.iterations; })
+      .def_prop_ro("duration_ns", [](const ResolvedSpinPolicy &spin) { return spin.duration_ns; });
+
+  nb::class_<ResolvedCpuExecutionPolicy>(
+      rt_mod, "ResolvedCpuExecutionPolicy",
+      "Immutable CPU execution policy resolved against process-visible topology.")
+      .def_prop_ro("request",
+                   [](const ResolvedCpuExecutionPolicy &policy) { return policy.request; })
+      .def_prop_ro(
+          "effective_threads",
+          [](const ResolvedCpuExecutionPolicy &policy) { return policy.effective_threads; })
+      .def_prop_ro("caller_processor",
+                   [](const ResolvedCpuExecutionPolicy &policy) { return policy.caller_processor; })
+      .def_prop_ro(
+          "worker_processors",
+          [](const ResolvedCpuExecutionPolicy &policy) { return policy.worker_processors; })
+      .def_prop_ro("uses_smt",
+                   [](const ResolvedCpuExecutionPolicy &policy) { return policy.uses_smt; })
+      .def_prop_ro(
+          "uses_efficiency_cores",
+          [](const ResolvedCpuExecutionPolicy &policy) { return policy.uses_efficiency_cores; })
+      .def_prop_ro("spin", [](const ResolvedCpuExecutionPolicy &policy) { return policy.spin; })
+      .def_prop_ro(
+          "allow_nested_parallelism",
+          [](const ResolvedCpuExecutionPolicy &policy) { return policy.allow_nested_parallelism; })
+      .def_prop_ro("diagnostics",
+                   [](const ResolvedCpuExecutionPolicy &policy) { return policy.diagnostics; });
+
+  nb::class_<CpuExecutorKey>(rt_mod, "CpuExecutorKey",
+                             "Immutable behavior key used to share compatible executors.")
+      .def_prop_ro("effective_threads",
+                   [](const CpuExecutorKey &key) { return key.effective_threads; })
+      .def_prop_ro("caller_processor",
+                   [](const CpuExecutorKey &key) { return key.caller_processor; })
+      .def_prop_ro("worker_processors",
+                   [](const CpuExecutorKey &key) { return key.worker_processors; })
+      .def_prop_ro("spin", [](const CpuExecutorKey &key) { return key.spin; })
+      .def_prop_ro("explicit_no_affinity",
+                   [](const CpuExecutorKey &key) { return key.explicit_no_affinity; })
+      .def_prop_ro("allow_nested_parallelism",
+                   [](const CpuExecutorKey &key) { return key.allow_nested_parallelism; });
+
+  nb::class_<CpuExecutorCounters>(rt_mod, "CpuExecutorCounters",
+                                  "Snapshot of optional executor dispatch counters.")
+      .def_prop_ro("dispatches",
+                   [](const CpuExecutorCounters &counters) { return counters.dispatches; })
+      .def_prop_ro(
+          "nested_inline_dispatches",
+          [](const CpuExecutorCounters &counters) { return counters.nested_inline_dispatches; })
+      .def_prop_ro("limited_inline_dispatches", [](const CpuExecutorCounters &counters) {
+        return counters.limited_inline_dispatches;
+      });
+
+  rt_mod.def("resolve_cpu_execution_policy", &core::runtime::ResolveCpuExecutionPolicy,
+             nb::arg("policy"),
+             "Validates and resolves a requested policy against process-visible topology.");
+
   // RuntimeSessionOptions — bundled construction knobs for RuntimeSession.
   nb::class_<RuntimeSessionOptions>(
       rt_mod, "RuntimeSessionOptions",
       "Bundled construction options for :class:`RuntimeSession`, grouping the "
-      "per-session knobs (:attr:`parameters`, :attr:`verbose`, :attr:`check_shapes`, "
-      ":attr:`allow_external_output_allocators`) so they can be passed as a single "
-      "``options`` argument instead of individual keyword arguments.")
+      "per-session CPU policy and runtime knobs.")
       .def(
           "__init__",
-          [](RuntimeSessionOptions *self, nb::object parameters_obj, int verbose, bool check_shapes,
-             bool allow_external_output_allocators) {
+          [](RuntimeSessionOptions *self, nb::object parameters_obj,
+             std::optional<CpuExecutionPolicy> cpu_execution, bool cpu_execution_counters,
+             int verbose, bool check_shapes, bool allow_external_output_allocators) {
             RuntimeParameters parameters = parameters_obj.is_none()
                                                ? RuntimeParameters()
                                                : nb::cast<RuntimeParameters>(parameters_obj);
             new (self) RuntimeSessionOptions{
                 .parameters = std::move(parameters),
+                .cpu_execution = std::move(cpu_execution),
+                .cpu_execution_counters = cpu_execution_counters,
                 .verbose = verbose,
                 .check_shapes = check_shapes,
                 .allow_external_output_allocators = allow_external_output_allocators,
             };
           },
-          nb::kw_only(), nb::arg("parameters").none() = nb::none(), nb::arg("verbose") = 0,
-          nb::arg("check_shapes") = false, nb::arg("allow_external_output_allocators") = false,
+          nb::kw_only(), nb::arg("parameters").none() = nb::none(),
+          nb::arg("cpu_execution").none() = nb::none(), nb::arg("cpu_execution_counters") = false,
+          nb::arg("verbose") = 0, nb::arg("check_shapes") = false,
+          nb::arg("allow_external_output_allocators") = false,
           "Builds the options bundle. All fields are keyword-only and optional; each "
           "defaults to the same value :class:`RuntimeSession` uses when the field is "
           "omitted.")
       .def_rw("parameters", &RuntimeSessionOptions::parameters,
               "Model-independent execution parameters applied to the nodes the session runs.")
+      .def_rw("cpu_execution", &RuntimeSessionOptions::cpu_execution,
+              "Explicit CPU execution policy, or ``None`` to derive it from parameters.")
+      .def_rw("cpu_execution_counters", &RuntimeSessionOptions::cpu_execution_counters,
+              "Enables optional executor dispatch counters.")
       .def_rw("verbose", &RuntimeSessionOptions::verbose,
               "Verbosity level requested for :func:`RuntimeSession.run`.")
       .def_rw("check_shapes", &RuntimeSessionOptions::check_shapes,
@@ -1100,21 +1228,24 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(
           "__init__",
           [](RuntimeSession *self, const ModelProto &model, nb::object parameters_obj, int verbose,
-             bool check_shapes, bool allow_external_output_allocators) {
+             std::optional<CpuExecutionPolicy> cpu_execution, bool check_shapes,
+             bool allow_external_output_allocators) {
             RuntimeParameters parameters = parameters_obj.is_none()
                                                ? RuntimeParameters()
                                                : nb::cast<RuntimeParameters>(parameters_obj);
             new (self) RuntimeSession(
                 model, core::runtime::RuntimeSessionOptions{
                            .parameters = std::move(parameters),
+                           .cpu_execution = std::move(cpu_execution),
                            .verbose = verbose,
                            .check_shapes = check_shapes,
                            .allow_external_output_allocators = allow_external_output_allocators,
                        });
           },
           nb::arg("model"), nb::kw_only(), nb::arg("parameters").none() = nb::none(),
-          nb::arg("verbose") = 0, nb::arg("check_shapes") = false,
-          nb::arg("allow_external_output_allocators") = false, nb::keep_alive<1, 2>(),
+          nb::arg("verbose") = 0, nb::arg("cpu_execution").none() = nb::none(),
+          nb::arg("check_shapes") = false, nb::arg("allow_external_output_allocators") = false,
+          nb::keep_alive<1, 2>(),
           "Builds a session over an :class:`ExecutionPlan` the session owns, "
           "built from ``model.graph``. Use this when no precomputed plan is "
           "available: ``model`` (and the graph it owns) must outlive the session; "
@@ -1122,21 +1253,24 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(
           "__init__",
           [](RuntimeSession *self, const ExecutionPlan &plan, nb::object parameters_obj,
-             int verbose, bool check_shapes, bool allow_external_output_allocators) {
+             int verbose, std::optional<CpuExecutionPolicy> cpu_execution, bool check_shapes,
+             bool allow_external_output_allocators) {
             RuntimeParameters parameters = parameters_obj.is_none()
                                                ? RuntimeParameters()
                                                : nb::cast<RuntimeParameters>(parameters_obj);
             new (self) RuntimeSession(
                 plan, core::runtime::RuntimeSessionOptions{
                           .parameters = std::move(parameters),
+                          .cpu_execution = std::move(cpu_execution),
                           .verbose = verbose,
                           .check_shapes = check_shapes,
                           .allow_external_output_allocators = allow_external_output_allocators,
                       });
           },
           nb::arg("plan"), nb::kw_only(), nb::arg("parameters").none() = nb::none(),
-          nb::arg("verbose") = 0, nb::arg("check_shapes") = false,
-          nb::arg("allow_external_output_allocators") = false, nb::keep_alive<1, 2>(),
+          nb::arg("verbose") = 0, nb::arg("cpu_execution").none() = nb::none(),
+          nb::arg("check_shapes") = false, nb::arg("allow_external_output_allocators") = false,
+          nb::keep_alive<1, 2>(),
           "Builds a session over ``plan``. ``plan`` (and the graph / function it "
           "was built from) must outlive the session; this binding keeps ``plan`` "
           "alive for at least as long as the session.")
@@ -1162,6 +1296,25 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_prop_ro("parameters", &RuntimeSession::parameters,
                    "Model-independent execution parameters applied to the nodes this "
                    "session runs.")
+      .def_prop_ro("cpu_execution_policy", &RuntimeSession::cpu_execution_policy,
+                   "Requested CPU execution policy.")
+      .def_prop_ro(
+          "cpu_execution_resolution",
+          [](RuntimeSession &session) -> const ResolvedCpuExecutionPolicy & {
+            return session.cpu_executor()->policy();
+          },
+          nb::rv_policy::reference_internal,
+          "Immutable CPU execution policy resolved for this session.")
+      .def_prop_ro(
+          "cpu_execution_identity",
+          [](RuntimeSession &session) -> const CpuExecutorKey & {
+            return session.cpu_executor()->key();
+          },
+          nb::rv_policy::reference_internal, "Behavior key shared by compatible executor leases.")
+      .def_prop_ro(
+          "cpu_execution_counters",
+          [](RuntimeSession &session) { return session.cpu_executor()->counters(); },
+          "Snapshot of optional executor dispatch counters.")
       .def_prop_ro("check_shapes", &RuntimeSession::check_shapes,
                    "When ``True``, :func:`run` validates that the concrete shape of every "
                    "tensor carrying a declared (possibly symbolic) shape — the graph "
@@ -1202,32 +1355,44 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "__init__",
           [](ReferenceEvaluatorRunner *self, const GraphProto &graph,
              std::vector<std::string> input_names, std::unordered_set<std::string> map_inputs,
-             std::unordered_set<std::string> sequence_inputs,
-             std::vector<std::string> output_names) {
-            new (self)
-                ReferenceEvaluatorRunner(graph, std::move(input_names), std::move(map_inputs),
-                                         std::move(sequence_inputs), std::move(output_names));
+             std::unordered_set<std::string> sequence_inputs, std::vector<std::string> output_names,
+             RuntimeSessionOptions options) {
+            new (self) ReferenceEvaluatorRunner(graph, std::move(input_names),
+                                                std::move(map_inputs), std::move(sequence_inputs),
+                                                std::move(output_names), std::move(options));
           },
           nb::arg("graph"), nb::arg("input_names"), nb::arg("map_inputs"),
-          nb::arg("sequence_inputs"), nb::arg("output_names"), nb::keep_alive<1, 2>())
+          nb::arg("sequence_inputs"), nb::arg("output_names"),
+          nb::arg("options") = RuntimeSessionOptions{}, nb::keep_alive<1, 2>())
       .def(
           "__init__",
           [](ReferenceEvaluatorRunner *self, const FunctionProto &function,
              std::vector<std::string> input_names, std::unordered_set<std::string> map_inputs,
-             std::unordered_set<std::string> sequence_inputs,
-             std::vector<std::string> output_names) {
-            new (self)
-                ReferenceEvaluatorRunner(function, std::move(input_names), std::move(map_inputs),
-                                         std::move(sequence_inputs), std::move(output_names));
+             std::unordered_set<std::string> sequence_inputs, std::vector<std::string> output_names,
+             RuntimeSessionOptions options) {
+            new (self) ReferenceEvaluatorRunner(function, std::move(input_names),
+                                                std::move(map_inputs), std::move(sequence_inputs),
+                                                std::move(output_names), std::move(options));
           },
           nb::arg("function"), nb::arg("input_names"), nb::arg("map_inputs"),
-          nb::arg("sequence_inputs"), nb::arg("output_names"), nb::keep_alive<1, 2>())
+          nb::arg("sequence_inputs"), nb::arg("output_names"),
+          nb::arg("options") = RuntimeSessionOptions{}, nb::keep_alive<1, 2>())
       .def("run", &ReferenceEvaluatorRunner::Run, nb::arg("runtime_context"),
            nb::arg("output_names").none() = nb::none(), nb::arg("feed_inputs"),
            nb::arg("release_intermediates") = true,
            "Runs one inference entirely through the native input/execution/output path.")
       .def("used_kernels", &ReferenceEvaluatorRunner::UsedKernels,
            "Returns the normalized identifiers of the kernels used by the cached session.")
+      .def_prop_ro("cpu_execution_policy", &ReferenceEvaluatorRunner::CpuExecutionPolicyRequest,
+                   nb::rv_policy::reference_internal, "Requested CPU execution policy.")
+      .def_prop_ro("cpu_execution_resolution", &ReferenceEvaluatorRunner::CpuExecutionResolution,
+                   nb::rv_policy::reference_internal,
+                   "Immutable CPU execution policy resolved for the cached session.")
+      .def_prop_ro("cpu_execution_identity", &ReferenceEvaluatorRunner::CpuExecutionIdentity,
+                   nb::rv_policy::reference_internal,
+                   "Behavior key shared by compatible executor leases.")
+      .def_prop_ro("cpu_execution_counters", &ReferenceEvaluatorRunner::CpuExecutionCounters,
+                   "Snapshot of optional executor dispatch counters.")
       .def("reset", &ReferenceEvaluatorRunner::Reset,
            "Drops the cached execution plan and RuntimeSession so kernels resolve again.");
 

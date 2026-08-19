@@ -62,6 +62,8 @@ struct RuntimeSessionOptions {
   /// pinned workers, another spin policy, or nested parallelism supplies the
   /// policy explicitly.
   std::optional<CpuExecutionPolicy> cpu_execution = std::nullopt;
+  /// Enables optional executor dispatch counters for inspection.
+  bool cpu_execution_counters = false;
   int verbose = 0;
   bool check_shapes = false;
   /// When ``false`` (the default), :cpp:func:`RuntimeSession::Run` verifies
@@ -424,6 +426,8 @@ private:
   /// with a derived policy nested inside another session's run reuses the
   /// enclosing executor instead of leasing a second pool.
   bool cpu_execution_explicit_ = false;
+  /// Whether this session enables optional executor dispatch counters.
+  bool cpu_execution_counters_ = false;
   /// Lease on the shared executor, acquired on first use by
   /// :cpp:func:`cpu_executor`.
   std::shared_ptr<CpuExecutor> cpu_executor_;

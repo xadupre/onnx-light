@@ -224,6 +224,15 @@ class TestPatternOptimization(ExtTestCase):
             "LeakyRelu",
             "MaxRelu",
             "SoftmaxCrossEntropyLossCast",
+            "RotaryEmbedding",
+            "RotaryConcatPart",
+            "FunctionCausalMask",
+            "FunctionCausalMaskMulAdd",
+            "FunctionCosSinCache",
+            "FunctionHalfRotaryEmbedding",
+            "FunctionAttention",
+            "FunctionAttentionGQA",
+            "AttentionGQA",
         )
         registered = optim.standard_pattern_names()
         for name in names:

@@ -157,6 +157,10 @@ requests:
      - MatMul, normalization, and activation rewrites
      - Ports 9 matrix-multiplication and 11 normalization/activation patterns
        with rewrite/rejection tests, registration, and Python bindings.
+   * - `PR #4567 <https://github.com/xadupre/onnx-light/pull/4567>`_
+     - Rotary embedding and attention rewrites
+     - Ports the final 9 rotary, causal-mask, cache, attention-function, and
+       grouped-query-attention patterns.
 
 Graph structure on Graph
 ++++++++++++++++++++++++
@@ -711,8 +715,8 @@ The upstream default list currently contains 104 enabled patterns.
 the last four ``Expand`` patterns, and the tensor-layout/algebra batch adds 30
 active rewrites plus the upstream-compatible
 ``ShapeBasedShapeShapeAddPattern`` placeholder. PR #4566 adds the 20
-matrix-multiplication and normalization/activation patterns, leaving only
-the 9 attention patterns for the final pull request.
+matrix-multiplication and normalization/activation patterns, and PR #4567
+adds the final 9 attention patterns.
 They are grouped into cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;
@@ -778,7 +782,7 @@ requests. Commented-out, non-default upstream patterns are outside this plan.
    ``LayerNormalizationScalePattern``, ``RMSNormalizationPattern``,
    ``RMSNormalizationMulPattern``, ``GeluPattern``, ``LeakyReluPattern``,
    ``MaxReluPattern``, and ``SoftmaxCrossEntropyLossCastPattern``.
-#. **Rotary embedding and attention functions (9 patterns).**
+#. **Rotary embedding and attention functions (done in PR #4567).**
    ``RotaryEmbeddingPattern``, ``RotaryConcatPartPattern``,
    ``FunctionCausalMaskPattern``, ``FunctionCausalMaskMulAddPattern``,
    ``FunctionCosSinCachePattern``, ``FunctionHalfRotaryEmbeddingPattern``,
@@ -844,3 +848,6 @@ Pull requests
   remaining layout, algebra, reduction, and graph-identity patterns.
 * `PR #4566 <https://github.com/xadupre/onnx-light/pull/4566>`_: matrix
   multiplication, normalization, and activation patterns.
+* `PR #4567 <https://github.com/xadupre/onnx-light/pull/4567>`_: rotary
+  embedding, causal masks, caches, attention functions, and grouped-query
+  attention.

@@ -225,6 +225,9 @@ set(ONNX_PY_BACKEND_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onn
 set(ONNX_PY_GRADIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_gradient.cc")
 
 file(GLOB_RECURSE ONNX_CORE_SOURCES CONFIGURE_DEPENDS "${ONNX_CORE_PATH}/*.cc")
+set(ONNX_RUNTIME_REGISTRY_SOURCE
+    "${ONNX_CORE_PATH}/runtime/kernels/kernel_dispatch_table.cc")
+list(REMOVE_ITEM ONNX_CORE_SOURCES "${ONNX_RUNTIME_REGISTRY_SOURCE}")
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_SHAPE_SOURCES CONFIGURE_DEPENDS "${ONNX_SHAPE_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_PATTERNS_SOURCES CONFIGURE_DEPENDS "${ONNX_PATTERNS_PATH}/*.cc")
@@ -289,14 +292,17 @@ set(ONNX_LIGHT_LIB_ALL_SOURCES
 # Pure C++ consumers (ONNX_LIGHT_BUILD_PYTHON=OFF) keep the lighter static
 # variant they used to ship.
 #
-# Windows and macOS keep the five non-proto libs STATIC even when
+# Windows and macOS keep the five large non-proto libs STATIC even when
 # ONNX_LIGHT_BUILD_PYTHON=ON: on Windows ``WINDOWS_EXPORT_ALL_SYMBOLS`` does
 # not export data symbols (e.g. the ``kDoc_*`` arrays), which would break
 # the C++ test executable and any cross-DLL data references, and on macOS
 # nanobind extensions are compiled with hidden visibility so RTTI for
 # exception types defined in those libs would not match across .dylib
-# boundaries. The original ``lib_onnx_proto`` SHARED variant predates this
-# change and is preserved on all platforms.
+# boundaries. Process-wide runtime registry state is different: every Python
+# extension must observe one copy. ``lib_onnx_runtime_registry`` therefore
+# remains a small SHARED library on every Python platform while pure C++
+# builds keep it STATIC. The original ``lib_onnx_proto`` SHARED variant
+# predates this change and is also preserved on all Python platforms.
 if(ONNX_LIGHT_BUILD_PYTHON)
   set(_lib_onnx_proto_type SHARED)
 else()
@@ -306,6 +312,11 @@ if(ONNX_LIGHT_BUILD_PYTHON AND UNIX AND NOT APPLE)
   set(_onnx_light_lib_type SHARED)
 else()
   set(_onnx_light_lib_type STATIC)
+endif()
+if(ONNX_LIGHT_BUILD_PYTHON)
+  set(_onnx_runtime_registry_type SHARED)
+else()
+  set(_onnx_runtime_registry_type STATIC)
 endif()
 
 add_library(lib_onnx_proto ${_lib_onnx_proto_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_PROTO_ALL_SOURCES})
@@ -378,6 +389,21 @@ endif()
 # also provides the graph-node helpers (CollectExternalInputs, CollectNodeInputs,
 # CollectRemainingInputs) so that lib_onnx_kernels depends on lib_onnx_core
 # directly instead of lib_onnx_manipulations.
+add_library(lib_onnx_runtime_registry ${_onnx_runtime_registry_type}
+    ${ONNX_RUNTIME_REGISTRY_SOURCE})
+if(WIN32 AND _onnx_runtime_registry_type STREQUAL "SHARED")
+  set_target_properties(lib_onnx_runtime_registry PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+target_include_directories(lib_onnx_runtime_registry PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
+    $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
+    $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
+)
+set_property(TARGET lib_onnx_runtime_registry PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_compile_features(lib_onnx_runtime_registry PUBLIC cxx_std_20)
+target_link_libraries(lib_onnx_runtime_registry PUBLIC lib_onnx_proto)
+
 add_library(lib_onnx_core ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_CORE_SOURCES})
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
   set_target_properties(lib_onnx_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -390,7 +416,7 @@ target_include_directories(lib_onnx_core PUBLIC
 )
 set_property(TARGET lib_onnx_core PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_core PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_core PUBLIC lib_onnx_proto)
+target_link_libraries(lib_onnx_core PUBLIC lib_onnx_proto lib_onnx_runtime_registry)
 
 # Builds onnx_manipulations library.
 # This library bundles the lightweight ModelProto/GraphProto manipulation
@@ -804,6 +830,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   if(_lib_onnx_proto_type STREQUAL "SHARED")
     list(APPEND _onnxpy_rpath_targets lib_onnx_proto)
   endif()
+  list(APPEND _onnxpy_rpath_targets lib_onnx_runtime_registry)
   if(_onnx_light_lib_type STREQUAL "SHARED")
     list(APPEND _onnxpy_rpath_targets lib_onnx_lib lib_onnx_manipulations lib_onnx_op
         lib_onnx_shape lib_onnx_patterns)
@@ -1122,6 +1149,9 @@ if(ONNX_LIGHT_BUILD_PYTHON)
         LIBRARY DESTINATION onnx_light/onnx_py
         RUNTIME DESTINATION onnx_light/onnx_py)
   endif()
+  install(TARGETS lib_onnx_runtime_registry
+      LIBRARY DESTINATION onnx_light/onnx_py
+      RUNTIME DESTINATION onnx_light/onnx_py)
   if(_onnx_light_lib_type STREQUAL "SHARED")
     install(TARGETS
         lib_onnx_core
@@ -1150,7 +1180,8 @@ if(ONNX_LIGHT_INSTALL)
   # Splitting into two install(TARGETS) calls keeps the same exported
   # ``onnx_lightTargets`` set when ONNX_LIGHT_BUILD_KERNELS=OFF while
   # avoiding references to targets that were never created.
-  install(TARGETS lib_onnx_proto lib_onnx_core lib_onnx_manipulations lib_onnx_lib
+  install(TARGETS lib_onnx_proto lib_onnx_runtime_registry lib_onnx_core
+      lib_onnx_manipulations lib_onnx_lib
       lib_onnx_op lib_onnx_shape lib_onnx_patterns
     EXPORT onnx_lightTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"

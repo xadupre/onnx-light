@@ -28,7 +28,10 @@ std::string DispatchKey(const std::string &domain, const std::string &op_type) {
 // ``":<device>"`` for any other device to disambiguate.
 std::string DispatchKey(const std::string &domain, const std::string &op_type,
                         symbolic::Device device) {
-  return DispatchKey(domain, op_type) + symbolic::DeviceKeySuffix(device);
+  if (device == symbolic::Device::kUndefined || device == symbolic::Device::kCPU) {
+    return DispatchKey(domain, op_type);
+  }
+  return DispatchKey(domain, op_type) + ":" + std::to_string(static_cast<int32_t>(device));
 }
 
 // Returns the mutable dispatch table singleton. Only

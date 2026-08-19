@@ -49,9 +49,14 @@ class TestCMakeCppStandard(unittest.TestCase):
             (
                 r"(?s)set\(ONNX_BLAKE3_SOURCES.*?"
                 r"set_property\(SOURCE \$\{ONNX_BLAKE3_SOURCES\} APPEND PROPERTY "
+                r'COMPILE_OPTIONS "/WX-"\).*?'
+                r"set_property\(SOURCE \$\{ONNX_BLAKE3_SOURCES\} APPEND PROPERTY "
                 r'COMPILE_OPTIONS "-Wno-error"\)'
             ),
-            msg="Vendored BLAKE3 sources must keep their warnings non-fatal.",
+            msg=(
+                "Vendored BLAKE3 sources must keep their warnings non-fatal on "
+                "both MSVC (/WX-) and GCC/Clang (-Wno-error)."
+            ),
         )
 
     def test_examples_cmake_use_cpp20(self):

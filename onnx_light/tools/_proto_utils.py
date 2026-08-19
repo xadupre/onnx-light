@@ -15,6 +15,9 @@ import importlib.util
 import contextlib
 from typing import TYPE_CHECKING, Any
 
+import ml_dtypes
+import numpy as np
+
 _shape_inference: Any = None
 
 if importlib.util.find_spec("onnx_light.onnx_py._onnxpycore") is not None:
@@ -156,6 +159,145 @@ _DTYPE_NAMES = {
 def _dtype_name(elem_type: int) -> str:
     """Returns the textual name of a ``TensorProto.DataType`` value."""
     return _DTYPE_NAMES.get(int(elem_type), f"dtype{int(elem_type)}")
+
+
+def _dtype_enum_name(elem_type: int) -> str:
+    """Returns the ``TensorProto.DataType`` enum name (e.g. ``"FLOAT"``).
+
+    Returns ``"UNDEFINED"`` for unknown or unset element types, so the result
+    can always be pasted after ``onnx.TensorProto.``.
+    """
+    name = _DTYPE_NAMES.get(int(elem_type))
+    return name.upper() if name else "UNDEFINED"
+
+
+# Mapping ``TensorProto.DataType`` -> numpy (or ``ml_dtypes``) scalar type.
+_DTYPE_TO_NUMPY = {
+    1: np.float32,
+    2: np.uint8,
+    3: np.int8,
+    4: np.uint16,
+    5: np.int16,
+    6: np.int32,
+    7: np.int64,
+    9: np.bool_,
+    10: np.float16,
+    11: np.float64,
+    12: np.uint32,
+    13: np.uint64,
+    14: np.complex64,
+    15: np.complex128,
+    16: ml_dtypes.bfloat16,
+    17: ml_dtypes.float8_e4m3fn,
+    18: ml_dtypes.float8_e4m3fnuz,
+    19: ml_dtypes.float8_e5m2,
+    20: ml_dtypes.float8_e5m2fnuz,
+    21: ml_dtypes.uint4,
+    22: ml_dtypes.int4,
+    23: ml_dtypes.float4_e2m1fn,
+}
+
+# Typed repeated field holding the values of a ``TensorProto`` (when the data
+# is not stored in ``raw_data``).
+_DTYPE_TO_FIELD = {
+    1: "float_data",
+    2: "int32_data",
+    3: "int32_data",
+    4: "int32_data",
+    5: "int32_data",
+    6: "int32_data",
+    7: "int64_data",
+    9: "int32_data",
+    10: "int32_data",
+    11: "double_data",
+    12: "uint64_data",
+    13: "uint64_data",
+    14: "float_data",
+    15: "double_data",
+}
+
+
+def _tensor_to_numpy(tensor: Any) -> np.ndarray:
+    """Returns the content of a ``TensorProto``-like object as a numpy array.
+
+    Handles the ``raw_data`` layout as well as the typed repeated fields, and
+    decodes the small float / sub-byte types packed in ``int32_data`` (or
+    ``raw_data``) via :mod:`ml_dtypes`.
+    """
+    data_type = int(getattr(tensor, "data_type", 0) or 0)
+    dims = [int(d) for d in _iter(getattr(tensor, "dims", None))]
+
+    if data_type == 8:  # STRING
+        strings = [_s(v) for v in _iter(getattr(tensor, "string_data", None))]
+        array = np.array(strings, dtype=object)
+        return array.reshape(dims) if dims else array.reshape(())
+
+    if data_type not in _DTYPE_TO_NUMPY:
+        raise NotImplementedError(f"Unable to decode a tensor with data_type={data_type}.")
+    np_dtype = _DTYPE_TO_NUMPY[data_type]
+
+    raw = getattr(tensor, "raw_data", b"") or b""
+    if raw:
+        array = np.frombuffer(raw, dtype=np_dtype)
+        return array.reshape(dims) if dims else array.reshape(())
+
+    field = _DTYPE_TO_FIELD.get(data_type)
+    if field is None:
+        raise NotImplementedError(
+            f"Unable to decode a tensor with data_type={data_type} and no raw_data."
+        )
+    values = list(_iter(getattr(tensor, field, None)))
+    if data_type in (10, 16, 17, 18, 19, 20, 21, 22, 23):
+        # Small float / sub-byte types are packed as their raw bit pattern in
+        # ``int32_data``; reinterpret the bits instead of casting the value.
+        storage = {10: np.uint16, 16: np.uint16}.get(data_type, np.uint8)
+        array = np.array(values, dtype=storage).view(np_dtype)
+    else:
+        array = np.array(values, dtype=np_dtype)
+    return array.reshape(dims) if dims else array.reshape(())
+
+
+def _shape_tuple(value_info: Any) -> tuple | None:
+    """Returns the shape of a ``ValueInfoProto`` as a tuple, or ``None``.
+
+    Each dimension is rendered as its ``dim_param`` string, its ``dim_value``
+    integer, or ``None`` when neither is set.
+    """
+    type_proto = getattr(value_info, "type", None)
+    tensor_type = getattr(type_proto, "tensor_type", None)
+    if tensor_type is None:
+        return None
+    shape = getattr(tensor_type, "shape", None)
+    if shape is None:
+        return None
+    result: list = []
+    for dim in _iter(getattr(shape, "dim", None)):
+        dim_param = _s(getattr(dim, "dim_param", "") or "")
+        dim_value = int(getattr(dim, "dim_value", 0) or 0)
+        if dim_param:
+            result.append(dim_param)
+        elif dim_value != 0:
+            result.append(dim_value)
+        else:
+            result.append(None)
+    return tuple(result)
+
+
+def _elem_type(value_info: Any) -> int:
+    """Returns the element type of a ``ValueInfoProto``."""
+    type_proto = getattr(value_info, "type", None)
+    tensor_type = getattr(type_proto, "tensor_type", None)
+    return int(getattr(tensor_type, "elem_type", 0) or 0)
+
+
+def _opsets(model_or_graph: Any) -> list[tuple[str, int]]:
+    """Returns the ``[(domain, version), ...]`` opset imports of a model."""
+    result: list[tuple[str, int]] = []
+    for opset in _iter(getattr(model_or_graph, "opset_import", None)):
+        domain = _s(getattr(opset, "domain", "") or "")
+        version = int(getattr(opset, "version", 0) or 0)
+        result.append((domain, version))
+    return result
 
 
 def _iter(seq: Any) -> Iterable[Any]:

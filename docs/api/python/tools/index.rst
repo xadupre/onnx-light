@@ -10,6 +10,7 @@ onnx_light.tools
     schema_comparison
     schema_diff
     svg
+    translate
 
 .. automodule:: onnx_light.tools
     :members:

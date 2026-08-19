@@ -92,6 +92,15 @@ public:
   /// Returns the immutable registry-sharing key.
   const CpuExecutorKey &key() const noexcept;
 
+  /**
+   * Returns the process-local identity of this executor instance.
+   *
+   * Compatible sessions that share one lease observe the same identifier.
+   * The identifier is diagnostic only and must not be persisted as a tuning
+   * or cache key.
+   */
+  uint64_t instance_id() const noexcept;
+
   /// Enables optional dispatch counters. Repeated calls preserve existing counts.
   void EnableCounters();
 

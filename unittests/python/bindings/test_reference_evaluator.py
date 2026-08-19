@@ -88,6 +88,21 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(evaluator.cpu_execution_identity.effective_threads, 2)
         self.assertEqual(evaluator.cpu_execution_resolution.diagnostics, [])
 
+    def test_cpu_executor_instance_identity_tracks_sharing(self):
+        model = parser.parse_model(_ABS_MODEL_SRC)
+        first = ReferenceEvaluator(
+            model, cpu_execution={"num_threads": 1, "affinity_policy": "none"}
+        )
+        compatible = ReferenceEvaluator(
+            model, cpu_execution={"num_threads": 1, "affinity_policy": "none"}
+        )
+        incompatible = ReferenceEvaluator(
+            model, cpu_execution={"num_threads": 2, "affinity_policy": "none"}
+        )
+
+        self.assertEqual(first.cpu_executor_instance_id, compatible.cpu_executor_instance_id)
+        self.assertNotEqual(first.cpu_executor_instance_id, incompatible.cpu_executor_instance_id)
+
     def test_cpu_execution_policy_rejects_unknown_keys_and_values(self):
         model = parser.parse_model(_ABS_MODEL_SRC)
         with self.assertRaisesRegex(ValueError, "Unknown cpu_execution keys"):
@@ -524,6 +539,14 @@ class TestReferenceEvaluator(ExtTestCase):
             d = ev.as_dict()
             for key in ("action", "kind", "name", "data_type", "shape"):
                 self.assertIn(key, d)
+
+        run_events = [ev for ev in events if ev.action == runtime.RuntimeEventAction.kRunNode]
+        self.assertNotEqual(run_events, [])
+        for ev in run_events:
+            self.assertEqual(ev.cpu_executor_instance_id, sess.cpu_executor_instance_id)
+            self.assertEqual(
+                ev.cpu_effective_threads, sess.cpu_execution_resolution.effective_threads
+            )
 
     def test_verbose_prints_node_progress(self):
         code = f"""

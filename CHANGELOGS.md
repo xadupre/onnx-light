@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   and optional dispatch counters through the Python runtime and `ReferenceEvaluator`.
 - Made calibration use an explicitly selected CPU executor and reject execution descriptors
   that disagree with the active participants.
+- Tagged node runtime events with the exact shared CPU executor instance and its effective
+  participants, and fixed future prepared execution to the same executor ownership contract.
 
 ### Documentation & CI
 

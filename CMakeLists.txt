@@ -305,6 +305,18 @@ set(ONNX_BLAKE3_SOURCES
     "${ONNX_BLAKE3_PATH}/blake3_hash.cc")
 set_source_files_properties(${ONNX_BLAKE3_SOURCES} PROPERTIES COMPILE_DEFINITIONS
     "BLAKE3_USE_TBB;BLAKE3_NO_SSE2;BLAKE3_NO_SSE41;BLAKE3_NO_AVX2;BLAKE3_NO_AVX512;BLAKE3_USE_NEON=0")
+# BLAKE3 is vendored upstream code: its warnings cannot be fixed here, so keep
+# them non-fatal like the other third-party sources (see
+# onnx_light_disable_werror). The portable-only configuration used above makes
+# `num_cvs` in compress_subtree_to_parent_node() unused once NDEBUG turns the
+# assert reading it into a no-op, which Clang reports as -Wunused-variable.
+if(ONNX_LIGHT_WERROR)
+  if(MSVC)
+    set_property(SOURCE ${ONNX_BLAKE3_SOURCES} APPEND PROPERTY COMPILE_OPTIONS "/WX-")
+  else()
+    set_property(SOURCE ${ONNX_BLAKE3_SOURCES} APPEND PROPERTY COMPILE_OPTIONS "-Wno-error")
+  endif()
+endif()
 
 set(ONNX_LIGHT_PROTO_ALL_SOURCES
     ${ONNX_LIGHT_SOURCES}

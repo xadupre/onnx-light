@@ -44,6 +44,15 @@ class TestCMakeCppStandard(unittest.TestCase):
         )
         self.assertIn("function(onnx_light_disable_werror)", content)
         self.assertIn("onnx_light_disable_werror(gtest gtest_main gmock gmock_main)", content)
+        self.assertRegex(
+            content,
+            (
+                r"(?s)set\(ONNX_BLAKE3_SOURCES.*?"
+                r"set_property\(SOURCE \$\{ONNX_BLAKE3_SOURCES\} APPEND PROPERTY "
+                r'COMPILE_OPTIONS "-Wno-error"\)'
+            ),
+            msg="Vendored BLAKE3 sources must keep their warnings non-fatal.",
+        )
 
     def test_examples_cmake_use_cpp20(self):
         root = Path(__file__).resolve().parents[2]

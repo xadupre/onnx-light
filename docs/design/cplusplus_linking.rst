@@ -90,8 +90,9 @@ can be set on the ``cmake`` command line with ``-D<NAME>=<VALUE>``.
       - Treat C/C++ compiler warnings as errors (``/WX`` on MSVC,
         ``-Werror`` on GCC/Clang, on top of the ``-Wall -Wextra`` baseline
         those compilers always receive).  Third-party sources built inside
-        the tree (googletest, nanobind, upstream ``onnx``) are excluded, and
-        Clang's ``-Wunused-lambda-capture`` stays a plain warning.
+        the tree (googletest, nanobind, vendored BLAKE3, upstream ``onnx``)
+        are excluded, and Clang's ``-Wunused-lambda-capture`` stays a plain
+        warning.
         Turn ``OFF`` when building with a toolchain that emits warnings
         onnx-light does not control.
     * - ``ONNX_HARDENING``

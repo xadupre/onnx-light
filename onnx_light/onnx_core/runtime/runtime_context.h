@@ -32,6 +32,10 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
+// Forward declaration: a RuntimeContext only carries a non-owning view on the
+// CPU executor leased by the session (see onnx_core/runtime/tuning/cpu_executor.h).
+class CpuExecutor;
+
 /**
  * Name-keyed map of tensors carrying both the graph inputs/initializers
  * and the intermediate values produced by previously executed nodes.
@@ -425,6 +429,17 @@ public:
   /// clock reads, and value decoding — eliminating the profiling overhead
   /// from the hot path.
   bool events_enabled() const noexcept { return events_enabled_; }
+
+  /// Returns the non-owning view on the CPU executor the running session
+  /// leased, or ``nullptr`` when the context is used outside a session run.
+  /// Kernels that need an explicit executor dispatch through it instead of a
+  /// process-wide pool.
+  CpuExecutor *cpu_executor() const noexcept { return cpu_executor_; }
+
+  /// Attaches the CPU executor a session leased for its run. The context does
+  /// not own the executor: the session keeps its lease alive for the whole
+  /// run and detaches the view afterwards.
+  void set_cpu_executor(CpuExecutor *executor) noexcept { cpu_executor_ = executor; }
 
   /// Returns the construction-time verbosity level used by
   /// :cpp:func:`RunNode` to emit execution progress logs while the graph is
@@ -883,6 +898,8 @@ private:
   ShapeMap shapes_;
   bool events_enabled_ = false;
   int verbose_ = 0;
+  /// Non-owning view on the CPU executor leased by the running session.
+  CpuExecutor *cpu_executor_ = nullptr;
   bool release_intermediates_ = false;
   int64_t current_node_index_ = -1;
   /// Index of the control-flow node in the parent graph currently being

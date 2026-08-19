@@ -4,6 +4,7 @@
 
 #include "onnx_core/runtime/kernels/parallel_for.h"
 
+#include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/runtime_parameters.h"
 
 #include <algorithm>
@@ -33,6 +34,9 @@ std::chrono::steady_clock::duration SpinDuration(uint64_t duration_ns) noexcept 
 } // namespace
 
 int64_t ParallelForThreadCount() noexcept {
+  if (const CpuExecutor *executor = CurrentCpuExecutor(); executor != nullptr) {
+    return static_cast<int64_t>(executor->effective_threads());
+  }
   static const int64_t thread_count = RuntimeParameters().EffectiveNumThreads();
   return thread_count;
 }
@@ -253,6 +257,14 @@ void ParallelForErased(int64_t total, int64_t grain_size, void *task_ctx, Parall
   }
   EXT_ENFORCE_INVALID(grain_size > 0, "ParallelFor grain_size must be positive, got ", grain_size,
                       ".");
+  // Inside a session run the leased executor is installed on the calling
+  // thread; dispatching through it is what makes the session policy effective.
+  // The process-wide pool below only serves standalone callers that run
+  // outside any executor scope.
+  if (CpuExecutor *executor = CurrentCpuExecutor(); executor != nullptr) {
+    executor->ParallelFor(total, grain_size, task_ctx, task_fn);
+    return;
+  }
   const int64_t max_threads = ParallelForThreadCount();
   if (total < grain_size || max_threads <= 1) {
     task_fn(task_ctx, static_cast<int64_t>(0), total);

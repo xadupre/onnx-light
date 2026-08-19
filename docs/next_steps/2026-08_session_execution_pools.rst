@@ -33,6 +33,20 @@ here; the full sequence is tracked in the `Implementation sequence`_ table.
        resolved policies share a persistent pool; incompatible policies remain
        isolated, the last lease stops workers immediately, serial policies
        create no workers, and inherited executors are rejected after ``fork``.
+   * - Pool PR03
+     - Session and runtime wiring
+     - ``RuntimeSessionOptions`` accepts a ``CpuExecutionPolicy``, defaulting to
+       the policy derived from ``RuntimeParameters::num_threads``.
+       ``RuntimeSession`` leases a shared executor before preparing kernels,
+       installs it on the running thread and on ``RuntimeContext`` for the whole
+       run, and reports it through ``cpu_executor()``. Worker startup now
+       follows the lease, so reusing a session amortizes it while rebuilding a
+       session for every inference pays it again. Portable ``ParallelFor``
+       and ``ParallelForThreadCount`` dispatch through the installed executor,
+       so a session's requested participants are the participants its kernels
+       observe and the process-wide pool is no longer reached from a session
+       run. Kernel tuning descriptors report the leased executor's effective
+       threads.
 
 Objective
 +++++++++
@@ -231,6 +245,20 @@ The existing free ``ParallelFor`` API can remain as a compatibility wrapper,
 but runtime kernels must migrate to the context executor. A hidden global
 fallback must not remain in a path that claims to obey session parameters.
 
+Pool PR03 implements this with a thread-scoped view. ``RuntimeSession::Run``
+installs its leased executor through ``CpuExecutorScope`` and on
+``RuntimeContext::cpu_executor`` for the duration of the run, and every
+participant of a parallel region keeps that view installed, so a nested region
+runs inline on the same executor. The free ``ParallelFor`` dispatches through
+the installed executor and only falls back to the process-wide pool for
+standalone callers running outside any session.
+
+Session wiring derives its default policy from
+``RuntimeParameters::num_threads`` and requests ``CpuAffinityPolicy::kNone``,
+which keeps worker placement identical to the pre-policy behavior. Pinned
+defaults are a placement change that belongs with the measurements of Pool
+PR07; a caller that wants them supplies an explicit policy today.
+
 Nesting and concurrency
 +++++++++++++++++++++++
 
@@ -416,7 +444,7 @@ Implementation sequence
        requested thread counts equal observed participants; global fallback is
        absent from runtime kernels.
      - PR02
-     - Pending
+     - Done
    * - Pool PR04
      - ``onnx-light``: tuning, Python, and inspection.
      - Calibration uses the active executor; Python exposes policy and

@@ -60,11 +60,13 @@ public:
 
 // Exception class used for handling errors in type and shape inference
 
-class InferenceError final : public std::runtime_error {
+class ONNX_LIGHT_LIB_API InferenceError final : public std::runtime_error {
 public:
   using std::runtime_error::runtime_error;
 
   explicit InferenceError(const std::string &message) : std::runtime_error(message) {}
+
+  ~InferenceError() override;
 
   const char *what() const noexcept override {
     if (!expanded_message_.empty()) {

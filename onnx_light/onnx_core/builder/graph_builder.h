@@ -81,7 +81,7 @@ enum class ProtoKind {
 
 /// Thrown when :cpp:class:`GraphBuilder` is used incorrectly, for example when
 /// a name is reused or the opset version of a domain cannot be resolved.
-class BuilderError : public std::runtime_error {
+class ONNX_LIGHT_CORE_API BuilderError : public std::runtime_error {
 public:
   /// Constructs an error with the message and its call-site source location.
   explicit BuilderError(const std::string &message,
@@ -89,6 +89,8 @@ public:
       : std::runtime_error(std::string(location.file_name()) + ":" +
                            std::to_string(location.line()) + ": " + message),
         source_file_(location.file_name()), source_line_(location.line()) {}
+
+  ~BuilderError() override;
 
   /// Returns the source file where the error was created.
   const std::string &SourceFile() const noexcept { return source_file_; }

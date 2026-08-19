@@ -58,6 +58,8 @@ struct open_how {
 
 namespace ONNX_LIGHT_NAMESPACE::checker {
 
+ValidationError::~ValidationError() = default;
+
 #define enforce_has_field(proto, field)                                                            \
   do {                                                                                             \
     if (!proto.has_##field()) {                                                                    \

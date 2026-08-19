@@ -34,7 +34,7 @@ namespace ONNX_LIGHT_NAMESPACE::version_conversion {
  * }
  * @endcode
  */
-struct ConvertError final : public std::runtime_error {
+struct ONNX_LIGHT_LIB_API ConvertError final : public std::runtime_error {
   using std::runtime_error::runtime_error;
 
   /**
@@ -42,6 +42,8 @@ struct ConvertError final : public std::runtime_error {
    * @param message Human-readable description of the conversion failure.
    */
   explicit ConvertError(const std::string &message) : std::runtime_error(message) {}
+
+  ~ConvertError() override;
 };
 
 /**

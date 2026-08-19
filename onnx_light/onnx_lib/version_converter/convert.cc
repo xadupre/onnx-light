@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_lib/version_converter/convert.h"
+#include "onnx_lib/version_converter/errors.h"
 
 #include <iostream>
 #include <memory>
@@ -11,6 +12,8 @@
 #include "onnx_lib/common/ir_pb_converter.h"
 
 namespace ONNX_LIGHT_NAMESPACE::version_conversion {
+
+ConvertError::~ConvertError() = default;
 
 ModelProto ConvertVersion(const ModelProto &mp_in, int target_version) {
   // Get initial_opsetid from mp_in

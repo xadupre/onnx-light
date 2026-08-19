@@ -218,7 +218,7 @@ inline constexpr const char *ToTypeString(TensorType type) {
 
 /// Thrown when a LightOpSchema is constructed with invalid arguments, or when
 /// ::ONNX_LIGHT_NAMESPACE::core::schema::LightOpSchema::Verify rejects a node.
-class SchemaError final : public std::runtime_error {
+class ONNX_LIGHT_CORE_API SchemaError final : public std::runtime_error {
 public:
   /// Constructs a SchemaError with the given diagnostic message.
   explicit SchemaError(const std::string &message) : std::runtime_error(message) {}

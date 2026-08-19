@@ -20,6 +20,8 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
+BuilderError::~BuilderError() = default;
+
 using ::onnx_light::core::shapes::kUnknownOpsetVersion;
 using ::onnx_light::core::shapes::ShapesContext;
 using ::onnx_light::core::symbolic::SymTensorFromTensorProto;

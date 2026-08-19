@@ -19,7 +19,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::builder {
 using PatternFactory = std::function<std::unique_ptr<PatternOptimization>()>;
 
 /// Reports an invalid or duplicate pattern registration.
-class PatternRegistrationError : public std::runtime_error {
+class ONNX_LIGHT_CORE_API PatternRegistrationError : public std::runtime_error {
 public:
   /// Constructs an error with the given diagnostic message.
   explicit PatternRegistrationError(const std::string &message) : std::runtime_error(message) {}

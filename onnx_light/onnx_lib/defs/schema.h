@@ -99,7 +99,7 @@ class OpSchema;
 using ContextDependentFunctionBodyBuilder =
     std::function<bool(const FunctionBodyBuildContext &, const OpSchema &, FunctionProto &)>;
 
-class SchemaError final : public std::runtime_error {
+class ONNX_LIGHT_LIB_API SchemaError final : public std::runtime_error {
 public:
   using std::runtime_error::runtime_error;
 

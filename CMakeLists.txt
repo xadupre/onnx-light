@@ -372,6 +372,9 @@ endif()
 # CollectRemainingInputs) so that lib_onnx_kernels depends on lib_onnx_core
 # directly instead of lib_onnx_manipulations.
 add_library(lib_onnx_core ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_CORE_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED")
+  target_compile_definitions(lib_onnx_core PUBLIC ONNX_LIGHT_SHARED_LIBS)
+endif()
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
   set_target_properties(lib_onnx_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
@@ -409,6 +412,9 @@ target_link_libraries(lib_onnx_manipulations PUBLIC lib_onnx_core)
 
 # Builds onnx_lib library.
 add_library(lib_onnx_lib ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_LIB_ALL_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED")
+  target_compile_definitions(lib_onnx_lib PUBLIC ONNX_LIGHT_SHARED_LIBS)
+endif()
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
   set_target_properties(lib_onnx_lib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()

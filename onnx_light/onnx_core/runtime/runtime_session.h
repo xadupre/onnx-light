@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_core/runtime/tuning/runtime_parameters.h"
 #include "onnx_core/symbolic/sym_tensor.h"
@@ -53,6 +54,14 @@ namespace runtime {
  */
 struct RuntimeSessionOptions {
   RuntimeParameters parameters = {};
+  /// Requested CPU execution policy. When empty, the session derives its
+  /// policy from :cpp:var:`RuntimeParameters::num_threads` and leaves worker
+  /// placement to the operating system
+  /// (:cpp:enumerator:`CpuAffinityPolicy::kNone`), which preserves the
+  /// behavior of sessions built before the policy existed. A caller that wants
+  /// pinned workers, another spin policy, or nested parallelism supplies the
+  /// policy explicitly.
+  std::optional<CpuExecutionPolicy> cpu_execution = std::nullopt;
   int verbose = 0;
   bool check_shapes = false;
   /// When ``false`` (the default), :cpp:func:`RuntimeSession::Run` verifies
@@ -193,6 +202,31 @@ public:
   /// parallelism, :cpp:var:`RuntimeParameters::num_threads`) applied to the
   /// nodes this session runs.
   const RuntimeParameters &parameters() const noexcept { return parameters_; }
+
+  /// Returns the CPU execution policy this session requests, either the one
+  /// supplied at construction or the one derived from
+  /// :cpp:func:`parameters`.
+  const CpuExecutionPolicy &cpu_execution_policy() const noexcept { return cpu_execution_; }
+
+  /// Returns the shared CPU executor this session leases, acquiring it from
+  /// :cpp:func:`GlobalCpuExecutorRegistry` on first use. Sessions whose
+  /// resolved policies are compatible share one executor; incompatible
+  /// policies get distinct pools. :cpp:func:`Run` installs it on the calling
+  /// thread so every parallel region a kernel launches uses exactly these
+  /// participants. Like the rest of the session state, the first acquisition
+  /// is not synchronized: a session is prepared and run by one thread at a
+  /// time, while distinct sessions may run concurrently on a shared executor.
+  ///
+  /// Returns:
+  ///   The leased executor, never null.
+  const std::shared_ptr<CpuExecutor> &cpu_executor();
+
+  /// Returns whether the CPU execution policy was supplied by the caller
+  /// rather than derived from :cpp:func:`parameters`. A session with a derived
+  /// policy that runs inside another session's run (a subgraph, a model-local
+  /// function, or any nested session) reuses the executor already installed on
+  /// the :cpp:class:`RuntimeContext` instead of leasing a second pool.
+  bool has_explicit_cpu_execution_policy() const noexcept { return cpu_execution_explicit_; }
 
   /// Verbosity level requested for :cpp:func:`Run`. When non-zero, it overrides
   /// :cpp:func:`RuntimeContext::verbose` for this session's progress lines
@@ -383,6 +417,16 @@ private:
   /// outside the session's common allocator.
   bool allow_external_output_allocators_ = false;
   RuntimeParameters parameters_;
+  /// Requested CPU execution policy, derived from :cpp:member:`parameters_`
+  /// when the caller did not supply one.
+  CpuExecutionPolicy cpu_execution_;
+  /// Whether :cpp:member:`cpu_execution_` was requested explicitly. A session
+  /// with a derived policy nested inside another session's run reuses the
+  /// enclosing executor instead of leasing a second pool.
+  bool cpu_execution_explicit_ = false;
+  /// Lease on the shared executor, acquired on first use by
+  /// :cpp:func:`cpu_executor`.
+  std::shared_ptr<CpuExecutor> cpu_executor_;
   /// Verbosity level used by :cpp:func:`Run` when non-zero.
   int verbose_ = 0;
   /// Allocator observed on ``rt`` the first time :cpp:func:`Run` executes;

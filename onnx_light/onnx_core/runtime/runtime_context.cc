@@ -363,6 +363,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.functions() = functions_;
   child.tensors() = tensors_;
   child.sequences() = sequences_;
+  child.set_cpu_executor(cpu_executor_);
   child.set_current_subgraph(current_node_index_, attr_name);
   return child;
 }
@@ -377,6 +378,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                                         .device = device_,
                                     });
   child.functions() = functions_;
+  child.set_cpu_executor(cpu_executor_);
   return child;
 }
 

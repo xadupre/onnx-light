@@ -16,6 +16,42 @@
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
+namespace {
+
+/// Derives the CPU policy a session requests when the caller supplied none.
+/// The requested participant count comes from
+/// :cpp:var:`RuntimeParameters::num_threads` (negative values mean "topology
+/// default", as documented there) and worker placement is left to the
+/// operating system so wiring the executor does not change where the workers
+/// of an existing session run.
+CpuExecutionPolicy DefaultCpuExecutionPolicy(const RuntimeParameters &parameters) {
+  CpuExecutionPolicy policy;
+  policy.num_threads = parameters.num_threads < 0 ? 0 : parameters.num_threads;
+  policy.affinity_policy = CpuAffinityPolicy::kNone;
+  return policy;
+}
+
+/// Installs an executor on the calling thread and on ``rt`` for a run, and
+/// detaches both when the run ends, including when a kernel throws.
+class SessionExecutorScope {
+public:
+  SessionExecutorScope(RuntimeContext &rt, CpuExecutor *executor) noexcept
+      : rt_(rt), previous_(rt.cpu_executor()), scope_(executor) {
+    rt_.set_cpu_executor(executor);
+  }
+
+  SessionExecutorScope(const SessionExecutorScope &) = delete;
+  SessionExecutorScope &operator=(const SessionExecutorScope &) = delete;
+
+  ~SessionExecutorScope() { rt_.set_cpu_executor(previous_); }
+
+private:
+  RuntimeContext &rt_;
+  CpuExecutor *previous_;
+  CpuExecutorScope scope_;
+};
+
+} // namespace
 
 RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
     : RuntimeSession(model, RuntimeSessionOptions{
@@ -27,12 +63,16 @@ RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
 RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions options)
     : default_plan_(model.graph()), plan_(default_plan_), check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
-      parameters_(std::move(options.parameters)), verbose_(options.verbose) {
+      parameters_(std::move(options.parameters)),
+      cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
+                                                       : DefaultCpuExecutionPolicy(parameters_)),
+      cpu_execution_explicit_(options.cpu_execution.has_value()), verbose_(options.verbose) {
   SetDeclaredShapes(model.graph());
 }
 
 RuntimeSession::RuntimeSession(const GraphProto &graph, int verbose)
-    : default_plan_(graph), plan_(default_plan_), verbose_(verbose) {
+    : default_plan_(graph), plan_(default_plan_),
+      cpu_execution_(DefaultCpuExecutionPolicy(parameters_)), verbose_(verbose) {
   SetDeclaredShapes(graph);
 }
 
@@ -46,7 +86,17 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions options)
     : plan_(plan), check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
-      parameters_(std::move(options.parameters)), verbose_(options.verbose) {}
+      parameters_(std::move(options.parameters)),
+      cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
+                                                       : DefaultCpuExecutionPolicy(parameters_)),
+      cpu_execution_explicit_(options.cpu_execution.has_value()), verbose_(options.verbose) {}
+
+const std::shared_ptr<CpuExecutor> &RuntimeSession::cpu_executor() {
+  if (!cpu_executor_) {
+    cpu_executor_ = GlobalCpuExecutorRegistry().Acquire(cpu_execution_);
+  }
+  return cpu_executor_;
+}
 
 void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
   // Records the declared shape of every tensor-typed value the graph exposes
@@ -147,8 +197,14 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
       static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                 std::chrono::steady_clock::now() - snapshot_start)
                                 .count());
-  const CpuExecutionDescriptor tuning_execution{
-      platform::GetCpuDescriptor(), static_cast<uint32_t>(parameters_.EffectiveNumThreads())};
+  // Tuning describes the participants that actually run the graph, so the
+  // descriptor reports the effective threads of the executor installed for
+  // this run (the session's lease, or the enclosing session's executor when
+  // this session is nested).
+  const CpuExecutor *tuning_executor =
+      rt.cpu_executor() != nullptr ? rt.cpu_executor() : cpu_executor().get();
+  const CpuExecutionDescriptor tuning_execution{platform::GetCpuDescriptor(),
+                                                tuning_executor->effective_threads()};
   struct PendingTuning {
     PreparedKernel *kernel;
     KernelTuningKey key;
@@ -310,6 +366,15 @@ void RuntimeSession::VerifyDeclaredShape(const std::string &name, const RuntimeC
 }
 
 void RuntimeSession::Run(RuntimeContext &rt) {
+  // Lease the shared executor before any kernel is prepared or executed and
+  // install it for the whole run: every parallel region a kernel launches then
+  // uses this session's resolved policy instead of a hidden process-wide pool.
+  // A nested session (a subgraph body, a model-local function, ...) that did
+  // not receive an explicit policy keeps running on the executor the enclosing
+  // session installed, so nesting never wakes a second pool.
+  const bool inherits_executor = !cpu_execution_explicit_ && rt.cpu_executor() != nullptr;
+  const SessionExecutorScope executor_scope(rt, inherits_executor ? rt.cpu_executor()
+                                                                  : cpu_executor().get());
   // Kernels are resolved against ``rt`` on the first run and cached; later
   // runs reuse the same built instances without redoing the per-node
   // dispatch lookup or re-constructing concrete kernels.

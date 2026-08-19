@@ -121,7 +121,21 @@ struct ParallelRange {
   int64_t extra_blocks = 0;
 };
 
+CpuExecutor *&CurrentCpuExecutorSlot() noexcept {
+  thread_local CpuExecutor *current = nullptr;
+  return current;
+}
+
 } // namespace
+
+CpuExecutor *CurrentCpuExecutor() noexcept { return CurrentCpuExecutorSlot(); }
+
+CpuExecutorScope::CpuExecutorScope(CpuExecutor *executor) noexcept
+    : previous_(CurrentCpuExecutorSlot()) {
+  CurrentCpuExecutorSlot() = executor;
+}
+
+CpuExecutorScope::~CpuExecutorScope() { CurrentCpuExecutorSlot() = previous_; }
 
 CpuExecutorKey MakeCpuExecutorKey(const ResolvedCpuExecutionPolicy &policy) {
   return CpuExecutorKey{
@@ -194,6 +208,10 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
       throw std::runtime_error("CpuExecutor caller affinity failed: " + error);
     }
   }
+  // Every participant runs with this executor installed so a nested parallel
+  // region dispatches here (and therefore runs inline) instead of waking an
+  // unrelated process-wide pool.
+  CpuExecutorScope caller_scope(this);
 
   const uint32_t participant_limit =
       maximum_participants == 0 ? impl_->policy.effective_threads
@@ -216,7 +234,8 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
       total / num_blocks,
       total % num_blocks,
   };
-  impl_->pool->Run(num_blocks, [&range](int64_t block_index) {
+  impl_->pool->Run(num_blocks, [&range, this](int64_t block_index) {
+    CpuExecutorScope block_scope(this);
     const int64_t begin =
         block_index * range.base_block_size + std::min(block_index, range.extra_blocks);
     const int64_t end = begin + range.base_block_size + (block_index < range.extra_blocks ? 1 : 0);

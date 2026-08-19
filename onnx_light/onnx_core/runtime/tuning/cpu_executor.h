@@ -106,6 +106,39 @@ private:
 };
 
 /**
+ * Returns the executor installed on the calling thread.
+ *
+ * A session installs its leased executor for the duration of a run so portable
+ * helpers dispatch through it instead of a hidden process-wide pool.
+ *
+ * Returns:
+ *   The installed executor, or ``nullptr`` when the thread runs outside any
+ *   executor scope.
+ */
+CpuExecutor *CurrentCpuExecutor() noexcept;
+
+/**
+ * Installs a non-owning executor view on the calling thread.
+ *
+ * The previous view is restored when the scope ends, so nested scopes and
+ * subgraph executions compose. The scope does not extend the executor
+ * lifetime: the installer must keep its lease alive.
+ */
+class CpuExecutorScope {
+public:
+  /// Installs ``executor`` (possibly ``nullptr``) on the calling thread.
+  explicit CpuExecutorScope(CpuExecutor *executor) noexcept;
+
+  CpuExecutorScope(const CpuExecutorScope &) = delete;
+  CpuExecutorScope &operator=(const CpuExecutorScope &) = delete;
+
+  ~CpuExecutorScope();
+
+private:
+  CpuExecutor *previous_;
+};
+
+/**
  * Leases compatible shared executors from a process-owned bounded registry.
  *
  * The registry stores weak references. Compatible callers receive the same

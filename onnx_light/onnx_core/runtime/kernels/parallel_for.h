@@ -51,7 +51,11 @@ struct ThreadPoolOptions {
 
 /// Returns the number of participating threads :cpp:func:`ParallelFor` may use.
 ///
-/// Resolves to one participant per detected physical core, falling back to the
+/// When a :cpp:class:`CpuExecutor` is installed on the calling thread (see
+/// :cpp:class:`CpuExecutorScope`), the executor's effective participant count
+/// is returned so the reported value describes the workers that actually run
+/// the graph. Outside any executor scope it resolves to one participant per
+/// detected physical core, falling back to the
 /// detected logical-core count and then ``std::thread::hardware_concurrency()``.
 /// The result is always ``>= 1`` and counts the calling thread, which always
 /// participates in the work.
@@ -175,10 +179,11 @@ void ParallelForErased(int64_t total, int64_t grain_size, void *task_ctx, Parall
  * Splits the half-open range ``[0, total)`` into contiguous blocks and invokes
  * ``fn(begin, end)`` once per block.
  *
- * Blocks are processed on the shared :cpp:func:`GlobalThreadPool` (up to
- * :cpp:func:`ParallelForThreadCount` participants, including the calling
- * thread). When ``total`` is below ``grain_size`` or only one thread is
- * available the whole range is processed inline on the calling thread, so
+ * Blocks are processed on the :cpp:class:`CpuExecutor` installed on the calling
+ * thread, or on the shared :cpp:func:`GlobalThreadPool` when the caller runs
+ * outside any executor scope (up to :cpp:func:`ParallelForThreadCount`
+ * participants, including the calling thread). When ``total`` is below ``grain_size`` or only one
+ * thread is available the whole range is processed inline on the calling thread, so
  * ``fn`` must be safe to call once with the full range. The three-argument
  * overload accepts a kernel-specific ``grain_size``; the two-argument overload
  * below uses :cpp:var:`kParallelForGrainSize`. Every

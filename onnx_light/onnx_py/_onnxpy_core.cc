@@ -255,7 +255,7 @@ void AddOnnxPyExpressions(nb::module_ &m) {
              })
         .def(
             "__eq__",
-            [from_dim](const expr::DimRange &r, nb::object other) -> bool {
+            [](const expr::DimRange &r, nb::object other) -> bool {
               if (!nb::isinstance<expr::DimRange>(other))
                 return false;
               const auto &o = nb::cast<const expr::DimRange &>(other);

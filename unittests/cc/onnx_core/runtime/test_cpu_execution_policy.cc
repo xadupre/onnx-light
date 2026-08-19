@@ -248,14 +248,21 @@ TEST(CpuExecutionPolicy, PhysicalCoreAffinityAssignsEveryWorker) {
   if (resolved.effective_threads <= 1) {
     GTEST_SKIP() << "fewer than two process-visible physical cores";
   }
-  EXPECT_EQ(resolved.worker_processors.size(), static_cast<size_t>(resolved.effective_threads - 1));
 #if defined(__linux__)
+  EXPECT_EQ(resolved.worker_processors.size(), static_cast<size_t>(resolved.effective_threads - 1));
   std::set<std::pair<uint32_t, uint32_t>> worker_cores;
   for (CpuLogicalProcessor processor : resolved.worker_processors) {
     const std::optional<std::pair<uint32_t, uint32_t>> core = ProcessorCore(processor);
     ASSERT_TRUE(core.has_value());
     EXPECT_TRUE(worker_cores.insert(*core).second);
   }
+#else
+  EXPECT_TRUE(resolved.worker_processors.empty());
+  const bool has_topology_diagnostic = std::any_of(
+      resolved.diagnostics.begin(), resolved.diagnostics.end(), [](const std::string &message) {
+        return message.find("per-core processor topology unavailable") != std::string::npos;
+      });
+  EXPECT_TRUE(has_topology_diagnostic);
 #endif
 }
 

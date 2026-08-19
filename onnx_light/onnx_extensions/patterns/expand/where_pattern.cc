@@ -4,7 +4,10 @@
 
 #include "onnx_extensions/patterns/expand/where_pattern.h"
 
+#include <cmath>
+#include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "onnx_core/builder/graph_graph.h"
@@ -43,6 +46,36 @@ bool ReadUnsqueezeAxes(core::builder::GraphGraph &graph, const NodeProto &node,
     return false;
   }
   return ReadIntegerTensor(*axes_tensor, axes);
+}
+
+bool IsFiniteScalarConstant(core::builder::GraphGraph &graph, const std::string &name) {
+  if (!graph.IsConstantScalar(name, false)) {
+    return false;
+  }
+  const TensorProto *tensor = graph.GetComputedConstant(name);
+  double value = 0.0;
+  return tensor != nullptr && ReadScalarAsDouble(*tensor, value) && std::isfinite(value);
+}
+
+bool IsRankZeroConstant(core::builder::GraphGraph &graph, const std::string &name) {
+  const TensorProto *tensor = graph.GetComputedConstant(name);
+  if (tensor != nullptr) {
+    return tensor->dims_size() == 0;
+  }
+  const NodeProto *producer = graph.NodeBefore(name);
+  if (producer != nullptr && IsDefaultOp(*producer, "Constant") &&
+      (FindAttribute(*producer, "value_int") != nullptr ||
+       FindAttribute(*producer, "value_float") != nullptr)) {
+    return true;
+  }
+  return graph.HasShape(name) && graph.GetShape(name).Shape().Rank() == 0;
+}
+
+bool EqualPreservesComparedInputRank(core::builder::GraphGraph &graph, const NodeProto &equal) {
+  const std::string &input = equal.input()[0].value();
+  const std::string &output = equal.output()[0].value();
+  return graph.HasShape(input) && graph.HasShape(output) &&
+         graph.GetShape(input).Shape().Rank() == graph.GetShape(output).Shape().Rank();
 }
 
 bool ExtractWhereAddTerms(const NodeProto &then_add, const NodeProto &else_add,
@@ -136,6 +169,52 @@ core::builder::MatchResult UnsqueezeEqualPattern::Match(core::builder::GraphGrap
     return NoMatch(candidate, "candidate is not a default-domain Equal with two inputs");
   }
 
+  if (graph.IsConstantScalar(candidate.input()[1].value(), false)) {
+    if (!IsRankZeroConstant(graph, candidate.input()[1].value()) &&
+        !EqualPreservesComparedInputRank(graph, candidate)) {
+      return NoMatch(candidate,
+                     "the constant is not rank zero and Equal does not preserve the input rank");
+    }
+    const std::vector<const NodeProto *> &equal_consumers =
+        graph.NextNodes(candidate.output()[0].value());
+    if (equal_consumers.size() != 1 || graph.IsUsedMoreThanOnce(candidate.output()[0].value())) {
+      return NoMatch(candidate, "the Equal output is not local to one Unsqueeze");
+    }
+    const NodeProto *equal_unsqueeze = equal_consumers[0];
+    if (!IsDefaultOp(*equal_unsqueeze, "Unsqueeze") || equal_unsqueeze->input_size() != 2 ||
+        equal_unsqueeze->output_size() != 1) {
+      return NoMatch(candidate, "the Equal output is not consumed by an Unsqueeze");
+    }
+
+    const std::vector<const NodeProto *> &input_consumers =
+        graph.NextNodes(candidate.input()[0].value());
+    if (input_consumers.size() != 2) {
+      return NoMatch(candidate, "the compared input does not have Equal and Unsqueeze consumers");
+    }
+    const NodeProto *input_unsqueeze = nullptr;
+    if (input_consumers[0] == &candidate) {
+      input_unsqueeze = input_consumers[1];
+    } else if (input_consumers[1] == &candidate) {
+      input_unsqueeze = input_consumers[0];
+    }
+    if (input_unsqueeze == nullptr || !IsDefaultOp(*input_unsqueeze, "Unsqueeze") ||
+        input_unsqueeze->input_size() != 2 || input_unsqueeze->output_size() != 1) {
+      return NoMatch(candidate, "the other compared-input consumer is not an Unsqueeze");
+    }
+
+    std::vector<int64_t> input_axes;
+    std::vector<int64_t> equal_axes;
+    if (!ReadUnsqueezeAxes(graph, *input_unsqueeze, input_axes) ||
+        !ReadUnsqueezeAxes(graph, *equal_unsqueeze, equal_axes)) {
+      return NoMatch(candidate, "Unsqueeze axes are not constant integer tensors");
+    }
+    if (input_axes != equal_axes) {
+      return NoMatch(candidate, "the sibling and result Unsqueeze axes differ");
+    }
+    return core::builder::MatchResult{
+        this, {input_unsqueeze, &candidate, equal_unsqueeze}, nullptr};
+  }
+
   const NodeProto *left_unsqueeze = graph.NodeBefore(candidate.input()[0].value());
   const NodeProto *right_unsqueeze = graph.NodeBefore(candidate.input()[1].value());
   if (left_unsqueeze == nullptr || right_unsqueeze == nullptr ||
@@ -153,6 +232,12 @@ core::builder::MatchResult UnsqueezeEqualPattern::Match(core::builder::GraphGrap
   if (left_axes != right_axes) {
     return NoMatch(candidate, "the Unsqueeze axes differ");
   }
+  if (!graph.HasShape(left_unsqueeze->input()[0].value()) ||
+      !graph.HasShape(right_unsqueeze->input()[0].value()) ||
+      graph.GetShape(left_unsqueeze->input()[0].value()).Shape().Rank() !=
+          graph.GetShape(right_unsqueeze->input()[0].value()).Shape().Rank()) {
+    return NoMatch(candidate, "the pre-Unsqueeze input ranks are unknown or different");
+  }
   if (graph.IsUsedMoreThanOnce(left_unsqueeze->output()[0].value()) ||
       graph.IsUsedMoreThanOnce(right_unsqueeze->output()[0].value())) {
     return NoMatch(candidate, "an Unsqueeze output is shared");
@@ -166,23 +251,52 @@ utils::RepeatedProtoField<NodeProto>
 UnsqueezeEqualPattern::Apply(core::builder::GraphGraph &graph,
                              const std::vector<const NodeProto *> &nodes) const {
   if (nodes.size() != 3 || nodes[0] == nullptr || nodes[1] == nullptr || nodes[2] == nullptr) {
-    throw BuilderError(
-        "UnsqueezeEqualPattern::Apply expects two Unsqueeze nodes and one Equal node.");
-  }
-  const core::builder::MatchResult verified = Match(graph, *nodes[2]);
-  if (verified.pattern == nullptr || verified.nodes != nodes) {
-    throw BuilderError("UnsqueezeEqualPattern::Apply received an unsafe or inconsistent match.");
+    throw BuilderError("UnsqueezeEqualPattern::Apply expects one Equal and two Unsqueeze nodes.");
   }
 
+  if (IsDefaultOp(*nodes[1], "Equal")) {
+    const core::builder::MatchResult verified = Match(graph, *nodes[1]);
+    if (verified.pattern == nullptr || verified.nodes != nodes) {
+      throw BuilderError("UnsqueezeEqualPattern::Apply received an unsafe upstream match.");
+    }
+    const NodeProto &input_unsqueeze = *nodes[0];
+    const NodeProto &equal = *nodes[1];
+    const NodeProto &equal_unsqueeze = *nodes[2];
+    const std::string name = "UnsqueezeEqualPattern--" + equal.name().value();
+
+    utils::RepeatedProtoField<NodeProto> replacements;
+    replacements.add() = input_unsqueeze;
+    NodeProto replacement =
+        MakeNode("Equal", {input_unsqueeze.output()[0].value(), equal.input()[1].value()},
+                 {equal_unsqueeze.output()[0].value()}, "", name.c_str());
+    if (equal_unsqueeze.has_doc_string()) {
+      replacement.set_doc_string(equal_unsqueeze.doc_string().value());
+    }
+    replacements.push_back(std::move(replacement));
+    return replacements;
+  }
+
+  const core::builder::MatchResult verified = Match(graph, *nodes[2]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError("UnsqueezeEqualPattern::Apply received an unsafe local match.");
+  }
   const NodeProto &left_unsqueeze = *nodes[0];
   const NodeProto &right_unsqueeze = *nodes[1];
   const NodeProto &equal = *nodes[2];
+  core::builder::GraphBuilder &builder = graph.Builder();
   const std::string name = "UnsqueezeEqualPattern--" + equal.name().value();
+  const std::string equal_output = builder.UniqueName(name + "_equal");
 
   utils::RepeatedProtoField<NodeProto> replacements;
   replacements.push_back(
       MakeNode("Equal", {left_unsqueeze.input()[0].value(), right_unsqueeze.input()[0].value()},
-               {equal.output()[0].value()}, "", name.c_str()));
+               {equal_output}, "", (name + "--equal").c_str()));
+  NodeProto unsqueeze = MakeNode("Unsqueeze", {equal_output, left_unsqueeze.input()[1].value()},
+                                 {equal.output()[0].value()}, "", name.c_str());
+  if (equal.has_doc_string()) {
+    unsqueeze.set_doc_string(equal.doc_string().value());
+  }
+  replacements.push_back(std::move(unsqueeze));
   return replacements;
 }
 
@@ -194,6 +308,28 @@ core::builder::MatchResult WhereAddPattern::Match(core::builder::GraphGraph &gra
       candidate.output_size() != 1) {
     return NoMatch(candidate, "candidate is not a default-domain Where with three inputs");
   }
+
+  if (graph.IsConstantScalar(candidate.input()[1].value(), 0.0, false) &&
+      graph.IsConstantScalar(candidate.input()[2].value(), -std::numeric_limits<double>::infinity(),
+                             false)) {
+    const std::vector<const NodeProto *> &consumers =
+        graph.NextNodes(candidate.output()[0].value());
+    if (consumers.size() == 1 && !graph.IsUsedMoreThanOnce(candidate.output()[0].value())) {
+      const NodeProto *add = consumers[0];
+      if (IsDefaultOp(*add, "Add") && add->input_size() == 2 && add->output_size() == 1) {
+        const bool first_is_where = add->input()[0].value() == candidate.output()[0].value();
+        const bool second_is_where = add->input()[1].value() == candidate.output()[0].value();
+        if (first_is_where != second_is_where) {
+          const std::string &addend =
+              first_is_where ? add->input()[1].value() : add->input()[0].value();
+          if (IsFiniteScalarConstant(graph, addend)) {
+            return core::builder::MatchResult{this, {&candidate, add}, add};
+          }
+        }
+      }
+    }
+  }
+
   const NodeProto *then_add = graph.NodeBefore(candidate.input()[1].value());
   const NodeProto *else_add = graph.NodeBefore(candidate.input()[2].value());
   if (then_add == nullptr || else_add == nullptr) {
@@ -217,8 +353,34 @@ core::builder::MatchResult WhereAddPattern::Match(core::builder::GraphGraph &gra
 utils::RepeatedProtoField<NodeProto>
 WhereAddPattern::Apply(core::builder::GraphGraph &graph,
                        const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() == 2) {
+    if (nodes[0] == nullptr || nodes[1] == nullptr) {
+      throw BuilderError("WhereAddPattern::Apply received a null upstream node.");
+    }
+    const core::builder::MatchResult verified = Match(graph, *nodes[0]);
+    if (verified.pattern == nullptr || verified.nodes != nodes) {
+      throw BuilderError("WhereAddPattern::Apply received an unsafe upstream match.");
+    }
+    const NodeProto &where = *nodes[0];
+    const NodeProto &add = *nodes[1];
+    const std::string where_output = where.output()[0].value();
+    const std::string addend =
+        add.input()[0].value() == where_output ? add.input()[1].value() : add.input()[0].value();
+    const std::string name = "WhereAddPattern--" + where.name().value();
+
+    utils::RepeatedProtoField<NodeProto> replacements;
+    NodeProto replacement =
+        MakeNode("Where", {where.input()[0].value(), addend, where.input()[2].value()},
+                 {add.output()[0].value()}, "", name.c_str());
+    if (where.has_doc_string()) {
+      replacement.set_doc_string(where.doc_string().value());
+    }
+    replacements.push_back(std::move(replacement));
+    return replacements;
+  }
+
   if (nodes.size() != 3 || nodes[0] == nullptr || nodes[1] == nullptr || nodes[2] == nullptr) {
-    throw BuilderError("WhereAddPattern::Apply expects two Add nodes and one Where node.");
+    throw BuilderError("WhereAddPattern::Apply expects Where/Add or Add/Add/Where nodes.");
   }
   const core::builder::MatchResult verified = Match(graph, *nodes[2]);
   if (verified.pattern == nullptr || verified.nodes != nodes) {

@@ -1848,39 +1848,62 @@ core::builder::MatchResult FunctionCausalMaskPattern::Match(core::builder::Graph
   }
   const std::vector<const NodeProto *> matched = {squeeze1,   squeeze2,   range1, range2,
                                                   unsqueeze1, unsqueeze2, sub,    &candidate};
-  const std::unordered_set<const NodeProto *> matched_set(matched.begin(), matched.end());
-  const std::unordered_set<std::string> replaced{candidate.output()[0].value()};
+  const auto preserved = PreservedNodes(graph, matched, {candidate.output()[0].value()});
+  const std::unordered_set<const NodeProto *> preserved_set(preserved.begin(), preserved.end());
+  std::vector<const NodeProto *> removed;
   for (const NodeProto *node : matched) {
-    if (node != nullptr && NodeOutputHasExternalUse(graph, *node, matched_set, replaced)) {
-      return NoMatch(candidate, "A causal-mask intermediate has an external use.");
+    if (node != nullptr && preserved_set.count(node) == 0) {
+      removed.push_back(node);
     }
   }
-  return core::builder::MatchResult{this, matched, &candidate};
+  return core::builder::MatchResult{this, removed, &candidate};
 }
 
 utils::RepeatedProtoField<NodeProto>
 FunctionCausalMaskPattern::Apply(core::builder::GraphGraph &graph,
                                  const std::vector<const NodeProto *> &nodes) const {
-  if (nodes.size() != 8 || nodes[0] == nullptr || nodes[1] == nullptr || nodes[2] == nullptr ||
-      nodes[3] == nullptr || nodes[4] == nullptr || nodes[5] == nullptr || nodes[7] == nullptr) {
+  const NodeProto *comparison = nullptr;
+  for (const NodeProto *node : nodes) {
+    if (node != nullptr && (IsDefaultOp(*node, "Greater") || IsDefaultOp(*node, "LessOrEqual"))) {
+      comparison = node;
+      break;
+    }
+  }
+  if (comparison == nullptr || comparison->input_size() != 2 || comparison->output_size() != 1) {
     throw BuilderError("FunctionCausalMaskPattern::Apply expects the causal-mask decomposition.");
   }
-  const NodeProto &squeeze1 = *nodes[0];
-  const NodeProto &squeeze2 = *nodes[1];
-  const NodeProto *sub = nodes[6];
-  const NodeProto &comparison = *nodes[7];
+  const NodeProto *unsqueeze1 = graph.NodeBefore(comparison->input()[0].value());
+  const NodeProto *second = graph.NodeBefore(comparison->input()[1].value());
+  const NodeProto *sub = nullptr;
+  if (IsDefaultOp(*comparison, "Greater")) {
+    if (!IsNode(second, "Sub", 2, 1)) {
+      throw BuilderError("FunctionCausalMaskPattern::Apply expects the causal-mask decomposition.");
+    }
+    sub = second;
+    second = graph.NodeBefore(sub->input()[0].value());
+  }
+  const NodeProto *unsqueeze2 = second;
+  const NodeProto *range2 =
+      unsqueeze2 == nullptr ? nullptr : graph.NodeBefore(unsqueeze2->input()[0].value());
+  const NodeProto *squeeze1 =
+      range2 == nullptr ? nullptr : graph.NodeBefore(range2->input()[0].value());
+  const NodeProto *squeeze2 =
+      range2 == nullptr ? nullptr : graph.NodeBefore(range2->input()[1].value());
+  if (!IsNode(unsqueeze1, "Unsqueeze", 2, 1) || !IsNode(unsqueeze2, "Unsqueeze", 2, 1) ||
+      !IsNode(range2, "Range", 3, 1) || !IsNode(squeeze1, "Squeeze", 1, 1) ||
+      !IsNode(squeeze2, "Squeeze", 1, 1)) {
+    throw BuilderError("FunctionCausalMaskPattern::Apply expects the causal-mask decomposition.");
+  }
   const bool shifted = sub != nullptr;
   const std::string function_name = shifted ? "ShiftedCausalMask" : "CausalMask";
   utils::RepeatedProtoField<NodeProto> result;
-  const auto preserved = PreservedNodes(graph, nodes, {comparison.output()[0].value()});
-  AppendOriginalsInGraphOrder(graph, result, preserved);
-  std::vector<std::string> inputs = {squeeze1.input()[0].value(), squeeze2.input()[0].value()};
+  std::vector<std::string> inputs = {squeeze1->input()[0].value(), squeeze2->input()[0].value()};
   if (shifted) {
     inputs.push_back(sub->input()[1].value());
   }
-  result.push_back(MakePatternNode(function_name.c_str(), inputs, {comparison.output()[0].value()},
+  result.push_back(MakePatternNode(function_name.c_str(), inputs, {comparison->output()[0].value()},
                                    kIntermediateDomain,
-                                   "FunctionCausalMaskPattern--" + comparison.name().value()));
+                                   "FunctionCausalMaskPattern--" + comparison->name().value()));
   EnsureFunction(graph.Builder(), MakeCausalMaskFunction(graph.Builder(), shifted));
   return result;
 }

@@ -62,13 +62,78 @@ bool IsAllOne(const TensorProto &tensor) {
   return true;
 }
 
+bool IsAllOneConstantOfShape(const NodeProto &node) {
+  if (!IsDefaultOp(node, "ConstantOfShape") || node.input_size() != 1 || node.output_size() != 1) {
+    return false;
+  }
+  const AttributeProto *value = FindAttribute(node, "value");
+  return value != nullptr && value->type() == AttributeProto::AttributeType::TENSOR &&
+         IsAllOne(value->ref_t());
+}
+
+const core::symbolic::SymDim &AlignedDim(const core::symbolic::SymShape &shape,
+                                         std::size_t output_rank, std::size_t index,
+                                         const core::symbolic::SymDim &one) {
+  const std::size_t offset = output_rank - shape.Rank();
+  return index < offset ? one : shape[index - offset];
+}
+
+bool BroadcastsTo(const core::symbolic::SymShape &left, const core::symbolic::SymShape &right,
+                  const core::symbolic::SymShape &output) {
+  const std::size_t rank = left.Rank() > right.Rank() ? left.Rank() : right.Rank();
+  if (rank != output.Rank()) {
+    return false;
+  }
+  const core::symbolic::SymDim one(1);
+  for (std::size_t index = 0; index < rank; ++index) {
+    const core::symbolic::SymDim &left_dim = AlignedDim(left, rank, index, one);
+    const core::symbolic::SymDim &right_dim = AlignedDim(right, rank, index, one);
+    const core::symbolic::SymDim &output_dim = output[index];
+    if (left_dim.IsInt() && left_dim.AsInt() == 1) {
+      if (right_dim != output_dim) {
+        return false;
+      }
+    } else if (right_dim.IsInt() && right_dim.AsInt() == 1) {
+      if (left_dim != output_dim) {
+        return false;
+      }
+    } else if (left_dim != right_dim || left_dim != output_dim) {
+      return false;
+    }
+  }
+  return true;
+}
+
 const NodeProto *OneMinusNode(core::builder::GraphGraph &graph, const NodeProto *node) {
-  if (node == nullptr || !IsDefaultOp(*node, "Sub") || node->input_size() != 2 ||
-      !graph.IsConstant(node->input()[0].value())) {
+  if (node == nullptr || !IsDefaultOp(*node, "Sub") || node->input_size() != 2) {
     return nullptr;
   }
-  const TensorProto *constant = graph.GetComputedConstant(node->input()[0].value());
-  return constant != nullptr && IsAllOne(*constant) ? node : nullptr;
+  const std::string &one = node->input()[0].value();
+  if (graph.IsConstant(one)) {
+    const TensorProto *constant = graph.GetComputedConstant(one);
+    if (constant != nullptr && IsAllOne(*constant)) {
+      return node;
+    }
+  }
+  const NodeProto *constant_of_shape = graph.NodeBefore(one);
+  return constant_of_shape != nullptr && IsAllOneConstantOfShape(*constant_of_shape) ? node
+                                                                                     : nullptr;
+}
+
+bool ConstantOfShapeRewritePreservesShape(core::builder::GraphGraph &graph,
+                                          const NodeProto &one_minus, const std::string &other,
+                                          const NodeProto &mul) {
+  const NodeProto *constant_of_shape = graph.NodeBefore(one_minus.input()[0].value());
+  if (constant_of_shape == nullptr || !IsAllOneConstantOfShape(*constant_of_shape)) {
+    return true;
+  }
+  const std::string &subtracted = one_minus.input()[1].value();
+  if (!graph.HasShape(subtracted) || !graph.HasShape(other) ||
+      !graph.HasShape(mul.output()[0].value())) {
+    return false;
+  }
+  return BroadcastsTo(graph.GetShape(subtracted).Shape(), graph.GetShape(other).Shape(),
+                      graph.GetShape(mul.output()[0].value()).Shape());
 }
 
 } // namespace
@@ -92,8 +157,17 @@ core::builder::MatchResult Sub1MulPattern::Match(core::builder::GraphGraph &grap
       (right_is_sub && graph.IsUsedMoreThanOnce(candidate.input()[1].value()))) {
     return NoMatch(candidate, "a Sub output has another use");
   }
-  if (OneMinusNode(graph, left) == nullptr && OneMinusNode(graph, right) == nullptr) {
+  const NodeProto *left_one_minus = OneMinusNode(graph, left);
+  const NodeProto *right_one_minus = OneMinusNode(graph, right);
+  if (left_one_minus == nullptr && right_one_minus == nullptr) {
     return NoMatch(candidate, "neither Sub has a constant first input equal to one");
+  }
+  const NodeProto *one_minus = left_one_minus != nullptr ? left_one_minus : right_one_minus;
+  const std::string &other =
+      left_one_minus != nullptr ? candidate.input()[1].value() : candidate.input()[0].value();
+  if (!ConstantOfShapeRewritePreservesShape(graph, *one_minus, other, candidate)) {
+    return NoMatch(candidate,
+                   "removing ConstantOfShape would change or cannot prove the output shape");
   }
   return core::builder::MatchResult{this, {&candidate, left, right}, nullptr};
 }

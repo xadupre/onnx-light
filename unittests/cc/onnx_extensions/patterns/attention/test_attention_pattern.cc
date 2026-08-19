@@ -485,6 +485,37 @@ TEST(FunctionCausalMaskPattern, CreatesShiftedFunctionAndRejectsWrongAxes) {
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[6]).pattern, nullptr);
 }
 
+TEST(FunctionCausalMaskPattern, PreservesSharedRangeAndItsProducers) {
+  core::builder::GraphBuilder builder("shared_range", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("A", core::symbolic::TensorType::kInt64, Shape({1}));
+  builder.MakeInput("B", core::symbolic::TensorType::kInt64, Shape({1}));
+  AddInt64(builder, "zero", {}, {0});
+  AddInt64(builder, "one", {}, {1});
+  AddInt64(builder, "axes1", {3}, {0, 1, 2});
+  AddInt64(builder, "axes2", {3}, {0, 1, 3});
+  builder.MakeNode("Squeeze", {"A"}, {"sA"});
+  builder.MakeNode("Squeeze", {"B"}, {"sB"});
+  builder.MakeNode("Range", {"zero", "sB", "one"}, {"r1"});
+  builder.MakeNode("Range", {"sA", "sB", "one"}, {"r2"});
+  builder.MakeNode("Identity", {"r2"}, {"shared"});
+  builder.MakeNode("Unsqueeze", {"r1", "axes1"}, {"u1"});
+  builder.MakeNode("Unsqueeze", {"r2", "axes2"}, {"u2"});
+  builder.MakeNode("LessOrEqual", {"u1", "u2"}, {"mask"});
+  builder.MakeOutput("mask", core::symbolic::TensorType::kBool, Shape({1, 1, 2, 3}));
+  builder.MakeOutput("shared", core::symbolic::TensorType::kInt64, Shape({2}));
+
+  OptimizeAndVerify<onnx_patterns::FunctionCausalMaskPattern>(builder);
+
+  ASSERT_EQ(builder.Nodes().size(), 5u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Squeeze");
+  EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Squeeze");
+  EXPECT_EQ(builder.Nodes()[2].op_type().value(), "Range");
+  EXPECT_EQ(builder.Nodes()[2].output()[0].value(), "r2");
+  EXPECT_EQ(builder.Nodes()[3].op_type().value(), "Identity");
+  EXPECT_EQ(builder.Nodes()[4].op_type().value(), "CausalMask");
+}
+
 TEST(FunctionCausalMaskMulAddPattern, CreatesFunctionAndRejectsNonUnitStep) {
   core::builder::GraphBuilder builder("positive", SchemaLookup());
   builder.SetOpsetVersion("", 18);

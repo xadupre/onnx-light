@@ -32,8 +32,6 @@ reproduce.
     :maxdepth: 1
     :caption: In progress
 
-    2026-08_graph_builder_optimization
-
 .. toctree::
     :maxdepth: 1
     :caption: Discussion
@@ -62,3 +60,4 @@ reproduce.
     2026-08_proto_binary_size
     2026-08_processor_aware_kernel_tuning
     2026-08_buffer_reuse_arena
+    2026-08_graph_builder_optimization

@@ -33,10 +33,13 @@ public:
 };
 
 /**
- * Rewrites ``Equal(Unsqueeze(x, a), Unsqueeze(y, a))`` into ``Equal(x, y)``.
+ * Moves ``Equal(x, c)`` after a compatible sibling ``Unsqueeze(x, a)`` and
+ * preserves the rank of ``Equal(Unsqueeze(x, a), Unsqueeze(y, a))``.
  *
- * The rewrite applies when both ``Unsqueeze`` nodes use the same constant axes
- * and are consumed only by the matched ``Equal``.
+ * The local rewrite emits ``Unsqueeze(Equal(x, y), a)`` rather than dropping
+ * the inserted dimensions. The upstream rewrite requires a rank-zero constant,
+ * unless inferred shapes prove that ``Equal(x, c)`` preserves the rank of
+ * ``x``.
  */
 class UnsqueezeEqualPattern final : public core::builder::PatternOptimization {
 public:
@@ -47,22 +50,23 @@ public:
   /// Returns ``Equal`` as the only possible root operator.
   std::set<std::string> FastOpType() const override;
 
-  /// Finds an ``Equal`` comparing two compatible ``Unsqueeze`` outputs.
+  /// Finds an upstream or local ``Equal``/``Unsqueeze`` topology.
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;
 
-  /// Rebuilds ``Equal`` on the pre-unsqueezed inputs.
+  /// Rebuilds the topology without changing the final output rank.
   utils::RepeatedProtoField<NodeProto>
   Apply(core::builder::GraphGraph &graph,
         const std::vector<const NodeProto *> &nodes) const override;
 };
 
 /**
- * Factors a common additive term from ``Where(Add(a, z), Add(b, z))``.
+ * Rewrites an additive mask or factors a common term from ``Where`` branches.
  *
- * The rewrite turns ``Where(c, Add(a, z), Add(b, z))`` into
- * ``Add(Where(c, a, b), z)`` when both ``Add`` nodes are local to the matched
- * ``Where``.
+ * It turns ``Add(Where(c, 0, -inf), x)`` into ``Where(c, x, -inf)`` when ``x``
+ * is a provably finite scalar constant, and keeps the local
+ * ``Where(c, Add(a, z), Add(b, z))`` to
+ * ``Add(Where(c, a, b), z)`` rewrite.
  */
 class WhereAddPattern final : public core::builder::PatternOptimization {
 public:
@@ -72,11 +76,11 @@ public:
   /// Returns ``Where`` as the only possible root operator.
   std::set<std::string> FastOpType() const override;
 
-  /// Finds a ``Where`` whose branches are ``Add`` nodes sharing one input.
+  /// Finds an additive mask or two ``Add`` branches sharing one input.
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;
 
-  /// Emits ``Where`` then ``Add`` with the factored common additive input.
+  /// Emits the upstream ``Where`` or the local factored ``Where`` and ``Add``.
   utils::RepeatedProtoField<NodeProto>
   Apply(core::builder::GraphGraph &graph,
         const std::vector<const NodeProto *> &nodes) const override;

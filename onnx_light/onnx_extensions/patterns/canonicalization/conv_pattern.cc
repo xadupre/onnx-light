@@ -51,6 +51,24 @@ bool IsAllZero(const TensorProto &tensor) {
   return false;
 }
 
+// Returns ``true`` when ``name`` is materialized as an all-zero tensor or is
+// produced by expanding one to a constant target shape.
+bool IsKnownAllZero(core::builder::GraphGraph &graph, const std::string &name) {
+  const TensorProto *tensor = graph.GetComputedConstant(name);
+  if (tensor != nullptr) {
+    return IsAllZero(*tensor);
+  }
+
+  const NodeProto *producer = graph.NodeBefore(name);
+  if (producer == nullptr || producer->op_type().value() != "Expand" ||
+      NormaliseDomain(producer->domain().value()) != kDefaultOnnxDomain ||
+      producer->input_size() < 2 || !graph.IsConstant(producer->input()[1].value())) {
+    return false;
+  }
+  const TensorProto *expanded = graph.GetComputedConstant(producer->input()[0].value());
+  return expanded != nullptr && IsAllZero(*expanded);
+}
+
 // Reads the optional string input at ``index``. Returns an empty string when
 // the input is absent or explicitly omitted.
 std::string OptionalInput(const NodeProto &node, int index) {
@@ -139,8 +157,7 @@ core::builder::MatchResult ConvBiasNullPattern::Match(core::builder::GraphGraph 
   if (!graph.IsConstant(candidate.input()[2].value())) {
     return NoMatch(candidate, "the Conv bias is not a constant");
   }
-  const TensorProto *bias = graph.GetComputedConstant(candidate.input()[2].value());
-  if (bias == nullptr || !IsAllZero(*bias)) {
+  if (!IsKnownAllZero(graph, candidate.input()[2].value())) {
     return NoMatch(candidate, "the Conv bias is not a known all-zero constant");
   }
   return core::builder::MatchResult{this, {&candidate}, &candidate};

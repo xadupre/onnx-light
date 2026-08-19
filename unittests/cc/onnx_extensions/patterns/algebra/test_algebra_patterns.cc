@@ -13,7 +13,9 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -50,6 +52,16 @@ void AddIntInitializer(core::builder::GraphBuilder &builder, const std::string &
 void AddFloat16Initializer(core::builder::GraphBuilder &builder, const std::string &name,
                            const std::vector<int64_t> &dims, const std::vector<uint16_t> &values) {
   builder.MakeInitializer(MakeInitializer<uint16_t>(name.c_str(), dims, values));
+}
+
+void AddConstantOfShape(core::builder::GraphBuilder &builder, const std::string &shape,
+                        const std::string &output, float value) {
+  NodeProto node = MakeNode("ConstantOfShape", {shape}, {output});
+  AttributeProto *attribute = node.add_attribute();
+  attribute->set_name("value");
+  attribute->set_type(AttributeProto::AttributeType::TENSOR);
+  *attribute->mutable_t() = MakeInitializer<float>("", {1}, {value});
+  builder.MakeNode("ConstantOfShape", {shape}, {output}, "", "", node.attribute());
 }
 
 NodeProto NodeWithIntAttribute(const char *op_type, const std::vector<std::string> &inputs,
@@ -227,6 +239,89 @@ TEST(Sub1MulPattern, RejectsAConstantOtherThanOne) {
   core::builder::GraphGraph graph(builder);
   onnx_patterns::Sub1MulPattern pattern;
   EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+}
+
+TEST(Sub1MulPattern, ReassociatesConstantOfShapeOnBothSides) {
+  for (bool sub_on_left : {true, false}) {
+    core::builder::GraphBuilder builder(sub_on_left ? "left" : "right", SchemaLookup());
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+    builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+    AddIntInitializer(builder, "shape", {2}, {1, 3});
+    AddConstantOfShape(builder, "shape", "one", 1.0F);
+    builder.MakeNode("Sub", {"one", sub_on_left ? "x" : "y"}, {"one_minus"});
+    builder.MakeNode("Mul",
+                     sub_on_left ? std::vector<std::string>{"one_minus", "y"}
+                                 : std::vector<std::string>{"x", "one_minus"},
+                     {"out"});
+    builder.MakeOutput("out");
+
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::Sub1MulPattern pattern;
+    const auto match = pattern.Match(graph, builder.Nodes()[2]);
+    ASSERT_EQ(match.pattern, &pattern) << (sub_on_left ? "left" : "right");
+    const auto replacements = pattern.Apply(graph, match.nodes);
+    ASSERT_EQ(replacements.size(), 2u);
+    EXPECT_EQ(replacements[0].op_type().value(), "Mul");
+    EXPECT_EQ(replacements[1].op_type().value(), "Sub");
+    EXPECT_EQ(replacements[1].output()[0].value(), "out");
+  }
+}
+
+TEST(Sub1MulPattern, RejectsNonOneConstantOfShape) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  AddIntInitializer(builder, "shape", {2}, {1, 3});
+  AddConstantOfShape(builder, "shape", "two", 2.0F);
+  builder.MakeNode("Sub", {"two", "x"}, {"two_minus"});
+  builder.MakeNode("Mul", {"two_minus", "y"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::Sub1MulPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[2]).pattern, nullptr);
+}
+
+TEST(Sub1MulPattern, RejectsConstantOfShapeChangingBroadcastRank) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({3}));
+  builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({3}));
+  AddIntInitializer(builder, "shape", {3}, {2, 1, 3});
+  AddConstantOfShape(builder, "shape", "one", 1.0F);
+  builder.MakeNode("Sub", {"one", "x"}, {"one_minus"});
+  builder.MakeNode("Mul", {"one_minus", "y"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::Sub1MulPattern pattern;
+  const auto match = pattern.Match(graph, builder.Nodes()[2]);
+  EXPECT_EQ(match.pattern, nullptr);
+  ASSERT_TRUE(match.no_match.has_value());
+  EXPECT_EQ(match.no_match->reason,
+            "removing ConstantOfShape would change or cannot prove the output shape");
+}
+
+TEST(Sub1MulPattern, PreservesExternalConstantOfShapeOutput) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  AddIntInitializer(builder, "shape", {2}, {1, 3});
+  AddConstantOfShape(builder, "shape", "one", 1.0F);
+  builder.MakeNode("Sub", {"one", "x"}, {"one_minus"});
+  builder.MakeNode("Mul", {"one_minus", "y"}, {"out"});
+  builder.MakeOutput("out");
+  builder.MakeOutput("one");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::Sub1MulPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  graph.Optimize();
+
+  ASSERT_EQ(builder.Nodes().size(), 3u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "ConstantOfShape");
+  EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Mul");
+  EXPECT_EQ(builder.Nodes()[2].op_type().value(), "Sub");
+  EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "one");
 }
 
 TEST(ReduceArgTopKPattern, ReplacesSiblingReduceAndArgMax) {

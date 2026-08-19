@@ -244,20 +244,21 @@ class TestMermaid(unittest.TestCase):
 
     @unittest.skipUnless(HAS_OPTIM_EXT, "requires onnx_light C++ shape_inference bindings")
     def test_tagged_style_classes(self) -> None:
-        from onnx_light.onnx import TensorProto, helper
+        import onnx_light.onnx.helper as oh
+        from onnx_light.onnx import TensorProto
         from onnx_light.tools import write_value_and_node_tags_to_metadata
 
-        g = helper.make_graph(
+        g = oh.make_graph(
             [
-                helper.make_node("Shape", ["X"], ["S"], name="shape0"),
-                helper.make_node("Reshape", ["X", "S"], ["Y"], name="reshape0"),
+                oh.make_node("Shape", ["X"], ["S"], name="shape0"),
+                oh.make_node("Reshape", ["X", "S"], ["Y"], name="reshape0"),
             ],
             "g",
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 2])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 2])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2])],
         )
         write_value_and_node_tags_to_metadata(g)
-        text = to_mermaid(helper.make_model(g))
+        text = to_mermaid(oh.make_model(g))
         self.assertIn(":::onnxTagShape", text)
         self.assertIn("classDef onnxTagShape", text)
         self.assertIn("classDef onnxTagAxes", text)

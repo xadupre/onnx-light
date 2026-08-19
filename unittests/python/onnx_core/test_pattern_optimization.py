@@ -9,7 +9,8 @@ import gc
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
-from onnx_light.onnx import TensorProto, helper
+import onnx_light.onnx.helper as oh
+from onnx_light.onnx import TensorProto
 from onnx_light.onnx_lib import parser
 
 optim = import_or_skip("onnx_light.onnx_core.optimization")
@@ -44,7 +45,7 @@ class NegNegPattern(optim.PatternOptimization):
     def apply(self, graph, nodes):
         del graph
         previous, node = nodes
-        return [helper.make_node("Identity", [previous.input[0]], list(node.output))]
+        return [oh.make_node("Identity", [previous.input[0]], list(node.output))]
 
 
 class TestPatternOptimization(ExtTestCase):
@@ -145,20 +146,20 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(rewrites[0].pattern_name, "Cast")
 
     def test_standard_clip_clip_pattern_is_selectable(self):
-        graph = helper.make_graph(
+        graph = oh.make_graph(
             [
-                helper.make_node("Clip", ["x", "mn"], ["x1"]),
-                helper.make_node("Clip", ["x1", "", "mx"], ["y"]),
+                oh.make_node("Clip", ["x", "mn"], ["x1"]),
+                oh.make_node("Clip", ["x1", "", "mx"], ["y"]),
             ],
             "agraph",
             [
-                helper.make_tensor_value_info("x", TensorProto.FLOAT, [2]),
-                helper.make_tensor_value_info("mn", TensorProto.FLOAT, [1]),
-                helper.make_tensor_value_info("mx", TensorProto.FLOAT, [1]),
+                oh.make_tensor_value_info("x", TensorProto.FLOAT, [2]),
+                oh.make_tensor_value_info("mn", TensorProto.FLOAT, [1]),
+                oh.make_tensor_value_info("mx", TensorProto.FLOAT, [1]),
             ],
-            [helper.make_tensor_value_info("y", TensorProto.FLOAT, [2])],
+            [oh.make_tensor_value_info("y", TensorProto.FLOAT, [2])],
         )
-        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
 
         builder = optim.GraphBuilder(model)
         graph = optim.GraphGraph(builder, optim.standard_patterns(["ClipClip"]))
@@ -246,35 +247,35 @@ class TestPatternOptimization(ExtTestCase):
                 )
 
     def test_python_pattern_runs_recursively_in_subgraph(self):
-        then_branch = helper.make_graph(
+        then_branch = oh.make_graph(
             [
-                helper.make_node("Neg", ["X"], ["middle"]),
-                helper.make_node("Neg", ["middle"], ["then_out"]),
+                oh.make_node("Neg", ["X"], ["middle"]),
+                oh.make_node("Neg", ["middle"], ["then_out"]),
             ],
             "then_branch",
             [],
-            [helper.make_tensor_value_info("then_out", TensorProto.FLOAT, [2])],
+            [oh.make_tensor_value_info("then_out", TensorProto.FLOAT, [2])],
         )
-        else_branch = helper.make_graph(
-            [helper.make_node("Identity", ["X"], ["else_out"])],
+        else_branch = oh.make_graph(
+            [oh.make_node("Identity", ["X"], ["else_out"])],
             "else_branch",
             [],
-            [helper.make_tensor_value_info("else_out", TensorProto.FLOAT, [2])],
+            [oh.make_tensor_value_info("else_out", TensorProto.FLOAT, [2])],
         )
-        graph = helper.make_graph(
+        graph = oh.make_graph(
             [
-                helper.make_node(
+                oh.make_node(
                     "If", ["cond"], ["Y"], then_branch=then_branch, else_branch=else_branch
                 )
             ],
             "main",
             [
-                helper.make_tensor_value_info("cond", TensorProto.BOOL, []),
-                helper.make_tensor_value_info("X", TensorProto.FLOAT, [2]),
+                oh.make_tensor_value_info("cond", TensorProto.BOOL, []),
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, [2]),
             ],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2])],
         )
-        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
 
         builder = optim.GraphBuilder(model)
         graph = optim.GraphGraph(builder, [NegNegPattern()])

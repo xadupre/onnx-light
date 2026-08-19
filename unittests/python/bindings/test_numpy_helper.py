@@ -16,7 +16,7 @@ from onnx_light.onnx_proto._numpy_helper import (
 )
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
-import onnx_light.onnx.numpy_helper as numpy_helper
+import onnx_light.onnx.numpy_helper as onh
 
 
 class TestNumpyHelper(ExtTestCase):
@@ -24,128 +24,128 @@ class TestNumpyHelper(ExtTestCase):
         tensor = oh.make_tensor(
             "x", onnxl.TensorProto.FLOAT, [2, 3], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
         )
-        arr = numpy_helper.to_array(tensor)
+        arr = onh.to_array(tensor)
         np.testing.assert_array_equal(
             arr, np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
         )
 
     def test_to_array_int32(self) -> None:
         tensor = oh.make_tensor("x", onnxl.TensorProto.INT32, [3], [1, 2, 3])
-        arr = numpy_helper.to_array(tensor)
+        arr = onh.to_array(tensor)
         np.testing.assert_array_equal(arr, np.array([1, 2, 3], dtype=np.int32))
 
     def test_to_array_int64(self) -> None:
         tensor = oh.make_tensor("x", onnxl.TensorProto.INT64, [2], [10, 20])
-        arr = numpy_helper.to_array(tensor)
+        arr = onh.to_array(tensor)
         np.testing.assert_array_equal(arr, np.array([10, 20], dtype=np.int64))
 
     def test_to_array_double(self) -> None:
         tensor = oh.make_tensor("x", onnxl.TensorProto.DOUBLE, [2], [1.5, 2.5])
-        arr = numpy_helper.to_array(tensor)
+        arr = onh.to_array(tensor)
         np.testing.assert_array_equal(arr, np.array([1.5, 2.5], dtype=np.float64))
 
     def test_to_array_bool(self) -> None:
         tensor = oh.make_tensor("x", onnxl.TensorProto.BOOL, [3], [True, False, True])
-        arr = numpy_helper.to_array(tensor)
+        arr = onh.to_array(tensor)
         np.testing.assert_array_equal(arr, np.array([True, False, True]))
 
     def test_to_array_float16(self) -> None:
         data = np.array([1.0, 2.0, 3.0], dtype=np.float16)
         tensor = oh.make_tensor("x", onnxl.TensorProto.FLOAT16, [3], data)
-        arr = numpy_helper.to_array(tensor)
+        arr = onh.to_array(tensor)
         np.testing.assert_array_equal(arr, data)
 
     def test_to_array_string(self) -> None:
         tensor = oh.make_tensor("x", onnxl.TensorProto.STRING, [2], [b"hello", b"world"])
-        arr = numpy_helper.to_array(tensor)
+        arr = onh.to_array(tensor)
         self.assertEqual(list(arr), ["hello", "world"])
 
     def test_to_array_raw_data(self) -> None:
         data = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         tensor = oh.make_tensor("x", onnxl.TensorProto.FLOAT, [3], data, raw=True)
-        arr = numpy_helper.to_array(tensor)
+        arr = onh.to_array(tensor)
         np.testing.assert_array_equal(arr, data)
 
     def test_to_array_undefined_raises(self) -> None:
         tensor = onnxl.TensorProto()
         tensor.data_type = onnxl.TensorProto.UNDEFINED
         with self.assertRaises(TypeError):
-            numpy_helper.to_array(tensor)
+            onh.to_array(tensor)
 
     def test_from_array_float(self) -> None:
         data = np.array([1.0, 2.0, 3.0], dtype=np.float32)
-        tensor = numpy_helper.from_array(data, name="x")
+        tensor = onh.from_array(data, name="x")
         self.assertEqual(tensor.name, "x")
         self.assertEqual(tensor.data_type, onnxl.TensorProto.FLOAT)
-        arr = numpy_helper.to_array(tensor)
+        arr = onh.to_array(tensor)
         np.testing.assert_array_equal(arr, data)
 
     def test_from_array_int64(self) -> None:
         data = np.array([[1, 2], [3, 4]], dtype=np.int64)
-        tensor = numpy_helper.from_array(data)
+        tensor = onh.from_array(data)
         self.assertEqual(tensor.data_type, onnxl.TensorProto.INT64)
-        arr = numpy_helper.to_array(tensor)
+        arr = onh.to_array(tensor)
         np.testing.assert_array_equal(arr, data)
 
     def test_from_array_string(self) -> None:
         data = np.array(["hello", "world"], dtype=object)
-        tensor = numpy_helper.from_array(data, name="s")
+        tensor = onh.from_array(data, name="s")
         self.assertEqual(tensor.data_type, onnxl.TensorProto.STRING)
-        arr = numpy_helper.to_array(tensor)
+        arr = onh.to_array(tensor)
         np.testing.assert_array_equal(arr, data)
 
     def test_from_array_bytes(self) -> None:
         data = np.array([b"abc", b"def"], dtype=object)
-        tensor = numpy_helper.from_array(data, name="b")
+        tensor = onh.from_array(data, name="b")
         self.assertEqual(tensor.data_type, onnxl.TensorProto.STRING)
 
     def test_roundtrip_float(self) -> None:
         data = np.random.rand(3, 4).astype(np.float32)
-        tensor = numpy_helper.from_array(data, name="t")
-        recovered = numpy_helper.to_array(tensor)
+        tensor = onh.from_array(data, name="t")
+        recovered = onh.to_array(tensor)
         np.testing.assert_array_almost_equal(recovered, data)
 
     def test_roundtrip_double(self) -> None:
         data = np.random.rand(5).astype(np.float64)
-        tensor = numpy_helper.from_array(data)
-        recovered = numpy_helper.to_array(tensor)
+        tensor = onh.from_array(data)
+        recovered = onh.to_array(tensor)
         np.testing.assert_array_almost_equal(recovered, data)
 
     def test_roundtrip_float16(self) -> None:
         data = np.random.rand(13, 37).astype(np.float16)
-        tensor = numpy_helper.from_array(data, name="test")
+        tensor = onh.from_array(data, name="test")
         self.assertEqual(tensor.name, "test")
-        recovered = numpy_helper.to_array(tensor)
+        recovered = onh.to_array(tensor)
         np.testing.assert_array_equal(recovered, data)
 
     def test_roundtrip_int8(self) -> None:
         data = np.array([-128, 0, 127], dtype=np.int8)
-        tensor = numpy_helper.from_array(data)
-        recovered = numpy_helper.to_array(tensor)
+        tensor = onh.from_array(data)
+        recovered = onh.to_array(tensor)
         np.testing.assert_array_equal(recovered, data)
 
     def test_roundtrip_uint8(self) -> None:
         data = np.array([0, 128, 255], dtype=np.uint8)
-        tensor = numpy_helper.from_array(data)
-        recovered = numpy_helper.to_array(tensor)
+        tensor = onh.from_array(data)
+        recovered = onh.to_array(tensor)
         np.testing.assert_array_equal(recovered, data)
 
     def test_roundtrip_bool(self) -> None:
         data = np.array([True, False, True, False])
-        tensor = numpy_helper.from_array(data)
-        recovered = numpy_helper.to_array(tensor)
+        tensor = onh.from_array(data)
+        recovered = onh.to_array(tensor)
         np.testing.assert_array_equal(recovered, data)
 
     def test_roundtrip_complex64(self) -> None:
         data = np.array([1 + 2j, 3 + 4j], dtype=np.complex64)
-        tensor = numpy_helper.from_array(data)
-        recovered = numpy_helper.to_array(tensor)
+        tensor = onh.from_array(data)
+        recovered = onh.to_array(tensor)
         np.testing.assert_array_almost_equal(recovered, data)
 
     def test_roundtrip_complex128(self) -> None:
         data = np.array([1 + 2j, 3 + 4j], dtype=np.complex128)
-        tensor = numpy_helper.from_array(data)
-        recovered = numpy_helper.to_array(tensor)
+        tensor = onh.from_array(data)
+        recovered = onh.to_array(tensor)
         np.testing.assert_array_almost_equal(recovered, data)
 
     def test_tobytes_little_endian(self) -> None:
@@ -160,30 +160,30 @@ class TestNumpyHelper(ExtTestCase):
         t1 = oh.make_tensor("", onnxl.TensorProto.FLOAT, [2], [1.0, 2.0])
         t2 = oh.make_tensor("", onnxl.TensorProto.FLOAT, [2], [3.0, 4.0])
         seq.tensor_values.extend([t1, t2])
-        lst = numpy_helper.to_list(seq)
+        lst = onh.to_list(seq)
         self.assertEqual(len(lst), 2)
         np.testing.assert_array_equal(lst[0], np.array([1.0, 2.0], dtype=np.float32))
         np.testing.assert_array_equal(lst[1], np.array([3.0, 4.0], dtype=np.float32))
 
     def test_from_list_tensors(self) -> None:
         lst = [np.array([1.0, 2.0], dtype=np.float32), np.array([3.0, 4.0], dtype=np.float32)]
-        seq = numpy_helper.from_list(lst, name="myseq")
+        seq = onh.from_list(lst, name="myseq")
         self.assertEqual(seq.name, "myseq")
         self.assertEqual(int(seq.elem_type), int(onnxl.SequenceProto.TENSOR))
         self.assertEqual(len(seq.tensor_values), 2)
 
     def test_from_list_empty_with_dtype(self) -> None:
-        seq = numpy_helper.from_list([], dtype=onnxl.SequenceProto.TENSOR)
+        seq = onh.from_list([], dtype=onnxl.SequenceProto.TENSOR)
         self.assertEqual(int(seq.elem_type), int(onnxl.SequenceProto.TENSOR))
 
     def test_from_list_empty_no_dtype(self) -> None:
-        seq = numpy_helper.from_list([])
+        seq = onh.from_list([])
         self.assertEqual(int(seq.elem_type), int(onnxl.SequenceProto.TENSOR))
 
     def test_from_list_mismatched_types_raises(self) -> None:
         lst = [np.array([1.0]), "not_a_tensor"]
         with self.assertRaises(TypeError):
-            numpy_helper.from_list(lst)
+            onh.from_list(lst)
 
     def test_to_dict_int_keys(self) -> None:
         map_proto = onnxl.MapProto()
@@ -194,7 +194,7 @@ class TestNumpyHelper(ExtTestCase):
         t3 = oh.make_tensor("", onnxl.TensorProto.FLOAT, [1], [30.0])
         map_proto.values.elem_type = onnxl.SequenceProto.TENSOR
         map_proto.values.tensor_values.extend([t1, t2, t3])
-        d = numpy_helper.to_dict(map_proto)
+        d = onh.to_dict(map_proto)
         self.assertEqual(len(d), 3)
 
     def test_from_dict_int_keys(self) -> None:
@@ -202,51 +202,51 @@ class TestNumpyHelper(ExtTestCase):
             np.int64(1): np.array([10.0], dtype=np.float32),
             np.int64(2): np.array([20.0], dtype=np.float32),
         }
-        map_proto = numpy_helper.from_dict(d, name="mymap")
+        map_proto = onh.from_dict(d, name="mymap")
         self.assertEqual(map_proto.name, "mymap")
         self.assertEqual(int(map_proto.key_type), int(onnxl.TensorProto.INT64))
 
     def test_from_dict_empty_raises(self) -> None:
         with self.assertRaises(ValueError):
-            numpy_helper.from_dict({})
+            onh.from_dict({})
 
     def test_to_optional_tensor(self) -> None:
         optional = onnxl.OptionalProto()
         optional.elem_type = onnxl.OptionalProto.TENSOR
         t = oh.make_tensor("", onnxl.TensorProto.FLOAT, [2], [1.0, 2.0])
         optional.tensor_value.CopyFrom(t)
-        result = numpy_helper.to_optional(optional)
+        result = onh.to_optional(optional)
         self.assertIsNotNone(result)
         np.testing.assert_array_equal(result, np.array([1.0, 2.0], dtype=np.float32))
 
     def test_to_optional_undefined(self) -> None:
         optional = onnxl.OptionalProto()
         optional.elem_type = onnxl.OptionalProto.UNDEFINED
-        result = numpy_helper.to_optional(optional)
+        result = onh.to_optional(optional)
         self.assertIsNone(result)
 
     def test_from_optional_tensor(self) -> None:
         data = np.array([1.0, 2.0], dtype=np.float32)
-        opt_proto = numpy_helper.from_optional(data, name="opt")
+        opt_proto = onh.from_optional(data, name="opt")
         self.assertEqual(opt_proto.name, "opt")
         self.assertEqual(int(opt_proto.elem_type), int(onnxl.OptionalProto.TENSOR))
 
     def test_from_optional_none(self) -> None:
-        opt_proto = numpy_helper.from_optional(None, dtype=onnxl.OptionalProto.UNDEFINED)
+        opt_proto = onh.from_optional(None, dtype=onnxl.OptionalProto.UNDEFINED)
         self.assertEqual(int(opt_proto.elem_type), int(onnxl.OptionalProto.UNDEFINED))
 
     def test_from_optional_invalid_dtype_raises(self) -> None:
         with self.assertRaises(TypeError):
-            numpy_helper.from_optional(None, dtype=999)
+            onh.from_optional(None, dtype=999)
 
     def test_create_random_int(self) -> None:
-        arr = numpy_helper.create_random_int((3, 4), np.int32)
+        arr = onh.create_random_int((3, 4), np.int32)
         self.assertEqual(arr.shape, (3, 4))
         self.assertEqual(arr.dtype, np.int32)
 
     def test_create_random_int_unsupported_dtype_raises(self) -> None:
         with self.assertRaises(TypeError):
-            numpy_helper.create_random_int((2, 2), np.float32)
+            onh.create_random_int((2, 2), np.float32)
 
     def test_external_data_roundtrip(self) -> None:
         data = np.random.rand(10).astype(np.float32)
@@ -267,7 +267,7 @@ class TestNumpyHelper(ExtTestCase):
             entry.value = "tensor_data.bin"
 
             # Load and verify
-            arr = numpy_helper.to_array(tensor, base_dir=tmpdir)
+            arr = onh.to_array(tensor, base_dir=tmpdir)
             np.testing.assert_array_almost_equal(arr, data)
 
     def test_load_external_data_method(self) -> None:
@@ -368,7 +368,7 @@ class TestNumpyHelper(ExtTestCase):
                 tensor.dims.extend([1000])
                 tensor.raw_data = b"\x00"  # encodes 2 elements, not 1000
                 with self.assertRaises(ValueError):
-                    numpy_helper.to_array(tensor)
+                    onh.to_array(tensor)
 
     def test_to_array_4bit_payload_too_small_int32_data(self) -> None:
         for name, data_type in [
@@ -382,7 +382,7 @@ class TestNumpyHelper(ExtTestCase):
                 tensor.dims.extend([1000])
                 tensor.int32_data.append(0)  # encodes 8 elements, not 1000
                 with self.assertRaises(ValueError):
-                    numpy_helper.to_array(tensor)
+                    onh.to_array(tensor)
 
     def test_to_array_2bit_payload_too_small_raw_data(self) -> None:
         for name, data_type in [
@@ -395,7 +395,7 @@ class TestNumpyHelper(ExtTestCase):
                 tensor.dims.extend([1000])
                 tensor.raw_data = b"\x00"  # encodes 4 elements, not 1000
                 with self.assertRaises(ValueError):
-                    numpy_helper.to_array(tensor)
+                    onh.to_array(tensor)
 
     def test_to_array_2bit_payload_too_small_int32_data(self) -> None:
         for name, data_type in [
@@ -408,42 +408,40 @@ class TestNumpyHelper(ExtTestCase):
                 tensor.dims.extend([1000])
                 tensor.int32_data.append(0)  # encodes 16 elements, not 1000
                 with self.assertRaises(ValueError):
-                    numpy_helper.to_array(tensor)
+                    onh.to_array(tensor)
 
 
 class TestHelperExtensions(ExtTestCase):
     def test_tensor_dtype_to_storage_tensor_dtype(self) -> None:
-        import onnx_light.onnx.helper as helper
-
         # INT8 stored as INT32
         self.assertEqual(
-            helper.tensor_dtype_to_storage_tensor_dtype(onnxl.TensorProto.INT8),
+            oh.tensor_dtype_to_storage_tensor_dtype(onnxl.TensorProto.INT8),
             onnxl.TensorProto.INT32,
         )
         # FLOAT stored as FLOAT
         self.assertEqual(
-            helper.tensor_dtype_to_storage_tensor_dtype(onnxl.TensorProto.FLOAT),
+            oh.tensor_dtype_to_storage_tensor_dtype(onnxl.TensorProto.FLOAT),
             onnxl.TensorProto.FLOAT,
         )
         # INT64 stored as INT64
         self.assertEqual(
-            helper.tensor_dtype_to_storage_tensor_dtype(onnxl.TensorProto.INT64),
+            oh.tensor_dtype_to_storage_tensor_dtype(onnxl.TensorProto.INT64),
             onnxl.TensorProto.INT64,
         )
         # BOOL stored as INT32
         self.assertEqual(
-            helper.tensor_dtype_to_storage_tensor_dtype(onnxl.TensorProto.BOOL),
+            oh.tensor_dtype_to_storage_tensor_dtype(onnxl.TensorProto.BOOL),
             onnxl.TensorProto.INT32,
         )
 
     def test_tensor_type_map_basic(self) -> None:
-        import onnx_light.onnx_proto._helper as helper
+        import onnx_light.onnx_proto._helper as proto_helper
 
-        self.assertIn(onnxl.TensorProto.FLOAT, helper.TENSOR_TYPE_MAP)
-        self.assertIn(onnxl.TensorProto.INT32, helper.TENSOR_TYPE_MAP)
-        self.assertIn(onnxl.TensorProto.INT64, helper.TENSOR_TYPE_MAP)
-        self.assertIn(onnxl.TensorProto.DOUBLE, helper.TENSOR_TYPE_MAP)
-        self.assertIn(onnxl.TensorProto.STRING, helper.TENSOR_TYPE_MAP)
+        self.assertIn(onnxl.TensorProto.FLOAT, proto_helper.TENSOR_TYPE_MAP)
+        self.assertIn(onnxl.TensorProto.INT32, proto_helper.TENSOR_TYPE_MAP)
+        self.assertIn(onnxl.TensorProto.INT64, proto_helper.TENSOR_TYPE_MAP)
+        self.assertIn(onnxl.TensorProto.DOUBLE, proto_helper.TENSOR_TYPE_MAP)
+        self.assertIn(onnxl.TensorProto.STRING, proto_helper.TENSOR_TYPE_MAP)
 
     def test_saturate_cast_float(self) -> None:
         from onnx_light.onnx_proto._numpy_helper import saturate_cast
@@ -504,12 +502,12 @@ class TestHelperExtensions(ExtTestCase):
         seq = onnxl.SequenceProto()
         seq.elem_type = onnxl.SequenceProto.UNDEFINED
         with self.assertRaises(TypeError):
-            numpy_helper.to_list(seq)
+            onh.to_list(seq)
 
     def test_from_list_to_list_roundtrip(self) -> None:
         lst = [np.array([1.0, 2.0], dtype=np.float32), np.array([3.0, 4.0], dtype=np.float32)]
-        seq = numpy_helper.from_list(lst)
-        out = numpy_helper.to_list(seq)
+        seq = onh.from_list(lst)
+        out = onh.to_list(seq)
         self.assertEqual(len(out), 2)
         np.testing.assert_array_equal(out[0], lst[0])
         np.testing.assert_array_equal(out[1], lst[1])
@@ -521,7 +519,7 @@ class TestHelperExtensions(ExtTestCase):
         optional.sequence_value.tensor_values.extend(
             [oh.make_tensor("", onnxl.TensorProto.FLOAT, [1], [5.0])]
         )
-        result = numpy_helper.to_optional(optional)
+        result = onh.to_optional(optional)
         self.assertEqual(len(result), 1)
         np.testing.assert_array_equal(result[0], np.array([5.0], dtype=np.float32))
 
@@ -532,7 +530,7 @@ class TestHelperExtensions(ExtTestCase):
         optional = onnxl.OptionalProto()
         optional.elem_type = onnxl.OptionalProto.OPTIONAL
         optional.optional_value.CopyFrom(inner)
-        result = numpy_helper.to_optional(optional)
+        result = onh.to_optional(optional)
         np.testing.assert_array_equal(result, np.array([7.0], dtype=np.float32))
 
     def test_to_optional_map(self) -> None:
@@ -544,21 +542,21 @@ class TestHelperExtensions(ExtTestCase):
         optional.map_value.values.tensor_values.extend(
             [oh.make_tensor("", onnxl.TensorProto.FLOAT, [1], [1.0])]
         )
-        result = numpy_helper.to_optional(optional)
+        result = onh.to_optional(optional)
         self.assertEqual(len(result), 1)
 
     def test_from_optional_sequence(self) -> None:
-        opt_proto = numpy_helper.from_optional([np.array([1.0], dtype=np.float32)])
+        opt_proto = onh.from_optional([np.array([1.0], dtype=np.float32)])
         self.assertEqual(int(opt_proto.elem_type), int(onnxl.OptionalProto.SEQUENCE))
 
     def test_from_optional_map(self) -> None:
-        opt_proto = numpy_helper.from_optional({np.int64(1): np.array([1.0], dtype=np.float32)})
+        opt_proto = onh.from_optional({np.int64(1): np.array([1.0], dtype=np.float32)})
         self.assertEqual(int(opt_proto.elem_type), int(onnxl.OptionalProto.MAP))
 
     def test_from_optional_to_optional_roundtrip(self) -> None:
         data = np.array([1.0, 2.0, 3.0], dtype=np.float32)
-        opt_proto = numpy_helper.from_optional(data)
-        result = numpy_helper.to_optional(opt_proto)
+        opt_proto = onh.from_optional(data)
+        result = onh.to_optional(opt_proto)
         np.testing.assert_array_equal(result, data)
 
 

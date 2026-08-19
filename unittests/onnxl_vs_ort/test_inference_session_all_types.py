@@ -9,7 +9,9 @@ import unittest
 import numpy as np
 
 from onnx_light.ext_test_case import ExtTestCase, InferenceSessionAllTypes
-from onnx_light.onnx import TensorProto, helper as oh, numpy_helper as onh
+import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
+from onnx_light.onnx import TensorProto
 
 
 class TestInferenceSessionAllTypes(ExtTestCase):

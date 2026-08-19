@@ -9,7 +9,11 @@ import unittest
 
 import numpy as np
 
-from onnx_light.onnx import TensorProto, helper, numpy_helper
+import onnx_light.onnx.helper as oh
+
+import onnx_light.onnx.numpy_helper as onh
+
+from onnx_light.onnx import TensorProto
 from onnx_light.ext_test_case import import_or_skip
 
 from onnx_light.onnx_core import optimization
@@ -18,20 +22,18 @@ ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvalu
 
 
 def _value(name: str, data_type: int, shape: list[int | str]):
-    return helper.make_tensor_value_info(name, data_type, shape)
+    return oh.make_tensor_value_info(name, data_type, shape)
 
 
 def _initializer(name: str, value):
-    return numpy_helper.from_array(np.asarray(value), name=name)
+    return onh.from_array(np.asarray(value), name=name)
 
 
 def _model(nodes, inputs, outputs, initializers=(), *, opset: int = 18, ir_version: int = 10):
-    graph = helper.make_graph(
+    graph = oh.make_graph(
         list(nodes), "algebra-pattern", list(inputs), list(outputs), list(initializers)
     )
-    return helper.make_model(
-        graph, opset_imports=[helper.make_opsetid("", opset)], ir_version=ir_version
-    )
+    return oh.make_model(graph, opset_imports=[oh.make_opsetid("", opset)], ir_version=ir_version)
 
 
 def _range(*shape: int, bias: float = 0.0, dtype=np.float32):
@@ -78,9 +80,9 @@ class TestPatternsAlgebra(unittest.TestCase):
     def _mul_mul_mul_model(inner_op: str):
         return _model(
             [
-                helper.make_node(inner_op, ["X", "cst1"], ["xc"]),
-                helper.make_node(inner_op, ["Y", "cst2"], ["yc"]),
-                helper.make_node("Mul", ["xc", "yc"], ["Z"]),
+                oh.make_node(inner_op, ["X", "cst1"], ["xc"]),
+                oh.make_node(inner_op, ["Y", "cst2"], ["yc"]),
+                oh.make_node("Mul", ["xc", "yc"], ["Z"]),
             ],
             [
                 _value("X", TensorProto.FLOAT, ["a", "b"]),
@@ -109,7 +111,7 @@ class TestPatternsAlgebra(unittest.TestCase):
                 ]
                 self.assertEqual(1, len(combined))
                 np.testing.assert_allclose(
-                    numpy_helper.to_array(combined[0]), np.array([6], dtype=np.float32)
+                    onh.to_array(combined[0]), np.array([6], dtype=np.float32)
                 )
                 self.assertEqual(1, _rewrite_count(rewrites, "MulMulMulScalar"))
                 self.assert_equivalent(model, optimized, feeds, atol=1e-5)
@@ -132,9 +134,9 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_mul_mul_mul_scalar_shared_inner_output_no_match(self):
         model = _model(
             [
-                helper.make_node("Mul", ["X", "cst1"], ["xc"]),
-                helper.make_node("Mul", ["Y", "cst2"], ["yc"]),
-                helper.make_node("Mul", ["xc", "yc"], ["Z"]),
+                oh.make_node("Mul", ["X", "cst1"], ["xc"]),
+                oh.make_node("Mul", ["Y", "cst2"], ["yc"]),
+                oh.make_node("Mul", ["xc", "yc"], ["Z"]),
             ],
             [_value("X", TensorProto.FLOAT, [2, 3]), _value("Y", TensorProto.FLOAT, [2, 3])],
             [_value("Z", TensorProto.FLOAT, [2, 3]), _value("xc", TensorProto.FLOAT, [2, 3])],
@@ -156,14 +158,14 @@ class TestPatternsAlgebra(unittest.TestCase):
         mul_inputs = ["i1", "Y"] if side == "left" else ["X", "i1"]
         return _model(
             [
-                helper.make_node(
+                oh.make_node(
                     "ConstantOfShape",
                     ["shape"],
                     ["one"],
                     value=_initializer("", np.array([1], dtype=np.float32)),
                 ),
-                helper.make_node("Sub", ["one", subtracted], ["i1"]),
-                helper.make_node("Mul", mul_inputs, ["Z"]),
+                oh.make_node("Sub", ["one", subtracted], ["i1"]),
+                oh.make_node("Mul", mul_inputs, ["Z"]),
             ],
             [_value("X", TensorProto.FLOAT, ["a", 6]), _value("Y", TensorProto.FLOAT, ["a", 6])],
             [_value("Z", TensorProto.FLOAT, ["a", 6])],
@@ -190,8 +192,8 @@ class TestPatternsAlgebra(unittest.TestCase):
                 mul_inputs = ["i1", "Y"] if side == "left" else ["X", "i1"]
                 model = _model(
                     [
-                        helper.make_node("Sub", ["one", subtracted], ["i1"]),
-                        helper.make_node("Mul", mul_inputs, ["Z"]),
+                        oh.make_node("Sub", ["one", subtracted], ["i1"]),
+                        oh.make_node("Mul", mul_inputs, ["Z"]),
                     ],
                     [
                         _value("X", TensorProto.FLOAT, ["a", 6]),
@@ -210,8 +212,8 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_sub1_mul_shared_sub_output_no_match(self):
         model = _model(
             [
-                helper.make_node("Sub", ["one", "X"], ["one_minus"]),
-                helper.make_node("Mul", ["one_minus", "Y"], ["Z"]),
+                oh.make_node("Sub", ["one", "X"], ["one_minus"]),
+                oh.make_node("Mul", ["one_minus", "Y"], ["Z"]),
             ],
             [_value("X", TensorProto.FLOAT, [2, 3]), _value("Y", TensorProto.FLOAT, [2, 3])],
             [
@@ -242,14 +244,14 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_sub1_mul_constant_of_shape_broadcast_rank_no_match(self):
         model = _model(
             [
-                helper.make_node(
+                oh.make_node(
                     "ConstantOfShape",
                     ["shape"],
                     ["one"],
                     value=_initializer("", np.array([1], dtype=np.float32)),
                 ),
-                helper.make_node("Sub", ["one", "X"], ["i1"]),
-                helper.make_node("Mul", ["i1", "Y"], ["Z"]),
+                oh.make_node("Sub", ["one", "X"], ["i1"]),
+                oh.make_node("Mul", ["i1", "Y"], ["Z"]),
             ],
             [_value("X", TensorProto.FLOAT, [3]), _value("Y", TensorProto.FLOAT, [3])],
             [_value("Z", TensorProto.FLOAT, [2, 1, 3])],
@@ -282,8 +284,8 @@ class TestPatternsAlgebra(unittest.TestCase):
             outer = ["a", 1, 3, 4]
             broad = ["a", 2, 3, 4]
             tail = ["a", 1, 3, 4]
-        nodes = [helper.make_node("Add", ["B", "C"], ["bc"])]
-        nodes.append(helper.make_node("Add", ["bc", "A"] if side == 0 else ["A", "bc"], ["F"]))
+        nodes = [oh.make_node("Add", ["B", "C"], ["bc"])]
+        nodes.append(oh.make_node("Add", ["bc", "A"] if side == 0 else ["A", "bc"], ["F"]))
         return _model(
             nodes,
             [
@@ -346,59 +348,59 @@ class TestPatternsAlgebra(unittest.TestCase):
 
     @staticmethod
     def _same_children_model(case: str):
-        prefix = [helper.make_node("Add", ["X", "Y"], ["xy"])]
+        prefix = [oh.make_node("Add", ["X", "Y"], ["xy"])]
         output_type = TensorProto.FLOAT16
         if case == "two_casts":
             nodes = [
                 *prefix,
-                helper.make_node("Cast", ["xy"], ["xy1"], to=TensorProto.FLOAT16),
-                helper.make_node("Cast", ["xy"], ["xy2"], to=TensorProto.FLOAT16),
-                helper.make_node("Add", ["xy1", "xy2"], ["Z"]),
+                oh.make_node("Cast", ["xy"], ["xy1"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["xy"], ["xy2"], to=TensorProto.FLOAT16),
+                oh.make_node("Add", ["xy1", "xy2"], ["Z"]),
             ]
             expected_ops = ["Add", "Cast", "Add"]
         elif case == "commutative_add":
             nodes = [
-                helper.make_node("Cast", ["X"], ["xc"], to=TensorProto.FLOAT16),
-                helper.make_node("Cast", ["Y"], ["yc"], to=TensorProto.FLOAT16),
-                helper.make_node("Add", ["xc", "yc"], ["xy"]),
-                helper.make_node("Add", ["yc", "xc"], ["xy2"]),
-                helper.make_node("Add", ["xy", "xy2"], ["Z"]),
+                oh.make_node("Cast", ["X"], ["xc"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["Y"], ["yc"], to=TensorProto.FLOAT16),
+                oh.make_node("Add", ["xc", "yc"], ["xy"]),
+                oh.make_node("Add", ["yc", "xc"], ["xy2"]),
+                oh.make_node("Add", ["xy", "xy2"], ["Z"]),
             ]
             expected_ops = ["Cast", "Cast", "Add", "Add"]
         elif case == "three_casts":
             nodes = [
                 *prefix,
-                helper.make_node("Cast", ["xy"], ["xy1"], to=TensorProto.FLOAT16),
-                helper.make_node("Cast", ["xy"], ["xy2"], to=TensorProto.FLOAT16),
-                helper.make_node("Cast", ["xy"], ["xy3"], to=TensorProto.FLOAT16),
-                helper.make_node("Add", ["xy1", "xy2"], ["xy12"]),
-                helper.make_node("Add", ["xy12", "xy3"], ["Z"]),
+                oh.make_node("Cast", ["xy"], ["xy1"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["xy"], ["xy2"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["xy"], ["xy3"], to=TensorProto.FLOAT16),
+                oh.make_node("Add", ["xy1", "xy2"], ["xy12"]),
+                oh.make_node("Add", ["xy12", "xy3"], ["Z"]),
             ]
             expected_ops = ["Add", "Cast", "Add", "Add"]
         elif case == "two_exp":
             nodes = [
                 *prefix,
-                helper.make_node("Cast", ["xy"], ["xy1"], to=TensorProto.FLOAT16),
-                helper.make_node("Cast", ["xy"], ["xy2"], to=TensorProto.FLOAT16),
-                helper.make_node("Exp", ["xy1"], ["e1"]),
-                helper.make_node("Exp", ["xy2"], ["e2"]),
-                helper.make_node("Add", ["e1", "e2"], ["Z"]),
+                oh.make_node("Cast", ["xy"], ["xy1"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["xy"], ["xy2"], to=TensorProto.FLOAT16),
+                oh.make_node("Exp", ["xy1"], ["e1"]),
+                oh.make_node("Exp", ["xy2"], ["e2"]),
+                oh.make_node("Add", ["e1", "e2"], ["Z"]),
             ]
             expected_ops = ["Add", "Cast", "Exp", "Add"]
         elif case == "four_exp":
             nodes = [
                 *prefix,
-                helper.make_node("Cast", ["xy"], ["xy1"], to=TensorProto.FLOAT16),
-                helper.make_node("Cast", ["xy"], ["xy2"], to=TensorProto.FLOAT16),
-                helper.make_node("Cast", ["xy"], ["xy3"], to=TensorProto.FLOAT16),
-                helper.make_node("Cast", ["xy"], ["xy4"], to=TensorProto.FLOAT16),
-                helper.make_node("Exp", ["xy1"], ["e1"]),
-                helper.make_node("Exp", ["xy2"], ["e2"]),
-                helper.make_node("Exp", ["xy3"], ["e3"]),
-                helper.make_node("Exp", ["xy4"], ["e4"]),
-                helper.make_node("Add", ["e1", "e2"], ["e12"]),
-                helper.make_node("Add", ["e3", "e4"], ["e34"]),
-                helper.make_node("Add", ["e12", "e34"], ["Z"]),
+                oh.make_node("Cast", ["xy"], ["xy1"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["xy"], ["xy2"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["xy"], ["xy3"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["xy"], ["xy4"], to=TensorProto.FLOAT16),
+                oh.make_node("Exp", ["xy1"], ["e1"]),
+                oh.make_node("Exp", ["xy2"], ["e2"]),
+                oh.make_node("Exp", ["xy3"], ["e3"]),
+                oh.make_node("Exp", ["xy4"], ["e4"]),
+                oh.make_node("Add", ["e1", "e2"], ["e12"]),
+                oh.make_node("Add", ["e3", "e4"], ["e34"]),
+                oh.make_node("Add", ["e12", "e34"], ["Z"]),
             ]
             expected_ops = ["Add", "Cast", "Exp", "Add", "Add"]
         else:
@@ -432,9 +434,9 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_same_children_from_graph_input(self):
         model = _model(
             [
-                helper.make_node("Cast", ["X"], ["xy1"], to=TensorProto.FLOAT16),
-                helper.make_node("Cast", ["X"], ["xy2"], to=TensorProto.FLOAT16),
-                helper.make_node("Add", ["xy1", "xy2"], ["Z"]),
+                oh.make_node("Cast", ["X"], ["xy1"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["X"], ["xy2"], to=TensorProto.FLOAT16),
+                oh.make_node("Add", ["xy1", "xy2"], ["Z"]),
             ],
             [_value("X", TensorProto.FLOAT, ["a", 2, 3, 4])],
             [_value("Z", TensorProto.FLOAT16, ["a", 2, 3, 4])],
@@ -451,22 +453,22 @@ class TestPatternsAlgebra(unittest.TestCase):
 
     def test_same_children_many_duplicated(self):
         nodes = [
-            helper.make_node("Add", ["X", "one"], ["x1"]),
-            helper.make_node("Add", ["x1", "one"], ["x11"]),
-            helper.make_node("Add", ["x1", "one"], ["x12"]),
-            helper.make_node("Add", ["x11", "one"], ["x111"]),
-            helper.make_node("Add", ["x11", "one"], ["x112"]),
-            helper.make_node("Add", ["x12", "one"], ["x121"]),
-            helper.make_node("Add", ["x12", "one"], ["x122"]),
-            helper.make_node("Add", ["x111", "one"], ["x1111"]),
-            helper.make_node("Add", ["x111", "one"], ["x1112"]),
-            helper.make_node("Add", ["x112", "one"], ["x1121"]),
-            helper.make_node("Add", ["x112", "one"], ["x1122"]),
-            helper.make_node("Add", ["x121", "one"], ["x1211"]),
-            helper.make_node("Add", ["x121", "one"], ["x1212"]),
-            helper.make_node("Add", ["x122", "one"], ["x1221"]),
-            helper.make_node("Add", ["x122", "one"], ["x1222"]),
-            helper.make_node(
+            oh.make_node("Add", ["X", "one"], ["x1"]),
+            oh.make_node("Add", ["x1", "one"], ["x11"]),
+            oh.make_node("Add", ["x1", "one"], ["x12"]),
+            oh.make_node("Add", ["x11", "one"], ["x111"]),
+            oh.make_node("Add", ["x11", "one"], ["x112"]),
+            oh.make_node("Add", ["x12", "one"], ["x121"]),
+            oh.make_node("Add", ["x12", "one"], ["x122"]),
+            oh.make_node("Add", ["x111", "one"], ["x1111"]),
+            oh.make_node("Add", ["x111", "one"], ["x1112"]),
+            oh.make_node("Add", ["x112", "one"], ["x1121"]),
+            oh.make_node("Add", ["x112", "one"], ["x1122"]),
+            oh.make_node("Add", ["x121", "one"], ["x1211"]),
+            oh.make_node("Add", ["x121", "one"], ["x1212"]),
+            oh.make_node("Add", ["x122", "one"], ["x1221"]),
+            oh.make_node("Add", ["x122", "one"], ["x1222"]),
+            oh.make_node(
                 "Sum",
                 ["x1111", "x1112", "x1121", "x1122", "x1211", "x1212", "x1221", "x1222"],
                 ["Z"],
@@ -489,9 +491,9 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_same_children_different_attributes_no_match(self):
         model = _model(
             [
-                helper.make_node("Identity", ["X"], ["shared"]),
-                helper.make_node("Cast", ["shared"], ["left"], to=TensorProto.FLOAT16),
-                helper.make_node("Cast", ["shared"], ["right"], to=TensorProto.DOUBLE),
+                oh.make_node("Identity", ["X"], ["shared"]),
+                oh.make_node("Cast", ["shared"], ["left"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["shared"], ["right"], to=TensorProto.DOUBLE),
             ],
             [_value("X", TensorProto.FLOAT, [2, 3])],
             [
@@ -510,11 +512,11 @@ class TestPatternsAlgebra(unittest.TestCase):
     def _shape_children_model():
         return _model(
             [
-                helper.make_node("Shape", ["X"], ["sh1"]),
-                helper.make_node("Shape", ["X"], ["sh2"]),
-                helper.make_node("Expand", ["Y", "sh1"], ["y1"]),
-                helper.make_node("Expand", ["Y", "sh2"], ["y2"]),
-                helper.make_node("Mul", ["y1", "y2"], ["Z"]),
+                oh.make_node("Shape", ["X"], ["sh1"]),
+                oh.make_node("Shape", ["X"], ["sh2"]),
+                oh.make_node("Expand", ["Y", "sh1"], ["y1"]),
+                oh.make_node("Expand", ["Y", "sh2"], ["y2"]),
+                oh.make_node("Mul", ["y1", "y2"], ["Z"]),
             ],
             [
                 _value("X", TensorProto.FLOAT, ["a", 2, 3, 4]),
@@ -554,8 +556,8 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_shape_based_identity_full_slice(self):
         model = _model(
             [
-                helper.make_node("Shape", ["X"], ["N"], start=0, end=1),
-                helper.make_node("Slice", ["X", "zero", "N", "zero"], ["Y"]),
+                oh.make_node("Shape", ["X"], ["N"], start=0, end=1),
+                oh.make_node("Slice", ["X", "zero", "N", "zero"], ["Y"]),
             ],
             [_value("X", TensorProto.FLOAT, ["a"])],
             [_value("Y", TensorProto.FLOAT, ["a"])],
@@ -571,7 +573,7 @@ class TestPatternsAlgebra(unittest.TestCase):
 
     def test_shape_based_identity_non_unit_steps_no_match(self):
         model = _model(
-            [helper.make_node("Slice", ["X", "starts", "ends", "axes", "steps"], ["Y"])],
+            [oh.make_node("Slice", ["X", "starts", "ends", "axes", "steps"], ["Y"])],
             [_value("X", TensorProto.FLOAT, [2, 3])],
             [_value("Y", TensorProto.FLOAT, [2, 3])],
             [
@@ -598,9 +600,9 @@ class TestPatternsAlgebra(unittest.TestCase):
             (True, ["Reshape", "Reshape", "Mul"], 2),
         ):
             with self.subTest(transpose=transpose):
-                nodes = [helper.make_node("MatMul", ["X", "Y"], ["Zt" if transpose else "Z"])]
+                nodes = [oh.make_node("MatMul", ["X", "Y"], ["Zt" if transpose else "Z"])]
                 if transpose:
-                    nodes.append(helper.make_node("Transpose", ["Zt"], ["Z"], perm=[0, 2, 1]))
+                    nodes.append(oh.make_node("Transpose", ["Zt"], ["Z"], perm=[0, 2, 1]))
                 model = _model(
                     nodes,
                     [
@@ -625,8 +627,8 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_shape_based_matmul_transpose_shared_output_no_match(self):
         model = _model(
             [
-                helper.make_node("MatMul", ["X", "Y"], ["Zt"]),
-                helper.make_node("Transpose", ["Zt"], ["Z"], perm=[0, 2, 1]),
+                oh.make_node("MatMul", ["X", "Y"], ["Zt"]),
+                oh.make_node("Transpose", ["Zt"], ["Z"], perm=[0, 2, 1]),
             ],
             [
                 _value("X", TensorProto.FLOAT, [1, 5, 1]),
@@ -657,8 +659,8 @@ class TestPatternsAlgebra(unittest.TestCase):
                 unary_inputs = ["xt"] if unary == "Exp" else ["xt", "cst"]
                 model = _model(
                     [
-                        helper.make_node("Transpose", ["X"], ["xt"], perm=[0, 2, 1, 3]),
-                        helper.make_node(unary, unary_inputs, ["Y"]),
+                        oh.make_node("Transpose", ["X"], ["xt"], perm=[0, 2, 1, 3]),
+                        oh.make_node(unary, unary_inputs, ["Y"]),
                     ],
                     [_value("X", TensorProto.FLOAT, ["a", "b", "c", "d"])],
                     [_value("Y", TensorProto.FLOAT, ["a", "c", "b", "d"])],
@@ -691,8 +693,8 @@ class TestPatternsAlgebra(unittest.TestCase):
             with self.subTest(case=case):
                 model = _model(
                     [
-                        helper.make_node("Transpose", ["X"], ["xt"], perm=[0, 2, 1]),
-                        helper.make_node("Mul", ["xt", "cst"], ["Y"]),
+                        oh.make_node("Transpose", ["X"], ["xt"], perm=[0, 2, 1]),
+                        oh.make_node("Mul", ["xt", "cst"], ["Y"]),
                     ],
                     [_value("X", TensorProto.FLOAT, [1, 2, 3])],
                     outputs,
@@ -729,8 +731,8 @@ class TestPatternsAlgebra(unittest.TestCase):
                     start = "START"
                 model = _model(
                     [
-                        helper.make_node("Range", [start, "END", "one"], ["arange"]),
-                        helper.make_node("Add", ["arange", "PLUS"], ["Y"]),
+                        oh.make_node("Range", [start, "END", "one"], ["arange"]),
+                        oh.make_node("Add", ["arange", "PLUS"], ["Y"]),
                     ],
                     inputs,
                     [_value("Y", TensorProto.INT64, ["n"])],
@@ -746,8 +748,8 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_swap_range_add_scalar_no_match(self):
         model = _model(
             [
-                helper.make_node("Range", ["zero", "END", "one"], ["arange"]),
-                helper.make_node("Add", ["arange", "PLUS"], ["Y"]),
+                oh.make_node("Range", ["zero", "END", "one"], ["arange"]),
+                oh.make_node("Add", ["arange", "PLUS"], ["Y"]),
             ],
             [_value("END", TensorProto.INT64, []), _value("PLUS", TensorProto.INT64, [])],
             [_value("Y", TensorProto.INT64, ["n"])],
@@ -767,11 +769,11 @@ class TestPatternsAlgebra(unittest.TestCase):
     def _reduce_sum_normalize_model():
         return _model(
             [
-                helper.make_node("Cast", ["X"], ["xc"], to=TensorProto.FLOAT),
-                helper.make_node("ReduceSum", ["xc", "axis"], ["red"], keepdims=1),
-                helper.make_node("Mul", ["red", "Y"], ["mul"]),
-                helper.make_node("Sub", ["xc", "mul"], ["subc"]),
-                helper.make_node("Cast", ["subc"], ["Z"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["X"], ["xc"], to=TensorProto.FLOAT),
+                oh.make_node("ReduceSum", ["xc", "axis"], ["red"], keepdims=1),
+                oh.make_node("Mul", ["red", "Y"], ["mul"]),
+                oh.make_node("Sub", ["xc", "mul"], ["subc"]),
+                oh.make_node("Cast", ["subc"], ["Z"], to=TensorProto.FLOAT16),
             ],
             [
                 _value("X", TensorProto.FLOAT16, ["a", "b"]),
@@ -803,12 +805,10 @@ class TestPatternsAlgebra(unittest.TestCase):
                 value_shape = [32, 1] if keepdims else [32]
                 model = _model(
                     [
-                        helper.make_node(
+                        oh.make_node(
                             f"Reduce{extremum}", ["X", "axis"], ["Y1"], keepdims=keepdims
                         ),
-                        helper.make_node(
-                            f"Arg{extremum}", ["X"], ["Y2"], axis=1, keepdims=keepdims
-                        ),
+                        oh.make_node(f"Arg{extremum}", ["X"], ["Y2"], axis=1, keepdims=keepdims),
                     ],
                     [_value("X", TensorProto.FLOAT, ["a", "b"])],
                     [
@@ -831,8 +831,8 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_reduce_arg_topk_different_axes_no_match(self):
         model = _model(
             [
-                helper.make_node("ReduceMin", ["X", "axis"], ["Y1"], keepdims=0),
-                helper.make_node("ArgMin", ["X"], ["Y2"], axis=0, keepdims=0),
+                oh.make_node("ReduceMin", ["X", "axis"], ["Y1"], keepdims=0),
+                oh.make_node("ArgMin", ["X"], ["Y2"], axis=0, keepdims=0),
             ],
             [_value("X", TensorProto.FLOAT, ["a", "b"])],
             [_value("Y1", TensorProto.FLOAT, ["a"]), _value("Y2", TensorProto.INT64, ["b"])],
@@ -854,8 +854,8 @@ class TestPatternsAlgebra(unittest.TestCase):
                 add_inputs = ["fmask", "X"] if where_first else ["X", "fmask"]
                 model = _model(
                     [
-                        helper.make_node("Where", ["mask", "zero", "inf"], ["fmask"]),
-                        helper.make_node("Add", add_inputs, ["Y"]),
+                        oh.make_node("Where", ["mask", "zero", "inf"], ["fmask"]),
+                        oh.make_node("Add", add_inputs, ["Y"]),
                     ],
                     [_value("mask", TensorProto.BOOL, ["a", "b"])],
                     [_value("Y", TensorProto.FLOAT, ["a", "b"])],
@@ -876,8 +876,8 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_where_add_upstream_positive_infinity_addend_no_match(self):
         model = _model(
             [
-                helper.make_node("Where", ["mask", "zero", "minus_inf"], ["fmask"]),
-                helper.make_node("Add", ["fmask", "X"], ["Y"]),
+                oh.make_node("Where", ["mask", "zero", "minus_inf"], ["fmask"]),
+                oh.make_node("Add", ["fmask", "X"], ["Y"]),
             ],
             [_value("mask", TensorProto.BOOL, [2, 2])],
             [_value("Y", TensorProto.FLOAT, [2, 2])],
@@ -915,9 +915,9 @@ class TestPatternsAlgebra(unittest.TestCase):
                 else_inputs = ["Z", "Y"] if else_common_first else ["Y", "Z"]
                 model = _model(
                     [
-                        helper.make_node("Add", then_inputs, ["then"]),
-                        helper.make_node("Add", else_inputs, ["else"]),
-                        helper.make_node("Where", ["cond", "then", "else"], ["out"]),
+                        oh.make_node("Add", then_inputs, ["then"]),
+                        oh.make_node("Add", else_inputs, ["else"]),
+                        oh.make_node("Where", ["cond", "then", "else"], ["out"]),
                     ],
                     [
                         _value("cond", TensorProto.BOOL, [2, 2]),
@@ -937,8 +937,8 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_where_add_upstream_and_local_no_match_topologies(self):
         upstream_model = _model(
             [
-                helper.make_node("Where", ["mask", "one", "inf"], ["fmask"]),
-                helper.make_node("Add", ["fmask", "X"], ["Y"]),
+                oh.make_node("Where", ["mask", "one", "inf"], ["fmask"]),
+                oh.make_node("Add", ["fmask", "X"], ["Y"]),
             ],
             [_value("X", TensorProto.FLOAT, [2, 2]), _value("mask", TensorProto.BOOL, [2, 2])],
             [_value("Y", TensorProto.FLOAT, [2, 2])],
@@ -949,9 +949,9 @@ class TestPatternsAlgebra(unittest.TestCase):
         )
         local_model = _model(
             [
-                helper.make_node("Add", ["X", "Z"], ["then"]),
-                helper.make_node("Add", ["Y", "W"], ["else"]),
-                helper.make_node("Where", ["mask", "then", "else"], ["out"]),
+                oh.make_node("Add", ["X", "Z"], ["then"]),
+                oh.make_node("Add", ["Y", "W"], ["else"]),
+                oh.make_node("Where", ["mask", "then", "else"], ["out"]),
             ],
             [
                 _value("mask", TensorProto.BOOL, [2, 2]),
@@ -991,9 +991,9 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_where_add_shared_branch_output_no_match(self):
         model = _model(
             [
-                helper.make_node("Add", ["X", "Z"], ["then"]),
-                helper.make_node("Add", ["Y", "Z"], ["else"]),
-                helper.make_node("Where", ["mask", "then", "else"], ["out"]),
+                oh.make_node("Add", ["X", "Z"], ["then"]),
+                oh.make_node("Add", ["Y", "Z"], ["else"]),
+                oh.make_node("Where", ["mask", "then", "else"], ["out"]),
             ],
             [
                 _value("mask", TensorProto.BOOL, [2, 2]),
@@ -1018,8 +1018,8 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_where_add_upstream_external_use_no_match(self):
         model = _model(
             [
-                helper.make_node("Where", ["mask", "zero", "inf"], ["fmask"]),
-                helper.make_node("Add", ["fmask", "X"], ["Y"]),
+                oh.make_node("Where", ["mask", "zero", "inf"], ["fmask"]),
+                oh.make_node("Add", ["fmask", "X"], ["Y"]),
             ],
             [_value("X", TensorProto.FLOAT, [2, 2]), _value("mask", TensorProto.BOOL, [2, 2])],
             [_value("Y", TensorProto.FLOAT, [2, 2]), _value("fmask", TensorProto.FLOAT, [2, 2])],
@@ -1048,8 +1048,8 @@ class TestPatternsAlgebra(unittest.TestCase):
                     outputs.append(_value("nx", TensorProto.BOOL, [2, 2]))
                 model = _model(
                     [
-                        helper.make_node("Not", ["X"], ["nx"]),
-                        helper.make_node("Where", ["nx", "A", "B"], ["Y"]),
+                        oh.make_node("Not", ["X"], ["nx"]),
+                        oh.make_node("Where", ["nx", "A", "B"], ["Y"]),
                     ],
                     [
                         _value("X", TensorProto.BOOL, [2, 2]),
@@ -1066,7 +1066,7 @@ class TestPatternsAlgebra(unittest.TestCase):
 
     def test_not_where_no_match(self):
         model = _model(
-            [helper.make_node("Not", ["X"], ["nx"]), helper.make_node("And", ["nx", "X"], ["Y"])],
+            [oh.make_node("Not", ["X"], ["nx"]), oh.make_node("And", ["nx", "X"], ["Y"])],
             [_value("X", TensorProto.BOOL, [2, 2])],
             [_value("Y", TensorProto.BOOL, [2, 2])],
         )
@@ -1086,8 +1086,8 @@ class TestPatternsAlgebra(unittest.TestCase):
                     outputs.append(_value("middle", TensorProto.BOOL, [2, 2]))
                 model = _model(
                     [
-                        helper.make_node("Not", ["X"], ["middle"]),
-                        helper.make_node("Not", ["middle"], ["Y"]),
+                        oh.make_node("Not", ["X"], ["middle"]),
+                        oh.make_node("Not", ["middle"], ["Y"]),
                     ],
                     [_value("X", TensorProto.BOOL, [2, 2])],
                     outputs,
@@ -1101,7 +1101,7 @@ class TestPatternsAlgebra(unittest.TestCase):
 
     def test_not_not_no_match(self):
         model = _model(
-            [helper.make_node("Not", ["X"], ["Y"])],
+            [oh.make_node("Not", ["X"], ["Y"])],
             [_value("X", TensorProto.BOOL, [2, 2])],
             [_value("Y", TensorProto.BOOL, [2, 2])],
             opset=23,
@@ -1116,9 +1116,9 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_unsqueeze_equal_upstream_topology_preserves_rank(self):
         model = _model(
             [
-                helper.make_node("Unsqueeze", ["X", "axis"], ["Y"]),
-                helper.make_node("Equal", ["X", "m_one"], ["xe"]),
-                helper.make_node("Unsqueeze", ["xe", "axis"], ["Z"]),
+                oh.make_node("Unsqueeze", ["X", "axis"], ["Y"]),
+                oh.make_node("Equal", ["X", "m_one"], ["xe"]),
+                oh.make_node("Unsqueeze", ["xe", "axis"], ["Z"]),
             ],
             [_value("X", TensorProto.FLOAT, ["a", "b"])],
             [
@@ -1141,9 +1141,9 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_unsqueeze_equal_upstream_scalar_rank_zero_constant(self):
         model = _model(
             [
-                helper.make_node("Unsqueeze", ["X", "axis"], ["Y"]),
-                helper.make_node("Equal", ["X", "m_one"], ["xe"]),
-                helper.make_node("Unsqueeze", ["xe", "axis"], ["Z"]),
+                oh.make_node("Unsqueeze", ["X", "axis"], ["Y"]),
+                oh.make_node("Equal", ["X", "m_one"], ["xe"]),
+                oh.make_node("Unsqueeze", ["xe", "axis"], ["Z"]),
             ],
             [_value("X", TensorProto.FLOAT, [])],
             [_value("Y", TensorProto.FLOAT, [1]), _value("Z", TensorProto.BOOL, [1])],
@@ -1164,9 +1164,9 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_unsqueeze_equal_upstream_scalar_rank_one_constant_no_match(self):
         model = _model(
             [
-                helper.make_node("Unsqueeze", ["X", "axis"], ["Y"]),
-                helper.make_node("Equal", ["X", "m_one"], ["xe"]),
-                helper.make_node("Unsqueeze", ["xe", "axis"], ["Z"]),
+                oh.make_node("Unsqueeze", ["X", "axis"], ["Y"]),
+                oh.make_node("Equal", ["X", "m_one"], ["xe"]),
+                oh.make_node("Unsqueeze", ["xe", "axis"], ["Z"]),
             ],
             [_value("X", TensorProto.FLOAT, [])],
             [_value("Y", TensorProto.FLOAT, [1]), _value("Z", TensorProto.BOOL, [1, 1])],
@@ -1198,9 +1198,9 @@ class TestPatternsAlgebra(unittest.TestCase):
                     right_axis = "axis0"
                 model = _model(
                     [
-                        helper.make_node("Unsqueeze", ["X", "axis1"], ["xu"]),
-                        helper.make_node("Unsqueeze", ["Y", right_axis], ["yu"]),
-                        helper.make_node("Equal", ["xu", "yu"], ["Z"]),
+                        oh.make_node("Unsqueeze", ["X", "axis1"], ["xu"]),
+                        oh.make_node("Unsqueeze", ["Y", right_axis], ["yu"]),
+                        oh.make_node("Equal", ["xu", "yu"], ["Z"]),
                     ],
                     [
                         _value("X", TensorProto.FLOAT, [2, 3]),
@@ -1220,9 +1220,9 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_unsqueeze_equal_upstream_different_axes_no_match(self):
         model = _model(
             [
-                helper.make_node("Unsqueeze", ["X", "axis1"], ["Y"]),
-                helper.make_node("Equal", ["X", "m_one"], ["xe"]),
-                helper.make_node("Unsqueeze", ["xe", "axis0"], ["Z"]),
+                oh.make_node("Unsqueeze", ["X", "axis1"], ["Y"]),
+                oh.make_node("Equal", ["X", "m_one"], ["xe"]),
+                oh.make_node("Unsqueeze", ["xe", "axis0"], ["Z"]),
             ],
             [_value("X", TensorProto.FLOAT, [2, 3])],
             [_value("Y", TensorProto.FLOAT, [2, 1, 3]), _value("Z", TensorProto.BOOL, [1, 2, 3])],
@@ -1242,9 +1242,9 @@ class TestPatternsAlgebra(unittest.TestCase):
     def test_shape_based_shape_shape_add_preserves_upstream_no_match(self):
         model = _model(
             [
-                helper.make_node("Shape", ["X"], ["sx"]),
-                helper.make_node("Shape", ["Y"], ["sy"]),
-                helper.make_node("Add", ["sx", "sy"], ["Z"]),
+                oh.make_node("Shape", ["X"], ["sx"]),
+                oh.make_node("Shape", ["Y"], ["sy"]),
+                oh.make_node("Add", ["sx", "sy"], ["Z"]),
             ],
             [_value("X", TensorProto.FLOAT, [2, 3]), _value("Y", TensorProto.FLOAT, [2, 3])],
             [_value("Z", TensorProto.INT64, [2])],
@@ -1266,7 +1266,7 @@ class TestPatternsAlgebra(unittest.TestCase):
 
     def test_shape_based_shape_shape_add_non_shape_inputs_no_match(self):
         model = _model(
-            [helper.make_node("Add", ["X", "Y"], ["Z"])],
+            [oh.make_node("Add", ["X", "Y"], ["Z"])],
             [_value("X", TensorProto.INT64, [2]), _value("Y", TensorProto.INT64, [2])],
             [_value("Z", TensorProto.INT64, [2])],
         )

@@ -9,7 +9,11 @@ import unittest
 
 import numpy as np
 
-from onnx_light.onnx import TensorProto, checker, helper, numpy_helper
+import onnx_light.onnx.helper as oh
+
+import onnx_light.onnx.numpy_helper as onh
+
+from onnx_light.onnx import TensorProto, checker
 from onnx_light.ext_test_case import import_or_skip
 
 from onnx_light.onnx_core import optimization
@@ -30,12 +34,12 @@ class TestPatternsReshape(unittest.TestCase):
     @staticmethod
     def _value_info(name: str, shape: list[int | str]):
         """Creates a floating-point value-info entry."""
-        return helper.make_tensor_value_info(name, TensorProto.FLOAT, shape)
+        return oh.make_tensor_value_info(name, TensorProto.FLOAT, shape)
 
     @staticmethod
     def _initializer(name: str, values, dtype=np.int64):
         """Creates an initializer from values."""
-        return numpy_helper.from_array(np.asarray(values, dtype=dtype), name=name)
+        return onh.from_array(np.asarray(values, dtype=dtype), name=name)
 
     def _optimize_and_check(
         self,
@@ -88,15 +92,15 @@ class TestPatternsReshape(unittest.TestCase):
         outputs = [self._value_info("Z", output_shape)]
         if keep_intermediate:
             outputs.append(self._value_info("xm1", [1, 32, 128]))
-        graph = helper.make_graph(
+        graph = oh.make_graph(
             [
-                helper.make_node("Unsqueeze", ["X", "zero"], ["xu1"]),
-                helper.make_node("Unsqueeze", ["xu1", "one"], ["xu2"]),
-                helper.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
-                helper.make_node("Reshape", ["Y", "shape2"], ["xm2c"]),
-                helper.make_node("Cast", ["xm2c"], ["xm2"], to=TensorProto.FLOAT),
-                helper.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
-                helper.make_node("Reshape", ["xm", "shape3"], ["Z"]),
+                oh.make_node("Unsqueeze", ["X", "zero"], ["xu1"]),
+                oh.make_node("Unsqueeze", ["xu1", "one"], ["xu2"]),
+                oh.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
+                oh.make_node("Reshape", ["Y", "shape2"], ["xm2c"]),
+                oh.make_node("Cast", ["xm2c"], ["xm2"], to=TensorProto.FLOAT),
+                oh.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
+                oh.make_node("Reshape", ["xm", "shape3"], ["Z"]),
             ],
             "reshape_matmul_reshape",
             [self._value_info("X", input_x_shape), self._value_info("Y", input_y_shape)],
@@ -109,9 +113,7 @@ class TestPatternsReshape(unittest.TestCase):
                 self._initializer("shape3", [3, 5, 32, 64]),
             ],
         )
-        return helper.make_model(
-            graph, opset_imports=[helper.make_opsetid("", 18)], ir_version=10
-        )
+        return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=10)
 
     def _check_reshape_matmul_reshape(
         self, *, dynamic: bool = False, keep_intermediate: bool = False, combined: bool = False
@@ -173,15 +175,15 @@ class TestPatternsReshape(unittest.TestCase):
         self.assertEqual(["Z", "xm1"], [output.name for output in optimized.graph.output])
 
     def test_reshape_same_shape(self):
-        model = helper.make_model(
-            helper.make_graph(
-                [helper.make_node("Reshape", ["X", "shape"], ["Y"])],
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Reshape", ["X", "shape"], ["Y"])],
                 "reshape_same_shape",
                 [self._value_info("X", [2, 3])],
                 [self._value_info("Y", [2, 3])],
                 [self._initializer("shape", [2, 3])],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=10,
         )
         self._optimize_and_check(
@@ -194,15 +196,15 @@ class TestPatternsReshape(unittest.TestCase):
         )
 
     def test_reshape_reshape_execution(self):
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node("Reshape", ["X", "r1"], ["xu1"]),
-                    helper.make_node("Reshape", ["xu1", "r2"], ["xu2"]),
-                    helper.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
-                    helper.make_node("Reshape", ["Y", "shape2"], ["xm2"]),
-                    helper.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
-                    helper.make_node("Reshape", ["xm", "shape3"], ["Z"]),
+                    oh.make_node("Reshape", ["X", "r1"], ["xu1"]),
+                    oh.make_node("Reshape", ["xu1", "r2"], ["xu2"]),
+                    oh.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
+                    oh.make_node("Reshape", ["Y", "shape2"], ["xm2"]),
+                    oh.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
+                    oh.make_node("Reshape", ["xm", "shape3"], ["Z"]),
                 ],
                 "reshape_reshape_execution",
                 [self._value_info("X", [32, 128]), self._value_info("Y", [3, 5, 128, 64])],
@@ -215,7 +217,7 @@ class TestPatternsReshape(unittest.TestCase):
                     self._initializer("shape3", [3, 5, 32, 64]),
                 ],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=10,
         )
         self._optimize_and_check(
@@ -229,12 +231,12 @@ class TestPatternsReshape(unittest.TestCase):
     def test_reshape_reshape_3d_shape_based(self):
         feeds = {"X": self._range(2, 3, 8)}
         with self.subTest(pattern="ReshapeReshape"):
-            model = helper.make_model(
-                helper.make_graph(
+            model = oh.make_model(
+                oh.make_graph(
                     [
-                        helper.make_node("Reshape", ["X", "shape1"], ["xr"]),
-                        helper.make_node("Reshape", ["xr", "shape2"], ["xrr"]),
-                        helper.make_node("Add", ["xrr", "one"], ["Y"]),
+                        oh.make_node("Reshape", ["X", "shape1"], ["xr"]),
+                        oh.make_node("Reshape", ["xr", "shape2"], ["xrr"]),
+                        oh.make_node("Add", ["xrr", "one"], ["Y"]),
                     ],
                     "reshape_reshape_3d",
                     [self._value_info("X", ["a", "b", "c"])],
@@ -245,7 +247,7 @@ class TestPatternsReshape(unittest.TestCase):
                         self._initializer("one", [1], np.float32),
                     ],
                 ),
-                opset_imports=[helper.make_opsetid("", 18)],
+                opset_imports=[oh.make_opsetid("", 18)],
                 ir_version=10,
             )
             self._optimize_and_check(
@@ -256,11 +258,11 @@ class TestPatternsReshape(unittest.TestCase):
                 required_patterns={"ReshapeReshape"},
             )
         with self.subTest(pattern="ShapedBasedReshape"):
-            model = helper.make_model(
-                helper.make_graph(
+            model = oh.make_model(
+                oh.make_graph(
                     [
-                        helper.make_node("Reshape", ["X", "shape"], ["xr"]),
-                        helper.make_node("Add", ["xr", "one"], ["Y"]),
+                        oh.make_node("Reshape", ["X", "shape"], ["xr"]),
+                        oh.make_node("Add", ["xr", "one"], ["Y"]),
                     ],
                     "shape_based_reshape",
                     [self._value_info("X", ["a", "b", "c"])],
@@ -270,7 +272,7 @@ class TestPatternsReshape(unittest.TestCase):
                         self._initializer("one", [1], np.float32),
                     ],
                 ),
-                opset_imports=[helper.make_opsetid("", 18)],
+                opset_imports=[oh.make_opsetid("", 18)],
                 ir_version=10,
             )
             self._optimize_and_check(
@@ -282,21 +284,21 @@ class TestPatternsReshape(unittest.TestCase):
             )
 
     def test_reshape_reshape_zero(self):
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node("Reshape", ["X", "shape"], ["Xs"], name="R1"),
-                    helper.make_node("Reshape", ["Xs", "shape0"], ["Y"], name="R2"),
+                    oh.make_node("Reshape", ["X", "shape"], ["Xs"], name="R1"),
+                    oh.make_node("Reshape", ["Xs", "shape0"], ["Y"], name="R2"),
                 ],
                 "reshape_reshape_zero",
                 [
                     self._value_info("X", ["a", "b", "c"]),
-                    helper.make_tensor_value_info("shape", TensorProto.INT64, [4]),
+                    oh.make_tensor_value_info("shape", TensorProto.INT64, [4]),
                 ],
                 [self._value_info("Y", ["d", "e", "f", "g"])],
                 [self._initializer("shape0", [0, 1, -1, 0])],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=10,
         )
         self._optimize_and_check(
@@ -308,11 +310,11 @@ class TestPatternsReshape(unittest.TestCase):
         )
 
     def test_reshape_reshape_zero_from_positive(self):
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node("Reshape", ["X", "shape1"], ["xr"]),
-                    helper.make_node("Reshape", ["xr", "shape2"], ["Y"]),
+                    oh.make_node("Reshape", ["X", "shape1"], ["xr"]),
+                    oh.make_node("Reshape", ["xr", "shape2"], ["Y"]),
                 ],
                 "reshape_reshape_zero_positive",
                 [self._value_info("X", [2, 3, 16, 8])],
@@ -322,7 +324,7 @@ class TestPatternsReshape(unittest.TestCase):
                     self._initializer("shape2", [0, 0, 0, 1, 8]),
                 ],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=10,
         )
         self._optimize_and_check(
@@ -334,12 +336,12 @@ class TestPatternsReshape(unittest.TestCase):
         )
 
     def test_reshape_reshape_three(self):
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node("Reshape", ["X", "shape1"], ["s1"]),
-                    helper.make_node("Reshape", ["s1", "shape2"], ["s2"]),
-                    helper.make_node("Reshape", ["s2", "shape3"], ["Y"]),
+                    oh.make_node("Reshape", ["X", "shape1"], ["s1"]),
+                    oh.make_node("Reshape", ["s1", "shape2"], ["s2"]),
+                    oh.make_node("Reshape", ["s2", "shape3"], ["Y"]),
                 ],
                 "reshape_reshape_three",
                 [self._value_info("X", ["a", "b", 8])],
@@ -350,7 +352,7 @@ class TestPatternsReshape(unittest.TestCase):
                     self._initializer("shape3", [196, 8]),
                 ],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=10,
         )
         self._optimize_and_check(
@@ -362,11 +364,11 @@ class TestPatternsReshape(unittest.TestCase):
         )
 
     def test_reshape_reshape_single(self):
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node("Reshape", ["X", "shape1"], ["xs"]),
-                    helper.make_node("Reshape", ["xs", "shape2"], ["Y"]),
+                    oh.make_node("Reshape", ["X", "shape1"], ["xs"]),
+                    oh.make_node("Reshape", ["xs", "shape2"], ["Y"]),
                 ],
                 "reshape_reshape_single",
                 [self._value_info("X", ["a", "b", 1, 16, 80])],
@@ -376,7 +378,7 @@ class TestPatternsReshape(unittest.TestCase):
                     self._initializer("shape2", [-1, 1280]),
                 ],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=10,
         )
         self._optimize_and_check(
@@ -413,39 +415,37 @@ class TestPatternsReshape(unittest.TestCase):
         right_name = "Y"
         if topology in {"three", "left", "right", "both"}:
             if topology != "right":
-                nodes.append(helper.make_node("Reshape", ["X", "shape1"], ["xr"]))
+                nodes.append(oh.make_node("Reshape", ["X", "shape1"], ["xr"]))
                 initializers.append(self._initializer("shape1", reshaped_x_shape))
                 left_name = "xr"
             else:
-                nodes.append(helper.make_node("Reshape", ["X", "shape1"], ["xr"]))
+                nodes.append(oh.make_node("Reshape", ["X", "shape1"], ["xr"]))
                 initializers.append(self._initializer("shape1", reshaped_x_shape))
                 right_name = "xr"
         if topology in {"three", "both"}:
-            nodes.append(helper.make_node("Reshape", ["Y", "shape2"], ["yr"]))
+            nodes.append(oh.make_node("Reshape", ["Y", "shape2"], ["yr"]))
             initializers.append(self._initializer("shape2", reshaped_y_shape))
             right_name = "yr"
         if topology == "right":
             left_name = "Y"
 
         inner_output = "inner" if topology != "both" else "Z"
-        nodes.append(helper.make_node(op_type, [left_name, right_name], [inner_output]))
+        nodes.append(oh.make_node(op_type, [left_name, right_name], [inner_output]))
         if topology != "both":
-            nodes.append(helper.make_node("Reshape", [inner_output, "shape3"], ["Z"]))
+            nodes.append(oh.make_node("Reshape", [inner_output, "shape3"], ["Z"]))
             initializers.append(self._initializer("shape3", output_shape))
 
         outputs = [self._value_info("Z", output_shape)]
         if keep_intermediate:
             outputs.append(self._value_info("inner", inner_shape))
-        graph = helper.make_graph(
+        graph = oh.make_graph(
             nodes,
             f"{op_type.lower()}_reshape_2of3_{topology}",
             [self._value_info("X", input_x_shape), self._value_info("Y", input_y_shape)],
             outputs,
             initializers,
         )
-        return helper.make_model(
-            graph, opset_imports=[helper.make_opsetid("", 18)], ir_version=10
-        )
+        return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=10)
 
     def _check_2of3(self, op_type: str, topology: str, *, keep_intermediate: bool = False):
         pattern = "Reshape2Of3" if op_type == "Mul" else "MatMulReshape2Of3"
@@ -513,19 +513,19 @@ class TestPatternsReshape(unittest.TestCase):
         self._check_2of3("MatMul", "both")
 
     def test_reshape_reshape_binary(self):
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node("Reshape", ["X", "shape1"], ["xc"]),
-                    helper.make_node("Reshape", ["Y", "shape2"], ["yc"]),
-                    helper.make_node("Add", ["xc", "yc"], ["Z"]),
+                    oh.make_node("Reshape", ["X", "shape1"], ["xc"]),
+                    oh.make_node("Reshape", ["Y", "shape2"], ["yc"]),
+                    oh.make_node("Add", ["xc", "yc"], ["Z"]),
                 ],
                 "reshape_reshape_binary",
                 [self._value_info("X", ["a", 4]), self._value_info("Y", ["a", 4])],
                 [self._value_info("Z", ["b", 8])],
                 [self._initializer("shape1", [-1, 8]), self._initializer("shape2", [-1, 8])],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=10,
         )
         self._optimize_and_check(
@@ -554,22 +554,20 @@ class TestPatternsReshape(unittest.TestCase):
         elif axes is not None:
             reduce_attributes["axes"] = axes
         nodes = [
-            helper.make_node("ReduceSum", reduce_inputs, ["reduced"], **reduce_attributes),
-            helper.make_node("Reshape", ["reduced", "shape"], ["reshaped" if add_cos else "Y"]),
+            oh.make_node("ReduceSum", reduce_inputs, ["reduced"], **reduce_attributes),
+            oh.make_node("Reshape", ["reduced", "shape"], ["reshaped" if add_cos else "Y"]),
         ]
         if add_cos:
-            nodes.append(helper.make_node("Cos", ["reshaped"], ["Y"]))
+            nodes.append(oh.make_node("Cos", ["reshaped"], ["Y"]))
         initializers.append(self._initializer("shape", output_shape))
-        graph = helper.make_graph(
+        graph = oh.make_graph(
             nodes,
             "reduce_reshape",
             [self._value_info("X", input_shape)],
             [self._value_info("Y", output_shape)],
             initializers,
         )
-        return helper.make_model(
-            graph, opset_imports=[helper.make_opsetid("", opset)], ir_version=10
-        )
+        return oh.make_model(graph, opset_imports=[oh.make_opsetid("", opset)], ir_version=10)
 
     def test_reduce_reshape(self):
         self._optimize_and_check(
@@ -609,29 +607,27 @@ class TestPatternsReshape(unittest.TestCase):
 
     def _make_concat_reshape(self, *, with_abs: bool):
         nodes = [
-            helper.make_node("Shape", ["X"], ["D2"], start=2, end=3),
-            helper.make_node("Shape", ["X"], ["D1"], start=3, end=4),
+            oh.make_node("Shape", ["X"], ["D2"], start=2, end=3),
+            oh.make_node("Shape", ["X"], ["D1"], start=3, end=4),
         ]
         dimension = "D1"
         if with_abs:
-            nodes.append(helper.make_node("Abs", ["D1"], ["abs_D1"]))
+            nodes.append(oh.make_node("Abs", ["D1"], ["abs_D1"]))
             dimension = "abs_D1"
         nodes.extend(
             [
-                helper.make_node("Concat", ["I1", "I2", dimension, "D2"], ["shape"], axis=0),
-                helper.make_node("Reshape", ["X", "shape"], ["Y"]),
+                oh.make_node("Concat", ["I1", "I2", dimension, "D2"], ["shape"], axis=0),
+                oh.make_node("Reshape", ["X", "shape"], ["Y"]),
             ]
         )
-        graph = helper.make_graph(
+        graph = oh.make_graph(
             nodes,
             "concat_reshape",
             [self._value_info("X", ["a", "b", "c", "d"])],
             [self._value_info("Y", ["a", "b", "d", "c"])],
             [self._initializer("I1", [2]), self._initializer("I2", [1])],
         )
-        return helper.make_model(
-            graph, opset_imports=[helper.make_opsetid("", 18)], ir_version=10
-        )
+        return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=10)
 
     def test_concat_reshape_shape_inputs(self):
         self._optimize_and_check(
@@ -652,19 +648,19 @@ class TestPatternsReshape(unittest.TestCase):
         )
 
     def test_static_concat_reshape(self):
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node("Shape", ["X"], ["D2"], start=2, end=3),
-                    helper.make_node("Concat", ["I1", "D2"], ["shape"], axis=0),
-                    helper.make_node("Reshape", ["X", "shape"], ["Y"]),
+                    oh.make_node("Shape", ["X"], ["D2"], start=2, end=3),
+                    oh.make_node("Concat", ["I1", "D2"], ["shape"], axis=0),
+                    oh.make_node("Reshape", ["X", "shape"], ["Y"]),
                 ],
                 "static_concat_reshape",
                 [self._value_info("X", [2, 3, "d"])],
                 [self._value_info("Y", [6, "d"])],
                 [self._initializer("I1", [6])],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=10,
         )
         self._optimize_and_check(
@@ -676,19 +672,19 @@ class TestPatternsReshape(unittest.TestCase):
         )
 
     def test_shape_based_edit_distance_reshape(self):
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node("Shape", ["X"], ["D2"], start=2, end=3),
-                    helper.make_node("Concat", ["minus_one", "D2"], ["shape"], axis=0),
-                    helper.make_node("Reshape", ["X", "shape"], ["Y"]),
+                    oh.make_node("Shape", ["X"], ["D2"], start=2, end=3),
+                    oh.make_node("Concat", ["minus_one", "D2"], ["shape"], axis=0),
+                    oh.make_node("Reshape", ["X", "shape"], ["Y"]),
                 ],
                 "shape_based_edit_distance_reshape",
                 [self._value_info("X", [2, 3, "d"])],
                 [self._value_info("Y", [6, "d"])],
                 [self._initializer("minus_one", [-1])],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=10,
         )
         self._optimize_and_check(
@@ -700,19 +696,19 @@ class TestPatternsReshape(unittest.TestCase):
         )
 
     def test_shape_based_reshape_is_squeeze_reshape(self):
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node("Shape", ["X"], ["shape_x"]),
-                    helper.make_node("Concat", ["one", "shape_x", "one"], ["shape"], axis=0),
-                    helper.make_node("Reshape", ["X", "shape"], ["Y"]),
+                    oh.make_node("Shape", ["X"], ["shape_x"]),
+                    oh.make_node("Concat", ["one", "shape_x", "one"], ["shape"], axis=0),
+                    oh.make_node("Reshape", ["X", "shape"], ["Y"]),
                 ],
                 "shape_based_reshape_is_squeeze",
                 [self._value_info("X", [2, 3, "d"])],
                 [self._value_info("Y", [1, 2, 3, "d", 1])],
                 [self._initializer("one", [1])],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=10,
         )
         self._optimize_and_check(
@@ -730,19 +726,17 @@ class TestPatternsReshape(unittest.TestCase):
         reshape_shape: list[int],
         output_shape: list[int | str],
     ):
-        graph = helper.make_graph(
+        graph = oh.make_graph(
             [
-                helper.make_node("Unsqueeze", ["X", "axis"], ["xu"]),
-                helper.make_node("Reshape", ["xu", "shape"], ["Z"]),
+                oh.make_node("Unsqueeze", ["X", "axis"], ["xu"]),
+                oh.make_node("Reshape", ["xu", "shape"], ["Z"]),
             ],
             "unsqueeze_reshape",
             [self._value_info("X", input_shape)],
             [self._value_info("Z", output_shape)],
             [self._initializer("axis", [axis]), self._initializer("shape", reshape_shape)],
         )
-        return helper.make_model(
-            graph, opset_imports=[helper.make_opsetid("", 18)], ir_version=10
-        )
+        return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=10)
 
     def test_unsqueeze_or_squeeze_reshape(self):
         self._optimize_and_check(
@@ -797,19 +791,17 @@ class TestPatternsReshape(unittest.TestCase):
         reshape_shape: list[int],
         output_shape: list[int | str],
     ):
-        graph = helper.make_graph(
+        graph = oh.make_graph(
             [
-                helper.make_node("Reshape", ["X", "shape"], ["xr"]),
-                helper.make_node("Squeeze", ["xr", "axis"], ["Z"]),
+                oh.make_node("Reshape", ["X", "shape"], ["xr"]),
+                oh.make_node("Squeeze", ["xr", "axis"], ["Z"]),
             ],
             "reshape_squeeze",
             [self._value_info("X", input_shape)],
             [self._value_info("Z", output_shape)],
             [self._initializer("shape", reshape_shape), self._initializer("axis", [3])],
         )
-        return helper.make_model(
-            graph, opset_imports=[helper.make_opsetid("", 18)], ir_version=10
-        )
+        return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=10)
 
     def test_reshape_squeeze_basic(self):
         self._optimize_and_check(

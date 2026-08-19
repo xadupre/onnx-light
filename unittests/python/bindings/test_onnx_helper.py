@@ -226,7 +226,7 @@ class TestOnnxLightHelper(ExtTestCase):
         )
 
     def test_make_tensor_sub_byte_types(self) -> None:
-        import onnx_light.onnx.numpy_helper as nh
+        import onnx_light.onnx.numpy_helper as onh
 
         vals = [0, 1, 2, 1, 0]
         cases = [
@@ -240,11 +240,11 @@ class TestOnnxLightHelper(ExtTestCase):
             with self.subTest(data_type=int(data_type)):
                 tensor = oh.make_tensor("t", data_type, [5], vals)
                 self.assertEqual(int(tensor.data_type), int(data_type))
-                back = nh.to_array(tensor)
+                back = onh.to_array(tensor)
                 self.assertEqual(back.astype(np.float32).flatten().tolist(), expected)
 
                 raw_tensor = oh.make_tensor("t", data_type, [5], back, raw=True)
-                raw_back = nh.to_array(raw_tensor)
+                raw_back = onh.to_array(raw_tensor)
                 self.assertEqual(raw_back.astype(np.float32).flatten().tolist(), expected)
 
     def test_attr_repeated_tensor_proto(self) -> None:

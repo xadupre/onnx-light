@@ -23,7 +23,7 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
-import onnx_light.onnx.helper as helper
+import onnx_light.onnx.helper as oh
 from onnx_light.tools import pretty_onnx
 from onnx_light.onnx_core.expressions import evaluate_expression
 from onnx_light.onnx_core.shape_inference import (
@@ -62,20 +62,20 @@ defs.register_onnx_operator_set_schema()
 # last two nodes can reuse their input buffers in place. The memory table
 # therefore mixes constant terms, symbolic terms, and zero-allocation steps.
 
-model = helper.make_model(
-    helper.make_graph(
+model = oh.make_model(
+    oh.make_graph(
         [
-            helper.make_node("MatMul", ["X", "W"], ["M"]),
-            helper.make_node("Concat", ["M", "X"], ["C"], axis=0),
-            helper.make_node("Shape", ["C"], ["S"]),
-            helper.make_node("Abs", ["C"], ["A"]),
-            helper.make_node("Reshape", ["A", "S"], ["Z"]),
+            oh.make_node("MatMul", ["X", "W"], ["M"]),
+            oh.make_node("Concat", ["M", "X"], ["C"], axis=0),
+            oh.make_node("Shape", ["C"], ["S"]),
+            oh.make_node("Abs", ["C"], ["A"]),
+            oh.make_node("Reshape", ["A", "S"], ["Z"]),
         ],
         "compute_context_memory_demo",
-        inputs=[helper.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])],
-        outputs=[helper.make_tensor_value_info("Z", onnxl.TensorProto.FLOAT, None)],
+        inputs=[oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])],
+        outputs=[oh.make_tensor_value_info("Z", onnxl.TensorProto.FLOAT, None)],
         initializer=[
-            helper.make_tensor(
+            oh.make_tensor(
                 "W",
                 onnxl.TensorProto.FLOAT,
                 [4, 4],
@@ -83,7 +83,7 @@ model = helper.make_model(
             )
         ],
     ),
-    opset_imports=[helper.make_opsetid("", 18)],
+    opset_imports=[oh.make_opsetid("", 18)],
     ir_version=8,
 )
 

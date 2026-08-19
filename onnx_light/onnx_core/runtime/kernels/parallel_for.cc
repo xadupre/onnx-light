@@ -7,12 +7,13 @@
 #include "onnx_core/runtime/tuning/runtime_parameters.h"
 
 #include <algorithm>
+#include <chrono>
+#include <limits>
+#include <stdexcept>
+#include <system_error>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
-
-// Covers the Python/runtime dispatch gap between nearby inference calls.
-constexpr int64_t kParallelForSpinCount = 1000000;
 
 void CpuRelax() noexcept {
 #if defined(__x86_64__) || defined(__i386__)
@@ -24,6 +25,11 @@ void CpuRelax() noexcept {
 #endif
 }
 
+std::chrono::steady_clock::duration SpinDuration(uint64_t duration_ns) noexcept {
+  const uint64_t maximum = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+  return std::chrono::nanoseconds(static_cast<int64_t>(std::min(duration_ns, maximum)));
+}
+
 } // namespace
 
 int64_t ParallelForThreadCount() noexcept {
@@ -31,17 +37,38 @@ int64_t ParallelForThreadCount() noexcept {
   return thread_count;
 }
 
-ThreadPool::ThreadPool(int64_t num_workers) {
+ThreadPool::ThreadPool(int64_t num_workers) : ThreadPool(num_workers, ThreadPoolOptions{}) {}
+
+ThreadPool::ThreadPool(int64_t num_workers, ThreadPoolOptions options)
+    : options_(std::move(options)) {
   if (num_workers < 0) {
     num_workers = 0;
   }
   workers_.reserve(static_cast<size_t>(num_workers));
-  for (int64_t i = 0; i < num_workers; ++i) {
-    workers_.emplace_back([this, i]() { WorkerLoop(i); });
+  try {
+    for (int64_t i = 0; i < num_workers; ++i) {
+      workers_.emplace_back([this, i]() { WorkerLoop(i); });
+    }
+  } catch (const std::system_error &) {
+    StopAndJoin();
+    throw;
+  }
+  if (!workers_.empty()) {
+    std::unique_lock<std::mutex> lock(mu_);
+    cv_started_.wait(
+        lock, [this]() { return started_workers_ == static_cast<int64_t>(workers_.size()); });
+    if (!startup_error_.empty()) {
+      const std::string error = startup_error_;
+      lock.unlock();
+      StopAndJoin();
+      throw std::runtime_error(error);
+    }
   }
 }
 
-ThreadPool::~ThreadPool() {
+ThreadPool::~ThreadPool() { StopAndJoin(); }
+
+void ThreadPool::StopAndJoin() noexcept {
   {
     std::lock_guard<std::mutex> lock(mu_);
     stop_.store(true, std::memory_order_release);
@@ -62,6 +89,54 @@ bool &ThreadPool::InPoolFlag() noexcept {
 
 bool ThreadPool::InPool() noexcept { return InPoolFlag(); }
 
+bool ThreadPool::SpinForWork(uint64_t last_generation) const noexcept {
+  if (options_.spin_iterations != 0) {
+    for (uint64_t spin = 0; spin < options_.spin_iterations; ++spin) {
+      if (stop_.load(std::memory_order_acquire) ||
+          generation_.load(std::memory_order_acquire) != last_generation) {
+        return true;
+      }
+      CpuRelax();
+    }
+    return false;
+  }
+  if (options_.spin_duration_ns == 0) {
+    return false;
+  }
+  const auto deadline = std::chrono::steady_clock::now() + SpinDuration(options_.spin_duration_ns);
+  while (std::chrono::steady_clock::now() < deadline) {
+    if (stop_.load(std::memory_order_acquire) ||
+        generation_.load(std::memory_order_acquire) != last_generation) {
+      return true;
+    }
+    CpuRelax();
+  }
+  return false;
+}
+
+bool ThreadPool::SpinForCompletion() const noexcept {
+  if (options_.spin_iterations != 0) {
+    for (uint64_t spin = 0; spin < options_.spin_iterations; ++spin) {
+      if (remaining_.load(std::memory_order_acquire) == 0) {
+        return true;
+      }
+      CpuRelax();
+    }
+    return false;
+  }
+  if (options_.spin_duration_ns == 0) {
+    return false;
+  }
+  const auto deadline = std::chrono::steady_clock::now() + SpinDuration(options_.spin_duration_ns);
+  while (std::chrono::steady_clock::now() < deadline) {
+    if (remaining_.load(std::memory_order_acquire) == 0) {
+      return true;
+    }
+    CpuRelax();
+  }
+  return false;
+}
+
 void ThreadPool::RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn) {
   if (num_blocks <= 0) {
     return;
@@ -71,6 +146,9 @@ void ThreadPool::RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn) {
       task_fn(task_ctx, b);
     }
     return;
+  }
+  if (num_blocks > worker_count() + 1) {
+    throw std::invalid_argument("ThreadPool num_blocks exceeds its participant capacity.");
   }
 
   std::lock_guard<std::mutex> region(region_mu_);
@@ -90,11 +168,8 @@ void ThreadPool::RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn) {
   task_fn(task_ctx, static_cast<int64_t>(0));
   in_pool = was_in_pool;
 
-  for (int64_t spin = 0; spin < kParallelForSpinCount; ++spin) {
-    if (remaining_.load(std::memory_order_acquire) == 0) {
-      return;
-    }
-    CpuRelax();
+  if (SpinForCompletion()) {
+    return;
   }
   std::unique_lock<std::mutex> lock(mu_);
   cv_done_.wait(lock, [this]() { return remaining_.load(std::memory_order_acquire) == 0; });
@@ -102,16 +177,25 @@ void ThreadPool::RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn) {
 
 void ThreadPool::WorkerLoop(int64_t worker_index) {
   InPoolFlag() = true;
+  std::string startup_error;
+  if (options_.worker_start != nullptr &&
+      !options_.worker_start(options_.worker_start_context, worker_index, startup_error) &&
+      startup_error.empty()) {
+    startup_error = "ThreadPool worker startup callback failed.";
+  }
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    if (!startup_error.empty() && startup_error_.empty()) {
+      startup_error_ = std::move(startup_error);
+    }
+    ++started_workers_;
+  }
+  cv_started_.notify_one();
+
   const int64_t my_block = worker_index + 1;
   uint64_t last_generation = 0;
   for (;;) {
-    for (int64_t spin = 0; spin < kParallelForSpinCount; ++spin) {
-      if (stop_.load(std::memory_order_acquire) ||
-          generation_.load(std::memory_order_acquire) != last_generation) {
-        break;
-      }
-      CpuRelax();
-    }
+    SpinForWork(last_generation);
     void *ctx = nullptr;
     TaskFn fn = nullptr;
     int64_t num_blocks = 0;
@@ -148,16 +232,14 @@ namespace {
 struct ParallelRange {
   void *task_ctx;
   detail::ParallelRangeFn task_fn;
-  int64_t block;
-  int64_t total;
+  int64_t base_block_size;
+  int64_t extra_blocks;
 };
 
 void RunParallelBlock(ParallelRange &range, int64_t block_index) {
-  const int64_t begin = block_index * range.block;
-  if (begin >= range.total) {
-    return;
-  }
-  const int64_t end = std::min(begin + range.block, range.total);
+  const int64_t begin =
+      block_index * range.base_block_size + std::min(block_index, range.extra_blocks);
+  const int64_t end = begin + range.base_block_size + (block_index < range.extra_blocks ? 1 : 0);
   range.task_fn(range.task_ctx, begin, end);
 }
 
@@ -187,8 +269,8 @@ void ParallelForErased(int64_t total, int64_t grain_size, void *task_ctx, Parall
   ParallelRange range{
       task_ctx,
       task_fn,
-      (total + num_blocks - 1) / num_blocks,
-      total,
+      total / num_blocks,
+      total % num_blocks,
   };
   GlobalThreadPool().Run(num_blocks,
                          [&range](int64_t block_index) { RunParallelBlock(range, block_index); });

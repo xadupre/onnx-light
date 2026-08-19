@@ -27,6 +27,12 @@ here; the full sequence is tracked in the `Implementation sequence`_ table.
        ``ResolveCpuExecutionPolicy`` validates the request deterministically,
        derives the effective participant count from the process-visible
        topology, and records fallback diagnostics.
+   * - Pool PR02
+     - Executor and compatible-pool registry
+     - Added ``CpuExecutor`` and the bounded ``CpuExecutorRegistry``. Compatible
+       resolved policies share a persistent pool; incompatible policies remain
+       isolated, the last lease stops workers immediately, serial policies
+       create no workers, and inherited executors are rejected after ``fork``.
 
 Objective
 +++++++++
@@ -158,7 +164,7 @@ must not be inferred from adjacency.
 Pool registry
 +++++++++++++
 
-Introduce a process-owned ``CpuExecutorRegistry``. A session resolves its
+Pool PR02 introduces a process-owned ``CpuExecutorRegistry``. A session resolves its
 policy, obtains an immutable key, and leases a ``CpuExecutor``:
 
 .. code-block:: text
@@ -181,13 +187,15 @@ The key does not include diagnostics, counters, session identifiers, or
 kernel-specific thresholds. Two sessions share only when their immutable keys
 are equal.
 
-Use reference-counted leases. Releasing the last lease may stop the pool
-immediately or place it in a bounded idle cache; the chosen lifecycle must be
-deterministic and testable. The registry needs a strict bound so creating many
-policies cannot leave an unbounded number of parked threads.
+Leases are reference-counted. The registry retains weak references, so
+releasing the last lease stops the pool immediately. A registry accepts at
+most its configured number of simultaneously live incompatible pools; the
+process-owned registry defaults to eight. Capacity exhaustion fails explicitly,
+and expired entries never consume capacity.
 
-A serial policy does not create worker threads. Forked child behavior must be
-defined explicitly: inherited worker state is never treated as usable.
+A serial policy does not create worker threads. An executor records its
+creating process and rejects dispatch after ``fork``; inherited worker state is
+never treated as usable.
 
 Executor interface
 ++++++++++++++++++
@@ -210,6 +218,11 @@ Kernels need a small non-owning interface, not the concrete pool:
 request a lower positive limit resolved by processor-aware tuning. It can never
 exceed the session limit.
 
+Worker affinity is applied before the executor becomes available. Failure to
+apply a resolved worker assignment fails acquisition. Explicit caller affinity
+is applied at dispatch and likewise fails explicitly if the process CPU set
+changed after resolution.
+
 ``RuntimeContext`` or the prepared-kernel context carries a non-owning executor
 view. Portable kernel helpers dispatch through that view. Standalone helpers
 may use an explicitly supplied executor or a documented standalone default.
@@ -228,9 +241,11 @@ Nested parallel regions run inline by default. This includes:
 * application code invoking a session from its own pool;
 * callbacks that enter BLAS, OpenMP, or another runtime pool.
 
-An executor marks its workers and caller-owned active regions. A nested call
-may reuse the current participants only if a later explicit composition design
-proves it deadlock-free and bounded; it must never wake an unrelated pool.
+An executor marks its workers and caller-owned active regions. Pool PR02 always
+runs nested calls inline, including when the nesting flag is present in the
+sharing key. A nested call may reuse the current participants only if a later
+explicit composition design proves it deadlock-free and bounded; it must never
+wake an unrelated pool.
 
 Concurrent calls sharing one executor serialize only the parallel-region
 dispatch metadata, not complete inference runs. The design must measure and
@@ -394,7 +409,7 @@ Implementation sequence
      - Compatible sessions share a bounded pool; incompatible and serial
        policies behave correctly; lifecycle and thread-sanitizer tests pass.
      - PR01
-     - Pending
+     - Done
    * - Pool PR03
      - ``onnx-light``: session/runtime wiring.
      - ``RuntimeSession`` and ``ReferenceEvaluator`` use the leased executor;

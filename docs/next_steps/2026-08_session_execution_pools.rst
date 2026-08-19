@@ -419,6 +419,14 @@ Counters belong to the shared executor rather than one session: enabling them
 through any compatible lease enables cumulative counting for every leaseholder
 until that executor is destroyed.
 
+Pool PR06 gives every ``kRunNode`` runtime event the process-local identity of
+the exact ``CpuExecutor`` installed for that dispatch and its effective
+participant count. Compatible sessions therefore emit the same identifier,
+incompatible executors emit different identifiers, and nested sessions retain
+their enclosing executor identity. The identifier is diagnostic and
+non-persistent; tuning and prepared-object compatibility continue to use the
+behavior-only executor key.
+
 Validation
 ++++++++++
 
@@ -483,13 +491,13 @@ Implementation sequence
        CPU pool, and respect kernel participant limits; standalone behavior is
        unchanged.
      - PR03
-     - Pending
+     - Done
    * - Pool PR06
      - ``onnx-light``: profiling and prepared-execution integration.
      - Region events identify the resolved executor; future prepared tasks do
        not introduce an incompatible pool or nested oversubscription.
      - PR04, PR05
-     - Pending
+     - In progress
    * - Pool PR07
      - Both repositories: compatibility and performance gate.
      - Policy matrix, concurrent sessions, registered/standalone kernels, and

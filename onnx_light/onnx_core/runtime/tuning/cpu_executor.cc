@@ -39,6 +39,11 @@ uint64_t CurrentProcessId() noexcept {
 #endif
 }
 
+uint64_t NextCpuExecutorInstanceId() noexcept {
+  static std::atomic<uint64_t> next{1};
+  return next.fetch_add(1, std::memory_order_relaxed);
+}
+
 void ValidateResolvedPolicy(const ResolvedCpuExecutionPolicy &policy) {
   if (policy.effective_threads == 0) {
     throw std::invalid_argument("CpuExecutor requires at least one effective participant.");
@@ -176,7 +181,7 @@ struct CpuExecutor::Impl {
 
   explicit Impl(ResolvedCpuExecutionPolicy resolved)
       : policy(std::move(resolved)), executor_key(MakeCpuExecutorKey(policy)),
-        process_id(CurrentProcessId()) {
+        process_id(CurrentProcessId()), instance_id(NextCpuExecutorInstanceId()) {
     ValidateResolvedPolicy(policy);
     ThreadPoolOptions options = MakeThreadPoolOptions(policy, this, &Impl::StartWorker);
     pool = std::make_unique<ThreadPool>(static_cast<int64_t>(policy.effective_threads) - 1,
@@ -198,6 +203,7 @@ struct CpuExecutor::Impl {
   ResolvedCpuExecutionPolicy policy;
   CpuExecutorKey executor_key;
   uint64_t process_id;
+  uint64_t instance_id;
   std::unique_ptr<ThreadPool> pool;
   std::mutex counters_mutex;
   std::unique_ptr<CounterState> counters_storage;
@@ -214,6 +220,8 @@ uint32_t CpuExecutor::effective_threads() const noexcept { return impl_->policy.
 const ResolvedCpuExecutionPolicy &CpuExecutor::policy() const noexcept { return impl_->policy; }
 
 const CpuExecutorKey &CpuExecutor::key() const noexcept { return impl_->executor_key; }
+
+uint64_t CpuExecutor::instance_id() const noexcept { return impl_->instance_id; }
 
 void CpuExecutor::EnableCounters() {
   if (impl_->counters.load(std::memory_order_acquire) != nullptr) {

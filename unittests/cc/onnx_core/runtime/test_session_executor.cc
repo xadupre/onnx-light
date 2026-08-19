@@ -13,6 +13,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -31,6 +32,7 @@ using core::runtime::KernelContext;
 using core::runtime::ParallelFor;
 using core::runtime::ParallelForThreadCount;
 using core::runtime::RuntimeContext;
+using core::runtime::RuntimeEventAction;
 using core::runtime::RuntimeParameters;
 using core::runtime::RuntimeSession;
 using core::runtime::RuntimeSessionOptions;
@@ -42,6 +44,8 @@ struct ExecutorObservation {
   CpuExecutor *current = nullptr;
   CpuExecutor *from_context = nullptr;
   int64_t reported_threads = 0;
+  uint64_t event_executor_instance_id = 0;
+  uint32_t event_effective_threads = 0;
   std::set<std::thread::id> block_threads;
 };
 
@@ -151,6 +155,26 @@ TEST(SessionExecutor, RunInstallsTheLeasedExecutor) {
   EXPECT_EQ(CurrentCpuExecutor(), nullptr);
 }
 
+TEST(SessionExecutor, RunEventsIdentifyTheResolvedExecutor) {
+  const GraphProto graph = MakeObserverGraph();
+  RuntimeContext rt(KernelContext(core::runtime::DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.events_enabled = true});
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan, RuntimeSessionOptions{.parameters = RuntimeParameters(2)});
+  ExecutorObservation observation;
+
+  RunObserver(session, rt, observation, 8);
+
+  const auto event =
+      std::find_if(rt.events().begin(), rt.events().end(), [](const auto &candidate) {
+        return candidate.action == RuntimeEventAction::kRunNode;
+      });
+  ASSERT_NE(event, rt.events().end());
+  EXPECT_EQ(event->cpu_executor_instance_id, session.cpu_executor()->instance_id());
+  EXPECT_EQ(event->cpu_effective_threads, session.cpu_executor()->effective_threads());
+  EXPECT_NE(event->cpu_executor_instance_id, 0u);
+}
+
 TEST(SessionExecutor, ObservedParticipantsMatchTheRequestedThreadCount) {
   const GraphProto graph = MakeObserverGraph();
   RuntimeContext rt(KernelContext(core::runtime::DefaultOpset(18)));
@@ -185,32 +209,43 @@ TEST(SessionExecutor, NestedSessionKeepsTheEnclosingExecutor) {
   inner_node->add_output("z");
 
   const GraphProto outer_graph = MakeObserverGraph();
-  RuntimeContext rt(KernelContext(core::runtime::DefaultOpset(18)));
+  RuntimeContext rt(KernelContext(core::runtime::DefaultOpset(18)),
+                    core::runtime::RuntimeContextOptions{.events_enabled = true});
   const ExecutionPlan &outer_plan = rt.GetExecutionPlan(outer_graph);
   RuntimeSession outer(outer_plan, RuntimeSessionOptions{.parameters = RuntimeParameters(2)});
 
   ExecutorObservation nested;
-  rt.RegisterCustomKernel("test.execution_pools", "ObserveExecutor",
-                          [&inner_graph, &nested](const NodeProto &node, RuntimeContext &ctx) {
-                            RuntimeContext child = ctx.MakeSubgraphContext("body");
-                            child.RegisterCustomKernel(
-                                "test.execution_pools", "ObserveNested",
-                                [&nested](const NodeProto &inner, RuntimeContext &inner_ctx) {
-                                  nested.current = CurrentCpuExecutor();
-                                  nested.from_context = inner_ctx.cpu_executor();
-                                  nested.reported_threads = ParallelForThreadCount();
-                                  inner_ctx.Set(std::string(inner.output(0)),
-                                                inner_ctx.Get(inner.input(0)));
-                                });
-                            const ExecutionPlan &inner_plan = child.GetExecutionPlan(inner_graph);
-                            RuntimeSession inner_session(inner_plan);
-                            inner_session.Run(child);
-                            ctx.Set(std::string(node.output(0)), ctx.Get(node.input(0)));
-                          });
+  rt.RegisterCustomKernel(
+      "test.execution_pools", "ObserveExecutor",
+      [&inner_graph, &nested](const NodeProto &node, RuntimeContext &ctx) {
+        RuntimeContext child = ctx.MakeSubgraphContext("body");
+        child.RegisterCustomKernel("test.execution_pools", "ObserveNested",
+                                   [&nested](const NodeProto &inner, RuntimeContext &inner_ctx) {
+                                     nested.current = CurrentCpuExecutor();
+                                     nested.from_context = inner_ctx.cpu_executor();
+                                     nested.reported_threads = ParallelForThreadCount();
+                                     inner_ctx.Set(std::string(inner.output(0)),
+                                                   inner_ctx.Get(inner.input(0)));
+                                   });
+        const ExecutionPlan &inner_plan = child.GetExecutionPlan(inner_graph);
+        RuntimeSession inner_session(inner_plan);
+        inner_session.Run(child);
+        const auto event =
+            std::find_if(child.events().begin(), child.events().end(), [](const auto &candidate) {
+              return candidate.action == RuntimeEventAction::kRunNode &&
+                     candidate.op_type == "ObserveNested";
+            });
+        ASSERT_NE(event, child.events().end());
+        nested.event_executor_instance_id = event->cpu_executor_instance_id;
+        nested.event_effective_threads = event->cpu_effective_threads;
+        ctx.Set(std::string(node.output(0)), ctx.Get(node.input(0)));
+      });
   rt.Set("x", core::runtime::Tensor::FromFloat("x", {1}, {1.0f}));
   outer.Run(rt);
 
   EXPECT_EQ(nested.current, outer.cpu_executor().get());
   EXPECT_EQ(nested.from_context, outer.cpu_executor().get());
   EXPECT_EQ(nested.reported_threads, 2);
+  EXPECT_EQ(nested.event_executor_instance_id, outer.cpu_executor()->instance_id());
+  EXPECT_EQ(nested.event_effective_threads, 2u);
 }

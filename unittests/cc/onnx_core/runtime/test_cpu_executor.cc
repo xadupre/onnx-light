@@ -60,6 +60,8 @@ TEST(CpuExecutorRegistry, CompatibleResolvedPoliciesShareExecutor) {
   std::shared_ptr<CpuExecutor> equivalent = registry.Acquire(equivalent_policy);
 
   EXPECT_EQ(first, equivalent);
+  EXPECT_EQ(first->instance_id(), equivalent->instance_id());
+  EXPECT_NE(first->instance_id(), 0u);
   EXPECT_EQ(registry.live_pool_count(), 1u);
 }
 
@@ -69,6 +71,7 @@ TEST(CpuExecutorRegistry, IncompatiblePoliciesUseDistinctExecutors) {
   std::shared_ptr<CpuExecutor> parallel = registry.Acquire(NoAffinityPolicy(2));
 
   EXPECT_NE(serial, parallel);
+  EXPECT_NE(serial->instance_id(), parallel->instance_id());
   EXPECT_EQ(registry.live_pool_count(), 2u);
 }
 

@@ -245,6 +245,10 @@ inline constexpr const char *RuntimeEventKindName(RuntimeEventKind kind) noexcep
  * ``value_count = 0``, leave ``shape`` empty and do not populate
  * ``values`` / ``string_values``; they only record the name, kind and
  * timestamp of the removal.
+ *
+ * ``kRunNode`` events describe one kernel dispatch. In addition to its
+ * duration and operator identity, each event records the process-local
+ * identity and effective participants of the installed CPU executor.
  */
 struct RuntimeEvent {
   /// Kind of mutation recorded by this entry.
@@ -299,6 +303,15 @@ struct RuntimeEvent {
   /// dispatch in nanoseconds (``std::chrono::steady_clock``). Zero for
   /// all other event actions.
   int64_t duration_ns = 0;
+  /// Process-local identity of the CPU executor that dispatched this node.
+  /// Compatible sessions sharing one executor report the same non-zero value.
+  /// Zero for events recorded outside a session executor and for non-run events.
+  /// This diagnostic identifier must not be persisted as a tuning or cache key.
+  uint64_t cpu_executor_instance_id = 0;
+  /// Effective participants of the CPU executor that dispatched this node,
+  /// including the caller. Zero when no executor was installed and for
+  /// non-run events.
+  uint32_t cpu_effective_threads = 0;
   /// Index of the node this event is associated with. For
   /// :cpp:enumerator:`RuntimeEventKind::kInput` values it is ``-1`` and for
   /// :cpp:enumerator:`RuntimeEventKind::kInitializer` values it is ``-2``.
@@ -334,7 +347,8 @@ struct RuntimeEvent {
   /// Returns a concise, human-readable one-line summary of the event: the
   /// action / kind, the tensor name (or ``op_type(inputs)`` for ``kRunNode``
   /// events), the associated node index, the wall-clock duration (for
-  /// ``kRunNode`` events) and the allocator's live / peak memory in bytes.
+  /// ``kRunNode`` events), the CPU executor identity when present, and the
+  /// allocator's live / peak memory in bytes.
   /// Suitable for logging or rendering the event log as a table.
   std::string summary() const;
 };

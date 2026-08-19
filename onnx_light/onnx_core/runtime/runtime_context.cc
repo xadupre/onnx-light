@@ -4,6 +4,8 @@
 
 #include "onnx_core/runtime/runtime_context.h"
 
+#include "onnx_core/runtime/tuning/cpu_executor.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cstring>
@@ -222,6 +224,9 @@ std::string RuntimeEvent::summary() const {
   }
   if (action == RuntimeEventAction::kRunNode) {
     oss << " took " << duration_ns << "ns";
+    if (cpu_executor_instance_id != 0) {
+      oss << " executor#" << cpu_executor_instance_id << "/" << cpu_effective_threads;
+    }
   }
   oss << " mem=" << allocated_bytes << "B peak=" << peak_bytes << "B";
   return oss.str();
@@ -259,6 +264,10 @@ void RuntimeContext::RecordRunNodeEvent(const NodeProto &node, const std::string
     ev.inputs.push_back(node.input(i));
   }
   ev.duration_ns = duration_ns;
+  if (cpu_executor_ != nullptr) {
+    ev.cpu_executor_instance_id = cpu_executor_->instance_id();
+    ev.cpu_effective_threads = cpu_executor_->effective_threads();
+  }
   ev.subgraph_node_index = current_subgraph_node_index_;
   ev.subgraph_attr_name = current_subgraph_attr_name_;
   StampAllocatorMemory(ev);

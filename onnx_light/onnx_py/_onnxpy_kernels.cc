@@ -550,6 +550,11 @@ public:
     return session_->cpu_executor()->counters();
   }
 
+  uint64_t CpuExecutorInstanceId() {
+    EnsureSession();
+    return session_->cpu_executor()->instance_id();
+  }
+
   nb::list Run(RuntimeContext &rt, nb::object requested_outputs, nb::dict feeds,
                bool release_intermediates) {
     std::vector<std::string> outputs = requested_outputs.is_none()
@@ -796,8 +801,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   // lists of length ``value_count``.
   nb::class_<core::runtime::RuntimeEvent>(
       rt_mod, "RuntimeEvent",
-      "One entry of the :meth:`RuntimeContext.events` log describing a single "
-      "tensor map mutation (``add`` / ``replace`` / ``remove``). For ``add`` and "
+      "One entry of the :meth:`RuntimeContext.events` log describing a tensor map "
+      "mutation (``add`` / ``replace`` / ``remove``) or a node dispatch. For ``add`` and "
       "``replace`` events the first ``value_count`` element values of the tensor "
       "are captured inline (``values`` for numeric dtypes, ``string_values`` for "
       "``STRING``); the underlying buffer is fixed-size (capped at 8 entries). "
@@ -841,6 +846,13 @@ void AddOnnxPyRuntime(nb::module_ &m) {
               "For ``run_node`` events: wall-clock duration of the kernel dispatch in "
               "nanoseconds (``std::chrono::steady_clock``). ``0`` for other event "
               "actions.")
+      .def_ro("cpu_executor_instance_id", &core::runtime::RuntimeEvent::cpu_executor_instance_id,
+              "Process-local identity of the CPU executor that dispatched this node. "
+              "Compatible sessions sharing one executor report the same non-zero value. "
+              "``0`` for non-``run_node`` events or execution without a session executor.")
+      .def_ro("cpu_effective_threads", &core::runtime::RuntimeEvent::cpu_effective_threads,
+              "Effective CPU executor participants for this node, including the caller. "
+              "``0`` for non-``run_node`` events or execution without a session executor.")
       .def_ro("node_index", &core::runtime::RuntimeEvent::node_index,
               "Index of the node this event is associated with: ``-1`` for graph "
               "inputs, ``-2`` for initializers, and the ``>= 0`` position of the "
@@ -906,6 +918,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             d["op_type"] = ev.op_type;
             d["inputs"] = ev.inputs;
             d["duration_ns"] = ev.duration_ns;
+            d["cpu_executor_instance_id"] = ev.cpu_executor_instance_id;
+            d["cpu_effective_threads"] = ev.cpu_effective_threads;
             d["node_index"] = ev.node_index;
             d["device"] = ev.device;
             d["subgraph_node_index"] = ev.subgraph_node_index;
@@ -936,15 +950,17 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def("summary", &core::runtime::RuntimeEvent::summary,
            "Returns a concise, human-readable one-line summary of the event: the "
            "action / kind, the tensor name (or ``op_type(inputs)`` for ``run_node`` "
-           "events), the node index, the dispatch duration (for ``run_node`` events) "
-           "and the allocator's live (``allocated_bytes``) and peak (``peak_bytes``) "
-           "memory.")
+           "events), the node index, dispatch duration and CPU executor identity "
+           "(for ``run_node`` events), and the allocator's live (``allocated_bytes``) "
+           "and peak (``peak_bytes``) memory.")
       .def("__repr__", [](const core::runtime::RuntimeEvent &ev) {
         return std::string("RuntimeEvent(action='") +
                core::runtime::RuntimeEventActionName(ev.action) + "', kind='" +
                core::runtime::RuntimeEventKindName(ev.kind) + "', name='" + ev.name +
                "', data_type=" + std::to_string(ev.data_type) +
                ", value_count=" + std::to_string(ev.value_count) +
+               ", cpu_executor_instance_id=" + std::to_string(ev.cpu_executor_instance_id) +
+               ", cpu_effective_threads=" + std::to_string(ev.cpu_effective_threads) +
                ", node_index=" + std::to_string(ev.node_index) +
                ", device=" + std::to_string(ev.device) +
                ", subgraph_node_index=" + std::to_string(ev.subgraph_node_index) +
@@ -1315,6 +1331,10 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "cpu_execution_counters",
           [](RuntimeSession &session) { return session.cpu_executor()->counters(); },
           "Snapshot of optional executor dispatch counters.")
+      .def_prop_ro(
+          "cpu_executor_instance_id",
+          [](RuntimeSession &session) { return session.cpu_executor()->instance_id(); },
+          "Process-local identity shared by sessions leasing this exact CPU executor.")
       .def_prop_ro("check_shapes", &RuntimeSession::check_shapes,
                    "When ``True``, :func:`run` validates that the concrete shape of every "
                    "tensor carrying a declared (possibly symbolic) shape — the graph "
@@ -1393,6 +1413,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                    "Behavior key shared by compatible executor leases.")
       .def_prop_ro("cpu_execution_counters", &ReferenceEvaluatorRunner::CpuExecutionCounters,
                    "Snapshot of optional executor dispatch counters.")
+      .def_prop_ro("cpu_executor_instance_id", &ReferenceEvaluatorRunner::CpuExecutorInstanceId,
+                   "Process-local identity of the cached session's exact CPU executor.")
       .def("reset", &ReferenceEvaluatorRunner::Reset,
            "Drops the cached execution plan and RuntimeSession so kernels resolve again.");
 
@@ -1752,7 +1774,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "for numeric dtypes, ``string_values`` for ``STRING``). The value "
           "buffer is fixed-size (capped at 8 entries); for tensors with more "
           "than 8 elements only the first 8 are kept, ``data_type`` is set to "
-          "``-1`` and ``shape`` is empty to signal the truncated payload. Call "
+          "``-1`` and ``shape`` is empty to signal the truncated payload. Node "
+          "dispatch events also identify the exact process-local CPU executor and "
+          "its effective participants. Call "
           ":meth:`RuntimeEvent.as_dict` to convert an individual entry to a "
           "plain Python ``dict``.")
       .def("clear_events", &RuntimeContext::ClearEvents,

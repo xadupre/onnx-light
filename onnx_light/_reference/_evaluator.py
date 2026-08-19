@@ -780,6 +780,16 @@ class ReferenceEvaluator:
         """
         return self._runner.cpu_execution_counters
 
+    @property
+    def cpu_executor_instance_id(self) -> int:
+        """Returns the process-local identity of the leased CPU executor.
+
+        Compatible evaluators that lease the same executor return the same
+        value. This diagnostic identity is not stable across processes and
+        must not be used as a tuning-cache key.
+        """
+        return self._runner.cpu_executor_instance_id
+
     def run(
         self, output_names: list[str] | None, feed_inputs: dict[str, Any]
     ) -> list[np.ndarray | list[np.ndarray]]:

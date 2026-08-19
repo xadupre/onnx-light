@@ -340,6 +340,8 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertEqual(d["op_domain"], "ai.onnx")
         self.assertEqual(d["inputs"], ["x"])
         self.assertEqual(d["duration_ns"], run_node_events[0].duration_ns)
+        self.assertGreater(d["cpu_executor_instance_id"], 0)
+        self.assertGreaterEqual(d["cpu_effective_threads"], 1)
 
         # ``node_index`` tags inputs with ``-1`` and intermediates / run_node
         # events with the index of the producing node; ``device`` is ``-1``

@@ -415,6 +415,21 @@ A cancelled inference releases its interest in shared session tasks; it cancels
 one of those tasks only when no eager preparation handle or other inference
 still consumes it.
 
+CPU executor ownership
+^^^^^^^^^^^^^^^^^^^^^^
+
+The runtime scheduler must lease the session's resolved ``CpuExecutor`` rather
+than create a second CPU worker pool. CPU preparation tasks, invocation tasks,
+and kernel parallel regions all execute through that lease. A task already
+running on an executor participant installs the same executor view, so nested
+kernel work runs inline instead of waking unrelated workers.
+
+Bounded I/O workers remain a separate resource because blocking reads must not
+occupy CPU compute participants. Diagnostics carry the process-local executor
+instance identifier exposed by runtime events, while persisted prepared objects
+and tuning caches use the behavior-only executor key; the instance identifier
+is never persistent compatibility metadata.
+
 Relationship with the ``onnx_proto`` thread pool
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

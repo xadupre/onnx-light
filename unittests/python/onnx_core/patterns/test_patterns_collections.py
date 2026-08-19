@@ -9,7 +9,9 @@ import unittest
 
 import numpy
 
-from onnx_light.onnx import TensorProto, helper, numpy_helper
+import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
+from onnx_light.onnx import TensorProto
 from onnx_light.ext_test_case import import_or_skip
 
 from onnx_light.onnx_core import optimization
@@ -19,18 +21,18 @@ ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvalu
 
 def make_model(nodes, inputs, outputs, initializers=()):
     """Builds an opset-18 model."""
-    graph = helper.make_graph(nodes, "test", inputs, outputs, list(initializers))
-    return helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)], ir_version=10)
+    graph = oh.make_graph(nodes, "test", inputs, outputs, list(initializers))
+    return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=10)
 
 
 def make_value_info(name, data_type, shape):
     """Builds tensor value information."""
-    return helper.make_tensor_value_info(name, data_type, shape)
+    return oh.make_tensor_value_info(name, data_type, shape)
 
 
 def make_initializer(name, value, dtype=numpy.int64):
     """Builds an initializer from a NumPy value."""
-    return numpy_helper.from_array(numpy.asarray(value, dtype=dtype), name=name)
+    return onh.from_array(numpy.asarray(value, dtype=dtype), name=name)
 
 
 def make_range(*shape, dtype=numpy.float32):
@@ -46,8 +48,7 @@ def node_types(model):
 def initializer_values(model):
     """Returns every initializer as a NumPy array."""
     return {
-        initializer.name: numpy_helper.to_array(initializer)
-        for initializer in model.graph.initializer
+        initializer.name: onh.to_array(initializer) for initializer in model.graph.initializer
     }
 
 
@@ -74,9 +75,9 @@ class TestCollectionPatterns(unittest.TestCase):
     def test_slices_split(self):
         model = make_model(
             [
-                helper.make_node("Slice", ["X", "zero", "seven", "one"], ["x1"]),
-                helper.make_node("Slice", ["X", "seven", "eight", "one"], ["x2"]),
-                helper.make_node("Add", ["x1", "x2"], ["Y"]),
+                oh.make_node("Slice", ["X", "zero", "seven", "one"], ["x1"]),
+                oh.make_node("Slice", ["X", "seven", "eight", "one"], ["x2"]),
+                oh.make_node("Add", ["x1", "x2"], ["Y"]),
             ],
             [make_value_info("X", TensorProto.FLOAT, ["a", 8])],
             [make_value_info("Y", TensorProto.FLOAT, ["a", 7])],
@@ -103,9 +104,9 @@ class TestCollectionPatterns(unittest.TestCase):
     def test_gathers_split_rank1(self):
         model = make_model(
             [
-                helper.make_node("Gather", ["X", "zero"], ["x1"], axis=1),
-                helper.make_node("Gather", ["X", "one"], ["x2"], axis=1),
-                helper.make_node("Add", ["x1", "x2"], ["Y"]),
+                oh.make_node("Gather", ["X", "zero"], ["x1"], axis=1),
+                oh.make_node("Gather", ["X", "one"], ["x2"], axis=1),
+                oh.make_node("Add", ["x1", "x2"], ["Y"]),
             ],
             [make_value_info("X", TensorProto.FLOAT, ["a", 2])],
             [make_value_info("Y", TensorProto.FLOAT, ["a", 1])],
@@ -124,9 +125,9 @@ class TestCollectionPatterns(unittest.TestCase):
     def test_gathers_split_rank0(self):
         model = make_model(
             [
-                helper.make_node("Gather", ["X", "zero"], ["x1"], axis=1),
-                helper.make_node("Gather", ["X", "one"], ["x2"], axis=1),
-                helper.make_node("Add", ["x1", "x2"], ["Y"]),
+                oh.make_node("Gather", ["X", "zero"], ["x1"], axis=1),
+                oh.make_node("Gather", ["X", "one"], ["x2"], axis=1),
+                oh.make_node("Add", ["x1", "x2"], ["Y"]),
             ],
             [make_value_info("X", TensorProto.FLOAT, ["a", 2])],
             [make_value_info("Y", TensorProto.FLOAT, ["a"])],
@@ -157,8 +158,8 @@ class TestCollectionPatterns(unittest.TestCase):
             second_inputs.append("one")
         return make_model(
             [
-                helper.make_node("Slice", first_inputs, ["x1"]),
-                helper.make_node("Slice", second_inputs, ["Y"]),
+                oh.make_node("Slice", first_inputs, ["x1"]),
+                oh.make_node("Slice", second_inputs, ["Y"]),
             ],
             [make_value_info("X", TensorProto.FLOAT, ["a", "b"])],
             [make_value_info("Y", TensorProto.FLOAT, ["c", "d"])],
@@ -210,9 +211,9 @@ class TestCollectionPatterns(unittest.TestCase):
     def test_sequence_construct(self):
         model = make_model(
             [
-                helper.make_node("SequenceConstruct", ["X1", "X2"], ["seq"]),
-                helper.make_node("SequenceAt", ["seq", "i0"], ["Y1"]),
-                helper.make_node("SequenceAt", ["seq", "i1"], ["Y2"]),
+                oh.make_node("SequenceConstruct", ["X1", "X2"], ["seq"]),
+                oh.make_node("SequenceAt", ["seq", "i0"], ["Y1"]),
+                oh.make_node("SequenceAt", ["seq", "i1"], ["Y2"]),
             ],
             [
                 make_value_info("X1", TensorProto.FLOAT, ["a", "b"]),
@@ -236,10 +237,10 @@ class TestCollectionPatterns(unittest.TestCase):
     def test_split_to_sequence_sequence_at(self):
         model = make_model(
             [
-                helper.make_node("SplitToSequence", ["X", "split"], ["seq"], axis=1),
-                helper.make_node("SequenceAt", ["seq", "i0"], ["Y1"]),
-                helper.make_node("SequenceAt", ["seq", "i1"], ["Y2"]),
-                helper.make_node("SequenceAt", ["seq", "i2"], ["Y3"]),
+                oh.make_node("SplitToSequence", ["X", "split"], ["seq"], axis=1),
+                oh.make_node("SequenceAt", ["seq", "i0"], ["Y1"]),
+                oh.make_node("SequenceAt", ["seq", "i1"], ["Y2"]),
+                oh.make_node("SequenceAt", ["seq", "i2"], ["Y3"]),
             ],
             [make_value_info("X", TensorProto.FLOAT, ["a", 6])],
             [
@@ -266,8 +267,8 @@ class TestCollectionPatterns(unittest.TestCase):
     def test_split_concat(self):
         model = make_model(
             [
-                helper.make_node("Split", ["X"], ["s1", "s2"], num_outputs=2, axis=-1),
-                helper.make_node("Concat", ["s1", "s2"], ["Y"], axis=-1),
+                oh.make_node("Split", ["X"], ["s1", "s2"], num_outputs=2, axis=-1),
+                oh.make_node("Concat", ["s1", "s2"], ["Y"], axis=-1),
             ],
             [make_value_info("X", TensorProto.FLOAT, ["a", "b"])],
             [make_value_info("Y", TensorProto.FLOAT, ["a", "b"])],
@@ -285,8 +286,8 @@ class TestCollectionPatterns(unittest.TestCase):
         """Builds a Concat followed by a single-index Gather."""
         return make_model(
             [
-                helper.make_node("Concat", ["D1", "D2"], ["d"], axis=0),
-                helper.make_node("Gather", ["d", "index"], ["Y"]),
+                oh.make_node("Concat", ["D1", "D2"], ["d"], axis=0),
+                oh.make_node("Gather", ["d", "index"], ["Y"]),
             ],
             [
                 make_value_info("D1", TensorProto.INT64, first_shape),
@@ -344,17 +345,17 @@ class TestCollectionPatterns(unittest.TestCase):
     def make_concat_reshape_model(self, use_abs):
         """Builds a reshape shape assembled from constants and dynamic dimensions."""
         nodes = [
-            helper.make_node("Shape", ["X"], ["D2"], start=2, end=3),
-            helper.make_node("Shape", ["X"], ["D1"], start=3, end=4),
+            oh.make_node("Shape", ["X"], ["D2"], start=2, end=3),
+            oh.make_node("Shape", ["X"], ["D1"], start=3, end=4),
         ]
         shape_input = "D1"
         if use_abs:
-            nodes.append(helper.make_node("Abs", ["D1"], ["aD1"]))
+            nodes.append(oh.make_node("Abs", ["D1"], ["aD1"]))
             shape_input = "aD1"
         nodes.extend(
             [
-                helper.make_node("Concat", ["I1", "I2", shape_input, "D2"], ["shape"], axis=0),
-                helper.make_node("Reshape", ["X", "shape"], ["Y"]),
+                oh.make_node("Concat", ["I1", "I2", shape_input, "D2"], ["shape"], axis=0),
+                oh.make_node("Reshape", ["X", "shape"], ["Y"]),
             ]
         )
         return make_model(
@@ -391,7 +392,7 @@ class TestCollectionPatterns(unittest.TestCase):
 
     def test_concat_empty(self):
         model = make_model(
-            [helper.make_node("Concat", ["X", "Y", "empty"], ["Z"], axis=0)],
+            [oh.make_node("Concat", ["X", "Y", "empty"], ["Z"], axis=0)],
             [
                 make_value_info("X", TensorProto.INT64, ["a"]),
                 make_value_info("Y", TensorProto.INT64, ["b"]),
@@ -412,10 +413,10 @@ class TestCollectionPatterns(unittest.TestCase):
     def test_concat_twice(self):
         model = make_model(
             [
-                helper.make_node("Concat", ["X", "X"], ["xx"], axis=0),
-                helper.make_node("Sin", ["xx"], ["xsin"]),
-                helper.make_node("Cos", ["xsin"], ["xsc"]),
-                helper.make_node("Cast", ["xsc"], ["Y"], to=TensorProto.FLOAT),
+                oh.make_node("Concat", ["X", "X"], ["xx"], axis=0),
+                oh.make_node("Sin", ["xx"], ["xsin"]),
+                oh.make_node("Cos", ["xsin"], ["xsc"]),
+                oh.make_node("Cast", ["xsc"], ["Y"], to=TensorProto.FLOAT),
             ],
             [make_value_info("X", TensorProto.FLOAT, ["b", "c"])],
             [make_value_info("Y", TensorProto.FLOAT, ["d", "c"])],
@@ -441,12 +442,12 @@ class TestCollectionPatterns(unittest.TestCase):
         if shape_end is not None:
             attributes["end"] = shape_end
         nodes = [
-            helper.make_node("Shape", ["X"], ["shape"], **attributes),
-            helper.make_node("Gather", ["shape", "indices"], ["Y"]),
+            oh.make_node("Shape", ["X"], ["shape"], **attributes),
+            oh.make_node("Gather", ["shape", "indices"], ["Y"]),
         ]
         outputs = [make_value_info("Y", TensorProto.INT64, output_shape)]
         if shared:
-            nodes.append(helper.make_node("Identity", ["shape"], ["shape_copy"]))
+            nodes.append(oh.make_node("Identity", ["shape"], ["shape_copy"]))
             outputs.append(make_value_info("shape_copy", TensorProto.INT64, [4]))
         return make_model(
             nodes,
@@ -470,7 +471,7 @@ class TestCollectionPatterns(unittest.TestCase):
                 self.assertEqual(node_types(optimized), ["Shape"])
                 shape = optimized.graph.node[0]
                 attributes = {
-                    attribute.name: helper.get_attribute_value(attribute)
+                    attribute.name: oh.get_attribute_value(attribute)
                     for attribute in shape.attribute
                 }
                 self.assertEqual(attributes["start"], gather_start)
@@ -486,7 +487,7 @@ class TestCollectionPatterns(unittest.TestCase):
         self.assertEqual(len(rewrites), 1)
         self.assertEqual(node_types(optimized), ["Shape"])
         attributes = {
-            attribute.name: helper.get_attribute_value(attribute)
+            attribute.name: oh.get_attribute_value(attribute)
             for attribute in optimized.graph.node[0].attribute
         }
         self.assertEqual(attributes, {"start": 2, "end": 4})
@@ -541,12 +542,12 @@ class TestCollectionPatterns(unittest.TestCase):
     def make_gather_gather_model(self, outer_indices, output_shape, shared=False):
         """Builds two consecutive axis-zero Gather nodes."""
         nodes = [
-            helper.make_node("Gather", ["X", "inner_indices"], ["Y"], axis=0),
-            helper.make_node("Gather", ["Y", "outer_indices"], ["Z"], axis=0),
+            oh.make_node("Gather", ["X", "inner_indices"], ["Y"], axis=0),
+            oh.make_node("Gather", ["Y", "outer_indices"], ["Z"], axis=0),
         ]
         outputs = [make_value_info("Z", TensorProto.FLOAT, output_shape)]
         if shared:
-            nodes.append(helper.make_node("Add", ["Y", "Y"], ["W"]))
+            nodes.append(oh.make_node("Add", ["Y", "Y"], ["W"]))
             outputs.append(make_value_info("W", TensorProto.FLOAT, [5, 4]))
         return make_model(
             nodes,
@@ -601,12 +602,12 @@ class TestCollectionPatterns(unittest.TestCase):
     ):
         """Builds Gather(Concat(...), indices) with one dynamic input."""
         nodes = [
-            helper.make_node("Concat", concat_inputs, ["Z"], axis=0),
-            helper.make_node("Gather", ["Z", "indices"], ["Y"]),
+            oh.make_node("Concat", concat_inputs, ["Z"], axis=0),
+            oh.make_node("Gather", ["Z", "indices"], ["Y"]),
         ]
         outputs = [make_value_info("Y", TensorProto.INT64, output_shape)]
         if shared:
-            nodes.append(helper.make_node("Identity", ["Z"], ["W"]))
+            nodes.append(oh.make_node("Identity", ["Z"], ["W"]))
             total = 5 + sum(len(value) for value in constants.values())
             outputs.append(make_value_info("W", TensorProto.INT64, [total]))
         initializers = [make_initializer(name, value) for name, value in constants.items()]

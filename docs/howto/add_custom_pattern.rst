@@ -40,7 +40,7 @@ The running example collapses two consecutive ``Neg`` nodes into an
 
       .. code-block:: python
 
-          from onnx_light.onnx import helper
+          import onnx_light.onnx.helper as oh
           from onnx_light.onnx_core.optimization import PatternOptimization
 
           class NegNegPattern(PatternOptimization):
@@ -59,7 +59,7 @@ The running example collapses two consecutive ``Neg`` nodes into an
               def apply(self, graph, nodes):
                   previous, node = nodes
                   return [
-                      helper.make_node("Identity", [previous.input[0]], list(node.output))
+                      oh.make_node("Identity", [previous.input[0]], list(node.output))
                   ]
 
       ``self.result(nodes, insert_at=...)`` records the matched nodes (in the

@@ -9,7 +9,9 @@ import unittest
 
 import numpy as np
 
-from onnx_light.onnx import TensorProto, checker, helper, numpy_helper
+import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
+from onnx_light.onnx import TensorProto, checker
 from onnx_light.ext_test_case import import_or_skip
 
 from onnx_light.onnx_core import optimization
@@ -30,27 +32,25 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
     @staticmethod
     def _value_info(name: str, data_type: int, shape):
         """Creates a tensor value-info entry."""
-        return helper.make_tensor_value_info(name, data_type, shape)
+        return oh.make_tensor_value_info(name, data_type, shape)
 
     @staticmethod
     def _initializer(name: str, values, dtype) -> TensorProto:
         """Creates an initializer from NumPy-compatible values."""
-        return numpy_helper.from_array(np.asarray(values, dtype=dtype), name=name)
+        return onh.from_array(np.asarray(values, dtype=dtype), name=name)
 
     def _make_model(
         self, nodes, inputs, outputs, initializers=(), *, opset: int = 18, name: str = "pattern"
     ):
         """Creates a small model for one pattern."""
-        graph = helper.make_graph(
+        graph = oh.make_graph(
             list(nodes),
             name,
             [self._value_info(*value) for value in inputs],
             [self._value_info(*value) for value in outputs],
             list(initializers),
         )
-        return helper.make_model(
-            graph, opset_imports=[helper.make_opsetid("", opset)], ir_version=10
-        )
+        return oh.make_model(graph, opset_imports=[oh.make_opsetid("", opset)], ir_version=10)
 
     @staticmethod
     def _attribute(node, name: str, default):
@@ -273,7 +273,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
                     gemm_inputs.append("C")
                     feeds["C"] = self._range(2, bias=0.25)
                 model = self._make_model(
-                    [helper.make_node("Gemm", gemm_inputs, ["Y"], alpha=0.75)],
+                    [oh.make_node("Gemm", gemm_inputs, ["Y"], alpha=0.75)],
                     inputs,
                     [("Y", TensorProto.FLOAT, [2, 2])],
                     initializers,
@@ -298,7 +298,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
             with self.subTest(attributes=attributes):
                 weight_shape = (2, 3) if attributes.get("transB") else (3, 2)
                 model = self._make_model(
-                    [helper.make_node("Gemm", ["X", "B"], ["Y"], **attributes)],
+                    [oh.make_node("Gemm", ["X", "B"], ["Y"], **attributes)],
                     [("X", TensorProto.FLOAT, [2, 3])],
                     [("Y", TensorProto.FLOAT, [2, 2])],
                     [self._initializer("B", self._range(*weight_shape), np.float32)],
@@ -306,7 +306,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
                 self._assert_no_match(model, {"X": self._range(2, 3)}, "GemmTranspose")
 
         dynamic_weight = self._make_model(
-            [helper.make_node("Gemm", ["X", "B"], ["Y"])],
+            [oh.make_node("Gemm", ["X", "B"], ["Y"])],
             [("X", TensorProto.FLOAT, [2, 3]), ("B", TensorProto.FLOAT, [3, 2])],
             [("Y", TensorProto.FLOAT, [2, 2])],
         )
@@ -318,7 +318,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
         variants = [
             (
                 "MatMul",
-                [helper.make_node("MatMul", ["X1", "X2"], ["M"])],
+                [oh.make_node("MatMul", ["X1", "X2"], ["M"])],
                 [
                     ("X1", TensorProto.FLOAT, [2, 3]),
                     ("X2", TensorProto.FLOAT, [3, 2]),
@@ -329,7 +329,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
             ),
             (
                 "Gemm",
-                [helper.make_node("Gemm", ["X1", "X2"], ["M"], transB=1)],
+                [oh.make_node("Gemm", ["X1", "X2"], ["M"], transB=1)],
                 [
                     ("X1", TensorProto.FLOAT, [2, 3]),
                     ("X2", TensorProto.FLOAT, [2, 3]),
@@ -340,7 +340,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
             ),
             (
                 "GemmBias",
-                [helper.make_node("Gemm", ["X1", "X2", "B1"], ["M"], transB=1)],
+                [oh.make_node("Gemm", ["X1", "X2", "B1"], ["M"], transB=1)],
                 [
                     ("X1", TensorProto.FLOAT, [2, 3]),
                     ("X2", TensorProto.FLOAT, [2, 3]),
@@ -360,7 +360,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
             with self.subTest(name=name):
                 bias_name = "B2" if name == "GemmBias" else "B"
                 model = self._make_model(
-                    [*prefix, helper.make_node("Add", ["M", bias_name], ["Y"])],
+                    [*prefix, oh.make_node("Add", ["M", bias_name], ["Y"])],
                     inputs,
                     [("Y", TensorProto.FLOAT, [2, 2])],
                 )
@@ -376,10 +376,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
 
     def test_matmul_add_no_match(self):
         rank_three = self._make_model(
-            [
-                helper.make_node("MatMul", ["X1", "X2"], ["M"]),
-                helper.make_node("Add", ["M", "B"], ["Y"]),
-            ],
+            [oh.make_node("MatMul", ["X1", "X2"], ["M"]), oh.make_node("Add", ["M", "B"], ["Y"])],
             [
                 ("X1", TensorProto.FLOAT, [4, 2, 3]),
                 ("X2", TensorProto.FLOAT, [3, 2]),
@@ -395,8 +392,8 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
 
         beta = self._make_model(
             [
-                helper.make_node("Gemm", ["X1", "X2"], ["M"], beta=0.5),
-                helper.make_node("Add", ["M", "B"], ["Y"]),
+                oh.make_node("Gemm", ["X1", "X2"], ["M"], beta=0.5),
+                oh.make_node("Add", ["M", "B"], ["Y"]),
             ],
             [
                 ("X1", TensorProto.FLOAT, [2, 3]),
@@ -412,10 +409,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
         )
 
         shared = self._make_model(
-            [
-                helper.make_node("MatMul", ["X1", "X2"], ["M"]),
-                helper.make_node("Add", ["M", "B"], ["Y"]),
-            ],
+            [oh.make_node("MatMul", ["X1", "X2"], ["M"]), oh.make_node("Add", ["M", "B"], ["Y"])],
             [
                 ("X1", TensorProto.FLOAT, [2, 3]),
                 ("X2", TensorProto.FLOAT, [3, 2]),
@@ -431,10 +425,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
 
     def test_matmul_add_reshape_1(self):
         model = self._make_model(
-            [
-                helper.make_node("MatMul", ["X1", "X2"], ["M"]),
-                helper.make_node("Add", ["M", "B"], ["Y"]),
-            ],
+            [oh.make_node("MatMul", ["X1", "X2"], ["M"]), oh.make_node("Add", ["M", "B"], ["Y"])],
             [
                 ("X1", TensorProto.FLOAT, [4, 2, 3]),
                 ("X2", TensorProto.FLOAT, [3, 2]),
@@ -453,10 +444,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
 
     def test_matmul_add_reshape_2(self):
         model = self._make_model(
-            [
-                helper.make_node("MatMul", ["X1", "X2"], ["M"]),
-                helper.make_node("Add", ["M", "B"], ["Y"]),
-            ],
+            [oh.make_node("MatMul", ["X1", "X2"], ["M"]), oh.make_node("Add", ["M", "B"], ["Y"])],
             [
                 ("X1", TensorProto.FLOAT, [4, 2, 3]),
                 ("X2", TensorProto.FLOAT, [3, 2]),
@@ -475,10 +463,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
 
     def test_matmul_add_reshape_2_dyn(self):
         model = self._make_model(
-            [
-                helper.make_node("MatMul", ["X1", "X2"], ["M"]),
-                helper.make_node("Add", ["M", "B"], ["Y"]),
-            ],
+            [oh.make_node("MatMul", ["X1", "X2"], ["M"]), oh.make_node("Add", ["M", "B"], ["Y"])],
             [
                 ("X1", TensorProto.FLOAT, ["a", "b", 3]),
                 ("X2", TensorProto.FLOAT, [3, "d"]),
@@ -504,10 +489,10 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
             with self.subTest(left=left_inputs, right=right_inputs):
                 model = self._make_model(
                     [
-                        helper.make_node("Mul", left_inputs, ["A"]),
-                        helper.make_node("Mul", right_inputs, ["B"]),
-                        helper.make_node("MatMul", ["A", "B"], ["M"]),
-                        helper.make_node("Add", ["M", "M"], ["Yout"]),
+                        oh.make_node("Mul", left_inputs, ["A"]),
+                        oh.make_node("Mul", right_inputs, ["B"]),
+                        oh.make_node("MatMul", ["A", "B"], ["M"]),
+                        oh.make_node("Add", ["M", "M"], ["Yout"]),
                     ],
                     [("X", TensorProto.FLOAT, [4, 3]), ("Y", TensorProto.FLOAT, [3, 5])],
                     [("Yout", TensorProto.FLOAT, [4, 5])],
@@ -529,9 +514,9 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
     def test_mul_mul_matmul_no_match(self):
         vector_scale = self._make_model(
             [
-                helper.make_node("Mul", ["X", "left_scale"], ["A"]),
-                helper.make_node("Mul", ["Y", "right_scale"], ["B"]),
-                helper.make_node("MatMul", ["A", "B"], ["Z"]),
+                oh.make_node("Mul", ["X", "left_scale"], ["A"]),
+                oh.make_node("Mul", ["Y", "right_scale"], ["B"]),
+                oh.make_node("MatMul", ["A", "B"], ["Z"]),
             ],
             [("X", TensorProto.FLOAT, [4, 3]), ("Y", TensorProto.FLOAT, [3, 5])],
             [("Z", TensorProto.FLOAT, [4, 5])],
@@ -546,9 +531,9 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
 
         shared = self._make_model(
             [
-                helper.make_node("Mul", ["X", "left_scale"], ["A"]),
-                helper.make_node("Mul", ["Y", "right_scale"], ["B"]),
-                helper.make_node("MatMul", ["A", "B"], ["Z"]),
+                oh.make_node("Mul", ["X", "left_scale"], ["A"]),
+                oh.make_node("Mul", ["Y", "right_scale"], ["B"]),
+                oh.make_node("MatMul", ["A", "B"], ["Z"]),
             ],
             [("X", TensorProto.FLOAT, [4, 3]), ("Y", TensorProto.FLOAT, [3, 5])],
             [("Z", TensorProto.FLOAT, [4, 5]), ("A", TensorProto.FLOAT, [4, 3])],
@@ -569,7 +554,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
         right = "Y"
         if topology in {"left", "both", "shared"}:
             perm = [0, 1] if bad_perm else [1, 0]
-            nodes.append(helper.make_node("Transpose", ["X"], ["Xt"], perm=perm))
+            nodes.append(oh.make_node("Transpose", ["X"], ["Xt"], perm=perm))
             left = "Xt"
             input_shape = [2, 3] if bad_perm else [3, 2]
             inputs.append(("X", TensorProto.FLOAT, input_shape))
@@ -578,17 +563,17 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
             inputs.append(("X", TensorProto.FLOAT, [2, 3]))
             feeds["X"] = self._range(2, 3)
         if topology in {"right", "both"}:
-            nodes.append(helper.make_node("Transpose", ["Y"], ["Yt"], perm=[1, 0]))
+            nodes.append(oh.make_node("Transpose", ["Y"], ["Yt"], perm=[1, 0]))
             right = "Yt"
             inputs.append(("Y", TensorProto.FLOAT, [4, 3]))
             feeds["Y"] = self._range(4, 3)
         else:
             inputs.append(("Y", TensorProto.FLOAT, [3, 4]))
             feeds["Y"] = self._range(3, 4)
-        nodes.append(helper.make_node("MatMul", [left, right], ["Z"]))
+        nodes.append(oh.make_node("MatMul", [left, right], ["Z"]))
         outputs = [("Z", TensorProto.FLOAT, [2, 4])]
         if topology == "shared":
-            nodes.append(helper.make_node("Transpose", ["Xt"], ["W"], perm=[1, 0]))
+            nodes.append(oh.make_node("Transpose", ["Xt"], ["W"], perm=[1, 0]))
             outputs.append(("W", TensorProto.FLOAT, [3, 2]))
         return self._make_model(nodes, inputs, outputs, opset=opset), feeds
 
@@ -613,10 +598,8 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
 
         model = self._make_model(
             [
-                helper.make_node("Transpose", ["X"], ["Xt"], perm=[1, 0]),
-                helper.make_node(
-                    "Gemm", ["Xt", "Y"], ["Z"], alpha=2.0, beta=0.0, transA=1, transB=1
-                ),
+                oh.make_node("Transpose", ["X"], ["Xt"], perm=[1, 0]),
+                oh.make_node("Gemm", ["Xt", "Y"], ["Z"], alpha=2.0, beta=0.0, transA=1, transB=1),
             ],
             [("X", TensorProto.FLOAT, [2, 3]), ("Y", TensorProto.FLOAT, [4, 3])],
             [("Z", TensorProto.FLOAT, [2, 4])],
@@ -645,8 +628,8 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
 
         rank_three = self._make_model(
             [
-                helper.make_node("Transpose", ["X"], ["Xt"], perm=[0, 2, 1]),
-                helper.make_node("MatMul", ["Xt", "Y"], ["Z"]),
+                oh.make_node("Transpose", ["X"], ["Xt"], perm=[0, 2, 1]),
+                oh.make_node("MatMul", ["Xt", "Y"], ["Z"]),
             ],
             [("X", TensorProto.FLOAT, [2, 4, 3]), ("Y", TensorProto.FLOAT, [2, 4, 5])],
             [("Z", TensorProto.FLOAT, [2, 3, 5])],
@@ -658,9 +641,9 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
     def _make_transpose_reshape_matmul(self, side: str, *, shared=False):
         if side == "left":
             nodes = [
-                helper.make_node("Transpose", ["X"], ["Xt"], perm=[0, 2, 1]),
-                helper.make_node("Reshape", ["Xt", "shape"], ["Xtr"]),
-                helper.make_node("MatMul", ["Xtr", "Y"], ["Z"]),
+                oh.make_node("Transpose", ["X"], ["Xt"], perm=[0, 2, 1]),
+                oh.make_node("Reshape", ["Xt", "shape"], ["Xtr"]),
+                oh.make_node("MatMul", ["Xtr", "Y"], ["Z"]),
             ]
             inputs = [("X", TensorProto.FLOAT, [4, 5, 7]), ("Y", TensorProto.FLOAT, [2, 2, 5, 3])]
             outputs = [("Z", TensorProto.FLOAT, [2, 2, 7, 3])]
@@ -670,9 +653,9 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
             shared_shape = [4, 7, 5]
         else:
             nodes = [
-                helper.make_node("Transpose", ["Y"], ["Yt"], perm=[0, 2, 1]),
-                helper.make_node("Reshape", ["Yt", "shape"], ["Ytr"]),
-                helper.make_node("MatMul", ["X", "Ytr"], ["Z"]),
+                oh.make_node("Transpose", ["Y"], ["Yt"], perm=[0, 2, 1]),
+                oh.make_node("Reshape", ["Yt", "shape"], ["Ytr"]),
+                oh.make_node("MatMul", ["X", "Ytr"], ["Z"]),
             ]
             inputs = [("X", TensorProto.FLOAT, [2, 2, 5, 7]), ("Y", TensorProto.FLOAT, [4, 3, 7])]
             outputs = [("Z", TensorProto.FLOAT, [2, 2, 5, 3])]
@@ -711,9 +694,9 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
     def _make_switch_reshape_activation(self, layout: str, activation: str):
         if layout == "Transpose":
             nodes = [
-                helper.make_node("MatMul", ["X", "Y"], ["M"]),
-                helper.make_node("Transpose", ["M"], ["L"], perm=[0, 2, 1, 3]),
-                helper.make_node(activation, ["L"], ["Z"]),
+                oh.make_node("MatMul", ["X", "Y"], ["M"]),
+                oh.make_node("Transpose", ["M"], ["L"], perm=[0, 2, 1, 3]),
+                oh.make_node(activation, ["L"], ["Z"]),
             ]
             inputs = [
                 ("X", TensorProto.FLOAT, [3, 2, 6, 5]),
@@ -724,9 +707,9 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
             feeds = {"X": self._range(3, 2, 6, 5), "Y": self._range(3, 2, 5, 6)}
         else:
             nodes = [
-                helper.make_node("MatMul", ["X", "Y"], ["M"]),
-                helper.make_node("Reshape", ["M", "shape"], ["L"]),
-                helper.make_node(activation, ["L"], ["Z"]),
+                oh.make_node("MatMul", ["X", "Y"], ["M"]),
+                oh.make_node("Reshape", ["M", "shape"], ["L"]),
+                oh.make_node(activation, ["L"], ["Z"]),
             ]
             inputs = [("X", TensorProto.FLOAT, [2, 3]), ("Y", TensorProto.FLOAT, [3, 4])]
             outputs = [("Z", TensorProto.FLOAT, [4, 2])]
@@ -764,7 +747,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
     def test_batch_normalization_identity_and_no_match(self):
         neutral = self._make_model(
             [
-                helper.make_node(
+                oh.make_node(
                     "BatchNormalization",
                     ["X", "scale", "bias", "mean", "variance"],
                     ["Y"],
@@ -795,7 +778,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
             with self.subTest(changed=changed):
                 model = self._make_model(
                     [
-                        helper.make_node(
+                        oh.make_node(
                             "BatchNormalization",
                             ["X", "scale", "bias", "mean", "variance"],
                             ["Y"],
@@ -820,12 +803,12 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
 
         identity_pattern_topology = self._make_model(
             [
-                helper.make_node(
+                oh.make_node(
                     "BatchNormalization",
                     ["X", "scale", "bias", "mean", "variance"],
                     ["normalized"],
                 ),
-                helper.make_node("Neg", ["normalized"], ["Y"]),
+                oh.make_node("Neg", ["normalized"], ["Y"]),
             ],
             [("X", TensorProto.FLOAT16, [6, 2])],
             [("Y", TensorProto.FLOAT16, [6, 2])],
@@ -876,7 +859,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
             with self.subTest(name=name):
                 model = self._make_model(
                     [
-                        helper.make_node(
+                        oh.make_node(
                             "BatchNormalization",
                             ["X", "scale", "bias", "mean", "variance"],
                             ["Y", "unused_mean", "unused_variance"],
@@ -924,7 +907,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
                     outputs.append(("running_mean", TensorProto.FLOAT, [3]))
                 model = self._make_model(
                     [
-                        helper.make_node(
+                        oh.make_node(
                             "BatchNormalization",
                             ["X", "scale", "bias", "mean", "variance"],
                             node_outputs,
@@ -961,15 +944,15 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
         )
         axes = [-1] if axis == -1 else [0, 1]
         nodes = [
-            helper.make_node(
+            oh.make_node(
                 "ReduceMean",
                 ["X", "axes"],
                 ["mean"],
                 **({"keepdims": 1} if first_keepdims else {}),
             ),
-            helper.make_node("Sub", ["X", "mean"], ["centered"]),
-            helper.make_node("Pow", ["centered", "two"], ["squared"]),
-            helper.make_node("ReduceMean", ["squared", "axes"], ["variance"], keepdims=1),
+            oh.make_node("Sub", ["X", "mean"], ["centered"]),
+            oh.make_node("Pow", ["centered", "two"], ["squared"]),
+            oh.make_node("ReduceMean", ["squared", "axes"], ["variance"], keepdims=1),
         ]
         sqrt_input = "variance"
         initializers = [
@@ -977,21 +960,21 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
             self._initializer("two", [2], np.float32),
         ]
         if epsilon is not None:
-            nodes.append(helper.make_node("Add", ["variance", "epsilon"], ["variance_epsilon"]))
+            nodes.append(oh.make_node("Add", ["variance", "epsilon"], ["variance_epsilon"]))
             sqrt_input = "variance_epsilon"
             initializers.append(self._initializer("epsilon", [epsilon], dtype))
-        nodes.append(helper.make_node("Sqrt", [sqrt_input], ["standard_deviation"]))
+        nodes.append(oh.make_node("Sqrt", [sqrt_input], ["standard_deviation"]))
         if reciprocal:
             nodes.extend(
                 [
-                    helper.make_node(
+                    oh.make_node(
                         "Reciprocal", ["standard_deviation"], ["inverse_standard_deviation"]
                     ),
-                    helper.make_node("Mul", ["centered", "inverse_standard_deviation"], ["Y"]),
+                    oh.make_node("Mul", ["centered", "inverse_standard_deviation"], ["Y"]),
                 ]
             )
         else:
-            nodes.append(helper.make_node("Div", ["centered", "standard_deviation"], ["Y"]))
+            nodes.append(oh.make_node("Div", ["centered", "standard_deviation"], ["Y"]))
         shape = ["rows", "columns"] if dynamic else [2, 3]
         outputs = [("Y", data_type, shape)]
         if expose_mean:
@@ -1072,7 +1055,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
         mismatch: bool = False,
     ):
         nodes = [
-            helper.make_node(
+            oh.make_node(
                 "LayerNormalization",
                 ["X", "scale0"] + (["bias0"] if with_bias else []),
                 ["normalized"],
@@ -1080,7 +1063,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
                 epsilon=epsilon,
                 stash_type=stash_type,
             ),
-            helper.make_node("Mul", ["normalized", "scale1"], ["scaled"]),
+            oh.make_node("Mul", ["normalized", "scale1"], ["scaled"]),
         ]
         initializers = [
             self._initializer("scale0", [-0.1, -0.01, -0.05], np.float32),
@@ -1088,7 +1071,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
         ]
         output_name = "scaled"
         if with_bias:
-            nodes.append(helper.make_node("Add", ["scaled", "bias1"], ["Y"]))
+            nodes.append(oh.make_node("Add", ["scaled", "bias1"], ["Y"]))
             initializers.extend(
                 [
                     self._initializer("bias0", [0.5, 0.6, 0.7], np.float32),
@@ -1154,14 +1137,14 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
     def test_cast_layer_normalization_cast_variants(self):
         layer = self._make_model(
             [
-                helper.make_node("Cast", ["X"], ["X32"], to=TensorProto.FLOAT),
-                helper.make_node(
+                oh.make_node("Cast", ["X"], ["X32"], to=TensorProto.FLOAT),
+                oh.make_node(
                     "LayerNormalization",
                     ["X32", "scale", "bias"],
                     ["normalized"],
                     stash_type=TensorProto.FLOAT,
                 ),
-                helper.make_node("Cast", ["normalized"], ["Y"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["normalized"], ["Y"], to=TensorProto.FLOAT16),
             ],
             [("X", TensorProto.FLOAT16, [3, 3])],
             [("Y", TensorProto.FLOAT16, [3, 3])],
@@ -1185,14 +1168,14 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
 
         rms = self._make_model(
             [
-                helper.make_node("Cast", ["X"], ["X32"], to=TensorProto.FLOAT),
-                helper.make_node(
+                oh.make_node("Cast", ["X"], ["X32"], to=TensorProto.FLOAT),
+                oh.make_node(
                     "RMSNormalization",
                     ["X32", "scale"],
                     ["normalized"],
                     stash_type=TensorProto.FLOAT,
                 ),
-                helper.make_node("Cast", ["normalized"], ["Y"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["normalized"], ["Y"], to=TensorProto.FLOAT16),
             ],
             [("X", TensorProto.FLOAT16, [3, 3])],
             [("Y", TensorProto.FLOAT16, [3, 3])],
@@ -1213,14 +1196,14 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
     def test_cast_layer_normalization_cast_no_match(self):
         model = self._make_model(
             [
-                helper.make_node("Cast", ["X"], ["X32"], to=TensorProto.FLOAT),
-                helper.make_node(
+                oh.make_node("Cast", ["X"], ["X32"], to=TensorProto.FLOAT),
+                oh.make_node(
                     "LayerNormalization",
                     ["X32", "scale"],
                     ["normalized"],
                     stash_type=TensorProto.FLOAT,
                 ),
-                helper.make_node("Cast", ["normalized"], ["Y"], to=TensorProto.FLOAT),
+                oh.make_node("Cast", ["normalized"], ["Y"], to=TensorProto.FLOAT),
             ],
             [("X", TensorProto.FLOAT16, [3, 3])],
             [("Y", TensorProto.FLOAT, [3, 3])],
@@ -1252,23 +1235,23 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
         data = "X32" if cast else "X"
         nodes = []
         if cast:
-            nodes.append(helper.make_node("Cast", ["X"], ["X32"], to=TensorProto.FLOAT))
+            nodes.append(oh.make_node("Cast", ["X"], ["X32"], to=TensorProto.FLOAT))
         nodes.extend(
             [
-                helper.make_node("Pow", [data, "two"], ["squared"]),
-                helper.make_node("ReduceMean", ["squared", "axes"], ["mean"], keepdims=keepdims),
-                helper.make_node("Add", ["mean", "epsilon"], ["mean_epsilon"]),
-                helper.make_node("Sqrt", ["mean_epsilon"], ["root"]),
+                oh.make_node("Pow", [data, "two"], ["squared"]),
+                oh.make_node("ReduceMean", ["squared", "axes"], ["mean"], keepdims=keepdims),
+                oh.make_node("Add", ["mean", "epsilon"], ["mean_epsilon"]),
+                oh.make_node("Sqrt", ["mean_epsilon"], ["root"]),
             ]
         )
         if divide:
-            nodes.append(helper.make_node("Div", ["one", "root"], ["inverse"]))
+            nodes.append(oh.make_node("Div", ["one", "root"], ["inverse"]))
         else:
-            nodes.append(helper.make_node("Reciprocal", ["root"], ["inverse"]))
-        nodes.append(helper.make_node("Mul", ["inverse", data], ["normalized"]))
+            nodes.append(oh.make_node("Reciprocal", ["root"], ["inverse"]))
+        nodes.append(oh.make_node("Mul", ["inverse", data], ["normalized"]))
         output_name = "normalized"
         if cast:
-            nodes.append(helper.make_node("Cast", ["normalized"], ["Y"], to=TensorProto.FLOAT16))
+            nodes.append(oh.make_node("Cast", ["normalized"], ["Y"], to=TensorProto.FLOAT16))
             output_name = "Y"
         shape = ["rows", "columns"] if dynamic else list(static_shape)
         outputs = [(output_name, input_type, shape)]
@@ -1340,8 +1323,8 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
             with self.subTest(dtype=dtype):
                 model = self._make_model(
                     [
-                        helper.make_node("RMSNormalization", ["X", "scale0"], ["normalized"]),
-                        helper.make_node("Mul", ["normalized", "scale1"], ["Y"]),
+                        oh.make_node("RMSNormalization", ["X", "scale0"], ["normalized"]),
+                        oh.make_node("Mul", ["normalized", "scale1"], ["Y"]),
                     ],
                     [("X", data_type, [2, 2])],
                     [("Y", data_type, [2, 2])],
@@ -1362,8 +1345,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
                     rtol=tolerance,
                 )
                 scales = [
-                    numpy_helper.to_array(initializer)
-                    for initializer in optimized.graph.initializer
+                    onh.to_array(initializer) for initializer in optimized.graph.initializer
                 ]
                 self.assertTrue(
                     any(
@@ -1375,8 +1357,8 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
     def test_rms_normalization_mul_no_match(self):
         add = self._make_model(
             [
-                helper.make_node("RMSNormalization", ["X", "scale"], ["normalized"]),
-                helper.make_node("Add", ["normalized", "bias"], ["Y"]),
+                oh.make_node("RMSNormalization", ["X", "scale"], ["normalized"]),
+                oh.make_node("Add", ["normalized", "bias"], ["Y"]),
             ],
             [("X", TensorProto.FLOAT, [2, 2])],
             [("Y", TensorProto.FLOAT, [2, 2])],
@@ -1390,8 +1372,8 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
 
         mismatch = self._make_model(
             [
-                helper.make_node("RMSNormalization", ["X", "scale0"], ["normalized"]),
-                helper.make_node("Mul", ["normalized", "scale1"], ["Y"]),
+                oh.make_node("RMSNormalization", ["X", "scale0"], ["normalized"]),
+                oh.make_node("Mul", ["normalized", "scale1"], ["Y"]),
             ],
             [("X", TensorProto.FLOAT, [2, 2])],
             [("Y", TensorProto.FLOAT, [2, 2])],
@@ -1415,14 +1397,14 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
             TensorProto.FLOAT16 if np.dtype(dtype) == np.dtype(np.float16) else TensorProto.FLOAT
         )
         nodes = [
-            helper.make_node("Pow", ["X", "three"], ["power"]),
-            helper.make_node("Mul", ["power", "cubic_scale"], ["cubic"]),
-            helper.make_node("Add", ["X", "cubic"], ["inner"]),
-            helper.make_node("Mul", ["inner", "tanh_scale"], ["scaled"]),
-            helper.make_node("Tanh", ["scaled"], ["tanh"]),
-            helper.make_node("Add", ["tanh", "one"], ["tanh_one"]),
-            helper.make_node("Mul", ["X", "half"], ["x_half"]),
-            helper.make_node("Mul", ["x_half", "tanh_one"], ["Y"]),
+            oh.make_node("Pow", ["X", "three"], ["power"]),
+            oh.make_node("Mul", ["power", "cubic_scale"], ["cubic"]),
+            oh.make_node("Add", ["X", "cubic"], ["inner"]),
+            oh.make_node("Mul", ["inner", "tanh_scale"], ["scaled"]),
+            oh.make_node("Tanh", ["scaled"], ["tanh"]),
+            oh.make_node("Add", ["tanh", "one"], ["tanh_one"]),
+            oh.make_node("Mul", ["X", "half"], ["x_half"]),
+            oh.make_node("Mul", ["x_half", "tanh_one"], ["Y"]),
         ]
         outputs = [("Y", data_type, [2, 3])]
         if expose_power:
@@ -1482,9 +1464,9 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
         )
         return self._make_model(
             [
-                helper.make_node("Greater", ["X", "threshold"], ["positive"]),
-                helper.make_node("Mul", ["X", "slope"], ["negative"]),
-                helper.make_node("Where", ["positive", "X", "negative"], ["Y"]),
+                oh.make_node("Greater", ["X", "threshold"], ["positive"]),
+                oh.make_node("Mul", ["X", "slope"], ["negative"]),
+                oh.make_node("Where", ["positive", "X", "negative"], ["Y"]),
             ],
             [("X", data_type, [3, 3])],
             [("Y", data_type, [3, 3])],
@@ -1518,12 +1500,12 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
 
         model = self._make_model(
             [
-                helper.make_node("Greater", ["X", "threshold"], ["positive"]),
-                helper.make_node("Mul", ["X", "slope"], ["negative"]),
-                helper.make_node("Where", ["positive", "X", "negative"], ["X1"]),
-                helper.make_node("Greater", ["X1", "threshold2"], ["positive2"]),
-                helper.make_node("Mul", ["X1", "slope2"], ["negative2"]),
-                helper.make_node("Where", ["positive2", "X1", "negative2"], ["Y"]),
+                oh.make_node("Greater", ["X", "threshold"], ["positive"]),
+                oh.make_node("Mul", ["X", "slope"], ["negative"]),
+                oh.make_node("Where", ["positive", "X", "negative"], ["X1"]),
+                oh.make_node("Greater", ["X1", "threshold2"], ["positive2"]),
+                oh.make_node("Mul", ["X1", "slope2"], ["negative2"]),
+                oh.make_node("Where", ["positive2", "X1", "negative2"], ["Y"]),
             ],
             [("X", TensorProto.FLOAT, [3, 3])],
             [("Y", TensorProto.FLOAT, [3, 3])],
@@ -1573,7 +1555,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
                 with self.subTest(dtype=dtype, opset=opset, commuted=commuted):
                     inputs = ["zero", "X"] if commuted else ["X", "zero"]
                     model = self._make_model(
-                        [helper.make_node("Max", inputs, ["Y"])],
+                        [oh.make_node("Max", inputs, ["Y"])],
                         [("X", data_type, [3, 3])],
                         [("Y", data_type, [3, 3])],
                         [self._initializer("zero", [0], dtype)],
@@ -1590,7 +1572,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
 
     def test_max_relu_no_match_and_opset(self):
         one = self._make_model(
-            [helper.make_node("Max", ["X", "one"], ["Y"])],
+            [oh.make_node("Max", ["X", "one"], ["Y"])],
             [("X", TensorProto.FLOAT, [3, 3])],
             [("Y", TensorProto.FLOAT, [3, 3])],
             [self._initializer("one", [1], np.float32)],
@@ -1598,7 +1580,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
         self._assert_no_match(one, {"X": self._range(3, 3, bias=-0.5)}, "MaxRelu")
 
         both_zero = self._make_model(
-            [helper.make_node("Max", ["zero1", "zero2"], ["Y"])],
+            [oh.make_node("Max", ["zero1", "zero2"], ["Y"])],
             [],
             [("Y", TensorProto.FLOAT, [1])],
             [
@@ -1609,7 +1591,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
         self._assert_no_match(both_zero, {}, "MaxRelu")
 
         unsupported_type = self._make_model(
-            [helper.make_node("Max", ["X", "zero"], ["Y"])],
+            [oh.make_node("Max", ["X", "zero"], ["Y"])],
             [("X", TensorProto.INT64, [3, 3])],
             [("Y", TensorProto.INT64, [3, 3])],
             [self._initializer("zero", [0], np.int64)],
@@ -1619,7 +1601,7 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
         )
 
         old_integer_opset = self._make_model(
-            [helper.make_node("Max", ["X", "zero"], ["Y"])],
+            [oh.make_node("Max", ["X", "zero"], ["Y"])],
             [("X", TensorProto.INT32, [3, 3])],
             [("Y", TensorProto.INT32, [3, 3])],
             [self._initializer("zero", [0], np.int32)],
@@ -1643,31 +1625,31 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
     ):
         return self._make_model(
             [
-                helper.make_node("Equal", ["labels", "ignore"], ["equal"]),
-                helper.make_node("Not", ["equal"], ["valid"]),
-                helper.make_node("Where", ["valid", "labels", "zero_index"], ["safe_labels"]),
-                helper.make_node("Unsqueeze", ["safe_labels", "axis"], ["expanded_labels"]),
-                helper.make_node("LogSoftmax", ["scores"], ["log_probabilities"], axis=1),
-                helper.make_node(
+                oh.make_node("Equal", ["labels", "ignore"], ["equal"]),
+                oh.make_node("Not", ["equal"], ["valid"]),
+                oh.make_node("Where", ["valid", "labels", "zero_index"], ["safe_labels"]),
+                oh.make_node("Unsqueeze", ["safe_labels", "axis"], ["expanded_labels"]),
+                oh.make_node("LogSoftmax", ["scores"], ["log_probabilities"], axis=1),
+                oh.make_node(
                     "GatherElements",
                     ["log_probabilities", "expanded_labels"],
                     ["gathered"],
                     axis=1,
                 ),
-                helper.make_node("Squeeze", ["gathered", "squeeze_axis"], ["flat_gathered"]),
-                helper.make_node("Neg", ["flat_gathered"], ["losses"]),
-                helper.make_node("Where", ["valid", "losses", "zero_loss"], ["masked_losses"]),
-                helper.make_node("Cast", ["masked_losses"], ["losses32"], to=TensorProto.FLOAT),
-                helper.make_node("Cast", ["valid"], ["valid32"], to=TensorProto.FLOAT),
-                helper.make_node(
+                oh.make_node("Squeeze", ["gathered", "squeeze_axis"], ["flat_gathered"]),
+                oh.make_node("Neg", ["flat_gathered"], ["losses"]),
+                oh.make_node("Where", ["valid", "losses", "zero_loss"], ["masked_losses"]),
+                oh.make_node("Cast", ["masked_losses"], ["losses32"], to=TensorProto.FLOAT),
+                oh.make_node("Cast", ["valid"], ["valid32"], to=TensorProto.FLOAT),
+                oh.make_node(
                     "ReduceSum", ["losses32"], ["loss_sum"], keepdims=0, noop_with_empty_axes=0
                 ),
-                helper.make_node(
+                oh.make_node(
                     "ReduceSum", ["valid32"], ["valid_sum"], keepdims=0, noop_with_empty_axes=0
                 ),
-                helper.make_node("Cast", ["loss_sum"], ["loss_out"], to=output_cast_type),
-                helper.make_node("Cast", ["valid_sum"], ["valid_out"], to=output_cast_type),
-                helper.make_node("Div", ["loss_out", "valid_out"], ["Y"]),
+                oh.make_node("Cast", ["loss_sum"], ["loss_out"], to=output_cast_type),
+                oh.make_node("Cast", ["valid_sum"], ["valid_out"], to=output_cast_type),
+                oh.make_node("Div", ["loss_out", "valid_out"], ["Y"]),
             ],
             [("scores", score_type, [3, 4]), ("labels", TensorProto.INT64, [3])],
             [("Y", output_type, [])],

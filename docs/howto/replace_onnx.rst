@@ -15,7 +15,7 @@ The :mod:`onnx_light.onnx` module exposes the same protobuf message types
 (:class:`~onnx_light.onnx_lib.ModelProto`,
 :class:`~onnx_light.onnx_lib.TensorProto`, ...) and submodules
 (``helper``, ``numpy_helper``, ``reference``, ``backend``).  Only the imports
-change; the rest of the code (``load``, ``save``, ``helper.make_node``,
+change; the rest of the code (``load``, ``save``, ``oh.make_node``,
 ``ReferenceEvaluator``, ...) stays the same.
 
 .. tab-set::
@@ -25,11 +25,12 @@ change; the rest of the code (``load``, ``save``, ``helper.make_node``,
       .. code-block:: python
 
           import onnx
-          from onnx import helper, numpy_helper
+          import onnx.helper as oh
+          import onnx.numpy_helper as onh
           from onnx.reference import ReferenceEvaluator
 
           model = onnx.load("model.onnx")
-          node = helper.make_node("Add", ["a", "b"], ["c"])
+          node = oh.make_node("Add", ["a", "b"], ["c"])
           ref = ReferenceEvaluator(model)
 
    .. tab-item:: After (onnx-light)
@@ -37,11 +38,12 @@ change; the rest of the code (``load``, ``save``, ``helper.make_node``,
       .. code-block:: python
 
           import onnx_light.onnx as onnx
-          from onnx_light.onnx import helper, numpy_helper
+          import onnx_light.onnx.helper as oh
+          import onnx_light.onnx.numpy_helper as onh
           from onnx_light.onnx.reference import ReferenceEvaluator
 
           model = onnx.load("model.onnx")
-          node = helper.make_node("Add", ["a", "b"], ["c"])
+          node = oh.make_node("Add", ["a", "b"], ["c"])
           ref = ReferenceEvaluator(model)
 
 C++

@@ -11,7 +11,8 @@ import numpy as np
 
 import onnx_light.onnx as onnxl
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
-from onnx_light.onnx import helper, numpy_helper
+import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
 
 from onnx_light.onnx_core import optimization
 
@@ -25,21 +26,19 @@ INT64 = onnxl.TensorProto.INT64
 
 def _initializer(name: str, value, dtype=None):
     """Creates an initializer from a NumPy-compatible value."""
-    return numpy_helper.from_array(np.asarray(value, dtype=dtype), name=name)
+    return onh.from_array(np.asarray(value, dtype=dtype), name=name)
 
 
 def _value_info(name: str, dtype: int, shape):
     """Creates tensor value information."""
-    return helper.make_tensor_value_info(name, dtype, shape)
+    return oh.make_tensor_value_info(name, dtype, shape)
 
 
 def _make_model(nodes, inputs, outputs, initializers=(), *, opset: int = 18):
     """Creates a minimal model."""
-    graph = helper.make_graph(nodes, "rotary_attention", inputs, outputs, list(initializers))
-    return helper.make_model(
-        graph,
-        opset_imports=[helper.make_opsetid("", opset)],
-        ir_version=11 if opset >= 24 else 10,
+    graph = oh.make_graph(nodes, "rotary_attention", inputs, outputs, list(initializers))
+    return oh.make_model(
+        graph, opset_imports=[oh.make_opsetid("", opset)], ir_version=11 if opset >= 24 else 10
     )
 
 
@@ -117,38 +116,38 @@ def _make_rotary_concat_slice(*, negate_first: bool, gap: bool = False, nonzero:
     zero_value = _initializer("zero_value", [1], np.float32) if nonzero else None
     constant_attributes = {"value": zero_value} if zero_value is not None else {}
     nodes = [
-        helper.make_node("Slice", ["X", "start0", "end0", "axis"], ["x1"]),
-        helper.make_node("Slice", ["X", "start1", "end1", "axis"], ["x2"]),
+        oh.make_node("Slice", ["X", "start0", "end0", "axis"], ["x1"]),
+        oh.make_node("Slice", ["X", "start1", "end1", "axis"], ["x2"]),
     ]
     if negate_first:
         nodes.extend(
             [
-                helper.make_node("Neg", ["x1"], ["negative"]),
-                helper.make_node(
+                oh.make_node("Neg", ["x1"], ["negative"]),
+                oh.make_node(
                     "ConstantOfShape", ["left_zero_shape"], ["left_zero"], **constant_attributes
                 ),
-                helper.make_node(
+                oh.make_node(
                     "ConstantOfShape", ["right_zero_shape"], ["right_zero"], **constant_attributes
                 ),
-                helper.make_node("Concat", ["negative", "left_zero"], ["left"], axis=-1),
-                helper.make_node("Concat", ["right_zero", "x2"], ["right"], axis=3),
+                oh.make_node("Concat", ["negative", "left_zero"], ["left"], axis=-1),
+                oh.make_node("Concat", ["right_zero", "x2"], ["right"], axis=3),
             ]
         )
     else:
         nodes.extend(
             [
-                helper.make_node("Neg", ["x2"], ["negative"]),
-                helper.make_node(
+                oh.make_node("Neg", ["x2"], ["negative"]),
+                oh.make_node(
                     "ConstantOfShape", ["left_zero_shape"], ["left_zero"], **constant_attributes
                 ),
-                helper.make_node(
+                oh.make_node(
                     "ConstantOfShape", ["right_zero_shape"], ["right_zero"], **constant_attributes
                 ),
-                helper.make_node("Concat", ["left_zero", "x1"], ["left"], axis=3),
-                helper.make_node("Concat", ["negative", "right_zero"], ["right"], axis=-1),
+                oh.make_node("Concat", ["left_zero", "x1"], ["left"], axis=3),
+                oh.make_node("Concat", ["negative", "right_zero"], ["right"], axis=-1),
             ]
         )
-    nodes.append(helper.make_node("Add", ["left", "right"], ["Y"], name="rotary_add"))
+    nodes.append(oh.make_node("Add", ["left", "right"], ["Y"], name="rotary_add"))
     return _make_model(
         nodes,
         [_value_info("X", FLOAT, [1, 2, 3, 8])],
@@ -168,12 +167,12 @@ def _make_rotary_concat_slice(*, negate_first: bool, gap: bool = False, nonzero:
 def _make_rotary_concat_split(*, zero_width: int = 8):
     """Builds the Split/Concat rotary cancellation topology."""
     nodes = [
-        helper.make_node("Split", ["X", "split"], ["x1", "x2"], axis=1),
-        helper.make_node("Neg", ["x1"], ["negative"]),
-        helper.make_node("ConstantOfShape", ["zero_shape"], ["zero"]),
-        helper.make_node("Concat", ["negative", "zero"], ["left"], axis=1),
-        helper.make_node("Concat", ["zero", "x2"], ["right"], axis=1),
-        helper.make_node("Add", ["left", "right"], ["Y"]),
+        oh.make_node("Split", ["X", "split"], ["x1", "x2"], axis=1),
+        oh.make_node("Neg", ["x1"], ["negative"]),
+        oh.make_node("ConstantOfShape", ["zero_shape"], ["zero"]),
+        oh.make_node("Concat", ["negative", "zero"], ["left"], axis=1),
+        oh.make_node("Concat", ["zero", "x2"], ["right"], axis=1),
+        oh.make_node("Add", ["left", "right"], ["Y"]),
     ]
     output_width = 16 if zero_width == 8 else 8 + zero_width
     return _make_model(
@@ -190,19 +189,19 @@ def _make_rotary_concat_split(*, zero_width: int = 8):
 def _make_rotary_transpose_scatter():
     """Builds the Transpose/ScatterND rotary cancellation topology."""
     nodes = [
-        helper.make_node("Split", ["X", "split"], ["x1", "x2"], axis=1),
-        helper.make_node("Neg", ["x1"], ["negative"]),
-        helper.make_node("ConstantOfShape", ["zero_shape"], ["zero1"]),
-        helper.make_node("ConstantOfShape", ["zero_shape"], ["zero2"]),
-        helper.make_node("Transpose", ["zero1"], ["zero1_t"], perm=[1, 0]),
-        helper.make_node("Transpose", ["zero2"], ["zero2_t"], perm=[1, 0]),
-        helper.make_node("Transpose", ["negative"], ["negative_t"], perm=[1, 0]),
-        helper.make_node("Transpose", ["x2"], ["x2_t"], perm=[1, 0]),
-        helper.make_node("ScatterND", ["zero1_t", "indices0", "negative_t"], ["scatter1"]),
-        helper.make_node("ScatterND", ["zero2_t", "indices1", "x2_t"], ["scatter2"]),
-        helper.make_node("Transpose", ["scatter1"], ["left"], perm=[1, 0]),
-        helper.make_node("Transpose", ["scatter2"], ["right"], perm=[1, 0]),
-        helper.make_node("Add", ["left", "right"], ["Y"]),
+        oh.make_node("Split", ["X", "split"], ["x1", "x2"], axis=1),
+        oh.make_node("Neg", ["x1"], ["negative"]),
+        oh.make_node("ConstantOfShape", ["zero_shape"], ["zero1"]),
+        oh.make_node("ConstantOfShape", ["zero_shape"], ["zero2"]),
+        oh.make_node("Transpose", ["zero1"], ["zero1_t"], perm=[1, 0]),
+        oh.make_node("Transpose", ["zero2"], ["zero2_t"], perm=[1, 0]),
+        oh.make_node("Transpose", ["negative"], ["negative_t"], perm=[1, 0]),
+        oh.make_node("Transpose", ["x2"], ["x2_t"], perm=[1, 0]),
+        oh.make_node("ScatterND", ["zero1_t", "indices0", "negative_t"], ["scatter1"]),
+        oh.make_node("ScatterND", ["zero2_t", "indices1", "x2_t"], ["scatter2"]),
+        oh.make_node("Transpose", ["scatter1"], ["left"], perm=[1, 0]),
+        oh.make_node("Transpose", ["scatter2"], ["right"], perm=[1, 0]),
+        oh.make_node("Add", ["left", "right"], ["Y"]),
     ]
     return _make_model(
         nodes,
@@ -220,12 +219,12 @@ def _make_rotary_transpose_scatter():
 def _make_half_rotary(dtype: int):
     """Builds a half-rotary decomposition."""
     nodes = [
-        helper.make_node("Split", ["X"], ["x1", "x2"], axis=-1, num_outputs=2),
-        helper.make_node("Neg", ["x2"], ["negative"]),
-        helper.make_node("Concat", ["negative", "x1"], ["rotated"], axis=-1),
-        helper.make_node("Mul", ["rotated", "sin"], ["rotated_sin"]),
-        helper.make_node("Mul", ["X", "cos"], ["x_cos"]),
-        helper.make_node("Add", ["rotated_sin", "x_cos"], ["Y"]),
+        oh.make_node("Split", ["X"], ["x1", "x2"], axis=-1, num_outputs=2),
+        oh.make_node("Neg", ["x2"], ["negative"]),
+        oh.make_node("Concat", ["negative", "x1"], ["rotated"], axis=-1),
+        oh.make_node("Mul", ["rotated", "sin"], ["rotated_sin"]),
+        oh.make_node("Mul", ["X", "cos"], ["x_cos"]),
+        oh.make_node("Add", ["rotated_sin", "x_cos"], ["Y"]),
     ]
     return _make_model(
         nodes,
@@ -243,26 +242,26 @@ def _make_full_rotary(dtype: int, *, partial: bool):
     """Builds a full or partial rotary decomposition."""
     half_width = 2 if partial else 4
     nodes = [
-        helper.make_node("Concat", ["cos_half", "cos_half"], ["cos"], axis=-1),
-        helper.make_node("Concat", ["sin_half", "sin_half"], ["sin"], axis=-1),
+        oh.make_node("Concat", ["cos_half", "cos_half"], ["cos"], axis=-1),
+        oh.make_node("Concat", ["sin_half", "sin_half"], ["sin"], axis=-1),
     ]
     rotary_input = "X"
     if partial:
-        nodes.append(helper.make_node("Split", ["X", "outer_split"], ["rotary", "tail"], axis=-1))
+        nodes.append(oh.make_node("Split", ["X", "outer_split"], ["rotary", "tail"], axis=-1))
         rotary_input = "rotary"
     nodes.extend(
         [
-            helper.make_node("Split", [rotary_input], ["x1", "x2"], axis=-1, num_outputs=2),
-            helper.make_node("Neg", ["x2"], ["negative"]),
-            helper.make_node("Concat", ["negative", "x1"], ["rotated"], axis=-1),
-            helper.make_node("Mul", ["rotated", "sin"], ["rotated_sin"]),
-            helper.make_node("Mul", [rotary_input, "cos"], ["x_cos"]),
-            helper.make_node("Add", ["rotated_sin", "x_cos"], ["rotary_y"]),
+            oh.make_node("Split", [rotary_input], ["x1", "x2"], axis=-1, num_outputs=2),
+            oh.make_node("Neg", ["x2"], ["negative"]),
+            oh.make_node("Concat", ["negative", "x1"], ["rotated"], axis=-1),
+            oh.make_node("Mul", ["rotated", "sin"], ["rotated_sin"]),
+            oh.make_node("Mul", [rotary_input, "cos"], ["x_cos"]),
+            oh.make_node("Add", ["rotated_sin", "x_cos"], ["rotary_y"]),
         ]
     )
     output = "rotary_y"
     if partial:
-        nodes.append(helper.make_node("Concat", ["rotary_y", "tail"], ["Y"], axis=-1))
+        nodes.append(oh.make_node("Concat", ["rotary_y", "tail"], ["Y"], axis=-1))
         output = "Y"
     initializers = [_initializer("outer_split", [4, 4], np.int64)] if partial else []
     return _make_model(
@@ -281,24 +280,24 @@ def _make_full_rotary(dtype: int, *, partial: bool):
 def _make_causal_mask(*, shifted: bool, expose_range: bool = False):
     """Builds a causal-mask decomposition from input dimensions."""
     nodes = [
-        helper.make_node("Shape", ["X"], ["dim1"], start=0, end=1),
-        helper.make_node("Shape", ["X"], ["dim2"], start=1, end=2),
-        helper.make_node("Squeeze", ["dim1"], ["s1"]),
-        helper.make_node("Squeeze", ["dim2"], ["s2"]),
-        helper.make_node("Range", ["zero", "s2", "one"], ["range1"]),
-        helper.make_node("Range", ["s1", "s2", "one"], ["range2"]),
-        helper.make_node("Unsqueeze", ["range1", "axes1"], ["u1"]),
-        helper.make_node("Unsqueeze", ["range2", "axes2"], ["u2"]),
+        oh.make_node("Shape", ["X"], ["dim1"], start=0, end=1),
+        oh.make_node("Shape", ["X"], ["dim2"], start=1, end=2),
+        oh.make_node("Squeeze", ["dim1"], ["s1"]),
+        oh.make_node("Squeeze", ["dim2"], ["s2"]),
+        oh.make_node("Range", ["zero", "s2", "one"], ["range1"]),
+        oh.make_node("Range", ["s1", "s2", "one"], ["range2"]),
+        oh.make_node("Unsqueeze", ["range1", "axes1"], ["u1"]),
+        oh.make_node("Unsqueeze", ["range2", "axes2"], ["u2"]),
     ]
     if shifted:
         nodes.extend(
             [
-                helper.make_node("Sub", ["u2", "shift"], ["shifted"]),
-                helper.make_node("Greater", ["u1", "shifted"], ["mask"]),
+                oh.make_node("Sub", ["u2", "shift"], ["shifted"]),
+                oh.make_node("Greater", ["u1", "shifted"], ["mask"]),
             ]
         )
     else:
-        nodes.append(helper.make_node("LessOrEqual", ["u1", "u2"], ["mask"]))
+        nodes.append(oh.make_node("LessOrEqual", ["u1", "u2"], ["mask"]))
     outputs = [_value_info("mask", BOOL, [1, 1, 5, 2])]
     if expose_range:
         outputs.append(_value_info("range2", INT64, [2]))
@@ -319,17 +318,17 @@ def _make_causal_mask(*, shifted: bool, expose_range: bool = False):
 def _make_causal_mask_mul_add():
     """Builds the causal mask Mul/Add decomposition."""
     nodes = [
-        helper.make_node("Shape", ["X"], ["batch"], start=0, end=1),
-        helper.make_node("Shape", ["X"], ["dim1"], start=1, end=2),
-        helper.make_node("Shape", ["X"], ["dim2"], start=2, end=3),
-        helper.make_node("Squeeze", ["dim1"], ["s1"]),
-        helper.make_node("Squeeze", ["dim2"], ["s2"]),
-        helper.make_node("Range", ["zero", "s1", "one"], ["range1"]),
-        helper.make_node("Range", ["zero", "s2", "one"], ["range2"]),
-        helper.make_node("Unsqueeze", ["range1", "axes1"], ["u1"]),
-        helper.make_node("Unsqueeze", ["range2", "axes2"], ["u2"]),
-        helper.make_node("Mul", ["u2", "batch"], ["scaled"]),
-        helper.make_node("Add", ["u1", "scaled"], ["mask"]),
+        oh.make_node("Shape", ["X"], ["batch"], start=0, end=1),
+        oh.make_node("Shape", ["X"], ["dim1"], start=1, end=2),
+        oh.make_node("Shape", ["X"], ["dim2"], start=2, end=3),
+        oh.make_node("Squeeze", ["dim1"], ["s1"]),
+        oh.make_node("Squeeze", ["dim2"], ["s2"]),
+        oh.make_node("Range", ["zero", "s1", "one"], ["range1"]),
+        oh.make_node("Range", ["zero", "s2", "one"], ["range2"]),
+        oh.make_node("Unsqueeze", ["range1", "axes1"], ["u1"]),
+        oh.make_node("Unsqueeze", ["range2", "axes2"], ["u2"]),
+        oh.make_node("Mul", ["u2", "batch"], ["scaled"]),
+        oh.make_node("Add", ["u1", "scaled"], ["mask"]),
     ]
     return _make_model(
         nodes,
@@ -351,17 +350,17 @@ def _make_cos_sin_cache(*, output_dtype: int, position_ids: bool, consumers: boo
     initializers = [_initializer("reshape_shape", [0, -1, 1], np.int64)]
     if position_ids:
         inputs.insert(0, _value_info("position_ids", INT64, [3]))
-        nodes.append(helper.make_node("Unsqueeze", ["position_ids", "axes"], ["positions_u"]))
+        nodes.append(oh.make_node("Unsqueeze", ["position_ids", "axes"], ["positions_u"]))
         initializers.append(_initializer("axes", [1], np.int64))
     else:
         inputs.insert(0, _value_info("dim1", INT64, [1]))
         inputs.insert(1, _value_info("dim2", INT64, [1]))
         nodes.extend(
             [
-                helper.make_node("Squeeze", ["dim1"], ["s1"]),
-                helper.make_node("Squeeze", ["dim2"], ["s2"]),
-                helper.make_node("Range", ["s1", "s2", "one"], ["positions"]),
-                helper.make_node("Unsqueeze", ["positions", "axes"], ["positions_u"]),
+                oh.make_node("Squeeze", ["dim1"], ["s1"]),
+                oh.make_node("Squeeze", ["dim2"], ["s2"]),
+                oh.make_node("Range", ["s1", "s2", "one"], ["positions"]),
+                oh.make_node("Unsqueeze", ["positions", "axes"], ["positions_u"]),
             ]
         )
         initializers.extend(
@@ -369,11 +368,11 @@ def _make_cos_sin_cache(*, output_dtype: int, position_ids: bool, consumers: boo
         )
     nodes.extend(
         [
-            helper.make_node("Cast", ["positions_u"], ["positions_f"], to=FLOAT),
-            helper.make_node("Reshape", ["positions_f", "reshape_shape"], ["positions_r"]),
-            helper.make_node("Mul", ["weights", "positions_r"], ["weighted"]),
-            helper.make_node("Cos", ["weighted"], ["cos_raw"]),
-            helper.make_node("Sin", ["weighted"], ["sin_raw"]),
+            oh.make_node("Cast", ["positions_u"], ["positions_f"], to=FLOAT),
+            oh.make_node("Reshape", ["positions_f", "reshape_shape"], ["positions_r"]),
+            oh.make_node("Mul", ["weights", "positions_r"], ["weighted"]),
+            oh.make_node("Cos", ["weighted"], ["cos_raw"]),
+            oh.make_node("Sin", ["weighted"], ["sin_raw"]),
         ]
     )
     cos_output = "cos_raw"
@@ -381,8 +380,8 @@ def _make_cos_sin_cache(*, output_dtype: int, position_ids: bool, consumers: boo
     if output_dtype != FLOAT:
         nodes.extend(
             [
-                helper.make_node("Cast", ["cos_raw"], ["cos_cache"], to=output_dtype),
-                helper.make_node("Cast", ["sin_raw"], ["sin_cache"], to=output_dtype),
+                oh.make_node("Cast", ["cos_raw"], ["cos_cache"], to=output_dtype),
+                oh.make_node("Cast", ["sin_raw"], ["sin_cache"], to=output_dtype),
             ]
         )
         cos_output = "cos_cache"
@@ -390,8 +389,8 @@ def _make_cos_sin_cache(*, output_dtype: int, position_ids: bool, consumers: boo
     if consumers:
         nodes.extend(
             [
-                helper.make_node("Exp", [cos_output], ["cos_output"]),
-                helper.make_node("Exp", [sin_output], ["sin_output"]),
+                oh.make_node("Exp", [cos_output], ["cos_output"]),
+                oh.make_node("Exp", [sin_output], ["sin_output"]),
             ]
         )
         cos_output = "cos_output"
@@ -423,15 +422,15 @@ def _make_attention(dtype: int, *, rank3: bool, switched_mask: bool = False):
         )
         nodes.extend(
             [
-                helper.make_node("Mul", ["query", "scale"], ["query_scaled_3d"]),
-                helper.make_node("Mul", ["keys", "scale"], ["keys_scaled_3d"]),
-                helper.make_node("Reshape", ["query_scaled_3d", "query_shape"], ["query_r"]),
-                helper.make_node("Reshape", ["keys_scaled_3d", "key_value_shape"], ["keys_r"]),
-                helper.make_node("Reshape", ["values", "key_value_shape"], ["values_r"]),
-                helper.make_node("Transpose", ["query_r"], ["query_t"], perm=[0, 2, 1, 3]),
-                helper.make_node("Transpose", ["keys_r"], ["keys_t"], perm=[0, 2, 3, 1]),
-                helper.make_node("Transpose", ["values_r"], ["values_t"], perm=[0, 2, 1, 3]),
-                helper.make_node("MatMul", ["query_t", "keys_t"], ["scores"]),
+                oh.make_node("Mul", ["query", "scale"], ["query_scaled_3d"]),
+                oh.make_node("Mul", ["keys", "scale"], ["keys_scaled_3d"]),
+                oh.make_node("Reshape", ["query_scaled_3d", "query_shape"], ["query_r"]),
+                oh.make_node("Reshape", ["keys_scaled_3d", "key_value_shape"], ["keys_r"]),
+                oh.make_node("Reshape", ["values", "key_value_shape"], ["values_r"]),
+                oh.make_node("Transpose", ["query_r"], ["query_t"], perm=[0, 2, 1, 3]),
+                oh.make_node("Transpose", ["keys_r"], ["keys_t"], perm=[0, 2, 3, 1]),
+                oh.make_node("Transpose", ["values_r"], ["values_t"], perm=[0, 2, 1, 3]),
+                oh.make_node("MatMul", ["query_t", "keys_t"], ["scores"]),
             ]
         )
         values = "values_t"
@@ -455,29 +454,29 @@ def _make_attention(dtype: int, *, rank3: bool, switched_mask: bool = False):
     if not rank3:
         nodes.extend(
             [
-                helper.make_node("Mul", [query, "scale"], ["query_scaled"]),
-                helper.make_node("Mul", [keys, "scale"], ["keys_scaled"]),
+                oh.make_node("Mul", [query, "scale"], ["query_scaled"]),
+                oh.make_node("Mul", [keys, "scale"], ["keys_scaled"]),
             ]
         )
         nodes.append(
-            helper.make_node("Transpose", ["keys_scaled"], ["keys_scaled_t"], perm=[0, 1, 3, 2])
+            oh.make_node("Transpose", ["keys_scaled"], ["keys_scaled_t"], perm=[0, 1, 3, 2])
         )
-        nodes.append(helper.make_node("MatMul", ["query_scaled", "keys_scaled_t"], ["scores"]))
+        nodes.append(oh.make_node("MatMul", ["query_scaled", "keys_scaled_t"], ["scores"]))
     if switched_mask:
-        nodes.append(helper.make_node("Where", ["mask", "minfty", "scores"], ["masked"]))
+        nodes.append(oh.make_node("Where", ["mask", "minfty", "scores"], ["masked"]))
     else:
         nodes.extend(
             [
-                helper.make_node("Where", ["mask", "zero", "minfty"], ["bias"]),
-                helper.make_node("Add", ["scores", "bias"], ["masked"]),
+                oh.make_node("Where", ["mask", "zero", "minfty"], ["bias"]),
+                oh.make_node("Add", ["scores", "bias"], ["masked"]),
             ]
         )
     nodes.extend(
         [
-            helper.make_node("Softmax", ["masked"], ["probabilities"], axis=-1),
-            helper.make_node("IsNaN", ["probabilities"], ["nan"]),
-            helper.make_node("Where", ["nan", "zero", "probabilities"], ["filtered"]),
-            helper.make_node("MatMul", ["filtered", values], ["Y"]),
+            oh.make_node("Softmax", ["masked"], ["probabilities"], axis=-1),
+            oh.make_node("IsNaN", ["probabilities"], ["nan"]),
+            oh.make_node("Where", ["nan", "zero", "probabilities"], ["filtered"]),
+            oh.make_node("MatMul", ["filtered", values], ["Y"]),
         ]
     )
     initializers.extend(
@@ -514,8 +513,8 @@ def _make_gqa_attention(
         )
         nodes.extend(
             [
-                helper.make_node("Concat", ["past_key", "key"], ["present_key"], axis=2),
-                helper.make_node("Concat", ["past_value", "value"], ["present_value"], axis=2),
+                oh.make_node("Concat", ["past_key", "key"], ["present_key"], axis=2),
+                oh.make_node("Concat", ["past_value", "value"], ["present_value"], axis=2),
             ]
         )
         key_source = "present_key"
@@ -526,30 +525,30 @@ def _make_gqa_attention(
                 _value_info("present_value", dtype, [1, 2, 3, 2]),
             ]
         )
-    nodes.append(helper.make_node("Mul", ["query", "scale"], ["query_scaled"]))
-    nodes.append(helper.make_node("Unsqueeze", [key_source, "axis2"], ["key_u"]))
+    nodes.append(oh.make_node("Mul", ["query", "scale"], ["query_scaled"]))
+    nodes.append(oh.make_node("Unsqueeze", [key_source, "axis2"], ["key_u"]))
     if repeat_after_scale:
-        nodes.append(helper.make_node("Mul", ["key_u", "scale"], ["key_u_scaled"]))
-        nodes.append(helper.make_node("Expand", ["key_u_scaled", "expand_shape"], ["key_e"]))
-        nodes.append(helper.make_node("Reshape", ["key_e", "reshape_shape"], ["key_r"]))
+        nodes.append(oh.make_node("Mul", ["key_u", "scale"], ["key_u_scaled"]))
+        nodes.append(oh.make_node("Expand", ["key_u_scaled", "expand_shape"], ["key_e"]))
+        nodes.append(oh.make_node("Reshape", ["key_e", "reshape_shape"], ["key_r"]))
         key_scaled = "key_r"
     else:
-        nodes.append(helper.make_node("Expand", ["key_u", "expand_shape"], ["key_e"]))
-        nodes.append(helper.make_node("Reshape", ["key_e", "reshape_shape"], ["key_r"]))
-        nodes.append(helper.make_node("Mul", ["key_r", "scale"], ["key_scaled"]))
+        nodes.append(oh.make_node("Expand", ["key_u", "expand_shape"], ["key_e"]))
+        nodes.append(oh.make_node("Reshape", ["key_e", "reshape_shape"], ["key_r"]))
+        nodes.append(oh.make_node("Mul", ["key_r", "scale"], ["key_scaled"]))
         key_scaled = "key_scaled"
     nodes.extend(
         [
-            helper.make_node("Unsqueeze", [value_source, "axis2"], ["value_u"]),
-            helper.make_node("Expand", ["value_u", "expand_shape"], ["value_e"]),
-            helper.make_node("Reshape", ["value_e", "reshape_shape"], ["value_r"]),
-            helper.make_node("Transpose", [key_scaled], ["key_t"], perm=[0, 1, 3, 2]),
-            helper.make_node("MatMul", ["query_scaled", "key_t"], ["scores"]),
-            helper.make_node("Where", ["mask", "minfty", "scores"], ["masked"]),
-            helper.make_node("Softmax", ["masked"], ["probabilities"], axis=-1),
-            helper.make_node("IsNaN", ["probabilities"], ["nan"]),
-            helper.make_node("Where", ["nan", "zero", "probabilities"], ["filtered"]),
-            helper.make_node("MatMul", ["filtered", "value_r"], ["Y"]),
+            oh.make_node("Unsqueeze", [value_source, "axis2"], ["value_u"]),
+            oh.make_node("Expand", ["value_u", "expand_shape"], ["value_e"]),
+            oh.make_node("Reshape", ["value_e", "reshape_shape"], ["value_r"]),
+            oh.make_node("Transpose", [key_scaled], ["key_t"], perm=[0, 1, 3, 2]),
+            oh.make_node("MatMul", ["query_scaled", "key_t"], ["scores"]),
+            oh.make_node("Where", ["mask", "minfty", "scores"], ["masked"]),
+            oh.make_node("Softmax", ["masked"], ["probabilities"], axis=-1),
+            oh.make_node("IsNaN", ["probabilities"], ["nan"]),
+            oh.make_node("Where", ["nan", "zero", "probabilities"], ["filtered"]),
+            oh.make_node("MatMul", ["filtered", "value_r"], ["Y"]),
         ]
     )
     return _make_model(
@@ -573,29 +572,29 @@ def _make_attention_gqa(
 ):
     """Builds ONNX Attention preceded by cache and GQA expansion."""
     nodes = [
-        helper.make_node("Concat", ["past_key", "key"], ["present_key"], axis=2),
-        helper.make_node("Concat", ["past_value", "value"], ["present_value"], axis=2),
-        helper.make_node("Unsqueeze", ["present_key", "axis2"], ["key_u"]),
-        helper.make_node("Expand", ["key_u", "expand_shape"], ["key_e"]),
+        oh.make_node("Concat", ["past_key", "key"], ["present_key"], axis=2),
+        oh.make_node("Concat", ["past_value", "value"], ["present_value"], axis=2),
+        oh.make_node("Unsqueeze", ["present_key", "axis2"], ["key_u"]),
+        oh.make_node("Expand", ["key_u", "expand_shape"], ["key_e"]),
     ]
     if reshape:
-        nodes.append(helper.make_node("Reshape", ["key_e", "reshape_shape"], ["key_r"]))
+        nodes.append(oh.make_node("Reshape", ["key_e", "reshape_shape"], ["key_r"]))
     else:
-        nodes.append(helper.make_node("Squeeze", ["key_e", "axis1"], ["key_r"]))
+        nodes.append(oh.make_node("Squeeze", ["key_e", "axis1"], ["key_r"]))
     nodes.extend(
         [
-            helper.make_node("Unsqueeze", ["present_value", "axis2"], ["value_u"]),
-            helper.make_node("Expand", ["value_u", "expand_shape"], ["value_e"]),
+            oh.make_node("Unsqueeze", ["present_value", "axis2"], ["value_u"]),
+            oh.make_node("Expand", ["value_u", "expand_shape"], ["value_e"]),
         ]
     )
     if reshape:
-        nodes.append(helper.make_node("Reshape", ["value_e", "reshape_shape"], ["value_r"]))
+        nodes.append(oh.make_node("Reshape", ["value_e", "reshape_shape"], ["value_r"]))
     else:
-        nodes.append(helper.make_node("Squeeze", ["value_e", "axis1"], ["value_r"]))
+        nodes.append(oh.make_node("Squeeze", ["value_e", "axis1"], ["value_r"]))
     attention_inputs = ["query", "key_r", "value_r", "mask"]
     if active_optional:
         attention_inputs.append("active_optional")
-    nodes.append(helper.make_node("Attention", attention_inputs, ["Y"], scale=0.11))
+    nodes.append(oh.make_node("Attention", attention_inputs, ["Y"], scale=0.11))
     key_value_heads = 2 if reshape else 1
     query_heads = 4 if reshape else 2
     model = _make_model(
@@ -725,7 +724,7 @@ class TestRotaryAttentionPatterns(ExtTestCase):
 
     def test_function_half_rotary_embedding_wrong_axis_no_match(self):
         model = _make_model(
-            [helper.make_node("Split", ["X"], ["x1", "x2"], axis=2, num_outputs=2)],
+            [oh.make_node("Split", ["X"], ["x1", "x2"], axis=2, num_outputs=2)],
             [_value_info("X", FLOAT, [1, 2, 4, 8])],
             [_value_info("x1", FLOAT, [1, 2, 2, 8]), _value_info("x2", FLOAT, [1, 2, 2, 8])],
         )

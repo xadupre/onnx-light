@@ -39,13 +39,13 @@ from unittest.mock import patch
 
 import numpy as np
 import onnx
-from onnx import numpy_helper
+import onnx.numpy_helper as onh
 from onnx.backend.test.loader import load_model_tests
 
 import onnx_light.onnx as onnxl
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
-from onnx_light.onnx import helper as onnxl_helper
-from onnx_light.onnx import numpy_helper as onnxl_numpy_helper
+import onnx_light.onnx.helper as onnxl_helper
+import onnx_light.onnx.numpy_helper as onnxl_numpy_helper
 
 # The reference runtime is only available in the full build; skip this module on
 # a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
@@ -182,7 +182,7 @@ def _has_supported_io(model: onnxl.ModelProto) -> bool:
 
 def _load_tensor_value(path: str) -> np.ndarray:
     """Loads a serialised ``TensorProto`` as a :class:`numpy.ndarray`."""
-    return numpy_helper.to_array(onnx.load_tensor(path))
+    return onh.to_array(onnx.load_tensor(path))
 
 
 def _load_sequence_value(path: str) -> list[np.ndarray]:
@@ -190,7 +190,7 @@ def _load_sequence_value(path: str) -> list[np.ndarray]:
     sequence = onnx.SequenceProto()
     with open(path, "rb") as f:
         sequence.ParseFromString(f.read())
-    return [numpy_helper.to_array(t) for t in sequence.tensor_values]
+    return [onh.to_array(t) for t in sequence.tensor_values]
 
 
 def _load_optional_value(path: str) -> np.ndarray | list[np.ndarray] | None:
@@ -243,7 +243,7 @@ def _normalize_in_memory_value(value):
     ``.pb`` files, and leaves the other representations untouched.
     """
     if isinstance(value, onnx.TensorProto):
-        return numpy_helper.to_array(value)
+        return onh.to_array(value)
     if isinstance(value, list):
         return [_normalize_in_memory_value(v) for v in value]
     return value

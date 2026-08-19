@@ -203,8 +203,8 @@ class TestTranslateRoundTrip(unittest.TestCase):
     """Round-trip tests: execute the generated code and compare the models."""
 
     def _build_reference(self):
-        from onnx_light.onnx import helper as oh
-        from onnx_light.onnx import numpy_helper as onh
+        import onnx_light.onnx.helper as oh
+        import onnx_light.onnx.numpy_helper as onh
         from onnx_light.onnx import TensorProto
 
         node1 = oh.make_node("Add", ["X", "A"], ["T"])

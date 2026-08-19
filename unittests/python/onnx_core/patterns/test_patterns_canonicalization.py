@@ -10,7 +10,9 @@ import unittest
 import numpy as np
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
-from onnx_light.onnx import TensorProto, helper, numpy_helper
+import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
+from onnx_light.onnx import TensorProto
 
 from onnx_light.onnx_core import optimization
 
@@ -19,20 +21,20 @@ ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvalu
 
 def _value_info(name, dtype, shape):
     """Creates a tensor value-info."""
-    return helper.make_tensor_value_info(name, dtype, shape)
+    return oh.make_tensor_value_info(name, dtype, shape)
 
 
 def _model(nodes, inputs, outputs, initializers=(), opset=18, name="canonicalization"):
     """Creates a model with one default-domain opset."""
-    graph = helper.make_graph(nodes, name, inputs, outputs, list(initializers))
-    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", opset)])
+    graph = oh.make_graph(nodes, name, inputs, outputs, list(initializers))
+    model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", opset)])
     model.ir_version = 10
     return model
 
 
 def _array(values, dtype, name):
     """Creates an initializer from a NumPy array."""
-    return numpy_helper.from_array(np.array(values, dtype=dtype), name=name)
+    return onh.from_array(np.array(values, dtype=dtype), name=name)
 
 
 def _op_types(model):
@@ -75,13 +77,13 @@ def _cast_reshape_model(dynamic=False, keep_intermediate=False):
         outputs.append(_value_info("xm1", TensorProto.FLOAT, [1, 2, 3]))
     return _model(
         [
-            helper.make_node("Unsqueeze", ["X", "zero"], ["xu1"]),
-            helper.make_node("Unsqueeze", ["xu1", "one"], ["xu2"]),
-            helper.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
-            helper.make_node("Reshape", ["Y", "shape2"], ["xm2c"]),
-            helper.make_node("Cast", ["xm2c"], ["xm2"], to=TensorProto.FLOAT),
-            helper.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
-            helper.make_node("Reshape", ["xm", "shape3"], ["Z"]),
+            oh.make_node("Unsqueeze", ["X", "zero"], ["xu1"]),
+            oh.make_node("Unsqueeze", ["xu1", "one"], ["xu2"]),
+            oh.make_node("Reshape", ["xu2", "shape1"], ["xm1"]),
+            oh.make_node("Reshape", ["Y", "shape2"], ["xm2c"]),
+            oh.make_node("Cast", ["xm2c"], ["xm2"], to=TensorProto.FLOAT),
+            oh.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
+            oh.make_node("Reshape", ["xm", "shape3"], ["Z"]),
         ],
         [
             _value_info("X", TensorProto.FLOAT, x_shape),
@@ -101,7 +103,7 @@ def _cast_reshape_model(dynamic=False, keep_intermediate=False):
 def _layernorm_model(tail_nodes, output_name, extra_initializers=(), opset=20):
     """Creates a small layer-normalization fragment replacing the upstream artifact."""
     nodes = [
-        helper.make_node(
+        oh.make_node(
             "LayerNormalization",
             ["X", "scale", "bias"],
             ["normalized", "mean", "inv_std"],
@@ -126,32 +128,32 @@ def _layernorm_model(tail_nodes, output_name, extra_initializers=(), opset=20):
 
 def _constant_capture_model(then_value, else_value):
     """Creates an If model whose branches capture X and shadow an outer initializer."""
-    then_graph = helper.make_graph(
+    then_graph = oh.make_graph(
         [
-            helper.make_node(
+            oh.make_node(
                 "Constant",
                 [],
                 ["two"],
-                value=numpy_helper.from_array(np.array([then_value], dtype=np.float32)),
+                value=onh.from_array(np.array([then_value], dtype=np.float32)),
             ),
-            helper.make_node("Add", ["X", "two"], ["shifted"]),
-            helper.make_node("Add", ["shifted", "two_cst2init"], ["branch_output"]),
+            oh.make_node("Add", ["X", "two"], ["shifted"]),
+            oh.make_node("Add", ["shifted", "two_cst2init"], ["branch_output"]),
         ],
         "then_branch",
         [],
         [_value_info("branch_output", TensorProto.FLOAT, [3])],
         [_array([0], np.float32, "two_cst2init")],
     )
-    else_graph = helper.make_graph(
+    else_graph = oh.make_graph(
         [
-            helper.make_node(
+            oh.make_node(
                 "Constant",
                 [],
                 ["two"],
-                value=numpy_helper.from_array(np.array([else_value], dtype=np.float32)),
+                value=onh.from_array(np.array([else_value], dtype=np.float32)),
             ),
-            helper.make_node("Sub", ["X", "two"], ["shifted"]),
-            helper.make_node("Add", ["shifted", "two_cst2init"], ["branch_output"]),
+            oh.make_node("Sub", ["X", "two"], ["shifted"]),
+            oh.make_node("Add", ["shifted", "two_cst2init"], ["branch_output"]),
         ],
         "else_branch",
         [],
@@ -160,9 +162,9 @@ def _constant_capture_model(then_value, else_value):
     )
     return _model(
         [
-            helper.make_node("ReduceSum", ["X"], ["sum"]),
-            helper.make_node("Greater", ["sum", "threshold"], ["condition"]),
-            helper.make_node(
+            oh.make_node("ReduceSum", ["X"], ["sum"]),
+            oh.make_node("Greater", ["sum", "threshold"], ["condition"]),
+            oh.make_node(
                 "If", ["condition"], ["Y"], then_branch=then_graph, else_branch=else_graph
             ),
         ],
@@ -219,7 +221,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
 
     def test_cast_minimal_layernorm_artifact_replacement(self):
         model = _layernorm_model(
-            [helper.make_node("Cast", ["normalized"], ["Y"], to=TensorProto.FLOAT)], "Y"
+            [oh.make_node("Cast", ["normalized"], ["Y"], to=TensorProto.FLOAT)], "Y"
         )
         feeds = {"X": np.arange(8, dtype=np.float32).reshape(2, 4)}
 
@@ -232,7 +234,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
 
     def test_cast_no_match_when_type_changes(self):
         model = _model(
-            [helper.make_node("Cast", ["X"], ["Y"], to=TensorProto.FLOAT16)],
+            [oh.make_node("Cast", ["X"], ["Y"], to=TensorProto.FLOAT16)],
             [_value_info("X", TensorProto.FLOAT, [2, 3])],
             [_value_info("Y", TensorProto.FLOAT16, [2, 3])],
         )
@@ -247,9 +249,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_cast_cast_identity(self):
         model = _model(
             [
-                helper.make_node("Add", ["X", "one"], ["x1"]),
-                helper.make_node("Cast", ["x1"], ["x2"], to=TensorProto.FLOAT),
-                helper.make_node("Cast", ["x2"], ["Y"], to=TensorProto.FLOAT16),
+                oh.make_node("Add", ["X", "one"], ["x1"]),
+                oh.make_node("Cast", ["x1"], ["x2"], to=TensorProto.FLOAT),
+                oh.make_node("Cast", ["x2"], ["Y"], to=TensorProto.FLOAT16),
             ],
             [_value_info("X", TensorProto.FLOAT16, [3, 4])],
             [_value_info("Y", TensorProto.FLOAT16, [3, 4])],
@@ -266,9 +268,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_cast_cast_cast(self):
         model = _model(
             [
-                helper.make_node("Add", ["X", "one"], ["x1"]),
-                helper.make_node("Cast", ["x1"], ["x2"], to=TensorProto.FLOAT),
-                helper.make_node("Cast", ["x2"], ["Y"], to=TensorProto.FLOAT),
+                oh.make_node("Add", ["X", "one"], ["x1"]),
+                oh.make_node("Cast", ["x1"], ["x2"], to=TensorProto.FLOAT),
+                oh.make_node("Cast", ["x2"], ["Y"], to=TensorProto.FLOAT),
             ],
             [_value_info("X", TensorProto.FLOAT16, [3, 4])],
             [_value_info("Y", TensorProto.FLOAT, [3, 4])],
@@ -285,8 +287,8 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_cast_cast_no_match(self):
         model = _model(
             [
-                helper.make_node("Cast", ["X"], ["middle"], to=TensorProto.FLOAT),
-                helper.make_node("Cast", ["middle"], ["Y"], to=TensorProto.INT64),
+                oh.make_node("Cast", ["X"], ["middle"], to=TensorProto.FLOAT),
+                oh.make_node("Cast", ["middle"], ["Y"], to=TensorProto.INT64),
             ],
             [_value_info("X", TensorProto.FLOAT16, [2, 3])],
             [_value_info("Y", TensorProto.INT64, [2, 3])],
@@ -302,8 +304,8 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_cast_cast_keeps_used_intermediate_output(self):
         model = _model(
             [
-                helper.make_node("Cast", ["X"], ["middle"], to=TensorProto.FLOAT),
-                helper.make_node("Cast", ["middle"], ["Y"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["X"], ["middle"], to=TensorProto.FLOAT),
+                oh.make_node("Cast", ["middle"], ["Y"], to=TensorProto.FLOAT16),
             ],
             [_value_info("X", TensorProto.FLOAT16, [2, 3])],
             [
@@ -322,9 +324,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_cast_cast_binary(self):
         model = _model(
             [
-                helper.make_node("Cast", ["X"], ["xc"], to=TensorProto.FLOAT16),
-                helper.make_node("Cast", ["Y"], ["yc"], to=TensorProto.FLOAT16),
-                helper.make_node("Add", ["xc", "yc"], ["Z"]),
+                oh.make_node("Cast", ["X"], ["xc"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["Y"], ["yc"], to=TensorProto.FLOAT16),
+                oh.make_node("Add", ["xc", "yc"], ["Z"]),
             ],
             [
                 _value_info("X", TensorProto.FLOAT, [3, 4]),
@@ -347,9 +349,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_cast_cast_binary_no_match_integer_sources(self):
         model = _model(
             [
-                helper.make_node("Cast", ["X"], ["xc"], to=TensorProto.FLOAT16),
-                helper.make_node("Cast", ["Y"], ["yc"], to=TensorProto.FLOAT16),
-                helper.make_node("Add", ["xc", "yc"], ["Z"]),
+                oh.make_node("Cast", ["X"], ["xc"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["Y"], ["yc"], to=TensorProto.FLOAT16),
+                oh.make_node("Add", ["xc", "yc"], ["Z"]),
             ],
             [
                 _value_info("X", TensorProto.INT64, [3, 4]),
@@ -371,9 +373,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_cast_cast_binary_no_match_when_cast_output_is_used(self):
         model = _model(
             [
-                helper.make_node("Cast", ["X"], ["xc"], to=TensorProto.FLOAT16),
-                helper.make_node("Cast", ["Y"], ["yc"], to=TensorProto.FLOAT16),
-                helper.make_node("Add", ["xc", "yc"], ["Z"]),
+                oh.make_node("Cast", ["X"], ["xc"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["Y"], ["yc"], to=TensorProto.FLOAT16),
+                oh.make_node("Add", ["xc", "yc"], ["Z"]),
             ],
             [
                 _value_info("X", TensorProto.FLOAT, [2, 3]),
@@ -398,9 +400,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_cast_op_cast_binary(self):
         model = _model(
             [
-                helper.make_node("Cast", ["Y"], ["yc"], to=TensorProto.FLOAT),
-                helper.make_node("Add", ["X", "yc"], ["computed"]),
-                helper.make_node("Cast", ["computed"], ["Z"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["Y"], ["yc"], to=TensorProto.FLOAT),
+                oh.make_node("Add", ["X", "yc"], ["computed"]),
+                oh.make_node("Cast", ["computed"], ["Z"], to=TensorProto.FLOAT16),
             ],
             [
                 _value_info("X", TensorProto.FLOAT, [2, 3]),
@@ -426,9 +428,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_cast_op_cast_unary(self):
         model = _model(
             [
-                helper.make_node("Cast", ["X"], ["xc"], to=TensorProto.FLOAT16),
-                helper.make_node("Neg", ["xc"], ["computed"]),
-                helper.make_node("Cast", ["computed"], ["Y"], to=TensorProto.FLOAT),
+                oh.make_node("Cast", ["X"], ["xc"], to=TensorProto.FLOAT16),
+                oh.make_node("Neg", ["xc"], ["computed"]),
+                oh.make_node("Cast", ["computed"], ["Y"], to=TensorProto.FLOAT),
             ],
             [_value_info("X", TensorProto.FLOAT, [2, 3])],
             [_value_info("Y", TensorProto.FLOAT, [2, 3])],
@@ -444,8 +446,8 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_cast_op_cast_no_match_without_input_cast(self):
         model = _model(
             [
-                helper.make_node("Add", ["X", "Y"], ["computed"]),
-                helper.make_node("Cast", ["computed"], ["Z"], to=TensorProto.FLOAT16),
+                oh.make_node("Add", ["X", "Y"], ["computed"]),
+                oh.make_node("Cast", ["computed"], ["Z"], to=TensorProto.FLOAT16),
             ],
             [
                 _value_info("X", TensorProto.FLOAT, [2, 3]),
@@ -467,9 +469,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_cast_op_cast_preserves_used_computation_output(self):
         model = _model(
             [
-                helper.make_node("Cast", ["Y"], ["yc"], to=TensorProto.FLOAT),
-                helper.make_node("Add", ["X", "yc"], ["computed"]),
-                helper.make_node("Cast", ["computed"], ["Z"], to=TensorProto.FLOAT16),
+                oh.make_node("Cast", ["Y"], ["yc"], to=TensorProto.FLOAT),
+                oh.make_node("Add", ["X", "yc"], ["computed"]),
+                oh.make_node("Cast", ["computed"], ["Z"], to=TensorProto.FLOAT16),
             ],
             [
                 _value_info("X", TensorProto.FLOAT, [2, 3]),
@@ -496,7 +498,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
             with self.subTest(shape_values=shape_values):
                 input_shape = list(range(2, 2 + len(shape_values)))
                 model = _model(
-                    [helper.make_node("Reshape", ["X", "shape"], ["Y"])],
+                    [oh.make_node("Reshape", ["X", "shape"], ["Y"])],
                     [_value_info("X", TensorProto.FLOAT, input_shape)],
                     [_value_info("Y", TensorProto.FLOAT, input_shape)],
                     [_array(shape_values, np.int64, "shape")],
@@ -514,9 +516,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_identity_transpose(self):
         model = _model(
             [
-                helper.make_node("Add", ["X", "two"], ["x2"]),
-                helper.make_node("Mul", ["x2", "two"], ["x3"]),
-                helper.make_node("Transpose", ["x3"], ["Y"], perm=[0, 1, 2]),
+                oh.make_node("Add", ["X", "two"], ["x2"]),
+                oh.make_node("Mul", ["x2", "two"], ["x3"]),
+                oh.make_node("Transpose", ["x3"], ["Y"], perm=[0, 1, 2]),
             ],
             [_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
             [_value_info("Y", TensorProto.FLOAT, [2, 3, 4])],
@@ -533,12 +535,12 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_identity_batch_normalization_float16(self):
         model = _model(
             [
-                helper.make_node(
+                oh.make_node(
                     "BatchNormalization",
                     ["X", "scale", "bias", "bias", "scale"],
                     ["normalized", "saved_mean", "saved_variance"],
                 ),
-                helper.make_node("Neg", ["normalized"], ["Z"]),
+                oh.make_node("Neg", ["normalized"], ["Z"]),
             ],
             [_value_info("X", TensorProto.FLOAT16, [3, 2])],
             [_value_info("Z", TensorProto.FLOAT16, [3, 2])],
@@ -557,9 +559,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_identity_expand(self):
         model = _model(
             [
-                helper.make_node("Add", ["X", "two"], ["x2"]),
-                helper.make_node("Mul", ["x2", "two"], ["x3"]),
-                helper.make_node("Expand", ["x3", "ones"], ["Y"]),
+                oh.make_node("Add", ["X", "two"], ["x2"]),
+                oh.make_node("Mul", ["x2", "two"], ["x3"]),
+                oh.make_node("Expand", ["x3", "ones"], ["Y"]),
             ],
             [_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
             [_value_info("Y", TensorProto.FLOAT, [2, 3, 4])],
@@ -576,9 +578,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_identity_mul_constant_node(self):
         model = _model(
             [
-                helper.make_node("Constant", [], ["one"], value_float=1.0),
-                helper.make_node("Add", ["X", "two"], ["x2"]),
-                helper.make_node("Mul", ["x2", "one"], ["Y"]),
+                oh.make_node("Constant", [], ["one"], value_float=1.0),
+                oh.make_node("Add", ["X", "two"], ["x2"]),
+                oh.make_node("Mul", ["x2", "one"], ["Y"]),
             ],
             [_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
             [_value_info("Y", TensorProto.FLOAT, [2, 3, 4])],
@@ -595,8 +597,8 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_identity_add_mul_uniform_vectors(self):
         model = _model(
             [
-                helper.make_node("Add", ["X", "zero"], ["x2"]),
-                helper.make_node("Mul", ["x2", "one"], ["Y"]),
+                oh.make_node("Add", ["X", "zero"], ["x2"]),
+                oh.make_node("Mul", ["x2", "one"], ["Y"]),
             ],
             [_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
             [_value_info("Y", TensorProto.FLOAT, [2, 3, 4])],
@@ -613,9 +615,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_identity_add_constant_node(self):
         model = _model(
             [
-                helper.make_node("Constant", [], ["zero"], value_float=0.0),
-                helper.make_node("Add", ["X", "zero"], ["x2"]),
-                helper.make_node("Mul", ["x2", "two"], ["Y"]),
+                oh.make_node("Constant", [], ["zero"], value_float=0.0),
+                oh.make_node("Add", ["X", "zero"], ["x2"]),
+                oh.make_node("Mul", ["x2", "two"], ["Y"]),
             ],
             [_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
             [_value_info("Y", TensorProto.FLOAT, [2, 3, 4])],
@@ -631,7 +633,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
 
     def test_identity_no_match_non_identity_transpose(self):
         model = _model(
-            [helper.make_node("Transpose", ["X"], ["Y"], perm=[1, 0])],
+            [oh.make_node("Transpose", ["X"], ["Y"], perm=[1, 0])],
             [_value_info("X", TensorProto.FLOAT, [2, 3])],
             [_value_info("Y", TensorProto.FLOAT, [3, 2])],
         )
@@ -646,8 +648,8 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_clip_clip(self):
         model = _model(
             [
-                helper.make_node("Clip", ["X", "zero"], ["clipped_min"]),
-                helper.make_node("Clip", ["clipped_min", "", "one"], ["Y"]),
+                oh.make_node("Clip", ["X", "zero"], ["clipped_min"]),
+                oh.make_node("Clip", ["clipped_min", "", "one"], ["Y"]),
             ],
             [_value_info("X", TensorProto.FLOAT, [2, 3])],
             [_value_info("Y", TensorProto.FLOAT, [2, 3])],
@@ -666,8 +668,8 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_clip_clip_no_match_when_first_output_is_used(self):
         model = _model(
             [
-                helper.make_node("Clip", ["X", "zero"], ["clipped_min"]),
-                helper.make_node("Clip", ["clipped_min", "", "one"], ["Y"]),
+                oh.make_node("Clip", ["X", "zero"], ["clipped_min"]),
+                oh.make_node("Clip", ["clipped_min", "", "one"], ["Y"]),
             ],
             [_value_info("X", TensorProto.FLOAT, [2, 3])],
             [
@@ -687,13 +689,13 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_constant_to_initializer(self):
         model = _model(
             [
-                helper.make_node(
+                oh.make_node(
                     "Constant",
                     [],
                     ["constant"],
-                    value=numpy_helper.from_array(np.array([1, 2], dtype=np.float32)),
+                    value=onh.from_array(np.array([1, 2], dtype=np.float32)),
                 ),
-                helper.make_node("Add", ["X", "constant"], ["Y"]),
+                oh.make_node("Add", ["X", "constant"], ["Y"]),
             ],
             [_value_info("X", TensorProto.FLOAT, [5, 2])],
             [_value_info("Y", TensorProto.FLOAT, [5, 2])],
@@ -708,31 +710,31 @@ class TestCanonicalizationPatterns(ExtTestCase):
         initializer = optimized.graph.initializer[0]
         self.assertEqual(initializer.name, "constant_cst2init")
         np.testing.assert_array_equal(
-            numpy_helper.to_array(initializer), np.array([1, 2], dtype=np.float32)
+            onh.to_array(initializer), np.array([1, 2], dtype=np.float32)
         )
         self._assert_equivalent(model, optimized, feeds)
 
     def test_constant_to_initializer_recursive_if(self):
-        then_graph = helper.make_graph(
+        then_graph = oh.make_graph(
             [
-                helper.make_node(
+                oh.make_node(
                     "Constant",
                     [],
                     ["then_output"],
-                    value=numpy_helper.from_array(np.ones(5, dtype=np.float32)),
+                    value=onh.from_array(np.ones(5, dtype=np.float32)),
                 )
             ],
             "then_branch",
             [],
             [_value_info("then_output", TensorProto.FLOAT, [5])],
         )
-        else_graph = helper.make_graph(
+        else_graph = oh.make_graph(
             [
-                helper.make_node(
+                oh.make_node(
                     "Constant",
                     [],
                     ["else_output"],
-                    value=numpy_helper.from_array(-np.ones(5, dtype=np.float32)),
+                    value=onh.from_array(-np.ones(5, dtype=np.float32)),
                 )
             ],
             "else_branch",
@@ -741,9 +743,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
         )
         model = _model(
             [
-                helper.make_node("ReduceSum", ["X"], ["sum"]),
-                helper.make_node("Greater", ["sum", "zero"], ["condition"]),
-                helper.make_node(
+                oh.make_node("ReduceSum", ["X"], ["sum"]),
+                oh.make_node("Greater", ["sum", "zero"], ["condition"]),
+                oh.make_node(
                     "If", ["condition"], ["Y"], then_branch=then_graph, else_branch=else_graph
                 ),
             ],
@@ -811,11 +813,8 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_constant_to_initializer_graph_output(self):
         model = _model(
             [
-                helper.make_node(
-                    "Constant",
-                    [],
-                    ["Y"],
-                    value=numpy_helper.from_array(np.array([3, 4], dtype=np.int64)),
+                oh.make_node(
+                    "Constant", [], ["Y"], value=onh.from_array(np.array([3, 4], dtype=np.int64))
                 )
             ],
             [],
@@ -834,8 +833,8 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_dropout_minimal_layernorm_artifact_replacement(self):
         model = _layernorm_model(
             [
-                helper.make_node("Dropout", ["normalized", "ratio"], ["dropped", "mask"]),
-                helper.make_node("Add", ["dropped", "residual"], ["Y"]),
+                oh.make_node("Dropout", ["normalized", "ratio"], ["dropped", "mask"]),
+                oh.make_node("Add", ["dropped", "residual"], ["Y"]),
             ],
             "Y",
             [_array(0.1, np.float32, "ratio"), _array(np.ones((1, 4)), np.float32, "residual")],
@@ -853,9 +852,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_dropout_no_match_when_mask_is_used(self):
         model = _model(
             [
-                helper.make_node("Dropout", ["X", "ratio"], ["Y", "mask"]),
-                helper.make_node("Cast", ["mask"], ["mask_float"], to=TensorProto.FLOAT),
-                helper.make_node("Mul", ["Y", "mask_float"], ["Z"]),
+                oh.make_node("Dropout", ["X", "ratio"], ["Y", "mask"]),
+                oh.make_node("Cast", ["mask"], ["mask_float"], to=TensorProto.FLOAT),
+                oh.make_node("Mul", ["Y", "mask_float"], ["Z"]),
             ],
             [_value_info("X", TensorProto.FLOAT, [2, 3])],
             [_value_info("Z", TensorProto.FLOAT, [2, 3])],
@@ -872,7 +871,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
 
     def test_dropout_no_match_when_training_is_enabled(self):
         model = _model(
-            [helper.make_node("Dropout", ["X", "ratio", "training"], ["Y", "mask"])],
+            [oh.make_node("Dropout", ["X", "ratio", "training"], ["Y", "mask"])],
             [_value_info("X", TensorProto.FLOAT, [2, 3])],
             [
                 _value_info("Y", TensorProto.FLOAT, [2, 3]),
@@ -890,7 +889,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_conv_bias_null(self):
         model = _model(
             [
-                helper.make_node(
+                oh.make_node(
                     "Conv", ["X", "W", "bias"], ["Y"], kernel_shape=[3, 3], pads=[1, 1, 1, 1]
                 )
             ],
@@ -919,13 +918,10 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_conv_bias_null_materialized_constant(self):
         model = _model(
             [
-                helper.make_node(
-                    "Constant",
-                    [],
-                    ["bias"],
-                    value=numpy_helper.from_array(np.zeros(2, dtype=np.float32)),
+                oh.make_node(
+                    "Constant", [], ["bias"], value=onh.from_array(np.zeros(2, dtype=np.float32))
                 ),
-                helper.make_node(
+                oh.make_node(
                     "Conv", ["X", "W", "bias"], ["Y"], kernel_shape=[3, 3], pads=[1, 1, 1, 1]
                 ),
             ],
@@ -950,9 +946,9 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_conv_bias_null_shape_expand(self):
         model = _model(
             [
-                helper.make_node("Shape", ["bias_shape_source"], ["bias_shape"], start=0, end=1),
-                helper.make_node("Expand", ["zero", "bias_shape"], ["bias"]),
-                helper.make_node(
+                oh.make_node("Shape", ["bias_shape_source"], ["bias_shape"], start=0, end=1),
+                oh.make_node("Expand", ["zero", "bias_shape"], ["bias"]),
+                oh.make_node(
                     "Conv", ["X", "W", "bias"], ["Y"], kernel_shape=[3, 3], pads=[1, 1, 1, 1]
                 ),
             ],
@@ -981,7 +977,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_conv_bias_null_no_match_nonzero_bias(self):
         model = _model(
             [
-                helper.make_node(
+                oh.make_node(
                     "Conv", ["X", "W", "bias"], ["Y"], kernel_shape=[3, 3], pads=[1, 1, 1, 1]
                 )
             ],
@@ -1006,8 +1002,8 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_pad_conv_fusion(self):
         model = _model(
             [
-                helper.make_node("Pad", ["X", "pads"], ["padded"]),
-                helper.make_node("Conv", ["padded", "W"], ["Y"], kernel_shape=[3, 3]),
+                oh.make_node("Pad", ["X", "pads"], ["padded"]),
+                oh.make_node("Conv", ["padded", "W"], ["Y"], kernel_shape=[3, 3]),
             ],
             [
                 _value_info("X", TensorProto.FLOAT, [1, 1, 6, 6]),
@@ -1032,8 +1028,8 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_pad_conv_fusion_with_existing_pads(self):
         model = _model(
             [
-                helper.make_node("Pad", ["X", "pads"], ["padded"]),
-                helper.make_node(
+                oh.make_node("Pad", ["X", "pads"], ["padded"]),
+                oh.make_node(
                     "Conv", ["padded", "W"], ["Y"], kernel_shape=[3, 3], pads=[1, 1, 1, 1]
                 ),
             ],
@@ -1059,8 +1055,8 @@ class TestCanonicalizationPatterns(ExtTestCase):
     def test_pad_conv_no_fusion_batch_channel_padded(self):
         model = _model(
             [
-                helper.make_node("Pad", ["X", "pads"], ["padded"]),
-                helper.make_node("Conv", ["padded", "W"], ["Y"], kernel_shape=[1, 1]),
+                oh.make_node("Pad", ["X", "pads"], ["padded"]),
+                oh.make_node("Conv", ["padded", "W"], ["Y"], kernel_shape=[1, 1]),
             ],
             [
                 _value_info("X", TensorProto.FLOAT, [1, 2, 4, 4]),

@@ -25,7 +25,7 @@ import numpy as np
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx as onnxl
-from onnx_light.onnx import numpy_helper
+import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx_lib import TensorProto, helper, parser
 
 # The reference runtime is only available in the full build; skip this module on
@@ -60,7 +60,7 @@ _ABS_MODEL_SRC = (
 # attribute when the value tensor stores ``raw_data`` (see
 # ``test_constant_output_survives_model_release``).
 def _make_raw_data_constant_model():
-    value = numpy_helper.from_array(np.array([1.0, 2.0, 3.0], dtype=np.float32), name="c")
+    value = onh.from_array(np.array([1.0, 2.0, 3.0], dtype=np.float32), name="c")
     assert value.raw_data, "Constant value must use raw_data to exercise the borrowed path."
     node = helper.make_node("Constant", [], ["y"], value=value)
     graph = helper.make_graph(
@@ -718,7 +718,8 @@ sess.run(
         # the way out when ``layout=1`` is requested. Running both
         # layouts on the same logical inputs must produce the same
         # outputs (modulo the axis permutation).
-        from onnx_light.onnx import TensorProto, helper
+        import onnx_light.onnx.helper as oh
+        from onnx_light.onnx import TensorProto
 
         batch, seq, inp, hid = 2, 3, 4, 5
         rng = np.random.default_rng(0)
@@ -728,23 +729,23 @@ sess.run(
         x_layout1 = np.transpose(x_layout0, (1, 0, 2)).copy()
 
         def build_model(layout: int, x_shape: list[int]):
-            node = helper.make_node(
+            node = oh.make_node(
                 "LSTM", ["X", "W", "R"], ["Y", "Y_h"], hidden_size=hid, layout=layout
             )
-            graph = helper.make_graph(
+            graph = oh.make_graph(
                 [node],
                 "g",
                 [
-                    helper.make_tensor_value_info("X", TensorProto.FLOAT, x_shape),
-                    helper.make_tensor_value_info("W", TensorProto.FLOAT, [1, 4 * hid, inp]),
-                    helper.make_tensor_value_info("R", TensorProto.FLOAT, [1, 4 * hid, hid]),
+                    oh.make_tensor_value_info("X", TensorProto.FLOAT, x_shape),
+                    oh.make_tensor_value_info("W", TensorProto.FLOAT, [1, 4 * hid, inp]),
+                    oh.make_tensor_value_info("R", TensorProto.FLOAT, [1, 4 * hid, hid]),
                 ],
                 [
-                    helper.make_tensor_value_info("Y", TensorProto.FLOAT, None),
-                    helper.make_tensor_value_info("Y_h", TensorProto.FLOAT, None),
+                    oh.make_tensor_value_info("Y", TensorProto.FLOAT, None),
+                    oh.make_tensor_value_info("Y_h", TensorProto.FLOAT, None),
                 ],
             )
-            return helper.make_model(graph, opset_imports=[helper.make_opsetid("", 22)])
+            return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 22)])
 
         sess0 = ReferenceEvaluator(build_model(0, [seq, batch, inp]))
         sess1 = ReferenceEvaluator(build_model(1, [batch, seq, inp]))
@@ -764,7 +765,8 @@ sess.run(
         # X / initial_h on the way in and Y / Y_h on the way out).
         # Running both layouts on the same logical inputs must produce
         # the same outputs (modulo the axis permutation).
-        from onnx_light.onnx import TensorProto, helper
+        import onnx_light.onnx.helper as oh
+        from onnx_light.onnx import TensorProto
 
         batch, seq, inp, hid = 2, 3, 4, 5
         rng = np.random.default_rng(0)
@@ -774,23 +776,23 @@ sess.run(
         x_layout1 = np.transpose(x_layout0, (1, 0, 2)).copy()
 
         def build_model(layout: int, x_shape: list[int]):
-            node = helper.make_node(
+            node = oh.make_node(
                 "GRU", ["X", "W", "R"], ["Y", "Y_h"], hidden_size=hid, layout=layout
             )
-            graph = helper.make_graph(
+            graph = oh.make_graph(
                 [node],
                 "g",
                 [
-                    helper.make_tensor_value_info("X", TensorProto.FLOAT, x_shape),
-                    helper.make_tensor_value_info("W", TensorProto.FLOAT, [1, 3 * hid, inp]),
-                    helper.make_tensor_value_info("R", TensorProto.FLOAT, [1, 3 * hid, hid]),
+                    oh.make_tensor_value_info("X", TensorProto.FLOAT, x_shape),
+                    oh.make_tensor_value_info("W", TensorProto.FLOAT, [1, 3 * hid, inp]),
+                    oh.make_tensor_value_info("R", TensorProto.FLOAT, [1, 3 * hid, hid]),
                 ],
                 [
-                    helper.make_tensor_value_info("Y", TensorProto.FLOAT, None),
-                    helper.make_tensor_value_info("Y_h", TensorProto.FLOAT, None),
+                    oh.make_tensor_value_info("Y", TensorProto.FLOAT, None),
+                    oh.make_tensor_value_info("Y_h", TensorProto.FLOAT, None),
                 ],
             )
-            return helper.make_model(graph, opset_imports=[helper.make_opsetid("", 22)])
+            return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 22)])
 
         sess0 = ReferenceEvaluator(build_model(0, [seq, batch, inp]))
         sess1 = ReferenceEvaluator(build_model(1, [batch, seq, inp]))
@@ -938,22 +940,22 @@ sess.run(
         # ReferenceEvaluator.run() feed boundary must accept a list mixing
         # NumPy arrays and runtime Tensors via ``put_sequence`` rather than the
         # single-tensor ``set`` path.
-        from onnx_light.onnx import helper
+        import onnx_light.onnx.helper as oh
 
-        body = helper.make_graph(
-            [helper.make_node("Identity", ["elem"], ["out"])],
+        body = oh.make_graph(
+            [oh.make_node("Identity", ["elem"], ["out"])],
             "body",
-            [helper.make_tensor_value_info("elem", onnxl.TensorProto.FLOAT, None)],
-            [helper.make_tensor_value_info("out", onnxl.TensorProto.FLOAT, None)],
+            [oh.make_tensor_value_info("elem", onnxl.TensorProto.FLOAT, None)],
+            [oh.make_tensor_value_info("out", onnxl.TensorProto.FLOAT, None)],
         )
-        node = helper.make_node("SequenceMap", ["x"], ["y"], body=body)
-        graph = helper.make_graph(
+        node = oh.make_node("SequenceMap", ["x"], ["y"], body=body)
+        graph = oh.make_graph(
             [node],
             "g",
-            [helper.make_tensor_sequence_value_info("x", onnxl.TensorProto.FLOAT, None)],
-            [helper.make_tensor_sequence_value_info("y", onnxl.TensorProto.FLOAT, None)],
+            [oh.make_tensor_sequence_value_info("x", onnxl.TensorProto.FLOAT, None)],
+            [oh.make_tensor_sequence_value_info("y", onnxl.TensorProto.FLOAT, None)],
         )
-        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
 
         sess = ReferenceEvaluator(model)
         self.assertEqual(sess.input_names, ["x"])
@@ -974,22 +976,22 @@ sess.run(
     def test_sequence_input_must_be_list(self):
         # A ``seq(tensor)`` graph input fed as a bare array (instead of a list of
         # arrays) is a caller error and must raise a clear ``TypeError``.
-        from onnx_light.onnx import helper
+        import onnx_light.onnx.helper as oh
 
-        body = helper.make_graph(
-            [helper.make_node("Identity", ["elem"], ["out"])],
+        body = oh.make_graph(
+            [oh.make_node("Identity", ["elem"], ["out"])],
             "body",
-            [helper.make_tensor_value_info("elem", onnxl.TensorProto.FLOAT, None)],
-            [helper.make_tensor_value_info("out", onnxl.TensorProto.FLOAT, None)],
+            [oh.make_tensor_value_info("elem", onnxl.TensorProto.FLOAT, None)],
+            [oh.make_tensor_value_info("out", onnxl.TensorProto.FLOAT, None)],
         )
-        node = helper.make_node("SequenceMap", ["x"], ["y"], body=body)
-        graph = helper.make_graph(
+        node = oh.make_node("SequenceMap", ["x"], ["y"], body=body)
+        graph = oh.make_graph(
             [node],
             "g",
-            [helper.make_tensor_sequence_value_info("x", onnxl.TensorProto.FLOAT, None)],
-            [helper.make_tensor_sequence_value_info("y", onnxl.TensorProto.FLOAT, None)],
+            [oh.make_tensor_sequence_value_info("x", onnxl.TensorProto.FLOAT, None)],
+            [oh.make_tensor_sequence_value_info("y", onnxl.TensorProto.FLOAT, None)],
         )
-        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
         sess = ReferenceEvaluator(model)
         with self.assertRaises(TypeError):
             sess.run(None, {"x": np.array([1.0, 2.0], dtype=np.float32)})
@@ -1161,8 +1163,8 @@ sess.run(
         new_initializers = []
         for init in graph.initializer:
             if init.data_type == FLOAT:
-                array = numpy_helper.to_array(init).astype(bfloat16)
-                new_initializers.append(numpy_helper.from_array(array, init.name))
+                array = onh.to_array(init).astype(bfloat16)
+                new_initializers.append(onh.from_array(array, init.name))
             else:
                 new_initializers.append(init)
         del graph.initializer[:]
@@ -1179,8 +1181,8 @@ sess.run(
             elif node.op_type == "Constant":
                 for attr in node.attribute:
                     if attr.name == "value" and attr.t.data_type == FLOAT:
-                        array = numpy_helper.to_array(attr.t).astype(bfloat16)
-                        attr.t.CopyFrom(numpy_helper.from_array(array))
+                        array = onh.to_array(attr.t).astype(bfloat16)
+                        attr.t.CopyFrom(onh.from_array(array))
         return converted
 
     def test_tiny_llm_float32(self):

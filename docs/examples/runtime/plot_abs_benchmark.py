@@ -32,7 +32,8 @@ import matplotlib.pyplot
 import ml_dtypes
 import numpy
 import onnxruntime
-from onnx_light.onnx import TensorProto, checker, helper
+import onnx_light.onnx.helper as oh
+from onnx_light.onnx import TensorProto, checker
 from onnx_light.onnx.reference import ReferenceEvaluator
 from onnx_light.onnx_py import _onnxpykernels
 
@@ -59,13 +60,13 @@ DTYPES = [
 def make_abs_model(elem_type: int):
     """Creates a dynamic one-dimensional Abs model for a given element type."""
 
-    graph = helper.make_graph(
-        [helper.make_node("Abs", ["X"], ["Y"])],
+    graph = oh.make_graph(
+        [oh.make_node("Abs", ["X"], ["Y"])],
         "abs_benchmark",
-        [helper.make_tensor_value_info("X", elem_type, ["N"])],
-        [helper.make_tensor_value_info("Y", elem_type, ["N"])],
+        [oh.make_tensor_value_info("X", elem_type, ["N"])],
+        [oh.make_tensor_value_info("Y", elem_type, ["N"])],
     )
-    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+    model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
     model.ir_version = min(model.ir_version, ORT_MAX_IR_VERSION)
     checker.check_model(model)
     return model

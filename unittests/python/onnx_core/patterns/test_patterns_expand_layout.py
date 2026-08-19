@@ -10,7 +10,9 @@ import unittest
 
 import numpy as np
 
-from onnx_light.onnx import TensorProto, helper, numpy_helper, shape_inference
+import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
+from onnx_light.onnx import TensorProto, shape_inference
 from onnx_light.ext_test_case import import_or_skip
 
 from onnx_light.onnx_core import optimization
@@ -47,15 +49,15 @@ REQUESTED_PATTERNS = (
 
 def _initializer(name, values, dtype):
     """Creates an initializer."""
-    return numpy_helper.from_array(np.array(values, dtype=dtype), name=name)
+    return onh.from_array(np.array(values, dtype=dtype), name=name)
 
 
 def _make_model(nodes, inputs, outputs, initializers=(), value_info=(), opset=18):
     """Creates a model for one pattern test."""
-    graph = helper.make_graph(
+    graph = oh.make_graph(
         nodes, "pattern_test", inputs, outputs, list(initializers), value_info=list(value_info)
     )
-    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", opset)])
+    model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", opset)])
     model.ir_version = 10
     return model
 
@@ -78,7 +80,7 @@ def _initializer_values(model, name):
     """Returns an initializer as a NumPy array."""
     for tensor in model.graph.initializer:
         if tensor.name == name:
-            return numpy_helper.to_array(tensor)
+            return onh.to_array(tensor)
     raise AssertionError(f"Initializer {name!r} was not found.")
 
 
@@ -127,17 +129,17 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_expand_execution_and_initializer_cleanup(self):
         model = _make_model(
             [
-                helper.make_node("Reshape", ["X", "shape1"], ["xu1"]),
-                helper.make_node("Expand", ["xu1", "expand_shape"], ["xm1"]),
-                helper.make_node("Cast", ["Y"], ["xm2"], to=TensorProto.FLOAT),
-                helper.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
-                helper.make_node("Reshape", ["xm", "shape3"], ["Z"]),
+                oh.make_node("Reshape", ["X", "shape1"], ["xu1"]),
+                oh.make_node("Expand", ["xu1", "expand_shape"], ["xm1"]),
+                oh.make_node("Cast", ["Y"], ["xm2"], to=TensorProto.FLOAT),
+                oh.make_node("MatMul", ["xm1", "xm2"], ["xm"]),
+                oh.make_node("Reshape", ["xm", "shape3"], ["Z"]),
             ],
             [
-                helper.make_tensor_value_info("X", TensorProto.FLOAT, [4, 8]),
-                helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3, 8, 5]),
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, [4, 8]),
+                oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3, 8, 5]),
             ],
-            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, [2, 3, 4, 5])],
+            [oh.make_tensor_value_info("Z", TensorProto.FLOAT, [2, 3, 4, 5])],
             [
                 _initializer("shape1", [1, 4, 8], np.int64),
                 _initializer("expand_shape", [1, 4, 8], np.int64),
@@ -159,9 +161,9 @@ class TestExpandLayoutPatterns(unittest.TestCase):
 
     def test_expand_no_match_when_shape_changes(self):
         model = _make_model(
-            [helper.make_node("Expand", ["X", "shape"], ["Y"])],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, 3])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3])],
+            [oh.make_node("Expand", ["X", "shape"], ["Y"])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [1, 3])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3])],
             [_initializer("shape", [2, 3], np.int64)],
         )
 
@@ -179,14 +181,14 @@ class TestExpandLayoutPatterns(unittest.TestCase):
                 mul_inputs = ["expanded", "Y"] if side == "left" else ["Y", "expanded"]
                 model = _make_model(
                     [
-                        helper.make_node("Expand", ["X", "shape"], ["expanded"]),
-                        helper.make_node("Mul", mul_inputs, ["Z"]),
+                        oh.make_node("Expand", ["X", "shape"], ["expanded"]),
+                        oh.make_node("Mul", mul_inputs, ["Z"]),
                     ],
                     [
-                        helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, 4, 1]),
-                        helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 4, 6]),
+                        oh.make_tensor_value_info("X", TensorProto.FLOAT, [1, 4, 1]),
+                        oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 4, 6]),
                     ],
-                    [helper.make_tensor_value_info("Z", TensorProto.FLOAT, [2, 4, 6])],
+                    [oh.make_tensor_value_info("Z", TensorProto.FLOAT, [2, 4, 6])],
                     [_initializer("shape", [2, 4, 6], np.int64)],
                 )
                 feeds = {
@@ -211,15 +213,15 @@ class TestExpandLayoutPatterns(unittest.TestCase):
             with self.subTest(name=name):
                 model = _make_model(
                     [
-                        helper.make_node("Expand", ["X", "shape"], ["expanded"]),
-                        helper.make_node("Mul", ["expanded", "Y"], ["Z"]),
+                        oh.make_node("Expand", ["X", "shape"], ["expanded"]),
+                        oh.make_node("Mul", ["expanded", "Y"], ["Z"]),
                     ],
                     [
-                        helper.make_tensor_value_info("X", TensorProto.FLOAT, x_shape),
-                        helper.make_tensor_value_info("Y", TensorProto.FLOAT, y_shape),
+                        oh.make_tensor_value_info("X", TensorProto.FLOAT, x_shape),
+                        oh.make_tensor_value_info("Y", TensorProto.FLOAT, y_shape),
                     ],
                     [
-                        helper.make_tensor_value_info(output, TensorProto.FLOAT, [2, 3])
+                        oh.make_tensor_value_info(output, TensorProto.FLOAT, [2, 3])
                         for output in outputs
                     ],
                     [_initializer("shape", [2, 3], np.int64)],
@@ -246,14 +248,12 @@ class TestExpandLayoutPatterns(unittest.TestCase):
                     attributes["to"] = configuration["to"]
                 model = _make_model(
                     [
-                        helper.make_node("Expand", ["X", "shape"], ["expanded"]),
-                        helper.make_node(
-                            op_type, ["expanded", *extra_inputs], ["Z"], **attributes
-                        ),
+                        oh.make_node("Expand", ["X", "shape"], ["expanded"]),
+                        oh.make_node(op_type, ["expanded", *extra_inputs], ["Z"], **attributes),
                     ],
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, 5, 7])],
+                    [oh.make_tensor_value_info("X", TensorProto.FLOAT, [1, 5, 7])],
                     [
-                        helper.make_tensor_value_info(
+                        oh.make_tensor_value_info(
                             "Z",
                             TensorProto.FLOAT16 if op_type == "Cast" else TensorProto.FLOAT,
                             [3, 5, 7],
@@ -281,25 +281,25 @@ class TestExpandLayoutPatterns(unittest.TestCase):
         for shared in (False, True):
             with self.subTest(shared=shared):
                 nodes = [
-                    helper.make_node("Expand", ["X", "shape"], ["expanded"]),
-                    helper.make_node(
+                    oh.make_node("Expand", ["X", "shape"], ["expanded"]),
+                    oh.make_node(
                         "Add" if not shared else "Exp",
                         ["expanded", "Y"] if not shared else ["expanded"],
                         ["Z"],
                     ),
                 ]
-                outputs = [helper.make_tensor_value_info("Z", TensorProto.FLOAT, [3, 5, 7])]
+                outputs = [oh.make_tensor_value_info("Z", TensorProto.FLOAT, [3, 5, 7])]
                 if shared:
-                    nodes.append(helper.make_node("Identity", ["expanded"], ["other"]))
+                    nodes.append(oh.make_node("Identity", ["expanded"], ["other"]))
                     outputs.append(
-                        helper.make_tensor_value_info("other", TensorProto.FLOAT, [3, 5, 7])
+                        oh.make_tensor_value_info("other", TensorProto.FLOAT, [3, 5, 7])
                     )
                 model = _make_model(
                     nodes,
                     [
-                        helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, 5, 7]),
+                        oh.make_tensor_value_info("X", TensorProto.FLOAT, [1, 5, 7]),
                         *(
-                            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [3, 5, 7])]
+                            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [3, 5, 7])]
                             if not shared
                             else []
                         ),
@@ -321,11 +321,11 @@ class TestExpandLayoutPatterns(unittest.TestCase):
             with self.subTest(axes=axes):
                 model = _make_model(
                     [
-                        helper.make_node("Expand", ["X", "shape"], ["expanded"]),
-                        helper.make_node("Unsqueeze", ["expanded", "axes"], ["Y"]),
+                        oh.make_node("Expand", ["X", "shape"], ["expanded"]),
+                        oh.make_node("Unsqueeze", ["expanded", "axes"], ["Y"]),
                     ],
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, 5, 7])],
-                    [helper.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
+                    [oh.make_tensor_value_info("X", TensorProto.FLOAT, [1, 5, 7])],
+                    [oh.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
                     [
                         _initializer("shape", [3, 1, 1], np.int64),
                         _initializer("axes", axes, np.int64),
@@ -347,21 +347,21 @@ class TestExpandLayoutPatterns(unittest.TestCase):
         cases = ("dynamic_axes", "shared_expand", "old_opset")
         for case in cases:
             with self.subTest(case=case):
-                inputs = [helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, 5, 7])]
+                inputs = [oh.make_tensor_value_info("X", TensorProto.FLOAT, [1, 5, 7])]
                 initializers = [_initializer("shape", [3, 1, 1], np.int64)]
                 if case == "dynamic_axes":
-                    inputs.append(helper.make_tensor_value_info("axes", TensorProto.INT64, [1]))
+                    inputs.append(oh.make_tensor_value_info("axes", TensorProto.INT64, [1]))
                 else:
                     initializers.append(_initializer("axes", [1], np.int64))
                 nodes = [
-                    helper.make_node("Expand", ["X", "shape"], ["expanded"]),
-                    helper.make_node("Unsqueeze", ["expanded", "axes"], ["Y"]),
+                    oh.make_node("Expand", ["X", "shape"], ["expanded"]),
+                    oh.make_node("Unsqueeze", ["expanded", "axes"], ["Y"]),
                 ]
-                outputs = [helper.make_tensor_value_info("Y", TensorProto.FLOAT, None)]
+                outputs = [oh.make_tensor_value_info("Y", TensorProto.FLOAT, None)]
                 if case == "shared_expand":
-                    nodes.append(helper.make_node("Identity", ["expanded"], ["other"]))
+                    nodes.append(oh.make_node("Identity", ["expanded"], ["other"]))
                     outputs.append(
-                        helper.make_tensor_value_info("other", TensorProto.FLOAT, [3, 5, 7])
+                        oh.make_tensor_value_info("other", TensorProto.FLOAT, [3, 5, 7])
                     )
                 model = _make_model(
                     nodes, inputs, outputs, initializers, opset=11 if case == "old_opset" else 18
@@ -378,12 +378,12 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_expand_unsqueeze_expand_fusion_and_initializer(self):
         model = _make_model(
             [
-                helper.make_node("Expand", ["X", "shape1"], ["expanded"]),
-                helper.make_node("Unsqueeze", ["expanded", "axes"], ["unsqueezed"]),
-                helper.make_node("Expand", ["unsqueezed", "shape2"], ["Y"]),
+                oh.make_node("Expand", ["X", "shape1"], ["expanded"]),
+                oh.make_node("Unsqueeze", ["expanded", "axes"], ["unsqueezed"]),
+                oh.make_node("Expand", ["unsqueezed", "shape2"], ["Y"]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, 3, 4])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [5, 2, 3, 4])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [1, 3, 4])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [5, 2, 3, 4])],
             [
                 _initializer("shape1", [5, 3, 4], np.int64),
                 _initializer("axes", [1], np.int64),
@@ -406,8 +406,8 @@ class TestExpandLayoutPatterns(unittest.TestCase):
             with self.subTest(case=case):
                 axes = [1, 2] if case == "rank_mismatch" else [1]
                 nodes = [
-                    helper.make_node("Expand", ["X", "shape1"], ["expanded"]),
-                    helper.make_node("Unsqueeze", ["expanded", "axes"], ["unsqueezed"]),
+                    oh.make_node("Expand", ["X", "shape1"], ["expanded"]),
+                    oh.make_node("Unsqueeze", ["expanded", "axes"], ["unsqueezed"]),
                 ]
                 initializers = [
                     _initializer("shape1", [5, 3, 4], np.int64),
@@ -415,21 +415,19 @@ class TestExpandLayoutPatterns(unittest.TestCase):
                 ]
                 outputs = []
                 if case != "missing_second_expand":
-                    nodes.append(helper.make_node("Expand", ["unsqueezed", "shape2"], ["Y"]))
+                    nodes.append(oh.make_node("Expand", ["unsqueezed", "shape2"], ["Y"]))
                     initializers.append(_initializer("shape2", [5, 2, 3, 4], np.int64))
-                    outputs.append(helper.make_tensor_value_info("Y", TensorProto.FLOAT, None))
+                    outputs.append(oh.make_tensor_value_info("Y", TensorProto.FLOAT, None))
                 else:
                     outputs.append(
-                        helper.make_tensor_value_info("unsqueezed", TensorProto.FLOAT, None)
+                        oh.make_tensor_value_info("unsqueezed", TensorProto.FLOAT, None)
                     )
                 if case == "shared_unsqueeze":
-                    nodes.append(helper.make_node("Identity", ["unsqueezed"], ["other"]))
-                    outputs.append(
-                        helper.make_tensor_value_info("other", TensorProto.FLOAT, None)
-                    )
+                    nodes.append(oh.make_node("Identity", ["unsqueezed"], ["other"]))
+                    outputs.append(oh.make_tensor_value_info("other", TensorProto.FLOAT, None))
                 model = _make_model(
                     nodes,
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, 3, 4])],
+                    [oh.make_tensor_value_info("X", TensorProto.FLOAT, [1, 3, 4])],
                     outputs,
                     initializers,
                 )
@@ -442,13 +440,13 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_swap_expand_reshape_upstream_topology(self):
         model = _make_model(
             [
-                helper.make_node("Shape", ["X"], ["batch"], start=0, end=1),
-                helper.make_node("Concat", ["batch", "ones"], ["shape"], axis=0),
-                helper.make_node("Expand", ["weight", "shape"], ["expanded"]),
-                helper.make_node("Reshape", ["expanded", "reshape_shape"], ["Y"]),
+                oh.make_node("Shape", ["X"], ["batch"], start=0, end=1),
+                oh.make_node("Concat", ["batch", "ones"], ["shape"], axis=0),
+                oh.make_node("Expand", ["weight", "shape"], ["expanded"]),
+                oh.make_node("Reshape", ["expanded", "reshape_shape"], ["Y"]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, ["a", 4])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, ["a", 1, 4])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, ["a", 4])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, ["a", 1, 4])],
             [
                 _initializer("ones", [1, 1], np.int64),
                 _initializer("reshape_shape", [0, 1, -1], np.int64),
@@ -473,11 +471,11 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_swap_expand_reshape_no_match_when_target_is_not_specialized(self):
         model = _make_model(
             [
-                helper.make_node("Expand", ["X", "expand_shape"], ["expanded"]),
-                helper.make_node("Reshape", ["expanded", "reshape_shape"], ["Y"]),
+                oh.make_node("Expand", ["X", "expand_shape"], ["expanded"]),
+                oh.make_node("Reshape", ["expanded", "reshape_shape"], ["Y"]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, 1, 1])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [3, 2, 1])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [1, 1, 1])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [3, 2, 1])],
             [
                 _initializer("expand_shape", [3, 2, 1], np.int64),
                 _initializer("reshape_shape", [0, 1, -1], np.int64),
@@ -492,12 +490,12 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_shape_based_static_expand_upstream_graph(self):
         model = _make_model(
             [
-                helper.make_node("Shape", ["X"], ["prefix"], start=0, end=-1),
-                helper.make_node("Concat", ["prefix", "two"], ["target"], axis=0),
-                helper.make_node("Expand", ["X", "target"], ["Y"]),
+                oh.make_node("Shape", ["X"], ["prefix"], start=0, end=-1),
+                oh.make_node("Concat", ["prefix", "two"], ["target"], axis=0),
+                oh.make_node("Expand", ["X", "target"], ["Y"]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, "d", 1])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3, "d", 2])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, "d", 1])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3, "d", 2])],
             [_initializer("two", [2], np.int64)],
         )
         feeds = {"X": np.arange(72, dtype=np.float32).reshape(2, 3, 12, 1)}
@@ -514,12 +512,12 @@ class TestExpandLayoutPatterns(unittest.TestCase):
 
     def test_shape_based_static_expand_rejects_symbolic_changed_dimension(self):
         model = _make_model(
-            [helper.make_node("Expand", ["X", "target"], ["Y"])],
+            [oh.make_node("Expand", ["X", "target"], ["Y"])],
             [
-                helper.make_tensor_value_info("X", TensorProto.FLOAT, ["a", 1]),
-                helper.make_tensor_value_info("target", TensorProto.INT64, [2]),
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, ["a", 1]),
+                oh.make_tensor_value_info("target", TensorProto.INT64, [2]),
             ],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, ["b", 4])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, ["b", 4])],
         )
 
         optimized, rewrites = _optimize(
@@ -532,16 +530,16 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_shape_based_expand_broadcast_upstream_graph(self):
         model = _make_model(
             [
-                helper.make_node("Reshape", ["X", "column_shape"], ["column"]),
-                helper.make_node("Reshape", ["X", "row_shape"], ["row"]),
-                helper.make_node("Shape", ["X"], ["shape"]),
-                helper.make_node("Concat", ["shape", "shape"], ["target"], axis=0),
-                helper.make_node("Expand", ["column", "target"], ["columns"]),
-                helper.make_node("Expand", ["row", "target"], ["rows"]),
-                helper.make_node("Add", ["columns", "rows"], ["Y"]),
+                oh.make_node("Reshape", ["X", "column_shape"], ["column"]),
+                oh.make_node("Reshape", ["X", "row_shape"], ["row"]),
+                oh.make_node("Shape", ["X"], ["shape"]),
+                oh.make_node("Concat", ["shape", "shape"], ["target"], axis=0),
+                oh.make_node("Expand", ["column", "target"], ["columns"]),
+                oh.make_node("Expand", ["row", "target"], ["rows"]),
+                oh.make_node("Add", ["columns", "rows"], ["Y"]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, ["d"])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, ["d", "d"])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, ["d"])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, ["d", "d"])],
             [
                 _initializer("column_shape", [-1, 1], np.int64),
                 _initializer("row_shape", [1, -1], np.int64),
@@ -559,17 +557,17 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_shape_based_expand_broadcast_preserves_shared_expand(self):
         model = _make_model(
             [
-                helper.make_node("Shape", ["Y"], ["target"]),
-                helper.make_node("Expand", ["X", "target"], ["expanded"]),
-                helper.make_node("Mul", ["expanded", "Y"], ["Z"]),
+                oh.make_node("Shape", ["Y"], ["target"]),
+                oh.make_node("Expand", ["X", "target"], ["expanded"]),
+                oh.make_node("Mul", ["expanded", "Y"], ["Z"]),
             ],
             [
-                helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, "b"]),
-                helper.make_tensor_value_info("Y", TensorProto.FLOAT, ["a", "b"]),
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, [1, "b"]),
+                oh.make_tensor_value_info("Y", TensorProto.FLOAT, ["a", "b"]),
             ],
             [
-                helper.make_tensor_value_info("Z", TensorProto.FLOAT, ["a", "b"]),
-                helper.make_tensor_value_info("expanded", TensorProto.FLOAT, ["a", "b"]),
+                oh.make_tensor_value_info("Z", TensorProto.FLOAT, ["a", "b"]),
+                oh.make_tensor_value_info("expanded", TensorProto.FLOAT, ["a", "b"]),
             ],
         )
         feeds = {
@@ -587,15 +585,15 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_shape_based_expand_broadcast_rejects_incompatible_symbols(self):
         model = _make_model(
             [
-                helper.make_node("Shape", ["Y"], ["target"]),
-                helper.make_node("Expand", ["X", "target"], ["expanded"]),
-                helper.make_node("Add", ["expanded", "Y"], ["Z"]),
+                oh.make_node("Shape", ["Y"], ["target"]),
+                oh.make_node("Expand", ["X", "target"], ["expanded"]),
+                oh.make_node("Add", ["expanded", "Y"], ["Z"]),
             ],
             [
-                helper.make_tensor_value_info("X", TensorProto.FLOAT, ["m", "b"]),
-                helper.make_tensor_value_info("Y", TensorProto.FLOAT, ["a", "b"]),
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, ["m", "b"]),
+                oh.make_tensor_value_info("Y", TensorProto.FLOAT, ["a", "b"]),
             ],
-            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, ["a", "b"])],
+            [oh.make_tensor_value_info("Z", TensorProto.FLOAT, ["a", "b"])],
         )
 
         optimized, rewrites = _optimize(
@@ -608,17 +606,17 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_shape_based_expand_broadcast_matmul(self):
         model = _make_model(
             [
-                helper.make_node("Shape", ["X"], ["batch"], start=0, end=1),
-                helper.make_node("Shape", ["Y"], ["matrix"], start=1),
-                helper.make_node("Concat", ["batch", "matrix"], ["target"], axis=0),
-                helper.make_node("Expand", ["Y", "target"], ["expanded"]),
-                helper.make_node("MatMul", ["X", "expanded"], ["Z"]),
+                oh.make_node("Shape", ["X"], ["batch"], start=0, end=1),
+                oh.make_node("Shape", ["Y"], ["matrix"], start=1),
+                oh.make_node("Concat", ["batch", "matrix"], ["target"], axis=0),
+                oh.make_node("Expand", ["Y", "target"], ["expanded"]),
+                oh.make_node("MatMul", ["X", "expanded"], ["Z"]),
             ],
             [
-                helper.make_tensor_value_info("X", TensorProto.FLOAT, ["a", 3, 4]),
-                helper.make_tensor_value_info("Y", TensorProto.FLOAT, [1, 4, 5]),
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, ["a", 3, 4]),
+                oh.make_tensor_value_info("Y", TensorProto.FLOAT, [1, 4, 5]),
             ],
-            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, ["a", 3, 5])],
+            [oh.make_tensor_value_info("Z", TensorProto.FLOAT, ["a", 3, 5])],
         )
         feeds = {
             "X": np.arange(24, dtype=np.float32).reshape(2, 3, 4),
@@ -635,15 +633,15 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_shape_based_expand_broadcast_matmul_no_match(self):
         model = _make_model(
             [
-                helper.make_node("Expand", ["Y", "target"], ["expanded"]),
-                helper.make_node("MatMul", ["X", "expanded"], ["Z"]),
+                oh.make_node("Expand", ["Y", "target"], ["expanded"]),
+                oh.make_node("MatMul", ["X", "expanded"], ["Z"]),
             ],
             [
-                helper.make_tensor_value_info("X", TensorProto.FLOAT, ["a", 2, 3]),
-                helper.make_tensor_value_info("Y", TensorProto.FLOAT, ["m", 3, 4]),
-                helper.make_tensor_value_info("target", TensorProto.INT64, [3]),
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, ["a", 2, 3]),
+                oh.make_tensor_value_info("Y", TensorProto.FLOAT, ["m", 3, 4]),
+                oh.make_tensor_value_info("target", TensorProto.INT64, [3]),
             ],
-            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, ["a", 2, 4])],
+            [oh.make_tensor_value_info("Z", TensorProto.FLOAT, ["a", 2, 4])],
         )
 
         optimized, rewrites = _optimize(
@@ -661,38 +659,38 @@ class TestExpandLayoutPatterns(unittest.TestCase):
         )
         for name, leading_batch, two_expands in cases:
             with self.subTest(name=name):
-                nodes = [helper.make_node("Reshape", ["X", "column_shape"], ["column"])]
+                nodes = [oh.make_node("Reshape", ["X", "column_shape"], ["column"])]
                 initializers = [
                     _initializer("column_shape", [-1, 1], np.int64),
                     _initializer("four", [4], np.int64),
                 ]
                 if two_expands:
-                    nodes.append(helper.make_node("Reshape", ["X", "row_shape"], ["row"]))
+                    nodes.append(oh.make_node("Reshape", ["X", "row_shape"], ["row"]))
                     initializers.append(_initializer("row_shape", [1, -1], np.int64))
                 nodes.extend(
                     [
-                        helper.make_node("Shape", ["X"], ["shape"]),
-                        helper.make_node(
+                        oh.make_node("Shape", ["X"], ["shape"]),
+                        oh.make_node(
                             "Concat",
                             ["four", "shape", "shape"] if leading_batch else ["shape", "shape"],
                             ["target"],
                             axis=0,
                         ),
-                        helper.make_node("Expand", ["column", "target"], ["columns"]),
+                        oh.make_node("Expand", ["column", "target"], ["columns"]),
                     ]
                 )
                 if two_expands:
-                    nodes.append(helper.make_node("Expand", ["row", "target"], ["rows"]))
+                    nodes.append(oh.make_node("Expand", ["row", "target"], ["rows"]))
                     right = "rows"
                 else:
                     initializers.append(_initializer("scalar", [3.0], np.float32))
                     right = "scalar"
-                nodes.append(helper.make_node("Add", ["columns", right], ["Y"]))
+                nodes.append(oh.make_node("Add", ["columns", right], ["Y"]))
                 output_shape = [4, "d", "d"] if leading_batch else ["d", "d"]
                 model = _make_model(
                     nodes,
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, ["d"])],
-                    [helper.make_tensor_value_info("Y", TensorProto.FLOAT, output_shape)],
+                    [oh.make_tensor_value_info("X", TensorProto.FLOAT, ["d"])],
+                    [oh.make_tensor_value_info("Y", TensorProto.FLOAT, output_shape)],
                     initializers,
                 )
                 feeds = {"X": np.arange(3, dtype=np.float32)}
@@ -708,16 +706,16 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_shape_based_expand_swap_preserves_shared_input_expand(self):
         model = _make_model(
             [
-                helper.make_node("Expand", ["X", "target"], ["expanded"]),
-                helper.make_node("Add", ["expanded", "scalar"], ["Y"]),
+                oh.make_node("Expand", ["X", "target"], ["expanded"]),
+                oh.make_node("Add", ["expanded", "scalar"], ["Y"]),
             ],
             [
-                helper.make_tensor_value_info("X", TensorProto.FLOAT, [4, 1]),
-                helper.make_tensor_value_info("target", TensorProto.INT64, [2]),
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, [4, 1]),
+                oh.make_tensor_value_info("target", TensorProto.INT64, [2]),
             ],
             [
-                helper.make_tensor_value_info("Y", TensorProto.FLOAT, [4, 4]),
-                helper.make_tensor_value_info("expanded", TensorProto.FLOAT, [4, 4]),
+                oh.make_tensor_value_info("Y", TensorProto.FLOAT, [4, 4]),
+                oh.make_tensor_value_info("expanded", TensorProto.FLOAT, [4, 4]),
             ],
             [_initializer("scalar", [1.0], np.float32)],
         )
@@ -735,11 +733,11 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_shape_based_expand_swap_rejects_redundant_expand(self):
         model = _make_model(
             [
-                helper.make_node("Expand", ["X", "target"], ["expanded"]),
-                helper.make_node("Add", ["expanded", "scalar"], ["Y"]),
+                oh.make_node("Expand", ["X", "target"], ["expanded"]),
+                oh.make_node("Add", ["expanded", "scalar"], ["Y"]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [4, 4])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [4, 4])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [4, 4])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [4, 4])],
             [_initializer("target", [4, 4], np.int64), _initializer("scalar", [1.0], np.float32)],
         )
 
@@ -758,16 +756,14 @@ class TestExpandLayoutPatterns(unittest.TestCase):
                 )
                 model = _make_model(
                     [
-                        helper.make_node("Shape", ["X"], ["batch"], start=0, end=1),
-                        helper.make_node("Concat", ["batch", "batch", "one"], ["target"], axis=0),
-                        helper.make_node("Expand", ["X", "target"], ["expanded"]),
-                        helper.make_node(
-                            "Cast", ["expanded"], ["condition"], to=TensorProto.BOOL
-                        ),
-                        helper.make_node("Where", where_inputs, ["Y"]),
+                        oh.make_node("Shape", ["X"], ["batch"], start=0, end=1),
+                        oh.make_node("Concat", ["batch", "batch", "one"], ["target"], axis=0),
+                        oh.make_node("Expand", ["X", "target"], ["expanded"]),
+                        oh.make_node("Cast", ["expanded"], ["condition"], to=TensorProto.BOOL),
+                        oh.make_node("Where", where_inputs, ["Y"]),
                     ],
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, ["b", 1, "c"])],
-                    [helper.make_tensor_value_info("Y", TensorProto.FLOAT, ["b", "b", "c"])],
+                    [oh.make_tensor_value_info("X", TensorProto.FLOAT, ["b", 1, "c"])],
+                    [oh.make_tensor_value_info("Y", TensorProto.FLOAT, ["b", "b", "c"])],
                     [
                         _initializer("one", [1], np.int64),
                         _initializer("constant", [-np.inf], np.float32),
@@ -786,18 +782,18 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_shape_based_expand_cast_where_rejects_extra_expand_use(self):
         model = _make_model(
             [
-                helper.make_node("Expand", ["X", "target"], ["expanded"]),
-                helper.make_node("Cast", ["expanded"], ["condition"], to=TensorProto.BOOL),
-                helper.make_node("Where", ["condition", "expanded", "zero"], ["Y"]),
-                helper.make_node("Identity", ["expanded"], ["other"]),
+                oh.make_node("Expand", ["X", "target"], ["expanded"]),
+                oh.make_node("Cast", ["expanded"], ["condition"], to=TensorProto.BOOL),
+                oh.make_node("Where", ["condition", "expanded", "zero"], ["Y"]),
+                oh.make_node("Identity", ["expanded"], ["other"]),
             ],
             [
-                helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 1]),
-                helper.make_tensor_value_info("target", TensorProto.INT64, [2]),
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 1]),
+                oh.make_tensor_value_info("target", TensorProto.INT64, [2]),
             ],
             [
-                helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3]),
-                helper.make_tensor_value_info("other", TensorProto.FLOAT, [2, 3]),
+                oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3]),
+                oh.make_tensor_value_info("other", TensorProto.FLOAT, [2, 3]),
             ],
             [_initializer("zero", [0.0], np.float32)],
         )
@@ -812,12 +808,12 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_shape_based_concat_expand_upstream_graph_and_initializer(self):
         model = _make_model(
             [
-                helper.make_node("Shape", ["X"], ["first"], start=0, end=1),
-                helper.make_node("Concat", ["first", "two"], ["target"], axis=0),
-                helper.make_node("Expand", ["X", "target"], ["Y"]),
+                oh.make_node("Shape", ["X"], ["first"], start=0, end=1),
+                oh.make_node("Concat", ["first", "two"], ["target"], axis=0),
+                oh.make_node("Expand", ["X", "target"], ["Y"]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, ["a", 1])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, ["a", 2])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, ["a", 1])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, ["a", 2])],
             [_initializer("two", [2], np.int64)],
         )
         feeds = {"X": np.arange(6, dtype=np.float32).reshape(6, 1)}
@@ -835,15 +831,15 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_shape_based_concat_expand_rejects_shared_target(self):
         model = _make_model(
             [
-                helper.make_node("Shape", ["X"], ["first"], start=0, end=1),
-                helper.make_node("Concat", ["first", "two"], ["target"], axis=0),
-                helper.make_node("Expand", ["X", "target"], ["Y"]),
-                helper.make_node("Identity", ["target"], ["saved_target"]),
+                oh.make_node("Shape", ["X"], ["first"], start=0, end=1),
+                oh.make_node("Concat", ["first", "two"], ["target"], axis=0),
+                oh.make_node("Expand", ["X", "target"], ["Y"]),
+                oh.make_node("Identity", ["target"], ["saved_target"]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, ["a", 1])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, ["a", 1])],
             [
-                helper.make_tensor_value_info("Y", TensorProto.FLOAT, ["a", 2]),
-                helper.make_tensor_value_info("saved_target", TensorProto.INT64, [2]),
+                oh.make_tensor_value_info("Y", TensorProto.FLOAT, ["a", 2]),
+                oh.make_tensor_value_info("saved_target", TensorProto.INT64, [2]),
             ],
             [_initializer("two", [2], np.int64)],
         )
@@ -866,13 +862,13 @@ class TestExpandLayoutPatterns(unittest.TestCase):
                 input_shape = list(range(2, rank + 2))
                 second_shape = [input_shape[first_perm[index]] for index in second_perm]
                 nodes = [
-                    helper.make_node("Transpose", ["X"], ["first"], perm=first_perm),
-                    helper.make_node("Transpose", ["first"], ["Y"], perm=second_perm),
+                    oh.make_node("Transpose", ["X"], ["first"], perm=first_perm),
+                    oh.make_node("Transpose", ["first"], ["Y"], perm=second_perm),
                 ]
-                outputs = [helper.make_tensor_value_info("Y", TensorProto.FLOAT, second_shape)]
+                outputs = [oh.make_tensor_value_info("Y", TensorProto.FLOAT, second_shape)]
                 if shared:
                     outputs.append(
-                        helper.make_tensor_value_info(
+                        oh.make_tensor_value_info(
                             "first",
                             TensorProto.FLOAT,
                             [input_shape[index] for index in first_perm],
@@ -880,7 +876,7 @@ class TestExpandLayoutPatterns(unittest.TestCase):
                     )
                 model = _make_model(
                     nodes,
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+                    [oh.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
                     outputs,
                 )
                 feeds = {
@@ -898,13 +894,13 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_transpose_transpose_rejects_shared_non_identity_merge(self):
         model = _make_model(
             [
-                helper.make_node("Transpose", ["X"], ["first"], perm=[1, 0, 2]),
-                helper.make_node("Transpose", ["first"], ["Y"], perm=[0, 2, 1]),
+                oh.make_node("Transpose", ["X"], ["first"], perm=[1, 0, 2]),
+                oh.make_node("Transpose", ["first"], ["Y"], perm=[0, 2, 1]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
             [
-                helper.make_tensor_value_info("Y", TensorProto.FLOAT, [3, 4, 2]),
-                helper.make_tensor_value_info("first", TensorProto.FLOAT, [3, 2, 4]),
+                oh.make_tensor_value_info("Y", TensorProto.FLOAT, [3, 4, 2]),
+                oh.make_tensor_value_info("first", TensorProto.FLOAT, [3, 2, 4]),
             ],
         )
 
@@ -923,11 +919,11 @@ class TestExpandLayoutPatterns(unittest.TestCase):
                 input_shape = [3, 4, 5, 6][: len(perm)]
                 model = _make_model(
                     [
-                        helper.make_node("Transpose", ["X"], ["transposed"], perm=perm),
-                        helper.make_node("Gather", ["transposed", "index"], ["Y"], axis=axis),
+                        oh.make_node("Transpose", ["X"], ["transposed"], perm=perm),
+                        oh.make_node("Gather", ["transposed", "index"], ["Y"], axis=axis),
                     ],
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
-                    [helper.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
+                    [oh.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+                    [oh.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
                     [_initializer("index", 1, np.int64)],
                 )
                 feeds = {
@@ -946,13 +942,13 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_transpose_gather_reused(self):
         model = _make_model(
             [
-                helper.make_node("Transpose", ["X"], ["transposed"], perm=[1, 0, 2, 3]),
-                helper.make_node("Gather", ["transposed", "index"], ["Y"], axis=0),
+                oh.make_node("Transpose", ["X"], ["transposed"], perm=[1, 0, 2, 3]),
+                oh.make_node("Gather", ["transposed", "index"], ["Y"], axis=0),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [4, 3, 16, 80])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [4, 3, 16, 80])],
             [
-                helper.make_tensor_value_info("Y", TensorProto.FLOAT, [4, 16, 80]),
-                helper.make_tensor_value_info("transposed", TensorProto.FLOAT, [3, 4, 16, 80]),
+                oh.make_tensor_value_info("Y", TensorProto.FLOAT, [4, 16, 80]),
+                oh.make_tensor_value_info("transposed", TensorProto.FLOAT, [3, 4, 16, 80]),
             ],
             [_initializer("index", 1, np.int64)],
         )
@@ -975,11 +971,11 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_transpose_gather_rejects_vector_index(self):
         model = _make_model(
             [
-                helper.make_node("Transpose", ["X"], ["transposed"], perm=[1, 0, 2, 3]),
-                helper.make_node("Gather", ["transposed", "index"], ["Y"], axis=0),
+                oh.make_node("Transpose", ["X"], ["transposed"], perm=[1, 0, 2, 3]),
+                oh.make_node("Gather", ["transposed", "index"], ["Y"], axis=0),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [3, 4, 5, 6])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [3, 4, 5, 6])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
             [_initializer("index", [0, 1], np.int64)],
         )
 
@@ -997,20 +993,18 @@ class TestExpandLayoutPatterns(unittest.TestCase):
         for name, attributes, expected_indices, shared in cases:
             with self.subTest(name=name):
                 nodes = [
-                    helper.make_node("Transpose", ["X"], ["transposed"], perm=[2, 0, 1]),
-                    helper.make_node("Shape", ["transposed"], ["Y"], **attributes),
+                    oh.make_node("Transpose", ["X"], ["transposed"], perm=[2, 0, 1]),
+                    oh.make_node("Shape", ["transposed"], ["Y"], **attributes),
                 ]
                 outputs = [
-                    helper.make_tensor_value_info("Y", TensorProto.INT64, [len(expected_indices)])
+                    oh.make_tensor_value_info("Y", TensorProto.INT64, [len(expected_indices)])
                 ]
                 if shared:
                     outputs.append(
-                        helper.make_tensor_value_info("transposed", TensorProto.FLOAT, [4, 2, 3])
+                        oh.make_tensor_value_info("transposed", TensorProto.FLOAT, [4, 2, 3])
                     )
                 model = _make_model(
-                    nodes,
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
-                    outputs,
+                    nodes, [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4])], outputs
                 )
                 feeds = {"X": np.arange(24, dtype=np.float32).reshape(2, 3, 4)}
 
@@ -1030,9 +1024,9 @@ class TestExpandLayoutPatterns(unittest.TestCase):
 
     def test_shape_transpose_no_match_without_transpose_parent(self):
         model = _make_model(
-            [helper.make_node("Shape", ["X"], ["Y"])],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
-            [helper.make_tensor_value_info("Y", TensorProto.INT64, [3])],
+            [oh.make_node("Shape", ["X"], ["Y"])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
+            [oh.make_tensor_value_info("Y", TensorProto.INT64, [3])],
         )
 
         optimized, rewrites = _optimize(model, "ShapeTranspose")
@@ -1049,20 +1043,20 @@ class TestExpandLayoutPatterns(unittest.TestCase):
         for name, axes, attributes, shared in cases:
             with self.subTest(name=name):
                 nodes = [
-                    helper.make_node("Unsqueeze", ["X", "axes"], ["unsqueezed"]),
-                    helper.make_node("Shape", ["unsqueezed"], ["Y"], **attributes),
+                    oh.make_node("Unsqueeze", ["X", "axes"], ["unsqueezed"]),
+                    oh.make_node("Shape", ["unsqueezed"], ["Y"], **attributes),
                 ]
                 output_rank = 3 + len(axes)
                 start = attributes.get("start", 0)
                 end = attributes.get("end", output_rank)
-                outputs = [helper.make_tensor_value_info("Y", TensorProto.INT64, [end - start])]
+                outputs = [oh.make_tensor_value_info("Y", TensorProto.INT64, [end - start])]
                 if shared:
                     outputs.append(
-                        helper.make_tensor_value_info("unsqueezed", TensorProto.FLOAT, None)
+                        oh.make_tensor_value_info("unsqueezed", TensorProto.FLOAT, None)
                     )
                 model = _make_model(
                     nodes,
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
+                    [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
                     outputs,
                     [_initializer("axes", axes, np.int64)],
                 )
@@ -1091,14 +1085,14 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_unsqueeze_shape_rejects_dynamic_axes(self):
         model = _make_model(
             [
-                helper.make_node("Unsqueeze", ["X", "axes"], ["unsqueezed"]),
-                helper.make_node("Shape", ["unsqueezed"], ["Y"]),
+                oh.make_node("Unsqueeze", ["X", "axes"], ["unsqueezed"]),
+                oh.make_node("Shape", ["unsqueezed"], ["Y"]),
             ],
             [
-                helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4]),
-                helper.make_tensor_value_info("axes", TensorProto.INT64, [1]),
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4]),
+                oh.make_tensor_value_info("axes", TensorProto.INT64, [1]),
             ],
-            [helper.make_tensor_value_info("Y", TensorProto.INT64, [4])],
+            [oh.make_tensor_value_info("Y", TensorProto.INT64, [4])],
         )
 
         optimized, rewrites = _optimize(model, "UnsqueezeShape")
@@ -1113,11 +1107,11 @@ class TestExpandLayoutPatterns(unittest.TestCase):
                 with self.subTest(first_axis=first_axis, second_axis=second_axis):
                     model = _make_model(
                         [
-                            helper.make_node("Unsqueeze", ["X", "first_axes"], ["first"]),
-                            helper.make_node("Unsqueeze", ["first", "second_axes"], ["Y"]),
+                            oh.make_node("Unsqueeze", ["X", "first_axes"], ["first"]),
+                            oh.make_node("Unsqueeze", ["first", "second_axes"], ["Y"]),
                         ],
-                        [helper.make_tensor_value_info("X", TensorProto.FLOAT, ["a", "b"])],
-                        [helper.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
+                        [oh.make_tensor_value_info("X", TensorProto.FLOAT, ["a", "b"])],
+                        [oh.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
                         [
                             _initializer("first_axes", [first_axis], np.int64),
                             _initializer("second_axes", [second_axis], np.int64),
@@ -1139,11 +1133,11 @@ class TestExpandLayoutPatterns(unittest.TestCase):
             with self.subTest(first_axes=first_axes, second_axes=second_axes):
                 model = _make_model(
                     [
-                        helper.make_node("Unsqueeze", ["X", "first_axes"], ["first"]),
-                        helper.make_node("Unsqueeze", ["first", "second_axes"], ["Y"]),
+                        oh.make_node("Unsqueeze", ["X", "first_axes"], ["first"]),
+                        oh.make_node("Unsqueeze", ["first", "second_axes"], ["Y"]),
                     ],
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, ["a", "b"])],
-                    [helper.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
+                    [oh.make_tensor_value_info("X", TensorProto.FLOAT, ["a", "b"])],
+                    [oh.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
                     [
                         _initializer("first_axes", first_axes, np.int64),
                         _initializer("second_axes", second_axes, np.int64),
@@ -1159,14 +1153,14 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_unsqueeze_unsqueeze_shared_and_no_match_cases(self):
         shared_model = _make_model(
             [
-                helper.make_node("Unsqueeze", ["X", "first_axes"], ["first"]),
-                helper.make_node("Unsqueeze", ["first", "second_axes"], ["Y"]),
-                helper.make_node("Identity", ["first"], ["other"]),
+                oh.make_node("Unsqueeze", ["X", "first_axes"], ["first"]),
+                oh.make_node("Unsqueeze", ["first", "second_axes"], ["Y"]),
+                oh.make_node("Identity", ["first"], ["other"]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3])],
             [
-                helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3, 1, 1]),
-                helper.make_tensor_value_info("other", TensorProto.FLOAT, [2, 3, 1]),
+                oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3, 1, 1]),
+                oh.make_tensor_value_info("other", TensorProto.FLOAT, [2, 3, 1]),
             ],
             [
                 _initializer("first_axes", [2], np.int64),
@@ -1183,14 +1177,14 @@ class TestExpandLayoutPatterns(unittest.TestCase):
 
         dynamic_model = _make_model(
             [
-                helper.make_node("Unsqueeze", ["X", "first_axes"], ["first"]),
-                helper.make_node("Unsqueeze", ["first", "second_axes"], ["Y"]),
+                oh.make_node("Unsqueeze", ["X", "first_axes"], ["first"]),
+                oh.make_node("Unsqueeze", ["first", "second_axes"], ["Y"]),
             ],
             [
-                helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3]),
-                helper.make_tensor_value_info("first_axes", TensorProto.INT64, [1]),
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3]),
+                oh.make_tensor_value_info("first_axes", TensorProto.INT64, [1]),
             ],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
             [_initializer("second_axes", [3], np.int64)],
         )
 
@@ -1226,11 +1220,11 @@ class TestExpandLayoutPatterns(unittest.TestCase):
             with self.subTest(name=name):
                 model = _make_model(
                     [
-                        helper.make_node(first_op, ["X", "first_axes"], ["first"]),
-                        helper.make_node(second_op, ["first", "second_axes"], ["Y"]),
+                        oh.make_node(first_op, ["X", "first_axes"], ["first"]),
+                        oh.make_node(second_op, ["first", "second_axes"], ["Y"]),
                     ],
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, shape)],
-                    [helper.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
+                    [oh.make_tensor_value_info("X", TensorProto.FLOAT, shape)],
+                    [oh.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
                     [
                         _initializer("first_axes", first_axes, np.int64),
                         _initializer("second_axes", second_axes, np.int64),
@@ -1247,11 +1241,11 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_squeeze_without_axes_then_unsqueeze(self):
         model = _make_model(
             [
-                helper.make_node("Squeeze", ["X"], ["squeezed"]),
-                helper.make_node("Unsqueeze", ["squeezed", "axes"], ["Y"]),
+                oh.make_node("Squeeze", ["X"], ["squeezed"]),
+                oh.make_node("Unsqueeze", ["squeezed", "axes"], ["Y"]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.INT64, [1])],
-            [helper.make_tensor_value_info("Y", TensorProto.INT64, [1])],
+            [oh.make_tensor_value_info("X", TensorProto.INT64, [1])],
+            [oh.make_tensor_value_info("Y", TensorProto.INT64, [1])],
             [_initializer("axes", [0], np.int64)],
         )
 
@@ -1264,14 +1258,14 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_squeeze_unsqueeze_shared_and_disjoint_axes(self):
         shared_model = _make_model(
             [
-                helper.make_node("Unsqueeze", ["X", "axes"], ["first"]),
-                helper.make_node("Squeeze", ["first", "axes"], ["Y"]),
-                helper.make_node("Identity", ["first"], ["other"]),
+                oh.make_node("Unsqueeze", ["X", "axes"], ["first"]),
+                oh.make_node("Squeeze", ["first", "axes"], ["Y"]),
+                oh.make_node("Identity", ["first"], ["other"]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3])],
             [
-                helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3]),
-                helper.make_tensor_value_info("other", TensorProto.FLOAT, [2, 3, 1]),
+                oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3]),
+                oh.make_tensor_value_info("other", TensorProto.FLOAT, [2, 3, 1]),
             ],
             [_initializer("axes", [2], np.int64)],
         )
@@ -1285,11 +1279,11 @@ class TestExpandLayoutPatterns(unittest.TestCase):
 
         no_match_model = _make_model(
             [
-                helper.make_node("Unsqueeze", ["X", "unsqueeze_axes"], ["first"]),
-                helper.make_node("Squeeze", ["first", "squeeze_axes"], ["Y"]),
+                oh.make_node("Unsqueeze", ["X", "unsqueeze_axes"], ["first"]),
+                oh.make_node("Squeeze", ["first", "squeeze_axes"], ["Y"]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 1])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 1])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 1])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 1])],
             [
                 _initializer("unsqueeze_axes", [2], np.int64),
                 _initializer("squeeze_axes", [1], np.int64),
@@ -1310,11 +1304,11 @@ class TestExpandLayoutPatterns(unittest.TestCase):
             with self.subTest(axes=axes):
                 model = _make_model(
                     [
-                        helper.make_node("Unsqueeze", ["X", "axes"], ["unsqueezed"]),
-                        helper.make_node("Transpose", ["unsqueezed"], ["Y"], perm=perm),
+                        oh.make_node("Unsqueeze", ["X", "axes"], ["unsqueezed"]),
+                        oh.make_node("Transpose", ["unsqueezed"], ["Y"], perm=perm),
                     ],
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, ["a", "b", "c"])],
-                    [helper.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
+                    [oh.make_tensor_value_info("X", TensorProto.FLOAT, ["a", "b", "c"])],
+                    [oh.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
                     [_initializer("axes", axes, np.int64)],
                 )
 
@@ -1327,14 +1321,14 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_swap_unsqueeze_transpose_rejects_shared_unsqueeze(self):
         model = _make_model(
             [
-                helper.make_node("Unsqueeze", ["X", "axes"], ["unsqueezed"]),
-                helper.make_node("Transpose", ["unsqueezed"], ["Y"], perm=[0, 2, 1, 3]),
-                helper.make_node("Identity", ["unsqueezed"], ["other"]),
+                oh.make_node("Unsqueeze", ["X", "axes"], ["unsqueezed"]),
+                oh.make_node("Transpose", ["unsqueezed"], ["Y"], perm=[0, 2, 1, 3]),
+                oh.make_node("Identity", ["unsqueezed"], ["other"]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
             [
-                helper.make_tensor_value_info("Y", TensorProto.FLOAT, None),
-                helper.make_tensor_value_info("other", TensorProto.FLOAT, None),
+                oh.make_tensor_value_info("Y", TensorProto.FLOAT, None),
+                oh.make_tensor_value_info("other", TensorProto.FLOAT, None),
             ],
             [_initializer("axes", [1], np.int64)],
         )
@@ -1349,11 +1343,11 @@ class TestExpandLayoutPatterns(unittest.TestCase):
             with self.subTest(batch=batch):
                 model = _make_model(
                     [
-                        helper.make_node("Transpose", ["X"], ["transposed"], perm=[0, 2, 1, 3]),
-                        helper.make_node("Add", ["transposed", "one"], ["Y"]),
+                        oh.make_node("Transpose", ["X"], ["transposed"], perm=[0, 2, 1, 3]),
+                        oh.make_node("Add", ["transposed", "one"], ["Y"]),
                     ],
-                    [helper.make_tensor_value_info("X", TensorProto.FLOAT, ["a", 2, 1, 5])],
-                    [helper.make_tensor_value_info("Y", TensorProto.FLOAT, ["a", 1, 2, 5])],
+                    [oh.make_tensor_value_info("X", TensorProto.FLOAT, ["a", 2, 1, 5])],
+                    [oh.make_tensor_value_info("Y", TensorProto.FLOAT, ["a", 1, 2, 5])],
                     [_initializer("one", [1.0], np.float32)],
                 )
                 feeds = {"X": np.arange(batch * 10, dtype=np.float32).reshape(batch, 2, 1, 5)}
@@ -1370,9 +1364,9 @@ class TestExpandLayoutPatterns(unittest.TestCase):
 
     def test_transpose_equal_reshape_no_match_for_moved_data_axes(self):
         model = _make_model(
-            [helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 1, 3])],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [3, 2, 4, 5])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [3, 4, 2, 5])],
+            [oh.make_node("Transpose", ["X"], ["Y"], perm=[0, 2, 1, 3])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [3, 2, 4, 5])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [3, 4, 2, 5])],
         )
 
         optimized, rewrites = _optimize(model, "TransposeEqualReshape")
@@ -1383,12 +1377,12 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_transpose_reshape_transpose_after(self):
         model = _make_model(
             [
-                helper.make_node("Transpose", ["X"], ["first"], perm=[0, 2, 3, 1]),
-                helper.make_node("Reshape", ["first", "shape"], ["reshaped"]),
-                helper.make_node("Transpose", ["reshaped"], ["Y"], perm=[0, 2, 1]),
+                oh.make_node("Transpose", ["X"], ["first"], perm=[0, 2, 3, 1]),
+                oh.make_node("Reshape", ["first", "shape"], ["reshaped"]),
+                oh.make_node("Transpose", ["reshaped"], ["Y"], perm=[0, 2, 1]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4, 5])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3, 20])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4, 5])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3, 20])],
             [_initializer("shape", [2, 20, 3], np.int64)],
         )
         feeds = {"X": np.arange(120, dtype=np.float32).reshape(2, 3, 4, 5)}
@@ -1405,12 +1399,12 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_transpose_reshape_transpose_before(self):
         model = _make_model(
             [
-                helper.make_node("Transpose", ["X"], ["first"], perm=[0, 2, 3, 1]),
-                helper.make_node("Reshape", ["first", "shape"], ["reshaped"]),
-                helper.make_node("Transpose", ["reshaped"], ["Y"], perm=[0, 1, 3, 2, 4, 5]),
+                oh.make_node("Transpose", ["X"], ["first"], perm=[0, 2, 3, 1]),
+                oh.make_node("Reshape", ["first", "shape"], ["reshaped"]),
+                oh.make_node("Transpose", ["reshaped"], ["Y"], perm=[0, 1, 3, 2, 4, 5]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 6, 4, 4])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2, 2, 2, 2, 6])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 6, 4, 4])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2, 2, 2, 2, 6])],
             [_initializer("shape", [2, 2, 2, 2, 2, 6], np.int64)],
         )
         feeds = {"X": np.arange(192, dtype=np.float32).reshape(2, 6, 4, 4)}
@@ -1427,15 +1421,15 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_transpose_reshape_transpose_rejects_dynamic_shape(self):
         model = _make_model(
             [
-                helper.make_node("Transpose", ["X"], ["first"], perm=[0, 2, 3, 1]),
-                helper.make_node("Reshape", ["first", "shape"], ["reshaped"]),
-                helper.make_node("Transpose", ["reshaped"], ["Y"], perm=[0, 2, 1]),
+                oh.make_node("Transpose", ["X"], ["first"], perm=[0, 2, 3, 1]),
+                oh.make_node("Reshape", ["first", "shape"], ["reshaped"]),
+                oh.make_node("Transpose", ["reshaped"], ["Y"], perm=[0, 2, 1]),
             ],
             [
-                helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4, 5]),
-                helper.make_tensor_value_info("shape", TensorProto.INT64, [3]),
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3, 4, 5]),
+                oh.make_tensor_value_info("shape", TensorProto.INT64, [3]),
             ],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3, 20])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 3, 20])],
         )
 
         optimized, rewrites = _optimize(
@@ -1448,15 +1442,15 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_mul_unsqueeze_unsqueeze_and_no_match_cases(self):
         positive = _make_model(
             [
-                helper.make_node("Unsqueeze", ["X", "axes"], ["left"]),
-                helper.make_node("Unsqueeze", ["Y", "axes"], ["right"]),
-                helper.make_node("Mul", ["left", "right"], ["Z"]),
+                oh.make_node("Unsqueeze", ["X", "axes"], ["left"]),
+                oh.make_node("Unsqueeze", ["Y", "axes"], ["right"]),
+                oh.make_node("Mul", ["left", "right"], ["Z"]),
             ],
             [
-                helper.make_tensor_value_info("X", TensorProto.FLOAT, [3, 4]),
-                helper.make_tensor_value_info("Y", TensorProto.FLOAT, [3, 4]),
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, [3, 4]),
+                oh.make_tensor_value_info("Y", TensorProto.FLOAT, [3, 4]),
             ],
-            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, [3, 4, 1])],
+            [oh.make_tensor_value_info("Z", TensorProto.FLOAT, [3, 4, 1])],
             [_initializer("axes", [2], np.int64)],
         )
         feeds = {
@@ -1473,21 +1467,19 @@ class TestExpandLayoutPatterns(unittest.TestCase):
         for case in ("different_axes", "shared"):
             with self.subTest(case=case):
                 nodes = [
-                    helper.make_node("Unsqueeze", ["X", "left_axes"], ["left"]),
-                    helper.make_node("Unsqueeze", ["Y", "right_axes"], ["right"]),
-                    helper.make_node("Mul", ["left", "right"], ["Z"]),
+                    oh.make_node("Unsqueeze", ["X", "left_axes"], ["left"]),
+                    oh.make_node("Unsqueeze", ["Y", "right_axes"], ["right"]),
+                    oh.make_node("Mul", ["left", "right"], ["Z"]),
                 ]
-                outputs = [helper.make_tensor_value_info("Z", TensorProto.FLOAT, None)]
+                outputs = [oh.make_tensor_value_info("Z", TensorProto.FLOAT, None)]
                 if case == "shared":
-                    nodes.append(helper.make_node("Identity", ["left"], ["other"]))
-                    outputs.append(
-                        helper.make_tensor_value_info("other", TensorProto.FLOAT, None)
-                    )
+                    nodes.append(oh.make_node("Identity", ["left"], ["other"]))
+                    outputs.append(oh.make_tensor_value_info("other", TensorProto.FLOAT, None))
                 model = _make_model(
                     nodes,
                     [
-                        helper.make_tensor_value_info("X", TensorProto.FLOAT, [3]),
-                        helper.make_tensor_value_info("Y", TensorProto.FLOAT, [3]),
+                        oh.make_tensor_value_info("X", TensorProto.FLOAT, [3]),
+                        oh.make_tensor_value_info("Y", TensorProto.FLOAT, [3]),
                     ],
                     outputs,
                     [
@@ -1518,16 +1510,16 @@ class TestExpandLayoutPatterns(unittest.TestCase):
                 second_inputs = ["S2", "axes"] if explicit_axes else ["S2"]
                 model = _make_model(
                     [
-                        helper.make_node("Squeeze", squeeze_inputs, ["left"]),
-                        helper.make_node("Squeeze", second_inputs, ["right"]),
-                        helper.make_node("Add", ["left", "right"], ["sum"]),
-                        helper.make_node("Unsqueeze", ["sum", "axes"], ["Y"]),
+                        oh.make_node("Squeeze", squeeze_inputs, ["left"]),
+                        oh.make_node("Squeeze", second_inputs, ["right"]),
+                        oh.make_node("Add", ["left", "right"], ["sum"]),
+                        oh.make_node("Unsqueeze", ["sum", "axes"], ["Y"]),
                     ],
                     [
-                        helper.make_tensor_value_info("S1", TensorProto.INT64, [1]),
-                        helper.make_tensor_value_info("S2", TensorProto.INT64, [1]),
+                        oh.make_tensor_value_info("S1", TensorProto.INT64, [1]),
+                        oh.make_tensor_value_info("S2", TensorProto.INT64, [1]),
                     ],
-                    [helper.make_tensor_value_info("Y", TensorProto.INT64, [1])],
+                    [oh.make_tensor_value_info("Y", TensorProto.INT64, [1])],
                     [_initializer("axes", [0], np.int64)],
                 )
                 feeds = {"S1": np.array([5], dtype=np.int64), "S2": np.array([7], dtype=np.int64)}
@@ -1541,15 +1533,15 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_squeeze_add_rejects_different_axes(self):
         model = _make_model(
             [
-                helper.make_node("Squeeze", ["X", "first_axes"], ["left"]),
-                helper.make_node("Squeeze", ["Y", "second_axes"], ["right"]),
-                helper.make_node("Add", ["left", "right"], ["Z"]),
+                oh.make_node("Squeeze", ["X", "first_axes"], ["left"]),
+                oh.make_node("Squeeze", ["Y", "second_axes"], ["right"]),
+                oh.make_node("Add", ["left", "right"], ["Z"]),
             ],
             [
-                helper.make_tensor_value_info("X", TensorProto.INT64, [1]),
-                helper.make_tensor_value_info("Y", TensorProto.INT64, [1, 1]),
+                oh.make_tensor_value_info("X", TensorProto.INT64, [1]),
+                oh.make_tensor_value_info("Y", TensorProto.INT64, [1, 1]),
             ],
-            [helper.make_tensor_value_info("Z", TensorProto.INT64, None)],
+            [oh.make_tensor_value_info("Z", TensorProto.INT64, None)],
             [
                 _initializer("first_axes", [0], np.int64),
                 _initializer("second_axes", [1], np.int64),
@@ -1564,13 +1556,13 @@ class TestExpandLayoutPatterns(unittest.TestCase):
     def test_squeeze_binary_unsqueeze_upstream_graph(self):
         model = _make_model(
             [
-                helper.make_node("Shape", ["X"], ["dimension"], start=0, end=1),
-                helper.make_node("Squeeze", ["dimension"], ["scalar_dimension"]),
-                helper.make_node("Div", ["scalar_dimension", "two"], ["quotient"]),
-                helper.make_node("Unsqueeze", ["quotient", "zero"], ["Y"]),
+                oh.make_node("Shape", ["X"], ["dimension"], start=0, end=1),
+                oh.make_node("Squeeze", ["dimension"], ["scalar_dimension"]),
+                oh.make_node("Div", ["scalar_dimension", "two"], ["quotient"]),
+                oh.make_node("Unsqueeze", ["quotient", "zero"], ["Y"]),
             ],
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, ["a", "b"])],
-            [helper.make_tensor_value_info("Y", TensorProto.INT64, [1])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, ["a", "b"])],
+            [oh.make_tensor_value_info("Y", TensorProto.INT64, [1])],
             [_initializer("zero", [0], np.int64), _initializer("two", 2, np.int64)],
         )
         feeds = {"X": np.arange(12, dtype=np.float32).reshape(3, 4)}
@@ -1585,17 +1577,17 @@ class TestExpandLayoutPatterns(unittest.TestCase):
         for case in ("non_scalar", "shared"):
             with self.subTest(case=case):
                 nodes = [
-                    helper.make_node("Squeeze", ["X"], ["squeezed"]),
-                    helper.make_node("Div", ["squeezed", "two"], ["quotient"]),
-                    helper.make_node("Unsqueeze", ["quotient", "zero"], ["Y"]),
+                    oh.make_node("Squeeze", ["X"], ["squeezed"]),
+                    oh.make_node("Div", ["squeezed", "two"], ["quotient"]),
+                    oh.make_node("Unsqueeze", ["quotient", "zero"], ["Y"]),
                 ]
-                outputs = [helper.make_tensor_value_info("Y", TensorProto.INT64, [1])]
+                outputs = [oh.make_tensor_value_info("Y", TensorProto.INT64, [1])]
                 if case == "shared":
-                    nodes.append(helper.make_node("Identity", ["quotient"], ["other"]))
-                    outputs.append(helper.make_tensor_value_info("other", TensorProto.INT64, []))
+                    nodes.append(oh.make_node("Identity", ["quotient"], ["other"]))
+                    outputs.append(oh.make_tensor_value_info("other", TensorProto.INT64, []))
                 model = _make_model(
                     nodes,
-                    [helper.make_tensor_value_info("X", TensorProto.INT64, [1])],
+                    [oh.make_tensor_value_info("X", TensorProto.INT64, [1])],
                     outputs,
                     [
                         _initializer("zero", [0], np.int64),

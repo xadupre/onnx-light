@@ -10,8 +10,11 @@ import unittest
 import numpy as np
 
 from onnx_light.onnx import TensorProto, helper, numpy_helper
-from onnx_light.onnx.reference import ReferenceEvaluator
+from onnx_light.ext_test_case import import_or_skip
+
 from onnx_light.onnx_core import optimization
+
+ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 
 def _value(name: str, data_type: int, shape: list[int | str]):

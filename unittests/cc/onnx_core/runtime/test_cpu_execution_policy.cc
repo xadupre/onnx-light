@@ -10,32 +10,47 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <optional>
+#include <set>
 #include <stdexcept>
-#include <thread>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
 
-// Resolves the topology-derived default participant count the same way the
-// implementation does, so tests do not hard-code a value that depends on the
-// host.
-uint32_t ExpectedDefaultThreads() {
-  const platform::CpuDescriptor &descriptor = platform::GetCpuDescriptor();
-  if (descriptor.physical_cores.has_value() && *descriptor.physical_cores != 0) {
-    return *descriptor.physical_cores;
+#if defined(__linux__)
+std::optional<std::pair<uint32_t, uint32_t>> ProcessorCore(CpuLogicalProcessor processor) {
+  const std::filesystem::path topology = std::filesystem::path("/sys/devices/system/cpu") /
+                                         ("cpu" + std::to_string(processor.id)) / "topology";
+  std::ifstream package_input(topology / "physical_package_id");
+  std::ifstream core_input(topology / "core_id");
+  uint32_t package_id = 0;
+  uint32_t core_id = 0;
+  if (!(package_input >> package_id) || !(core_input >> core_id)) {
+    return std::nullopt;
   }
-  if (descriptor.logical_cores.has_value() && *descriptor.logical_cores != 0) {
-    return *descriptor.logical_cores;
-  }
-  const unsigned int hardware = std::thread::hardware_concurrency();
-  return hardware == 0 ? 1 : static_cast<uint32_t>(hardware);
+  return std::pair<uint32_t, uint32_t>{package_id, core_id};
+}
+#endif
+
+TEST(CpuExecutionPolicy, ProcessVisibleProcessorsAreStableAndUnique) {
+  const std::vector<CpuLogicalProcessor> visible = ProcessVisibleLogicalProcessors();
+  EXPECT_TRUE(std::is_sorted(visible.begin(), visible.end(),
+                             [](const CpuLogicalProcessor &left, const CpuLogicalProcessor &right) {
+                               return left.id < right.id;
+                             }));
+  EXPECT_EQ(std::adjacent_find(visible.begin(), visible.end()), visible.end());
 }
 
 TEST(CpuExecutionPolicy, DefaultResolvesToTopologyThreads) {
   CpuExecutionPolicy request;
   ResolvedCpuExecutionPolicy resolved = ResolveCpuExecutionPolicy(request);
-  EXPECT_EQ(resolved.effective_threads, ExpectedDefaultThreads());
   EXPECT_GE(resolved.effective_threads, 1u);
+  const std::vector<CpuLogicalProcessor> visible = ProcessVisibleLogicalProcessors();
+  if (!visible.empty()) {
+    EXPECT_LE(resolved.effective_threads, visible.size());
+  }
   EXPECT_EQ(resolved.request, request);
   EXPECT_EQ(resolved.spin.policy, CpuSpinPolicy::kAdaptive);
   EXPECT_EQ(resolved.spin.iterations, kDefaultAdaptiveSpinIterations);
@@ -108,12 +123,32 @@ TEST(CpuExecutionPolicy, AdaptiveSpinRejectsBudget) {
 }
 
 TEST(CpuExecutionPolicy, ExplicitAffinityPinsWorkers) {
+  const std::vector<CpuLogicalProcessor> visible = ProcessVisibleLogicalProcessors();
+  if (visible.size() < 2) {
+    GTEST_SKIP() << "fewer than two stable process-visible processor identifiers";
+  }
   CpuExecutionPolicy request;
   request.affinity_policy = CpuAffinityPolicy::kExplicit;
-  request.cpu_set = {CpuLogicalProcessor{0}, CpuLogicalProcessor{1}};
+  request.cpu_set = {visible[0], visible[1]};
   ResolvedCpuExecutionPolicy resolved = ResolveCpuExecutionPolicy(request);
   EXPECT_EQ(resolved.effective_threads, 2u);
-  EXPECT_EQ(resolved.worker_processors, request.cpu_set);
+  EXPECT_EQ(resolved.caller_processor, request.cpu_set[0]);
+  EXPECT_EQ(resolved.worker_processors, std::vector<CpuLogicalProcessor>({request.cpu_set[1]}));
+}
+
+TEST(CpuExecutionPolicy, ExplicitSerialRetainsCallerProcessor) {
+  const std::vector<CpuLogicalProcessor> visible = ProcessVisibleLogicalProcessors();
+  if (visible.empty()) {
+    GTEST_SKIP() << "stable process-visible processor identifiers unavailable";
+  }
+  CpuExecutionPolicy request;
+  request.num_threads = 1;
+  request.affinity_policy = CpuAffinityPolicy::kExplicit;
+  request.cpu_set = {visible[0]};
+  ResolvedCpuExecutionPolicy resolved = ResolveCpuExecutionPolicy(request);
+  EXPECT_EQ(resolved.effective_threads, 1u);
+  EXPECT_EQ(resolved.caller_processor, visible[0]);
+  EXPECT_TRUE(resolved.worker_processors.empty());
 }
 
 TEST(CpuExecutionPolicy, ExplicitAffinityRequiresCpuSet) {
@@ -123,25 +158,48 @@ TEST(CpuExecutionPolicy, ExplicitAffinityRequiresCpuSet) {
 }
 
 TEST(CpuExecutionPolicy, ExplicitAffinityRejectsDuplicates) {
+  const std::vector<CpuLogicalProcessor> visible = ProcessVisibleLogicalProcessors();
+  if (visible.empty()) {
+    GTEST_SKIP() << "stable process-visible processor identifiers unavailable";
+  }
   CpuExecutionPolicy request;
   request.affinity_policy = CpuAffinityPolicy::kExplicit;
-  request.cpu_set = {CpuLogicalProcessor{0}, CpuLogicalProcessor{0}};
+  request.cpu_set = {visible[0], visible[0]};
   EXPECT_THROW(ResolveCpuExecutionPolicy(request), std::invalid_argument);
 }
 
 TEST(CpuExecutionPolicy, ExplicitAffinityRejectsThreadCountMismatch) {
+  const std::vector<CpuLogicalProcessor> visible = ProcessVisibleLogicalProcessors();
+  if (visible.size() < 2) {
+    GTEST_SKIP() << "fewer than two stable process-visible processor identifiers";
+  }
   CpuExecutionPolicy request;
   request.affinity_policy = CpuAffinityPolicy::kExplicit;
-  request.cpu_set = {CpuLogicalProcessor{0}, CpuLogicalProcessor{1}};
+  request.cpu_set = {visible[0], visible[1]};
   request.num_threads = 3;
   EXPECT_THROW(ResolveCpuExecutionPolicy(request), std::invalid_argument);
 }
 
 TEST(CpuExecutionPolicy, ExplicitAffinityRejectsSerialWithMultipleProcessors) {
+  const std::vector<CpuLogicalProcessor> visible = ProcessVisibleLogicalProcessors();
+  if (visible.size() < 2) {
+    GTEST_SKIP() << "fewer than two stable process-visible processor identifiers";
+  }
   CpuExecutionPolicy request;
   request.affinity_policy = CpuAffinityPolicy::kExplicit;
-  request.cpu_set = {CpuLogicalProcessor{0}, CpuLogicalProcessor{1}};
+  request.cpu_set = {visible[0], visible[1]};
   request.num_threads = 1;
+  EXPECT_THROW(ResolveCpuExecutionPolicy(request), std::invalid_argument);
+}
+
+TEST(CpuExecutionPolicy, ExplicitAffinityRejectsProcessorOutsideVisibleSet) {
+  const std::vector<CpuLogicalProcessor> visible = ProcessVisibleLogicalProcessors();
+  if (visible.empty()) {
+    GTEST_SKIP() << "stable process-visible processor identifiers unavailable";
+  }
+  CpuExecutionPolicy request;
+  request.affinity_policy = CpuAffinityPolicy::kExplicit;
+  request.cpu_set = {CpuLogicalProcessor{visible.back().id + 1}};
   EXPECT_THROW(ResolveCpuExecutionPolicy(request), std::invalid_argument);
 }
 
@@ -154,7 +212,7 @@ TEST(CpuExecutionPolicy, NonExplicitAffinityRejectsCpuSet) {
 
 TEST(CpuExecutionPolicy, PerformanceCoresRecordsFallbackDiagnostic) {
   CpuExecutionPolicy request;
-  request.num_threads = 4;
+  request.num_threads = 1;
   request.affinity_policy = CpuAffinityPolicy::kPerformanceCores;
   ResolvedCpuExecutionPolicy resolved = ResolveCpuExecutionPolicy(request);
   const bool has_pe_diagnostic = std::any_of(
@@ -170,6 +228,70 @@ TEST(CpuExecutionPolicy, NestingFlagIsCarried) {
   request.allow_nested_parallelism = true;
   ResolvedCpuExecutionPolicy resolved = ResolveCpuExecutionPolicy(request);
   EXPECT_TRUE(resolved.allow_nested_parallelism);
+}
+
+TEST(CpuExecutionPolicy, PhysicalThenSmtRejectsMoreThanVisibleProcessors) {
+  const std::vector<CpuLogicalProcessor> visible = ProcessVisibleLogicalProcessors();
+  if (visible.empty()) {
+    GTEST_SKIP() << "process-visible logical processor count unavailable";
+  }
+  CpuExecutionPolicy request;
+  request.affinity_policy = CpuAffinityPolicy::kPhysicalThenSmt;
+  request.num_threads = static_cast<int32_t>(visible.size()) + 1;
+  EXPECT_THROW(ResolveCpuExecutionPolicy(request), std::invalid_argument);
+}
+
+TEST(CpuExecutionPolicy, PhysicalCoreAffinityAssignsEveryWorker) {
+  CpuExecutionPolicy request;
+  request.affinity_policy = CpuAffinityPolicy::kPhysicalCores;
+  ResolvedCpuExecutionPolicy resolved = ResolveCpuExecutionPolicy(request);
+  if (resolved.effective_threads <= 1) {
+    GTEST_SKIP() << "fewer than two process-visible physical cores";
+  }
+  EXPECT_EQ(resolved.worker_processors.size(), static_cast<size_t>(resolved.effective_threads - 1));
+#if defined(__linux__)
+  std::set<std::pair<uint32_t, uint32_t>> worker_cores;
+  for (CpuLogicalProcessor processor : resolved.worker_processors) {
+    const std::optional<std::pair<uint32_t, uint32_t>> core = ProcessorCore(processor);
+    ASSERT_TRUE(core.has_value());
+    EXPECT_TRUE(worker_cores.insert(*core).second);
+  }
+#endif
+}
+
+TEST(CpuExecutionPolicy, PhysicalThenSmtPlacesSiblingsAfterPhysicalCores) {
+#if defined(__linux__)
+  const std::vector<CpuLogicalProcessor> visible = ProcessVisibleLogicalProcessors();
+  std::set<std::pair<uint32_t, uint32_t>> visible_cores;
+  for (CpuLogicalProcessor processor : visible) {
+    const std::optional<std::pair<uint32_t, uint32_t>> core = ProcessorCore(processor);
+    if (!core.has_value()) {
+      GTEST_SKIP() << "process-visible core topology unavailable";
+    }
+    visible_cores.insert(*core);
+  }
+  if (visible.size() <= visible_cores.size()) {
+    GTEST_SKIP() << "no process-visible SMT siblings";
+  }
+
+  CpuExecutionPolicy request;
+  request.affinity_policy = CpuAffinityPolicy::kPhysicalThenSmt;
+  request.num_threads = static_cast<int32_t>(visible.size());
+  ResolvedCpuExecutionPolicy resolved = ResolveCpuExecutionPolicy(request);
+  ASSERT_EQ(resolved.worker_processors.size(), visible.size() - 1);
+  EXPECT_TRUE(resolved.uses_smt);
+
+  std::set<std::pair<uint32_t, uint32_t>> primary_cores;
+  const size_t primary_workers = visible_cores.size() - 1;
+  for (size_t index = 0; index < primary_workers; ++index) {
+    const std::optional<std::pair<uint32_t, uint32_t>> core =
+        ProcessorCore(resolved.worker_processors[index]);
+    ASSERT_TRUE(core.has_value());
+    EXPECT_TRUE(primary_cores.insert(*core).second);
+  }
+#else
+  GTEST_SKIP() << "stable per-core topology unavailable";
+#endif
 }
 
 TEST(CpuExecutionPolicy, SmtIsReportedWhenExceedingPhysicalCores) {

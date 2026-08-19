@@ -131,6 +131,7 @@ are illustrative and may change during API review.
     struct ResolvedCpuExecutionPolicy {
       CpuExecutionPolicy request;
       uint32_t effective_threads;
+      std::optional<CpuLogicalProcessor> caller_processor;
       std::vector<CpuLogicalProcessor> worker_processors;
       bool uses_smt;
       bool uses_efficiency_cores;
@@ -143,6 +144,11 @@ values above one request that many participants including the caller. Invalid
 explicit CPU sets, impossible affinity requests, negative values, and
 unsupported combinations fail explicitly. A fallback from an unavailable
 topology feature is recorded in diagnostics.
+
+An explicit CPU set lists all participants: its first processor belongs to the
+caller and the remaining processors belong to workers. This keeps
+``worker_processors`` consistent with the participant count and allows an
+explicit serial policy to retain its caller placement.
 
 The process-visible CPU set is authoritative. Resolution must respect Linux
 cpusets and containers, Windows processor groups, hybrid P/E cores, SMT
@@ -423,4 +429,3 @@ Implementation sequence
      - Pending
 
 Pool PR07 is the final roadmap PR.
-

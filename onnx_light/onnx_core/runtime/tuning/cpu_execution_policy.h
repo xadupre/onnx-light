@@ -7,6 +7,7 @@
 #include "onnx_light_helpers.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -34,6 +35,9 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 struct CpuLogicalProcessor {
   /// Stable operating-system logical processor identifier.
   uint32_t id = 0;
+  /// Windows processor group. It is ``0`` on platforms without processor
+  /// groups.
+  uint16_t group = 0;
 
   bool operator==(const CpuLogicalProcessor &) const = default;
 };
@@ -94,8 +98,10 @@ struct CpuExecutionPolicy {
   uint64_t spin_budget = 0;
   /// Requested affinity policy.
   CpuAffinityPolicy affinity_policy = CpuAffinityPolicy::kPhysicalCores;
-  /// Explicit CPU set, required and only allowed for
-  /// :cpp:enumerator:`CpuAffinityPolicy::kExplicit`.
+  /// Explicit participant CPU set, required and only allowed for
+  /// :cpp:enumerator:`CpuAffinityPolicy::kExplicit`. The first processor is
+  /// assigned to the calling participant; the remaining processors are
+  /// assigned to workers.
   std::vector<CpuLogicalProcessor> cpu_set;
   /// Whether nested parallel regions may create additional participants.
   bool allow_nested_parallelism = false;
@@ -133,7 +139,11 @@ struct ResolvedCpuExecutionPolicy {
   /// Effective number of participants, including the calling thread. Always
   /// ``>= 1``.
   uint32_t effective_threads = 1;
+  /// Explicit calling-participant assignment, absent when the caller is not
+  /// pinned by this policy.
+  std::optional<CpuLogicalProcessor> caller_processor;
   /// Explicit worker processor assignment, empty when no pinning is applied.
+  /// Its size is at most ``effective_threads - 1``.
   std::vector<CpuLogicalProcessor> worker_processors;
   /// Whether the resolution relies on SMT siblings.
   bool uses_smt = false;
@@ -151,6 +161,19 @@ struct ResolvedCpuExecutionPolicy {
 
 /// Default number of adaptive spin iterations recorded before parking.
 inline constexpr uint64_t kDefaultAdaptiveSpinIterations = 10000;
+
+/**
+ * Returns stable identifiers for the logical processors currently available
+ * to this process.
+ *
+ * The returned set reflects process affinity restrictions such as Linux
+ * cpusets. It is empty when the operating system cannot expose stable logical
+ * processor identifiers.
+ *
+ * Returns:
+ *   The process-visible logical processors in increasing identifier order.
+ */
+std::vector<CpuLogicalProcessor> ProcessVisibleLogicalProcessors();
 
 /**
  * Resolves a requested CPU execution policy into an immutable resolution.

@@ -62,6 +62,7 @@ PREDEFINED             = \
     "FIELD(type,name,order,doc)=/** doc */ type name;" \
     "FIELD_DEFAULT(type,name,order,default_value,doc)=/** doc */ type name;" \
     "FIELD_STR(name,order,doc)=/** doc */ onnx_light::utils::OptionalString name;" \
+    "FIELD_BYTES(name,order,doc)=/** doc */ onnx_light::utils::ByteSpan name;" \
     "FIELD_REPEATED(type,name,order,doc)=/** doc */ onnx_light::utils::RepeatedField<type> name;" \
     "FIELD_REPEATED_STR(type,name,order,doc)=/** doc */ onnx_light::utils::RepeatedStringField name;" \
     "FIELD_REPEATED_PROTO(type,name,order,doc)=/** doc */ onnx_light::utils::RepeatedProtoField<type> name;" \

@@ -19,6 +19,11 @@ Currently provided helpers:
 * :func:`onnx_light.tools.pretty_onnx` -- render any ONNX proto
   (model, graph, function, node, attribute, value info, tensor) as a
   compact human-readable string.
+* :func:`onnx_light.tools.translate` -- translate a model or graph into
+  Python code that rebuilds it, either as a compact
+  :mod:`onnx_light.onnx.helper` expression (``api="onnx-compact"``) or as
+  a :class:`~onnx_light.onnx_core.graph_builder.GraphBuilder` script
+  (``api="builder"``).
 """
 
 from __future__ import annotations
@@ -32,6 +37,7 @@ from ._proto_utils import (
     write_value_and_node_tags_to_metadata,
 )
 from .svg import to_svg, to_svg_graph
+from .translate import translate, translate_header
 
 __all__ = [
     "compute_value_and_node_tags",
@@ -43,5 +49,7 @@ __all__ = [
     "to_mermaid_graph",
     "to_svg",
     "to_svg_graph",
+    "translate",
+    "translate_header",
     "write_value_and_node_tags_to_metadata",
 ]

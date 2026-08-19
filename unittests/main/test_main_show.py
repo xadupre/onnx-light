@@ -502,6 +502,60 @@ class TestMainShow(ExtTestCase):
             self.assertIn("Abs", output)
             self.assertIn("release", output)
 
+    # ------------------------------------------------------------------
+    # translate formats (onnx-compact / builder)
+    # ------------------------------------------------------------------
+
+    def test_show_onnx_compact_format(self):
+        """show --format onnx-compact emits runnable onnx-compact Python code."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(_make_abs_model(), model_path)
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                main(["show", model_path, "--format", "onnx-compact"])
+
+            output = buf.getvalue()
+            self.assertIn("import onnx_light.onnx.helper as oh", output)
+            self.assertIn("oh.make_model(", output)
+            self.assertIn("oh.make_node('Abs'", output)
+
+    def test_show_builder_format(self):
+        """show --format builder emits a runnable GraphBuilder Python script."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(_make_abs_model(), model_path)
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                main(["show", model_path, "--format", "builder"])
+
+            output = buf.getvalue()
+            self.assertIn("from onnx_light.onnx_core.graph_builder import GraphBuilder", output)
+            self.assertIn("GraphBuilder(", output)
+            self.assertIn("g.make_node('Abs'", output)
+
+    def test_show_onnx_compact_output_file(self):
+        """show --format onnx-compact -o writes the generated code to a file."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            out_path = os.path.join(tmp, "rebuild.py")
+            self._save_model(_make_abs_model(), model_path)
+
+            main(["show", model_path, "--format", "onnx-compact", "-o", out_path])
+
+            self.assertTrue(os.path.exists(out_path))
+            with open(out_path, encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("oh.make_model(", content)
+
 
 if __name__ == "__main__":
     unittest.main()

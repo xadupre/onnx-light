@@ -32,6 +32,8 @@ reproduce.
     :maxdepth: 1
     :caption: In progress
 
+    2026-08_session_execution_pools
+
 .. toctree::
     :maxdepth: 1
     :caption: Discussion
@@ -42,7 +44,6 @@ reproduce.
     2026-08_graph_builder_quantized_tensor
     2026-08_mutable_cache
     2026-08_compiled_tensor
-    2026-08_session_execution_pools
     2026-08_parallel_for_profiling
     2026-08_model_resolution
     2026-08_prepared_execution

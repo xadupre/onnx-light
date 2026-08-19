@@ -5,7 +5,28 @@ Session execution policies and shared CPU pools
 
 :Date: 2026-08
 
-**discussion**
+**implementation in progress**
+
+Progress
+++++++++
+
+The roadmap is delivered incrementally. Steps that are merged are recorded
+here; the full sequence is tracked in the `Implementation sequence`_ table.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 30 52
+
+   * - Step
+     - Scope
+     - Result
+   * - Pool PR01
+     - Requested and resolved CPU policy
+     - Added ``CpuExecutionPolicy`` and ``ResolvedCpuExecutionPolicy`` with
+       typed thread, spin, affinity, CPU-set, and nesting options.
+       ``ResolveCpuExecutionPolicy`` validates the request deterministically,
+       derives the effective participant count from the process-visible
+       topology, and records fallback diagnostics.
 
 Objective
 +++++++++
@@ -110,6 +131,7 @@ are illustrative and may change during API review.
     struct ResolvedCpuExecutionPolicy {
       CpuExecutionPolicy request;
       uint32_t effective_threads;
+      std::optional<CpuLogicalProcessor> caller_processor;
       std::vector<CpuLogicalProcessor> worker_processors;
       bool uses_smt;
       bool uses_efficiency_cores;
@@ -122,6 +144,11 @@ values above one request that many participants including the caller. Invalid
 explicit CPU sets, impossible affinity requests, negative values, and
 unsupported combinations fail explicitly. A fallback from an unavailable
 topology feature is recorded in diagnostics.
+
+An explicit CPU set lists all participants: its first processor belongs to the
+caller and the remaining processors belong to workers. This keeps
+``worker_processors`` consistent with the participant count and allows an
+explicit serial policy to retain its caller placement.
 
 The process-visible CPU set is authoritative. Resolution must respect Linux
 cpusets and containers, Windows processor groups, hybrid P/E cores, SMT
@@ -361,7 +388,7 @@ Implementation sequence
      - Typed thread, spin, affinity, CPU-set, and nesting options validate
        deterministically; topology and fallback diagnostics are tested.
      - None
-     - Pending
+     - Done
    * - Pool PR02
      - ``onnx-light``: executor and compatible-pool registry.
      - Compatible sessions share a bounded pool; incompatible and serial
@@ -402,4 +429,3 @@ Implementation sequence
      - Pending
 
 Pool PR07 is the final roadmap PR.
-

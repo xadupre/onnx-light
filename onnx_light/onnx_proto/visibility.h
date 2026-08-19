@@ -9,13 +9,14 @@
  */
 #if defined(_WIN32)
 #define ONNX_LIGHT_API
+#define ONNX_LIGHT_PROTO_API
 #elif defined(__GNUC__) || defined(__clang__)
 #define ONNX_LIGHT_API __attribute__((visibility("default")))
+#define ONNX_LIGHT_PROTO_API __attribute__((visibility("default")))
 #else
 #define ONNX_LIGHT_API
+#define ONNX_LIGHT_PROTO_API
 #endif
-
-#define ONNX_LIGHT_PROTO_API ONNX_LIGHT_API
 
 #if defined(_WIN32) && defined(ONNX_LIGHT_SHARED_LIBS)
 #if defined(lib_onnx_core_EXPORTS)

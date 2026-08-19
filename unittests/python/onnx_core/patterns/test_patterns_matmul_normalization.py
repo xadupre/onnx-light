@@ -293,11 +293,12 @@ class TestPatternsMatmulNormalization(unittest.TestCase):
         variants = [{"transB": 1}, {"beta": 0.5}]
         for attributes in variants:
             with self.subTest(attributes=attributes):
+                weight_shape = (2, 3) if attributes.get("transB") else (3, 2)
                 model = self._make_model(
                     [helper.make_node("Gemm", ["X", "B"], ["Y"], **attributes)],
                     [("X", TensorProto.FLOAT, [2, 3])],
                     [("Y", TensorProto.FLOAT, [2, 2])],
-                    [self._initializer("B", self._range(3, 2), np.float32)],
+                    [self._initializer("B", self._range(*weight_shape), np.float32)],
                 )
                 self._assert_no_match(model, {"X": self._range(2, 3)}, "GemmTranspose")
 

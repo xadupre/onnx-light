@@ -497,7 +497,8 @@ Implementation sequence
      - Region events identify the resolved executor; future prepared tasks do
        not introduce an incompatible pool or nested oversubscription.
      - PR04, PR05
-     - In progress
+     - In review (`#4594
+       <https://github.com/xadupre/onnx-light/pull/4594>`_)
    * - Pool PR07
      - Both repositories: compatibility and performance gate.
      - Policy matrix, concurrent sessions, registered/standalone kernels, and

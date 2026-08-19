@@ -342,7 +342,7 @@ def translate_header(api: str = "onnx-compact") -> str:
     Returns:
         The import header as a string ending with a trailing newline.
     """
-    if api in ("onnx-compact", "onnx"):
+    if api == "onnx-compact":
         return textwrap.dedent("""\
             import numpy as np
             import ml_dtypes
@@ -350,7 +350,7 @@ def translate_header(api: str = "onnx-compact") -> str:
             import onnx_light.onnx.helper as oh
             import onnx_light.onnx.numpy_helper as onh
             """)
-    if api in ("builder", "graph-builder"):
+    if api == "builder":
         return textwrap.dedent("""\
             import numpy as np
             import ml_dtypes
@@ -412,7 +412,7 @@ def _translate_compact(model: Any, graph: Any) -> str:
             lines.append(f"            {init},")
         lines.append("        ],")
     lines.append("    ),")
-    opset_str = ", ".join(f"oh.make_opsetid({d!r}, {v!r})" for d, v in opsets)
+    opset_str = ", ".join(f"oh.make_opsetid({d!r}, {v})" for d, v in opsets)
     lines.append(f"    opset_imports=[{opset_str}],")
     if ir_version:
         lines.append(f"    ir_version={ir_version},")
@@ -491,8 +491,8 @@ def translate(proto: Any, api: str = "onnx-compact") -> str:
     graph = _extract_graph(proto)
     model = proto
 
-    if api in ("onnx-compact", "onnx"):
+    if api == "onnx-compact":
         return _translate_compact(model, graph)
-    if api in ("builder", "graph-builder"):
+    if api == "builder":
         return _translate_builder(model, graph)
     raise ValueError(f"Unexpected value {api!r} for api.")

@@ -10,9 +10,7 @@ import unittest
 import numpy
 
 import onnx_light.onnx.helper as oh
-
 import onnx_light.onnx.numpy_helper as onh
-
 from onnx_light.onnx import TensorProto
 from onnx_light.ext_test_case import import_or_skip
 

@@ -36,7 +36,6 @@ resolution, compiled tensors, and prepared execution.
     :maxdepth: 1
     :caption: In progress
 
-    2026-08_graph_builder_optimization
     2026-08_session_execution_pools
 
 .. toctree::
@@ -67,3 +66,4 @@ resolution, compiled tensors, and prepared execution.
     2026-08_proto_binary_size
     2026-08_processor_aware_kernel_tuning
     2026-08_buffer_reuse_arena
+    2026-08_graph_builder_optimization

@@ -21,7 +21,7 @@ namespace ONNX_LIGHT_NAMESPACE {
  * The converter progressively appends context while unwinding nested conversion
  * calls so the final error message points to the failing model location.
  */
-class ConvertError final : public std::runtime_error {
+class ONNX_LIGHT_LIB_API ConvertError final : public std::runtime_error {
 public:
   using std::runtime_error::runtime_error;
 

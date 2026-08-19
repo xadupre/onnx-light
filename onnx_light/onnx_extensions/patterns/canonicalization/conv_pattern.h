@@ -29,7 +29,7 @@ public:
   /// Returns ``Conv`` as the only possible root operator.
   std::set<std::string> FastOpType() const override;
 
-  /// Finds a Conv node whose bias input is a known all-zero constant.
+  /// Finds a Conv node whose bias input is a known all-zero constant or a safe expansion of one.
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;
 

@@ -14,6 +14,8 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+InferenceError::~InferenceError() = default;
+
 // Note: for all methods below for propagating type or shape, callers are
 // responsible to handle optional inputs/outputs and ensure that the specified
 // index value is less than NumInputs/NumOutputs.

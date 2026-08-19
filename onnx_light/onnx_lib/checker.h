@@ -34,9 +34,10 @@ namespace ONNX_LIGHT_NAMESPACE::checker {
  */
 // std::string member means copy may throw when allocation fails
 // NOLINTNEXTLINE(bugprone-exception-copy-constructor-throws)
-class ValidationError final : public std::runtime_error {
+class ONNX_LIGHT_LIB_API ValidationError final : public std::runtime_error {
 public:
   using std::runtime_error::runtime_error;
+  ~ValidationError() override;
   /**
    * Returns the error message, including any appended context.
    *

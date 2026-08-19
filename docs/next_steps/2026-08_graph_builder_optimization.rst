@@ -5,7 +5,7 @@ Pattern-based optimization in ``GraphBuilder``
 
 :Date: 2026-08
 
-**implementation in progress**
+**implementation completed**
 
 Objective
 +++++++++
@@ -668,8 +668,8 @@ Implementation order
     disjoint replacements and multiple nodes added by one pattern
     (`PR #4539 <https://github.com/xadupre/onnx-light/pull/4539>`_).
 
-Remaining pattern batches
-+++++++++++++++++++++++++
+Pattern batches
++++++++++++++++
 
 The implementation is split by functional family; the root directory only
 contains registration and dispatch:
@@ -716,7 +716,8 @@ the last four ``Expand`` patterns, and the tensor-layout/algebra batch adds 30
 active rewrites plus the upstream-compatible
 ``ShapeBasedShapeShapeAddPattern`` placeholder. PR #4566 adds the 20
 matrix-multiplication and normalization/activation patterns, and PR #4567
-adds the final 9 attention patterns.
+adds the final 9 attention patterns. No pattern remains to migrate from the
+upstream default pattern set.
 They are grouped into cohesive pull requests below rather than
 one pull request per pattern. Within a batch, each pattern remains a separate
 commit with its exact positive rewrite test and at least one rejection test;

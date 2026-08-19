@@ -289,22 +289,15 @@ set(ONNX_LIGHT_LIB_ALL_SOURCES
 # Pure C++ consumers (ONNX_LIGHT_BUILD_PYTHON=OFF) keep the lighter static
 # variant they used to ship.
 #
-# Windows and macOS keep the five non-proto libs STATIC even when
-# ONNX_LIGHT_BUILD_PYTHON=ON: on Windows ``WINDOWS_EXPORT_ALL_SYMBOLS`` does
-# not export data symbols (e.g. the ``kDoc_*`` arrays), which would break
-# the C++ test executable and any cross-DLL data references, and on macOS
-# nanobind extensions are compiled with hidden visibility so RTTI for
-# exception types defined in those libs would not match across .dylib
-# boundaries. The original ``lib_onnx_proto`` SHARED variant predates this
-# change and is preserved on all platforms.
+# Every Python platform uses the same shared-library topology. This guarantees
+# that process-wide registries, RTTI, vtables, and out-of-line functions have
+# one identity across all extension modules. Pure C++ consumers keep the
+# lighter static variant.
 if(ONNX_LIGHT_BUILD_PYTHON)
   set(_lib_onnx_proto_type SHARED)
-else()
-  set(_lib_onnx_proto_type STATIC)
-endif()
-if(ONNX_LIGHT_BUILD_PYTHON AND UNIX AND NOT APPLE)
   set(_onnx_light_lib_type SHARED)
 else()
+  set(_lib_onnx_proto_type STATIC)
   set(_onnx_light_lib_type STATIC)
 endif()
 
@@ -379,6 +372,9 @@ endif()
 # CollectRemainingInputs) so that lib_onnx_kernels depends on lib_onnx_core
 # directly instead of lib_onnx_manipulations.
 add_library(lib_onnx_core ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_CORE_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED")
+  target_compile_definitions(lib_onnx_core PUBLIC ONNX_LIGHT_SHARED_LIBS)
+endif()
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
   set_target_properties(lib_onnx_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
@@ -416,6 +412,9 @@ target_link_libraries(lib_onnx_manipulations PUBLIC lib_onnx_core)
 
 # Builds onnx_lib library.
 add_library(lib_onnx_lib ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_LIB_ALL_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED")
+  target_compile_definitions(lib_onnx_lib PUBLIC ONNX_LIGHT_SHARED_LIBS)
+endif()
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
   set_target_properties(lib_onnx_lib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()

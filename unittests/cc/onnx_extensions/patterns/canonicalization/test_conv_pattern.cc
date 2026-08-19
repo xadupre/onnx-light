@@ -8,6 +8,7 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <memory>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -75,6 +76,58 @@ TEST(ConvBiasNullPattern, RejectsNonZeroBias) {
   EXPECT_EQ(match.pattern, nullptr);
   ASSERT_TRUE(match.no_match.has_value());
   EXPECT_EQ(match.no_match->reason, "the Conv bias is not a known all-zero constant");
+}
+
+TEST(ConvBiasNullPattern, RemovesShapeExpandedZeroBias) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 1, 4, 4));
+  builder.MakeInput("w", core::symbolic::TensorType::kFloat, Shape4D(2, 1, 2, 2));
+  builder.MakeInitializer(MakeInitializer<float>("b", {2}, {0.0f, 0.0f}));
+  builder.MakeInitializer(MakeInitializer<float>("zero", {1}, {0.0f}));
+  utils::RepeatedProtoField<AttributeProto> shape_attributes;
+  AttributeProto &start = shape_attributes.add();
+  start.set_name("start");
+  start.set_type(AttributeProto::AttributeType::INT);
+  start.set_i(0);
+  AttributeProto &end = shape_attributes.add();
+  end.set_name("end");
+  end.set_type(AttributeProto::AttributeType::INT);
+  end.set_i(1);
+  builder.MakeNode("Shape", {"b"}, {"b_shape"}, "", "", shape_attributes);
+  builder.MakeNode("Expand", {"zero", "b_shape"}, {"expanded_bias"});
+  builder.MakeNode("Conv", {"x", "w", "expanded_bias"}, {"y"});
+  builder.MakeOutput("y");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::ConvBiasNullPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  graph.Optimize();
+
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Conv");
+  ASSERT_EQ(builder.Nodes()[0].input_size(), 2);
+  EXPECT_EQ(builder.Nodes()[0].input()[0].value(), "x");
+  EXPECT_EQ(builder.Nodes()[0].input()[1].value(), "w");
+}
+
+TEST(ConvBiasNullPattern, RejectsExpandedZeroWithDynamicShape) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 1, 4, 4));
+  builder.MakeInput("w", core::symbolic::TensorType::kFloat, Shape4D(2, 1, 2, 2));
+  core::symbolic::SymShape shape;
+  shape.PushBack(core::symbolic::SymDim(1));
+  builder.MakeInput("bias_shape", core::symbolic::TensorType::kInt64, shape);
+  builder.MakeInitializer(MakeInitializer<float>("zero", {1}, {0.0f}));
+  builder.MakeNode("Expand", {"zero", "bias_shape"}, {"expanded_bias"});
+  builder.MakeNode("Conv", {"x", "w", "expanded_bias"}, {"y"});
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ConvBiasNullPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
+  EXPECT_EQ(match.pattern, nullptr);
+  ASSERT_TRUE(match.no_match.has_value());
+  EXPECT_EQ(match.no_match->reason, "the Conv bias is not a constant");
 }
 
 TEST(PadConvPattern, FoldsSpatialPadding) {

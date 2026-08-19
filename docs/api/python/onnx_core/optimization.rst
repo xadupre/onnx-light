@@ -75,7 +75,7 @@ Custom Python pattern
 
 .. code-block:: python
 
-    from onnx_light.onnx import helper
+    import onnx_light.onnx.helper as oh
     from onnx_light.onnx_core.optimization import (
         GraphBuilder,
         GraphGraph,
@@ -98,7 +98,7 @@ Custom Python pattern
         def apply(self, graph, nodes):
             previous, node = nodes
             return [
-                helper.make_node(
+                oh.make_node(
                     "Identity", [previous.input[0]], list(node.output)
                 )
             ]

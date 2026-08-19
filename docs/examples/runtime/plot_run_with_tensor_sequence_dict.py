@@ -24,9 +24,9 @@ from __future__ import annotations
 import numpy as np
 
 import onnx_light.onnx as onnxl
-from onnx_light.onnx import helper
+import onnx_light.onnx.helper as oh
 from onnx_light.onnx.reference import ReferenceEvaluator
-from onnx_light.onnx import numpy_helper
+import onnx_light.onnx.numpy_helper as onh
 from onnx_light.tools import pretty_onnx
 
 # ---------------------------------------------------------------------------
@@ -38,13 +38,13 @@ from onnx_light.tools import pretty_onnx
 # values; tensor outputs are returned as :class:`numpy.ndarray` values at
 # the corresponding index of the result list.
 
-tensor_graph = helper.make_graph(
-    [helper.make_node("Abs", ["x"], ["y"])],
+tensor_graph = oh.make_graph(
+    [oh.make_node("Abs", ["x"], ["y"])],
     "abs_graph",
-    [helper.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [4])],
-    [helper.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [4])],
+    [oh.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [4])],
+    [oh.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [4])],
 )
-tensor_model = helper.make_model(tensor_graph, opset_imports=[helper.make_opsetid("", 18)])
+tensor_model = oh.make_model(tensor_graph, opset_imports=[oh.make_opsetid("", 18)])
 print("=== Tensor model ===")
 print(pretty_onnx(tensor_model))
 
@@ -73,20 +73,20 @@ assert isinstance(tensor_output, np.ndarray)
 # Here we use ``SequenceMap`` with an ``Identity`` body to pass each element
 # unchanged through the graph, so the output sequence mirrors the input.
 
-body = helper.make_graph(
-    [helper.make_node("Identity", ["elem"], ["out"])],
+body = oh.make_graph(
+    [oh.make_node("Identity", ["elem"], ["out"])],
     "identity_body",
-    [helper.make_tensor_value_info("elem", onnxl.TensorProto.FLOAT, None)],
-    [helper.make_tensor_value_info("out", onnxl.TensorProto.FLOAT, None)],
+    [oh.make_tensor_value_info("elem", onnxl.TensorProto.FLOAT, None)],
+    [oh.make_tensor_value_info("out", onnxl.TensorProto.FLOAT, None)],
 )
-seq_node = helper.make_node("SequenceMap", ["seq_in"], ["seq_out"], body=body)
-seq_graph = helper.make_graph(
+seq_node = oh.make_node("SequenceMap", ["seq_in"], ["seq_out"], body=body)
+seq_graph = oh.make_graph(
     [seq_node],
     "seq_graph",
-    [helper.make_tensor_sequence_value_info("seq_in", onnxl.TensorProto.FLOAT, None)],
-    [helper.make_tensor_sequence_value_info("seq_out", onnxl.TensorProto.FLOAT, None)],
+    [oh.make_tensor_sequence_value_info("seq_in", onnxl.TensorProto.FLOAT, None)],
+    [oh.make_tensor_sequence_value_info("seq_out", onnxl.TensorProto.FLOAT, None)],
 )
-seq_model = helper.make_model(seq_graph, opset_imports=[helper.make_opsetid("", 18)])
+seq_model = oh.make_model(seq_graph, opset_imports=[oh.make_opsetid("", 18)])
 print("\n=== Sequence model ===")
 print(pretty_onnx(seq_model))
 
@@ -126,26 +126,25 @@ for i, arr in enumerate(seq_output):
 # ``int64_vocabulary`` attribute defines the vocabulary order, so
 # ``{10: 1.5, 30: 2.5}`` is mapped to ``[1.5, 0.0, 2.5]``.
 
-dict_graph = helper.make_graph(
+dict_graph = oh.make_graph(
     nodes=[
-        helper.make_node(
+        oh.make_node(
             "DictVectorizer", ["d"], ["y"], domain="ai.onnx.ml", int64_vocabulary=[10, 20, 30]
         )
     ],
     name="dict_graph",
     inputs=[
-        helper.make_value_info(
+        oh.make_value_info(
             "d",
-            helper.make_map_type_proto(
-                onnxl.TensorProto.INT64,
-                helper.make_tensor_type_proto(onnxl.TensorProto.FLOAT, None),
+            oh.make_map_type_proto(
+                onnxl.TensorProto.INT64, oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, None)
             ),
         )
     ],
-    outputs=[helper.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [3])],
+    outputs=[oh.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [3])],
 )
-dict_model = helper.make_model(
-    dict_graph, opset_imports=[helper.make_opsetid("", 13), helper.make_opsetid("ai.onnx.ml", 1)]
+dict_model = oh.make_model(
+    dict_graph, opset_imports=[oh.make_opsetid("", 13), oh.make_opsetid("ai.onnx.ml", 1)]
 )
 print("\n=== Dictionary model ===")
 print(pretty_onnx(dict_model))
@@ -181,7 +180,7 @@ tensor_map = {
     np.int64(2): np.array([7.0, 8.0, 9.0], dtype=np.float32),
 }
 
-map_proto = numpy_helper.from_dict(tensor_map, name="feature_map")
+map_proto = onh.from_dict(tensor_map, name="feature_map")
 print("\n=== Map of tensors – MapProto ===")
 print(
     "key_type         :", int(map_proto.key_type), "(INT64 =", int(onnxl.TensorProto.INT64), ")"
@@ -190,7 +189,7 @@ print("values.elem_type :", int(map_proto.values.elem_type))
 print("number of entries:", len(map_proto.keys))
 
 # Recover the Python dict from the MapProto.
-recovered = numpy_helper.to_dict(map_proto)
+recovered = onh.to_dict(map_proto)
 print("\nRecovered dict:")
 for k, v in recovered.items():
     print(f"  key={k}  value={v}")

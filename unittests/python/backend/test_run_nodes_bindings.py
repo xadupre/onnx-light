@@ -1074,69 +1074,71 @@ class TestSubgraphEventGraphName(ExtTestCase):
 
         The body adds 1.0 to s_in each iteration.
         """
-        from onnx_light.onnx import helper, TensorProto
+        import onnx_light.onnx.helper as oh
+        from onnx_light.onnx import TensorProto
 
-        one_init = helper.make_tensor("one", TensorProto.FLOAT, [], [1.0])
-        add = helper.make_node("Add", ["s_in", "one"], ["s_out"])
-        body = helper.make_graph(
+        one_init = oh.make_tensor("one", TensorProto.FLOAT, [], [1.0])
+        add = oh.make_node("Add", ["s_in", "one"], ["s_out"])
+        body = oh.make_graph(
             [add],
             "loop_body",
             [
-                helper.make_tensor_value_info("iter", TensorProto.INT64, []),
-                helper.make_tensor_value_info("cond_in", TensorProto.BOOL, []),
-                helper.make_tensor_value_info("s_in", TensorProto.FLOAT, []),
+                oh.make_tensor_value_info("iter", TensorProto.INT64, []),
+                oh.make_tensor_value_info("cond_in", TensorProto.BOOL, []),
+                oh.make_tensor_value_info("s_in", TensorProto.FLOAT, []),
             ],
             [
-                helper.make_tensor_value_info("cond_in", TensorProto.BOOL, []),
-                helper.make_tensor_value_info("s_out", TensorProto.FLOAT, []),
-                helper.make_tensor_value_info("s_out", TensorProto.FLOAT, []),
+                oh.make_tensor_value_info("cond_in", TensorProto.BOOL, []),
+                oh.make_tensor_value_info("s_out", TensorProto.FLOAT, []),
+                oh.make_tensor_value_info("s_out", TensorProto.FLOAT, []),
             ],
             initializer=[one_init],
         )
-        loop_node = helper.make_node("Loop", ["M", "cond", "s_init"], ["s_final", "scan_out"])
-        loop_node.attribute.append(helper.make_attribute("body", body))
-        graph = helper.make_graph(
+        loop_node = oh.make_node("Loop", ["M", "cond", "s_init"], ["s_final", "scan_out"])
+        loop_node.attribute.append(oh.make_attribute("body", body))
+        graph = oh.make_graph(
             [loop_node],
             "main",
             [
-                helper.make_tensor_value_info("M", TensorProto.INT64, []),
-                helper.make_tensor_value_info("cond", TensorProto.BOOL, []),
-                helper.make_tensor_value_info("s_init", TensorProto.FLOAT, []),
+                oh.make_tensor_value_info("M", TensorProto.INT64, []),
+                oh.make_tensor_value_info("cond", TensorProto.BOOL, []),
+                oh.make_tensor_value_info("s_init", TensorProto.FLOAT, []),
             ],
             [
-                helper.make_tensor_value_info("s_final", TensorProto.FLOAT, []),
-                helper.make_tensor_value_info("scan_out", TensorProto.FLOAT, None),
+                oh.make_tensor_value_info("s_final", TensorProto.FLOAT, []),
+                oh.make_tensor_value_info("scan_out", TensorProto.FLOAT, None),
             ],
         )
-        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
         model.ir_version = 10
         return model
 
     def _build_if_model(self) -> object:
         """Builds an If model: cond -> If(then_branch, else_branch)."""
-        from onnx_light.onnx import helper, TensorProto
+        import onnx_light.onnx.helper as oh
+        from onnx_light.onnx import TensorProto
 
         def _const_branch(name: str, val: float) -> object:
-            init = helper.make_tensor(name, TensorProto.FLOAT, [], [val])
-            add = helper.make_node("Add", [name, name], ["out"])
-            return helper.make_graph(
+            init = oh.make_tensor(name, TensorProto.FLOAT, [], [val])
+            add = oh.make_node("Add", [name, name], ["out"])
+            return oh.make_graph(
                 [add],
                 name + "_g",
                 [],
-                [helper.make_tensor_value_info("out", TensorProto.FLOAT, [])],
+                [oh.make_tensor_value_info("out", TensorProto.FLOAT, [])],
                 initializer=[init],
             )
 
-        if_node = helper.make_node("If", ["cond"], ["z"])
-        if_node.attribute.append(helper.make_attribute("then_branch", _const_branch("t", 1.0)))
-        if_node.attribute.append(helper.make_attribute("else_branch", _const_branch("e", 2.0)))
-        graph = helper.make_graph(
+        if_node = oh.make_node("If", ["cond"], ["z"])
+        if_node.attribute.append(oh.make_attribute("then_branch", _const_branch("t", 1.0)))
+        if_node.attribute.append(oh.make_attribute("else_branch", _const_branch("e", 2.0)))
+        graph = oh.make_graph(
             [if_node],
             "main",
-            [helper.make_tensor_value_info("cond", TensorProto.BOOL, [])],
-            [helper.make_tensor_value_info("z", TensorProto.FLOAT, [])],
+            [oh.make_tensor_value_info("cond", TensorProto.BOOL, [])],
+            [oh.make_tensor_value_info("z", TensorProto.FLOAT, [])],
         )
-        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
         model.ir_version = 10
         return model
 

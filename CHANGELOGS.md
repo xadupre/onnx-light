@@ -13,6 +13,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Documentation & CI
 
+- Standardized the python imports of the helper modules: `import onnx.helper as oh` and
+  `import onnx.numpy_helper as onh` (and their `onnx_light.onnx` counterparts) replace
+  the `from onnx import helper, numpy_helper` form in the code base and the documentation.
 - Bumped the release version to `0.1.20`.
 
 ## [0.1.19] – 2026-08-18

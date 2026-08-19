@@ -27,7 +27,7 @@ in both Python and C++.
 
 from __future__ import annotations
 
-from onnx_light.onnx import helper
+import onnx_light.onnx.helper as oh
 from onnx_light.onnx_lib import parser
 from onnx_light.onnx_core.optimization import (
     GraphBuilder,
@@ -129,7 +129,7 @@ class NegNegPattern(PatternOptimization):
     def apply(self, graph, nodes):
         del graph
         previous, node = nodes
-        return [helper.make_node("Identity", [previous.input[0]], list(node.output))]
+        return [oh.make_node("Identity", [previous.input[0]], list(node.output))]
 
 
 #####################################

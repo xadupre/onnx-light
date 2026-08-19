@@ -50,16 +50,14 @@ class TestValueTagsErrors(unittest.TestCase):
 @unittest.skipUnless(HAS_OPTIM_EXT, "requires onnx_light C++ shape_inference bindings")
 class TestValueTags(unittest.TestCase):
     def test_tags_graph_and_nodes(self):
-        from onnx_light.onnx import TensorProto, helper
+        import onnx_light.onnx.helper as oh
+        from onnx_light.onnx import TensorProto
 
-        g = helper.make_graph(
-            [
-                helper.make_node("Shape", ["X"], ["S"]),
-                helper.make_node("Reshape", ["X", "S"], ["Y"]),
-            ],
+        g = oh.make_graph(
+            [oh.make_node("Shape", ["X"], ["S"]), oh.make_node("Reshape", ["X", "S"], ["Y"])],
             "g",
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 2])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 2])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2])],
         )
         write_value_and_node_tags_to_metadata(g)
         tags = _value_tags(g)
@@ -73,13 +71,14 @@ class TestValueTags(unittest.TestCase):
 
     def test_output_is_shape_tensor_gets_shape_tag(self):
         """When the model output is directly a shape tensor, it receives value_tag = 'shape'."""
-        from onnx_light.onnx import TensorProto, helper
+        import onnx_light.onnx.helper as oh
+        from onnx_light.onnx import TensorProto
 
-        g = helper.make_graph(
-            [helper.make_node("Shape", ["X"], ["Y"])],
+        g = oh.make_graph(
+            [oh.make_node("Shape", ["X"], ["Y"])],
             "g",
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3])],
-            [helper.make_tensor_value_info("Y", TensorProto.INT64, [2])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 3])],
+            [oh.make_tensor_value_info("Y", TensorProto.INT64, [2])],
         )
         write_value_and_node_tags_to_metadata(g)
         tags = _value_tags(g)
@@ -90,21 +89,22 @@ class TestValueTags(unittest.TestCase):
         self.assertEqual(_meta_dict(g.output[0])[VALUE_TAG_METADATA_KEY], "shape")
 
     def test_tags_subgraph(self):
-        from onnx_light.onnx import TensorProto, helper
+        import onnx_light.onnx.helper as oh
+        from onnx_light.onnx import TensorProto
 
-        body = helper.make_graph(
-            [helper.make_node("Shape", ["A"], ["SA"])],
+        body = oh.make_graph(
+            [oh.make_node("Shape", ["A"], ["SA"])],
             "body",
-            [helper.make_tensor_value_info("A", TensorProto.FLOAT, [2, 2])],
-            [helper.make_tensor_value_info("SA", TensorProto.INT64, [2])],
+            [oh.make_tensor_value_info("A", TensorProto.FLOAT, [2, 2])],
+            [oh.make_tensor_value_info("SA", TensorProto.INT64, [2])],
         )
-        if_node = helper.make_node("If", ["cond"], ["Y"])
-        if_node.attribute.append(helper.make_attribute("then_branch", body))
-        g = helper.make_graph(
+        if_node = oh.make_node("If", ["cond"], ["Y"])
+        if_node.attribute.append(oh.make_attribute("then_branch", body))
+        g = oh.make_graph(
             [if_node],
             "g",
-            [helper.make_tensor_value_info("cond", TensorProto.BOOL, [])],
-            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2])],
+            [oh.make_tensor_value_info("cond", TensorProto.BOOL, [])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2])],
         )
         write_value_and_node_tags_to_metadata(g)
         subgraph = g.node[0].attribute[0].g
@@ -112,41 +112,34 @@ class TestValueTags(unittest.TestCase):
         self.assertEqual(body_tags["SA"], "shape")
 
     def test_accepts_list_of_nodes_and_function(self):
-        from onnx_light.onnx import helper
+        import onnx_light.onnx.helper as oh
 
-        nodes = [
-            helper.make_node("Shape", ["X"], ["S"]),
-            helper.make_node("Expand", ["Y", "S"], ["Z"]),
-        ]
+        nodes = [oh.make_node("Shape", ["X"], ["S"]), oh.make_node("Expand", ["Y", "S"], ["Z"])]
         value_tags, node_tags = compute_value_and_node_tags(nodes)
         self.assertEqual(value_tags["S"], "shape")
         self.assertEqual(node_tags[0], "shape")
 
-        function = helper.make_function(
-            "", "f", ["X", "Y"], ["Z"], nodes, [helper.make_opsetid("", 18)]
-        )
+        function = oh.make_function("", "f", ["X", "Y"], ["Z"], nodes, [oh.make_opsetid("", 18)])
         write_value_and_node_tags_to_metadata(function)
         self.assertEqual(_meta_dict(function.node[0])[NODE_TAG_METADATA_KEY], "shape")
 
     def test_compute_value_and_node_tags_accepts_verbose(self):
-        from onnx_light.onnx import helper
+        import onnx_light.onnx.helper as oh
 
-        nodes = [helper.make_node("Shape", ["X"], ["S"])]
+        nodes = [oh.make_node("Shape", ["X"], ["S"])]
         value_tags, node_tags = compute_value_and_node_tags(nodes, verbose=1)
         self.assertEqual(value_tags["S"], "shape")
         self.assertEqual(node_tags, ["shape"])
 
     def test_accepts_repeated_proto_field_of_nodes(self):
-        from onnx_light.onnx import TensorProto, helper
+        import onnx_light.onnx.helper as oh
+        from onnx_light.onnx import TensorProto
 
-        graph = helper.make_graph(
-            [
-                helper.make_node("Shape", ["X"], ["S"]),
-                helper.make_node("Expand", ["Y", "S"], ["Z"]),
-            ],
+        graph = oh.make_graph(
+            [oh.make_node("Shape", ["X"], ["S"]), oh.make_node("Expand", ["Y", "S"], ["Z"])],
             "g",
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 2])],
-            [helper.make_tensor_value_info("Z", TensorProto.FLOAT, [2, 2])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 2])],
+            [oh.make_tensor_value_info("Z", TensorProto.FLOAT, [2, 2])],
         )
 
         value_tags, node_tags = compute_value_and_node_tags(graph.node)
@@ -157,12 +150,12 @@ class TestValueTags(unittest.TestCase):
         self.assertEqual(_meta_dict(graph.node[0])[NODE_TAG_METADATA_KEY], "shape")
 
     def test_reshape_shape_tag_propagates_backward(self):
-        from onnx_light.onnx import helper
+        import onnx_light.onnx.helper as oh
 
         nodes = [
-            helper.make_node("Shape", ["X"], ["S0"]),
-            helper.make_node("Identity", ["S0"], ["S1"]),
-            helper.make_node("Reshape", ["X", "S1"], ["Y"]),
+            oh.make_node("Shape", ["X"], ["S0"]),
+            oh.make_node("Identity", ["S0"], ["S1"]),
+            oh.make_node("Reshape", ["X", "S1"], ["Y"]),
         ]
         value_tags, node_tags = compute_value_and_node_tags(nodes)
         self.assertEqual(value_tags["S1"], "shape")
@@ -170,41 +163,43 @@ class TestValueTags(unittest.TestCase):
         self.assertEqual(node_tags[1], "shape")
 
     def test_conflicting_shape_axes_input_tag_becomes_ambiguous(self):
-        from onnx_light.onnx import helper
+        import onnx_light.onnx.helper as oh
 
         nodes = [
-            helper.make_node("Reshape", ["X", "IDX"], ["A"]),
-            helper.make_node("ReduceSum", ["A", "IDX"], ["Y"]),
+            oh.make_node("Reshape", ["X", "IDX"], ["A"]),
+            oh.make_node("ReduceSum", ["A", "IDX"], ["Y"]),
         ]
         value_tags, _ = infer_value_and_node_tags(nodes)
         self.assertEqual(value_tags["IDX"], "ambiguous")
 
     def test_constant_feeding_reshape_shape_input(self):
-        from onnx_light.onnx import TensorProto, helper
+        import onnx_light.onnx.helper as oh
+        from onnx_light.onnx import TensorProto
 
         nodes = [
-            helper.make_node(
+            oh.make_node(
                 "Constant",
                 [],
                 ["S"],
-                value=helper.make_tensor("shape", TensorProto.INT64, [2], [2, 2]),
+                value=oh.make_tensor("shape", TensorProto.INT64, [2], [2, 2]),
             ),
-            helper.make_node("Reshape", ["X", "S"], ["Y"]),
+            oh.make_node("Reshape", ["X", "S"], ["Y"]),
         ]
         value_tags, node_tags = compute_value_and_node_tags(nodes)
         self.assertEqual(value_tags["S"], "shape")
         self.assertEqual(node_tags[0], "shape")
 
     def test_all_graph_inputs_are_seeded_as_weight(self):
-        from onnx_light.onnx import TensorProto, helper
+        import onnx_light.onnx.helper as oh
+        from onnx_light.onnx import TensorProto
 
-        g = helper.make_graph(
+        g = oh.make_graph(
             [],
             "g",
             [
-                helper.make_tensor_value_info("W", TensorProto.FLOAT, [4, 3]),
-                helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 4, 3]),
-                helper.make_tensor_value_info("I", TensorProto.INT64, [4, 3]),
+                oh.make_tensor_value_info("W", TensorProto.FLOAT, [4, 3]),
+                oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 4, 3]),
+                oh.make_tensor_value_info("I", TensorProto.INT64, [4, 3]),
             ],
             [],
         )
@@ -214,9 +209,9 @@ class TestValueTags(unittest.TestCase):
         self.assertEqual(value_tags.get("I"), "weight")
 
     def test_infer_alias_keeps_backward_compatibility(self):
-        from onnx_light.onnx import helper
+        import onnx_light.onnx.helper as oh
 
-        nodes = [helper.make_node("Shape", ["X"], ["S"])]
+        nodes = [oh.make_node("Shape", ["X"], ["S"])]
         self.assertEqual(compute_value_and_node_tags(nodes), infer_value_and_node_tags(nodes))
 
 

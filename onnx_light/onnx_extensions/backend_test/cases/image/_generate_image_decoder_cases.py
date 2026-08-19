@@ -1,7 +1,7 @@
 import os
 
 import onnx
-from onnx import numpy_helper
+import onnx.numpy_helper as onh
 from onnx.backend.test.loader import load_model_tests
 
 # The TIFF, WebP and JPEG2000 formats are intentionally not decoded by the
@@ -25,14 +25,14 @@ def load_case(test_case):
     data_dir = os.path.join(test_case.model_dir, "test_data_set_0")
     return (
         onnx.load(os.path.join(test_case.model_dir, "model.onnx")),
-        numpy_helper.to_array(onnx.load_tensor(os.path.join(data_dir, "input_0.pb"))),
-        numpy_helper.to_array(onnx.load_tensor(os.path.join(data_dir, "output_0.pb"))),
+        onh.to_array(onnx.load_tensor(os.path.join(data_dir, "input_0.pb"))),
+        onh.to_array(onnx.load_tensor(os.path.join(data_dir, "output_0.pb"))),
     )
 
 
 def _to_array(value):
     if isinstance(value, onnx.TensorProto):
-        return numpy_helper.to_array(value)
+        return onh.to_array(value)
     return value
 
 

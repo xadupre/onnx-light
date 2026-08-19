@@ -22,7 +22,7 @@ import numpy as np
 from onnx_light.ext_test_case import import_or_skip
 
 import onnx_light.onnx as onnxl
-from onnx_light.onnx import numpy_helper as onh
+import onnx_light.onnx.numpy_helper as onh
 
 # The kernels runtime and backend test registries are only available in the
 # full build; skip this module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).

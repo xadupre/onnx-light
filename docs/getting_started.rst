@@ -107,15 +107,17 @@ submodules:
 
     # before
     import onnx
-    from onnx import helper, numpy_helper
+    import onnx.helper as oh
+    import onnx.numpy_helper as onh
     from onnx.reference import ReferenceEvaluator
 
     # after
     import onnx_light.onnx as onnx
-    from onnx_light.onnx import helper, numpy_helper
+    import onnx_light.onnx.helper as oh
+    import onnx_light.onnx.numpy_helper as onh
     from onnx_light.onnx.reference import ReferenceEvaluator
 
-The rest of the code (``onnx.load``, ``onnx.save``, ``helper.make_node``,
+The rest of the code (``onnx.load``, ``onnx.save``, ``oh.make_node``,
 ``ReferenceEvaluator``, ...) stays unchanged.  See
 :ref:`l-onnx-tutorial` for a full set of examples ported from the upstream ONNX
 introduction.

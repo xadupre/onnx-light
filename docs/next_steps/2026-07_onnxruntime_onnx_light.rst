@@ -130,6 +130,12 @@ The default ORT build still uses protobuf; ``onnx-light`` is opt-in via
 (some execution providers, training, and fuzzing tests) follow the same
 substitution but are not exercised by the default build matrix.
 
+This integration preserves ORT's existing loading pipeline. It does not yet
+remove the complete staging buffer in ``ParseFromFileDescriptor``, control
+external-weight ownership, avoid runtime prepacking, or separate metadata,
+session-ready, and first-token timings. Those performance steps are specified
+in :ref:`l-next-steps-model-loading`.
+
 See also
 ++++++++
 
@@ -137,3 +143,5 @@ See also
   reference used by ``onnxruntime_USE_ONNX_LIGHT``.
 * :ref:`l-next-steps-onnx-proto` — how the protobuf-free ``onnx_proto`` library
   was built.
+* :ref:`l-next-steps-model-loading` — the loading-performance roadmap following
+  the compatibility milestone.

@@ -28,6 +28,10 @@ execution. Within the runtime track, the order above is mandatory: profiling
 or tuning a hidden global pool would produce profiles that a session cannot
 reproduce.
 
+For large-model startup, begin with the benchmark and direct parser work in
+:ref:`l-next-steps-model-loading`, then follow its dependencies through model
+resolution, compiled tensors, and prepared execution.
+
 .. toctree::
     :maxdepth: 1
     :caption: In progress
@@ -46,6 +50,7 @@ reproduce.
     2026-08_mutable_cache
     2026-08_compiled_tensor
     2026-08_parallel_for_profiling
+    2026-08_model_loading
     2026-08_model_resolution
     2026-08_prepared_execution
     2026-08_split_wheels

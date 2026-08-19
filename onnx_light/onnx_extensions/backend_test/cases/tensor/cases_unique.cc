@@ -58,7 +58,7 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_unique_not_sorted_without_axis_benchmark", {opset},
            {kUniqueBenchmarkSize},
            {kDistinctValues, kDistinctValues, kUniqueBenchmarkSize, kDistinctValues},
-           [unique_kernel, kUniqueBenchmarkSize, kDistinctValues]() -> IoData {
+           [unique_kernel]() -> IoData {
              std::vector<float> values(static_cast<std::size_t>(kUniqueBenchmarkSize));
              for (int64_t i = 0; i < kUniqueBenchmarkSize; ++i) {
                values[static_cast<std::size_t>(i)] = static_cast<float>(i % kDistinctValues);

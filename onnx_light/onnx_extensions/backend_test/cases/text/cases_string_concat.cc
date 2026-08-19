@@ -31,7 +31,7 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
 
     constexpr int64_t count = 262144;
     Expect(registry, std::move(node), "test_cc_string_concat_benchmark", {opset}, {count, count},
-           {count}, [string_concat, count]() -> IoData {
+           {count}, [string_concat]() -> IoData {
              std::vector<std::string> x_values(static_cast<size_t>(count));
              std::vector<std::string> y_values(static_cast<size_t>(count));
              for (size_t i = 0; i < x_values.size(); ++i) {

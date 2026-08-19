@@ -57,7 +57,7 @@ void RegisterCategoryMapperCases(std::vector<TestCase> &registry, TestMode mode)
     default_attr->set_s(utils::String(default_string));
     Expect(registry, std::move(node), "test_cc_category_mapper_benchmark", {default_opset, opset},
            {count}, {count},
-           [category_mapper, cats_strings, cats_int64s, default_string, count]() -> IoData {
+           [category_mapper, cats_strings, cats_int64s, default_string]() -> IoData {
              std::vector<int64_t> x_values(static_cast<size_t>(count));
              for (int64_t i = 0; i < count; ++i) {
                x_values[static_cast<size_t>(i)] = (i % 3) + 1;

@@ -33,7 +33,7 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
 
     constexpr int64_t count = 262144;
     Expect(registry, std::move(node), "test_cc_string_normalizer_lower_benchmark", {opset}, {count},
-           {count}, [string_normalizer, count]() -> IoData {
+           {count}, [string_normalizer]() -> IoData {
              std::vector<std::string> values(static_cast<size_t>(count));
              for (size_t i = 0; i < values.size(); ++i) {
                values[i] = (i % 3 == 0) ? "Hello" : ((i % 3 == 1) ? "World" : "FOO");

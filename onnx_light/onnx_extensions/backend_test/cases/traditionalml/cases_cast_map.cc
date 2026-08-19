@@ -57,7 +57,7 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
     AddStringAttr(node, "cast_to", "TO_FLOAT");
     AddStringAttr(node, "map_form", "DENSE");
     Expect(registry, std::move(node), "test_cc_cast_map_benchmark", {default_opset, opset},
-           [cast_map, count]() -> IoData {
+           [cast_map]() -> IoData {
              std::vector<int64_t> keys(static_cast<size_t>(count));
              for (int64_t i = 0; i < count; ++i) {
                keys[static_cast<size_t>(i)] = i;

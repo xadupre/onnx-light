@@ -38,7 +38,7 @@ void RegisterZipMapCases(std::vector<TestCase> &registry, TestMode mode) {
       labels_attr->add_ints(v);
     }
     Expect(registry, std::move(node), "test_cc_zipmap_benchmark", {default_opset, opset},
-           [zipmap, class_labels, batch, num_classes]() -> IoData {
+           [zipmap, class_labels]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {batch, num_classes}, 2001);
              Tensor z = zipmap(x, class_labels);
              return IoData{{std::move(x)}, {std::move(z)}};

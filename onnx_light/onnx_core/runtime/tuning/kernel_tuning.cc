@@ -908,14 +908,25 @@ CalibrationBatchReport CalibrateRegisteredKernels(const KernelCalibrationSelecti
   const platform::CpuDescriptor &processor = platform::GetCpuDescriptor();
   CpuExecutionDescriptor execution = options.execution.value_or(
       CpuExecutionDescriptor{processor, static_cast<uint32_t>(ParallelForThreadCount())});
+  const uint32_t active_threads = static_cast<uint32_t>(ParallelForThreadCount());
   if (options.maximum_threads.has_value()) {
     if (*options.maximum_threads == 0) {
       throw std::invalid_argument("Calibration maximum_threads must be positive.");
+    }
+    if (*options.maximum_threads < active_threads) {
+      throw std::invalid_argument(
+          "Calibration maximum_threads cannot be lower than the active executor participant "
+          "count; select a smaller CpuExecutor before calibration.");
     }
     execution.effective_threads = std::min(execution.effective_threads, *options.maximum_threads);
   }
   if (execution.effective_threads == 0) {
     throw std::invalid_argument("Calibration effective thread count must be positive.");
+  }
+  if (execution.effective_threads != active_threads) {
+    throw std::invalid_argument(
+        "Calibration execution descriptor requests " + std::to_string(execution.effective_threads) +
+        " threads, but the active executor uses " + std::to_string(active_threads) + ".");
   }
   if (selection.device.has_value() && *selection.device != Device::kCPU) {
     throw std::invalid_argument("Kernel calibration currently supports only the CPU device.");

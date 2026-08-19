@@ -49,6 +49,16 @@ here; the full sequence is tracked in the `Implementation sequence`_ table.
        model-local function) keeps the enclosing executor instead of leasing a
        second pool. Kernel tuning descriptors report the effective threads of
        the executor installed for the run.
+   * - Pool PR04
+     - Tuning, Python API, and inspection
+     - Python exposes typed CPU spin, affinity, processor, request, resolution,
+       sharing-key, and optional-counter objects. ``ReferenceEvaluator`` accepts
+       a validated ``cpu_execution`` mapping and reports its requested and
+       resolved policy. Calibration may lease an explicit compatible executor
+       and rejects an execution descriptor whose participants differ from the
+       active executor before invoking a callback. Optional executor counters
+       allocate no state until enabled and report dispatches, limited inline
+       calls, and nested inline calls.
 
 Objective
 +++++++++
@@ -398,6 +408,17 @@ worker-active time, and nested-inline calls. They are disabled by default with
 no allocation, lock, or clock read in the hot path. Detailed region telemetry
 belongs to :ref:`l-next-steps-parallel-for-profiling`.
 
+Pool PR04 exposes the policy as native Python objects and accepts either a
+``CpuExecutionPolicy`` or the mapping shown above. Mapping keys and string enum
+values are validated eagerly. ``cpu_execution_resolution`` reports the
+immutable topology resolution, ``cpu_execution_identity`` reports the
+behavior-only executor sharing key, and ``cpu_execution_counters`` reports a
+snapshot of optional dispatch counters. Counters are disabled by default; the
+hot path performs no counter allocation, lock, or clock read in that state.
+Counters belong to the shared executor rather than one session: enabling them
+through any compatible lease enables cumulative counting for every leaseholder
+until that executor is destroyed.
+
 Validation
 ++++++++++
 
@@ -455,7 +476,7 @@ Implementation sequence
      - Calibration uses the active executor; Python exposes policy and
        resolution; disabled counters have no measurable overhead.
      - PR03
-     - Pending
+     - Done
    * - Pool PR05
      - ``onnx-light-cpu``: registered-kernel executor adapter.
      - Registered kernels use only the session executor, never wake the private

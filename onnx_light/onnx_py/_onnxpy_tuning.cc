@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
 #include "onnx_core/runtime/tuning/runtime_parameters.h"
@@ -338,7 +339,8 @@ nb::dict SetParameters(const std::string &kernel, int32_t element_type, nb::dict
 nb::dict Calibrate(const std::string &kernel, const std::vector<int32_t> &element_types,
                    const std::string &library, const std::optional<std::string> &implementation,
                    bool only_missing, uint64_t maximum_duration_ms, uint64_t maximum_memory_bytes,
-                   bool save, const std::optional<std::string> &path) {
+                   bool save, const std::optional<std::string> &path,
+                   const std::optional<rt::CpuExecutionPolicy> &cpu_execution) {
   rt::KernelCalibrationSelection selection =
       MakeSelection(kernel, library, implementation, std::nullopt);
   selection.element_types = element_types;
@@ -346,6 +348,14 @@ nb::dict Calibrate(const std::string &kernel, const std::vector<int32_t> &elemen
   rt::CalibrationOptions options;
   options.maximum_duration_ms = maximum_duration_ms;
   options.maximum_memory_bytes = maximum_memory_bytes;
+  std::shared_ptr<rt::CpuExecutor> executor;
+  if (cpu_execution.has_value()) {
+    executor = rt::GlobalCpuExecutorRegistry().Acquire(*cpu_execution);
+    options.execution =
+        rt::CpuExecutionDescriptor{platform::GetCpuDescriptor(), executor->effective_threads()};
+  }
+  const rt::CpuExecutorScope executor_scope(executor == nullptr ? rt::CurrentCpuExecutor()
+                                                                : executor.get());
   const rt::CalibrationBatchReport calibration = rt::CalibrateRegisteredKernels(selection, options);
 
   nb::dict result;
@@ -418,6 +428,6 @@ void AddOnnxPyTuning(nb::module_ &rt_mod) {
              nb::arg("implementation") = nb::none(), nb::arg("only_missing") = false,
              nb::arg("maximum_duration_ms") = uint64_t{0},
              nb::arg("maximum_memory_bytes") = uint64_t{0}, nb::arg("save") = true,
-             nb::arg("path") = nb::none(),
+             nb::arg("path") = nb::none(), nb::arg("cpu_execution").none() = nb::none(),
              "Calibrates selected registered keys and optionally persists successful profiles.");
 }

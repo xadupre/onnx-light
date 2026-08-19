@@ -20,6 +20,15 @@ from onnx_light import kernel_tuning  # noqa: E402
 
 
 class TestKernelTuningBindings(ExtTestCase):
+    def test_calibration_accepts_explicit_cpu_executor(self):
+        policy = rt.CpuExecutionPolicy()
+        policy.num_threads = 1
+        policy.affinity_policy = rt.CpuAffinityPolicy.NONE
+
+        report = rt.calibrate_kernel_tuning("not_registered", save=False, cpu_execution=policy)
+
+        self.assertEqual(report["calibrated"], [])
+
     def test_lists_registered_parameters_and_defaults(self):
         report = kernel_tuning.kernel_tuning_parameters(
             kernel="Abs", element_type=int(TensorProto.FLOAT)

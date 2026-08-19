@@ -47,6 +47,18 @@ struct CpuExecutorKey {
   bool operator==(const CpuExecutorKey &) const = default;
 };
 
+/** Snapshot of optional executor dispatch counters. */
+struct CpuExecutorCounters {
+  /// Number of ParallelFor dispatches, including inline dispatches.
+  uint64_t dispatches = 0;
+  /// Number of dispatches that ran inline because they were nested.
+  uint64_t nested_inline_dispatches = 0;
+  /// Number of dispatches that ran inline for size or participant limits.
+  uint64_t limited_inline_dispatches = 0;
+
+  bool operator==(const CpuExecutorCounters &) const = default;
+};
+
 /**
  * Returns the immutable sharing key for a resolved policy.
  *
@@ -79,6 +91,15 @@ public:
 
   /// Returns the immutable registry-sharing key.
   const CpuExecutorKey &key() const noexcept;
+
+  /// Enables optional dispatch counters. Repeated calls preserve existing counts.
+  void EnableCounters();
+
+  /// Returns whether optional dispatch counters are enabled.
+  bool counters_enabled() const noexcept;
+
+  /// Returns a consistent snapshot of the optional dispatch counters.
+  CpuExecutorCounters counters() const noexcept;
 
   /**
    * Executes contiguous ranges covering ``[0, total)``.

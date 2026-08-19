@@ -72,6 +72,52 @@ def _make_raw_data_constant_model():
 
 
 class TestReferenceEvaluator(ExtTestCase):
+    def test_cpu_execution_policy_and_resolution(self):
+        model = parser.parse_model(_ABS_MODEL_SRC)
+        evaluator = ReferenceEvaluator(
+            model,
+            cpu_execution={
+                "num_threads": 2,
+                "spin_policy": "park_immediately",
+                "affinity_policy": "none",
+            },
+        )
+
+        self.assertEqual(evaluator.cpu_execution_policy.num_threads, 2)
+        self.assertEqual(evaluator.cpu_execution_resolution.effective_threads, 2)
+        self.assertEqual(evaluator.cpu_execution_identity.effective_threads, 2)
+        self.assertEqual(evaluator.cpu_execution_resolution.diagnostics, [])
+
+    def test_cpu_execution_policy_rejects_unknown_keys_and_values(self):
+        model = parser.parse_model(_ABS_MODEL_SRC)
+        with self.assertRaisesRegex(ValueError, "Unknown cpu_execution keys"):
+            ReferenceEvaluator(model, cpu_execution={"threads": 2})
+        with self.assertRaisesRegex(ValueError, "Unknown CPU spin policy"):
+            ReferenceEvaluator(model, cpu_execution={"spin_policy": "forever"})
+        with self.assertRaisesRegex(ValueError, "num_threads"):
+            ReferenceEvaluator(model, cpu_execution={"num_threads": -1})
+
+    def test_cpu_execution_counters_are_optional(self):
+        model = parser.parse_model(_ABS_MODEL_SRC)
+        source = np.array([-1.0, 2.0, -3.0], dtype=np.float32)
+        disabled = ReferenceEvaluator(
+            model, cpu_execution={"num_threads": 1, "affinity_policy": "none"}
+        )
+        disabled.run(None, {"x": source})
+        self.assertEqual(disabled.cpu_execution_counters.dispatches, 0)
+
+        enabled = ReferenceEvaluator(
+            model,
+            cpu_execution={
+                "num_threads": 1,
+                "affinity_policy": "none",
+                "spin_policy": "park_immediately",
+            },
+            cpu_execution_counters=True,
+        )
+        enabled.run(None, {"x": source})
+        self.assertGreaterEqual(enabled.cpu_execution_counters.dispatches, 1)
+
     def test_runtime_tensor_input_remains_zero_copy_and_alive(self):
         """Borrows a runtime Tensor input and retains its Python owner."""
         model = parser.parse_model(_ABS_MODEL_SRC)

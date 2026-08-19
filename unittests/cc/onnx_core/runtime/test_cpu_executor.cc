@@ -201,6 +201,32 @@ TEST(CpuExecutor, NestedParallelForRunsInline) {
   EXPECT_FALSE(observation.changed_thread.load(std::memory_order_relaxed));
 }
 
+TEST(CpuExecutor, DisabledCountersRemainEmpty) {
+  CpuExecutorRegistry registry(1);
+  std::shared_ptr<CpuExecutor> executor = registry.Acquire(NoAffinityPolicy(1));
+  RangeObservation observation(8);
+
+  executor->ParallelFor(8, 1, &observation, &ObserveRange);
+
+  EXPECT_FALSE(executor->counters_enabled());
+  EXPECT_EQ(executor->counters(), CpuExecutorCounters{});
+}
+
+TEST(CpuExecutor, EnabledCountersReportDispatchesAndNestedInlineCalls) {
+  CpuExecutorRegistry registry(1);
+  std::shared_ptr<CpuExecutor> executor = registry.Acquire(NoAffinityPolicy(4));
+  executor->EnableCounters();
+  NestedObservation observation{executor.get()};
+
+  executor->ParallelFor(4, 1, &observation, &ObserveNestedRange);
+
+  EXPECT_TRUE(executor->counters_enabled());
+  const CpuExecutorCounters counters = executor->counters();
+  EXPECT_EQ(counters.dispatches, 5u);
+  EXPECT_EQ(counters.nested_inline_dispatches, 4u);
+  EXPECT_EQ(counters.limited_inline_dispatches, 0u);
+}
+
 TEST(CpuExecutor, UnevenRangesRemainValidAndComplete) {
   CpuExecutorRegistry registry(1);
   std::shared_ptr<CpuExecutor> executor = registry.Acquire(NoAffinityPolicy(4));

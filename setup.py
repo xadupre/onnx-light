@@ -40,11 +40,16 @@ def _default_parallel_jobs():
     """Returns default parallel jobs for CMake builds.
 
     Returns:
-        int | None: None when CMAKE_BUILD_PARALLEL_LEVEL is set, else CPU count.
+        int: CMAKE_BUILD_PARALLEL_LEVEL when it is a positive integer, else CPU count.
     """
     cmake_parallel = os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL")
     if cmake_parallel:
-        return None
+        try:
+            parallel = int(cmake_parallel)
+            if parallel > 0:
+                return parallel
+        except ValueError:
+            pass
     return os.cpu_count() or 1
 
 

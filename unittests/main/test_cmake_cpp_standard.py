@@ -16,14 +16,36 @@ class TestCMakeCppStandard(unittest.TestCase):
                 r"if\(NOT CMAKE_GENERATOR MATCHES \"Ninja\"\)\s*"
                 r"add_compile_options\(\$<\$<COMPILE_LANGUAGE:C,CXX>:/MP>\)\s*"
                 r"endif\(\)\s*"
+                r"if\(ONNX_LIGHT_WERROR\)\s*"
                 r"add_compile_options\(\$<\$<COMPILE_LANGUAGE:C,CXX>:/WX>\)\s*"
+                r"endif\(\)\s*"
                 r"endif\(\)"
             ),
             msg=(
                 "MSVC /MP must be guarded by a Ninja check; /WX must remain "
-                "in the outer MSVC block."
+                "in the outer MSVC block, guarded by ONNX_LIGHT_WERROR."
             ),
         )
+
+    def test_project_cmake_treats_warnings_as_errors(self):
+        root = Path(__file__).resolve().parents[2]
+        content = (root / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn('option(ONNX_LIGHT_WERROR\n', content)
+        self.assertRegex(
+            content,
+            (
+                r"(?s)if\(NOT MSVC\).*?"
+                r"add_compile_options\(\$<\$<COMPILE_LANGUAGE:C,CXX>:-Wall>\)\s*"
+                r"add_compile_options\(\$<\$<COMPILE_LANGUAGE:C,CXX>:-Wextra>\)\s*"
+                r"if\(ONNX_LIGHT_WERROR\)\s*"
+                r"add_compile_options\(\$<\$<COMPILE_LANGUAGE:C,CXX>:-Werror>\)\s*"
+                r"endif\(\)\s*"
+                r"endif\(\)"
+            ),
+            msg="GCC/Clang builds must add -Werror when ONNX_LIGHT_WERROR is ON.",
+        )
+        self.assertIn("function(onnx_light_disable_werror)", content)
+        self.assertIn("onnx_light_disable_werror(gtest gtest_main gmock gmock_main)", content)
 
     def test_examples_cmake_use_cpp20(self):
         root = Path(__file__).resolve().parents[2]

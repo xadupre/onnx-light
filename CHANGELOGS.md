@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Improvements
 
+- Treated C++ compiler warnings as errors on GCC/Clang too (`-Werror`), controlled by the
+  new `ONNX_LIGHT_WERROR` CMake option which also gates the existing MSVC `/WX`.
+
 - Made the requested degree of parallelism effective: a runtime session now leases a shared
   CPU executor matching its execution policy and every parallel region its kernels launch
   runs on exactly those participants instead of a process-wide thread pool.

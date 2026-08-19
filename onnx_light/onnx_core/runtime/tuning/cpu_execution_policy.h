@@ -18,9 +18,9 @@
  * This is the first step (Pool PR01) of the
  * :ref:`l-next-steps-session-execution-pools` roadmap. It defines the typed
  * policy a session requests and the immutable resolution derived from it. The
- * executor, the compatible-pool registry, and the session wiring are delivered
- * by later steps; this header only owns the policy vocabulary and its
- * deterministic validation.
+ * executor and compatible-pool registry are delivered by Pool PR02. Session
+ * wiring is delivered by a later step; this header owns the policy vocabulary
+ * and its deterministic validation.
  */
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {

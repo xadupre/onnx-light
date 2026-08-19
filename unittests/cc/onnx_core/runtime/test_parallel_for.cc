@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <utility>
@@ -34,6 +35,27 @@ TEST(ParallelFor, GrainIsMinimumBlockSize) {
       EXPECT_EQ(ranges[i - 1].second, ranges[i].first);
     }
   }
+}
+
+TEST(ThreadPool, WorkerStartupFailureRejectsPool) {
+  ThreadPoolOptions options;
+  options.worker_start = [](void *, int64_t, std::string &error) {
+    error = "synthetic worker startup failure";
+    return false;
+  };
+  EXPECT_THROW(ThreadPool(1, options), std::runtime_error);
+}
+
+TEST(ThreadPool, ParkImmediatelyStillCompletesWork) {
+  ThreadPoolOptions options;
+  options.spin_iterations = 0;
+  options.spin_duration_ns = 0;
+  ThreadPool pool(1, options);
+  std::atomic<int> completed{0};
+
+  pool.Run(2, [&completed](int64_t) { completed.fetch_add(1, std::memory_order_relaxed); });
+
+  EXPECT_EQ(completed.load(std::memory_order_relaxed), 2);
 }
 
 } // namespace

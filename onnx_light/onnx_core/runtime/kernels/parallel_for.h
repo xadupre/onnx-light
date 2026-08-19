@@ -10,6 +10,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -27,6 +28,26 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 /// inline on the calling thread. Waking worker threads for tiny ranges costs
 /// more than the work they save, so small tensors stay single-threaded.
 inline constexpr int64_t kParallelForGrainSize = 1 << 15; // 32768 elements
+
+/**
+ * Configures worker startup and spin-before-park behavior for a
+ * :cpp:class:`ThreadPool`.
+ */
+struct ThreadPoolOptions {
+  /// Type-erased worker-start callback. It returns ``false`` and populates
+  /// ``error`` when the worker cannot satisfy its startup policy.
+  using WorkerStartFn = bool (*)(void *context, int64_t worker_index, std::string &error);
+
+  /// Number of relax iterations before parking.
+  uint64_t spin_iterations = 1000000;
+  /// Duration in nanoseconds to spin before parking. Used only when
+  /// ``spin_iterations`` is zero.
+  uint64_t spin_duration_ns = 0;
+  /// Optional callback invoked once by every worker before accepting work.
+  WorkerStartFn worker_start = nullptr;
+  /// Context passed to :cpp:var:`worker_start`.
+  void *worker_start_context = nullptr;
+};
 
 /// Returns the number of participating threads :cpp:func:`ParallelFor` may use.
 ///
@@ -71,6 +92,9 @@ public:
   ///                    :cpp:func:`Run` executes every block on the caller.
   explicit ThreadPool(int64_t num_workers);
 
+  /// Creates a pool with explicit startup and spin behavior.
+  ThreadPool(int64_t num_workers, ThreadPoolOptions options);
+
   ThreadPool(const ThreadPool &) = delete;
   ThreadPool &operator=(const ThreadPool &) = delete;
 
@@ -106,16 +130,23 @@ private:
   void RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn);
   static bool &InPoolFlag() noexcept;
   static bool InPool() noexcept;
+  void StopAndJoin() noexcept;
+  bool SpinForWork(uint64_t last_generation) const noexcept;
+  bool SpinForCompletion() const noexcept;
   void WorkerLoop(int64_t worker_index);
 
+  ThreadPoolOptions options_;
   std::vector<std::thread> workers_;
   std::mutex mu_;
   std::mutex region_mu_;
   std::condition_variable cv_work_;
   std::condition_variable cv_done_;
+  std::condition_variable cv_started_;
   void *task_ctx_ = nullptr;
   TaskFn task_fn_ = nullptr;
   int64_t num_blocks_ = 0;
+  int64_t started_workers_ = 0;
+  std::string startup_error_;
   std::atomic<int64_t> remaining_{0};
   std::atomic<uint64_t> generation_{0};
   std::atomic<bool> stop_{false};

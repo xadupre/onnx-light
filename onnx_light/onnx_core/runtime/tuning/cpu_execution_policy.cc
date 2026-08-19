@@ -134,7 +134,7 @@ ResolvedCpuExecutionPolicy ResolveCpuExecutionPolicy(const CpuExecutionPolicy &r
   resolved.spin = ResolveSpin(request);
 
   const bool explicit_affinity = request.affinity_policy == CpuAffinityPolicy::kExplicit;
-  if (explicit_affinity && request.num_threads > 1 &&
+  if (explicit_affinity && request.num_threads > 0 &&
       static_cast<size_t>(request.num_threads) != request.cpu_set.size()) {
     throw std::invalid_argument("CpuExecutionPolicy num_threads must match the explicit cpu_set "
                                 "size when both are specified.");

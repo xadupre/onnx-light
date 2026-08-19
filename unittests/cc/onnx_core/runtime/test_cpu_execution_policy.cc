@@ -137,6 +137,14 @@ TEST(CpuExecutionPolicy, ExplicitAffinityRejectsThreadCountMismatch) {
   EXPECT_THROW(ResolveCpuExecutionPolicy(request), std::invalid_argument);
 }
 
+TEST(CpuExecutionPolicy, ExplicitAffinityRejectsSerialWithMultipleProcessors) {
+  CpuExecutionPolicy request;
+  request.affinity_policy = CpuAffinityPolicy::kExplicit;
+  request.cpu_set = {CpuLogicalProcessor{0}, CpuLogicalProcessor{1}};
+  request.num_threads = 1;
+  EXPECT_THROW(ResolveCpuExecutionPolicy(request), std::invalid_argument);
+}
+
 TEST(CpuExecutionPolicy, NonExplicitAffinityRejectsCpuSet) {
   CpuExecutionPolicy request;
   request.affinity_policy = CpuAffinityPolicy::kPhysicalCores;

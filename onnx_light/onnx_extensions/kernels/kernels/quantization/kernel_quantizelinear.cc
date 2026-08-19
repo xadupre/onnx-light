@@ -104,19 +104,6 @@ inline std::uint8_t FloatToFloat8(float v, int32_t dtype) {
   }
 }
 
-// Returns true when ``dtype`` is a float8 type supported by QuantizeLinear.
-inline bool IsFloat8QuantizeDtype(int32_t dtype) {
-  switch (static_cast<DataType>(dtype)) {
-  case DataType::FLOAT8E4M3FN:
-  case DataType::FLOAT8E4M3FNUZ:
-  case DataType::FLOAT8E5M2:
-  case DataType::FLOAT8E5M2FNUZ:
-    return true;
-  default:
-    return false;
-  }
-}
-
 // Per-axis quantization loop: each element selects its scale/ZP by its
 // position along ``axis``.  Works for whole-byte integer output types.
 template <typename ZP>

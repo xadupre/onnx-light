@@ -82,6 +82,13 @@ if(NOT MSVC)
   add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-Wextra>)
   if(ONNX_LIGHT_WERROR)
     add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-Werror>)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      # Clang (unlike GCC) diagnoses explicit captures of constant variables
+      # that end up not being odr-used inside the lambda. The backend-test case
+      # registries capture such constants on purpose, for readability, so keep
+      # this diagnostic a warning instead of an error.
+      add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-error=unused-lambda-capture>)
+    endif()
   endif()
 endif()
 

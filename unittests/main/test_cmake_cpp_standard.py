@@ -38,9 +38,7 @@ class TestCMakeCppStandard(unittest.TestCase):
                 r"add_compile_options\(\$<\$<COMPILE_LANGUAGE:C,CXX>:-Wall>\)\s*"
                 r"add_compile_options\(\$<\$<COMPILE_LANGUAGE:C,CXX>:-Wextra>\)\s*"
                 r"if\(ONNX_LIGHT_WERROR\)\s*"
-                r"add_compile_options\(\$<\$<COMPILE_LANGUAGE:C,CXX>:-Werror>\)\s*"
-                r"endif\(\)\s*"
-                r"endif\(\)"
+                r"add_compile_options\(\$<\$<COMPILE_LANGUAGE:C,CXX>:-Werror>\)"
             ),
             msg="GCC/Clang builds must add -Werror when ONNX_LIGHT_WERROR is ON.",
         )

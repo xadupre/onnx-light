@@ -13,6 +13,7 @@
 #include "onnx_extensions/patterns/algebra/reduce_pattern.h"
 #include "onnx_extensions/patterns/algebra/shape_pattern.h"
 #include "onnx_extensions/patterns/algebra/sub_pattern.h"
+#include "onnx_extensions/patterns/attention/attention_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/constant_pattern.h"
@@ -298,6 +299,26 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("SoftmaxCrossEntropyLossCast", [] {
       return std::make_unique<SoftmaxCrossEntropyLossCastPattern>();
     });
+    core::builder::RegisterPattern("RotaryEmbedding",
+                                   [] { return std::make_unique<RotaryEmbeddingPattern>(); });
+    core::builder::RegisterPattern("RotaryConcatPart",
+                                   [] { return std::make_unique<RotaryConcatPartPattern>(); });
+    core::builder::RegisterPattern("FunctionCausalMask",
+                                   [] { return std::make_unique<FunctionCausalMaskPattern>(); });
+    core::builder::RegisterPattern("FunctionCausalMaskMulAdd", [] {
+      return std::make_unique<FunctionCausalMaskMulAddPattern>();
+    });
+    core::builder::RegisterPattern("FunctionCosSinCache",
+                                   [] { return std::make_unique<FunctionCosSinCachePattern>(); });
+    core::builder::RegisterPattern("FunctionHalfRotaryEmbedding", [] {
+      return std::make_unique<FunctionHalfRotaryEmbeddingPattern>();
+    });
+    core::builder::RegisterPattern("FunctionAttention",
+                                   [] { return std::make_unique<FunctionAttentionPattern>(); });
+    core::builder::RegisterPattern("FunctionAttentionGQA",
+                                   [] { return std::make_unique<FunctionAttentionGQAPattern>(); });
+    core::builder::RegisterPattern("AttentionGQA",
+                                   [] { return std::make_unique<AttentionGQAPattern>(); });
     core::builder::RegisterPattern("SwapExpandReshape",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<SwapExpandReshapePattern>();

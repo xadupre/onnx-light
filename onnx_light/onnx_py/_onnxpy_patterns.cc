@@ -10,6 +10,7 @@
 #include "onnx_extensions/patterns/algebra/reduce_pattern.h"
 #include "onnx_extensions/patterns/algebra/shape_pattern.h"
 #include "onnx_extensions/patterns/algebra/sub_pattern.h"
+#include "onnx_extensions/patterns/attention/attention_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/constant_pattern.h"
@@ -350,6 +351,28 @@ NB_MODULE(_onnxpypatterns, m) {
   BindPattern<onnx_patterns::SoftmaxCrossEntropyLossCastPattern>(
       m, "SoftmaxCrossEntropyLossCastPattern",
       "Moves a compatible label cast into SoftmaxCrossEntropyLoss.");
+  BindPattern<onnx_patterns::RotaryEmbeddingPattern>(m, "RotaryEmbeddingPattern",
+                                                     "Fuses a complete rotary-embedding subgraph.");
+  BindPattern<onnx_patterns::RotaryConcatPartPattern>(
+      m, "RotaryConcatPartPattern", "Simplifies padded rotary concatenation subgraphs.");
+  BindPattern<onnx_patterns::FunctionCausalMaskPattern>(
+      m, "FunctionCausalMaskPattern", "Replaces a causal-mask subgraph with a local function.");
+  BindPattern<onnx_patterns::FunctionCausalMaskMulAddPattern>(
+      m, "FunctionCausalMaskMulAddPattern",
+      "Fuses scaling and offset operations into a causal-mask function.");
+  BindPattern<onnx_patterns::FunctionCosSinCachePattern>(
+      m, "FunctionCosSinCachePattern",
+      "Replaces cosine and sine cache construction with a local function.");
+  BindPattern<onnx_patterns::FunctionHalfRotaryEmbeddingPattern>(
+      m, "FunctionHalfRotaryEmbeddingPattern",
+      "Replaces half-rotary embedding construction with a local function.");
+  BindPattern<onnx_patterns::FunctionAttentionPattern>(
+      m, "FunctionAttentionPattern", "Replaces a scaled dot-product attention subgraph.");
+  BindPattern<onnx_patterns::FunctionAttentionGQAPattern>(
+      m, "FunctionAttentionGQAPattern",
+      "Replaces grouped-query attention expressed with local functions.");
+  BindPattern<onnx_patterns::AttentionGQAPattern>(m, "AttentionGQAPattern",
+                                                  "Fuses grouped-query attention cache handling.");
   BindPattern<onnx_patterns::SwapExpandReshapePattern>(
       m, "SwapExpandReshapePattern",
       "Swaps a supported ``Expand`` and constant-shape ``Reshape`` pair.");

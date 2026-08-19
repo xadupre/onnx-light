@@ -875,6 +875,15 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
       "LeakyRelu",
       "MaxRelu",
       "SoftmaxCrossEntropyLossCast",
+      "RotaryEmbedding",
+      "RotaryConcatPart",
+      "FunctionCausalMask",
+      "FunctionCausalMaskMulAdd",
+      "FunctionCosSinCache",
+      "FunctionHalfRotaryEmbedding",
+      "FunctionAttention",
+      "FunctionAttentionGQA",
+      "AttentionGQA",
   };
   for (const std::string &name : new_pattern_names) {
     EXPECT_EQ(std::count(names.begin(), names.end(), name), 1) << name;

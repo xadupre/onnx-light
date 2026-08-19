@@ -72,6 +72,15 @@ SameChildrenFromInputPattern: TypeAlias = _patterns.SameChildrenFromInputPattern
 ShapeBasedIdentityPattern: TypeAlias = _patterns.ShapeBasedIdentityPattern
 ShapeBasedSameChildrenPattern: TypeAlias = _patterns.ShapeBasedSameChildrenPattern
 ShapeBasedShapeShapeAddPattern: TypeAlias = _patterns.ShapeBasedShapeShapeAddPattern
+RotaryEmbeddingPattern: TypeAlias = _patterns.RotaryEmbeddingPattern
+RotaryConcatPartPattern: TypeAlias = _patterns.RotaryConcatPartPattern
+FunctionCausalMaskPattern: TypeAlias = _patterns.FunctionCausalMaskPattern
+FunctionCausalMaskMulAddPattern: TypeAlias = _patterns.FunctionCausalMaskMulAddPattern
+FunctionCosSinCachePattern: TypeAlias = _patterns.FunctionCosSinCachePattern
+FunctionHalfRotaryEmbeddingPattern: TypeAlias = _patterns.FunctionHalfRotaryEmbeddingPattern
+FunctionAttentionPattern: TypeAlias = _patterns.FunctionAttentionPattern
+FunctionAttentionGQAPattern: TypeAlias = _patterns.FunctionAttentionGQAPattern
+AttentionGQAPattern: TypeAlias = _patterns.AttentionGQAPattern
 GemmTransposePattern: TypeAlias = _patterns.GemmTransposePattern
 MatMulAddPattern: TypeAlias = _patterns.MatMulAddPattern
 MatMulReshape2Of3Pattern: TypeAlias = _patterns.MatMulReshape2Of3Pattern
@@ -222,6 +231,7 @@ def replay(
 
 
 __all__ = [
+    "AttentionGQAPattern",
     "BatchNormalizationPattern",
     "BatchNormalizationTrainingPattern",
     "CastCastBinaryPattern",
@@ -237,6 +247,12 @@ __all__ = [
     "ConstantToInitializerPattern",
     "ConvBiasNullPattern",
     "DropoutPattern",
+    "FunctionAttentionGQAPattern",
+    "FunctionAttentionPattern",
+    "FunctionCausalMaskMulAddPattern",
+    "FunctionCausalMaskPattern",
+    "FunctionCosSinCachePattern",
+    "FunctionHalfRotaryEmbeddingPattern",
     "GatherConcatPattern",
     "GatherGatherPattern",
     "GatherShapePattern",
@@ -273,6 +289,8 @@ __all__ = [
     "ReshapeReshapeBinaryPattern",
     "ReshapeReshapePattern",
     "ReshapeSqueezePattern",
+    "RotaryConcatPartPattern",
+    "RotaryEmbeddingPattern",
     "SameChildrenFromInputPattern",
     "SameChildrenPattern",
     "SequenceConstructAtPattern",

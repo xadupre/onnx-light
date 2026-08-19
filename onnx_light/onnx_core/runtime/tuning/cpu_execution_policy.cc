@@ -26,6 +26,7 @@
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
 
+#if defined(__linux__)
 std::optional<uint32_t> ReadUnsignedFile(const std::filesystem::path &path) {
   std::ifstream input(path);
   uint32_t value = 0;
@@ -34,6 +35,7 @@ std::optional<uint32_t> ReadUnsignedFile(const std::filesystem::path &path) {
   }
   return value;
 }
+#endif
 
 struct LogicalProcessorTopology {
   CpuLogicalProcessor processor;

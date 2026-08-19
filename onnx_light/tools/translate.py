@@ -30,10 +30,18 @@ from __future__ import annotations
 import textwrap
 from typing import Any
 
-import ml_dtypes
 import numpy as np
 
-from ._proto_utils import _extract_graph, _iter, _s
+from ._proto_utils import (
+    _dtype_enum_name,
+    _extract_graph,
+    _elem_type,
+    _iter,
+    _opsets,
+    _s,
+    _shape_tuple,
+    _tensor_to_numpy,
+)
 
 __all__ = ["translate", "translate_header"]
 
@@ -51,118 +59,9 @@ _ATTR_INTS = 7
 _ATTR_STRINGS = 8
 
 
-# Mapping ``TensorProto.DataType`` -> numpy (or ``ml_dtypes``) scalar type.
-_DTYPE_TO_NUMPY = {
-    1: np.float32,
-    2: np.uint8,
-    3: np.int8,
-    4: np.uint16,
-    5: np.int16,
-    6: np.int32,
-    7: np.int64,
-    9: np.bool_,
-    10: np.float16,
-    11: np.float64,
-    12: np.uint32,
-    13: np.uint64,
-    14: np.complex64,
-    15: np.complex128,
-    16: ml_dtypes.bfloat16,
-    17: ml_dtypes.float8_e4m3fn,
-    18: ml_dtypes.float8_e4m3fnuz,
-    19: ml_dtypes.float8_e5m2,
-    20: ml_dtypes.float8_e5m2fnuz,
-    21: ml_dtypes.uint4,
-    22: ml_dtypes.int4,
-    23: ml_dtypes.float4_e2m1fn,
-}
-
-# ``TensorProto.DataType`` name for each id (mirror ``onnx.TensorProto``).
-_DTYPE_ENUM_NAME = {
-    0: "UNDEFINED",
-    1: "FLOAT",
-    2: "UINT8",
-    3: "INT8",
-    4: "UINT16",
-    5: "INT16",
-    6: "INT32",
-    7: "INT64",
-    8: "STRING",
-    9: "BOOL",
-    10: "FLOAT16",
-    11: "DOUBLE",
-    12: "UINT32",
-    13: "UINT64",
-    14: "COMPLEX64",
-    15: "COMPLEX128",
-    16: "BFLOAT16",
-    17: "FLOAT8E4M3FN",
-    18: "FLOAT8E4M3FNUZ",
-    19: "FLOAT8E5M2",
-    20: "FLOAT8E5M2FNUZ",
-    21: "UINT4",
-    22: "INT4",
-    23: "FLOAT4E2M1",
-}
-
-# Typed repeated field holding the values of a ``TensorProto`` (when the data
-# is not stored in ``raw_data``).
-_DTYPE_TO_FIELD = {
-    1: "float_data",
-    2: "int32_data",
-    3: "int32_data",
-    4: "int32_data",
-    5: "int32_data",
-    6: "int32_data",
-    7: "int64_data",
-    9: "int32_data",
-    10: "int32_data",
-    11: "double_data",
-    12: "uint64_data",
-    13: "uint64_data",
-    14: "float_data",
-    15: "double_data",
-}
-
-
 # ---------------------------------------------------------------------------
 # Value extraction (duck typed against ``TensorProto``)
 # ---------------------------------------------------------------------------
-def _tensor_to_numpy(tensor: Any) -> np.ndarray:
-    """Returns the content of a ``TensorProto``-like object as a numpy array."""
-    data_type = int(getattr(tensor, "data_type", 0) or 0)
-    dims = [int(d) for d in _iter(getattr(tensor, "dims", None))]
-
-    if data_type == 8:  # STRING
-        strings = [_s(v) for v in _iter(getattr(tensor, "string_data", None))]
-        array = np.array(strings, dtype=object)
-        return array.reshape(dims) if dims else array.reshape(())
-
-    if data_type not in _DTYPE_TO_NUMPY:
-        raise NotImplementedError(f"Unable to translate a tensor with data_type={data_type}.")
-    np_dtype = _DTYPE_TO_NUMPY[data_type]
-
-    raw = getattr(tensor, "raw_data", b"") or b""
-    if raw:
-        array = np.frombuffer(raw, dtype=np_dtype)
-        return array.reshape(dims) if dims else array.reshape(())
-
-    field = _DTYPE_TO_FIELD.get(data_type)
-    if field is None:
-        raise NotImplementedError(
-            f"Unable to translate a tensor with data_type={data_type} and no raw_data."
-        )
-    values = list(_iter(getattr(tensor, field, None)))
-    if data_type in (10, 16, 17, 18, 19, 20, 21, 22, 23):
-        # Small float / sub-byte types are packed as their raw bit pattern in
-        # ``int32_data``; reinterpret the bits instead of casting the value.
-        storage = {10: np.uint16, 16: np.uint16}.get(data_type, np.uint8)
-        array = np.array(values, dtype=storage).view(np_dtype)
-    else:
-        array = np.array(values, dtype=np_dtype)
-    return array.reshape(dims) if dims else array.reshape(())
-
-
 def _dtype_expr(array: np.ndarray) -> str:
     """Returns a Python expression naming the numpy dtype of ``array``."""
     repl = {"bool": "bool_", "object": "object_", "str": "str_"}
@@ -185,39 +84,9 @@ def _from_array_expr(tensor: Any, name: str) -> str:
 # ---------------------------------------------------------------------------
 # Shapes and value infos
 # ---------------------------------------------------------------------------
-def _shape_tuple(value_info: Any) -> tuple | None:
-    """Returns the shape of a ``ValueInfoProto`` as a tuple, or ``None``."""
-    type_proto = getattr(value_info, "type", None)
-    tensor_type = getattr(type_proto, "tensor_type", None)
-    if tensor_type is None:
-        return None
-    shape = getattr(tensor_type, "shape", None)
-    if shape is None:
-        return None
-    dims = list(_iter(getattr(shape, "dim", None)))
-    result: list = []
-    for dim in dims:
-        dim_param = _s(getattr(dim, "dim_param", "") or "")
-        dim_value = int(getattr(dim, "dim_value", 0) or 0)
-        if dim_param:
-            result.append(dim_param)
-        elif dim_value != 0:
-            result.append(dim_value)
-        else:
-            result.append(None)
-    return tuple(result)
-
-
-def _elem_type(value_info: Any) -> int:
-    """Returns the element type of a ``ValueInfoProto``."""
-    type_proto = getattr(value_info, "type", None)
-    tensor_type = getattr(type_proto, "tensor_type", None)
-    return int(getattr(tensor_type, "elem_type", 0) or 0)
-
-
 def _value_info_expr(name: str, elem_type: int, shape: tuple | None) -> str:
     """Returns an ``oh.make_tensor_value_info(...)`` expression."""
-    tp = f"onnx.TensorProto.{_DTYPE_ENUM_NAME.get(elem_type, 'UNDEFINED')}"
+    tp = f"onnx.TensorProto.{_dtype_enum_name(elem_type)}"
     if elem_type and shape is not None:
         return f"oh.make_tensor_value_info({name!r}, {tp}, {shape!r})"
     if elem_type:
@@ -360,16 +229,6 @@ def translate_header(api: str = "onnx-compact") -> str:
             from onnx_light.onnx_core.graph_builder import GraphBuilder
             """)
     raise ValueError(f"Unexpected value {api!r} for api.")
-
-
-def _opsets(model_or_graph: Any) -> list[tuple[str, int]]:
-    """Returns the ``[(domain, version), ...]`` opset imports of a model."""
-    result: list[tuple[str, int]] = []
-    for opset in _iter(getattr(model_or_graph, "opset_import", None)):
-        domain = _s(getattr(opset, "domain", "") or "")
-        version = int(getattr(opset, "version", 0) or 0)
-        result.append((domain, version))
-    return result
 
 
 def _translate_compact(model: Any, graph: Any) -> str:

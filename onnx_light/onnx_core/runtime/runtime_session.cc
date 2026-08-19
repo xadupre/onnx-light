@@ -66,7 +66,7 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
                                                        : DefaultCpuExecutionPolicy(parameters_)),
-      verbose_(options.verbose) {
+      cpu_execution_explicit_(options.cpu_execution.has_value()), verbose_(options.verbose) {
   SetDeclaredShapes(model.graph());
 }
 
@@ -89,7 +89,7 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions 
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
                                                        : DefaultCpuExecutionPolicy(parameters_)),
-      verbose_(options.verbose) {}
+      cpu_execution_explicit_(options.cpu_execution.has_value()), verbose_(options.verbose) {}
 
 const std::shared_ptr<CpuExecutor> &RuntimeSession::cpu_executor() {
   if (!cpu_executor_) {
@@ -198,10 +198,13 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
                                 std::chrono::steady_clock::now() - snapshot_start)
                                 .count());
   // Tuning describes the participants that actually run the graph, so the
-  // descriptor reports the leased executor's effective threads rather than a
-  // separately computed thread count.
+  // descriptor reports the effective threads of the executor installed for
+  // this run (the session's lease, or the enclosing session's executor when
+  // this session is nested).
+  const CpuExecutor *tuning_executor =
+      rt.cpu_executor() != nullptr ? rt.cpu_executor() : cpu_executor().get();
   const CpuExecutionDescriptor tuning_execution{platform::GetCpuDescriptor(),
-                                                cpu_executor()->effective_threads()};
+                                                tuning_executor->effective_threads()};
   struct PendingTuning {
     PreparedKernel *kernel;
     KernelTuningKey key;
@@ -366,7 +369,12 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   // Lease the shared executor before any kernel is prepared or executed and
   // install it for the whole run: every parallel region a kernel launches then
   // uses this session's resolved policy instead of a hidden process-wide pool.
-  const SessionExecutorScope executor_scope(rt, cpu_executor().get());
+  // A nested session (a subgraph body, a model-local function, ...) that did
+  // not receive an explicit policy keeps running on the executor the enclosing
+  // session installed, so nesting never wakes a second pool.
+  const bool inherits_executor = !cpu_execution_explicit_ && rt.cpu_executor() != nullptr;
+  const SessionExecutorScope executor_scope(rt, inherits_executor ? rt.cpu_executor()
+                                                                  : cpu_executor().get());
   // Kernels are resolved against ``rt`` on the first run and cached; later
   // runs reuse the same built instances without redoing the per-node
   // dispatch lookup or re-constructing concrete kernels.

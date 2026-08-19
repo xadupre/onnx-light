@@ -172,3 +172,45 @@ TEST(SessionExecutor, SerialSessionRunsEveryRangeInline) {
   EXPECT_EQ(observation.block_threads.size(), 1u);
   EXPECT_EQ(*observation.block_threads.begin(), std::this_thread::get_id());
 }
+
+TEST(SessionExecutor, NestedSessionKeepsTheEnclosingExecutor) {
+  // A nested session (a subgraph body, a model-local function, ...) is built
+  // without an explicit policy; it must keep running on the executor the
+  // enclosing session installed instead of leasing a second pool.
+  GraphProto inner_graph;
+  NodeProto *inner_node = inner_graph.add_node();
+  inner_node->set_domain("test.execution_pools");
+  inner_node->set_op_type("ObserveNested");
+  inner_node->add_input("x");
+  inner_node->add_output("z");
+
+  const GraphProto outer_graph = MakeObserverGraph();
+  RuntimeContext rt(KernelContext(core::runtime::DefaultOpset(18)));
+  const ExecutionPlan &outer_plan = rt.GetExecutionPlan(outer_graph);
+  RuntimeSession outer(outer_plan, RuntimeSessionOptions{.parameters = RuntimeParameters(2)});
+
+  ExecutorObservation nested;
+  rt.RegisterCustomKernel("test.execution_pools", "ObserveExecutor",
+                          [&inner_graph, &nested](const NodeProto &node, RuntimeContext &ctx) {
+                            RuntimeContext child = ctx.MakeSubgraphContext("body");
+                            child.RegisterCustomKernel(
+                                "test.execution_pools", "ObserveNested",
+                                [&nested](const NodeProto &inner, RuntimeContext &inner_ctx) {
+                                  nested.current = CurrentCpuExecutor();
+                                  nested.from_context = inner_ctx.cpu_executor();
+                                  nested.reported_threads = ParallelForThreadCount();
+                                  inner_ctx.Set(std::string(inner.output(0)),
+                                                inner_ctx.Get(inner.input(0)));
+                                });
+                            const ExecutionPlan &inner_plan = child.GetExecutionPlan(inner_graph);
+                            RuntimeSession inner_session(inner_plan);
+                            inner_session.Run(child);
+                            ctx.Set(std::string(node.output(0)), ctx.Get(node.input(0)));
+                          });
+  rt.Set("x", core::runtime::Tensor::FromFloat("x", {1}, {1.0f}));
+  outer.Run(rt);
+
+  EXPECT_EQ(nested.current, outer.cpu_executor().get());
+  EXPECT_EQ(nested.from_context, outer.cpu_executor().get());
+  EXPECT_EQ(nested.reported_threads, 2);
+}

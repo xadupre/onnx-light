@@ -45,8 +45,10 @@ here; the full sequence is tracked in the `Implementation sequence`_ table.
        and ``ParallelForThreadCount`` dispatch through the installed executor,
        so a session's requested participants are the participants its kernels
        observe and the process-wide pool is no longer reached from a session
-       run. Kernel tuning descriptors report the leased executor's effective
-       threads.
+       run. A nested session without an explicit policy (a subgraph body, a
+       model-local function) keeps the enclosing executor instead of leasing a
+       second pool. Kernel tuning descriptors report the effective threads of
+       the executor installed for the run.
 
 Objective
 +++++++++
@@ -251,7 +253,10 @@ installs its leased executor through ``CpuExecutorScope`` and on
 participant of a parallel region keeps that view installed, so a nested region
 runs inline on the same executor. The free ``ParallelFor`` dispatches through
 the installed executor and only falls back to the process-wide pool for
-standalone callers running outside any session.
+standalone callers running outside any session. A nested session that did not
+receive an explicit policy inherits the executor already installed on the
+context, so subgraphs and model-local functions run with the policy of the
+session that started the run.
 
 Session wiring derives its default policy from
 ``RuntimeParameters::num_threads`` and requests ``CpuAffinityPolicy::kNone``,

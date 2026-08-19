@@ -213,11 +213,20 @@ public:
   /// resolved policies are compatible share one executor; incompatible
   /// policies get distinct pools. :cpp:func:`Run` installs it on the calling
   /// thread so every parallel region a kernel launches uses exactly these
-  /// participants.
+  /// participants. Like the rest of the session state, the first acquisition
+  /// is not synchronized: a session is prepared and run by one thread at a
+  /// time, while distinct sessions may run concurrently on a shared executor.
   ///
   /// Returns:
   ///   The leased executor, never null.
   const std::shared_ptr<CpuExecutor> &cpu_executor();
+
+  /// Returns whether the CPU execution policy was supplied by the caller
+  /// rather than derived from :cpp:func:`parameters`. A session with a derived
+  /// policy that runs inside another session's run (a subgraph, a model-local
+  /// function, or any nested session) reuses the executor already installed on
+  /// the :cpp:class:`RuntimeContext` instead of leasing a second pool.
+  bool has_explicit_cpu_execution_policy() const noexcept { return cpu_execution_explicit_; }
 
   /// Verbosity level requested for :cpp:func:`Run`. When non-zero, it overrides
   /// :cpp:func:`RuntimeContext::verbose` for this session's progress lines
@@ -411,6 +420,10 @@ private:
   /// Requested CPU execution policy, derived from :cpp:member:`parameters_`
   /// when the caller did not supply one.
   CpuExecutionPolicy cpu_execution_;
+  /// Whether :cpp:member:`cpu_execution_` was requested explicitly. A session
+  /// with a derived policy nested inside another session's run reuses the
+  /// enclosing executor instead of leasing a second pool.
+  bool cpu_execution_explicit_ = false;
   /// Lease on the shared executor, acquired on first use by
   /// :cpp:func:`cpu_executor`.
   std::shared_ptr<CpuExecutor> cpu_executor_;

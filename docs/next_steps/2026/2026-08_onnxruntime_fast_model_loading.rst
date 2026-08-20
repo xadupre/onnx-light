@@ -547,6 +547,23 @@ PR05 -- resolve before reading large payloads
 
 **Repository:** ``xadupre/onnx-light``
 
+The concrete targets are models where structural resolution changes the live
+payload set:
+
+* a constant ``If`` condition makes one subgraph and its initializers
+  unreachable;
+* an exported training, loss, debug, or alternate-output head is not part of
+  the resolved inference graph;
+* a graph rewrite removes an initializer or replaces several initializers with
+  one derived weight;
+* a compatible prepared object selected in PR06 replaces portable weights and
+  their prepack recipe.
+
+This PR does not claim a gain for an ordinary model whose final graph consumes
+every serialized initializer. If the benchmark fixtures show that resolution
+avoids no material payload bytes, the manifest plumbing should be folded into
+PR06 rather than shipped as a standalone performance PR.
+
 Implement the first executable slice of
 :ref:`l-next-steps-model-resolution`:
 

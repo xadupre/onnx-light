@@ -5,16 +5,22 @@ Prepared and asynchronous execution
 
 :Date: 2026-08
 
-**discussion**
+**blocked by onnxruntime loading integration**
 
 Objective
 +++++++++
 
-The first objective is to reduce model loading time. This plan starts from the
-immutable ``ResolvedModel`` produced by
+This is step 3 of the fast-loading sequence, after
+:ref:`l-next-steps-model-loading` and before
+:ref:`l-next-steps-native-fast-loading-completion`.
+
+The first objective is to reduce model loading time. This plan consumes the
+immutable ``ResolvedModel`` contract defined by
 :ref:`l-next-steps-model-resolution`. Its transformed graph, kernel choices,
 prepared-object bindings, and minimal payload manifest are frozen before this
-plan creates or submits any weight-read task.
+plan creates or submits any weight-read task. The first implementation may use
+a deterministic resolved-model fixture; the production resolver and selective
+payload integration are completed in the fourth roadmap step.
 
 The execution plan may be submitted as soon as its structure and prepared-object
 requirements are known. It does not wait for every initialization task: each
@@ -25,6 +31,25 @@ also define the asynchronous execution contract requested by
 model execution remains sequential in the first implementation, but the public
 API, dependency representation, errors, and cancellation must not require a
 later incompatible ``run``/``run_wait`` split.
+
+Step 3 implementation boundary
+++++++++++++++++++++++++++++++
+
+This document implements the reusable execution substrate:
+
+* one immutable scope-aware plan and separate session/invocation state;
+* dependency events, completion handles, cancellation, failure propagation,
+  priorities, and memory admission;
+* persistent bounded I/O resources and the existing session CPU executor;
+* a sequential session-task reference path, a delayed-weight overlap test, and
+  the fully prepared hot path;
+* ``PrepareAsync``/``RunAsync`` with synchronous wrappers.
+
+The production model resolver, adaptive loader policy, persisted prepared
+cache, eviction/offloading policy, and device-placement variants are step 4,
+:ref:`l-next-steps-native-fast-loading-completion`. They remain described here
+where they constrain the core interfaces, but are not merge criteria for the
+step 3 implementation.
 
 Plan architecture
 +++++++++++++++++
@@ -1431,7 +1456,7 @@ Implementation order
 
 #. Add a valid external-data model benchmark that is never rewritten by the
    benchmark.
-#. Consume the frozen ``ResolvedModel`` from
+#. Consume a deterministic frozen ``ResolvedModel`` fixture conforming to
    :ref:`l-next-steps-model-resolution` and reject every read not present in its
    active payload manifest.
 #. Extract a persistent ``WorkerPool`` below the current ``onnx_proto``
@@ -1464,13 +1489,6 @@ Implementation order
 #. Add task failure propagation, dependency cancellation, and deterministic
    handle-destruction semantics; test initialization failure separately from
    per-inference failure.
-#. Add the companion ONNX prepared-model cache, its explicit
-   ``PreparedModelPolicy``, external packed payloads, and atomic background
-   writes; skip prepacking on a compatible hit and validate reuse in a newly
-   created session.
-#. Add prepared-object pinning, eviction, and reload from the companion model;
-   verify that offloading never evicts an object used by an active inference.
-#. Add one CUDA ``Gemm`` whose initialization can choose CPU-pack-plus-copy or
-   CUDA-side pack.
-#. Add alternative execution-device variants and device-residency policy only
-   after fixed-placement streaming initialization is complete.
+The companion prepared cache, eviction/offloading, CUDA preparation, and
+alternative placement variants continue in the fourth roadmap document after
+this core is stable.

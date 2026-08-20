@@ -16,8 +16,9 @@ Runtime execution work should proceed in dependency order:
    events and a disabled path with no instrumentation work;
 2. add process CPU time, inspection, hardware counters, and calibration
    diagnostics only after that event contract is stable;
-3. integrate the same executor with :ref:`l-next-steps-prepared-execution`
-   rather than creating another scheduler pool.
+3. use that same executor when the fast-loading sequence reaches
+   :ref:`l-next-steps-prepared-execution`, rather than creating another
+   scheduler pool.
 
 Model-format work such as custom types, quantization, compiled tensors, and
 model resolution may proceed independently until it reaches prepared
@@ -25,16 +26,33 @@ execution. Within the runtime track, the order above is mandatory: profiling
 or tuning a hidden global pool would produce profiles that a session cannot
 reproduce.
 
-For large-model startup, begin with the benchmark and direct parser work in
-:ref:`l-next-steps-model-loading`, then follow its dependencies through model
-resolution, compiled tensors, and prepared execution.
+Large-model startup follows one explicit four-document sequence:
+
+1. fix existing parser, external-data, and initializer-materialization defects
+   in :ref:`l-next-steps-model-loading-bug-fixes`;
+2. complete the ownership-aware cross-repository work in
+   :ref:`l-next-steps-model-loading`;
+3. implement :ref:`l-next-steps-prepared-execution`;
+4. connect adaptive I/O, model resolution, prepared tensors, and first-token
+   overlap in :ref:`l-next-steps-native-fast-loading-completion`.
+
+Parallel-for profiling may proceed alongside steps 1 and 2, but its executor
+instrumentation must be stable before step 3 begins.
+
+.. toctree::
+    :maxdepth: 1
+    :caption: Fast-loading implementation sequence
+
+    2026/2026-08_model_loading_bug_fixes
+    2026/2026-08_onnxruntime_fast_model_loading
+    2026/2026-08_prepared_execution
+    2026/2026-08_native_fast_loading_completion
 
 .. toctree::
     :maxdepth: 1
     :caption: Ready to implement
 
     2026/2026-08_parallel_for_profiling
-    2026/2026-08_onnxruntime_fast_model_loading
 
 .. toctree::
     :maxdepth: 1
@@ -47,7 +65,6 @@ resolution, compiled tensors, and prepared execution.
     2026/2026-08_mutable_cache
     2026/2026-08_compiled_tensor
     2026/2026-08_model_resolution
-    2026/2026-08_prepared_execution
     2026/2026-08_split_wheels
 
 .. toctree::

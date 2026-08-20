@@ -34,7 +34,7 @@ resolution, compiled tensors, and prepared execution.
     :caption: Ready to implement
 
     2026/2026-08_parallel_for_profiling
-    2026/2026-08_model_loading
+    2026/2026-08_onnxruntime_fast_model_loading
 
 .. toctree::
     :maxdepth: 1

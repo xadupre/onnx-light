@@ -1,7 +1,7 @@
 .. _l-next-steps-model-loading:
 
-Exploiting fast model loading with ``onnx-light``
-=================================================
+Exploiting ``onnx-light`` fast loading in ``onnxruntime``
+=========================================================
 
 :Date: 2026-08
 
@@ -102,7 +102,7 @@ layer:
       - Mapping lifetime tokens and final-destination read descriptors
       - Eligible ORT initializers borrow safely; others avoid intermediate
         buffers
-      - PR08
+      - PR08a + PR08b
     * - Measurement
       - Phase events, byte/copy counters, page-fault attribution, and cache-state
         labels
@@ -375,6 +375,8 @@ Implementation sequence
 PR01 -- truthful loading benchmark and trace
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+**Repository:** ``xadupre/onnx-light``
+
 Add one benchmark driver shared by the native and ORT comparison scripts. It
 creates the phase trace and resource report defined above, runs each sample in
 a separate process, and stores machine-readable results.
@@ -400,6 +402,8 @@ Acceptance:
 
 PR02 -- remove compatibility-parser staging
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Repository:** ``xadupre/onnx-light``
 
 Change ``ParseFromFileDescriptor`` to parse directly from ``FdReadStream``
 instead of first accumulating the complete file in a ``std::string``.
@@ -440,6 +444,8 @@ source change.
 PR03 -- one parse and adaptive I/O
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+**Repository:** ``xadupre/onnx-light``
+
 Replace Python's ``_find_external_location()`` preliminary parse with one of
 these equivalent one-pass contracts:
 
@@ -477,6 +483,8 @@ Acceptance:
 PR04 -- persistent initializer store and real session preparation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+**Repository:** ``xadupre/onnx-light``
+
 Introduce a session-owned initializer store. It converts each live
 ``TensorProto`` or lazy payload descriptor into a runtime ``Tensor`` once,
 retains the corresponding ownership token, and lends immutable views to
@@ -511,6 +519,8 @@ Acceptance:
 PR05 -- resolve before reading large payloads
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+**Repository:** ``xadupre/onnx-light``
+
 Implement the first executable slice of
 :ref:`l-next-steps-model-resolution`:
 
@@ -538,6 +548,8 @@ Acceptance:
 
 PR06 -- load compiled tensors before portable weights
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Repository:** ``xadupre/onnx-light``
 
 Implement the CPU subset of :ref:`l-next-steps-compiled-tensor`. Resolution
 checks source digest, CPU/ISA, runtime, kernel layout, and format compatibility
@@ -578,6 +590,8 @@ Acceptance:
 PR07 -- overlap preparation with first inference
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+**Repository:** ``xadupre/onnx-light``
+
 Connect the resolved payload manifest to
 :ref:`l-next-steps-prepared-execution`. Prioritize the embedding and earliest
 decoder blocks, then read and prepare later blocks under bounded memory and I/O
@@ -597,8 +611,10 @@ Acceptance:
 * ``T_fully_prepared`` is deterministic and observable;
 * synchronous mode remains available as the correctness reference.
 
-PR08 -- explicit ORT weight-ownership integration
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PR08a -- expose the ORT payload-ownership contract
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Repository:** ``xadupre/onnx-light``
 
 First measure ORT's existing external-data reader. If it already reads directly
 into final tensor allocations, retain it for portable tensors. Do not replace a
@@ -616,13 +632,32 @@ For ranges that ORT can safely borrow, add a narrow adapter:
       PayloadIdentity identity;
     };
 
-ORT attaches ``owner`` to session state and creates an immutable CPU
-initializer view. If ORT or an execution provider needs writable, relocated,
-or packed memory, the adapter instead supplies a descriptor so ORT can read
-directly into its final allocation.
+The ``onnx-light`` PR defines the C++ contract, source identity, alignment
+guarantees, ownership tests, and the descriptor used when a consumer must read
+into its own final allocation. It does not modify ORT session state.
 
-The interface belongs in ``onnx-light``; consuming it and preserving the owner
-requires a separate ORT PR following #29723. The integration must compare:
+Acceptance:
+
+* mapped payloads retain a shared owner and stable identity;
+* ineligible ranges expose a final-destination read descriptor rather than an
+  intermediate whole-tensor buffer;
+* tests cover owner release, alignment, file replacement, truncated ranges,
+  and concurrent views;
+* the public contract does not expose ORT-specific types.
+
+PR08b -- consume owned payloads in ORT session state
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Repository:** ``microsoft/onnxruntime``
+
+This PR follows microsoft/onnxruntime#29723 and depends on PR08a. ORT attaches
+``MappedPayload::owner`` to session state and creates an immutable CPU
+initializer view only when graph optimization and the selected execution
+provider permit borrowing. If ORT or an execution provider needs writable,
+relocated, or packed memory, it asks the PR08a descriptor to read directly into
+the final ORT allocation.
+
+The ORT integration must compare:
 
 * default ORT protobuf ``.onnx``;
 * ORT + ``onnx-light`` portable ``.onnx``;
@@ -731,7 +766,7 @@ benchmark, not inferred from parser microbenchmarks.
 For ORT itself, #29723 lets ``onnx-light`` improve the main protobuf path
 immediately. It cannot independently change ORT's graph resolver, external
 weight allocator, or execution-provider prepacking. Those gains require the
-explicit ownership adapter and ORT changes in PR08.
+explicit ownership adapter in PR08a and ORT changes in PR08b.
 
 Dependencies
 ++++++++++++
@@ -740,7 +775,8 @@ The strict implementation order is:
 
 .. code-block:: text
 
-    PR01 benchmark and phases
+    xadupre/onnx-light:
+      PR01 benchmark and phases
       -> PR02 direct compatibility parser
       -> PR03 one-pass external load and adaptive I/O
       -> PR04 persistent initializer/session ownership
@@ -748,8 +784,11 @@ The strict implementation order is:
       -> PR06 compiled tensor cache
       -> PR07 asynchronous prepared execution
 
-    PR02 -> PR08 ORT parser baseline
-    PR03 + PR04 -> PR08 mapped ownership
+      PR02 -> PR08a ownership contract
+      PR03 + PR04 -> PR08a mapped ownership
+
+    microsoft/onnxruntime:
+      onnx-light PR08a -> PR08b payload consumption
 
 PR02 and the ORT parser comparison may proceed before native prepared
 execution. PR06 depends on kernel-specific stable packed layouts. PR07 depends

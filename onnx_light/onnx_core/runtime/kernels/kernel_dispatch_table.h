@@ -7,6 +7,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -46,6 +47,48 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
  */
 using NodeKernelFn =
     std::function<std::unique_ptr<KernelBase>(const NodeProto &node, RuntimeContext &rt)>;
+
+/**
+ * Adapts a backend kernel to the lifetime of a :cpp:class:`RuntimeSession`.
+ *
+ * ``ExecutionScope`` remains backend-defined: constructing it from the active
+ * :cpp:class:`RuntimeContext` installs any backend-specific executor bridge
+ * for the duration of one kernel invocation. Keeping that policy outside
+ * ``onnx_core`` lets downstream libraries reuse the session factory without
+ * introducing a dependency from ``onnx_core`` to a concrete backend.
+ */
+template <typename Kernel, typename ExecutionScope> class SessionKernel final : public Kernel {
+  static_assert(std::is_base_of_v<KernelBase, Kernel>,
+                "Session kernels must derive from KernelBase.");
+  static_assert(std::is_constructible_v<Kernel, const KernelContext &>,
+                "Session kernels must be constructible from KernelContext.");
+  static_assert(std::is_constructible_v<ExecutionScope, RuntimeContext &>,
+                "Execution scopes must be constructible from RuntimeContext.");
+
+public:
+  SessionKernel(const NodeProto &node, RuntimeContext &rt) : Kernel(rt.kernel_ctx()) {
+    this->set_node(node);
+  }
+
+  void Run(RuntimeContext &rt) override {
+    ExecutionScope scope(rt);
+    Kernel::Run(rt);
+  }
+};
+
+/**
+ * Builds a backend kernel adapted to the active runtime session.
+ *
+ * ``Kernel`` supplies the operator implementation and ``ExecutionScope``
+ * installs the backend-specific executor bridge while the kernel runs.
+ *
+ * Returns:
+ *   The ready-to-run kernel owned through :cpp:class:`KernelBase`.
+ */
+template <typename Kernel, typename ExecutionScope>
+std::unique_ptr<KernelBase> MakeSessionKernel(const NodeProto &node, RuntimeContext &rt) {
+  return std::make_unique<SessionKernel<Kernel, ExecutionScope>>(node, rt);
+}
 
 /**
  * Signature of the ``SequenceMap`` output-packing callback: given the

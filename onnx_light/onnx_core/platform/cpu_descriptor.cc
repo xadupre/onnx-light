@@ -279,7 +279,7 @@ void DetectX86(CpuDescriptor &descriptor) {
 #endif
 
 #if defined(__linux__)
-void SetPositive(std::optional<size_t> &destination, long value) {
+[[maybe_unused]] void SetPositive(std::optional<size_t> &destination, long value) {
   if (value > 0) {
     destination = static_cast<size_t>(value);
   }

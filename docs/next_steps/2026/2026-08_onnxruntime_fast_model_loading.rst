@@ -83,8 +83,10 @@ layer:
       - One parse, one owner per source, no redundant payload copy
       - PR03
     * - Runtime state
-      - Borrowed ``ByteSpan`` payloads and persistent initializer descriptors
-      - Initializers are wrapped once and remain valid for the session
+      - Existing owned ``ByteSpan`` payloads plus persistent runtime
+        initializer tensors
+      - Names, shapes, typed payloads, and borrowed views are materialized once
+        per session
       - PR04
     * - Graph resolution
       - Metadata-first parsing and recoverable exact source ranges
@@ -497,16 +499,23 @@ Acceptance:
   full fixture and does not regress the reduced fixture by more than 3%;
 * failures identify the tensor, resolved source, range, and reason.
 
-PR04 -- persistent initializer store and real session preparation
+PR04 -- cache runtime initializer tensors in the prepared session
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 **Repository:** ``xadupre/onnx-light``
 
-Introduce a session-owned initializer store. It converts each live
+Payload ownership already exists: inline bytes belong to the ``ModelProto`` and
+mapped bytes retain their mapping owner. The bug is repeated runtime
+materialization. ``ReferenceEvaluatorRunner::Run`` clears its
+``RuntimeContext``, iterates over every graph initializer, and calls
+``TensorFromProto`` again. Raw payloads are borrowed again, names and shapes
+are rebuilt, and typed repeated fields may be copied again.
+
+Introduce a persistent initializer tensor store. It converts each live
 ``TensorProto`` or lazy payload descriptor into a runtime ``Tensor`` once,
-retains the corresponding ownership token, and lends immutable views to
-invocation contexts. Clearing a ``RuntimeContext`` must not rebuild initializer
-names, shapes, or payload wrappers on every token.
+retains or references the existing ownership token, and lends immutable tensor
+views to invocation contexts. Clearing a ``RuntimeContext`` must not rebuild
+initializer names, shapes, payload wrappers, or typed payloads on every token.
 
 The prepared session owns:
 
@@ -796,7 +805,7 @@ The strict implementation order is:
       PR01 benchmark and phases
       -> PR02 direct compatibility parser
       -> PR03 one-pass external load and adaptive I/O
-      -> PR04 persistent initializer/session ownership
+      -> PR04 persistent runtime initializer tensors
       -> PR05 model resolution and payload liveness
       -> PR06 compiled tensor cache
       -> PR07 prepared_execution integration

@@ -626,7 +626,7 @@ TEST(IOArena, RetentionCapNeverEvictsLiveOrLeasedBuffers) {
 
 // ---------------------------------------------------------------------------
 // IOArena::ExportHandle — self-owning exported allocation handle (step 6 of the
-// buffer-reuse arena plan, see docs/next_steps/2026-08_buffer_reuse_arena.rst).
+// buffer-reuse arena plan, see docs/next_steps/2026/2026-08_buffer_reuse_arena.rst).
 // ---------------------------------------------------------------------------
 
 // ExportHandle turns a live buffer into an AllocationHandle that keeps the arena

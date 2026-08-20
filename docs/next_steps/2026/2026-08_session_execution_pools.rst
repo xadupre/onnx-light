@@ -5,7 +5,7 @@ Session execution policies and shared CPU pools
 
 :Date: 2026-08
 
-**implementation in progress**
+**implementation complete**
 
 Progress
 ++++++++
@@ -59,6 +59,21 @@ here; the full sequence is tracked in the `Implementation sequence`_ table.
        active executor before invoking a callback. Optional executor counters
        allocate no state until enabled and report dispatches, limited inline
        calls, and nested inline calls.
+   * - Pool PR05
+     - Registered-kernel executor adapter
+     - ``onnx-light-cpu`` registered kernels install a non-owning view of the
+       exact session ``CpuExecutor`` and dispatch every parallel range through
+       it.
+   * - Pool PR06
+     - Runtime-event executor identity
+     - Every node-run event records the process-local identity and effective
+       participant count of the executor that performed the dispatch.
+   * - Pool PR07
+     - Scheduler ownership and compatibility gate
+     - Removed the private ``onnx-light-cpu`` scheduler and its controls.
+       Standalone calls are serial, registered calls use the session executor,
+       and source integration against ``onnx-light/main`` passes on Linux,
+       macOS, and Windows.
 
 Objective
 +++++++++
@@ -73,34 +88,33 @@ It should not create one independent set of threads per session. Sessions with
 the same resolved policy should lease a compatible shared pool from a registry.
 Sessions with incompatible policies must not silently share one.
 
-Standalone kernel libraries may retain a private executor for calls made
-outside ``onnx-light``. When a kernel is registered with ``onnx-light``, it must
-use the session executor rather than waking a second private pool.
+Standalone kernel libraries must either accept an explicitly supplied executor
+or run serially outside ``onnx-light``. When a kernel is registered with
+``onnx-light``, it uses the session executor rather than waking a second private
+pool.
 
 This plan is the ``onnx-light`` counterpart of the
 `onnx-light-cpu Runtime Execution Controls roadmap
 <https://github.com/xadupre/onnx-light-cpu/blob/docs/benchmark-runtime-tuning/docs/next_steps/2026_08_runtime_execution_controls.rst>`_.
 
-Current problem
-+++++++++++++++
+Problem addressed
++++++++++++++++++
 
-``RuntimeParameters`` currently stores ``num_threads`` in every
-``RuntimeSession``, but the portable ``ParallelFor`` implementation uses one
-process-wide ``GlobalThreadPool``. Its participant count is resolved from a
-default-constructed ``RuntimeParameters`` and captured on first use. Therefore
-a session can report one requested thread count while its kernels execute with
-another.
+Before this roadmap, ``RuntimeParameters`` stored ``num_threads`` in every
+``RuntimeSession``, but the portable ``ParallelFor`` implementation used one
+process-wide ``GlobalThreadPool``. Its participant count was resolved from a
+default-constructed ``RuntimeParameters`` and captured on first use. A session
+could therefore report one requested thread count while its kernels executed
+with another.
 
-The current global pool also has a compiled spin count and no public affinity
-policy. It cannot support two sessions that request different execution
-policies. Registered ``onnx-light-cpu`` kernels may additionally wake their own
-process-wide pool, so two sets of persistent workers can coexist, spin, retain
-affinity, interfere with benchmarks, or nest.
+The old global pool also had a compiled spin count and no public affinity
+policy. Registered ``onnx-light-cpu`` kernels could additionally wake their own
+process-wide pool, allowing two persistent worker sets to interfere or nest.
+Pool PR01--PR07 replaced that behavior with an inspectable session policy, a
+compatible-executor registry, and one scheduler for registered execution.
 
-Calibration now rejects an execution descriptor whose thread count differs
-from ``ParallelForThreadCount()``. That check prevents a false profile, but it
-does not make session parameters effective. The executor must become
-session-aware before calibration can truthfully vary execution policy.
+Calibration now validates its execution descriptor against the installed
+executor, so profiles and inference use the same resolved participant count.
 
 Ownership decision
 ++++++++++++++++++
@@ -348,9 +362,10 @@ an explicit resource class when they can overlap.
 Registered kernel libraries
 +++++++++++++++++++++++++++
 
-``onnx-light-cpu`` needs an adapter that accepts the ``CpuExecutor`` view and
-invokes serial SIMD range functions. Its private pool remains available only
-for standalone C++ entry points.
+``onnx-light-cpu`` now installs an adapter that accepts the ``CpuExecutor`` view
+and invokes serial SIMD range functions. Standalone C++ entry points run
+serially unless a caller supplies execution through a registered
+``onnx-light`` session; the private pool no longer exists.
 
 Registration should advertise executor support as a capability. A kernel that
 requires an executor but receives none fails preparation rather than silently
@@ -506,12 +521,16 @@ Implementation sequence
        are serial; registered kernels use only the session executor; the
        cross-repository policy and compatibility gates pass.
      - PR06
-     - In review (`onnx-light-cpu#271
+     - Done (`onnx-light-cpu#271
        <https://github.com/xadupre/onnx-light-cpu/pull/271>`_)
 
-Pool PR07 is the final roadmap PR. Its cross-repository gate builds
+Pool PR07 completed the roadmap. Its cross-repository gate builds
 ``onnx-light`` from ``main`` and validates ``onnx-light-cpu`` against that exact
 runtime on Linux, macOS, and Windows. Documentation remains a Linux-only build;
 the integration matrix varies only the operating system, not stable external
 dependency versions. It also removes ``onnx-light-cpu``'s private
 ``parallel_for`` implementation so runtime policy has a single scheduler.
+The follow-up `onnx-light-cpu#272
+<https://github.com/xadupre/onnx-light-cpu/pull/272>`_ fixes source-package
+discovery in that Linux documentation job without changing scheduler
+ownership.

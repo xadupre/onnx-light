@@ -5,14 +5,14 @@ Prepared and asynchronous execution
 
 :Date: 2026-08
 
-**blocked by onnxruntime loading integration**
+**blocked by model-loading bug fixes**
 
 Objective
 +++++++++
 
-This is step 3 of the fast-loading sequence, after
-:ref:`l-next-steps-model-loading` and before
-:ref:`l-next-steps-native-fast-loading-completion`.
+This is step 2 of the fast-loading sequence, after
+:ref:`l-next-steps-model-loading-bug-fixes` and before the explicit
+:ref:`l-next-steps-model-loading` integration with onnxruntime.
 
 The first objective is to reduce model loading time. This plan consumes the
 immutable ``ResolvedModel`` contract defined by
@@ -32,7 +32,7 @@ model execution remains sequential in the first implementation, but the public
 API, dependency representation, errors, and cancellation must not require a
 later incompatible ``run``/``run_wait`` split.
 
-Step 3 implementation boundary
+Step 2 implementation boundary
 ++++++++++++++++++++++++++++++
 
 This document implements the reusable execution substrate:

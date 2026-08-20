@@ -5,14 +5,14 @@ Using ``onnx-light`` fast loading in ``onnxruntime``
 
 :Date: 2026-08
 
-**blocked by model-loading bug fixes**
+**blocked by prepared execution**
 
 Objective
 +++++++++
 
-This is step 2 of the fast-loading sequence, after
-:ref:`l-next-steps-model-loading-bug-fixes` and immediately before
-:ref:`l-next-steps-prepared-execution`.
+This is step 3 of the fast-loading sequence, after
+:ref:`l-next-steps-prepared-execution` and immediately before
+:ref:`l-next-steps-native-fast-loading-completion`.
 
 The completed :ref:`l-next-steps-ort-onnx-light` roadmap made
 ``onnxruntime_USE_ONNX_LIGHT`` a build-time replacement for protobuf and the
@@ -140,7 +140,6 @@ reason and are never converted into empty tensors or successful sessions.
 Completion
 ++++++++++
 
-After both repository PRs merge, the ownership ABI used by later native
-prepared objects is fixed. Proceed to
-:ref:`l-next-steps-prepared-execution`; the remaining native loading work then
-continues in :ref:`l-next-steps-native-fast-loading-completion`.
+After both repository PRs merge, the prepared-object ownership ABI is available
+to ORT and the remaining native loading work continues in
+:ref:`l-next-steps-native-fast-loading-completion`.

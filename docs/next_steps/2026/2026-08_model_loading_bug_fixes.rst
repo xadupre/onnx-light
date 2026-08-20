@@ -102,8 +102,8 @@ Completion
 ++++++++++
 
 After these three PRs, proceed to
-:ref:`l-next-steps-model-loading`, which contains only the explicit
-onnxruntime integration work. Adaptive I/O tuning, selective payload loading,
-prepared caches, and first-token overlap intentionally belong to the later
-native completion roadmap.
-
+:ref:`l-next-steps-prepared-execution`. The explicit onnxruntime integration
+follows once the native prepared-object and ownership contracts are stable.
+Adaptive I/O tuning, selective payload loading, prepared caches, and
+first-token overlap intentionally belong to the later native completion
+roadmap.

@@ -215,8 +215,10 @@ results = [benchmark_dtype(*entry) for entry in DTYPES]
 #
 # One row is drawn per element type. The left panel shows raw inference time.
 # The right panel shows the speed-up relative to ``onnxruntime`` when it
-# provides a CPU kernel. No speed-up is reported for ``bfloat16`` because
-# changing the baseline to NumPy would make that row incomparable.
+# provides a CPU kernel, on a logarithmic scale so that speed-ups and
+# slowdowns are equally readable around the baseline. No speed-up is reported
+# for ``bfloat16`` because changing the baseline to NumPy would make that row
+# incomparable.
 
 figure, axes = matplotlib.pyplot.subplots(
     len(results), 2, figsize=(12, 4.5 * len(results)), squeeze=False
@@ -285,6 +287,7 @@ for row_index, result in enumerate(results):
         1.0, color="grey", linewidth=0.8, linestyle=":", label="onnxruntime (baseline)"
     )
     speedup_axis.set_xscale("log")
+    speedup_axis.set_yscale("log")
     speedup_axis.set_xlabel("array size (elements)")
     speedup_axis.set_ylabel("speed-up vs onnxruntime")
     speedup_axis.set_title(f"Abs speed-up ({label}, onnxruntime = 1)")

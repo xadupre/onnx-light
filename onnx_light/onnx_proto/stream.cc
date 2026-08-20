@@ -25,6 +25,21 @@ namespace ONNX_LIGHT_NAMESPACE::utils {
 
 namespace {
 
+#if defined(_WIN32) && defined(_MSC_VER)
+void IgnoreInvalidParameter(const wchar_t *, const wchar_t *, const wchar_t *, unsigned int,
+                            uintptr_t) {}
+
+class ScopedInvalidParameterHandler {
+public:
+  ScopedInvalidParameterHandler()
+      : previous_(::_set_thread_local_invalid_parameter_handler(IgnoreInvalidParameter)) {}
+  ~ScopedInvalidParameterHandler() { ::_set_thread_local_invalid_parameter_handler(previous_); }
+
+private:
+  _invalid_parameter_handler previous_;
+};
+#endif
+
 std::filesystem::path normalized_model_parent(const std::string &model_path) {
   std::filesystem::path parent = std::filesystem::path(model_path).parent_path();
   if (parent.empty()) {
@@ -749,7 +764,15 @@ bool FdReadStream::EnsureAvailable() const {
     n = ::read(fd_, buffer_, static_cast<size_t>(block_size_));
   } while (n < 0 && errno == EINTR);
 #else
+#if defined(_MSC_VER)
+  intptr_t handle = -1;
+  {
+    ScopedInvalidParameterHandler guard;
+    handle = ::_get_osfhandle(fd_);
+  }
+#else
   const intptr_t handle = ::_get_osfhandle(fd_);
+#endif
   if (handle == -1) {
     errno = EBADF;
     n = -1;
@@ -759,7 +782,7 @@ bool FdReadStream::EnsureAvailable() const {
                                static_cast<DWORD>(block_size_), &bytes_read, nullptr);
     if (!ok) {
       const DWORD err = ::GetLastError();
-      if (err == ERROR_BROKEN_PIPE) {
+      if (err == ERROR_BROKEN_PIPE || err == ERROR_HANDLE_EOF) {
         n = 0;
       } else {
         errno = (err == ERROR_INVALID_HANDLE) ? EBADF : EIO;

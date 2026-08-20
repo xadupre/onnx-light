@@ -78,6 +78,23 @@ struct KernelTuningParameters {
   bool Contains(std::string_view name) const;
 
   /**
+   * Returns a named value with its exact scalar type, or ``nullptr``.
+   *
+   * This query-style accessor returns ``nullptr`` when the name is absent or
+   * when it exists with another scalar type.
+   *
+   * Returns:
+   *   A pointer to the requested value, or ``nullptr``.
+   */
+  template <typename T> const T *TryGet(std::string_view name) const noexcept {
+    static_assert(std::is_same_v<T, int64_t> || std::is_same_v<T, double> ||
+                      std::is_same_v<T, bool> || std::is_same_v<T, std::string>,
+                  "T must be one of the TuningValue alternatives.");
+    auto found = values.find(std::string(name));
+    return found == values.end() ? nullptr : std::get_if<T>(&found->second);
+  }
+
+  /**
    * Returns a named value with its exact scalar type.
    *
    * @throws std::invalid_argument if the name is absent or has another type.
@@ -260,6 +277,16 @@ struct CalibrationBatchReport {
 using KernelTuningValidationHook = std::function<void(const KernelTuningParameters &)>;
 
 /**
+ * Validates kernel-specific value ranges without throwing on invalid input.
+ *
+ * Returns:
+ *   ``std::nullopt`` when the complete parameter set is valid, otherwise the
+ *   validation message describing why it is invalid.
+ */
+using KernelTuningQueryValidationHook =
+    std::function<std::optional<std::string>(const KernelTuningParameters &)>;
+
+/**
  * Defines one kernel's portable defaults and validation contract.
  *
  * Construction validates the key, names, and portable defaults immediately.
@@ -269,6 +296,16 @@ using KernelTuningValidationHook = std::function<void(const KernelTuningParamete
  */
 class KernelTuningSchema {
 public:
+  /**
+   * Creates a schema from a non-throwing validation query hook.
+   *
+   * Returns:
+   *   A schema whose validation hook returns ``std::nullopt`` on success or a
+   *   diagnostic message on invalid input.
+   */
+  static KernelTuningSchema WithQueryValidation(KernelTuningParameters portable_defaults,
+                                                KernelTuningQueryValidationHook validation_hook);
+
   explicit KernelTuningSchema(KernelTuningParameters portable_defaults,
                               KernelTuningValidationHook validation_hook = {});
 
@@ -298,10 +335,15 @@ public:
                    std::string *error_message = nullptr) const;
 
 private:
+  struct QueryValidationTag {};
+
+  KernelTuningSchema(KernelTuningParameters portable_defaults, QueryValidationTag,
+                     KernelTuningQueryValidationHook validation_hook);
+
   std::optional<std::string> ValidationError(const KernelTuningParameters &parameters) const;
 
   KernelTuningParameters portable_defaults_;
-  KernelTuningValidationHook validation_hook_;
+  KernelTuningQueryValidationHook validation_hook_;
 };
 
 class KernelTuningRegistry;

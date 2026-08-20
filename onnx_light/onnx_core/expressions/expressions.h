@@ -257,6 +257,22 @@ struct Call : Node {
 NodePtr parse(const std::string &expr);
 
 /**
+ * @brief Parses @p expr into an AST without throwing on malformed input.
+ *
+ * This query-style companion to :cpp:func:`parse` returns ``true`` and stores
+ * the parsed tree in @p tree when the expression is lexically and
+ * syntactically valid. It returns ``false`` when parsing fails, clears
+ * @p tree, and optionally stores the diagnostic message in @p error_message.
+ *
+ * @param expr The expression string to parse.
+ * @param tree Receives the parsed AST on success.
+ * @param error_message Receives the parse diagnostic on failure when it is not
+ *        ``nullptr``.
+ * @returns ``true`` on success, ``false`` on malformed input.
+ */
+bool try_parse(const std::string &expr, NodePtr &tree, std::string *error_message = nullptr);
+
+/**
  * @brief Converts @p node back to a canonical string expression.
  *
  * Follows Python's `ast.unparse` parenthesisation rules: operator precedence

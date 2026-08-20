@@ -15,12 +15,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
-// Compiles ``pattern`` with ECMAScript syntax. Throws
-// ``std::invalid_argument`` if the pattern is not a valid
-// ``std::regex`` (e.g. uses RE2-specific syntax not supported by the
-// C++ standard library). The message preserves the original
-// ``std::regex_error`` description so callers can diagnose the
-// offending pattern.
+// Compiles ``pattern`` with ECMAScript syntax. The C++ standard library
+// exposes no non-throwing or prevalidation API for ``std::regex``, so this
+// construction remains the genuine external boundary for invalid patterns.
+// The message preserves the original ``std::regex_error`` description so
+// callers can diagnose the offending pattern.
 std::regex CompileRegexPattern(const std::string &pattern) {
   try {
     return std::regex(pattern);

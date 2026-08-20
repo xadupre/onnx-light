@@ -2,6 +2,7 @@
 
 #include "onnx_light_helpers.h"
 #include <condition_variable>
+#include <exception>
 #include <functional>
 #include <mutex>
 #include <queue>
@@ -63,8 +64,10 @@ public:
    * joins all worker threads.
    *
    * If no workers were started, runs any queued jobs inline on the calling
-   * thread. After Wait() returns, the pool is in a stopped state and can be
-   * restarted with Start().
+   * thread. If a submitted job throws, Wait() rethrows the first captured
+   * exception on the caller thread after all workers have been joined. After
+   * Wait() returns, the pool is in a stopped state and can be restarted with
+   * Start().
    */
   void Wait();
 
@@ -109,6 +112,8 @@ private:
 
   // Counts jobs that are queued OR currently executing.
   size_t pending_jobs_;
+  // First exception raised by any submitted job, rethrown by Wait().
+  std::exception_ptr first_exception_;
 
   /**
    * Spawns the worker threads if they have not been created yet.
@@ -117,6 +122,11 @@ private:
    * exist or when the pool has not been started.
    */
   void EnsureWorkersStarted();
+
+  /** Runs one job, capturing any exception for the eventual Wait() caller. */
+  void ExecuteJob(std::function<void()> &job) noexcept;
+  /** Stops workers, drains queued jobs when needed, and optionally rethrows. */
+  void WaitImpl(bool rethrow_exceptions);
 
   /** Entry point executed by each worker thread. */
   void worker_thread();

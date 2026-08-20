@@ -286,6 +286,32 @@ TEST(RenameExpressions, ParseExpressionTokens_SyntaxError) {
   EXPECT_EQ(result, std::unordered_set<std::string>{inv});
 }
 
+TEST(RenameExpressions, TryParseReportsErrorsWithoutThrowing) {
+  NodePtr tree;
+  std::string error;
+  EXPECT_TRUE(try_parse("a+b", tree, &error));
+  ASSERT_NE(tree, nullptr);
+  EXPECT_TRUE(error.empty());
+
+  EXPECT_FALSE(try_parse("a +", tree, &error));
+  EXPECT_EQ(tree, nullptr);
+  EXPECT_EQ(error, "Unexpected token '' in expression");
+}
+
+TEST(RenameExpressions, TryParseRejectsLexerErrorsWithoutProducingATree) {
+  NodePtr tree = std::make_unique<Name>("stale");
+  std::string error;
+
+  EXPECT_FALSE(try_parse("@", tree, &error));
+  EXPECT_EQ(tree, nullptr);
+  EXPECT_EQ(error, "Unexpected character '@' in expression");
+
+  tree = std::make_unique<Name>("stale");
+  EXPECT_FALSE(try_parse("9223372036854775808", tree, &error));
+  EXPECT_EQ(tree, nullptr);
+  EXPECT_EQ(error, "Integer literal out of range in expression");
+}
+
 TEST(RenameExpressions, RenameDynamicExpression_SyntaxError) {
   std::string inv = "a +";
   auto result = rename_dynamic_expression(inv, {{"a", "b"}});

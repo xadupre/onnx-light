@@ -60,12 +60,16 @@ inline bool ParseProtoFromBytes(Proto *proto, const char *buffer, size_t length)
   ParseOptions options;
   utils::StringStream stream(reinterpret_cast<const uint8_t *>(buffer),
                              static_cast<int64_t>(length));
+  Proto parsed;
   try {
-    proto->ParseFromStream(stream, options);
+    if (!parsed.ParseFromStream(stream, options) || stream.NotEnd()) {
+      return false;
+    }
   } catch (const std::runtime_error &) {
     return false;
   }
-  return !stream.NotEnd();
+  *proto = std::move(parsed);
+  return true;
 }
 
 /**

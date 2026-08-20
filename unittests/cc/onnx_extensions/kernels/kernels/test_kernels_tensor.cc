@@ -430,6 +430,36 @@ TEST(KernelClass, CastClassDoubleToStringMatchesOrtFormat) {
   EXPECT_EQ(ys[3], "-INF");
 }
 
+TEST(KernelClass, CastClassStringToFloatPreservesStodAcceptedGrammar) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
+  Tensor x = Tensor::FromStrings("", {8},
+                                 {"  -2.5tail", "12abc", "0x1.8p+2rest", "INF", "-inf", "+InFiNiTy",
+                                  "nan(payload)", "  +3.5"});
+  Tensor y = cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::DOUBLE));
+  const double *py = y.AsDouble();
+  ASSERT_NE(py, nullptr);
+  EXPECT_DOUBLE_EQ(py[0], -2.5);
+  EXPECT_DOUBLE_EQ(py[1], 12.0);
+  EXPECT_DOUBLE_EQ(py[2], 6.0);
+  EXPECT_TRUE(std::isinf(py[3]));
+  EXPECT_GT(py[3], 0.0);
+  EXPECT_TRUE(std::isinf(py[4]));
+  EXPECT_LT(py[4], 0.0);
+  EXPECT_TRUE(std::isinf(py[5]));
+  EXPECT_GT(py[5], 0.0);
+  EXPECT_TRUE(std::isnan(py[6]));
+  EXPECT_DOUBLE_EQ(py[7], 3.5);
+}
+
+TEST(KernelClass, CastClassRejectsStringsOutsideStodRange) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
+  Tensor x = Tensor::FromStrings("", {2}, {"1e309", "1e-99999"});
+  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(core::runtime::DataType::DOUBLE)),
+               std::invalid_argument);
+}
+
 TEST(KernelClass, CastClassToStringUsesAllocator) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};

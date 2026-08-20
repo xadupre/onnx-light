@@ -5,6 +5,7 @@
 #include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
 #include <algorithm>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
@@ -14,12 +15,14 @@ namespace {
 constexpr std::string_view kTuningLibrary = "onnx_light";
 constexpr std::string_view kTuningImplementation = "portable";
 
-void ValidateParallelTuning(std::string_view kernel,
-                            const core::runtime::KernelTuningParameters &parameters) {
-  if (parameters.Get<int64_t>(kParallelMinimumElements) <= 0) {
-    throw std::invalid_argument(std::string(kernel) +
-                                " parallel.minimum_elements must be positive.");
+std::optional<std::string>
+ValidateParallelTuning(std::string_view kernel,
+                       const core::runtime::KernelTuningParameters &parameters) {
+  const int64_t *minimum_elements = parameters.TryGet<int64_t>(kParallelMinimumElements);
+  if (minimum_elements == nullptr || *minimum_elements <= 0) {
+    return std::string(kernel) + " parallel.minimum_elements must be positive.";
   }
+  return std::nullopt;
 }
 
 } // namespace
@@ -59,12 +62,13 @@ void RegisterParallelTuningSchemas(std::string_view kernel,
                                    int64_t portable_minimum_elements, uint32_t tuning_abi) {
   const std::string kernel_name(kernel);
   for (int32_t element_type : supported_element_types) {
-    core::runtime::RegisterKernelTuningSchema(core::runtime::KernelTuningSchema(
-        {MakePortableTuningKey(kernel, element_type, tuning_abi),
-         {{std::string(kParallelMinimumElements), portable_minimum_elements}}},
-        [kernel_name](const core::runtime::KernelTuningParameters &parameters) {
-          ValidateParallelTuning(kernel_name, parameters);
-        }));
+    core::runtime::RegisterKernelTuningSchema(
+        core::runtime::KernelTuningSchema::WithQueryValidation(
+            {MakePortableTuningKey(kernel, element_type, tuning_abi),
+             {{std::string(kParallelMinimumElements), portable_minimum_elements}}},
+            [kernel_name](const core::runtime::KernelTuningParameters &parameters) {
+              return ValidateParallelTuning(kernel_name, parameters);
+            }));
   }
 }
 
@@ -75,8 +79,10 @@ void ConfigureParallelTuning(std::string_view kernel,
     throw std::invalid_argument(std::string(kernel) +
                                 " tuning parameters have an incompatible key.");
   }
-  ValidateParallelTuning(kernel, parameters);
-  tuning.parallel_minimum_elements = parameters.Get<int64_t>(kParallelMinimumElements);
+  if (std::optional<std::string> error = ValidateParallelTuning(kernel, parameters)) {
+    throw std::invalid_argument(*error);
+  }
+  tuning.parallel_minimum_elements = *parameters.TryGet<int64_t>(kParallelMinimumElements);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::tuning

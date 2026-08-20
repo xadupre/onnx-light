@@ -200,6 +200,21 @@ void ValidateSelector(const platform::CpuSelector &selector) {
   }
 }
 
+KernelTuningQueryValidationHook WrapValidationHook(KernelTuningValidationHook validation_hook) {
+  if (!validation_hook) {
+    return {};
+  }
+  return [validation_hook = std::move(validation_hook)](
+             const KernelTuningParameters &parameters) -> std::optional<std::string> {
+    try {
+      validation_hook(parameters);
+      return std::nullopt;
+    } catch (const std::invalid_argument &exception) {
+      return exception.what();
+    }
+  };
+}
+
 } // namespace
 
 size_t KernelTuningKeyHash::operator()(const KernelTuningKey &key) const noexcept {
@@ -258,8 +273,21 @@ void KernelTuningParameters::ThrowWrongType(std::string_view name, std::string_v
                               std::string(expected) + ", not " + std::string(actual) + ".");
 }
 
+KernelTuningSchema
+KernelTuningSchema::WithQueryValidation(KernelTuningParameters portable_defaults,
+                                        KernelTuningQueryValidationHook validation_hook) {
+  return KernelTuningSchema(std::move(portable_defaults), QueryValidationTag{},
+                            std::move(validation_hook));
+}
+
 KernelTuningSchema::KernelTuningSchema(KernelTuningParameters portable_defaults,
                                        KernelTuningValidationHook validation_hook)
+    : KernelTuningSchema(std::move(portable_defaults), QueryValidationTag{},
+                         WrapValidationHook(std::move(validation_hook))) {}
+
+KernelTuningSchema::KernelTuningSchema(KernelTuningParameters portable_defaults,
+                                       QueryValidationTag /*tag*/,
+                                       KernelTuningQueryValidationHook validation_hook)
     : portable_defaults_(std::move(portable_defaults)),
       validation_hook_(std::move(validation_hook)) {
   ValidateKey(portable_defaults_.key);
@@ -272,17 +300,14 @@ KernelTuningSchema::KernelTuningSchema(KernelTuningParameters portable_defaults,
     }
     (void)value;
   }
-  if (validation_hook_) {
-    validation_hook_(portable_defaults_);
+  if (std::optional<std::string> error = ValidationError(portable_defaults_)) {
+    throw std::invalid_argument(*error);
   }
 }
 
 void KernelTuningSchema::Validate(const KernelTuningParameters &parameters) const {
   if (std::optional<std::string> error = ValidationError(parameters)) {
     throw std::invalid_argument(*error);
-  }
-  if (validation_hook_) {
-    validation_hook_(parameters);
   }
 }
 
@@ -291,20 +316,6 @@ bool KernelTuningSchema::TryValidate(const KernelTuningParameters &parameters,
   if (std::optional<std::string> error = ValidationError(parameters)) {
     if (error_message != nullptr) {
       *error_message = *error;
-    }
-    return false;
-  }
-  if (!validation_hook_) {
-    if (error_message != nullptr) {
-      error_message->clear();
-    }
-    return true;
-  }
-  try {
-    validation_hook_(parameters);
-  } catch (const std::invalid_argument &exception) {
-    if (error_message != nullptr) {
-      *error_message = exception.what();
     }
     return false;
   }
@@ -336,6 +347,9 @@ KernelTuningSchema::ValidationError(const KernelTuningParameters &parameters) co
       return "Missing kernel tuning parameter '" + name + "'.";
     }
     (void)value;
+  }
+  if (validation_hook_) {
+    return validation_hook_(parameters);
   }
   return std::nullopt;
 }

@@ -173,7 +173,9 @@ public:
 /// constructs exercised by the upstream backend tests (anchors,
 /// character classes, alternation, quantifiers, and groups).
 /// Patterns that rely on RE2-specific syntax not supported by
-/// ``std::regex`` will throw ``std::invalid_argument``.
+/// ``std::regex`` will throw ``std::invalid_argument``. This
+/// remains a boundary catch because standard C++ exposes no
+/// non-throwing regex prevalidation API.
 class RegexFullMatch : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:RegexFullMatch";

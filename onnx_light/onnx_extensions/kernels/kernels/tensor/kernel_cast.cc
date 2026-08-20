@@ -10,13 +10,19 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+
 #include <algorithm>
+#include <cctype>
+#include <cerrno>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
@@ -338,15 +344,32 @@ std::string ElementToString(const Tensor &x, int64_t i) {
   }
 }
 
-// Parses ``s`` (a numeric representation produced by ``ElementToString`` or
-// equivalent) as a ``double``. Throws ``std::invalid_argument`` if the
-// string is not a recognised numeric literal.
+// Parses ``s`` using the same accepted grammar and prefix semantics as the
+// previous ``std::stod`` implementation, but without exceptions in the probing
+// path. ``std::strtod`` keeps the historic behaviour we need here: it skips
+// leading whitespace, accepts prefix parses with trailing text, and recognises
+// hexadecimal floats, ``inf``/``infinity`` spellings, and ``nan(payload)``.
+// This intentionally remains locale-sensitive because forcing a C-locale parse
+// would change the old ``std::stod`` contract for callers that rely on the
+// process locale.
+bool TryParseAsDouble(std::string_view text, double &value) {
+  const std::string buffer(text);
+  const char *const begin = buffer.c_str();
+  char *end = nullptr;
+  errno = 0;
+  value = std::strtod(begin, &end);
+  if (end == begin) {
+    return false;
+  }
+  return errno != ERANGE;
+}
+
 double ParseAsDouble(const std::string &s) {
-  try {
-    return std::stod(s);
-  } catch (const std::exception &) {
+  double value = 0.0;
+  if (!TryParseAsDouble(s, value)) {
     EXT_THROW_INVALID("kernel::Cast: cannot parse string '", s, "' as a numeric value.");
   }
+  return value;
 }
 
 } // namespace

@@ -5,7 +5,7 @@ ParallelFor profiling and hardware counters
 
 :Date: 2026-08
 
-**discussion**
+**implementation ready**
 
 Objective
 +++++++++
@@ -22,6 +22,37 @@ layers:
 
 The instrumentation is diagnostic. It may explain a tuning result, but it must
 not silently change a kernel threshold or worker count while inference runs.
+
+Next implementation batch
++++++++++++++++++++++++++
+
+Profile PR01 is the next runtime implementation batch. It is intentionally
+limited to portable, session-owned region events:
+
+* add ``ParallelRegionEvent`` and a fixed-capacity
+  ``ParallelRegionCollector`` under ``onnx_core/runtime/tuning``;
+* add an optional collector to ``RuntimeSessionOptions`` and install its
+  non-owning view beside the session ``CpuExecutor`` for each run;
+* extend the public ``ParallelFor`` wrapper with an optional label and trailing
+  ``std::source_location`` while preserving every existing call site;
+* record total iterations, grain size, requested, admitted, and observed
+  participants, wall time, executor identity, source location, and whether the
+  region ran nested-inline;
+* report dropped events after the configured capacity is exhausted rather than
+  allocating or blocking;
+* prove that the disabled path performs no clock read, allocation, collector
+  lock, or event construction.
+
+The implementation hooks belong in ``tuning/cpu_executor.{h,cc}`` and
+``kernels/parallel_for.{h,cc}``; session ownership belongs in
+``runtime_session.{h,cc}``. Unit tests cover serial, limited, parallel,
+nested-inline, bounded-capacity, and disabled cases. A focused benchmark
+compares the disabled median against the current executor baseline.
+
+Profile PR01 explicitly excludes process CPU time, Python bindings,
+``perf_event_open``, calibration integration, and platform hardware-counter
+backends. Those additions depend on the portable event contract and land in
+later batches.
 
 Metric definitions
 ++++++++++++++++++
@@ -145,17 +176,43 @@ Acceptance requires:
 * hardware-counter values agree with ``perf stat`` within a documented
   tolerance on an isolated Linux benchmark.
 
-Implementation order
-++++++++++++++++++++
+Implementation sequence
++++++++++++++++++++++++
 
-1. Add the disabled-by-default collector interface and
-   ``std::source_location`` capture.
-2. Record bounded portable region events and expose them through C++ and
-   Python.
-3. Add nested/concurrent identifiers and dropped-event accounting.
-4. Add process CPU time and normalized utilization with explicit validity.
-5. Add the Linux ``perf_event_open`` grouped collector and status reporting.
-6. Connect optional diagnostics to kernel calibration reports.
-7. Add platform backends only where equivalent counter semantics can be
-   documented and tested.
+.. list-table::
+   :header-rows: 1
+   :widths: 12 31 42 15
 
+   * - PR
+     - Scope
+     - Merge criterion
+     - Status
+   * - Profile PR01
+     - Portable event contract and bounded session collector.
+     - Disabled execution has no instrumentation work; enabled serial,
+       parallel, limited, and nested regions emit truthful bounded events.
+     - Ready
+   * - Profile PR02
+     - Run/parent identity, process CPU time, and normalized utilization.
+     - Nested and concurrent regions retain identity and report explicit metric
+       validity.
+     - Planned
+   * - Profile PR03
+     - C++ report API and Python inspection.
+     - Bounded events and dropped counts are inspectable without exposing
+       mutable collector storage.
+     - Planned
+   * - Profile PR04
+     - Linux grouped ``perf_event_open`` collector.
+     - Unsupported, denied, multiplexed, and valid samples remain
+       distinguishable and agree with ``perf stat`` within tolerance.
+     - Planned
+   * - Profile PR05
+     - Calibration diagnostics integration.
+     - Metrics explain candidates but never override correctness or elapsed
+       time selection.
+     - Planned
+   * - Profile PR06
+     - Additional platform backends.
+     - A backend lands only with equivalent documented and tested semantics.
+     - Optional

@@ -39,6 +39,42 @@ Large-model startup follows one explicit four-document sequence:
 Parallel-for profiling may proceed alongside steps 1 and 2, but its executor
 instrumentation must be stable before step 3 begins.
 
+Assignable issue sequence:
+
+.. list-table::
+    :header-rows: 1
+    :widths: 12 24 64
+
+    * - Step
+      - Issues
+      - Order
+    * - 1. Bug fixes
+      - #4608--#4610
+      - `#4608 <https://github.com/xadupre/onnx-light/issues/4608>`_ ->
+        `#4609 <https://github.com/xadupre/onnx-light/issues/4609>`_ ->
+        `#4610 <https://github.com/xadupre/onnx-light/issues/4610>`_
+    * - 2. onnxruntime
+      - #4611--#4612
+      - `#4611 <https://github.com/xadupre/onnx-light/issues/4611>`_ ->
+        `#4612 <https://github.com/xadupre/onnx-light/issues/4612>`_. #4612 is
+        coordination for a PR in ``microsoft/onnxruntime`` and must not be
+        assigned to an agent working only in ``xadupre/onnx-light``.
+    * - 3. Prepared execution
+      - #4613--#4617
+      - `#4613 <https://github.com/xadupre/onnx-light/issues/4613>`_ ->
+        `#4614 <https://github.com/xadupre/onnx-light/issues/4614>`_ ->
+        `#4615 <https://github.com/xadupre/onnx-light/issues/4615>`_ ->
+        `#4616 <https://github.com/xadupre/onnx-light/issues/4616>`_ ->
+        `#4617 <https://github.com/xadupre/onnx-light/issues/4617>`_
+    * - 4. Native completion
+      - #4618--#4623
+      - `#4618 <https://github.com/xadupre/onnx-light/issues/4618>`_ ->
+        `#4619 <https://github.com/xadupre/onnx-light/issues/4619>`_ ->
+        `#4620 <https://github.com/xadupre/onnx-light/issues/4620>`_ ->
+        `#4621 <https://github.com/xadupre/onnx-light/issues/4621>`_ ->
+        `#4622 <https://github.com/xadupre/onnx-light/issues/4622>`_ ->
+        `#4623 <https://github.com/xadupre/onnx-light/issues/4623>`_
+
 .. toctree::
     :maxdepth: 1
     :caption: Fast-loading implementation sequence

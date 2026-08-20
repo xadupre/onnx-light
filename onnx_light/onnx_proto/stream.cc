@@ -670,7 +670,7 @@ bool FdWriteStream::Flush() {
 // FdReadStream
 ////////////////////
 
-int64_t FdReadStream::_InitLimit(int fd) noexcept {
+int64_t FdReadStream::InitLimit(int fd) noexcept {
 #if !defined(_WIN32)
   auto cur = ::lseek(fd, 0, SEEK_CUR);
   if (cur < 0)
@@ -681,7 +681,7 @@ int64_t FdReadStream::_InitLimit(int fd) noexcept {
     return INT64_MAX;
   }
   ::lseek(fd, cur, SEEK_SET);
-  return static_cast<int64_t>(end - cur); // remaining bytes
+  return end >= cur ? static_cast<int64_t>(end - cur) : 0; // remaining bytes
 #else
   auto cur = ::_lseeki64(fd, 0, SEEK_CUR);
   if (cur < 0)
@@ -692,59 +692,96 @@ int64_t FdReadStream::_InitLimit(int fd) noexcept {
     return INT64_MAX;
   }
   ::_lseeki64(fd, cur, SEEK_SET);
-  return static_cast<int64_t>(end - cur);
+  return end >= cur ? static_cast<int64_t>(end - cur) : 0;
 #endif
 }
 
+int FdReadStream::AdaptiveBlockSize(int64_t limit) noexcept {
+  if (limit == INT64_MAX)
+    return 64 * 1024;
+  if (limit <= 64 * 1024)
+    return 4096;
+  if (limit <= 16 * 1024 * 1024)
+    return 64 * 1024;
+  return 1024 * 1024;
+}
+
 FdReadStream::FdReadStream(int fd, int block_size)
-    : BinaryStream(), fd_(fd), block_size_(block_size > 0 ? block_size : 4096),
-      buffer_(new char[static_cast<size_t>(block_size_)]), available_(0), position_(0),
-      total_read_(0), pos_(0), eof_(false) {
-  limit_ = _InitLimit(fd_);
+    : BinaryStream(), fd_(fd), block_size_(block_size), buffer_(nullptr), available_(0),
+      position_(0), last_returned_(0), total_read_(0), pos_(0), limit_(InitLimit(fd_)), eof_(false),
+      failed_(false) {
+  if (block_size_ <= 0)
+    block_size_ = AdaptiveBlockSize(limit_);
+  buffer_ = new char[static_cast<size_t>(block_size_)];
 }
 
 FdReadStream::~FdReadStream() { delete[] buffer_; }
 
-bool FdReadStream::Next(const void **data, int *size) {
+bool FdReadStream::EnsureAvailable() const {
+  if (available_ > 0)
+    return true;
+  position_ = 0;
+  int64_t n;
+  do {
 #if !defined(_WIN32)
-  auto n = ::read(fd_, buffer_, static_cast<size_t>(block_size_));
+    n = ::read(fd_, buffer_, static_cast<size_t>(block_size_));
 #else
-  auto n = ::_read(fd_, buffer_, static_cast<unsigned>(block_size_));
+    n = ::_read(fd_, buffer_, static_cast<unsigned>(block_size_));
 #endif
+  } while (n < 0 && errno == EINTR);
   if (n <= 0) {
-    *data = nullptr;
-    *size = 0;
+    failed_ = n < 0;
     eof_ = true;
     return false;
   }
-  *data = buffer_;
-  *size = static_cast<int>(n);
   available_ = static_cast<int>(n);
-  position_ = 0;
   total_read_ += static_cast<int64_t>(n);
   return true;
 }
 
+bool FdReadStream::NotEnd() const {
+  if (pos_ >= limit_)
+    return false;
+  return EnsureAvailable();
+}
+
+bool FdReadStream::Next(const void **data, int *size) {
+  EXT_ENFORCE(data != nullptr && size != nullptr,
+              "FdReadStream::Next: output pointers must not be null.");
+  if (!EnsureAvailable()) {
+    *data = nullptr;
+    *size = 0;
+    return false;
+  }
+  *data = buffer_ + position_;
+  *size = available_;
+  last_returned_ = available_;
+  position_ += available_;
+  available_ = 0;
+  return true;
+}
+
 void FdReadStream::BackUp(int count) {
+  EXT_ENFORCE(count >= 0 && count <= last_returned_, "FdReadStream::BackUp: invalid count ", count,
+              ".");
+  position_ -= count;
   available_ += count;
-  total_read_ -= static_cast<int64_t>(count);
-#if !defined(_WIN32)
-  ::lseek(fd_, -static_cast<off_t>(count), SEEK_CUR);
-#else
-  ::_lseek(fd_, -static_cast<long>(count), SEEK_CUR);
-#endif
+  last_returned_ = 0;
 }
 
 bool FdReadStream::Skip(int count) {
-#if !defined(_WIN32)
-  auto r = ::lseek(fd_, static_cast<off_t>(count), SEEK_CUR);
-#else
-  auto r = ::_lseek(fd_, static_cast<long>(count), SEEK_CUR);
-#endif
-  if (r < 0)
+  if (count < 0 || pos_ < 0 || (limit_ != INT64_MAX && limit_ - pos_ < count))
     return false;
-  total_read_ += static_cast<int64_t>(count);
-  available_ = 0;
+  int64_t remaining = count;
+  while (remaining > 0) {
+    if (!EnsureAvailable())
+      return false;
+    int consumed = static_cast<int>(std::min<int64_t>(remaining, available_));
+    position_ += consumed;
+    available_ -= consumed;
+    pos_ += consumed;
+    remaining -= consumed;
+  }
   return true;
 }
 
@@ -773,6 +810,8 @@ std::string FdReadStream::tell_around() const {
 }
 
 const uint8_t *FdReadStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_buffer) {
+  EXT_ENFORCE(n_bytes >= 0, "[FdReadStream::read_bytes] n_bytes must be non-negative.");
+  CanRead(static_cast<uint64_t>(n_bytes), "[FdReadStream::read_bytes]");
   // When no destination is supplied, allocate and own a small buffer for this read
   // (rather than throwing): file-descriptor-backed streams cannot hand out a stable
   // pointer into their own rotating block_size_ buffer (each Next() call overwrites
@@ -806,15 +845,17 @@ const uint8_t *FdReadStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated
 }
 
 void FdReadStream::skip_bytes(offset_t n_bytes) {
-#if !defined(_WIN32)
-  auto r = ::lseek(fd_, static_cast<off_t>(n_bytes), SEEK_CUR);
-#else
-  auto r = ::_lseek(fd_, static_cast<long>(n_bytes), SEEK_CUR);
-#endif
-  EXT_ENFORCE(r >= 0, "[FdReadStream::skip_bytes] lseek failed at pos=", pos_, " skip=", n_bytes);
-  total_read_ += n_bytes;
-  available_ = 0;
-  pos_ += n_bytes;
+  EXT_ENFORCE(n_bytes >= 0, "[FdReadStream::skip_bytes] n_bytes must be non-negative.");
+  CanRead(static_cast<uint64_t>(n_bytes), "[FdReadStream::skip_bytes]");
+  while (n_bytes > 0) {
+    EXT_ENFORCE(EnsureAvailable(), "[FdReadStream::skip_bytes] EOF reached with ", n_bytes,
+                " bytes still needed at pos=", pos_);
+    int consumed = static_cast<int>(std::min<int64_t>(n_bytes, available_));
+    position_ += consumed;
+    available_ -= consumed;
+    pos_ += consumed;
+    n_bytes -= consumed;
+  }
 }
 
 //////////////////////

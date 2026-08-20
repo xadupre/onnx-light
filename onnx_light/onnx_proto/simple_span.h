@@ -302,6 +302,9 @@ public:
   /** Returns true when the data is borrowed (non-owning). */
   inline bool is_borrowed() const { return borrowed_; }
 
+  /** Returns the token retaining borrowed storage, or an empty token when caller-owned. */
+  inline const std::shared_ptr<void> &owner() const { return owner_; }
+
   /** Implicit conversion to a standard string so the type is a drop-in for
    *  protobuf ``bytes`` fields (which are std::string) in consuming code. */
   inline operator std::string() const {

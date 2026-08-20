@@ -5075,6 +5075,83 @@ TEST(RuntimeSession, IsReusableAcrossMultipleRuns) {
   EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[1], -4.0f);
 }
 
+TEST(RuntimeSession, CachesRawAndTypedInitializersAcrossContextClear) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  TensorProto *raw = graph->add_initializer();
+  raw->set_name("raw");
+  raw->set_data_type(TensorProto::DataType::FLOAT);
+  raw->add_dims(2);
+  const std::vector<float> raw_values{1.0f, 2.0f};
+  const auto *raw_bytes = reinterpret_cast<const uint8_t *>(raw_values.data());
+  raw->ref_raw_data() =
+      std::vector<uint8_t>(raw_bytes, raw_bytes + raw_values.size() * sizeof(float));
+  TensorProto *typed = graph->add_initializer();
+  typed->set_name("typed");
+  typed->set_data_type(TensorProto::DataType::FLOAT);
+  typed->add_dims(2);
+  typed->add_float_data(3.0f);
+  typed->add_float_data(4.0f);
+  NodeProto *node = graph->add_node();
+  node->set_domain("test.initializers");
+  node->set_op_type("Observe");
+  node->add_input("raw");
+  node->add_input("typed");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  std::vector<const uint8_t *> raw_addresses;
+  std::vector<const uint8_t *> typed_addresses;
+  rt.RegisterCustomKernel(
+      "test.initializers", "Observe",
+      [&raw_addresses, &typed_addresses](const NodeProto &, RuntimeContext &ctx) {
+        raw_addresses.push_back(ctx.Get("raw").bytes());
+        typed_addresses.push_back(ctx.Get("typed").bytes());
+        EXPECT_FLOAT_EQ(ctx.Get("raw").AsFloat()[1], 2.0f);
+        EXPECT_FLOAT_EQ(ctx.Get("typed").AsFloat()[1], 4.0f);
+      });
+  RuntimeSession session(model);
+
+  session.Run(rt);
+  EXPECT_TRUE(rt.Get("raw").is_borrowed());
+  EXPECT_TRUE(rt.Get("typed").is_borrowed());
+  rt.Clear();
+  session.Run(rt);
+
+  ASSERT_EQ(raw_addresses.size(), 2u);
+  ASSERT_EQ(typed_addresses.size(), 2u);
+  EXPECT_EQ(raw_addresses[0], raw_addresses[1]);
+  EXPECT_EQ(typed_addresses[0], typed_addresses[1]);
+}
+
+TEST(RuntimeSession, InputOverridesCachedInitializerForOneRun) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  TensorProto *initializer = graph->add_initializer();
+  initializer->set_name("value");
+  initializer->set_data_type(TensorProto::DataType::FLOAT);
+  initializer->add_dims(1);
+  initializer->add_float_data(1.0f);
+  NodeProto *node = graph->add_node();
+  node->set_domain("test.initializers");
+  node->set_op_type("ObserveOverride");
+  node->add_input("value");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  std::vector<float> observed;
+  rt.RegisterCustomKernel("test.initializers", "ObserveOverride",
+                          [&observed](const NodeProto &, RuntimeContext &ctx) {
+                            observed.push_back(ctx.Get("value").AsFloat()[0]);
+                          });
+  RuntimeSession session(model);
+
+  rt.Set("value", Tensor::FromFloat("value", {1}, {9.0f}), core::runtime::RuntimeEventKind::kInput);
+  session.Run(rt);
+  rt.Clear();
+  session.Run(rt);
+
+  EXPECT_EQ(observed, (std::vector<float>{9.0f, 1.0f}));
+}
+
 TEST(RuntimeSession, ConstructsExactlyOneKernelPerNodeAcrossMultipleRuns) {
   // Registers a synthetic op whose NodeKernelFn factory (kernel construction)
   // and the returned kernel's Run (per-run execution) each bump their own

@@ -283,7 +283,6 @@ public:
                           const std::string &attr_name = "");
 
 private:
-  std::vector<std::pair<std::string, Tensor>> initializers_;
   std::vector<std::string> output_names_;
 };
 

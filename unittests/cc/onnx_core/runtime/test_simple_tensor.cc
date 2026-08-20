@@ -356,6 +356,41 @@ TEST(SimpleTensorBorrow, BorrowBytes) {
   EXPECT_FLOAT_EQ(t.AsFloat()[2], 3.0f);
 }
 
+TEST(SimpleTensorBorrow, RetainsBorrowedOwnerAcrossProtoRelease) {
+  TensorProto proto;
+  proto.set_name("mapped");
+  proto.set_data_type(TensorProto::DataType::FLOAT);
+  proto.add_dims(1);
+  auto storage = std::make_shared<std::vector<float>>(std::initializer_list<float>{4.0f});
+  std::shared_ptr<void> owner = storage;
+  proto.ref_raw_data().assign_borrowed(reinterpret_cast<const uint8_t *>(storage->data()),
+                                       sizeof(float), owner);
+
+  Tensor tensor = TensorFromProto(proto);
+  const uint8_t *payload = tensor.bytes();
+  proto.clear_raw_data();
+  storage.reset();
+  owner.reset();
+
+  EXPECT_EQ(tensor.bytes(), payload);
+  EXPECT_TRUE(tensor.borrowed_owner());
+  EXPECT_FLOAT_EQ(tensor.AsFloat()[0], 4.0f);
+}
+
+TEST(SimpleTensorBorrow, BorrowViewReusesPayloadAndOwner) {
+  auto storage = std::make_shared<std::vector<float>>(std::initializer_list<float>{2.0f, 3.0f});
+  Tensor source = Tensor::Borrow("source", static_cast<int32_t>(DataType::FLOAT), {2},
+                                 reinterpret_cast<const uint8_t *>(storage->data()),
+                                 2 * sizeof(float), storage);
+
+  Tensor view = source.BorrowView();
+
+  EXPECT_EQ(view.bytes(), source.bytes());
+  EXPECT_EQ(view.borrowed_owner(), source.borrowed_owner());
+  EXPECT_EQ(view.name, source.name);
+  EXPECT_EQ(view.shape, source.shape);
+}
+
 TEST(SimpleTensorBorrow, ToOwnedDetachesBytes) {
   const float vals[] = {4.0f, 5.0f};
   Tensor borrowed = Tensor::Borrow("b", static_cast<int32_t>(DataType::FLOAT), {2},

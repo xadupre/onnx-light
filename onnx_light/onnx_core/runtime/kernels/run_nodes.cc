@@ -176,12 +176,6 @@ SubgraphSession::SubgraphSession(RuntimeContext &rt, const GraphProto &graph)
   // parameter for API symmetry with ``Run``/``RunChild`` and because most
   // call sites naturally have an ``rt`` in scope at the construction site.
   (void)rt;
-  const auto &inits = graph.initializer();
-  initializers_.reserve(inits.size());
-  for (size_t i = 0; i < inits.size(); ++i) {
-    const TensorProto &tp = inits[i];
-    initializers_.emplace_back(tp.name(), TensorFromProto(tp));
-  }
   const auto &outs = graph.output();
   output_names_.reserve(outs.size());
   for (size_t i = 0; i < outs.size(); ++i) {
@@ -196,20 +190,6 @@ SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
                           std::vector<std::pair<std::string, Sequence>> sequence_bindings,
                           RuntimeContext &rt, const std::string &attr_name) {
   RuntimeContext child = rt.MakeSubgraphContext(attr_name);
-  for (const auto &kv : initializers_) {
-    if (!child.Has(kv.first)) {
-      // Borrow the initializer's bytes instead of deep-copying. The
-      // ``initializers_`` vector outlives the child context (built once
-      // at SubgraphSession construction, reused across iterations), so
-      // the borrowed view never dangles.
-      const Tensor &src = kv.second;
-      Tensor borrowed =
-          (static_cast<DataType>(src.data_type) == DataType::STRING)
-              ? Tensor::BorrowStrings(kv.first, src.shape, src.AsStrings())
-              : Tensor::Borrow(kv.first, src.data_type, src.shape, src.bytes(), src.size_bytes());
-      child.Set(kv.first, std::move(borrowed), RuntimeEventKind::kInitializer);
-    }
-  }
   for (auto &kv : bindings) {
     child.Put(kv.first, std::move(kv.second), RuntimeEventKind::kInput);
   }
@@ -1201,14 +1181,6 @@ Tensors RunModel(const ModelProto &model, Tensors inputs, int verbose) {
     const std::string name = input.name;
     rt.Set(name, std::move(input), RuntimeEventKind::kInput);
   }
-  const auto &initializers = graph.initializer();
-  for (size_t i = 0; i < initializers.size(); ++i) {
-    const TensorProto &tp = initializers[i];
-    if (!rt.Has(tp.name())) {
-      rt.Set(tp.name(), TensorFromProto(tp), RuntimeEventKind::kInitializer);
-    }
-  }
-
   RuntimeSession session(model, verbose);
   session.Run(rt);
 

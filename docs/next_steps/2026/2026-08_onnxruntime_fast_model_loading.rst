@@ -94,8 +94,9 @@ layer:
       - Stable payload identities and kernel-specific compiled tensors
       - Compatible packed weights bypass portable reads and prepacking
       - PR06
-    * - First-token scheduling
-      - Lazy payloads plus session-scoped I/O and preparation dependencies
+    * - Prepared execution
+      - :ref:`l-next-steps-prepared-execution`, lazy payloads, and
+        session-scoped I/O/preparation dependencies
       - Early blocks run while later blocks are still prepared
       - PR07
     * - ORT ownership
@@ -587,8 +588,8 @@ Acceptance:
 * warm prepared-cache ``T_first_token`` improves by at least 20% on the reduced
   fixture, or profiling proves that preparation is not on its critical path.
 
-PR07 -- overlap preparation with first inference
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PR07 -- integrate ``prepared_execution`` with first inference
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 **Repository:** ``xadupre/onnx-light``
 
@@ -782,7 +783,7 @@ The strict implementation order is:
       -> PR04 persistent initializer/session ownership
       -> PR05 model resolution and payload liveness
       -> PR06 compiled tensor cache
-      -> PR07 asynchronous prepared execution
+      -> PR07 prepared_execution integration
 
       PR02 -> PR08a ownership contract
       PR03 + PR04 -> PR08a mapped ownership
@@ -791,8 +792,10 @@ The strict implementation order is:
       onnx-light PR08a -> PR08b payload consumption
 
 PR02 and the ORT parser comparison may proceed before native prepared
-execution. PR06 depends on kernel-specific stable packed layouts. PR07 depends
-on the real session executor from
+execution. PR06 depends on kernel-specific stable packed layouts. PR07 is the
+loading roadmap's implementation bridge into
+:ref:`l-next-steps-prepared-execution`; it depends on the real session executor
+from
 :ref:`l-next-steps-session-execution-pools`; it must not create another hidden
 CPU pool.
 

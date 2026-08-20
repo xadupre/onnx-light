@@ -221,11 +221,11 @@ jobs:
     needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
-    # windows-latest gets +30 minutes over macOS. The amd64 Windows duration is
+    # windows-latest gets +60 minutes over macOS. The amd64 Windows duration is
     # highly sensitive to sccache hit rate: when hits are high it can be close
     # to x86, but low-hit runs become much longer. Keep generous headroom for
     # that variance.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || 30 }}
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 90 || 30 }}
     permissions:
       contents: read
       id-token: write

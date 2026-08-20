@@ -145,8 +145,10 @@ descriptor and calls ``ModelProto::ParseFromFileDescriptor``. In the current
 
 This path does not use ``ParseOptions``, adaptive block sizes, parallel raw-data
 reads, or mmap ownership. ``ParseFromArray`` similarly constructs a temporary
-``std::string`` before parsing. These are concrete first optimizations because
-PR #29723 already routes ORT through them.
+``std::string`` before parsing. These are compatibility-adapter bugs, not
+parser requirements: the native parser already accepts bounded
+``BinaryStream`` implementations. PR #29723 makes them urgent because ORT now
+routes model loading through these adapters.
 
 External weights are a different path. The ONNX protobuf contains only
 ``location``, ``offset``, and ``length`` metadata; ORT resolves and
@@ -401,10 +403,16 @@ Acceptance:
   mapped bytes, and deferred page faults;
 * ORT + protobuf and ORT + ``onnx-light`` use otherwise identical builds.
 
-PR02 -- remove compatibility-parser staging
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PR02 -- fix compatibility-parser whole-file staging
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 **Repository:** ``xadupre/onnx-light``
+
+This PR fixes a performance and peak-memory bug. The compatibility adapter was
+implemented by accumulating the descriptor into a convenient ``std::string``
+and then reusing ``ParseFromString``; that shortcut is functionally correct but
+defeats the streaming parser and creates an allocation proportional to the
+complete model.
 
 Change ``ParseFromFileDescriptor`` to parse directly from ``FdReadStream``
 instead of first accumulating the complete file in a ``std::string``.

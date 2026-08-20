@@ -9,14 +9,6 @@ from ..onnx_py._onnxpyprotoop import (  # type: ignore
     TensorProto,
 )
 
-# ParseOptions used by :func:`_find_external_location` to skip copying raw tensor
-# bytes when scanning a model file purely for external-data ``location`` entries.
-# Without this, the scan would parse and copy every tensor's raw data and roughly
-# double the apparent ``load`` time when a caller passes ``load_external_data=True``
-# without an explicit ``location``.
-_FIND_EXTERNAL_PARSE_OPTS = ParseOptions()
-_FIND_EXTERNAL_PARSE_OPTS.skip_raw_data = True
-
 # Serialization formats understood by :func:`load` and :func:`save`. ``"protobuf"``
 # is the binary ONNX format; ``"textproto"`` is the protobuf text format handled
 # by :mod:`onnx_light.onnx_proto._text_format`.
@@ -32,54 +24,6 @@ def _infer_format(f: object) -> str:
     if isinstance(f, (str, Path)) and os.path.splitext(str(f))[-1] == ".textproto":
         return "textproto"
     return "protobuf"
-
-
-def _find_external_location(model_path: str) -> str:
-    """Scans a model file's structure to find the primary external data location.
-
-    Parses the ONNX protobuf structure without loading external tensor data,
-    then inspects the initializers in all graphs (including nested sub-graphs
-    found inside node attributes) for the first ``location`` entry in their
-    ``external_data`` metadata.
-
-    The discovered location is validated against path traversal and symlink
-    escape before being returned.
-
-    :param model_path: Absolute or relative path to the ``.onnx`` model file.
-    :return: Absolute path to the primary external data file, or ``""`` if no
-        external data references are found.
-    :raises ValueError: If the location would escape the model directory.
-    """
-    from ._path_security import validate_external_data_path
-
-    struct_model = ModelProto()
-    struct_model.ParseFromFile(model_path, _FIND_EXTERNAL_PARSE_OPTS)
-    model_dir = os.path.dirname(os.path.abspath(model_path))
-    if not struct_model.has_graph():
-        return ""
-    # BFS over all graphs (top-level + nested sub-graphs inside node attributes).
-    # Index-based access is used for node and attribute lists because the Python
-    # iterator raises a TypeError for RepeatedProtoField when sub-graph
-    # attributes are present.
-    queue = [struct_model.graph]
-    while queue:
-        graph = queue.pop()
-        for i in range(len(graph.initializer)):
-            init = graph.initializer[i]
-            if int(init.data_location) == 1:  # 1 == TensorProto.EXTERNAL
-                for j in range(len(init.external_data)):
-                    entry = init.external_data[j]
-                    if entry.key == "location" and entry.value:
-                        return validate_external_data_path(str(entry.value), model_dir)
-        for i in range(len(graph.node)):
-            node = graph.node[i]
-            for j in range(len(node.attribute)):
-                attr = node.attribute[j]
-                if attr.has_g():
-                    queue.append(attr.g)
-                for k in range(len(attr.graphs)):
-                    queue.append(attr.graphs[k])
-    return ""
 
 
 def save(
@@ -398,7 +342,10 @@ def load(
             ".onnx"
         }, f"File name must have the extension .onnx to be loaded but f={f!r}"
     if load_external_data and not location and isinstance(f, str):
-        location = _find_external_location(f)
+        # Avoid a metadata-only pre-scan parse. The C++ external-data path
+        # resolver consumes each tensor's ``external_data.location`` on the same
+        # parse pass and opens the matching source file on demand.
+        location = os.path.abspath(f)
     model = ModelProto()
     if (
         skip_raw_data

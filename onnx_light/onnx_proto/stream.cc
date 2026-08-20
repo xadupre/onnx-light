@@ -91,6 +91,33 @@ std::filesystem::path validate_external_location_is_next_to_model(const std::str
   return final_path;
 }
 
+void validate_external_weights_read_path(const std::filesystem::path &candidate_path,
+                                         const std::filesystem::path &base_dir) {
+  EXT_ENFORCE(!std::filesystem::is_symlink(candidate_path), "External data file '",
+              candidate_path.string(), "' is a symbolic link, which is not allowed.");
+  std::error_code ec;
+  const std::filesystem::path canonical_data =
+      std::filesystem::weakly_canonical(candidate_path, ec);
+  EXT_ENFORCE(!ec, "External data path '", candidate_path.string(),
+              "' could not be canonicalized: ", ec.message());
+  const std::filesystem::path canonical_base = std::filesystem::weakly_canonical(base_dir, ec);
+  EXT_ENFORCE(!ec, "Model base directory '", base_dir.string(),
+              "' could not be canonicalized: ", ec.message());
+  std::filesystem::path::string_type base_str = canonical_base.native();
+  if (!base_str.empty() && base_str.back() != std::filesystem::path::preferred_separator) {
+    base_str += std::filesystem::path::preferred_separator;
+  }
+  EXT_ENFORCE(canonical_data.native().find(base_str) == 0 || canonical_data == canonical_base,
+              "External data file '", candidate_path.string(),
+              "' resolves outside the model directory '", base_dir.string(), "'.");
+  std::error_code ec_hc;
+  const auto hc = std::filesystem::hard_link_count(candidate_path, ec_hc);
+  EXT_ENFORCE(!ec_hc, "Could not determine hard link count for external data file '",
+              candidate_path.string(), "': ", ec_hc.message());
+  EXT_ENFORCE(hc <= 1, "External data file '", candidate_path.string(),
+              "' has multiple hard links (", static_cast<int64_t>(hc), "), which is not allowed.");
+}
+
 } // namespace
 
 // Maps an entire file into read-only virtual memory and returns a shared_ptr<uint8_t>
@@ -1345,6 +1372,10 @@ TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &
 }
 
 void TwoFilesStream::set_active_weights_location(const std::string &location) {
+  std::filesystem::path model_parent = std::filesystem::path(file_path_).parent_path();
+  if (model_parent.empty()) {
+    model_parent = std::filesystem::path(".");
+  }
   if (location.empty()) {
     active_weights_location_ = weights_stream_.file_path();
     return;
@@ -1360,9 +1391,9 @@ void TwoFilesStream::set_active_weights_location(const std::string &location) {
   if (it == extra_weights_streams_.end()) {
     std::filesystem::path path(location);
     if (!path.is_absolute()) {
-      std::filesystem::path parent = std::filesystem::path(file_path_).parent_path();
-      path = parent / path;
+      path = model_parent / path;
     }
+    validate_external_weights_read_path(path, model_parent);
     auto stream = std::make_unique<FileStream>(path.string());
     extra_weights_streams_.emplace(location, std::move(stream));
   }

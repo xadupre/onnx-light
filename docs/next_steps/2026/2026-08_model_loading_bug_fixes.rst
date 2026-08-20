@@ -27,7 +27,7 @@ Bug PR01 -- remove C++ compatibility-parser staging (done)
 
 **Repository:** ``xadupre/onnx-light``
 
-**implemented**
+**Implemented**
 
 ``ProtoMessageAdapter::ParseFromFileDescriptor`` now parses directly through
 ``FdReadStream``, and ``ParseFromArray`` uses a bounded non-owning stream. The
@@ -54,6 +54,8 @@ Bug PR02 -- remove Python external-data double parsing
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 **Repository:** ``xadupre/onnx-light``
+
+**implemented**
 
 When ``load_external_data=True`` and ``location`` is absent, ``load()`` calls
 ``_find_external_location()``. That helper parses a temporary metadata-only

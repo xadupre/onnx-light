@@ -278,35 +278,66 @@ KernelTuningSchema::KernelTuningSchema(KernelTuningParameters portable_defaults,
 }
 
 void KernelTuningSchema::Validate(const KernelTuningParameters &parameters) const {
-  if (parameters.key != portable_defaults_.key) {
-    throw std::invalid_argument("Kernel tuning parameters for '" + KeyDescription(parameters.key) +
-                                "' do not match schema '" + KeyDescription(portable_defaults_.key) +
-                                "'.");
+  if (std::optional<std::string> error = ValidationError(parameters)) {
+    throw std::invalid_argument(*error);
   }
-  ValidateValues(parameters);
   if (validation_hook_) {
     validation_hook_(parameters);
   }
 }
 
-void KernelTuningSchema::ValidateValues(const KernelTuningParameters &parameters) const {
+bool KernelTuningSchema::TryValidate(const KernelTuningParameters &parameters,
+                                     std::string *error_message) const {
+  if (std::optional<std::string> error = ValidationError(parameters)) {
+    if (error_message != nullptr) {
+      *error_message = *error;
+    }
+    return false;
+  }
+  if (!validation_hook_) {
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
+  try {
+    validation_hook_(parameters);
+  } catch (const std::invalid_argument &exception) {
+    if (error_message != nullptr) {
+      *error_message = exception.what();
+    }
+    return false;
+  }
+  if (error_message != nullptr) {
+    error_message->clear();
+  }
+  return true;
+}
+
+std::optional<std::string>
+KernelTuningSchema::ValidationError(const KernelTuningParameters &parameters) const {
+  if (parameters.key != portable_defaults_.key) {
+    return "Kernel tuning parameters for '" + KeyDescription(parameters.key) +
+           "' do not match schema '" + KeyDescription(portable_defaults_.key) + "'.";
+  }
   for (const auto &[name, value] : parameters.values) {
     auto expected = portable_defaults_.values.find(name);
     if (expected == portable_defaults_.values.end()) {
-      throw std::invalid_argument("Unknown kernel tuning parameter '" + name + "'.");
+      return "Unknown kernel tuning parameter '" + name + "'.";
     }
     if (value.index() != expected->second.index()) {
-      throw std::invalid_argument("Kernel tuning parameter '" + name + "' must be " +
-                                  std::string(TuningValueTypeName(expected->second)) + ", not " +
-                                  std::string(TuningValueTypeName(value)) + ".");
+      return "Kernel tuning parameter '" + name + "' must be " +
+             std::string(TuningValueTypeName(expected->second)) + ", not " +
+             std::string(TuningValueTypeName(value)) + ".";
     }
   }
   for (const auto &[name, value] : portable_defaults_.values) {
     if (!parameters.Contains(name)) {
-      throw std::invalid_argument("Missing kernel tuning parameter '" + name + "'.");
+      return "Missing kernel tuning parameter '" + name + "'.";
     }
     (void)value;
   }
+  return std::nullopt;
 }
 
 struct KernelTuningRegistrySnapshot::State {

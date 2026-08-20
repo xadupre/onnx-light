@@ -286,8 +286,19 @@ public:
    */
   void Validate(const KernelTuningParameters &parameters) const;
 
+  /**
+   * Validates a complete parameter set without throwing on invalid input.
+   *
+   * Returns:
+   *   ``true`` when the parameters satisfy the schema. Otherwise returns
+   *   ``false`` and stores the validation message in ``error_message`` when it
+   *   is not ``nullptr``.
+   */
+  bool TryValidate(const KernelTuningParameters &parameters,
+                   std::string *error_message = nullptr) const;
+
 private:
-  void ValidateValues(const KernelTuningParameters &parameters) const;
+  std::optional<std::string> ValidationError(const KernelTuningParameters &parameters) const;
 
   KernelTuningParameters portable_defaults_;
   KernelTuningValidationHook validation_hook_;

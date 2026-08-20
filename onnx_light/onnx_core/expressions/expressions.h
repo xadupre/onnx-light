@@ -381,6 +381,27 @@ std::map<std::string, int64_t> simplify_two_expressions(const std::string &expr1
                                                         const std::string &expr2);
 
 /**
+ * @brief Attempts to compute the non-zero coefficient map of
+ *        @p expr1 - (@p expr2) without throwing on malformed or
+ *        unsupported expressions.
+ *
+ * This query-style companion to :cpp:func:`simplify_two_expressions`
+ * returns ``true`` and writes the simplified non-zero coefficient map
+ * into @p out when both expressions can be parsed and reduced by the
+ * linear-combination visitor. It returns ``false`` when the
+ * expressions are malformed or use constructs that the visitor cannot
+ * linearise.
+ *
+ * @param expr1 The first expression string.
+ * @param expr2 The second expression string.
+ * @param out Receives the non-zero coefficient map on success.
+ * @returns ``true`` on success, ``false`` when the expressions cannot
+ *          be linearised without error.
+ */
+bool try_simplify_two_expressions(const std::string &expr1, const std::string &expr2,
+                                  std::map<std::string, int64_t> &out);
+
+/**
  * @brief Possible outcomes of comparing two symbolic expressions.
  *
  * The comparison assumes that every symbolic token is positive or null

@@ -21,11 +21,43 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <algorithm>
+#include <cctype>
+#include <charconv>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 
 namespace ONNX_LIGHT_NAMESPACE::core::symbolic {
+
+namespace {
+
+bool TryParseGpuIndex(const std::string &text, std::size_t &value) {
+  const char *begin = text.data();
+  const char *end = begin + text.size();
+  const auto parsed = std::from_chars(begin, end, value);
+  return parsed.ec == std::errc() && parsed.ptr == end;
+}
+
+bool TryParseDoubleValue(const std::string &text, double &value) {
+  const char *begin = text.data();
+  const char *end = begin + text.size();
+  while (begin != end && std::isspace(static_cast<unsigned char>(*begin))) {
+    ++begin;
+  }
+  if (begin == end) {
+    return false;
+  }
+  if (*begin == '+') {
+    ++begin;
+    if (begin == end) {
+      return false;
+    }
+  }
+  const auto parsed = std::from_chars(begin, end, value);
+  return parsed.ec == std::errc() && parsed.ptr == end;
+}
+
+} // namespace
 
 Device MakeGPUDevice(int index) {
   if (index < 0 || index > kMaxGPUIndex) {
@@ -76,13 +108,10 @@ Device DeviceFromName(const std::string &name) {
         return Device::kUndefined;
       }
     }
-    try {
-      const std::size_t index = std::stoul(name.substr(kGPUPrefixLen));
-      if (index <= static_cast<std::size_t>(kMaxGPUIndex)) {
-        return MakeGPUDevice(static_cast<int>(index));
-      }
-    } catch (const std::exception &) {
-      // Fall through to kUndefined on overflow or parse error.
+    std::size_t index = 0;
+    if (TryParseGpuIndex(name.substr(kGPUPrefixLen), index) &&
+        index <= static_cast<std::size_t>(kMaxGPUIndex)) {
+      return MakeGPUDevice(static_cast<int>(index));
     }
   }
   return Device::kUndefined;
@@ -549,8 +578,9 @@ void RemoveMetadataAt(ValueInfoProto &vi, int idx) {
 // Writes/updates/removes a numeric metadata entry on ``vi``: when
 // ``value`` is present, the entry keyed by ``key`` is updated in place
 // or appended; when ``value`` is absent any pre-existing entry is
-// removed. Numeric values are serialised with ``std::to_string`` which
-// is locale-independent and round-trips through ``std::stod``.
+// removed. Numeric values are serialised with ``std::to_string`` and
+// parsed back with ``std::from_chars`` to keep the round-trip
+// locale-independent.
 void SetOrRemoveNumericMetadata(ValueInfoProto &vi, const char *key,
                                 const std::optional<double> &value) {
   const int idx = FindMetadataIndex(vi, key);
@@ -573,17 +603,12 @@ std::optional<double> ReadNumericMetadata(const ValueInfoProto &vi, const char *
   if (idx < 0) {
     return std::nullopt;
   }
-  try {
-    std::size_t consumed = 0;
-    const std::string value = vi.metadata_props()[idx].value();
-    const double parsed = std::stod(value, &consumed);
-    if (consumed != value.size()) {
-      return std::nullopt;
-    }
+  const std::string value = vi.metadata_props()[idx].value();
+  double parsed = 0.0;
+  if (TryParseDoubleValue(value, parsed)) {
     return parsed;
-  } catch (const std::exception &) {
-    return std::nullopt;
   }
+  return std::nullopt;
 }
 
 } // namespace

@@ -179,9 +179,7 @@ void AddSymbolicConstraintWithLeafDerivation(ShapesContext &ctx, const std::stri
     return;
   }
   std::map<std::string, int64_t> diff;
-  try {
-    diff = expressions::simplify_two_expressions(a, b);
-  } catch (const std::runtime_error &) {
+  if (!expressions::try_simplify_two_expressions(a, b, diff)) {
     return;
   }
   if (diff.size() != 2) {

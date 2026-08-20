@@ -194,6 +194,38 @@ const core::symbolic::SymDim &AlignedDim(const core::symbolic::SymShape &shape,
   return index < offset ? one : shape[index - offset];
 }
 
+std::optional<core::symbolic::SymDim> StrictBroadcastDim(const core::symbolic::SymDim &left,
+                                                         const core::symbolic::SymDim &right) {
+  if (left.IsInt() && right.IsInt()) {
+    if (left.AsInt() == right.AsInt()) {
+      return left;
+    }
+    if (left.AsInt() == 1) {
+      return right;
+    }
+    if (right.AsInt() == 1) {
+      return left;
+    }
+    return std::nullopt;
+  }
+  if (left.IsInt() && left.AsInt() == 1) {
+    return right;
+  }
+  if (right.IsInt() && right.AsInt() == 1) {
+    return left;
+  }
+  if (left == right) {
+    return left;
+  }
+  if (left.IsInt()) {
+    return left;
+  }
+  if (right.IsInt()) {
+    return right;
+  }
+  return std::nullopt;
+}
+
 bool BroadcastsTo(const core::symbolic::SymShape &left, const core::symbolic::SymShape &right,
                   const core::symbolic::SymShape &output) {
   const std::size_t rank = std::max(left.Rank(), right.Rank());
@@ -310,14 +342,30 @@ ApplyShapeBasedBroadcast(const char *pattern_name, core::builder::GraphGraph &gr
 
 std::optional<core::symbolic::SymShape>
 StrictBroadcastShape(const core::symbolic::SymShape &left, const core::symbolic::SymShape &right) {
-  try {
-    core::symbolic::SymShape result = core::shapes::BroadcastShapes(left, right);
-    return BroadcastsTo(left, right, result)
-               ? std::optional<core::symbolic::SymShape>(std::move(result))
-               : std::nullopt;
-  } catch (const std::invalid_argument &) {
-    return std::nullopt;
+  const std::size_t left_rank = left.Rank();
+  const std::size_t right_rank = right.Rank();
+  const std::size_t rank = std::max(left_rank, right_rank);
+  std::vector<core::symbolic::SymDim> dims;
+  dims.reserve(rank);
+  for (std::size_t i = 0; i < rank; ++i) {
+    const bool has_left = i + left_rank >= rank;
+    const bool has_right = i + right_rank >= rank;
+    if (!has_left) {
+      dims.push_back(right[i - (rank - right_rank)]);
+      continue;
+    }
+    if (!has_right) {
+      dims.push_back(left[i - (rank - left_rank)]);
+      continue;
+    }
+    const std::optional<core::symbolic::SymDim> dim =
+        StrictBroadcastDim(left[i - (rank - left_rank)], right[i - (rank - right_rank)]);
+    if (!dim.has_value()) {
+      return std::nullopt;
+    }
+    dims.push_back(*dim);
   }
+  return core::symbolic::SymShape(dims);
 }
 
 bool StaticExpandTarget(const core::symbolic::SymShape &input,

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cctype>
+#include <charconv>
 #include <functional>
 #include <map>
 #include <numeric>
@@ -43,6 +44,27 @@ struct Token {
   int64_t value{0};
 };
 
+namespace {
+
+bool TryParseInt64Literal(const std::string &text, int64_t &value) {
+  const char *begin = text.data();
+  const char *end = begin + text.size();
+  const auto parsed = std::from_chars(begin, end, value);
+  return parsed.ec == std::errc() && parsed.ptr == end;
+}
+
+bool TryParseExpression(const std::string &expr, NodePtr &tree) {
+  try {
+    tree = parse(expr);
+    return true;
+  } catch (const std::runtime_error &) {
+    tree.reset();
+    return false;
+  }
+}
+
+} // namespace
+
 class Tokenizer {
 public:
   explicit Tokenizer(const std::string &input) : input_(input), pos_(0) {}
@@ -62,7 +84,9 @@ public:
       Token t;
       t.kind = TokenKind::Integer;
       t.text = input_.substr(start, pos_ - start);
-      t.value = std::stoll(t.text);
+      if (!TryParseInt64Literal(t.text, t.value)) {
+        throw std::runtime_error("Integer literal out of range in expression");
+      }
       return t;
     }
 
@@ -1520,6 +1544,26 @@ static void run_add_visitor(const Node &node, AddVisitorResult &res) {
   res.add_coeff(s, 1);
 }
 
+namespace {
+
+bool TryDifferenceLinearCombination(const std::string &expr1, const std::string &expr2,
+                                    AddVisitorResult &out) {
+  NodePtr tree;
+  if (!TryParseExpression(expr1 + "-(" + expr2 + ")", tree)) {
+    return false;
+  }
+  try {
+    out = AddVisitorResult{};
+    run_add_visitor(*tree, out);
+    return true;
+  } catch (const std::runtime_error &) {
+    out = AddVisitorResult{};
+    return false;
+  }
+}
+
+} // namespace
+
 // Converts an AddVisitorResult into the final simplified string (or int).
 // Returns int64_t when no variables remain (coefficients map was never
 // populated — i.e. the expression was a pure constant).
@@ -1697,9 +1741,7 @@ SimplifyResult simplify_expression(int64_t value) { return value; }
 
 SimplifyResult simplify_expression(const std::string &expr) {
   NodePtr tree;
-  try {
-    tree = parse(expr);
-  } catch (const std::runtime_error &) {
+  if (!TryParseExpression(expr, tree)) {
     // Unparsable expression: return unchanged (matches Python behaviour for
     // expressions with invalid syntax like ONNX '::' node names)
     return expr;
@@ -1734,6 +1776,21 @@ std::map<std::string, int64_t> simplify_two_expressions(const std::string &expr1
     if (v != 0)
       out[k] = v;
   return out;
+}
+
+bool try_simplify_two_expressions(const std::string &expr1, const std::string &expr2,
+                                  std::map<std::string, int64_t> &out) {
+  AddVisitorResult res;
+  if (!TryDifferenceLinearCombination(expr1, expr2, res)) {
+    out.clear();
+    return false;
+  }
+
+  out.clear();
+  for (const auto &[k, v] : res.coeffs)
+    if (v != 0)
+      out[k] = v;
+  return true;
 }
 
 ExpressionComparison compare_expressions(const std::string &expr1, const std::string &expr2) {
@@ -1860,9 +1917,7 @@ int64_t evaluate_expression(const std::string &expr,
 
 std::unordered_set<std::string> parse_expression_tokens(const std::string &expr) {
   NodePtr tree;
-  try {
-    tree = parse(expr);
-  } catch (const std::runtime_error &) {
+  if (!TryParseExpression(expr, tree)) {
     return {expr};
   }
   std::unordered_set<std::string> out;
@@ -1893,9 +1948,7 @@ std::string
 rename_dynamic_expression(const std::string &expression,
                           const std::unordered_map<std::string, std::string> &replacements) {
   NodePtr tree;
-  try {
-    tree = parse(expression);
-  } catch (const std::runtime_error &) {
+  if (!TryParseExpression(expression, tree)) {
     return expression;
   }
 
@@ -2078,9 +2131,7 @@ DimType dim_min(const DimType &a, const DimType &b) {
 static std::optional<std::pair<std::string, int64_t>>
 extract_floordiv_chain(const std::string &simplified_str) {
   NodePtr node;
-  try {
-    node = parse(simplified_str);
-  } catch (const std::runtime_error &) {
+  if (!TryParseExpression(simplified_str, node)) {
     return std::nullopt;
   }
 

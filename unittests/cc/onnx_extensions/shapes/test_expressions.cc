@@ -76,6 +76,20 @@ TEST(SimplifyExpressions, SimplifyTwoExpressions) {
   EXPECT_TRUE(r2.empty());
 }
 
+TEST(SimplifyExpressions, TrySimplifyTwoExpressions) {
+  std::map<std::string, int64_t> diff;
+  ASSERT_TRUE(try_simplify_two_expressions("s52+seq_length", "s52+s70", diff));
+  EXPECT_EQ(diff.size(), 2u);
+  EXPECT_EQ(diff.at("s70"), -1);
+  EXPECT_EQ(diff.at("seq_length"), 1);
+}
+
+TEST(SimplifyExpressions, TrySimplifyTwoExpressionsRejectsMalformedInput) {
+  std::map<std::string, int64_t> diff{{"stale", 1}};
+  EXPECT_FALSE(try_simplify_two_expressions("a", "b +", diff));
+  EXPECT_TRUE(diff.empty());
+}
+
 TEST(SimplifyExpressions, CompareExpressions) {
   // Equal expressions.
   auto eq = compare_expressions("a+b", "b+a");

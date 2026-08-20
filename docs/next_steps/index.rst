@@ -34,6 +34,7 @@ resolution, compiled tensors, and prepared execution.
     :caption: Ready to implement
 
     2026/2026-08_parallel_for_profiling
+    2026/2026-08_model_loading
 
 .. toctree::
     :maxdepth: 1
@@ -45,7 +46,6 @@ resolution, compiled tensors, and prepared execution.
     2026/2026-08_graph_builder_quantized_tensor
     2026/2026-08_mutable_cache
     2026/2026-08_compiled_tensor
-    2026/2026-08_model_loading
     2026/2026-08_model_resolution
     2026/2026-08_prepared_execution
     2026/2026-08_split_wheels

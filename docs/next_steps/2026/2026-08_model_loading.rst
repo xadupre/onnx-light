@@ -1,11 +1,11 @@
 .. _l-next-steps-model-loading:
 
-Faster model loading with ``onnx-light``
-========================================
+Exploiting fast model loading with ``onnx-light``
+=================================================
 
 :Date: 2026-08
 
-**discussion**
+**ready to implement**
 
 Objective
 +++++++++
@@ -32,6 +32,86 @@ The target is not the smallest reported ``load()`` number. A memory map can
 make parsing appear almost free while moving page faults into the first
 inference. The target is a truthful reduction in time to first token, bytes
 read and copied, peak private memory, and repeated preparation work.
+
+Relationship to the completed ORT integration
+++++++++++++++++++++++++++++++++++++++++++++++
+
+This is the second roadmap after the completed
+:ref:`l-next-steps-ort-onnx-light` compatibility plan. The first roadmap made
+``onnx-light`` a build-time replacement for protobuf and the standard
+``onnx`` library inside ORT. It deliberately preserved ORT's existing loading
+pipeline.
+
+This roadmap starts where that compatibility work stops. It uses the native
+loader's source ownership, mapped ranges, selective payload materialization,
+prepared tensors, and asynchronous preparation instead of limiting
+``onnx-light`` to protobuf-compatible method calls. The implementation has two
+coordinated tracks:
+
+* **drop-in ORT improvements**, where direct parsing can accelerate the
+  existing ``onnxruntime_USE_ONNX_LIGHT`` build without an ORT source change;
+* **ownership-aware integration**, where ORT or the native runtime explicitly
+  consumes mapped, lazy, or kernel-ready payloads and preserves their owners.
+
+The tracks share formats, identities, benchmarks, and failure semantics, but
+they do not force ORT and the native runtime to use the same graph resolver or
+execution planner.
+
+Opportunity map
++++++++++++++++
+
+The plan treats fast parsing as the entry point, not the final optimization.
+Every opportunity exposed by the native loader belongs to one measurable
+layer:
+
+.. list-table::
+    :header-rows: 1
+    :widths: 20 34 28 18
+
+    * - Layer
+      - ``onnx-light`` capability
+      - Intended result
+      - Main PR
+    * - Main protobuf
+      - Direct bounded array/file-descriptor streams, adaptive blocks, optional
+        owned mappings
+      - No whole-file staging copy and lower parse latency
+      - PR02
+    * - External data
+      - Validated source descriptors, shared mappings, lazy reads, explicit
+        ownership
+      - One parse, one owner per source, no redundant payload copy
+      - PR03
+    * - Runtime state
+      - Borrowed ``ByteSpan`` payloads and persistent initializer descriptors
+      - Initializers are wrapped once and remain valid for the session
+      - PR04
+    * - Graph resolution
+      - Metadata-first parsing and recoverable exact source ranges
+      - Dead or superseded weights are never read
+      - PR05
+    * - Kernel preparation
+      - Stable payload identities and kernel-specific compiled tensors
+      - Compatible packed weights bypass portable reads and prepacking
+      - PR06
+    * - First-token scheduling
+      - Lazy payloads plus session-scoped I/O and preparation dependencies
+      - Early blocks run while later blocks are still prepared
+      - PR07
+    * - ORT ownership
+      - Mapping lifetime tokens and final-destination read descriptors
+      - Eligible ORT initializers borrow safely; others avoid intermediate
+        buffers
+      - PR08
+    * - Measurement
+      - Phase events, byte/copy counters, page-fault attribution, and cache-state
+        labels
+      - Parser wins cannot hide deferred I/O or first-token regressions
+      - PR01
+
+These layers are intentionally end to end. A change is not considered a
+loading improvement when it only moves copies, page faults, graph work, or
+prepacking past the measured boundary.
 
 Scope and non-goals
 +++++++++++++++++++

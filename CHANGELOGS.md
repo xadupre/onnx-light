@@ -9,7 +9,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Treated C++ compiler warnings as errors on GCC/Clang too (`-Werror`), controlled by the
   new `ONNX_LIGHT_WERROR` CMake option which also gates the existing MSVC `/WX`.
-
 - Made the requested degree of parallelism effective: a runtime session now leases a shared
   CPU executor matching its execution policy and every parallel region its kernels launch
   runs on exactly those participants instead of a process-wide thread pool.
@@ -19,12 +18,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   that disagree with the active participants.
 - Tagged node runtime events with the exact shared CPU executor instance and its effective
   participants, and fixed future prepared execution to the same executor ownership contract.
+- Accepted runtime `Tensor` objects, and sequences mixing them with NumPy arrays, as
+  `ReferenceEvaluator` inputs, borrowing their buffers zero-copy while keeping their owners
+  alive.
+- Ported the MatMul and normalization optimization patterns to C++: `MatMulAdd`,
+  `GemmTranspose`, `TransposeMatMul`, the MatMul reshape patterns, `LayerNormalization`,
+  `RMSNormalization`, `BatchNormalization`, `Gelu`, `LeakyRelu` and their variants.
+- Ported the rotary embedding and attention optimization patterns to C++:
+  `RotaryEmbedding`, `RotaryConcatPart`, the causal mask and cos/sin cache function
+  patterns, `FunctionAttention` and the grouped-query attention patterns.
+- Added `onnx_light.tools.translate`, which converts an ONNX model or graph into Python
+  code rebuilding it, either with the *onnx-compact* `onnx.helper` API or with
+  `GraphBuilder`.
+
+### Fixes
+
+- Removed the remaining unused lambda captures reported by Clang in the Python bindings and
+  in the backend test cases.
 
 ### Documentation & CI
 
 - Standardized the python imports of the helper modules: `import onnx.helper as oh` and
   `import onnx.numpy_helper as onh` (and their `onnx_light.onnx` counterparts) replace
   the `from onnx import helper, numpy_helper` form in the code base and the documentation.
+- Made `setup.py` honor `CMAKE_BUILD_PARALLEL_LEVEL` explicitly by forwarding it as
+  `cmake --build --parallel N`, falling back to the number of available CPUs.
+- Ported the upstream Python pattern tests, so the C++ patterns are checked against the
+  same expectations as the original implementation.
+- Refreshed the quick tour, getting started, main page and README documentation to reflect
+  the implemented features.
+- Documented the plans for session-owned CPU execution pools and for faster model loading,
+  and closed the execution pool roadmap once every step was implemented.
+- Fixed a doxygen warning caused by the unexpanded `FIELD_BYTES` macro.
 - Bumped the release version to `0.1.20`.
 
 ## [0.1.19] – 2026-08-18

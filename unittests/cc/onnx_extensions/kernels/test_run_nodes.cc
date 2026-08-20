@@ -4459,7 +4459,7 @@ TEST(RunNodes, RuntimeSessionAllowsOutputFromForeignAllocatorWhenOptionSet) {
 // graph output through the I/O allocator, while an intermediate value that
 // is not a declared output keeps allocating from the execution allocator.
 // This exercises step 5 of the buffer-reuse arena plan (see
-// docs/next_steps/2026-08_buffer_reuse_arena.rst): "route declared graph
+// docs/next_steps/2026/2026-08_buffer_reuse_arena.rst): "route declared graph
 // outputs directly to the I/O arena".
 TEST(RunNodes, RuntimeSessionRoutesDeclaredOutputsToIOAllocator) {
   core::runtime::SimpleRawBufferAllocator execution_alloc(8);
@@ -4671,7 +4671,7 @@ TEST(RunNodes, RuntimeSessionKeepsSingleAllocatorBehaviorWithoutIOAllocator) {
 // VerifyOutputAllocators never migrates either output. This exercises the
 // slot-aware output allocation API that completes the zero-copy path deferred
 // by the output-slot routing step (see
-// docs/next_steps/2026-08_buffer_reuse_arena.rst, "Target output-slot
+// docs/next_steps/2026/2026-08_buffer_reuse_arena.rst, "Target output-slot
 // contract"). The I/O arena's peak proves the intermediate never touched it:
 // the migration path would have allocated the intermediate in the I/O arena
 // first, doubling the peak.
@@ -4747,7 +4747,7 @@ TEST(RunNodes, RuntimeSessionSlotAwareKernelAllocatesEachOutputInFinalArena) {
 // execution arena regardless of that routing, so the declared output lands in
 // the I/O arena while the workspace stays in the execution arena. This is the
 // "plus a kernel workspace" coverage required by the buffer-reuse arena plan
-// (see docs/next_steps/2026-08_buffer_reuse_arena.rst, "Target output-slot
+// (see docs/next_steps/2026/2026-08_buffer_reuse_arena.rst, "Target output-slot
 // contract").
 TEST(RunNodes, RuntimeSessionSlotAwareKernelWorkspaceStaysInExecutionArena) {
   core::runtime::SimpleRawBufferAllocator execution_alloc(8);

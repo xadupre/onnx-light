@@ -450,10 +450,18 @@ Acceptance:
 This PR benefits the existing #29723 ORT integration without requiring an ORT
 source change.
 
-PR03 -- one parse and adaptive I/O
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PR03 -- fix double parsing and make external I/O adaptive
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 **Repository:** ``xadupre/onnx-light``
+
+This PR fixes a loader-orchestration bug. When ``load_external_data=True`` and
+the caller does not provide ``location``, ``load()`` currently calls
+``_find_external_location()``. That helper parses a temporary metadata-only
+``ModelProto``, returns the first external location, and discards the model.
+``load()`` then constructs another ``ModelProto`` and parses the main protobuf
+again for the real load. Raw tensor bytes are skipped during discovery, but
+the main file and protobuf structure are still traversed twice.
 
 Replace Python's ``_find_external_location()`` preliminary parse with one of
 these equivalent one-pass contracts:

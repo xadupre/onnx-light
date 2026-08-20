@@ -54,7 +54,7 @@ resolution, compiled tensors, and prepared execution.
     :maxdepth: 1
     :caption: Completed
 
-    2025-07_onnx_proto
+    2025/2025-07_onnx_proto
     2026/2026-06_lib_onnx
     2026/2026-06_kernels_backend_tests
     2026/2026-06_gradient

@@ -1150,6 +1150,25 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(args, ("model.onnx",))
         self.assertEqual(kwargs, {})
 
+    def test_loading_auto_external_data_parses_main_proto_once(self):
+        class FakeModelProto:
+            def __init__(self):
+                self.calls = []
+
+            def ParseFromFile(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+            def ParseFromString(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+        with patch.object(io_helper, "ModelProto", FakeModelProto):
+            model = io_helper.load("model.onnx", load_external_data=True, num_threads=1)
+
+        self.assertEqual(len(model.calls), 1)
+        args, kwargs = model.calls[0]
+        self.assertEqual(args, ("model.onnx",))
+        self.assertEqual(kwargs, {"external_data_file": os.path.abspath("model.onnx")})
+
     def test_loading_with_tiny_external_threshold_uses_parse_options(self):
         class FakeParseOptions:
             def __init__(self):
@@ -1400,6 +1419,87 @@ class TestOnnxLightHelper(ExtTestCase):
             attr = if_node.attribute[j]
             init = attr.g.initializer[0]
             self.assertEqual(len(init.raw_data), 3 * 5 * 128 * 64 * 4)
+
+    def test_loading_external_weights_auto_rejects_malformed_range_with_diagnostics(self):
+        src = self.get_dump_file("test_loading_auto_malformed_range_src.onnx")
+        bad = self.get_dump_file("test_loading_auto_malformed_range_bad.onnx")
+        location = self.get_dump_file("test_loading_auto_malformed_range.data")
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, src, location=os.path.split(location)[-1], save_as_external_data=True)
+        rewrite = onnxl.load(src, load_external_data=False)
+        for init in rewrite.graph.initializer:
+            if int(init.data_location) != int(onnxl.TensorProto.EXTERNAL):
+                continue
+            entries = {entry.key: entry.value for entry in init.external_data}
+            if (
+                "location" in entries
+                and "offset" in entries
+                and ("length" in entries or "size" in entries)
+            ):
+                del init.external_data[:]
+                for key, value in [
+                    ("location", entries["location"]),
+                    ("offset", "999999999"),
+                    ("length", entries.get("length", entries.get("size", "0"))),
+                ]:
+                    entry = init.external_data.add()
+                    entry.key = key
+                    entry.value = value
+                break
+        onnxl.save(rewrite, bad)
+        with self.assertRaises(RuntimeError) as cm:
+            onnxl.load(bad, load_external_data=True)
+        msg = str(cm.exception)
+        self.assertIn("tensor", msg)
+        self.assertIn("source", msg)
+        self.assertIn("range", msg)
+
+    def test_loading_external_weights_auto_rejects_traversal_location(self):
+        src = self.get_dump_file("test_loading_auto_traversal_src.onnx")
+        bad = self.get_dump_file("test_loading_auto_traversal_bad.onnx")
+        location = self.get_dump_file("test_loading_auto_traversal.data")
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, src, location=os.path.split(location)[-1], save_as_external_data=True)
+        rewrite = onnxl.load(src, load_external_data=False)
+        for init in rewrite.graph.initializer:
+            if int(init.data_location) != int(onnxl.TensorProto.EXTERNAL):
+                continue
+            for entry in init.external_data:
+                if entry.key == "location":
+                    entry.value = "../escape.data"
+                    break
+            break
+        onnxl.save(rewrite, bad)
+        with self.assertRaises(RuntimeError) as cm:
+            onnxl.load(bad, load_external_data=True)
+        self.assertIn("filename with no folder", str(cm.exception))
+
+    @unittest.skipIf(
+        not hasattr(os, "symlink") or os.name == "nt",
+        "Symlinks require POSIX or elevated privileges on Windows",
+    )
+    def test_loading_external_weights_auto_rejects_symlink_source(self):
+        import shutil
+        import tempfile
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            model_path = os.path.join(tmpdir, "model.onnx")
+            link_name = "weights_link.data"
+            link_path = os.path.join(tmpdir, link_name)
+            outside = os.path.join(tmpdir, "outside.bin")
+            with open(outside, "wb") as f:
+                f.write(b"\x01" * 4096)
+            model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+            onnxl.save(model, model_path, location=link_name, save_as_external_data=True)
+            if os.path.exists(link_path):
+                os.remove(link_path)
+            os.symlink(outside, link_path)
+            with self.assertRaises(RuntimeError) as cm:
+                onnxl.load(model_path, load_external_data=True)
+            self.assertIn("symbolic link", str(cm.exception))
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 @unittest.skipIf(

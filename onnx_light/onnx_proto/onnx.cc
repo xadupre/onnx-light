@@ -9,6 +9,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string_view>
 
@@ -819,31 +820,46 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
       std::cerr << "Warning: " << oss.str() << " Realigning tensor bytes into an aligned buffer."
                 << std::endl;
     }
-    if (borrow_weights) {
-      std::shared_ptr<void> owner;
-      const uint8_t *ptr = two_stream.borrow_weights_bytes(
-          location, offset, size, static_cast<size_t>(std::max<int64_t>(options.alignment, 0)),
-          owner);
-      ref_raw_data().assign_borrowed(ptr, static_cast<size_t>(size), owner);
-    } else {
+    const int64_t range_begin = offset;
+    const int64_t range_end = size > (std::numeric_limits<int64_t>::max() - offset)
+                                  ? std::numeric_limits<int64_t>::max()
+                                  : offset + size;
+    const std::string tensor_name = std::string(ref_name());
+    try {
       two_stream.set_active_weights_location(location);
-      if (options.alignment > 1) {
-        ref_raw_data().resize_aligned(static_cast<size_t>(size),
-                                      static_cast<size_t>(options.alignment));
+      const int64_t source_size = two_stream.weights_size(location);
+      EXT_ENFORCE(source_size >= 0, "External data source has unknown size.");
+      EXT_ENFORCE(offset >= 0 && size >= 0 && offset <= source_size && size <= source_size - offset,
+                  "External data range [", range_begin, ", ", range_end,
+                  ") is out of bounds for source size ", source_size, ".");
+      if (borrow_weights) {
+        std::shared_ptr<void> owner;
+        const uint8_t *ptr = two_stream.borrow_weights_bytes(
+            location, offset, size, static_cast<size_t>(std::max<int64_t>(options.alignment, 0)),
+            owner);
+        ref_raw_data().assign_borrowed(ptr, static_cast<size_t>(size), owner);
       } else {
-        ref_raw_data().resize(size);
+        if (options.alignment > 1) {
+          ref_raw_data().resize_aligned(static_cast<size_t>(size),
+                                        static_cast<size_t>(options.alignment));
+        } else {
+          ref_raw_data().resize(size);
+        }
+        if (options.is_parallel()) {
+          utils::DelayedBlock block;
+          block.size = size;
+          block.data = ref_raw_data().data();
+          block.offset = offset;
+          block.stream_id = 1; // The second stream is the weights stream.
+          two_stream.ReadDelayedBlock(block);
+        } else {
+          two_stream.read_bytes_from_weights_stream(size, ref_raw_data().data(), offset);
+        }
       }
-      if (options.is_parallel()) {
-        two_stream.set_active_weights_location(location);
-        utils::DelayedBlock block;
-        block.size = size;
-        block.data = ref_raw_data().data();
-        block.offset = offset;
-        block.stream_id = 1; // The second stream is the weights stream.
-        two_stream.ReadDelayedBlock(block);
-      } else {
-        two_stream.read_bytes_from_weights_stream(size, ref_raw_data().data(), offset);
-      }
+    } catch (const std::exception &e) {
+      EXT_THROW("TensorProto::ParseFromStream external-data read failure for tensor '", tensor_name,
+                "', source '", location, "', range [", range_begin, ", ", range_end,
+                "): ", e.what());
     }
   }
   // After raw_data (inline or external) has been resolved, gives the caller a chance to take

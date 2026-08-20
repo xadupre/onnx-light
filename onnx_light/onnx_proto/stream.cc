@@ -25,6 +25,21 @@ namespace ONNX_LIGHT_NAMESPACE::utils {
 
 namespace {
 
+#if defined(_WIN32) && defined(_MSC_VER)
+void IgnoreInvalidParameter(const wchar_t *, const wchar_t *, const wchar_t *, unsigned int,
+                            uintptr_t) {}
+
+class ScopedInvalidParameterHandler {
+public:
+  ScopedInvalidParameterHandler()
+      : previous_(::_set_thread_local_invalid_parameter_handler(IgnoreInvalidParameter)) {}
+  ~ScopedInvalidParameterHandler() { ::_set_thread_local_invalid_parameter_handler(previous_); }
+
+private:
+  _invalid_parameter_handler previous_;
+};
+#endif
+
 std::filesystem::path normalized_model_parent(const std::string &model_path) {
   std::filesystem::path parent = std::filesystem::path(model_path).parent_path();
   if (parent.empty()) {
@@ -89,6 +104,33 @@ std::filesystem::path validate_external_location_is_next_to_model(const std::str
               "(see GHSA-8qff-7g33-75mx).");
   }
   return final_path;
+}
+
+void validate_external_weights_read_path(const std::filesystem::path &candidate_path,
+                                         const std::filesystem::path &base_dir) {
+  EXT_ENFORCE(!std::filesystem::is_symlink(candidate_path), "External data file '",
+              candidate_path.string(), "' is a symbolic link, which is not allowed.");
+  std::error_code ec;
+  const std::filesystem::path canonical_data =
+      std::filesystem::weakly_canonical(candidate_path, ec);
+  EXT_ENFORCE(!ec, "External data path '", candidate_path.string(),
+              "' could not be canonicalized: ", ec.message());
+  const std::filesystem::path canonical_base = std::filesystem::weakly_canonical(base_dir, ec);
+  EXT_ENFORCE(!ec, "Model base directory '", base_dir.string(),
+              "' could not be canonicalized: ", ec.message());
+  std::filesystem::path::string_type base_str = canonical_base.native();
+  if (!base_str.empty() && base_str.back() != std::filesystem::path::preferred_separator) {
+    base_str += std::filesystem::path::preferred_separator;
+  }
+  EXT_ENFORCE(canonical_data.native().find(base_str) == 0 || canonical_data == canonical_base,
+              "External data file '", candidate_path.string(),
+              "' resolves outside the model directory '", base_dir.string(), "'.");
+  std::error_code ec_hc;
+  const auto hc = std::filesystem::hard_link_count(candidate_path, ec_hc);
+  EXT_ENFORCE(!ec_hc, "Could not determine hard link count for external data file '",
+              candidate_path.string(), "': ", ec_hc.message());
+  EXT_ENFORCE(hc <= 1, "External data file '", candidate_path.string(),
+              "' has multiple hard links (", static_cast<int64_t>(hc), "), which is not allowed.");
 }
 
 } // namespace
@@ -683,16 +725,11 @@ int64_t FdReadStream::InitLimit(int fd) noexcept {
   ::lseek(fd, cur, SEEK_SET);
   return end >= cur ? static_cast<int64_t>(end - cur) : 0; // remaining bytes
 #else
-  auto cur = ::_lseeki64(fd, 0, SEEK_CUR);
-  if (cur < 0)
-    return INT64_MAX;
-  auto end = ::_lseeki64(fd, 0, SEEK_END);
-  if (end < 0) {
-    ::_lseeki64(fd, cur, SEEK_SET);
-    return INT64_MAX;
-  }
-  ::_lseeki64(fd, cur, SEEK_SET);
-  return end >= cur ? static_cast<int64_t>(end - cur) : 0;
+  // Avoid probing descriptor positions on Windows. Some CRT calls can trigger
+  // fail-fast invalid-parameter handling for invalid/closed descriptors, while
+  // ParseFromFileDescriptor read-failure paths are expected to return false.
+  (void)fd;
+  return INT64_MAX;
 #endif
 }
 
@@ -722,13 +759,40 @@ bool FdReadStream::EnsureAvailable() const {
     return true;
   position_ = 0;
   int64_t n;
-  do {
 #if !defined(_WIN32)
+  do {
     n = ::read(fd_, buffer_, static_cast<size_t>(block_size_));
-#else
-    n = ::_read(fd_, buffer_, static_cast<unsigned>(block_size_));
-#endif
   } while (n < 0 && errno == EINTR);
+#else
+#if defined(_MSC_VER)
+  intptr_t handle = -1;
+  {
+    ScopedInvalidParameterHandler guard;
+    handle = ::_get_osfhandle(fd_);
+  }
+#else
+  const intptr_t handle = ::_get_osfhandle(fd_);
+#endif
+  if (handle == -1) {
+    errno = EBADF;
+    n = -1;
+  } else {
+    DWORD bytes_read = 0;
+    const BOOL ok = ::ReadFile(reinterpret_cast<HANDLE>(handle), buffer_,
+                               static_cast<DWORD>(block_size_), &bytes_read, nullptr);
+    if (!ok) {
+      const DWORD err = ::GetLastError();
+      if (err == ERROR_BROKEN_PIPE || err == ERROR_HANDLE_EOF) {
+        n = 0;
+      } else {
+        errno = (err == ERROR_INVALID_HANDLE) ? EBADF : EIO;
+        n = -1;
+      }
+    } else {
+      n = static_cast<int64_t>(bytes_read);
+    }
+  }
+#endif
   if (n <= 0) {
     failed_ = n < 0;
     eof_ = true;
@@ -1345,6 +1409,10 @@ TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &
 }
 
 void TwoFilesStream::set_active_weights_location(const std::string &location) {
+  std::filesystem::path model_parent = std::filesystem::path(file_path_).parent_path();
+  if (model_parent.empty()) {
+    model_parent = std::filesystem::path(".");
+  }
   if (location.empty()) {
     active_weights_location_ = weights_stream_.file_path();
     return;
@@ -1360,9 +1428,9 @@ void TwoFilesStream::set_active_weights_location(const std::string &location) {
   if (it == extra_weights_streams_.end()) {
     std::filesystem::path path(location);
     if (!path.is_absolute()) {
-      std::filesystem::path parent = std::filesystem::path(file_path_).parent_path();
-      path = parent / path;
+      path = model_parent / path;
     }
+    validate_external_weights_read_path(path, model_parent);
     auto stream = std::make_unique<FileStream>(path.string());
     extra_weights_streams_.emplace(location, std::move(stream));
   }

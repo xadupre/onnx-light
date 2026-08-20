@@ -467,12 +467,11 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_fp16", {opset}, [=]() -> IoData {
-      return IoData{
-          {std::move(FloatToFloat16Tensor("", q16)), std::move(FloatToFloat16Tensor("", k16)),
-           std::move(FloatToFloat16Tensor("", v16)), std::move(FloatToFloat16Tensor("", decay16)),
-           std::move(FloatToFloat16Tensor("", beta16))},
-          {std::move(FloatToFloat16Tensor("", result.output)),
-           std::move(FloatToFloat16Tensor("", result.present_state))}};
+      return IoData{{FloatToFloat16Tensor("", q16), FloatToFloat16Tensor("", k16),
+                     FloatToFloat16Tensor("", v16), FloatToFloat16Tensor("", decay16),
+                     FloatToFloat16Tensor("", beta16)},
+                    {FloatToFloat16Tensor("", result.output),
+                     FloatToFloat16Tensor("", result.present_state)}};
     });
     registry.back().atol = 5e-3;
     registry.back().rtol = 5e-3;

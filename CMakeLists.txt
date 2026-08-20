@@ -37,6 +37,9 @@ option(ONNX_LIGHT_PROVIDE_ONNX_TARGETS
     "Expose drop-in `onnx` and `onnx_proto` CMake targets (aliasing the onnx-light libraries) so onnx-light can be consumed as a replacement for upstream onnx, e.g. via FetchContent from onnxruntime. When ON the aggregate `onnx` target bundles the schema / checker / shape-inference libraries and `onnx_proto` aliases lib_onnx_proto."
     OFF)
 option(ONNX_ML "Enable ai.onnx.ml support." ON)
+option(ONNX_LIGHT_WERROR
+    "Treat C/C++ compiler warnings as errors (/WX on MSVC, -Werror on GCC/Clang). Turn OFF when building with a toolchain emitting warnings onnx-light does not control."
+    ON)
 option(ONNX_HARDENING
     "Enable OpenSSF Compiler Hardening Guide flags for C/C++ targets. \
 See cmake/Hardening.cmake and \
@@ -66,7 +69,9 @@ if(MSVC)
   if(NOT CMAKE_GENERATOR MATCHES "Ninja")
     add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/MP>)
   endif()
-  add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/WX>)
+  if(ONNX_LIGHT_WERROR)
+    add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/WX>)
+  endif()
 endif()
 
 if(NOT MSVC)
@@ -75,7 +80,46 @@ if(NOT MSVC)
   # to MSVC above.
   add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-Wall>)
   add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-Wextra>)
+  if(ONNX_LIGHT_WERROR)
+    add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-Werror>)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      # Clang (unlike GCC) diagnoses explicit captures of constant variables
+      # that end up not being odr-used inside the lambda. The backend-test case
+      # registries capture such constants on purpose, for readability, so keep
+      # this diagnostic a warning instead of an error.
+      add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-error=unused-lambda-capture>)
+    endif()
+  endif()
 endif()
+
+# Third-party sources (googletest, nanobind, upstream onnx) are compiled inside
+# this build tree and therefore inherit the directory-level warning flags above,
+# but their warnings cannot be fixed here. This helper re-enables plain warnings
+# for such targets: the per-target flag is appended after the inherited ones on
+# the command line, so it wins.
+function(onnx_light_disable_werror)
+  if(NOT ONNX_LIGHT_WERROR)
+    return()
+  endif()
+  foreach(_target IN LISTS ARGN)
+    if(NOT TARGET ${_target})
+      continue()
+    endif()
+    get_target_property(_type ${_target} TYPE)
+    if(_type STREQUAL "INTERFACE_LIBRARY" OR _type STREQUAL "UTILITY")
+      continue()
+    endif()
+    get_target_property(_imported ${_target} IMPORTED)
+    if(_imported)
+      continue()
+    endif()
+    if(MSVC)
+      target_compile_options(${_target} PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:/WX->)
+    else()
+      target_compile_options(${_target} PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:-Wno-error>)
+    endif()
+  endforeach()
+endfunction()
 
 include(GNUInstallDirs)
 
@@ -261,6 +305,18 @@ set(ONNX_BLAKE3_SOURCES
     "${ONNX_BLAKE3_PATH}/blake3_hash.cc")
 set_source_files_properties(${ONNX_BLAKE3_SOURCES} PROPERTIES COMPILE_DEFINITIONS
     "BLAKE3_USE_TBB;BLAKE3_NO_SSE2;BLAKE3_NO_SSE41;BLAKE3_NO_AVX2;BLAKE3_NO_AVX512;BLAKE3_USE_NEON=0")
+# BLAKE3 is vendored upstream code: its warnings cannot be fixed here, so keep
+# them non-fatal like the other third-party sources (see
+# onnx_light_disable_werror). The portable-only configuration used above makes
+# `num_cvs` in compress_subtree_to_parent_node() unused once NDEBUG turns the
+# assert reading it into a no-op, which Clang reports as -Wunused-variable.
+if(ONNX_LIGHT_WERROR)
+  if(MSVC)
+    set_property(SOURCE ${ONNX_BLAKE3_SOURCES} APPEND PROPERTY COMPILE_OPTIONS "/WX-")
+  else()
+    set_property(SOURCE ${ONNX_BLAKE3_SOURCES} APPEND PROPERTY COMPILE_OPTIONS "-Wno-error")
+  endif()
+endif()
 
 set(ONNX_LIGHT_PROTO_ALL_SOURCES
     ${ONNX_LIGHT_SOURCES}
@@ -819,6 +875,16 @@ if(ONNX_LIGHT_BUILD_PYTHON)
         BUILD_RPATH "@loader_path"
         INSTALL_RPATH "@loader_path")
   endif()
+
+  # nanobind's own runtime library is compiled by nanobind_add_module as a
+  # target of this directory, so it inherits the warning flags set above. Its
+  # warnings are outside this project's control: exclude it from -Werror / /WX.
+  get_property(_onnx_light_dir_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+  foreach(_onnx_light_target IN LISTS _onnx_light_dir_targets)
+    if(_onnx_light_target MATCHES "^nanobind")
+      onnx_light_disable_werror(${_onnx_light_target})
+    endif()
+  endforeach()
 endif()
 
 # Builds test
@@ -877,6 +943,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
     set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
+    onnx_light_disable_werror(gtest gtest_main gmock gmock_main)
   endif()
   include(GoogleTest)
 
@@ -997,6 +1064,7 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
       DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     FetchContent_MakeAvailable(onnx_upstream)
+    onnx_light_disable_werror(onnx onnx_proto onnx_protobuf)
   endif()
 
   foreach(benchmark_source IN LISTS ONNX_LIGHT_BENCHMARK_SOURCES)

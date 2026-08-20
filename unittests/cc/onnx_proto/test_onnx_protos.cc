@@ -429,14 +429,19 @@ TEST(onnx_string, String_AssignmentOperators) {
   EXPECT_EQ(s.size(), std_str.size());
   EXPECT_EQ(s, std_str);
 
-  s = s;
+  // Self-assignment goes through a pointer: spelling it `s = s` makes Clang
+  // reject the statement (-Wself-assign-overloaded) even though assigning a
+  // string to itself is exactly what is being checked here.
+  utils::String *self = &s;
+  s = *self;
   EXPECT_EQ(s, "assigned from std::string");
 }
 
 TEST(onnx_string, String_SelfAssignmentSafety) {
   utils::String s("12345678901234567890", 19);
 
-  s = s;
+  utils::String *self = &s;
+  s = *self;
   EXPECT_EQ(s.size(), 19);
   EXPECT_EQ(s, "1234567890123456789");
   EXPECT_EQ(s, "1234567890123456789");

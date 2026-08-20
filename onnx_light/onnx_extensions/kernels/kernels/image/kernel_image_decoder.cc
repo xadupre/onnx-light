@@ -147,12 +147,8 @@ bool TryDecodeBmp(const uint8_t *data, size_t size, const std::string &pixel_for
 }
 
 // ---------------------------------------------------------------------------
-// Big-endian byte readers (used by the PNG decoder below).
+// Big-endian byte reader (used by the PNG decoder below).
 // ---------------------------------------------------------------------------
-inline uint16_t ReadU16BE(const uint8_t *p) {
-  return static_cast<uint16_t>((static_cast<uint16_t>(p[0]) << 8) | static_cast<uint16_t>(p[1]));
-}
-
 inline uint32_t ReadU32BE(const uint8_t *p) {
   return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) |
          (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
@@ -589,7 +585,6 @@ bool TryDecodeJpeg(const uint8_t *data, size_t size, const std::string &pixel_fo
       // target always emit them with these canonical values.
       scan_start = pos;
       scan_end = size;
-      sof_seen = sof_seen; // silence unused warning when no other branches
       break;
     } else if (marker >= 0xE0 && marker <= 0xEF) {
       // APPn segments (JFIF, Exif, etc.): ignored.

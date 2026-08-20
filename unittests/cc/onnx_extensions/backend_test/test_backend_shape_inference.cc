@@ -97,19 +97,6 @@ const TypeProto::Tensor *TensorTypeOf(const TypeProto &type) {
   return nullptr;
 }
 
-const TypeProto::Map *MapTypeOf(const TypeProto &type) {
-  if (type.has_map_type()) {
-    return &type.ref_map_type();
-  }
-  if (type.has_optional_type()) {
-    return MapTypeOf(type.ref_optional_type().ref_elem_type());
-  }
-  if (type.has_sequence_type()) {
-    return MapTypeOf(type.ref_sequence_type().ref_elem_type());
-  }
-  return nullptr;
-}
-
 std::vector<ExpectedOutput> SnapshotAndStripOutputs(ModelProto &model) {
   std::vector<ExpectedOutput> snapshot;
   auto &outputs = model.mutable_graph()->ref_output();

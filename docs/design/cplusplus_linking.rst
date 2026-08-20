@@ -85,6 +85,16 @@ can be set on the ``cmake`` command line with ``-D<NAME>=<VALUE>``.
         fuzz harnesses (the ``fuzzer`` sanitizer is always added
         automatically).  Only meaningful with
         ``ONNX_LIGHT_BUILD_FUZZERS=ON``.
+    * - ``ONNX_LIGHT_WERROR``
+      - ``ON``
+      - Treat C/C++ compiler warnings as errors (``/WX`` on MSVC,
+        ``-Werror`` on GCC/Clang, on top of the ``-Wall -Wextra`` baseline
+        those compilers always receive).  Third-party sources built inside
+        the tree (googletest, nanobind, vendored BLAKE3, upstream ``onnx``)
+        are excluded, and Clang's ``-Wunused-lambda-capture`` stays a plain
+        warning.
+        Turn ``OFF`` when building with a toolchain that emits warnings
+        onnx-light does not control.
     * - ``ONNX_HARDENING``
       - ``OFF``
       - Opt in to the `OpenSSF Compiler Options Hardening Guide for C and

@@ -744,13 +744,32 @@ bool FdReadStream::EnsureAvailable() const {
     return true;
   position_ = 0;
   int64_t n;
-  do {
 #if !defined(_WIN32)
+  do {
     n = ::read(fd_, buffer_, static_cast<size_t>(block_size_));
-#else
-    n = ::_read(fd_, buffer_, static_cast<unsigned>(block_size_));
-#endif
   } while (n < 0 && errno == EINTR);
+#else
+  const intptr_t handle = ::_get_osfhandle(fd_);
+  if (handle == -1) {
+    errno = EBADF;
+    n = -1;
+  } else {
+    DWORD bytes_read = 0;
+    const BOOL ok = ::ReadFile(reinterpret_cast<HANDLE>(handle), buffer_,
+                               static_cast<DWORD>(block_size_), &bytes_read, nullptr);
+    if (!ok) {
+      const DWORD err = ::GetLastError();
+      if (err == ERROR_BROKEN_PIPE) {
+        n = 0;
+      } else {
+        errno = (err == ERROR_INVALID_HANDLE) ? EBADF : EIO;
+        n = -1;
+      }
+    } else {
+      n = static_cast<int64_t>(bytes_read);
+    }
+  }
+#endif
   if (n <= 0) {
     failed_ = n < 0;
     eof_ = true;

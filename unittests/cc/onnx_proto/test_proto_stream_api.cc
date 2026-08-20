@@ -41,12 +41,64 @@ int OpenTempFdForWrite(const std::string &path) {
 #endif
 }
 
+int OpenTempFdForRead(const std::string &path) {
+#if defined(_WIN32)
+  int fd = -1;
+  _sopen_s(&fd, path.c_str(), _O_RDONLY | _O_BINARY, _SH_DENYNO, _S_IREAD);
+  return fd;
+#else
+  return ::open(path.c_str(), O_RDONLY);
+#endif
+}
+
 void CloseFd(int fd) {
 #if defined(_WIN32)
   _close(fd);
 #else
   ::close(fd);
 #endif
+}
+
+void WriteWholeFile(const std::string &path, const std::string &data) {
+  std::ofstream out(path, std::ios::binary);
+  out.write(data.data(), static_cast<std::streamsize>(data.size()));
+}
+
+int64_t SeekFd(int fd, int64_t offset) {
+#if defined(_WIN32)
+  return ::_lseeki64(fd, offset, SEEK_SET);
+#else
+  return ::lseek(fd, static_cast<off_t>(offset), SEEK_SET);
+#endif
+}
+
+int64_t TellFd(int fd) {
+#if defined(_WIN32)
+  return ::_lseeki64(fd, 0, SEEK_CUR);
+#else
+  return ::lseek(fd, 0, SEEK_CUR);
+#endif
+}
+
+std::string EncodeVarint(uint64_t value) {
+  std::string encoded;
+  while (value >= 0x80) {
+    encoded.push_back(static_cast<char>((value & 0x7f) | 0x80));
+    value >>= 7;
+  }
+  encoded.push_back(static_cast<char>(value));
+  return encoded;
+}
+
+std::string BuildNestedTypeProto(int levels) {
+  std::string inner;
+  for (int i = 0; i < levels; ++i) {
+    std::string sequence = EncodeVarint((1 << 3) | 2);
+    sequence += EncodeVarint(inner.size());
+    sequence += inner;
+    inner = EncodeVarint((4 << 3) | 2) + EncodeVarint(sequence.size()) + sequence;
+  }
+  return inner;
 }
 
 std::string ReadWholeFile(const std::string &path) {
@@ -73,6 +125,149 @@ TEST(proto_stream_api, ParseFromStringReturnsTrue) {
   EXPECT_TRUE(parsed.has_i());
   EXPECT_EQ(parsed.ref_i(), 123456789);
   EXPECT_EQ(parsed.ref_name(), "i_attr");
+}
+
+TEST(proto_stream_api, ParseFromArrayUsesBoundedBorrowedInput) {
+  TensorProto tensor;
+  tensor.set_name("weight");
+  tensor.set_raw_data(std::string(8192, '\x2a'));
+  std::string serialized;
+  ASSERT_TRUE(tensor.SerializeToString(serialized));
+
+  TensorProto parsed;
+  ASSERT_TRUE(parsed.ParseFromArray(serialized.data(), static_cast<int>(serialized.size())));
+  std::fill(serialized.begin(), serialized.end(), '\0');
+  ASSERT_EQ(parsed.ref_raw_data().size(), 8192u);
+  EXPECT_EQ(parsed.ref_raw_data().data()[4096], 0x2a);
+}
+
+TEST(proto_stream_api, ParseFromArrayMalformedInputsReturnFalse) {
+  const std::string invalid_varint(11, static_cast<char>(0x80));
+  AttributeProto invalid;
+  EXPECT_FALSE(
+      invalid.ParseFromArray(invalid_varint.data(), static_cast<int>(invalid_varint.size())));
+
+  AttributeProto attr = MakeIntAttr();
+  std::string truncated;
+  ASSERT_TRUE(attr.SerializeToString(truncated));
+  truncated.pop_back();
+  AttributeProto parsed;
+  EXPECT_FALSE(parsed.ParseFromArray(truncated.data(), static_cast<int>(truncated.size())));
+}
+
+TEST(proto_stream_api, ParseFromFileDescriptorStartsAtCurrentOffsetAndReachesEof) {
+  AttributeProto attr = MakeIntAttr();
+  std::string serialized;
+  ASSERT_TRUE(attr.SerializeToString(serialized));
+  const std::string prefix = "ignored prefix";
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() / "onnx_light_parse_proto_fd.bin";
+  WriteWholeFile(path.string(), prefix + serialized);
+  const int fd = OpenTempFdForRead(path.string());
+  ASSERT_GE(fd, 0);
+  ASSERT_EQ(SeekFd(fd, static_cast<int64_t>(prefix.size())), static_cast<int64_t>(prefix.size()));
+
+  AttributeProto parsed;
+  EXPECT_TRUE(parsed.ParseFromFileDescriptor(fd));
+  EXPECT_EQ(parsed.ref_i(), 123456789);
+  EXPECT_EQ(parsed.ref_name(), "i_attr");
+  EXPECT_EQ(TellFd(fd), static_cast<int64_t>(prefix.size() + serialized.size()));
+  CloseFd(fd);
+  std::filesystem::remove(path);
+}
+
+TEST(proto_stream_api, ParseFromFileDescriptorMalformedInputsReturnFalse) {
+  AttributeProto attr = MakeIntAttr();
+  std::string truncated;
+  ASSERT_TRUE(attr.SerializeToString(truncated));
+  truncated.pop_back();
+  const std::string invalid_varint(11, static_cast<char>(0x80));
+
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() / "onnx_light_parse_malformed_fd.bin";
+  const std::string *inputs[] = {&truncated, &invalid_varint};
+  for (const std::string *input : inputs) {
+    WriteWholeFile(path.string(), *input);
+    const int fd = OpenTempFdForRead(path.string());
+    ASSERT_GE(fd, 0);
+    AttributeProto parsed;
+    EXPECT_FALSE(parsed.ParseFromFileDescriptor(fd));
+    CloseFd(fd);
+  }
+  std::filesystem::remove(path);
+}
+
+#if !defined(_WIN32)
+TEST(proto_stream_api, ParseFromFileDescriptorSupportsPipes) {
+  AttributeProto attr = MakeIntAttr();
+  std::string serialized;
+  ASSERT_TRUE(attr.SerializeToString(serialized));
+  int descriptors[2];
+  ASSERT_EQ(::pipe(descriptors), 0);
+  ASSERT_EQ(::write(descriptors[1], serialized.data(), serialized.size()),
+            static_cast<ssize_t>(serialized.size()));
+  CloseFd(descriptors[1]);
+
+  AttributeProto parsed;
+  EXPECT_TRUE(parsed.ParseFromFileDescriptor(descriptors[0]));
+  EXPECT_EQ(parsed.ref_i(), 123456789);
+  EXPECT_EQ(parsed.ref_name(), "i_attr");
+  CloseFd(descriptors[0]);
+}
+#endif
+
+TEST(proto_stream_api, ParseFromFileDescriptorReadFailureReturnsFalse) {
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() / "onnx_light_parse_closed_fd.bin";
+  WriteWholeFile(path.string(), "data");
+  const int fd = OpenTempFdForRead(path.string());
+  ASSERT_GE(fd, 0);
+  CloseFd(fd);
+
+  AttributeProto parsed;
+  EXPECT_FALSE(parsed.ParseFromFileDescriptor(fd));
+  std::filesystem::remove(path);
+}
+
+TEST(proto_stream_api, FdReadStreamPreservesTensorLimit) {
+  TensorProto tensor;
+  tensor.set_raw_data(std::string(32, '\x01'));
+  std::string serialized;
+  ASSERT_TRUE(tensor.SerializeToString(serialized));
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() / "onnx_light_parse_limited_fd.bin";
+  WriteWholeFile(path.string(), serialized);
+  const int fd = OpenTempFdForRead(path.string());
+  ASSERT_GE(fd, 0);
+
+  utils::FdReadStream stream(fd);
+  ParseOptions options;
+  options.max_tensor_size_bytes = 16;
+  TensorProto parsed;
+  EXPECT_THROW(parsed.ParseFromZeroCopyStream(&stream, options),
+               onnx_light_helpers::ParseLimitExceeded);
+  EXPECT_EQ(options._recursion_depth, 0);
+  CloseFd(fd);
+  std::filesystem::remove(path);
+}
+
+TEST(proto_stream_api, FdReadStreamPreservesRecursionLimit) {
+  const std::string serialized = BuildNestedTypeProto(10);
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() / "onnx_light_parse_recursion_fd.bin";
+  WriteWholeFile(path.string(), serialized);
+  const int fd = OpenTempFdForRead(path.string());
+  ASSERT_GE(fd, 0);
+
+  utils::FdReadStream stream(fd);
+  ParseOptions options;
+  options.max_recursion_depth = 5;
+  TypeProto parsed;
+  EXPECT_THROW(parsed.ParseFromZeroCopyStream(&stream, options),
+               onnx_light_helpers::ParseLimitExceeded);
+  EXPECT_EQ(options._recursion_depth, 0);
+  CloseFd(fd);
+  std::filesystem::remove(path);
 }
 
 TEST(proto_stream_api, SerializeToStringWithOptionsReturnsTrue) {

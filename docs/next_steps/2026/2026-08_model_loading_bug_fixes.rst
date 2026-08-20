@@ -22,16 +22,17 @@ These are defects in existing paths, not speculative architecture. Each fix
 must preserve malformed-input handling, parser limits, payload lifetime, and
 the public synchronous API.
 
-Bug PR01 -- remove C++ compatibility-parser staging
-++++++++++++++++++++++++++++++++++++++++++++++++++++
+Bug PR01 -- remove C++ compatibility-parser staging (done)
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 **Repository:** ``xadupre/onnx-light``
 
-``ProtoMessageAdapter::ParseFromFileDescriptor`` currently reads 4096-byte
-chunks into one growing ``std::string`` and then calls ``ParseFromString``.
-``ParseFromArray`` also creates a temporary ``std::string`` before parsing.
-The native parser already accepts bounded ``BinaryStream`` implementations, so
-neither copy is required.
+**implemented**
+
+``ProtoMessageAdapter::ParseFromFileDescriptor`` now parses directly through
+``FdReadStream``, and ``ParseFromArray`` uses a bounded non-owning stream. The
+native parser accepts both ``BinaryStream`` implementations without a complete
+input staging copy.
 
 Parse seekable descriptors directly through ``FdReadStream`` with adaptive
 buffering. Preserve the descriptor's current offset and EOF behavior. Pipes

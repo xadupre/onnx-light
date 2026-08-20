@@ -66,7 +66,17 @@ template <typename Derived>
 bool ProtoMessageAdapter<Derived>::ParseFromArray(const void *data, int size) {
   EXT_ENFORCE(data != nullptr || size == 0, "ParseFromArray: data pointer must not be null.");
   EXT_ENFORCE(size >= 0, "ParseFromArray: size must be non-negative.");
-  return ParseFromString(std::string(static_cast<const char *>(data), static_cast<size_t>(size)));
+  ParseOptions opts;
+  utils::StringStream stream(data, static_cast<int64_t>(size));
+  try {
+    derived().ParseFromStream(stream, opts);
+  } catch (const onnx_light_helpers::ParseLimitExceeded &) {
+    // Configured policy limits propagate; malformed wire data keeps protobuf's false result.
+    throw;
+  } catch (const std::exception &) {
+    return false;
+  }
+  return true;
 }
 
 template <typename Derived>
@@ -129,18 +139,17 @@ bool ProtoMessageAdapter<Derived>::ParseFromIstream(std::istream *input) {
 }
 
 template <typename Derived> bool ProtoMessageAdapter<Derived>::ParseFromFileDescriptor(int fd) {
-  std::string buffer;
-  constexpr size_t chunk_size = 4096;
-  char chunk[chunk_size];
-  for (;;) {
-    auto count = ::read(fd, chunk, chunk_size);
-    if (count < 0)
-      return false;
-    if (count == 0)
-      break;
-    buffer.append(chunk, static_cast<size_t>(count));
+  ParseOptions opts;
+  utils::FdReadStream stream(fd);
+  try {
+    derived().ParseFromStream(stream, opts);
+  } catch (const onnx_light_helpers::ParseLimitExceeded &) {
+    // Configured policy limits propagate; malformed wire data keeps protobuf's false result.
+    throw;
+  } catch (const std::exception &) {
+    return false;
   }
-  return ParseFromString(buffer);
+  return !stream.failed();
 }
 
 template <typename Derived>

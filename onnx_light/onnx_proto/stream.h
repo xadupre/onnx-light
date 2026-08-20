@@ -1039,17 +1039,17 @@ protected:
 /** Read stream that reads bytes from a raw file descriptor.
  *  Provides the ZeroCopyInputStream-compatible interface so it can back
  *  google::protobuf::io::FileInputStream as a pure alias. */
-/** Zero-copy input stream over a seekable file descriptor that also implements
+/** Buffered input stream over a file descriptor that also implements
  *  the full BinaryStream interface.  This allows it to be passed directly to
  *  ParseFromZeroCopyStream(BinaryStream*) without loading the entire file into
- *  memory first.  The file descriptor must support lseek (regular files);
- *  non-seekable descriptors fall back to an INT64_MAX limit and rely on the
- *  eof_ flag for end-of-stream detection. */
+ *  memory first. Non-seekable descriptors use buffered reads and discover their
+ *  bound at EOF. */
 class ONNX_LIGHT_PROTO_API FdReadStream : public BinaryStream {
 public:
   /** Initializes a read stream over the open file descriptor *fd*.
-   *  \p block_size is the internal buffer size used for reads. */
-  explicit FdReadStream(int fd, int block_size = 4096);
+   *  \p block_size is the internal buffer size used for reads, or zero to select
+   *  a bounded size based on the remaining input. */
+  explicit FdReadStream(int fd, int block_size = 0);
   ~FdReadStream() override;
 
   // --- BinaryStream pure virtual overrides ---
@@ -1058,8 +1058,8 @@ public:
   virtual uint64_t next_uint64() override;
   /** Raises an exception if fewer than *len* bytes remain before the current limit. */
   virtual void CanRead(uint64_t len, const char *msg) override;
-  /** Returns true while the logical read position is before the active limit. */
-  virtual bool NotEnd() const override { return !eof_ && pos_ < limit_; }
+  /** Returns true while buffered or descriptor bytes remain before the active limit. */
+  virtual bool NotEnd() const override;
   /** Returns the current byte offset from stream construction (bytes consumed). */
   virtual offset_t tell() const override { return pos_; }
   /** Returns the effective end of the stream (file size or active sub-limit). */
@@ -1102,6 +1102,8 @@ public:
   inline bool Close() { return true; }
   /** Returns 0; onnx-light throws on I/O errors rather than setting errno. */
   inline int GetErrno() const { return 0; }
+  /** Returns true when the descriptor reported a read error. */
+  inline bool failed() const { return failed_; }
 
 protected:
   virtual void LimitTo(uint64_t len) override { limit_ = static_cast<int64_t>(len); }
@@ -1109,20 +1111,27 @@ protected:
   /** Computes the remaining byte count from the current fd position to the end
    *  of the file via lseek.  Returns INT64_MAX when lseek is unavailable
    *  (non-regular files such as pipes or sockets). */
-  static int64_t _InitLimit(int fd) noexcept;
+  static int64_t InitLimit(int fd) noexcept;
+  /** Selects a bounded read buffer from the known remaining input size. */
+  static int AdaptiveBlockSize(int64_t limit) noexcept;
+  /** Fills the internal buffer when it has no unread bytes. */
+  bool EnsureAvailable() const;
 
   int fd_;
   int block_size_;
   char *buffer_;
-  int available_;
-  int position_;
-  int64_t total_read_;
+  mutable int available_;
+  mutable int position_;
+  int last_returned_;
+  mutable int64_t total_read_;
   /** Logical read position for the BinaryStream interface (updated by read_bytes/skip_bytes). */
   int64_t pos_;
   /** Effective end position: file-remaining-bytes at construction, or an active sub-limit. */
   int64_t limit_;
   /** Set to true by Next() when ::read() returns ≤ 0 (end-of-file or error). */
-  bool eof_;
+  mutable bool eof_;
+  /** Set to true when the descriptor reports a read error rather than clean EOF. */
+  mutable bool failed_;
   /** Owned copies handed out by read_bytes(n, nullptr) (the RefString/scalar zero-copy
    *  path). Kept alive for the lifetime of this stream since those callers only hold a
    *  non-owning pointer/RefString into the returned block. */

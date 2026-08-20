@@ -20,6 +20,14 @@
  *     -i <tensors>  Number of initializer tensors          (default: 40)
  *     -d <dim>      Tensor side length in floats           (default: 512)
  *
+ * Reproducible compatibility-adapter comparison:
+ *
+ *   # Representative small model (check direct/staged regression).
+ *   ./build/bench_parse_serialize -n 10000 -i 1 -d 4
+ *
+ *   # Large inline model (check direct/staged improvement).
+ *   ./build/bench_parse_serialize -n 20 -i 40 -d 512
+ *
  * Typical profiling workflow (see docs/examples/proto/plot_onnx_profile.py):
  *
  *   # perf stat (counts)
@@ -151,6 +159,30 @@ static size_t run_parse(const std::string &serialized, int n_iters, int n_thread
 }
 
 /**
+ * Runs the protobuf-compatible array parser with or without the former complete
+ * input staging copy.
+ *
+ * @param serialized Bytes produced by SerializeToString.
+ * @param n_iters Number of parse iterations to execute.
+ * @param stage_input Whether to copy the complete input before parsing.
+ * @return Total number of initializer tensors parsed across all iterations.
+ */
+static size_t run_parse_array(const std::string &serialized, int n_iters, bool stage_input) {
+  size_t total_tensors = 0;
+  for (int i = 0; i < n_iters; ++i) {
+    ModelProto model;
+    if (stage_input) {
+      std::string staged(serialized);
+      model.ParseFromString(staged);
+    } else {
+      model.ParseFromArray(serialized.data(), static_cast<int>(serialized.size()));
+    }
+    total_tensors += model.ref_graph().ref_initializer().size();
+  }
+  return total_tensors;
+}
+
+/**
  * Runs the file-load loop: saves the model to a temp file then loads it
  * *n_iters* times via FileStream.
  *
@@ -249,6 +281,16 @@ int main(int argc, char *argv[]) {
   auto t3 = std::chrono::high_resolution_clock::now();
   double parse_ms = std::chrono::duration<double, std::milli>(t3 - t2).count();
 
+  // --- compatibility array parse: former staging baseline versus direct stream ---
+  auto ta0 = std::chrono::high_resolution_clock::now();
+  size_t tensors_array_staged = run_parse_array(serialized, n_iters, true);
+  auto ta1 = std::chrono::high_resolution_clock::now();
+  size_t tensors_array_direct = run_parse_array(serialized, n_iters, false);
+  auto ta2 = std::chrono::high_resolution_clock::now();
+  double array_staged_ms = std::chrono::duration<double, std::milli>(ta1 - ta0).count();
+  double array_direct_ms = std::chrono::duration<double, std::milli>(ta2 - ta1).count();
+  double array_improvement = 100.0 * (array_staged_ms - array_direct_ms) / array_staged_ms;
+
   // --- file-load benchmark (FileStream) ---
   auto t4 = std::chrono::high_resolution_clock::now();
   size_t tensors_loaded = run_load_file(serialized, n_iters, n_threads);
@@ -260,6 +302,11 @@ int main(int argc, char *argv[]) {
             << "  (total_bytes=" << bytes_written << ")\n";
   std::cout << "parse    : " << parse_ms / n_iters << " ms/iter"
             << "  (total_tensors=" << tensors_read << ")\n";
+  std::cout << "array/staged: " << array_staged_ms / n_iters << " ms/iter"
+            << "  (total_tensors=" << tensors_array_staged << ")\n";
+  std::cout << "array/direct: " << array_direct_ms / n_iters << " ms/iter"
+            << "  (total_tensors=" << tensors_array_direct << ", improvement=" << array_improvement
+            << "%)\n";
   std::cout << "load/mmap: " << load_ms / n_iters << " ms/iter"
             << "  (total_tensors=" << tensors_loaded << ")\n";
   return 0;

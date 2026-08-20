@@ -174,32 +174,47 @@ TEST(KernelTuningSchema, AcceptsCompleteParametersAndRunsValidationHook) {
   });
   KernelTuningParameters parameters = MakeDefaults();
   parameters.values["algorithm.tile_m"] = int64_t{128};
+  std::string error;
 
   EXPECT_NO_THROW(schema.Validate(parameters));
+  EXPECT_TRUE(schema.TryValidate(parameters, &error));
+  EXPECT_TRUE(error.empty());
   EXPECT_EQ(schema.portable_defaults().Get<int64_t>("algorithm.tile_m"), 64);
 
   parameters.values["algorithm.tile_m"] = int64_t{0};
   EXPECT_THROW(schema.Validate(parameters), std::invalid_argument);
+  EXPECT_FALSE(schema.TryValidate(parameters, &error));
+  EXPECT_EQ(error, "Tile and task sizes must be positive.");
 }
 
 TEST(KernelTuningSchema, RejectsIncompleteUnknownAndMistypedParameters) {
   KernelTuningSchema schema(MakeDefaults());
+  std::string error;
 
   KernelTuningParameters missing = MakeDefaults();
   missing.values.erase("algorithm.tile_m");
   EXPECT_THROW(schema.Validate(missing), std::invalid_argument);
+  EXPECT_FALSE(schema.TryValidate(missing, &error));
+  EXPECT_EQ(error, "Missing kernel tuning parameter 'algorithm.tile_m'.");
 
   KernelTuningParameters unknown = MakeDefaults();
   unknown.values["algorithm.tile_n"] = int64_t{256};
   EXPECT_THROW(schema.Validate(unknown), std::invalid_argument);
+  EXPECT_FALSE(schema.TryValidate(unknown, &error));
+  EXPECT_EQ(error, "Unknown kernel tuning parameter 'algorithm.tile_n'.");
 
   KernelTuningParameters mistyped = MakeDefaults();
   mistyped.values["algorithm.tile_m"] = 64.0;
   EXPECT_THROW(schema.Validate(mistyped), std::invalid_argument);
+  EXPECT_FALSE(schema.TryValidate(mistyped, &error));
+  EXPECT_EQ(error, "Kernel tuning parameter 'algorithm.tile_m' must be int64, not double.");
 
   KernelTuningParameters another_key = MakeDefaults();
   another_key.key.element_type = 11;
   EXPECT_THROW(schema.Validate(another_key), std::invalid_argument);
+  EXPECT_FALSE(schema.TryValidate(another_key, &error));
+  EXPECT_EQ(error, "Kernel tuning parameters for 'onnx_light_cpu/Gemm/blocked_avx2' do not match "
+                   "schema 'onnx_light_cpu/Gemm/blocked_avx2'.");
 }
 
 TEST(KernelTuningSchema, RejectsInvalidKeysNamesAndPortableDefaults) {

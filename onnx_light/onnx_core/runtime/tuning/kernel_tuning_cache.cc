@@ -353,36 +353,43 @@ void WriteProfile(std::ostream &output, const CacheProfile &profile) {
 
 class InterprocessCacheLock {
 public:
-  explicit InterprocessCacheLock(const std::filesystem::path &path) {
+  InterprocessCacheLock() = default;
+
+  bool Acquire(const std::filesystem::path &path, std::string &error_message) {
 #if defined(_WIN32)
     handle_ = ::CreateFileW(path.native().c_str(), GENERIC_READ | GENERIC_WRITE,
                             FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
                             FILE_ATTRIBUTE_NORMAL, nullptr);
     if (handle_ == INVALID_HANDLE_VALUE) {
-      throw std::system_error(static_cast<int>(::GetLastError()), std::system_category(),
-                              "Unable to open kernel tuning cache lock");
+      error_message = "Unable to open kernel tuning cache lock: " +
+                      std::system_category().message(static_cast<int>(::GetLastError()));
+      return false;
     }
     if (!::LockFileEx(handle_, LOCKFILE_EXCLUSIVE_LOCK, 0, MAXDWORD, MAXDWORD, &overlapped_)) {
       const int error = static_cast<int>(::GetLastError());
       ::CloseHandle(handle_);
       handle_ = INVALID_HANDLE_VALUE;
-      throw std::system_error(error, std::system_category(),
-                              "Unable to acquire kernel tuning cache lock");
+      error_message =
+          "Unable to acquire kernel tuning cache lock: " + std::system_category().message(error);
+      return false;
     }
 #else
     descriptor_ = ::open(path.c_str(), O_CREAT | O_RDWR, 0600);
     if (descriptor_ < 0) {
-      throw std::system_error(errno, std::generic_category(),
-                              "Unable to open kernel tuning cache lock");
+      error_message =
+          "Unable to open kernel tuning cache lock: " + std::generic_category().message(errno);
+      return false;
     }
     if (::flock(descriptor_, LOCK_EX) != 0) {
       const int error = errno;
       ::close(descriptor_);
       descriptor_ = -1;
-      throw std::system_error(error, std::generic_category(),
-                              "Unable to acquire kernel tuning cache lock");
+      error_message =
+          "Unable to acquire kernel tuning cache lock: " + std::generic_category().message(error);
+      return false;
     }
 #endif
+    return true;
   }
 
   ~InterprocessCacheLock() {
@@ -574,80 +581,81 @@ UpdateKernelTuningCache(std::span<const CalibratedKernelProfile> profiles,
     }
   }
 
-  try {
-    std::filesystem::path lock_path = path;
-    lock_path += ".lock";
-    InterprocessCacheLock lock(lock_path);
-    ParsedCache cache;
-    const bool exists = std::filesystem::exists(path, error);
-    if (error) {
-      report.status = KernelTuningCacheUpdateStatus::kUnreadable;
-      report.diagnostics.push_back("Unable to inspect cache '" + path.string() +
-                                   "': " + error.message());
-      return report;
-    }
-    if (exists) {
-      std::ifstream input(path);
-      if (!input) {
-        report.status = KernelTuningCacheUpdateStatus::kUnreadable;
-        report.diagnostics.push_back("Unable to read cache '" + path.string() + "'.");
-        return report;
-      }
-      cache = ParseCache(input);
-      report.diagnostics = std::move(cache.diagnostics);
-      if (cache.malformed) {
-        report.status = KernelTuningCacheUpdateStatus::kMalformed;
-        return report;
-      }
-    }
-
-    const std::vector<KernelTuningKey> registered = registry.RegisteredKeys();
-    if (options.prune_stale_abis) {
-      std::erase_if(cache.profiles, [&](const CacheProfile &profile) {
-        const bool stale =
-            std::any_of(registered.begin(), registered.end(), [&](const KernelTuningKey &key) {
-              return SameIdentityIgnoringAbi(key, profile.parameters.key) &&
-                     key.tuning_abi != profile.parameters.key.tuning_abi;
-            });
-        if (stale) {
-          report.pruned.push_back(profile.parameters.key);
-        }
-        return stale;
-      });
-    }
-
-    for (const CalibratedKernelProfile &profile : profiles) {
-      auto existing = std::find_if(cache.profiles.begin(), cache.profiles.end(),
-                                   [&](const CacheProfile &cached) {
-                                     return cached.parameters.key == profile.parameters.key &&
-                                            cached.execution == profile.execution;
-                                   });
-      if (existing != cache.profiles.end() && !options.replace_existing) {
-        report.preserved.push_back(profile.parameters.key);
-        continue;
-      }
-      if (existing == cache.profiles.end()) {
-        cache.profiles.push_back(profile);
-      } else {
-        *existing = profile;
-      }
-      report.updated.push_back(profile.parameters.key);
-    }
-
-    if (!AtomicWriteCache(path, cache.profiles, report.diagnostics)) {
-      report.status = KernelTuningCacheUpdateStatus::kWriteFailed;
-      std::filesystem::path temporary = path;
-      temporary += ".tmp";
-      std::filesystem::remove(temporary, error);
-      return report;
-    }
-    report.status = KernelTuningCacheUpdateStatus::kUpdated;
-    return report;
-  } catch (const std::system_error &exception) {
+  std::filesystem::path lock_path = path;
+  lock_path += ".lock";
+  InterprocessCacheLock lock;
+  std::string lock_error;
+  if (!lock.Acquire(lock_path, lock_error)) {
     report.status = KernelTuningCacheUpdateStatus::kUnreadable;
-    report.diagnostics.push_back(exception.what());
+    report.diagnostics.push_back(lock_error);
     return report;
   }
+
+  ParsedCache cache;
+  const bool exists = std::filesystem::exists(path, error);
+  if (error) {
+    report.status = KernelTuningCacheUpdateStatus::kUnreadable;
+    report.diagnostics.push_back("Unable to inspect cache '" + path.string() +
+                                 "': " + error.message());
+    return report;
+  }
+  if (exists) {
+    std::ifstream input(path);
+    if (!input) {
+      report.status = KernelTuningCacheUpdateStatus::kUnreadable;
+      report.diagnostics.push_back("Unable to read cache '" + path.string() + "'.");
+      return report;
+    }
+    cache = ParseCache(input);
+    report.diagnostics = std::move(cache.diagnostics);
+    if (cache.malformed) {
+      report.status = KernelTuningCacheUpdateStatus::kMalformed;
+      return report;
+    }
+  }
+
+  const std::vector<KernelTuningKey> registered = registry.RegisteredKeys();
+  if (options.prune_stale_abis) {
+    std::erase_if(cache.profiles, [&](const CacheProfile &profile) {
+      const bool stale =
+          std::any_of(registered.begin(), registered.end(), [&](const KernelTuningKey &key) {
+            return SameIdentityIgnoringAbi(key, profile.parameters.key) &&
+                   key.tuning_abi != profile.parameters.key.tuning_abi;
+          });
+      if (stale) {
+        report.pruned.push_back(profile.parameters.key);
+      }
+      return stale;
+    });
+  }
+
+  for (const CalibratedKernelProfile &profile : profiles) {
+    auto existing =
+        std::find_if(cache.profiles.begin(), cache.profiles.end(), [&](const CacheProfile &cached) {
+          return cached.parameters.key == profile.parameters.key &&
+                 cached.execution == profile.execution;
+        });
+    if (existing != cache.profiles.end() && !options.replace_existing) {
+      report.preserved.push_back(profile.parameters.key);
+      continue;
+    }
+    if (existing == cache.profiles.end()) {
+      cache.profiles.push_back(profile);
+    } else {
+      *existing = profile;
+    }
+    report.updated.push_back(profile.parameters.key);
+  }
+
+  if (!AtomicWriteCache(path, cache.profiles, report.diagnostics)) {
+    report.status = KernelTuningCacheUpdateStatus::kWriteFailed;
+    std::filesystem::path temporary = path;
+    temporary += ".tmp";
+    std::filesystem::remove(temporary, error);
+    return report;
+  }
+  report.status = KernelTuningCacheUpdateStatus::kUpdated;
+  return report;
 }
 
 KernelTuningCacheUpdateReport
@@ -720,12 +728,11 @@ KernelTuningCacheLoadReport LoadKernelTuningCache(const KernelCalibrationSelecti
       report.incompatible.push_back(profile.parameters.key);
       continue;
     }
-    try {
-      schema->Validate(profile.parameters);
-    } catch (const std::invalid_argument &exception) {
+    std::string validation_error;
+    if (!schema->TryValidate(profile.parameters, &validation_error)) {
       report.invalid.push_back(profile.parameters.key);
       report.diagnostics.push_back(KeyDescription(profile.parameters.key) + ": " +
-                                   exception.what());
+                                   validation_error);
       continue;
     }
     loaded.emplace(profile.parameters.key);
@@ -798,11 +805,10 @@ ImportKernelTuningDeploymentProfiles(const KernelCalibrationSelection &selection
                                    ": deployment import contains multiple execution profiles.");
       continue;
     }
-    try {
-      schema->Validate(profile.parameters);
-    } catch (const std::invalid_argument &exception) {
+    std::string validation_error;
+    if (!schema->TryValidate(profile.parameters, &validation_error)) {
       report.invalid.push_back(key);
-      report.diagnostics.push_back(KeyDescription(key) + ": " + exception.what());
+      report.diagnostics.push_back(KeyDescription(key) + ": " + validation_error);
       continue;
     }
     imported.push_back({profile.parameters, options.processors, options.priority});

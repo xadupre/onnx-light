@@ -834,6 +834,22 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillAnchorExpressionTokens) {
   EXPECT_EQ(ctx.Get("X").Shape()[0].AsExpr(), "N");
 }
 
+TEST(OnnxOptimShapeInference, ComputeShapeModelAcceptsMalformedAnchorExpression) {
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{-1, 4},
+                                                  /*target=*/{-1, 2},
+                                                  /*symbolic_names=*/{"N"});
+  SetValueInfoTensorType(*model.mutable_graph()->mutable_output(0), TensorProto::DataType::FLOAT,
+                         /*shape=*/{-1, 2}, /*symbolic_names=*/{"Y::0"});
+
+  core::shapes::ShapesContext ctx;
+  EXPECT_NO_THROW(ctx.ComputeShapeModel(model, /*prefill_with_value_info_output=*/true));
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("Y").Shape()[0].AsExpr(), "Y::0");
+}
+
 TEST(OnnxOptimShapeInference, InferShapesModelWithPrefillPrefersOutputAnchor) {
   ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{-1, 4},
                                                   /*target=*/{-1, 2},

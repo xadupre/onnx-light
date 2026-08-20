@@ -442,6 +442,8 @@ TEST(OnnxOptimDevice, DeviceFromName) {
   EXPECT_EQ(core::symbolic::DeviceFromName("GPU+1"), core::symbolic::Device::kUndefined);
   EXPECT_EQ(core::symbolic::DeviceFromName("GPU 1"), core::symbolic::Device::kUndefined);
   EXPECT_EQ(core::symbolic::DeviceFromName("GPU8192"), core::symbolic::Device::kUndefined);
+  EXPECT_EQ(core::symbolic::DeviceFromName("GPU18446744073709551616"),
+            core::symbolic::Device::kUndefined);
   EXPECT_EQ(core::symbolic::DeviceFromName("Unknown"), core::symbolic::Device::kUndefined);
 }
 
@@ -814,6 +816,18 @@ TEST(OnnxOptimValueInfo, FromValueInfoIgnoresUnparseableMinMax) {
   auto *min_entry = vi.add_metadata_props();
   min_entry->set_key(core::symbolic::kValueInfoMinMetadataKey);
   min_entry->set_value("not-a-number");
+  core::symbolic::SymTensor t;
+  ASSERT_TRUE(core::symbolic::SymTensorFromValueInfo(vi, t));
+  EXPECT_FALSE(t.HasMin());
+  EXPECT_FALSE(t.HasMax());
+}
+
+TEST(OnnxOptimValueInfo, FromValueInfoIgnoresOutOfRangeMinMetadata) {
+  ValueInfoProto vi =
+      MakeTensorValueInfo("x", TensorProto::DataType::FLOAT, {core::symbolic::SymDim(4)});
+  auto *min_entry = vi.add_metadata_props();
+  min_entry->set_key(core::symbolic::kValueInfoMinMetadataKey);
+  min_entry->set_value("1e309");
   core::symbolic::SymTensor t;
   ASSERT_TRUE(core::symbolic::SymTensorFromValueInfo(vi, t));
   EXPECT_FALSE(t.HasMin());

@@ -49,6 +49,26 @@ struct ExecutorObservation {
   std::set<std::thread::id> block_threads;
 };
 
+bool session_execution_scope_active = false;
+const NodeProto *session_kernel_node = nullptr;
+
+class TestSessionExecutionScope {
+public:
+  explicit TestSessionExecutionScope(RuntimeContext &) { session_execution_scope_active = true; }
+
+  ~TestSessionExecutionScope() { session_execution_scope_active = false; }
+};
+
+class TestSessionKernel : public core::runtime::KernelBase {
+public:
+  explicit TestSessionKernel(const KernelContext &ctx) : KernelBase(ctx) {}
+
+  void Run(RuntimeContext &) override {
+    EXPECT_TRUE(session_execution_scope_active);
+    session_kernel_node = node_;
+  }
+};
+
 /// Builds a one-node graph dispatched to a custom operator so a test kernel can
 /// inspect the executor the session installed. A private domain keeps the
 /// registration away from the built-in kernels.
@@ -83,6 +103,22 @@ void RunObserver(RuntimeSession &session, RuntimeContext &rt, ExecutorObservatio
 }
 
 } // namespace
+
+TEST(SessionExecutor, MakeSessionKernelInstallsBackendExecutionScope) {
+  RuntimeContext rt(KernelContext(core::runtime::DefaultOpset(18)));
+  NodeProto node;
+  node.set_op_type("TestSessionKernel");
+  session_execution_scope_active = false;
+  session_kernel_node = nullptr;
+
+  std::unique_ptr<core::runtime::KernelBase> kernel =
+      core::runtime::MakeSessionKernel<TestSessionKernel, TestSessionExecutionScope>(node, rt);
+
+  EXPECT_FALSE(session_execution_scope_active);
+  kernel->Run(rt);
+  EXPECT_FALSE(session_execution_scope_active);
+  EXPECT_EQ(session_kernel_node, &node);
+}
 
 TEST(SessionExecutor, DefaultPolicyDerivesFromParameters) {
   ExecutionPlan plan;

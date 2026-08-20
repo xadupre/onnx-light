@@ -710,16 +710,11 @@ int64_t FdReadStream::InitLimit(int fd) noexcept {
   ::lseek(fd, cur, SEEK_SET);
   return end >= cur ? static_cast<int64_t>(end - cur) : 0; // remaining bytes
 #else
-  auto cur = ::_lseeki64(fd, 0, SEEK_CUR);
-  if (cur < 0)
-    return INT64_MAX;
-  auto end = ::_lseeki64(fd, 0, SEEK_END);
-  if (end < 0) {
-    ::_lseeki64(fd, cur, SEEK_SET);
-    return INT64_MAX;
-  }
-  ::_lseeki64(fd, cur, SEEK_SET);
-  return end >= cur ? static_cast<int64_t>(end - cur) : 0;
+  // Avoid probing descriptor positions on Windows. Some CRT calls can trigger
+  // fail-fast invalid-parameter handling for invalid/closed descriptors, while
+  // ParseFromFileDescriptor read-failure paths are expected to return false.
+  (void)fd;
+  return INT64_MAX;
 #endif
 }
 

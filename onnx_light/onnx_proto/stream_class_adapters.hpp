@@ -14,7 +14,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
-namespace detail {
+namespace proto_adapter_detail {
 
 enum class ProtoBoolParseStatus { kOk, kRejected };
 
@@ -29,7 +29,7 @@ template <typename ParseFn> ProtoBoolParseStatus RunProtoBoolParse(ParseFn &&par
   }
 }
 
-} // namespace detail
+} // namespace proto_adapter_detail
 
 template <typename Derived>
 SerializeSizeResult ProtoMessageAdapter<Derived>::SerializeSize() const {
@@ -63,7 +63,7 @@ bool ProtoMessageAdapter<Derived>::ParseFromString(const std::string &raw, Parse
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
               "ParseFromString: unrecognised SerializeFormat value ", static_cast<int>(opts.format),
               "; only kOnnx is currently supported.");
-  return detail::RunProtoBoolParse([&]() {
+  return proto_adapter_detail::RunProtoBoolParse([&]() {
            const uint8_t *ptr = reinterpret_cast<const uint8_t *>(raw.data());
            utils::StringStream stream(ptr, raw.size());
            if (opts.is_parallel())
@@ -71,7 +71,7 @@ bool ProtoMessageAdapter<Derived>::ParseFromString(const std::string &raw, Parse
            derived().ParseFromStream(stream, opts);
            if (opts.is_parallel())
              stream.WaitForDelayedBlock();
-         }) == detail::ProtoBoolParseStatus::kOk;
+         }) == proto_adapter_detail::ProtoBoolParseStatus::kOk;
 }
 
 template <typename Derived>
@@ -80,8 +80,9 @@ bool ProtoMessageAdapter<Derived>::ParseFromArray(const void *data, int size) {
   EXT_ENFORCE(size >= 0, "ParseFromArray: size must be non-negative.");
   ParseOptions opts;
   utils::StringStream stream(data, static_cast<int64_t>(size));
-  return detail::RunProtoBoolParse([&]() { derived().ParseFromStream(stream, opts); }) ==
-         detail::ProtoBoolParseStatus::kOk;
+  return proto_adapter_detail::RunProtoBoolParse([&]() {
+           derived().ParseFromStream(stream, opts);
+         }) == proto_adapter_detail::ProtoBoolParseStatus::kOk;
 }
 
 template <typename Derived>
@@ -139,15 +140,16 @@ bool ProtoMessageAdapter<Derived>::ParseFromIstream(std::istream *input) {
   ParseOptions opts;
   const uint8_t *ptr = reinterpret_cast<const uint8_t *>(buffer.data());
   utils::StringStream stream(ptr, static_cast<int64_t>(buffer.size()));
-  return detail::RunProtoBoolParse([&]() { derived().ParseFromStream(stream, opts); }) ==
-         detail::ProtoBoolParseStatus::kOk;
+  return proto_adapter_detail::RunProtoBoolParse([&]() {
+           derived().ParseFromStream(stream, opts);
+         }) == proto_adapter_detail::ProtoBoolParseStatus::kOk;
 }
 
 template <typename Derived> bool ProtoMessageAdapter<Derived>::ParseFromFileDescriptor(int fd) {
   ParseOptions opts;
   utils::FdReadStream stream(fd);
-  if (detail::RunProtoBoolParse([&]() { derived().ParseFromStream(stream, opts); }) !=
-      detail::ProtoBoolParseStatus::kOk) {
+  if (proto_adapter_detail::RunProtoBoolParse([&]() { derived().ParseFromStream(stream, opts); }) !=
+      proto_adapter_detail::ProtoBoolParseStatus::kOk) {
     return false;
   }
   return !stream.failed();

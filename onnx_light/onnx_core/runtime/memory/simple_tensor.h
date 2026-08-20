@@ -594,7 +594,8 @@ struct Tensor {
    * @param sz    Total byte count of the element buffer.
    * @return      A ``Tensor`` backed by the external buffer.
    */
-  static Tensor Borrow(std::string name, int32_t dtype, Shape shape, const uint8_t *ptr, size_t sz);
+  static Tensor Borrow(std::string name, int32_t dtype, Shape shape, const uint8_t *ptr, size_t sz,
+                       std::shared_ptr<void> owner = {});
 
   /// Creates a non-owning (borrowed) ``STRING`` tensor that references an
   /// external string vector without copying.
@@ -658,6 +659,14 @@ struct Tensor {
   bool is_borrowed() const noexcept {
     return borrow_ptr_ != nullptr || borrow_string_data_ != nullptr;
   }
+
+  /// Returns the token retaining borrowed byte storage, or an empty token when
+  /// the caller is responsible for its lifetime.
+  const std::shared_ptr<void> &borrowed_owner() const noexcept { return borrow_owner_; }
+
+  /// Creates an immutable-storage view whose metadata is independent while its
+  /// payload aliases this tensor. This tensor must outlive the returned view.
+  Tensor BorrowView() const;
 
   /// Returns an owned deep copy of this tensor that references no external
   /// memory: the bytes (or, for ``STRING`` tensors, the strings) are copied
@@ -804,6 +813,7 @@ private:
   const uint8_t *borrow_ptr_ = nullptr;
   size_t borrow_size_ = 0;
   const std::vector<std::string> *borrow_string_data_ = nullptr;
+  std::shared_ptr<void> borrow_owner_;
 };
 
 /// ``Tensors`` — the runtime value produced by kernels that emit more than one

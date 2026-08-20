@@ -69,12 +69,14 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
       cpu_execution_explicit_(options.cpu_execution.has_value()),
       cpu_execution_counters_(options.cpu_execution_counters), verbose_(options.verbose) {
   SetDeclaredShapes(model.graph());
+  SetInitializers(model.graph());
 }
 
 RuntimeSession::RuntimeSession(const GraphProto &graph, int verbose)
     : default_plan_(graph), plan_(default_plan_),
       cpu_execution_(DefaultCpuExecutionPolicy(parameters_)), verbose_(verbose) {
   SetDeclaredShapes(graph);
+  SetInitializers(graph);
 }
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
@@ -149,6 +151,22 @@ void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
   }
   for (std::size_t i = 0; i < graph.value_info().size(); ++i) {
     record(graph.value_info()[i]);
+  }
+}
+
+void RuntimeSession::SetInitializers(const GraphProto &graph) {
+  initializers_.clear();
+  initializers_.reserve(graph.initializer().size());
+  for (const TensorProto &initializer : graph.initializer()) {
+    initializers_.push_back(TensorFromProto(initializer));
+  }
+}
+
+void RuntimeSession::SeedInitializers(RuntimeContext &rt) const {
+  for (const Tensor &initializer : initializers_) {
+    if (!rt.Has(initializer.name)) {
+      rt.Set(initializer.name, initializer.BorrowView(), RuntimeEventKind::kInitializer);
+    }
   }
 }
 
@@ -380,6 +398,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   const bool inherits_executor = !cpu_execution_explicit_ && rt.cpu_executor() != nullptr;
   const SessionExecutorScope executor_scope(rt, inherits_executor ? rt.cpu_executor()
                                                                   : cpu_executor().get());
+  SeedInitializers(rt);
   // Kernels are resolved against ``rt`` on the first run and cached; later
   // runs reuse the same built instances without redoing the per-node
   // dispatch lookup or re-constructing concrete kernels.

@@ -289,6 +289,12 @@ public:
   /// read but not retained, so it need not outlive the session.
   void SetDeclaredShapes(const GraphProto &graph);
 
+  /// Materializes ``graph`` initializers into the session-owned cache. A
+  /// session built from a model or graph calls this automatically; callers
+  /// constructing a session from an :cpp:class:`ExecutionPlan` may call it once
+  /// before the first :cpp:func:`Run`.
+  void SetInitializers(const GraphProto &graph);
+
   /**
    * Returns the list of input names referenced by ``nodes`` that are not
    * produced as outputs by any node in the same list — i.e. the external
@@ -342,6 +348,9 @@ private:
   /// read in :cpp:member:`required_inputs_`.
   void InitializeKernels(RuntimeContext &rt);
 
+  /// Seeds missing initializer names with payload views into the session store.
+  void SeedInitializers(RuntimeContext &rt) const;
+
   /// Normalizes every raw tensor output of ``node`` into the arena implied by
   /// that output slot's role: a declared graph output (a name present in
   /// :cpp:member:`output_names_set_`) is normalized into
@@ -390,6 +399,7 @@ private:
   ExecutionPlan default_plan_;
   const ExecutionPlan &plan_;
   std::vector<PreparedKernel> kernels_;
+  std::vector<Tensor> initializers_;
   /// One immutable registry generation shared by every kernel in this session.
   /// Kernels copy resolved values during initialization; retaining the snapshot
   /// also makes the generation available for diagnostics.

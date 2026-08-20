@@ -5,7 +5,7 @@ Model-loading bug fixes
 
 :Date: 2026-08
 
-**ready to implement**
+**Implemented**
 
 Objective
 +++++++++
@@ -55,7 +55,7 @@ Bug PR02 -- remove Python external-data double parsing
 
 **Repository:** ``xadupre/onnx-light``
 
-**implemented**
+**Implemented**
 
 When ``load_external_data=True`` and ``location`` is absent, ``load()`` calls
 ``_find_external_location()``. That helper parses a temporary metadata-only
@@ -79,6 +79,8 @@ Bug PR03 -- cache runtime initializer tensors
 ++++++++++++++++++++++++++++++++++++++++++++++
 
 **Repository:** ``xadupre/onnx-light``
+
+**Implemented**
 
 Payload ownership already exists: inline bytes belong to ``ModelProto`` and
 mapped bytes retain their mapping owner. The defect is repeated runtime

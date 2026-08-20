@@ -598,13 +598,6 @@ public:
       }
     }
 
-    if (graph_ != nullptr) {
-      for (const TensorProto &initializer : graph_->initializer()) {
-        if (!rt.Has(initializer.name()))
-          rt.Set(initializer.name().value(), core::runtime::TensorFromProto(initializer),
-                 core::runtime::RuntimeEventKind::kInitializer);
-      }
-    }
     EnsureSession();
     session_->Run(rt);
 
@@ -641,6 +634,7 @@ private:
       plan_ = std::make_unique<ExecutionPlan>(*graph_);
       session_ = std::make_unique<RuntimeSession>(*plan_, options_);
       session_->SetDeclaredShapes(*graph_);
+      session_->SetInitializers(*graph_);
     } else {
       plan_ = std::make_unique<ExecutionPlan>(*function_);
       session_ = std::make_unique<RuntimeSession>(*plan_, options_);

@@ -86,7 +86,8 @@ void AllocationHandle::Reset() noexcept {
 Tensor::Tensor(const Tensor &other)
     : name(other.name), data_type(other.data_type), shape(other.shape), data(other.data),
       string_data(other.string_data), borrow_ptr_(other.borrow_ptr_),
-      borrow_size_(other.borrow_size_), borrow_string_data_(other.borrow_string_data_) {
+      borrow_size_(other.borrow_size_), borrow_string_data_(other.borrow_string_data_),
+      borrow_owner_(other.borrow_owner_) {
   if (other.allocation_) {
     RawBuffer *allocated = other.allocation_.owner()->Allocate(other.allocation_.logical_size());
     EXT_ENFORCE(allocated != nullptr,
@@ -110,6 +111,7 @@ Tensor &Tensor::operator=(const Tensor &other) {
   borrow_ptr_ = other.borrow_ptr_;
   borrow_size_ = other.borrow_size_;
   borrow_string_data_ = other.borrow_string_data_;
+  borrow_owner_ = other.borrow_owner_;
   if (other.allocation_) {
     RawBuffer *allocated = other.allocation_.owner()->Allocate(other.allocation_.logical_size());
     EXT_ENFORCE(allocated != nullptr,
@@ -125,10 +127,12 @@ Tensor::Tensor(Tensor &&other) noexcept
     : name(std::move(other.name)), data_type(other.data_type), shape(std::move(other.shape)),
       data(std::move(other.data)), string_data(std::move(other.string_data)),
       allocation_(std::move(other.allocation_)), borrow_ptr_(other.borrow_ptr_),
-      borrow_size_(other.borrow_size_), borrow_string_data_(other.borrow_string_data_) {
+      borrow_size_(other.borrow_size_), borrow_string_data_(other.borrow_string_data_),
+      borrow_owner_(std::move(other.borrow_owner_)) {
   other.borrow_ptr_ = nullptr;
   other.borrow_size_ = 0;
   other.borrow_string_data_ = nullptr;
+  other.borrow_owner_.reset();
 }
 
 Tensor &Tensor::operator=(Tensor &&other) noexcept {
@@ -144,9 +148,11 @@ Tensor &Tensor::operator=(Tensor &&other) noexcept {
   borrow_ptr_ = other.borrow_ptr_;
   borrow_size_ = other.borrow_size_;
   borrow_string_data_ = other.borrow_string_data_;
+  borrow_owner_ = std::move(other.borrow_owner_);
   other.borrow_ptr_ = nullptr;
   other.borrow_size_ = 0;
   other.borrow_string_data_ = nullptr;
+  other.borrow_owner_.reset();
   return *this;
 }
 
@@ -348,13 +354,15 @@ void FillValueInfo(const Tensor &tensor, ValueInfoProto &vi) {
   }
 }
 
-Tensor Tensor::Borrow(std::string name, int32_t dtype, Shape shape, const uint8_t *ptr, size_t sz) {
+Tensor Tensor::Borrow(std::string name, int32_t dtype, Shape shape, const uint8_t *ptr, size_t sz,
+                      std::shared_ptr<void> owner) {
   Tensor t;
   t.name = std::move(name);
   t.data_type = dtype;
   t.shape = std::move(shape);
   t.borrow_ptr_ = ptr;
   t.borrow_size_ = sz;
+  t.borrow_owner_ = std::move(owner);
   return t;
 }
 
@@ -366,6 +374,13 @@ Tensor Tensor::BorrowStrings(std::string name, Shape shape,
   t.shape = std::move(shape);
   t.borrow_string_data_ = &strings;
   return t;
+}
+
+Tensor Tensor::BorrowView() const {
+  if (static_cast<DataType>(data_type) == DataType::STRING) {
+    return Tensor::BorrowStrings(name, shape, AsStrings());
+  }
+  return Tensor::Borrow(name, data_type, shape, bytes(), size_bytes(), borrow_owner_);
 }
 
 Tensor Tensor::ToOwned() const {
@@ -408,7 +423,7 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
   // The TensorProto must outlive the returned Tensor.
   if (tp.is_raw_data()) {
     const auto &rd = tp.ref_raw_data();
-    return Tensor::Borrow(name, dtype, shape, rd.data(), rd.size());
+    return Tensor::Borrow(name, dtype, shape, rd.data(), rd.size(), rd.owner());
   }
 
   // Typed-field path: convert each field's values into a raw byte buffer.

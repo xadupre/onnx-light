@@ -220,6 +220,7 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
     if (my_block < num_blocks) {
       fn(ctx, my_block);
       if (remaining_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        std::lock_guard<std::mutex> lock(mu_);
         cv_done_.notify_one();
       }
     }

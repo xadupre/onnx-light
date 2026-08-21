@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Bumped the release version to `0.1.21`.
 
+### Fixes
+
+- Prevented a lost thread-pool completion notification from blocking parallel regions,
+  especially during repeated small GEMM executions on Windows.
+
 ## [0.1.20] – 2026-08-20
 
 ### Improvements

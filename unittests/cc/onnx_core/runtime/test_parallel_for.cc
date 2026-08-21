@@ -46,16 +46,19 @@ TEST(ThreadPool, WorkerStartupFailureRejectsPool) {
   EXPECT_THROW(ThreadPool(1, options), std::runtime_error);
 }
 
-TEST(ThreadPool, ParkImmediatelyStillCompletesWork) {
+TEST(ThreadPool, ParkImmediatelyRepeatedDispatchesStillCompleteWork) {
   ThreadPoolOptions options;
   options.spin_iterations = 0;
   options.spin_duration_ns = 0;
   ThreadPool pool(1, options);
   std::atomic<int> completed{0};
 
-  pool.Run(2, [&completed](int64_t) { completed.fetch_add(1, std::memory_order_relaxed); });
+  constexpr int iterations = 100000;
+  for (int iteration = 0; iteration < iterations; ++iteration) {
+    pool.Run(2, [&completed](int64_t) { completed.fetch_add(1, std::memory_order_relaxed); });
+  }
 
-  EXPECT_EQ(completed.load(std::memory_order_relaxed), 2);
+  EXPECT_EQ(completed.load(std::memory_order_relaxed), 2 * iterations);
 }
 
 } // namespace

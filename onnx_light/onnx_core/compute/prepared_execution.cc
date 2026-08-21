@@ -400,29 +400,6 @@ PreparedExecutionResult PreparedExecutionPlan::Run(PreparedExecutionState &state
                                                    CpuExecutor *cpu_executor) const {
   EXT_ENFORCE(static_cast<bool>(executor), "Prepared execution requires a task executor.");
   const uint64_t invocation_id = ++state.next_invocation_id_;
-  std::unordered_map<uint64_t, PreparedExecutionState::SessionTaskRequest> session;
-  std::unordered_set<uint64_t> replay_session_tasks;
-  for (auto task = tasks_.rbegin(); task != tasks_.rend(); ++task) {
-    if (task->scope != TaskScope::kSession || task->dormant) {
-      continue;
-    }
-    const bool missing_publication =
-        task->publishes.has_value() && !state.objects().Find(*task->publishes).has_value();
-    if (missing_publication || replay_session_tasks.count(task->id.value) != 0) {
-      replay_session_tasks.insert(task->id.value);
-      for (const TaskId dependency : task->dependencies) {
-        replay_session_tasks.insert(dependency.value);
-      }
-    }
-  }
-
-  for (const TaskDescriptor &task : tasks_) {
-    if (!task.dormant && task.scope == TaskScope::kSession) {
-      session.emplace(task.id.value, state.RequestSessionTask(
-                                         task.id, replay_session_tasks.count(task.id.value) != 0));
-    }
-  }
-
   const uint64_t readiness_epoch = state.readiness_epoch();
   bool hot_path = false;
   {
@@ -447,7 +424,6 @@ PreparedExecutionResult PreparedExecutionPlan::Run(PreparedExecutionState &state
     result.invocation_id = invocation_id;
     result.used_hot_path = true;
     result.diagnostics.reserve(tasks_.size());
-    result.session_generations.reserve(session.size());
     const CpuExecutorScope executor_scope(cpu_executor);
     for (const TaskDescriptor &task : tasks_) {
       if (task.dormant) {
@@ -455,7 +431,7 @@ PreparedExecutionResult PreparedExecutionPlan::Run(PreparedExecutionState &state
         continue;
       }
       if (task.scope == TaskScope::kSession) {
-        const auto &request = session.at(task.id.value);
+        const auto request = state.RequestSessionTask(task.id, false);
         result.diagnostics.push_back(request.completion.diagnostic());
         result.session_generations.emplace_back(task.id, request.generation);
         continue;
@@ -487,6 +463,28 @@ PreparedExecutionResult PreparedExecutionPlan::Run(PreparedExecutionState &state
       }
     }
     return result;
+  }
+
+  std::unordered_map<uint64_t, PreparedExecutionState::SessionTaskRequest> session;
+  std::unordered_set<uint64_t> replay_session_tasks;
+  for (auto task = tasks_.rbegin(); task != tasks_.rend(); ++task) {
+    if (task->scope != TaskScope::kSession || task->dormant) {
+      continue;
+    }
+    const bool missing_publication =
+        task->publishes.has_value() && !state.objects().Find(*task->publishes).has_value();
+    if (missing_publication || replay_session_tasks.count(task->id.value) != 0) {
+      replay_session_tasks.insert(task->id.value);
+      for (const TaskId dependency : task->dependencies) {
+        replay_session_tasks.insert(dependency.value);
+      }
+    }
+  }
+  for (const TaskDescriptor &task : tasks_) {
+    if (!task.dormant && task.scope == TaskScope::kSession) {
+      session.emplace(task.id.value, state.RequestSessionTask(
+                                         task.id, replay_session_tasks.count(task.id.value) != 0));
+    }
   }
 
   std::unordered_map<uint64_t, TaskCompletion> invocation;

@@ -167,6 +167,11 @@ public:
 
   /**
    * Executes session producers and the invocation tasks through completion events.
+   *
+   * @param state Mutable session state that owns reusable session-task generations.
+   * @param executor Executes a task descriptor. It may be called concurrently by
+   *                 the session worker and the invoking thread.
+   * @return Fresh invocation diagnostics and the session generations it observed.
    */
   PreparedExecutionResult RunSequential(PreparedExecutionState &state,
                                         const PreparedTaskExecutor &executor) const;

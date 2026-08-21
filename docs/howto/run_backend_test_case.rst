@@ -92,8 +92,9 @@ The evaluator accepts execution options when the session is created:
 * ``verbose=1`` prints one line for every dispatched node.  Keep it at ``0``
   for normal silent execution.
 * ``events_enabled=True`` records value-map changes and node dispatches in the
-  session's :class:`RuntimeContext`; :meth:`~onnx_light.reference.ReferenceEvaluator.events`
-  returns the records after a run.
+  session's :class:`RuntimeContext`;
+  :meth:`~onnx_light.onnx.reference.ReferenceEvaluator.events` returns the
+  records after a run.
 * ``release_intermediates=True`` removes an intermediate value after its last
   consumer.  Setting it to ``False`` keeps intermediates until the run ends,
   which can aid debugging but increases peak memory.  This one-node case has

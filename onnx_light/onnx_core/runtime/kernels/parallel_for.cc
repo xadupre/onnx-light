@@ -304,7 +304,7 @@ void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx
   const auto start = std::chrono::steady_clock::now();
   const int64_t max_threads = ParallelForThreadCount();
   uint32_t admitted = 1;
-  bool nested_inline = false;
+  const bool nested_inline = ThreadPool::InParallelRegion();
   if (total < grain_size || max_threads <= 1) {
     ParallelRegionCollectorScope collector_scope(collector);
     task_fn(task_ctx, static_cast<int64_t>(0), total);
@@ -315,7 +315,6 @@ void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx
       ParallelRegionCollectorScope collector_scope(collector);
       task_fn(task_ctx, static_cast<int64_t>(0), total);
     } else {
-      nested_inline = ThreadPool::InParallelRegion();
       admitted = nested_inline ? 1 : static_cast<uint32_t>(num_blocks);
       ParallelRange range{
           task_ctx,

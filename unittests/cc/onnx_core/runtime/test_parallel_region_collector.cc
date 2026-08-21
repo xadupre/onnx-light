@@ -100,6 +100,23 @@ TEST(ParallelRegionCollector, PropagatesToWorkersAndMarksNestedInline) {
   EXPECT_EQ(collector.events()[1].admitted_threads, 2);
 }
 
+TEST(ParallelRegionCollector, MarksLimitedStandaloneWorkerCallsNestedInline) {
+  ThreadPool pool(1);
+  ParallelRegionCollector collector(1);
+
+  pool.Run(2, [&collector](int64_t block) {
+    if (block == 1) {
+      ParallelRegionCollectorScope collector_scope(&collector);
+      ParallelFor(1, 2, [](int64_t, int64_t) {}, "limited-nested");
+    }
+  });
+
+  ASSERT_EQ(collector.events().size(), 1u);
+  EXPECT_EQ(collector.events()[0].label, "limited-nested");
+  EXPECT_TRUE(collector.events()[0].nested_inline);
+  EXPECT_EQ(collector.events()[0].admitted_threads, 1);
+}
+
 TEST(ParallelRegionCollector, PreservesCallerSourceLocation) {
   CpuExecutorRegistry registry(1);
   const auto executor = MakeExecutor(registry, 1);

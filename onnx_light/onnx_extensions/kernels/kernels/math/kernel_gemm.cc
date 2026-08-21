@@ -16,7 +16,6 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
-#include <new>
 #include <span>
 #include <sstream>
 #include <stdexcept>
@@ -221,37 +220,38 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB,
       << ":transB=" << transB << ":digest=" << digest;
   PreparedObjectRequirement requirement{PreparedKey{key.str()},
                                         b.name.empty() ? std::string{"constant B"} : b.name};
-  PreparedObjectRequest request = state.objects().Request(requirement);
+  std::optional<PreparedObjectRequest> request;
 
-  if (request.producer) {
-    try {
-      AllocationHandle source(&state.preparation_arena(),
-                              state.preparation_arena().Allocate(b.size_bytes()));
-      std::memcpy(source.buffer()->data(), b.bytes(), b.size_bytes());
-      state.objects().MarkPreparing(request);
+  if (!state.objects().Find(requirement.key).has_value()) {
+    AllocationHandle source(&state.preparation_arena(),
+                            state.preparation_arena().Allocate(b.size_bytes()));
+    std::memcpy(source.buffer()->data(), b.bytes(), b.size_bytes());
 
-      AllocationHandle packed(&state.prepared_arena(),
-                              state.prepared_arena().Allocate(b.size_bytes()));
-      const int64_t k = transB ? b.shape[1] : b.shape[0];
-      const int64_t n = transB ? b.shape[0] : b.shape[1];
-      const size_t element_size = b.element_size();
-      for (int64_t j = 0; j < n; ++j) {
-        for (int64_t l = 0; l < k; ++l) {
-          const int64_t source_index = transB ? j * k + l : l * n + j;
-          const int64_t target_index = j * k + l;
-          std::memcpy(packed.buffer()->data() + target_index * element_size,
-                      source.buffer()->data() + source_index * element_size, element_size);
-        }
+    AllocationHandle packed(&state.prepared_arena(),
+                            state.prepared_arena().Allocate(b.size_bytes()));
+    const int64_t k = transB ? b.shape[1] : b.shape[0];
+    const int64_t n = transB ? b.shape[0] : b.shape[1];
+    const size_t element_size = b.element_size();
+    for (int64_t j = 0; j < n; ++j) {
+      for (int64_t l = 0; l < k; ++l) {
+        const int64_t source_index = transB ? j * k + l : l * n + j;
+        const int64_t target_index = j * k + l;
+        std::memcpy(packed.buffer()->data() + target_index * element_size,
+                    source.buffer()->data() + source_index * element_size, element_size);
       }
-      state.objects().Publish(request, std::move(packed));
-    } catch (const std::bad_alloc &) {
-      state.objects().Fail(request, std::current_exception(),
-                           "Unable to allocate prepared Gemm B.");
-      throw;
+    }
+
+    request.emplace(state.objects().Request(requirement));
+    if (request->producer) {
+      state.objects().MarkPreparing(*request);
+      state.objects().Publish(*request, std::move(packed));
     }
   }
+  if (!request.has_value()) {
+    request.emplace(state.objects().Request(requirement));
+  }
 
-  auto prepared = std::make_shared<PreparedGemmB::State>(state, std::move(request));
+  auto prepared = std::make_shared<PreparedGemmB::State>(state, std::move(*request));
   prepared->data_type = b.data_type;
   prepared->shape = b.shape;
   prepared->trans_b = transB;

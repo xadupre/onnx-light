@@ -67,7 +67,8 @@ void PreparedArena::ResetPeak() {
 struct PreparedObjectStore::Entry {
   explicit Entry(PreparedObjectRequirement requirement_)
       : requirement(std::move(requirement_)),
-        completion(std::make_shared<TaskCompletion>(TaskId{})) {}
+        completion(std::make_shared<TaskCompletion>(TaskId{})),
+        allocation(std::make_shared<AllocationHandle>()) {}
 
   PreparedObjectRequirement requirement;
   PreparedResidencyState state = PreparedResidencyState::kAbsent;
@@ -102,9 +103,10 @@ PreparedObjectRequest PreparedObjectStore::Request(const PreparedObjectRequireme
                        entry.state == PreparedResidencyState::kFailed ||
                        entry.state == PreparedResidencyState::kPersisted;
   if (produce) {
+    auto completion = std::make_shared<TaskCompletion>(TaskId{entry.generation + 1});
     ++entry.generation;
     entry.state = PreparedResidencyState::kLoading;
-    entry.completion = std::make_shared<TaskCompletion>(TaskId{entry.generation});
+    entry.completion = std::move(completion);
   }
   return PreparedObjectRequest{entry.requirement.key, entry.generation, *entry.completion, produce};
 }
@@ -127,7 +129,7 @@ void PreparedObjectStore::Publish(const PreparedObjectRequest &request,
   EXT_ENFORCE(request.producer && (entry.state == PreparedResidencyState::kLoading ||
                                    entry.state == PreparedResidencyState::kPreparing),
               "Only the current producer can publish a prepared object.");
-  entry.allocation = std::make_shared<AllocationHandle>(std::move(allocation));
+  *entry.allocation = std::move(allocation);
   entry.state = PreparedResidencyState::kResident;
   ++readiness_epoch_;
   entry.completion->Succeed();
@@ -158,6 +160,7 @@ std::optional<PreparedObjectView> PreparedObjectStore::Find(const PreparedKey &k
 
 bool PreparedObjectStore::Evict(const PreparedKey &key) {
   std::shared_ptr<AllocationHandle> allocation;
+  auto replacement = std::make_shared<AllocationHandle>();
   {
     std::lock_guard<std::mutex> lock(mutex_);
     auto found = entries_.find(key);
@@ -167,6 +170,7 @@ bool PreparedObjectStore::Evict(const PreparedKey &key) {
     Entry &entry = *found->second;
     entry.state = PreparedResidencyState::kEvicting;
     allocation = std::move(entry.allocation);
+    entry.allocation = std::move(replacement);
     entry.state = PreparedResidencyState::kAbsent;
     ++readiness_epoch_;
   }

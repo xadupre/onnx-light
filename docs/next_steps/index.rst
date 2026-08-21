@@ -13,8 +13,9 @@ Recommended implementation order
 Runtime execution work should proceed in dependency order:
 
 1. implement Profile PR01 from
-   :ref:`l-next-steps-parallel-for-profiling`, starting with portable bounded
-   events and a disabled path with no instrumentation work;
+   :ref:`l-next-steps-parallel-for-profiling`: first record a fixed maximum
+   number of platform-independent profiling events; when profiling is disabled,
+   the runtime must not collect data or perform any instrumentation work;
 2. add process CPU time, inspection, hardware counters, and calibration
    diagnostics only after that event contract is stable;
 3. use that same executor when the fast-loading sequence reaches

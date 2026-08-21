@@ -1465,13 +1465,14 @@ Implementation order
    ``ThreadPool`` API, then add the common task, dependency, resource,
    completion, scope, and diagnostic types used by the unified runtime plan;
    keep the existing ``ExecutionPlan`` behavior unchanged during migration.
-#. Add ``PreparedExecution``, the residency-state ``PreparedObjectStore``,
-   ``PreparationArena``, ``PreparedArena``, and the explicit
-   prepared-object requirement/publish contract.
-#. Expand selected materialization recipes into load, prepack, publish, and
-   dormant-fallback task descriptors.
-#. Implement initialization tasks for one CPU ``Gemm`` with a constant ``B``,
-   including both ``transB`` values.
+#. **Implemented:** add ``PreparedExecutionState``, the residency-state
+   ``PreparedObjectStore``, ``PreparationArena``, ``PreparedArena``, and the
+   explicit prepared-object requirement/atomic-publish contract.
+#. **Implemented:** expand selected materialization recipes into load, prepack,
+   publish, and dormant-fallback task descriptors.
+#. **Implemented:** add session-scoped preparation for one CPU ``Gemm`` with a
+   constant ``B``, including both ``transB`` values while preserving the
+   ordinary reference fallback.
 #. Merge kernel preparation and node execution into one
    ``PreparedExecutionPlan`` and first execute its session-scoped tasks
    sequentially through completion events.

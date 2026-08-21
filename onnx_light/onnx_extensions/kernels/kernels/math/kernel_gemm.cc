@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/compute/prepared_execution.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
@@ -15,6 +16,8 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <span>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -64,15 +67,18 @@ template <typename T> std::vector<T> PackB(const T *b, int64_t k, int64_t n, int
 /// C (optional) is unidirectionally broadcastable to (M, N).
 template <typename T>
 void GemmCompute(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
-                 int64_t transA, int64_t transB, const tuning::GemmTuning &tuning, T *result) {
+                 int64_t transA, int64_t transB, const tuning::GemmTuning &tuning, T *result,
+                 const T *prepared_b = nullptr) {
   const int64_t m = transA ? a.shape[1] : a.shape[0];
   const int64_t k = transA ? a.shape[0] : a.shape[1];
   const int64_t n = transB ? b.shape[0] : b.shape[1];
 
   const T *pa = a.As<T>();
   const T *pb = b.As<T>();
-  const bool pack_b = b.element_count() >= tuning.pack_b_minimum_elements;
-  const std::vector<T> packed_b = pack_b ? PackB(pb, k, n, transB) : std::vector<T>{};
+  const bool pack_b = prepared_b != nullptr || b.element_count() >= tuning.pack_b_minimum_elements;
+  const std::vector<T> packed_b =
+      pack_b && prepared_b == nullptr ? PackB(pb, k, n, transB) : std::vector<T>{};
+  const T *packed_data = prepared_b != nullptr ? prepared_b : packed_b.data();
   const T *pc = c != nullptr ? c->As<T>() : nullptr;
   const int64_t c_rank = c != nullptr ? static_cast<int64_t>(c->shape.size()) : 0;
 
@@ -99,7 +105,7 @@ void GemmCompute(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
             const int64_t l_end = l_begin + std::min(tuning.tile_k, k - l_begin);
             for (int64_t l = l_begin; l < l_end; ++l) {
               const T a_val = transA ? pa[l * m + i] : pa[i * k + l];
-              const T b_val = pack_b ? packed_b[static_cast<size_t>(j * k + l)]
+              const T b_val = pack_b ? packed_data[static_cast<size_t>(j * k + l)]
                                      : (transB ? pb[j * k + l] : pb[l * n + j]);
               sum += a_val * b_val;
             }
@@ -166,6 +172,22 @@ constexpr const char *kSupportedGemmTypesMsg =
 
 } // namespace
 
+struct PreparedGemmB::State {
+  State(PreparedExecutionState &execution_, PreparedObjectRequest request_)
+      : execution(&execution_), request(std::move(request_)) {}
+
+  PreparedExecutionState *execution = nullptr;
+  PreparedObjectRequest request;
+  int32_t data_type = DataType::UNDEFINED;
+  Shape shape;
+  int64_t trans_b = 0;
+};
+
+bool PreparedGemmB::IsReady() const {
+  return state_ != nullptr && state_->request.completion.IsReady() &&
+         state_->request.completion.status() == TaskStatus::kSucceeded;
+}
+
 Gemm::Gemm(const KernelContext &ctx) : KernelBase(ctx) {}
 
 void Gemm::RegisterTuningSchemas() {
@@ -182,6 +204,60 @@ void Gemm::Configure(const KernelTuningParameters &parameters) {
   tuning::ConfigureGemmTuning(parameters, tuning_, kTuningAbi);
 }
 
+PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB,
+                                     PreparedExecutionState &state) const {
+  EXT_ENFORCE_INVALID(b.shape.size() == 2, kGemmName, " constant B must have rank 2.");
+  EXT_ENFORCE_INVALID(transB == 0 || transB == 1, kGemmName, " transB must be 0 or 1.");
+  EXT_ENFORCE_INVALID(b.data_type == DataType::FLOAT || b.data_type == DataType::DOUBLE, kGemmName,
+                      " prepared constant B only supports FLOAT and DOUBLE.");
+
+  uint64_t digest = 14695981039346656037ULL;
+  for (const uint8_t byte : std::span<const uint8_t>(b.bytes(), b.size_bytes())) {
+    digest = (digest ^ byte) * 1099511628211ULL;
+  }
+  std::ostringstream key;
+  key << "Gemm:B:" << b.name << ':' << b.data_type << ':' << b.shape[0] << 'x' << b.shape[1]
+      << ":transB=" << transB << ":digest=" << digest;
+  PreparedObjectRequirement requirement{PreparedKey{key.str()},
+                                        b.name.empty() ? std::string{"constant B"} : b.name};
+  std::optional<PreparedObjectRequest> request;
+
+  if (!state.objects().Find(requirement.key).has_value()) {
+    AllocationHandle source(&state.preparation_arena(),
+                            state.preparation_arena().Allocate(b.size_bytes()));
+    std::memcpy(source.buffer()->data(), b.bytes(), b.size_bytes());
+
+    AllocationHandle packed(&state.prepared_arena(),
+                            state.prepared_arena().Allocate(b.size_bytes()));
+    const int64_t k = transB ? b.shape[1] : b.shape[0];
+    const int64_t n = transB ? b.shape[0] : b.shape[1];
+    const size_t element_size = b.element_size();
+    for (int64_t j = 0; j < n; ++j) {
+      for (int64_t l = 0; l < k; ++l) {
+        const int64_t source_index = transB ? j * k + l : l * n + j;
+        const int64_t target_index = j * k + l;
+        std::memcpy(packed.buffer()->data() + target_index * element_size,
+                    source.buffer()->data() + source_index * element_size, element_size);
+      }
+    }
+
+    request.emplace(state.objects().Request(requirement));
+    if (request->producer) {
+      state.objects().MarkPreparing(*request);
+      state.objects().Publish(*request, std::move(packed));
+    }
+  }
+  if (!request.has_value()) {
+    request.emplace(state.objects().Request(requirement));
+  }
+
+  auto prepared = std::make_shared<PreparedGemmB::State>(state, std::move(*request));
+  prepared->data_type = b.data_type;
+  prepared->shape = b.shape;
+  prepared->trans_b = transB;
+  return PreparedGemmB(std::move(prepared));
+}
+
 Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
                         int64_t transA, int64_t transB, RuntimeContext *rt) const {
   switch (a.data_type) {
@@ -189,6 +265,7 @@ Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float
     if (rt == nullptr) {
       return GemmAlloc<float>(a, b, c, alpha, beta, transA, transB, tuning_);
     }
+
     const Shape shape{transA ? a.shape[1] : a.shape[0], transB ? b.shape[0] : b.shape[1]};
     Tensor output = rt->MakeOutputTensor(0, DataType::FLOAT, shape,
                                          static_cast<size_t>(shape[0] * shape[1]) * sizeof(float));
@@ -230,6 +307,50 @@ Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float
   }
   default:
     EXT_THROW_INVALID(kGemmName, ": unsupported data type ", a.data_type, kSupportedGemmTypesMsg);
+  }
+}
+
+Tensor Gemm::operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c, float alpha,
+                        float beta, int64_t transA, RuntimeContext *rt) const {
+  EXT_ENFORCE_INVALID(b.state_ != nullptr, kGemmName, " prepared B is empty.");
+  EXT_ENFORCE_INVALID(a.data_type == b.state_->data_type, kGemmName,
+                      " inputs A and prepared B must share the same dtype.");
+  b.state_->request.completion.Wait();
+  const std::optional<PreparedObjectView> view =
+      b.state_->execution->objects().Find(b.state_->request.key);
+  EXT_ENFORCE(view.has_value(), kGemmName, " prepared B is no longer resident.");
+  const Tensor packed = Tensor::Borrow("", b.state_->data_type, b.state_->shape,
+                                       view->buffer->data(), view->buffer->size());
+  const int64_t m = transA ? a.shape[1] : a.shape[0];
+  const int64_t a_k = transA ? a.shape[0] : a.shape[1];
+  const int64_t b_k = b.state_->trans_b ? b.state_->shape[1] : b.state_->shape[0];
+  EXT_ENFORCE_INVALID(a_k == b_k, kGemmName,
+                      " inputs A and prepared B have incompatible reduction dimensions.");
+  const int64_t n = b.state_->trans_b ? b.state_->shape[0] : b.state_->shape[1];
+  const Shape shape{m, n};
+
+  switch (a.data_type) {
+  case DataType::FLOAT: {
+    Tensor output = rt ? rt->MakeOutputTensor(0, DataType::FLOAT, shape,
+                                              static_cast<size_t>(m * n) * sizeof(float))
+                       : MakeOutputTensor(DataType::FLOAT, shape,
+                                          static_cast<size_t>(m * n) * sizeof(float), nullptr);
+    GemmCompute<float>(a, packed, c, alpha, beta, transA, b.state_->trans_b, tuning_,
+                       output.As<float>(), reinterpret_cast<const float *>(view->buffer->data()));
+    return output;
+  }
+  case DataType::DOUBLE: {
+    Tensor output = rt ? rt->MakeOutputTensor(0, DataType::DOUBLE, shape,
+                                              static_cast<size_t>(m * n) * sizeof(double))
+                       : MakeOutputTensor(DataType::DOUBLE, shape,
+                                          static_cast<size_t>(m * n) * sizeof(double), nullptr);
+    GemmCompute<double>(a, packed, c, alpha, beta, transA, b.state_->trans_b, tuning_,
+                        output.As<double>(),
+                        reinterpret_cast<const double *>(view->buffer->data()));
+    return output;
+  }
+  default:
+    EXT_THROW_INVALID(kGemmName, ": prepared B requires FLOAT or DOUBLE input A.");
   }
 }
 

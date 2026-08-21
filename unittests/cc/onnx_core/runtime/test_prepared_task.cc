@@ -2,8 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/compute/prepared_execution.h"
 #include "onnx_core/compute/prepared_task.h"
 #include "onnx_core/compute/resolved_model_fixture.h"
+#include <atomic>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
@@ -86,4 +89,77 @@ TEST(ResolvedModelFixture, ReadsOnlyActivePayloadManifestEntries) {
   EXPECT_THROW(resolved.ReadPayload("inactive"), std::runtime_error);
   EXPECT_THROW(resolved.ReadPayload("missing"), std::runtime_error);
   std::filesystem::remove(path);
+}
+
+TEST(PreparedObjectStore, SharesOneInFlightGenerationAndPublishesAtomically) {
+  PreparedExecutionState state(1, 1);
+  const PreparedObjectRequirement requirement{PreparedKey{"gemm:B"}, "B"};
+  PreparedObjectRequest producer = state.objects().Request(requirement);
+  PreparedObjectRequest observer = state.objects().Request(requirement);
+
+  EXPECT_TRUE(producer.producer);
+  EXPECT_FALSE(observer.producer);
+  EXPECT_EQ(observer.generation, producer.generation);
+  EXPECT_FALSE(state.objects().Find(requirement.key).has_value());
+
+  state.objects().MarkPreparing(producer);
+  AllocationHandle allocation(&state.prepared_arena(), state.prepared_arena().Allocate(4));
+  std::memcpy(allocation.buffer()->data(), "done", 4);
+  std::atomic<bool> observed{false};
+  std::thread waiter([&]() {
+    observer.completion.Wait();
+    const std::optional<PreparedObjectView> view = state.objects().Find(requirement.key);
+    observed = view.has_value() && std::memcmp(view->buffer->data(), "done", 4) == 0;
+  });
+  state.objects().Publish(producer, std::move(allocation));
+  waiter.join();
+
+  EXPECT_TRUE(observed);
+  EXPECT_EQ(state.prepared_arena().allocated_count(), 1u);
+}
+
+TEST(PreparedObjectStore, EvictionReturnsAllocationToItsOriginalArena) {
+  PreparedExecutionState state(1, 1);
+  const PreparedObjectRequirement requirement{PreparedKey{"resident"}, "source"};
+  PreparedObjectRequest request = state.objects().Request(requirement);
+  AllocationHandle allocation(&state.prepared_arena(), state.prepared_arena().Allocate(8));
+  state.objects().Publish(request, std::move(allocation));
+
+  std::optional<PreparedObjectView> view = state.objects().Find(requirement.key);
+  ASSERT_TRUE(view.has_value());
+  EXPECT_EQ(view->owner, &state.prepared_arena());
+  EXPECT_TRUE(state.objects().Evict(requirement.key));
+  EXPECT_EQ(state.prepared_arena().allocated_count(), 1u);
+  view.reset();
+  EXPECT_EQ(state.prepared_arena().allocated_count(), 0u);
+  EXPECT_EQ(state.objects().State(requirement.key), PreparedResidencyState::kAbsent);
+}
+
+TEST(PreparedExecutionState, PreparationScratchReturnsToPreparationArena) {
+  PreparedExecutionState state(1, 1);
+  {
+    AllocationHandle scratch(&state.preparation_arena(), state.preparation_arena().Allocate(16));
+    EXPECT_EQ(scratch.owner(), &state.preparation_arena());
+    EXPECT_EQ(state.preparation_arena().allocated_count(), 1u);
+  }
+  EXPECT_EQ(state.preparation_arena().allocated_count(), 0u);
+  EXPECT_EQ(state.prepared_arena().allocated_count(), 0u);
+}
+
+TEST(MaterializationRecipe, ExpandsSessionLoadPrepackPublishAndDormantFallback) {
+  PreparedRequirementDescriptor requirement{
+      PreparedObjectRequirement{PreparedKey{"gemm:B:packed"}, "B"},
+      {MaterializationRecipe{MaterializationRecipeKind::kReadSourceAndPrepack, "B",
+                             "gemm-transB=0"}}};
+  const MaterializationTaskDescriptors tasks =
+      ExpandMaterializationRecipe(requirement, requirement.recipes.front(), TaskId{10});
+
+  EXPECT_EQ(tasks.load.scope, TaskScope::kSession);
+  EXPECT_EQ(tasks.load.kind, TaskKind::kReadPayload);
+  EXPECT_EQ(tasks.prepack.dependencies, (std::vector<TaskId>{TaskId{10}}));
+  EXPECT_EQ(tasks.publish.dependencies, (std::vector<TaskId>{TaskId{11}}));
+  ASSERT_TRUE(tasks.publish.publishes.has_value());
+  EXPECT_EQ(tasks.publish.publishes->value, "gemm:B:packed");
+  EXPECT_EQ(tasks.dormant_fallback.kind, TaskKind::kFallback);
+  EXPECT_TRUE(tasks.dormant_fallback.dormant);
 }

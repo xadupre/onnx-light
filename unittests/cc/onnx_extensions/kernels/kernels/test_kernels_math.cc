@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/compute/prepared_execution.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
@@ -2635,6 +2636,45 @@ std::vector<float> DecodeHalfTensor(const Tensor &t) {
 }
 
 } // namespace
+
+TEST(KernelClass, GemmPreparedConstantBMatchesReferenceForBothTransposeModes) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Gemm gemm_kernel{ctx};
+  const Tensor a = Tensor::FromFloat("A", {1, 3}, {1.0f, 2.0f, 3.0f});
+
+  for (const int64_t trans_b : {int64_t{0}, int64_t{1}}) {
+    core::runtime::PreparedExecutionState state(1, 1);
+    const Tensor b = trans_b == 0
+                         ? Tensor::FromFloat("B", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f})
+                         : Tensor::FromFloat("B", {2, 3}, {1.0f, 3.0f, 5.0f, 2.0f, 4.0f, 6.0f});
+    const auto prepared = gemm_kernel.PrepareConstantB(b, trans_b, state);
+    const auto shared = gemm_kernel.PrepareConstantB(b, trans_b, state);
+
+    ASSERT_TRUE(prepared.IsReady());
+    ASSERT_TRUE(shared.IsReady());
+    EXPECT_EQ(state.prepared_arena().allocated_count(), 1u);
+    const Tensor expected = gemm_kernel(a, b, nullptr, 1.0f, 0.0f, /*transA=*/0, trans_b);
+    const Tensor got = gemm_kernel(a, prepared, nullptr, 1.0f, 0.0f, /*transA=*/0);
+    ASSERT_EQ(got.shape, expected.shape);
+    EXPECT_EQ(
+        std::vector<float>(got.AsFloat(), got.AsFloat() + got.element_count()),
+        std::vector<float>(expected.AsFloat(), expected.AsFloat() + expected.element_count()));
+  }
+}
+
+TEST(KernelClass, GemmPreparedConstantBAllocationFailureCanRetry) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Gemm gemm_kernel{ctx};
+  core::runtime::PreparedExecutionState state(1, 1);
+  const Tensor b = Tensor::FromFloat("B", {1, 1}, {2.0f});
+  core::runtime::AllocationHandle occupied(&state.prepared_arena(),
+                                           state.prepared_arena().Allocate(sizeof(float)));
+
+  EXPECT_THROW(gemm_kernel.PrepareConstantB(b, /*transB=*/0, state), std::bad_alloc);
+  occupied.Reset();
+  const auto prepared = gemm_kernel.PrepareConstantB(b, /*transB=*/0, state);
+  EXPECT_TRUE(prepared.IsReady());
+}
 
 // Verifies that the half-precision path of ``kernel::Gemm`` matches the
 // FLOAT path rounded through the same half-precision dtype, for both

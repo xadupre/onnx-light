@@ -28,5 +28,6 @@ back into the model (value_info and node metadata); and
     raw_buffer_allocator
     execute_action
     execution_plan
+    prepared_execution
     prepared_task
     resolved_model_fixture

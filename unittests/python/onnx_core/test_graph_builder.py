@@ -85,6 +85,29 @@ class TestGraphBuilder(ExtTestCase):
             {opset.domain: opset.version for opset in model.opset_import}["com.example"], 7
         )
 
+    def test_compact_documented_optimization_workflow(self):
+        optimization = import_or_skip("onnx_light.onnx_core.optimization")
+        source = GraphBuilder("optimization")
+        source.set_opset_version("", 18)
+        x = source.inp("X", FLOAT, [4])
+        y = source.op.Cast(x, outputs="Y", to=FLOAT)
+        source.out(y, FLOAT, [4])
+        original = source.to_onnx("model")
+
+        builder = GraphBuilder(original)
+        graph = optimization.GraphGraph(
+            builder, optimization.standard_patterns(["Cast"]), use_global_patterns=False
+        )
+        rewrites, report = graph.optimize(report=True)
+        optimized_graph = builder.build_graph()
+        replayed_graph = optimization.replay(original, rewrites)
+
+        self.assertEqual(len(rewrites), 1)
+        self.assertEqual(report.rewrites, 1)
+        self.assertEqual(rewrites[0].pattern_name, "Cast")
+        self.assertEqual(replayed_graph.SerializeToString(), optimized_graph.SerializeToString())
+        checker.check_model(builder.to_onnx("model"))
+
     def test_compact_imported_opset_attribute_validation(self):
         graph = oh.make_graph([], "g", [oh.make_tensor_value_info("x", FLOAT, [2])], [])
         model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 10)])

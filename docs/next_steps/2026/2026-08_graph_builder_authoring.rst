@@ -176,7 +176,7 @@ Implementation sequence
      - Non-gallery GraphBuilder basics and optimization how-to.
      - The documented model builds, validates, optimizes, displays its
        rewrites, and round-trips in documentation tests.
-     - Planned
+     - Completed
    * - Runtime PR01
      - Non-gallery backend-test runtime walkthrough and runtime design summary.
      - One stable case is displayed in ``onnx-compact`` form, executed,

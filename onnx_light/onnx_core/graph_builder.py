@@ -158,7 +158,9 @@ class GraphBuilder(_C.GraphBuilder):
         self._registered_patterns: dict[str, PatternOptimization] = {}
         self._op = _OperatorProxy(self)
         self._initializer_counter = 0
-        self._explicit_opsets = set(self.opset_versions()) if not isinstance(name, str) else set()
+        self._explicit_opsets: set[str] = (
+            set(self.opset_versions()) if not isinstance(name, str) else set()
+        )
 
     def set_opset_version(self, domain: str, version: int) -> None:
         """Records an explicit opset version."""

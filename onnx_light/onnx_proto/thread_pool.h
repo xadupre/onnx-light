@@ -1,13 +1,8 @@
 #pragma once
 
 #include "onnx_light_helpers.h"
-#include <condition_variable>
-#include <exception>
+#include "worker_pool.h"
 #include <functional>
-#include <mutex>
-#include <queue>
-#include <thread>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::utils {
 
@@ -73,10 +68,8 @@ public:
 
   /** Returns the number of worker threads the pool has (or will lazily spawn). */
   inline size_t GetThreadCount() const {
-    // Once tasks have been submitted the workers exist; before that, report the
-    // number of threads requested by Start() so callers see the logical size.
-    return workers_.empty() && is_started_ ? static_cast<size_t>(requested_threads_)
-                                           : workers_.size();
+    return workers_.GetThreadCount() == 0 && is_started_ ? static_cast<size_t>(requested_threads_)
+                                                         : workers_.GetThreadCount();
   }
 
   /** Returns whether the pool has been started (workers may start lazily). */
@@ -92,44 +85,10 @@ public:
   void Clear();
 
 private:
-  std::vector<std::thread> workers_;
-  std::queue<std::function<void()>> jobs_;
-
-  // Single mutex protecting all shared state (jobs_, pending_jobs_, stop_).
-  // Using one mutex eliminates split-brain races between job-queue and
-  // done-counter that can cause condition-variable notifications to be
-  // missed on Windows.
-  mutable std::mutex mutex_;
-  std::condition_variable work_cv_; // workers wait here for new jobs
-  std::condition_variable done_cv_; // Wait() waits here for all jobs to finish
-  bool stop_;
+  WorkerPool workers_;
   bool is_started_;
-
-  // Number of worker threads requested by Start(), resolved from a negative
-  // value to hardware_concurrency(). Workers are spawned lazily on the first
-  // SubmitTask() so an idle pool costs nothing.
   int32_t requested_threads_;
-
-  // Counts jobs that are queued OR currently executing.
-  size_t pending_jobs_;
-  // First exception raised by any submitted job, rethrown by Wait().
-  std::exception_ptr first_exception_;
-
-  /**
-   * Spawns the worker threads if they have not been created yet.
-   *
-   * Must be called while ``mutex_`` is held. Does nothing once the workers
-   * exist or when the pool has not been started.
-   */
-  void EnsureWorkersStarted();
-
-  /** Runs one job, capturing any exception for the eventual Wait() caller. */
-  void ExecuteJob(std::function<void()> &job) noexcept;
-  /** Stops workers, drains queued jobs when needed, and optionally rethrows. */
   void WaitImpl(bool rethrow_exceptions);
-
-  /** Entry point executed by each worker thread. */
-  void worker_thread();
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::utils

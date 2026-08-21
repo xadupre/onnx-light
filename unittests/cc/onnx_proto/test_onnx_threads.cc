@@ -2,6 +2,7 @@
 #include "onnx_helper.h"
 #include "onnx_light_helpers.h"
 #include "thread_pool.h"
+#include "worker_pool.h"
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -59,6 +60,42 @@ TEST(onnx_threads, WaitRethrowsWorkerException) {
   }
 
   EXPECT_FALSE(pool.IsStarted());
+}
+
+TEST(onnx_threads, WorkerPoolPersistsUntilShutdown) {
+  WorkerPool pool(2);
+  std::atomic<int> completed(0);
+  pool.Enqueue([&completed]() { completed.fetch_add(1, std::memory_order_relaxed); });
+  pool.WaitIdle();
+  EXPECT_TRUE(pool.IsStarted());
+
+  pool.Enqueue([&completed]() { completed.fetch_add(1, std::memory_order_relaxed); });
+  pool.WaitIdle();
+  EXPECT_EQ(completed.load(), 2);
+
+  pool.Shutdown();
+  EXPECT_FALSE(pool.IsStarted());
+  EXPECT_EQ(pool.GetThreadCount(), 0);
+}
+
+TEST(onnx_threads, WorkerPoolWaitIdleRethrowsTaskExceptionAndRemainsUsable) {
+  WorkerPool pool(1);
+  pool.Enqueue([]() { throw std::runtime_error("worker-pool failure"); });
+  EXPECT_THROW(pool.WaitIdle(), std::runtime_error);
+
+  std::atomic<bool> completed(false);
+  pool.Enqueue([&completed]() { completed.store(true, std::memory_order_relaxed); });
+  EXPECT_NO_THROW(pool.WaitIdle());
+  EXPECT_TRUE(completed.load());
+}
+
+TEST(onnx_threads, WorkerPoolDestructorDrainsTasks) {
+  std::atomic<bool> completed(false);
+  {
+    WorkerPool pool(1);
+    pool.Enqueue([&completed]() { completed.store(true, std::memory_order_relaxed); });
+  }
+  EXPECT_TRUE(completed.load());
 }
 
 TEST(onnx_threads, ParallelExecution) {

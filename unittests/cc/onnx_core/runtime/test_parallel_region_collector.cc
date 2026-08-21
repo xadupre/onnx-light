@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -15,6 +16,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
@@ -202,6 +204,100 @@ TEST(ParallelRegionCollector, ReportOwnsAnImmutableSnapshot) {
   EXPECT_FALSE(first_report.events()[0].llc_miss_rate.has_value());
   EXPECT_EQ(first_report.dropped_events(), 0u);
 }
+
+TEST(ParallelRegionCollector, PreservesUnavailableCounterStatusesWithoutValues) {
+  const std::array<HardwareCounterStatus, 4> statuses{
+      HardwareCounterStatus::kUnsupported,
+      HardwareCounterStatus::kPermissionDenied,
+      HardwareCounterStatus::kMultiplexed,
+      HardwareCounterStatus::kOverflowed,
+  };
+  ParallelRegionCollector collector(statuses.size());
+  for (HardwareCounterStatus status : statuses) {
+    ParallelRegionEvent event;
+    event.counters.status = status;
+    collector.Record(std::move(event));
+  }
+
+  const ParallelRegionReport report = collector.Report();
+  ASSERT_EQ(report.events().size(), statuses.size());
+  for (size_t index = 0; index < statuses.size(); ++index) {
+    const ParallelRegionReportEvent &event = report.events()[index];
+    EXPECT_EQ(event.counter_status, statuses[index]);
+    EXPECT_FALSE(event.cpu_cycles.has_value());
+    EXPECT_FALSE(event.retired_instructions.has_value());
+    EXPECT_FALSE(event.llc_references.has_value());
+    EXPECT_FALSE(event.llc_misses.has_value());
+    EXPECT_FALSE(event.ipc.has_value());
+    EXPECT_FALSE(event.llc_miss_rate.has_value());
+  }
+}
+
+TEST(ParallelRegionCollector, DerivesMetricsOnlyFromValidCounterSamples) {
+  ParallelRegionCollector collector(2);
+  ParallelRegionEvent valid;
+  valid.counters.status = HardwareCounterStatus::kValid;
+  valid.counters.cpu_cycles = 100;
+  valid.counters.retired_instructions = 250;
+  valid.counters.llc_references = 40;
+  valid.counters.llc_misses = 5;
+  valid.counters.time_enabled = 1000;
+  valid.counters.time_running = 1000;
+  collector.Record(std::move(valid));
+  ParallelRegionEvent multiplexed;
+  multiplexed.counters.status = HardwareCounterStatus::kMultiplexed;
+  multiplexed.counters.time_enabled = 1000;
+  multiplexed.counters.time_running = 500;
+  collector.Record(std::move(multiplexed));
+
+  const ParallelRegionReport report = collector.Report();
+  ASSERT_EQ(report.events().size(), 2u);
+  EXPECT_EQ(report.events()[0].counter_status, HardwareCounterStatus::kValid);
+  EXPECT_DOUBLE_EQ(*report.events()[0].ipc, 2.5);
+  EXPECT_DOUBLE_EQ(*report.events()[0].llc_miss_rate, 0.125);
+  EXPECT_EQ(report.events()[0].counter_time_enabled, 1000u);
+  EXPECT_EQ(report.events()[0].counter_time_running, 1000u);
+  EXPECT_FALSE(report.events()[1].ipc.has_value());
+  EXPECT_FALSE(report.events()[1].llc_miss_rate.has_value());
+  EXPECT_EQ(report.events()[1].counter_time_enabled, 1000u);
+  EXPECT_EQ(report.events()[1].counter_time_running, 500u);
+}
+
+#if defined(__linux__)
+TEST(ParallelRegionCollector, LinuxHardwareCountersAreValidOrSkipWithExplicitStatus) {
+  CpuExecutorRegistry registry(1);
+  const auto executor = MakeExecutor(registry, 1);
+  ParallelRegionCollector collector(1, true);
+  ParallelRegionCollectorScope collector_scope(&collector);
+  CpuExecutorScope executor_scope(executor.get());
+
+  std::atomic<uint64_t> checksum{0};
+  ParallelFor(
+      1 << 20, 1,
+      [&checksum](int64_t begin, int64_t end) {
+        for (int64_t index = begin; index < end; ++index) {
+          checksum.fetch_add(static_cast<uint64_t>(index), std::memory_order_relaxed);
+        }
+      },
+      "hardware-counters");
+
+  const ParallelRegionReport report = collector.Report();
+  ASSERT_EQ(report.events().size(), 1u);
+  const ParallelRegionReportEvent &event = report.events()[0];
+  if (event.counter_status == HardwareCounterStatus::kPermissionDenied ||
+      event.counter_status == HardwareCounterStatus::kUnsupported) {
+    GTEST_SKIP() << "Linux perf counters are " << HardwareCounterStatusName(event.counter_status)
+                 << " in this environment.";
+  }
+  ASSERT_EQ(event.counter_status, HardwareCounterStatus::kValid);
+  ASSERT_TRUE(event.cpu_cycles.has_value());
+  ASSERT_TRUE(event.retired_instructions.has_value());
+  EXPECT_GT(*event.cpu_cycles, 0u);
+  EXPECT_GT(*event.retired_instructions, 0u);
+  EXPECT_EQ(event.counter_time_enabled, event.counter_time_running);
+  EXPECT_NE(checksum.load(std::memory_order_relaxed), 0u);
+}
+#endif
 
 TEST(ParallelRegionCollector, DisabledPathDoesNotCreateEvents) {
   EXPECT_EQ(CurrentParallelRegionCollector(), nullptr);

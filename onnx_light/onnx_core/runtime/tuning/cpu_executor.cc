@@ -269,6 +269,7 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
   }
   std::chrono::steady_clock::time_point start;
   std::optional<uint64_t> process_cpu_start;
+  HardwareCounterMeasurement counter_measurement;
   uint64_t region_id = 0;
   uint64_t parent_region_id = 0;
   uint64_t run_id = 0;
@@ -276,6 +277,7 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
   if (collector != nullptr) {
     start = std::chrono::steady_clock::now();
     process_cpu_start = ReadProcessCpuTimeNs();
+    counter_measurement = collector->BeginHardwareCounters();
     region_id = NextParallelRegionId();
     parent_region_id = CurrentParallelRegionId();
     run_id = CurrentParallelRegionRunId();
@@ -314,6 +316,8 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
                 *process_cpu_end >= *process_cpu_start
             ? std::optional<uint64_t>(*process_cpu_end - *process_cpu_start)
             : std::nullopt;
+    const HardwareCounterSample hardware_counters =
+        collector->EndHardwareCounters(counter_measurement, admitted == 1);
     collector->Record(ParallelRegionEvent{
         .region_id = region_id,
         .parent_region_id = parent_region_id,
@@ -330,6 +334,7 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
         .process_cpu_time_ns = process_cpu_time_ns,
         .cpu_utilization = ComputeCpuUtilization(process_cpu_time_ns, wall_time_ns,
                                                  static_cast<int32_t>(admitted)),
+        .counters = hardware_counters,
         .executor_instance_id = impl_->instance_id,
         .nested_inline = nested_inline,
     });

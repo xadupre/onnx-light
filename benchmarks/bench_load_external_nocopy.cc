@@ -27,6 +27,7 @@
  * approach but skip the extra copy step.
  *
  * Usage:
+ *   python -m benchmarks.fixtures.generate_prepared_execution_external
  *   bench_load_external_nocopy [-n iters] [-m model.onnx] [-w weights.data]
  */
 

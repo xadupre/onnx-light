@@ -1455,8 +1455,8 @@ Implementation order
 ++++++++++++++++++++
 
 #. **Implemented:** add a valid deterministic external-data model benchmark
-   backed by checked-in model and payload files that the benchmark never
-   rewrites.
+   backed by model and payload files produced by a checked-in onnx-light
+   generator script that the benchmark never rewrites.
 #. Consume a deterministic frozen ``ResolvedModel`` fixture conforming to
    :ref:`l-next-steps-model-resolution` and reject every read not present in its
    active payload manifest. **Implemented by the temporary

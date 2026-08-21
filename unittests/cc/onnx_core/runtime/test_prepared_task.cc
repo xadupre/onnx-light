@@ -4,9 +4,6 @@
 
 #include "onnx_core/compute/prepared_task.h"
 #include "onnx_core/compute/resolved_model_fixture.h"
-#include "onnx_proto/onnx.h"
-#include "onnx_proto/stream.h"
-
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
@@ -89,34 +86,4 @@ TEST(ResolvedModelFixture, ReadsOnlyActivePayloadManifestEntries) {
   EXPECT_THROW(resolved.ReadPayload("inactive"), std::runtime_error);
   EXPECT_THROW(resolved.ReadPayload("missing"), std::runtime_error);
   std::filesystem::remove(path);
-}
-
-TEST(ResolvedModelFixture, CheckedInModelHasDeterministicExternalOutput) {
-  const std::filesystem::path root = std::filesystem::path(__FILE__)
-                                         .parent_path()
-                                         .parent_path()
-                                         .parent_path()
-                                         .parent_path()
-                                         .parent_path();
-  const std::filesystem::path model_path =
-      root / "benchmarks/fixtures/prepared_execution_external.onnx";
-  const std::filesystem::path weights_path =
-      root / "benchmarks/fixtures/prepared_execution_external.data";
-  const std::vector<uint8_t> expected{
-      0x00, 0x00, 0x80, 0x3f, 0x00, 0x00, 0x00, 0x40,
-      0x00, 0x00, 0x40, 0x40, 0x00, 0x00, 0x80, 0x40,
-  };
-
-  ResolvedModelFixture resolved(
-      model_path, {PayloadManifestEntry{"W", weights_path, 0, expected.size(), true}});
-  EXPECT_EQ(resolved.ReadPayload("W"), expected);
-
-  ONNX_LIGHT_NAMESPACE::ModelProto model;
-  ONNX_LIGHT_NAMESPACE::utils::TwoFilesStream stream(model_path.string(), weights_path.string());
-  ASSERT_TRUE(model.ParseFromStream(stream));
-  ASSERT_EQ(model.ref_graph().ref_initializer().size(), 1);
-  ASSERT_EQ(model.ref_graph().ref_node().size(), 1);
-  EXPECT_EQ(model.ref_graph().ref_node()[0].ref_op_type(), "Identity");
-  const auto &output = model.ref_graph().ref_initializer()[0].ref_raw_data();
-  EXPECT_EQ(std::vector<uint8_t>(output.data(), output.data() + output.size()), expected);
 }

@@ -178,8 +178,6 @@ cmake_install.cmake
 # Test-generated ONNX model artifacts
 *.onnx
 *.data
-!benchmarks/fixtures/prepared_execution_external.onnx
-!benchmarks/fixtures/prepared_execution_external.data
 *.pb
 
 # Pixi environment directory

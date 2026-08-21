@@ -67,7 +67,9 @@ CpuExecutionDescriptor MakeExecution() {
 
 void RecordAttractiveCandidateProfile() {
   ParallelRegionCollector *collector = CurrentParallelRegionCollector();
-  ASSERT_NE(collector, nullptr);
+  if (collector == nullptr) {
+    return;
+  }
   HardwareCounterSample counters;
   counters.status = HardwareCounterStatus::kValid;
   counters.cpu_cycles = 1;
@@ -564,16 +566,15 @@ TEST(KernelCalibration, ValidatesCandidateOutput) {
   };
   CpuExecutionDescriptor execution = MakeExecution();
   execution.effective_threads = static_cast<uint32_t>(ParallelForThreadCount());
-  CalibrationReporter reporter;
-  ParallelRegionCollector collector(1);
-  ParallelRegionCollectorScope collector_scope(&collector);
+  CalibrationOptions options;
+  options.profiling_capacity = 1;
+  CalibrationReporter reporter(options);
 
-  EXPECT_THROW(CalibrateKernelBenchmark(defaults.key, execution, {}, reporter, benchmark),
+  EXPECT_THROW(CalibrateKernelBenchmark(defaults.key, execution, options, reporter, benchmark),
                std::runtime_error);
-  const ParallelRegionReport profile = collector.Report();
-  ASSERT_EQ(profile.events().size(), 1u);
-  EXPECT_DOUBLE_EQ(*profile.events()[0].ipc, 100.0);
-  EXPECT_DOUBLE_EQ(*profile.events()[0].llc_miss_rate, 0.0);
+  reporter.FinalizeCandidateDiagnostics();
+  ASSERT_TRUE(reporter.parallel_region_report().has_value());
+  EXPECT_TRUE(reporter.parallel_region_report()->events().empty());
 }
 
 TEST(KernelCalibration, ProfilesCandidatesWithoutOverridingElapsedTimeSelection) {
@@ -617,10 +618,41 @@ TEST(KernelCalibration, ProfilesCandidatesWithoutOverridingElapsedTimeSelection)
   ASSERT_EQ(report.candidate_diagnostics.size(), 1u);
   const ParallelRegionReport &profile = report.candidate_diagnostics[0].parallel_regions;
   ASSERT_EQ(profile.events().size(), 1u);
-  EXPECT_EQ(profile.dropped_events(), 2u);
+  EXPECT_EQ(profile.dropped_events(), 0u);
   EXPECT_EQ(profile.events()[0].counter_status, HardwareCounterStatus::kValid);
   EXPECT_DOUBLE_EQ(*profile.events()[0].ipc, 100.0);
   EXPECT_DOUBLE_EQ(*profile.events()[0].llc_miss_rate, 0.0);
+}
+
+TEST(KernelCalibration, DoesNotRunDiagnosticCandidateWhenProfilingIsDisabled) {
+  if (ParallelForThreadCount() == 1) {
+    GTEST_SKIP() << "Parallel calibration is unavailable.";
+  }
+  KernelTuningParameters defaults = MakeDefaults();
+  KernelCalibrationBenchmark benchmark;
+  benchmark.portable_parameters = defaults;
+  benchmark.parameter_name = "algorithm.tile_m";
+  benchmark.cases = MakeElementwiseCalibrationCases(DataType::FLOAT, 1, 16, 16, false);
+  benchmark.repetitions = 1;
+  benchmark.required_consecutive_wins = 1;
+  benchmark.reference.configure = [](int64_t) {};
+  benchmark.candidate.configure = [](int64_t) {};
+  benchmark.reference.run = [](std::span<const Tensor>, Tensor &output) {
+    std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
+  };
+  int candidate_runs = 0;
+  benchmark.candidate.run = [&candidate_runs](std::span<const Tensor>, Tensor &output) {
+    ++candidate_runs;
+    std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
+  };
+  CpuExecutionDescriptor execution = MakeExecution();
+  execution.effective_threads = static_cast<uint32_t>(ParallelForThreadCount());
+  CalibrationReporter reporter;
+
+  CalibrateKernelBenchmark(defaults.key, execution, {}, reporter, benchmark);
+
+  EXPECT_EQ(candidate_runs, 2);
+  EXPECT_FALSE(reporter.parallel_region_report().has_value());
 }
 
 TEST(KernelCalibration, RetainsBoundedDiagnosticsWhenCountersAreDisabled) {
@@ -629,9 +661,12 @@ TEST(KernelCalibration, RetainsBoundedDiagnosticsWhenCountersAreDisabled) {
   RegisterKernelTuningSchema(KernelTuningSchema(defaults));
   RegisterKernelCalibrationFunction(
       defaults.key, [defaults](const KernelTuningKey &, const CpuExecutionDescriptor &,
-                               const CalibrationOptions &, CalibrationReporter &) {
-        ParallelFor(8, 1, [](int64_t, int64_t) {}, "first");
-        ParallelFor(8, 1, [](int64_t, int64_t) {}, "dropped");
+                               const CalibrationOptions &, CalibrationReporter &reporter) {
+        reporter.ProfileCandidate([]() {
+          ParallelFor(8, 1, [](int64_t, int64_t) {}, "first");
+          ParallelFor(8, 1, [](int64_t, int64_t) {}, "dropped");
+        });
+        reporter.FinalizeCandidateDiagnostics();
         return defaults;
       });
 

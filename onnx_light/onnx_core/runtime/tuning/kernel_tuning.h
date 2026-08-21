@@ -233,13 +233,16 @@ public:
   /** Returns the accumulated benchmark measurement duration. */
   uint64_t measured_duration_ns() const noexcept { return measured_duration_ns_; }
 
-  /** Returns the optional collector used for this candidate. */
-  ParallelRegionCollector *parallel_region_collector() const noexcept {
-    return parallel_region_collector_.get();
-  }
+  /** Runs one untimed candidate execution with optional profiling enabled. */
+  void ProfileCandidate(const std::function<void()> &run);
+
+  /** Copies completed profiling data while callback-owned labels remain valid. */
+  void FinalizeCandidateDiagnostics();
 
   /** Returns the candidate profiling snapshot when profiling was requested. */
-  std::optional<ParallelRegionReport> parallel_region_report() const;
+  const std::optional<ParallelRegionReport> &parallel_region_report() const noexcept {
+    return parallel_region_report_;
+  }
 
 private:
   std::vector<std::string> diagnostics_;
@@ -247,6 +250,7 @@ private:
   uint64_t peak_memory_bytes_ = 0;
   uint64_t measured_duration_ns_ = 0;
   std::unique_ptr<ParallelRegionCollector> parallel_region_collector_;
+  std::optional<ParallelRegionReport> parallel_region_report_;
 };
 
 /** Calibrates one exact, registered kernel tuning key. */

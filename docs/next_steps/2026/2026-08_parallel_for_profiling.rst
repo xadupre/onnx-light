@@ -182,9 +182,9 @@ that payload would mix value lifetime with scheduler telemetry.
 Calibration requests a bounded collector with ``profiling_capacity`` and may
 enable Linux counters with ``profiling_hardware_counters``. Candidate
 diagnostics retain the event validity fields and dropped-event count. Candidate
-selection remains based on validated outputs and stable elapsed-time wins. IPC
-or LLC misses explain a choice but cannot override a slower candidate
-automatically.
+profiling uses separate untimed, validated executions, so selection remains
+based on validated outputs and stable elapsed-time wins. IPC or LLC misses
+explain a choice but cannot override a slower candidate automatically.
 
 Benchmark and acceptance criteria
 +++++++++++++++++++++++++++++++++

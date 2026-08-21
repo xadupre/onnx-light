@@ -182,7 +182,7 @@ Implementation sequence
      - One stable case is displayed in ``onnx-compact`` form, executed,
        validated, and rerun with documented options; the design page explains
        the corresponding architecture.
-     - Planned
+     - Completed
 
 Acceptance criteria
 +++++++++++++++++++

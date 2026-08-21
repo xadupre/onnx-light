@@ -72,18 +72,18 @@ class _OperatorProxy:
             if not isinstance(name, str):
                 raise TypeError("The node name must be a string.")
 
-            if domain in ("", "ai.onnx"):
-                schemas = [
-                    schema
-                    for schema in _default_schema_lookup(op_type)
-                    if schema.domain in ("", "ai.onnx")
-                ]
-                if not schemas:
-                    raise ValueError(f"Unknown standard ONNX operator {op_type!r}.")
-                version = self._builder.opset_version("")
+            normalized_domain = "ai.onnx" if domain in ("", "ai.onnx") else domain
+            schemas = [
+                schema
+                for schema in _default_schema_lookup(op_type)
+                if ("ai.onnx" if schema.domain in ("", "ai.onnx") else schema.domain)
+                == normalized_domain
+            ]
+            if schemas:
+                version = self._builder.opset_version(domain)
                 matching = (
                     [schema for schema in schemas if schema.since_version <= version]
-                    if "" in self._builder._explicit_opsets
+                    if normalized_domain in self._builder._explicit_opsets
                     else schemas
                 )
                 if not matching:
@@ -98,6 +98,8 @@ class _OperatorProxy:
                         f"Unknown attribute(s) for standard ONNX operator {op_type!r}: "
                         f"{', '.join(unknown)}."
                     )
+            elif normalized_domain == "ai.onnx":
+                raise ValueError(f"Unknown standard ONNX operator {op_type!r}.")
             elif self._builder.opset_version(domain) <= 0:
                 raise ValueError(
                     f"Custom domain {domain!r} has no imported opset; "
@@ -161,7 +163,7 @@ class GraphBuilder(_C.GraphBuilder):
     def set_opset_version(self, domain: str, version: int) -> None:
         """Records an explicit opset version."""
         super().set_opset_version(domain, version)
-        self._explicit_opsets.add("" if domain == "ai.onnx" else domain)
+        self._explicit_opsets.add("ai.onnx" if domain in ("", "ai.onnx") else domain)
 
     @property
     def op(self) -> _OperatorProxy:

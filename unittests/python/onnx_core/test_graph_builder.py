@@ -85,6 +85,13 @@ class TestGraphBuilder(ExtTestCase):
             {opset.domain: opset.version for opset in model.opset_import}["com.example"], 7
         )
 
+    def test_compact_imported_opset_attribute_validation(self):
+        graph = oh.make_graph([], "g", [oh.make_tensor_value_info("x", FLOAT, [2])], [])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 10)])
+        builder = GraphBuilder(model)
+        output = builder.op.Clip("x", outputs="y", min=0.0, max=1.0)
+        self.assertEqual(output, "y")
+
     def test_compact_rejects_invalid_calls(self):
         builder = GraphBuilder("g")
         x = builder.inp("x", FLOAT, [2])

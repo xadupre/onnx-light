@@ -171,7 +171,7 @@ Implementation sequence
      - Deterministic short and detailed ``LocalRewriting`` display.
      - Reports are readable in Python and plain documentation while replay data
        and behavior remain unchanged.
-     - Planned
+     - Completed
    * - Builder PR03
      - Non-gallery GraphBuilder basics and optimization how-to.
      - The documented model builds, validates, optimizes, displays its

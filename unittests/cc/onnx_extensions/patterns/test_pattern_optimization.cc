@@ -429,12 +429,19 @@ TEST(PatternOptimization, OptimizeAppliesPatternAndCleanupPasses) {
   EXPECT_GE(rewrites[0].match_time_ns, 0);
   EXPECT_GE(rewrites[0].apply_time_ns, 0);
   EXPECT_EQ(rewrites[0].ToString(),
-            "LocalRewriting(pattern=CastCast, graph_path=[], matched_nodes=[0, 1], "
-            "added_nodes=[Cast(outputs=[y])], added_nodes_positions=[0], added_initializers=[], "
-            "added_initializer_positions=[], removed_initializers=[], value_renames=[], "
-            "iteration=0, match_time_ns=" +
-                std::to_string(rewrites[0].match_time_ns) +
-                ", apply_time_ns=" + std::to_string(rewrites[0].apply_time_ns) + ")");
+            "LocalRewriting(pattern=CastCast, graph_path=<root>, matched_nodes=2, added_nodes=1)");
+  const std::string details = rewrites[0].ToDetailedString();
+  EXPECT_NE(details.find("  graph_path: <root>\n"), std::string::npos);
+  EXPECT_NE(details.find("  iteration: 0\n"), std::string::npos);
+  EXPECT_NE(details.find("  matched_nodes:\n    positions: [0, 1]\n"), std::string::npos);
+  EXPECT_NE(details.find("  added_nodes:\n    nodes: [Cast(outputs=[y])]\n    positions: [0]\n"),
+            std::string::npos);
+  EXPECT_NE(
+      details.find("  initializers:\n    added: []\n    added_positions: []\n    removed: []\n"),
+      std::string::npos);
+  EXPECT_NE(details.find("  value_renames: []\n"), std::string::npos);
+  EXPECT_NE(details.find("  timings:\n    match_time_ns: "), std::string::npos);
+  EXPECT_NE(details.find("\n    apply_time_ns: "), std::string::npos);
   ASSERT_NE(rewrites[1].pattern, nullptr);
   EXPECT_EQ(rewrites[1].pattern->Name(), "RemoveIdentityNodes");
   EXPECT_EQ(rewrites[1].iteration, 1u);
@@ -557,6 +564,10 @@ TEST(PatternOptimization, OptimizesNestedSubgraphsAndReplaysByGraphPath) {
   ASSERT_EQ(rewrites.size(), 2u);
   EXPECT_EQ(rewrites[0].graph_path, std::vector<std::string>({"body", "leaf"}));
   EXPECT_EQ(rewrites[1].graph_path, std::vector<std::string>({"body"}));
+  EXPECT_EQ(
+      rewrites[0].ToString(),
+      "LocalRewriting(pattern=CastCast, graph_path=body/leaf, matched_nodes=2, added_nodes=1)");
+  EXPECT_NE(rewrites[0].ToDetailedString().find("  graph_path: body/leaf\n"), std::string::npos);
   EXPECT_EQ(rewrites[0].iteration, 0u);
   EXPECT_EQ(rewrites[1].iteration, 1u);
   ASSERT_EQ(builder.Nodes().size(), 2u);

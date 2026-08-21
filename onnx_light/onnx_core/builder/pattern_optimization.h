@@ -135,6 +135,8 @@ struct LocalRewriting {
 
   /// Returns a concise summary of this rewrite.
   std::string ToString() const;
+  /// Returns a structured description of every diagnostic field.
+  std::string ToDetailedString() const;
 };
 
 /// Explains why one candidate did not match a pattern.

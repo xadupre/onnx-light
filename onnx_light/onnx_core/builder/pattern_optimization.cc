@@ -39,6 +39,30 @@ void AppendNodes(std::ostringstream &os, const utils::RepeatedProtoField<NodePro
   os << "]";
 }
 
+void AppendGraphPath(std::ostringstream &os, const std::vector<std::string> &graph_path) {
+  if (graph_path.empty()) {
+    os << "<root>";
+    return;
+  }
+  for (std::size_t i = 0; i < graph_path.size(); ++i) {
+    if (i != 0) {
+      os << "/";
+    }
+    os << graph_path[i];
+  }
+}
+
+template <typename T> void AppendValues(std::ostringstream &os, const std::vector<T> &values) {
+  os << "[";
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    if (i != 0) {
+      os << ", ";
+    }
+    os << values[i];
+  }
+  os << "]";
+}
+
 } // namespace
 
 std::string PatternNoMatchStatistics::ToString() const {
@@ -119,59 +143,50 @@ std::string OptimizationReport::ToString() const {
 std::string LocalRewriting::ToString() const {
   std::ostringstream os;
   os << "LocalRewriting(pattern=" << (pattern == nullptr ? "<null>" : pattern->Name())
-     << ", graph_path=[";
-  for (std::size_t i = 0; i < graph_path.size(); ++i) {
-    if (i != 0) {
-      os << ", ";
-    }
-    os << graph_path[i];
-  }
-  os << "], matched_nodes=[";
-  for (std::size_t i = 0; i < matched_nodes.size(); ++i) {
-    if (i != 0) {
-      os << ", ";
-    }
-    os << matched_nodes[i];
-  }
-  os << "], added_nodes=";
+     << ", graph_path=";
+  AppendGraphPath(os, graph_path);
+  os << ", matched_nodes=" << matched_nodes.size() << ", added_nodes=" << added_nodes.size() << ")";
+  return os.str();
+}
+
+std::string LocalRewriting::ToDetailedString() const {
+  std::ostringstream os;
+  os << "LocalRewriting:\n"
+     << "  pattern: " << (pattern == nullptr ? "<null>" : pattern->Name()) << "\n"
+     << "  graph_path: ";
+  AppendGraphPath(os, graph_path);
+  os << "\n  iteration: " << iteration << "\n"
+     << "  matched_nodes:\n"
+     << "    positions: ";
+  AppendValues(os, matched_nodes);
+  os << "\n  added_nodes:\n"
+     << "    nodes: ";
   AppendNodes(os, added_nodes);
-  os << ", added_nodes_positions=[";
-  for (std::size_t i = 0; i < added_nodes_positions.size(); ++i) {
-    if (i != 0) {
-      os << ", ";
-    }
-    os << added_nodes_positions[i];
-  }
-  os << "], added_initializers=[";
+  os << "\n    positions: ";
+  AppendValues(os, added_nodes_positions);
+  os << "\n  initializers:\n"
+     << "    added: [";
   for (std::size_t i = 0; i < added_initializers.size(); ++i) {
     if (i != 0) {
       os << ", ";
     }
     os << added_initializers[i].name().value();
   }
-  os << "], added_initializer_positions=[";
-  for (std::size_t i = 0; i < added_initializer_positions.size(); ++i) {
-    if (i != 0) {
-      os << ", ";
-    }
-    os << added_initializer_positions[i];
-  }
-  os << "], removed_initializers=[";
-  for (std::size_t i = 0; i < removed_initializers.size(); ++i) {
-    if (i != 0) {
-      os << ", ";
-    }
-    os << removed_initializers[i];
-  }
-  os << "], value_renames=[";
+  os << "]\n    added_positions: ";
+  AppendValues(os, added_initializer_positions);
+  os << "\n    removed: ";
+  AppendValues(os, removed_initializers);
+  os << "\n  value_renames: [";
   for (std::size_t i = 0; i < value_renames.size(); ++i) {
     if (i != 0) {
       os << ", ";
     }
     os << value_renames[i].first << "->" << value_renames[i].second;
   }
-  os << "], iteration=" << iteration << ", match_time_ns=" << match_time_ns
-     << ", apply_time_ns=" << apply_time_ns << ")";
+  os << "]\n"
+     << "  timings:\n"
+     << "    match_time_ns: " << match_time_ns << "\n"
+     << "    apply_time_ns: " << apply_time_ns;
   return os.str();
 }
 

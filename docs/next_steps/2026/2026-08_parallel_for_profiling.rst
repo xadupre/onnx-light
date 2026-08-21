@@ -231,7 +231,7 @@ Implementation sequence
      - Bounded events and dropped counts are inspectable without exposing
        mutable collector storage. The examples enable profiling explicitly,
        inspect portable metrics, and handle unavailable optional metrics.
-     - Planned
+     - Complete
    * - `Profile PR04 (#4638)
        <https://github.com/xadupre/onnx-light/issues/4638>`_
      - Linux grouped ``perf_event_open`` collector and counter-specific

@@ -32,6 +32,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/vector.h>
+#include <sstream>
 #include <stdexcept>
 #include <unordered_set>
 
@@ -51,6 +52,9 @@ using core::runtime::IOArena;
 using core::runtime::KernelContext;
 using core::runtime::Map;
 using core::runtime::OpsetId;
+using core::runtime::ParallelRegionCollector;
+using core::runtime::ParallelRegionReport;
+using core::runtime::ParallelRegionReportEvent;
 using core::runtime::RawBufferAllocator;
 using core::runtime::ResolvedCpuExecutionPolicy;
 using core::runtime::ResolvedSpinPolicy;
@@ -1178,6 +1182,66 @@ void AddOnnxPyRuntime(nb::module_ &m) {
              nb::arg("policy"),
              "Validates and resolves a requested policy against process-visible topology.");
 
+  nb::class_<ParallelRegionReportEvent>(
+      rt_mod, "ParallelRegionReportEvent",
+      "Immutable event copied from a bounded parallel-region profiling collector.")
+      .def_prop_ro("region_id",
+                   [](const ParallelRegionReportEvent &event) { return event.region_id; })
+      .def_prop_ro("parent_region_id",
+                   [](const ParallelRegionReportEvent &event) { return event.parent_region_id; })
+      .def_prop_ro("run_id", [](const ParallelRegionReportEvent &event) { return event.run_id; })
+      .def_prop_ro("calling_thread_id",
+                   [](const ParallelRegionReportEvent &event) {
+                     std::ostringstream stream;
+                     stream << event.calling_thread_id;
+                     return stream.str();
+                   })
+      .def_prop_ro("label", [](const ParallelRegionReportEvent &event) { return event.label; })
+      .def_prop_ro("file_name",
+                   [](const ParallelRegionReportEvent &event) { return event.file_name; })
+      .def_prop_ro("function_name",
+                   [](const ParallelRegionReportEvent &event) { return event.function_name; })
+      .def_prop_ro("line", [](const ParallelRegionReportEvent &event) { return event.line; })
+      .def_prop_ro("column", [](const ParallelRegionReportEvent &event) { return event.column; })
+      .def_prop_ro("total_iterations",
+                   [](const ParallelRegionReportEvent &event) { return event.total_iterations; })
+      .def_prop_ro("grain_size",
+                   [](const ParallelRegionReportEvent &event) { return event.grain_size; })
+      .def_prop_ro("requested_threads",
+                   [](const ParallelRegionReportEvent &event) { return event.requested_threads; })
+      .def_prop_ro("admitted_threads",
+                   [](const ParallelRegionReportEvent &event) { return event.admitted_threads; })
+      .def_prop_ro("observed_threads",
+                   [](const ParallelRegionReportEvent &event) { return event.observed_threads; })
+      .def_prop_ro("wall_time_ns",
+                   [](const ParallelRegionReportEvent &event) { return event.wall_time_ns; })
+      .def_prop_ro("process_cpu_time_ns",
+                   [](const ParallelRegionReportEvent &event) { return event.process_cpu_time_ns; })
+      .def_prop_ro("cpu_utilization",
+                   [](const ParallelRegionReportEvent &event) { return event.cpu_utilization; })
+      .def_prop_ro("ipc", [](const ParallelRegionReportEvent &event) { return event.ipc; })
+      .def_prop_ro("llc_miss_rate",
+                   [](const ParallelRegionReportEvent &event) { return event.llc_miss_rate; })
+      .def_prop_ro(
+          "executor_instance_id",
+          [](const ParallelRegionReportEvent &event) { return event.executor_instance_id; })
+      .def_prop_ro("nested_inline",
+                   [](const ParallelRegionReportEvent &event) { return event.nested_inline; });
+
+  nb::class_<ParallelRegionReport>(
+      rt_mod, "ParallelRegionReport",
+      "Immutable snapshot of bounded parallel-region profiling events and dropped count.")
+      .def_prop_ro("events", [](const ParallelRegionReport &report) { return report.events(); })
+      .def_prop_ro("dropped_events", &ParallelRegionReport::dropped_events);
+
+  nb::class_<ParallelRegionCollector>(
+      rt_mod, "ParallelRegionCollector",
+      "Fixed-capacity parallel-region collector. Inspect data through report snapshots.")
+      .def(nb::init<size_t>(), nb::arg("capacity"))
+      .def_prop_ro("capacity", &ParallelRegionCollector::capacity)
+      .def("report", &ParallelRegionCollector::Report,
+           "Returns an immutable owning snapshot of the events collected so far.");
+
   // RuntimeSessionOptions — bundled construction knobs for RuntimeSession.
   nb::class_<RuntimeSessionOptions>(
       rt_mod, "RuntimeSessionOptions",
@@ -1187,7 +1251,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "__init__",
           [](RuntimeSessionOptions *self, nb::object parameters_obj,
              std::optional<CpuExecutionPolicy> cpu_execution, bool cpu_execution_counters,
-             int verbose, bool check_shapes, bool allow_external_output_allocators) {
+             std::shared_ptr<ParallelRegionCollector> parallel_region_collector, int verbose,
+             bool check_shapes, bool allow_external_output_allocators) {
             RuntimeParameters parameters = parameters_obj.is_none()
                                                ? RuntimeParameters()
                                                : nb::cast<RuntimeParameters>(parameters_obj);
@@ -1195,6 +1260,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                 .parameters = std::move(parameters),
                 .cpu_execution = std::move(cpu_execution),
                 .cpu_execution_counters = cpu_execution_counters,
+                .parallel_region_collector = std::move(parallel_region_collector),
                 .verbose = verbose,
                 .check_shapes = check_shapes,
                 .allow_external_output_allocators = allow_external_output_allocators,
@@ -1202,8 +1268,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           },
           nb::kw_only(), nb::arg("parameters").none() = nb::none(),
           nb::arg("cpu_execution").none() = nb::none(), nb::arg("cpu_execution_counters") = false,
-          nb::arg("verbose") = 0, nb::arg("check_shapes") = false,
-          nb::arg("allow_external_output_allocators") = false,
+          nb::arg("parallel_region_collector").none() = nb::none(), nb::arg("verbose") = 0,
+          nb::arg("check_shapes") = false, nb::arg("allow_external_output_allocators") = false,
           "Builds the options bundle. All fields are keyword-only and optional; each "
           "defaults to the same value :class:`RuntimeSession` uses when the field is "
           "omitted.")
@@ -1213,6 +1279,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
               "Explicit CPU execution policy, or ``None`` to derive it from parameters.")
       .def_rw("cpu_execution_counters", &RuntimeSessionOptions::cpu_execution_counters,
               "Enables optional executor dispatch counters.")
+      .def_rw("parallel_region_collector", &RuntimeSessionOptions::parallel_region_collector,
+              "Optional bounded collector enabling parallel-region profiling.")
       .def_rw("verbose", &RuntimeSessionOptions::verbose,
               "Verbosity level requested for :func:`RuntimeSession.run`.")
       .def_rw("check_shapes", &RuntimeSessionOptions::check_shapes,
@@ -1345,6 +1413,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                    "outputs to be owned by the session's unique allocator, so a kernel may "
                    "return an output allocated outside the common allocator. When ``False`` "
                    "(the default), such an output is rejected.")
+      .def("parallel_region_report", &RuntimeSession::parallel_region_report,
+           "Returns an immutable owning snapshot of parallel-region profiling data. The report "
+           "is empty when profiling is disabled.")
       .def("set_declared_shapes", &RuntimeSession::SetDeclaredShapes, nb::arg("graph"),
            "Records the declared (possibly symbolic) shapes carried by ``graph``'s "
            "inputs, outputs and ``value_info`` so that, when :attr:`check_shapes` is "

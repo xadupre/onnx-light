@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <thread>
 
@@ -172,6 +173,34 @@ TEST(ParallelRegionCollector, ReportsEventsDroppedBeyondCapacity) {
 
   EXPECT_EQ(collector.events().size(), 1u);
   EXPECT_EQ(collector.dropped_events(), 2u);
+}
+
+TEST(ParallelRegionCollector, ReportOwnsAnImmutableSnapshot) {
+  ParallelRegionReport first_report;
+  {
+    CpuExecutorRegistry registry(1);
+    const auto executor = MakeExecutor(registry, 1);
+    ParallelRegionCollector collector(1);
+    ParallelRegionCollectorScope collector_scope(&collector);
+    CpuExecutorScope executor_scope(executor.get());
+    std::string label = "owned label";
+
+    ParallelFor(1, [](int64_t, int64_t) {}, label);
+    first_report = collector.Report();
+    label.assign("changed");
+    ParallelFor(1, [](int64_t, int64_t) {}, "dropped");
+
+    const ParallelRegionReport second_report = collector.Report();
+    EXPECT_EQ(second_report.dropped_events(), 1u);
+  }
+
+  ASSERT_EQ(first_report.events().size(), 1u);
+  EXPECT_EQ(first_report.events()[0].label, "owned label");
+  EXPECT_NE(first_report.events()[0].file_name.find("test_parallel_region_collector.cc"),
+            std::string::npos);
+  EXPECT_FALSE(first_report.events()[0].ipc.has_value());
+  EXPECT_FALSE(first_report.events()[0].llc_miss_rate.has_value());
+  EXPECT_EQ(first_report.dropped_events(), 0u);
 }
 
 TEST(ParallelRegionCollector, DisabledPathDoesNotCreateEvents) {

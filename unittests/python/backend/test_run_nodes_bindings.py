@@ -170,6 +170,41 @@ class TestRunNodesBindings(ExtTestCase):
         session = rt.RuntimeSession(model, options)
         self.assertTrue(session.allow_external_output_allocators)
 
+    def test_runtime_session_parallel_region_report(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "agraph (float[N] x) => (float[N] y) {\n"
+            "  y = Abs(x)\n"
+            "}\n"
+        )
+        collector = rt.ParallelRegionCollector(1)
+        options = rt.RuntimeSessionOptions(
+            parameters=rt.RuntimeParameters(2), parallel_region_collector=collector
+        )
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.set("x", _make_float_tensor("x", [-1.0] * 100_000))
+        session = rt.RuntimeSession(model, options)
+
+        self.assertEqual(session.parallel_region_report().events, [])
+        session.run(ctx)
+        first_report = session.parallel_region_report()
+        session.run(ctx)
+
+        self.assertEqual(len(first_report.events), 1)
+        event = first_report.events[0]
+        self.assertIn("kernel_abs.cc", event.file_name)
+        self.assertGreater(event.line, 0)
+        self.assertEqual(event.requested_threads, 2)
+        self.assertGreaterEqual(event.admitted_threads, 1)
+        self.assertGreaterEqual(event.observed_threads, 1)
+        self.assertIsNotNone(event.wall_time_ns)
+        self.assertIsNone(event.ipc)
+        self.assertIsNone(event.llc_miss_rate)
+        self.assertEqual(first_report.dropped_events, 0)
+        self.assertEqual(collector.report().dropped_events, 1)
+        with self.assertRaises(AttributeError):
+            event.label = "changed"
+
     def test_default_opset_and_kernel_context(self):
         opset = rt.default_opset(18)
         self.assertEqual(opset.domain, "")

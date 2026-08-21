@@ -59,6 +59,20 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual([node.op_type for node in optimized.graph.node], ["Identity"])
         self.assertEqual(len(rewrites), 1)
         self.assertEqual(rewrites[0].pattern_name, "NegNeg")
+        self.assertEqual(
+            repr(rewrites[0]),
+            "LocalRewriting("
+            "pattern=NegNeg, graph_path=<root>, matched_nodes=2, added_nodes=1)",
+        )
+        details = str(rewrites[0])
+        self.assertIn("  graph_path: <root>\n", details)
+        self.assertIn("  matched_nodes:\n    positions: [0, 1]\n", details)
+        self.assertIn(
+            "  added_nodes:\n    nodes: [Identity(outputs=[y])]\n    positions: [0]\n", details
+        )
+        self.assertIn("  initializers:\n", details)
+        self.assertIn("  value_renames: []\n", details)
+        self.assertIn("  timings:\n    match_time_ns: ", details)
         self.assertEqual(report.rewrites, 1)
         pattern_report = next(item for item in report.patterns if item.pattern_name == "NegNeg")
         self.assertEqual(pattern_report.matches, 1)
@@ -283,6 +297,8 @@ class TestPatternOptimization(ExtTestCase):
 
         self.assertEqual(len(rewrites), 1)
         self.assertEqual(rewrites[0].graph_path, ["then_branch"])
+        self.assertIn("graph_path=then_branch", repr(rewrites[0]))
+        self.assertIn("  graph_path: then_branch\n", str(rewrites[0]))
         self.assertTrue(any(item.graph_path == ["then_branch"] for item in report.subgraphs))
 
     def test_render_rst_standard_patterns_table_lists_every_pattern(self):

@@ -172,7 +172,7 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
                    [](const LocalRewriting &rewrite) {
                      return rewrite.pattern == nullptr ? std::string{} : rewrite.pattern->Name();
                    })
-      .def("__str__", &LocalRewriting::ToString)
+      .def("__str__", &LocalRewriting::ToDetailedString)
       .def("__repr__", &LocalRewriting::ToString);
 
   nb::class_<GraphGraph>(builder_mod, "GraphGraph")

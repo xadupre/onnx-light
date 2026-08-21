@@ -268,8 +268,18 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
     throw std::invalid_argument("CpuExecutor ParallelFor function must not be null.");
   }
   std::chrono::steady_clock::time_point start;
+  std::optional<uint64_t> process_cpu_start;
+  uint64_t region_id = 0;
+  uint64_t parent_region_id = 0;
+  uint64_t run_id = 0;
+  std::thread::id calling_thread_id;
   if (collector != nullptr) {
     start = std::chrono::steady_clock::now();
+    process_cpu_start = ReadProcessCpuTimeNs();
+    region_id = NextParallelRegionId();
+    parent_region_id = CurrentParallelRegionId();
+    run_id = CurrentParallelRegionRunId();
+    calling_thread_id = std::this_thread::get_id();
   }
   Impl::CounterState *counters = impl_->counters.load(std::memory_order_relaxed);
   if (counters != nullptr) {
@@ -295,18 +305,33 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
       return;
     }
     const auto elapsed = std::chrono::steady_clock::now() - start;
+    const int64_t wall_time = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
+    const std::optional<uint64_t> wall_time_ns =
+        wall_time > 0 ? std::optional<uint64_t>(static_cast<uint64_t>(wall_time)) : std::nullopt;
+    const std::optional<uint64_t> process_cpu_end = ReadProcessCpuTimeNs();
+    const std::optional<uint64_t> process_cpu_time_ns =
+        process_cpu_start.has_value() && process_cpu_end.has_value() &&
+                *process_cpu_end >= *process_cpu_start
+            ? std::optional<uint64_t>(*process_cpu_end - *process_cpu_start)
+            : std::nullopt;
     collector->Record(ParallelRegionEvent{
-        label,
-        location,
-        total,
-        grain,
-        static_cast<int32_t>(participant_limit),
-        static_cast<int32_t>(admitted),
-        static_cast<int32_t>(admitted),
-        static_cast<uint64_t>(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()),
-        impl_->instance_id,
-        nested_inline,
+        .region_id = region_id,
+        .parent_region_id = parent_region_id,
+        .run_id = run_id,
+        .calling_thread_id = calling_thread_id,
+        .label = label,
+        .location = location,
+        .total_iterations = total,
+        .grain_size = grain,
+        .requested_threads = static_cast<int32_t>(participant_limit),
+        .admitted_threads = static_cast<int32_t>(admitted),
+        .observed_threads = static_cast<int32_t>(admitted),
+        .wall_time_ns = wall_time_ns,
+        .process_cpu_time_ns = process_cpu_time_ns,
+        .cpu_utilization = ComputeCpuUtilization(process_cpu_time_ns, wall_time_ns,
+                                                 static_cast<int32_t>(admitted)),
+        .executor_instance_id = impl_->instance_id,
+        .nested_inline = nested_inline,
     });
   };
   if (nested) {
@@ -314,7 +339,12 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
       counters->nested_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
     }
     CpuExecutorRegionScope region_scope(this);
-    function(context, 0, total);
+    if (collector != nullptr) {
+      ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
+      function(context, 0, total);
+    } else {
+      function(context, 0, total);
+    }
     record(1, true);
     return;
   }
@@ -323,7 +353,12 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
       counters->limited_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
     }
     CpuExecutorRegionScope region_scope(this);
-    function(context, 0, total);
+    if (collector != nullptr) {
+      ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
+      function(context, 0, total);
+    } else {
+      function(context, 0, total);
+    }
     record(1, false);
     return;
   }
@@ -335,7 +370,12 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
       counters->limited_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
     }
     CpuExecutorRegionScope region_scope(this);
-    function(context, 0, total);
+    if (collector != nullptr) {
+      ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
+      function(context, 0, total);
+    } else {
+      function(context, 0, total);
+    }
     record(1, false);
     return;
   }
@@ -346,14 +386,18 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
       total / num_blocks,
       total % num_blocks,
   };
-  impl_->pool->Run(num_blocks, [&range, this, collector](int64_t block_index) {
+  impl_->pool->Run(num_blocks, [&range, this, collector, run_id, region_id](int64_t block_index) {
     CpuExecutorScope block_scope(this);
     CpuExecutorRegionScope region_scope(this);
-    ParallelRegionCollectorScope collector_scope(collector);
     const int64_t begin =
         block_index * range.base_block_size + std::min(block_index, range.extra_blocks);
     const int64_t end = begin + range.base_block_size + (block_index < range.extra_blocks ? 1 : 0);
-    range.function(range.context, begin, end);
+    if (collector != nullptr) {
+      ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
+      range.function(range.context, begin, end);
+    } else {
+      range.function(range.context, begin, end);
+    }
   });
   record(static_cast<uint32_t>(num_blocks), false);
 }

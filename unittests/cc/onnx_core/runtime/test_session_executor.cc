@@ -252,6 +252,35 @@ TEST(SessionExecutor, RunInstallsAndRetainsParallelRegionCollector) {
   EXPECT_EQ(CurrentParallelRegionCollector(), nullptr);
 }
 
+TEST(SessionExecutor, ConcurrentRunsUseIndependentCollectorsAndRunIds) {
+  auto first_collector = std::make_shared<ParallelRegionCollector>(1);
+  auto second_collector = std::make_shared<ParallelRegionCollector>(1);
+  const auto run = [](const std::shared_ptr<ParallelRegionCollector> &collector) {
+    const GraphProto graph = MakeObserverGraph();
+    RuntimeContext rt(KernelContext(core::runtime::DefaultOpset(18)));
+    const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+    RuntimeSession session(plan, RuntimeSessionOptions{
+                                     .parameters = RuntimeParameters(1),
+                                     .parallel_region_collector = collector,
+                                 });
+    ExecutorObservation observation;
+    RunObserver(session, rt, observation, 8);
+  };
+
+  std::thread first(run, first_collector);
+  std::thread second(run, second_collector);
+  first.join();
+  second.join();
+
+  ASSERT_EQ(first_collector->events().size(), 1u);
+  ASSERT_EQ(second_collector->events().size(), 1u);
+  EXPECT_NE(first_collector->events()[0].run_id, 0u);
+  EXPECT_NE(second_collector->events()[0].run_id, 0u);
+  EXPECT_NE(first_collector->events()[0].run_id, second_collector->events()[0].run_id);
+  EXPECT_NE(first_collector->events()[0].calling_thread_id,
+            second_collector->events()[0].calling_thread_id);
+}
+
 TEST(SessionExecutor, SerialSessionRunsEveryRangeInline) {
   const GraphProto graph = MakeObserverGraph();
   RuntimeContext rt(KernelContext(core::runtime::DefaultOpset(18)));

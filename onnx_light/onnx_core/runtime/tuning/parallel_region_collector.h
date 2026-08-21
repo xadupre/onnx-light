@@ -9,15 +9,21 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <source_location>
 #include <span>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /** Describes one portable ParallelFor execution. */
 struct ParallelRegionEvent {
+  uint64_t region_id = 0;
+  uint64_t parent_region_id = 0;
+  uint64_t run_id = 0;
+  std::thread::id calling_thread_id;
   std::string_view label;
   std::source_location location;
   int64_t total_iterations = 0;
@@ -25,10 +31,20 @@ struct ParallelRegionEvent {
   int32_t requested_threads = 0;
   int32_t admitted_threads = 0;
   int32_t observed_threads = 0;
-  uint64_t wall_time_ns = 0;
+  std::optional<uint64_t> wall_time_ns;
+  std::optional<uint64_t> process_cpu_time_ns;
+  std::optional<double> cpu_utilization;
   uint64_t executor_instance_id = 0;
   bool nested_inline = false;
 };
+
+/// Returns normalized process CPU utilization when all inputs are valid.
+std::optional<double> ComputeCpuUtilization(std::optional<uint64_t> process_cpu_time_ns,
+                                            std::optional<uint64_t> wall_time_ns,
+                                            int32_t admitted_threads) noexcept;
+
+/// Returns aggregate process CPU time, or no value when the platform cannot provide it.
+std::optional<uint64_t> ReadProcessCpuTimeNs() noexcept;
 
 /**
  * Collects parallel-region events in fixed storage without locking inference.
@@ -68,10 +84,20 @@ private:
 /// Returns the non-owning collector installed on the calling thread.
 ParallelRegionCollector *CurrentParallelRegionCollector() noexcept;
 
-/** Installs a non-owning collector view for the lifetime of this scope. */
+/// Returns the run identifier installed on the calling thread.
+uint64_t CurrentParallelRegionRunId() noexcept;
+
+/// Returns the active region identifier installed on the calling thread.
+uint64_t CurrentParallelRegionId() noexcept;
+
+/// Returns a new process-unique region identifier.
+uint64_t NextParallelRegionId() noexcept;
+
+/** Installs a non-owning collector and profiling identity for this scope. */
 class ParallelRegionCollectorScope {
 public:
-  explicit ParallelRegionCollectorScope(ParallelRegionCollector *collector) noexcept;
+  explicit ParallelRegionCollectorScope(ParallelRegionCollector *collector, uint64_t run_id = 0,
+                                        uint64_t region_id = 0) noexcept;
 
   ParallelRegionCollectorScope(const ParallelRegionCollectorScope &) = delete;
   ParallelRegionCollectorScope &operator=(const ParallelRegionCollectorScope &) = delete;
@@ -79,7 +105,9 @@ public:
   ~ParallelRegionCollectorScope();
 
 private:
-  ParallelRegionCollector *previous_;
+  ParallelRegionCollector *previous_collector_;
+  uint64_t previous_run_id_;
+  uint64_t previous_region_id_;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

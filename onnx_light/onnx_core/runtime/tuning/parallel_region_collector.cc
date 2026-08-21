@@ -5,15 +5,34 @@
 #include "onnx_core/runtime/tuning/parallel_region_collector.h"
 
 #include <algorithm>
+#include <limits>
 #include <utility>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <time.h>
+#endif
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
 
-ParallelRegionCollector *&CurrentCollectorSlot() noexcept {
-  thread_local ParallelRegionCollector *collector = nullptr;
-  return collector;
+struct ParallelRegionContext {
+  ParallelRegionCollector *collector = nullptr;
+  uint64_t run_id = 0;
+  uint64_t region_id = 0;
+};
+
+ParallelRegionContext &CurrentContext() noexcept {
+  thread_local ParallelRegionContext context;
+  return context;
 }
+
+std::atomic<uint64_t> next_run_id{1};
+std::atomic<uint64_t> next_region_id{1};
 
 } // namespace
 
@@ -37,17 +56,82 @@ std::span<const ParallelRegionEvent> ParallelRegionCollector::events() const noe
 }
 
 ParallelRegionCollector *CurrentParallelRegionCollector() noexcept {
-  return CurrentCollectorSlot();
+  return CurrentContext().collector;
 }
 
-ParallelRegionCollectorScope::ParallelRegionCollectorScope(
-    ParallelRegionCollector *collector) noexcept
-    : previous_(CurrentCollectorSlot()) {
-  CurrentCollectorSlot() = collector;
+uint64_t CurrentParallelRegionRunId() noexcept { return CurrentContext().run_id; }
+
+uint64_t CurrentParallelRegionId() noexcept { return CurrentContext().region_id; }
+
+uint64_t NextParallelRegionId() noexcept {
+  return next_region_id.fetch_add(1, std::memory_order_relaxed);
+}
+
+std::optional<double> ComputeCpuUtilization(std::optional<uint64_t> process_cpu_time_ns,
+                                            std::optional<uint64_t> wall_time_ns,
+                                            int32_t admitted_threads) noexcept {
+  if (!process_cpu_time_ns.has_value() || !wall_time_ns.has_value() || *wall_time_ns == 0 ||
+      admitted_threads <= 0) {
+    return std::nullopt;
+  }
+  return static_cast<double>(*process_cpu_time_ns) / static_cast<double>(*wall_time_ns) /
+         static_cast<double>(admitted_threads);
+}
+
+std::optional<uint64_t> ReadProcessCpuTimeNs() noexcept {
+#if defined(_WIN32)
+  FILETIME creation;
+  FILETIME exit;
+  FILETIME kernel;
+  FILETIME user;
+  if (GetProcessTimes(GetCurrentProcess(), &creation, &exit, &kernel, &user) == 0) {
+    return std::nullopt;
+  }
+  ULARGE_INTEGER kernel_ticks;
+  kernel_ticks.LowPart = kernel.dwLowDateTime;
+  kernel_ticks.HighPart = kernel.dwHighDateTime;
+  ULARGE_INTEGER user_ticks;
+  user_ticks.LowPart = user.dwLowDateTime;
+  user_ticks.HighPart = user.dwHighDateTime;
+  if (kernel_ticks.QuadPart > std::numeric_limits<uint64_t>::max() - user_ticks.QuadPart ||
+      kernel_ticks.QuadPart + user_ticks.QuadPart > std::numeric_limits<uint64_t>::max() / 100) {
+    return std::nullopt;
+  }
+  return (kernel_ticks.QuadPart + user_ticks.QuadPart) * 100;
+#else
+  timespec process_time;
+  if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &process_time) != 0 || process_time.tv_sec < 0 ||
+      process_time.tv_nsec < 0 || process_time.tv_nsec >= 1000000000L ||
+      static_cast<uint64_t>(process_time.tv_sec) >
+          (std::numeric_limits<uint64_t>::max() - static_cast<uint64_t>(process_time.tv_nsec)) /
+              1000000000ULL) {
+    return std::nullopt;
+  }
+  return static_cast<uint64_t>(process_time.tv_sec) * 1000000000ULL +
+         static_cast<uint64_t>(process_time.tv_nsec);
+#endif
+}
+
+ParallelRegionCollectorScope::ParallelRegionCollectorScope(ParallelRegionCollector *collector,
+                                                           uint64_t run_id,
+                                                           uint64_t region_id) noexcept
+    : previous_collector_(CurrentContext().collector), previous_run_id_(CurrentContext().run_id),
+      previous_region_id_(CurrentContext().region_id) {
+  ParallelRegionContext &context = CurrentContext();
+  if (run_id == 0 && collector != nullptr) {
+    if (context.collector == collector && context.run_id != 0) {
+      run_id = context.run_id;
+      region_id = region_id == 0 ? context.region_id : region_id;
+    } else {
+      run_id = next_run_id.fetch_add(1, std::memory_order_relaxed);
+    }
+  }
+  context = ParallelRegionContext{collector, run_id, region_id};
 }
 
 ParallelRegionCollectorScope::~ParallelRegionCollectorScope() {
-  CurrentCollectorSlot() = previous_;
+  CurrentContext() =
+      ParallelRegionContext{previous_collector_, previous_run_id_, previous_region_id_};
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

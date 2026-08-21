@@ -1473,12 +1473,12 @@ Implementation order
 #. **Implemented:** add session-scoped preparation for one CPU ``Gemm`` with a
    constant ``B``, including both ``transB`` values while preserving the
    ordinary reference fallback.
-#. Merge kernel preparation and node execution into one
+#. **Implemented:** merge kernel preparation and node execution into one
    ``PreparedExecutionPlan`` and first execute its session-scoped tasks
    sequentially through completion events.
-#. Add two dependent inference nodes with independently delayed weights and
-   verify that the first node executes before the second weight finishes
-   loading, while later inferences reuse resident prepared objects.
+#. **Implemented:** add two dependent inference nodes with independently delayed
+   weights and verify that the first node executes before the second weight
+   finishes loading, while later inferences reuse resident prepared objects.
 #. Add persistent bounded I/O and CPU queues, inference priority inheritance,
    reserved critical-path admission, and global/per-arena memory budgets; then
    compare the same plans in sequential and parallel modes.

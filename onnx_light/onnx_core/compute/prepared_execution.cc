@@ -6,6 +6,8 @@
 
 #include <functional>
 #include <stdexcept>
+#include <thread>
+#include <unordered_set>
 #include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -208,10 +210,187 @@ ExpandMaterializationRecipe(const PreparedRequirementDescriptor &requirement,
   return descriptors;
 }
 
+PreparedExecutionPlan::PreparedExecutionPlan(std::vector<TaskDescriptor> tasks)
+    : tasks_(std::move(tasks)) {
+  std::unordered_map<uint64_t, TaskScope> scopes;
+  std::unordered_set<uint64_t> dormant;
+  for (const TaskDescriptor &task : tasks_) {
+    EXT_ENFORCE(task.id.value != 0, "Prepared task IDs must not be zero.");
+    EXT_ENFORCE(scopes.emplace(task.id.value, task.scope).second, "Duplicate prepared task ID ",
+                task.id.value, ".");
+    for (const TaskId dependency : task.dependencies) {
+      const auto found = scopes.find(dependency.value);
+      EXT_ENFORCE(found != scopes.end(), "Prepared task ", task.id.value,
+                  " depends on missing or later task ", dependency.value, ".");
+      EXT_ENFORCE(task.scope != TaskScope::kSession || found->second == TaskScope::kSession,
+                  "Session task ", task.id.value, " cannot depend on invocation task ",
+                  dependency.value, ".");
+      EXT_ENFORCE(dormant.count(dependency.value) == 0, "Prepared task ", task.id.value,
+                  " cannot depend on dormant task ", dependency.value, ".");
+    }
+    if (task.dormant) {
+      dormant.insert(task.id.value);
+    }
+  }
+}
+
+namespace {
+
+bool DependencySucceeded(const TaskCompletion &dependency, TaskCompletion &completion,
+                         TaskId dependency_id) {
+  try {
+    dependency.Wait();
+  } catch (...) {
+    completion.Suppress(dependency_id, "Prepared task dependency failed.");
+    return false;
+  }
+  if (dependency.status() != TaskStatus::kSucceeded) {
+    completion.Suppress(dependency_id, "Prepared task dependency did not succeed.");
+    return false;
+  }
+  return true;
+}
+
+} // namespace
+
+PreparedExecutionResult
+PreparedExecutionPlan::RunSequential(PreparedExecutionState &state,
+                                     const PreparedTaskExecutor &executor) const {
+  EXT_ENFORCE(static_cast<bool>(executor), "Prepared execution requires a task executor.");
+  const uint64_t invocation_id = ++state.next_invocation_id_;
+  std::unordered_map<uint64_t, PreparedExecutionState::SessionTaskRequest> session;
+  std::unordered_map<uint64_t, TaskCompletion> invocation;
+
+  for (const TaskDescriptor &task : tasks_) {
+    if (task.dormant) {
+      continue;
+    }
+    if (task.scope == TaskScope::kSession) {
+      session.emplace(task.id.value, state.RequestSessionTask(task.id));
+    } else {
+      invocation.emplace(task.id.value, TaskCompletion(task.id));
+    }
+  }
+
+  bool has_producers = false;
+  for (const TaskDescriptor &task : tasks_) {
+    if (!task.dormant && task.scope == TaskScope::kSession && session.at(task.id.value).producer) {
+      has_producers = true;
+      break;
+    }
+  }
+  std::thread producer;
+  if (has_producers) {
+    producer = std::thread([&]() {
+      for (const TaskDescriptor &task : tasks_) {
+        if (task.dormant || task.scope != TaskScope::kSession) {
+          continue;
+        }
+        auto request = session.at(task.id.value);
+        if (!request.producer) {
+          continue;
+        }
+        request.completion.MarkRunning();
+        bool ready = true;
+        for (const TaskId dependency_id : task.dependencies) {
+          if (!DependencySucceeded(session.at(dependency_id.value).completion, request.completion,
+                                   dependency_id)) {
+            ready = false;
+            break;
+          }
+        }
+        if (!ready) {
+          continue;
+        }
+        try {
+          executor(task, state);
+          request.completion.Succeed();
+        } catch (...) {
+          request.completion.Fail(std::current_exception(), "Prepared session task failed.");
+        }
+      }
+    });
+  }
+
+  for (const TaskDescriptor &task : tasks_) {
+    if (task.dormant || task.scope != TaskScope::kInvocation) {
+      continue;
+    }
+    TaskCompletion &completion = invocation.at(task.id.value);
+    bool ready = true;
+    for (const TaskId dependency_id : task.dependencies) {
+      const auto session_dependency = session.find(dependency_id.value);
+      const TaskCompletion &dependency = session_dependency != session.end()
+                                             ? session_dependency->second.completion
+                                             : invocation.at(dependency_id.value);
+      if (!DependencySucceeded(dependency, completion, dependency_id)) {
+        ready = false;
+        break;
+      }
+    }
+    if (!ready) {
+      continue;
+    }
+    completion.MarkRunning();
+    try {
+      executor(task, state);
+      completion.Succeed();
+    } catch (...) {
+      completion.Fail(std::current_exception(), "Prepared invocation task failed.");
+    }
+  }
+  if (producer.joinable()) {
+    producer.join();
+  }
+
+  PreparedExecutionResult result;
+  result.invocation_id = invocation_id;
+  result.diagnostics.reserve(tasks_.size());
+  result.session_generations.reserve(session.size());
+  for (const TaskDescriptor &task : tasks_) {
+    if (task.dormant) {
+      result.diagnostics.push_back(
+          TaskDiagnostic{task.id, TaskStatus::kPending, std::string(), std::nullopt});
+    } else if (task.scope == TaskScope::kSession) {
+      result.diagnostics.push_back(session.at(task.id.value).completion.diagnostic());
+      result.session_generations.emplace_back(task.id, session.at(task.id.value).generation);
+    } else {
+      result.diagnostics.push_back(invocation.at(task.id.value).diagnostic());
+    }
+  }
+  return result;
+}
+
+struct PreparedExecutionState::SessionTaskEntry {
+  explicit SessionTaskEntry(TaskId task_id)
+      : completion(std::make_shared<TaskCompletion>(task_id)) {}
+
+  uint64_t generation = 1;
+  std::shared_ptr<TaskCompletion> completion;
+};
+
 PreparedExecutionState::PreparedExecutionState(size_t preparation_slots, size_t prepared_slots,
                                                size_t preparation_retention_cap,
                                                size_t prepared_retention_cap)
     : preparation_arena_(preparation_slots, preparation_retention_cap),
       prepared_arena_(prepared_slots, prepared_retention_cap) {}
+
+PreparedExecutionState::~PreparedExecutionState() = default;
+
+PreparedExecutionState::SessionTaskRequest
+PreparedExecutionState::RequestSessionTask(TaskId task_id) {
+  std::lock_guard<std::mutex> lock(session_tasks_mutex_);
+  auto [found, inserted] =
+      session_tasks_.try_emplace(task_id.value, std::make_unique<SessionTaskEntry>(task_id));
+  SessionTaskEntry &entry = *found->second;
+  const TaskStatus status = entry.completion->status();
+  const bool producer = inserted || status == TaskStatus::kFailed ||
+                        status == TaskStatus::kCancelled || status == TaskStatus::kSuppressed;
+  if (!inserted && producer) {
+    ++entry.generation;
+    entry.completion = std::make_shared<TaskCompletion>(task_id);
+  }
+  return SessionTaskRequest{entry.generation, *entry.completion, producer};
+}
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -212,7 +212,7 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB,
   EXT_ENFORCE_INVALID(b.data_type == DataType::FLOAT || b.data_type == DataType::DOUBLE, kGemmName,
                       " prepared constant B only supports FLOAT and DOUBLE.");
 
-  uint64_t digest = 1469598103934665603ULL;
+  uint64_t digest = 14695981039346656037ULL;
   for (const uint8_t byte : std::span<const uint8_t>(b.bytes(), b.size_bytes())) {
     digest = (digest ^ byte) * 1099511628211ULL;
   }

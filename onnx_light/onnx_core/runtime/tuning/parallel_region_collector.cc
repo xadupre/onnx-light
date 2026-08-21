@@ -138,7 +138,7 @@ public:
       return sample;
     }
     if (bytes != static_cast<ssize_t>(sizeof(result)) || result.count != result.values.size()) {
-      sample.status = HardwareCounterStatus::kOverflowed;
+      sample.status = HardwareCounterStatus::kUnsupported;
       return sample;
     }
     sample.time_enabled = result.time_enabled;

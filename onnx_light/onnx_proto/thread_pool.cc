@@ -3,7 +3,8 @@
 namespace ONNX_LIGHT_NAMESPACE::utils {
 
 ThreadPool::ThreadPool()
-    : stop_(false), is_started_(false), requested_threads_(0), pending_jobs_(0) {}
+    : stop_(false), is_started_(false), requested_threads_(0), pending_jobs_(0),
+      first_exception_(nullptr) {}
 
 void ThreadPool::Start(int32_t num_threads) {
   if (num_threads < 0)
@@ -14,6 +15,7 @@ void ThreadPool::Start(int32_t num_threads) {
   stop_ = false;
   is_started_ = true;
   requested_threads_ = num_threads;
+  first_exception_ = nullptr;
   // Worker threads are spawned lazily on the first SubmitTask() (see
   // EnsureWorkersStarted). This keeps load/save of small models fast: when no
   // delayed block is submitted, Wait() runs the empty queue inline and no
@@ -34,9 +36,9 @@ void ThreadPool::SubmitTask(std::function<void()> &&job) {
   bool has_workers;
   {
     std::lock_guard<std::mutex> lock(mutex_);
+    EnsureWorkersStarted();
     ++pending_jobs_;
     jobs_.push(std::move(job));
-    EnsureWorkersStarted();
     has_workers = !workers_.empty();
   }
   if (has_workers)
@@ -47,13 +49,31 @@ void ThreadPool::SubmitTask(const std::function<void()> &job) {
   bool has_workers;
   {
     std::lock_guard<std::mutex> lock(mutex_);
+    EnsureWorkersStarted();
     ++pending_jobs_;
     jobs_.push(job);
-    EnsureWorkersStarted();
     has_workers = !workers_.empty();
   }
   if (has_workers)
     work_cv_.notify_one();
+}
+
+void ThreadPool::ExecuteJob(std::function<void()> &job) noexcept {
+  std::exception_ptr error;
+  try {
+    job();
+  } catch (...) {
+    error = std::current_exception();
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (error != nullptr && first_exception_ == nullptr)
+      first_exception_ = std::move(error);
+    --pending_jobs_;
+    if (pending_jobs_ == 0)
+      done_cv_.notify_all();
+  }
 }
 
 void ThreadPool::worker_thread() {
@@ -71,24 +91,11 @@ void ThreadPool::worker_thread() {
       jobs_.pop();
     }
 
-    try {
-      job();
-    } catch (...) {
-      // Prevent uncaught exceptions from calling std::terminate().
-      // The error is silently swallowed; the caller should validate
-      // results after WaitForDelayedBlock() returns.
-    }
-
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      --pending_jobs_;
-      if (pending_jobs_ == 0)
-        done_cv_.notify_all();
-    }
+    ExecuteJob(job);
   }
 }
 
-void ThreadPool::Wait() {
+void ThreadPool::WaitImpl(bool rethrow_exceptions) {
   if (workers_.empty()) {
     // No workers: run jobs inline on the calling thread.
     while (true) {
@@ -100,11 +107,7 @@ void ThreadPool::Wait() {
         job = std::move(jobs_.front());
         jobs_.pop();
       }
-      job();
-      {
-        std::lock_guard<std::mutex> lock(mutex_);
-        --pending_jobs_;
-      }
+      ExecuteJob(job);
     }
   } else {
     // Block until every submitted job has finished executing.
@@ -124,9 +127,20 @@ void ThreadPool::Wait() {
   }
   workers_.clear();
   is_started_ = false;
+
+  std::exception_ptr error;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    error = std::move(first_exception_);
+    first_exception_ = nullptr;
+  }
+  if (rethrow_exceptions && error != nullptr)
+    std::rethrow_exception(error);
 }
 
-ThreadPool::~ThreadPool() { Wait(); }
+void ThreadPool::Wait() { WaitImpl(true); }
+
+ThreadPool::~ThreadPool() { WaitImpl(false); }
 
 void ThreadPool::Clear() {
   EXT_ENFORCE(!IsStarted(), "Cannot clear the pool if threads are still running.");
@@ -136,6 +150,7 @@ void ThreadPool::Clear() {
     jobs_.pop();
   }
   pending_jobs_ = 0;
+  first_exception_ = nullptr;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::utils

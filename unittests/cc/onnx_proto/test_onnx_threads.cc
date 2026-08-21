@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -45,6 +46,21 @@ TEST(onnx_threads, SubmitMultipleTasks) {
   EXPECT_EQ(counter.load(), num_tasks);
 }
 
+TEST(onnx_threads, WaitRethrowsWorkerException) {
+  ThreadPool pool;
+  pool.Start(2);
+  pool.SubmitTask([]() { throw std::runtime_error("thread-pool-test failure"); });
+
+  try {
+    pool.Wait();
+    FAIL() << "Wait() should rethrow worker exceptions.";
+  } catch (const std::runtime_error &ex) {
+    EXPECT_NE(std::string(ex.what()).find("thread-pool-test failure"), std::string::npos);
+  }
+
+  EXPECT_FALSE(pool.IsStarted());
+}
+
 TEST(onnx_threads, ParallelExecution) {
   ThreadPool pool;
   pool.Start(8);
@@ -74,6 +90,48 @@ TEST(onnx_threads, ParallelExecution) {
   auto unique_end = std::unique(thread_ids.begin(), thread_ids.end());
   int unique_threads = std::distance(thread_ids.begin(), unique_end);
   EXPECT_GT(unique_threads, 1);
+}
+
+TEST(onnx_threads, FileStreamWaitForDelayedBlockRethrowsWorkerException) {
+  const std::string path = "test_file_stream_wait_rethrows.tmp";
+  constexpr size_t kBlockSize = 1 << 16;
+  constexpr int kBlockCount = 16;
+
+  {
+    std::ofstream file(path, std::ios::binary);
+    ASSERT_TRUE(file.is_open());
+    std::vector<char> bytes(kBlockSize, '\x5A');
+    for (int i = 0; i < kBlockCount; ++i) {
+      file.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    }
+  }
+
+  std::vector<std::vector<uint8_t>> buffers(kBlockCount,
+                                            std::vector<uint8_t>(static_cast<size_t>(kBlockSize)));
+  {
+    FileStream stream(path);
+    stream.StartThreadPool(1);
+    for (int i = 0; i < kBlockCount; ++i) {
+      DelayedBlock block;
+      block.size = kBlockSize;
+      block.data = buffers[static_cast<size_t>(i)].data();
+      block.offset = static_cast<offset_t>(i) * static_cast<offset_t>(kBlockSize);
+      stream.ReadDelayedBlock(block);
+    }
+
+    std::ofstream truncate(path, std::ios::binary | std::ios::trunc);
+    ASSERT_TRUE(truncate.is_open());
+    truncate.put('\0');
+
+    try {
+      stream.WaitForDelayedBlock();
+      FAIL() << "WaitForDelayedBlock() should rethrow delayed-read failures.";
+    } catch (const std::exception &ex) {
+      EXPECT_NE(std::string(ex.what()).find("ReadDelayedBlock"), std::string::npos);
+    }
+  }
+
+  std::remove(path.c_str());
 }
 
 TEST(onnx_threads, ParallelModelProcessing0) {

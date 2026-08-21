@@ -623,7 +623,11 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
               return;
             }
             // Optional scalar fields and optional/oneof message fields drop
-            // their presence bit when their setter receives ``None``.
+            // their presence bit when their setter receives ``None``. For the
+            // remaining field kinds, nanobind does not expose a compact runtime
+            // predicate telling whether the generated setter accepts ``None``,
+            // so this try/catch remains the Python-compatibility boundary
+            // between protobuf-style ``ClearField`` and the binding layer.
             try {
               nb::setattr(self, field_name.c_str(), nb::none());
             } catch (nb::python_error &) {

@@ -14,6 +14,23 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+namespace proto_adapter_detail {
+
+enum class ProtoBoolParseStatus { kOk, kRejected };
+
+template <typename ParseFn> ProtoBoolParseStatus RunProtoBoolParse(ParseFn &&parse_fn) {
+  try {
+    std::forward<ParseFn>(parse_fn)();
+    return ProtoBoolParseStatus::kOk;
+  } catch (const onnx_light_helpers::ParseLimitExceeded &) {
+    throw;
+  } catch (const std::exception &) {
+    return ProtoBoolParseStatus::kRejected;
+  }
+}
+
+} // namespace proto_adapter_detail
+
 template <typename Derived>
 SerializeSizeResult ProtoMessageAdapter<Derived>::SerializeSize() const {
   SerializeOptions opts;
@@ -46,20 +63,15 @@ bool ProtoMessageAdapter<Derived>::ParseFromString(const std::string &raw, Parse
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
               "ParseFromString: unrecognised SerializeFormat value ", static_cast<int>(opts.format),
               "; only kOnnx is currently supported.");
-  try {
-    const uint8_t *ptr = reinterpret_cast<const uint8_t *>(raw.data());
-    utils::StringStream stream(ptr, raw.size());
-    if (opts.is_parallel())
-      stream.StartThreadPool(opts.num_threads);
-    derived().ParseFromStream(stream, opts);
-    if (opts.is_parallel())
-      stream.WaitForDelayedBlock();
-  } catch (const onnx_light_helpers::ParseLimitExceeded &) {
-    throw;
-  } catch (const std::exception &) {
-    return false;
-  }
-  return true;
+  return proto_adapter_detail::RunProtoBoolParse([&]() {
+           const uint8_t *ptr = reinterpret_cast<const uint8_t *>(raw.data());
+           utils::StringStream stream(ptr, raw.size());
+           if (opts.is_parallel())
+             stream.StartThreadPool(opts.num_threads);
+           derived().ParseFromStream(stream, opts);
+           if (opts.is_parallel())
+             stream.WaitForDelayedBlock();
+         }) == proto_adapter_detail::ProtoBoolParseStatus::kOk;
 }
 
 template <typename Derived>
@@ -68,15 +80,9 @@ bool ProtoMessageAdapter<Derived>::ParseFromArray(const void *data, int size) {
   EXT_ENFORCE(size >= 0, "ParseFromArray: size must be non-negative.");
   ParseOptions opts;
   utils::StringStream stream(data, static_cast<int64_t>(size));
-  try {
-    derived().ParseFromStream(stream, opts);
-  } catch (const onnx_light_helpers::ParseLimitExceeded &) {
-    // Configured policy limits propagate; malformed wire data keeps protobuf's false result.
-    throw;
-  } catch (const std::exception &) {
-    return false;
-  }
-  return true;
+  return proto_adapter_detail::RunProtoBoolParse([&]() {
+           derived().ParseFromStream(stream, opts);
+         }) == proto_adapter_detail::ProtoBoolParseStatus::kOk;
 }
 
 template <typename Derived>
@@ -134,19 +140,16 @@ bool ProtoMessageAdapter<Derived>::ParseFromIstream(std::istream *input) {
   ParseOptions opts;
   const uint8_t *ptr = reinterpret_cast<const uint8_t *>(buffer.data());
   utils::StringStream stream(ptr, static_cast<int64_t>(buffer.size()));
-  derived().ParseFromStream(stream, opts);
-  return true;
+  return proto_adapter_detail::RunProtoBoolParse([&]() {
+           derived().ParseFromStream(stream, opts);
+         }) == proto_adapter_detail::ProtoBoolParseStatus::kOk;
 }
 
 template <typename Derived> bool ProtoMessageAdapter<Derived>::ParseFromFileDescriptor(int fd) {
   ParseOptions opts;
   utils::FdReadStream stream(fd);
-  try {
-    derived().ParseFromStream(stream, opts);
-  } catch (const onnx_light_helpers::ParseLimitExceeded &) {
-    // Configured policy limits propagate; malformed wire data keeps protobuf's false result.
-    throw;
-  } catch (const std::exception &) {
+  if (proto_adapter_detail::RunProtoBoolParse([&]() { derived().ParseFromStream(stream, opts); }) !=
+      proto_adapter_detail::ProtoBoolParseStatus::kOk) {
     return false;
   }
   return !stream.failed();

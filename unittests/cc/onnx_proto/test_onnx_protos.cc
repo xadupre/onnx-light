@@ -45,6 +45,14 @@ TEST(onnx_compatibility, ProtoUtilsParseAndRetrieve) {
   EXPECT_FALSE(ONNX_LIGHT_NAMESPACE::ParseProtoFromBytes<ModelProto>(nullptr, serialized.data(),
                                                                      serialized.size()));
 
+  ModelProto unchanged;
+  unchanged.mutable_graph()->set_name("keep");
+  ASSERT_GT(serialized.size(), 1u);
+  EXPECT_FALSE(ONNX_LIGHT_NAMESPACE::ParseProtoFromBytes(&unchanged, serialized.data(),
+                                                         serialized.size() - 1));
+  ASSERT_TRUE(unchanged.has_graph());
+  EXPECT_EQ(unchanged.ref_graph().ref_name(), "keep");
+
   AttributeProto attr;
   attr.set_name("attr");
   attr.ref_ints().push_back(3);

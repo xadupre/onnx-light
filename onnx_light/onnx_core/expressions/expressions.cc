@@ -53,26 +53,16 @@ bool TryParseInt64Literal(const std::string &text, int64_t &value) {
   return parsed.ec == std::errc() && parsed.ptr == end;
 }
 
-bool TryParseExpression(const std::string &expr, NodePtr &tree) {
-  try {
-    tree = parse(expr);
-    return true;
-  } catch (const std::runtime_error &) {
-    tree.reset();
-    return false;
-  }
-}
-
 } // namespace
 
 class Tokenizer {
 public:
   explicit Tokenizer(const std::string &input) : input_(input), pos_(0) {}
 
-  Token next() {
+  bool next(Token &token, std::string *error_message = nullptr) {
     skip_ws();
     if (pos_ >= input_.size())
-      return {TokenKind::Eof, ""};
+      return ReturnToken(token, {TokenKind::Eof, ""});
 
     char c = input_[pos_];
 
@@ -85,9 +75,9 @@ public:
       t.kind = TokenKind::Integer;
       t.text = input_.substr(start, pos_ - start);
       if (!TryParseInt64Literal(t.text, t.value)) {
-        throw std::runtime_error("Integer literal out of range in expression");
+        return Fail("Integer literal out of range in expression", error_message);
       }
-      return t;
+      return ReturnToken(token, std::move(t));
     }
 
     // Identifier
@@ -96,54 +86,66 @@ public:
       while (pos_ < input_.size() &&
              (std::isalnum(static_cast<unsigned char>(input_[pos_])) || input_[pos_] == '_'))
         ++pos_;
-      return {TokenKind::Name, input_.substr(start, pos_ - start)};
+      return ReturnToken(token, {TokenKind::Name, input_.substr(start, pos_ - start)});
     }
 
     // Double slash // or exact-division slash-colon /:
     if (c == '/') {
       if (pos_ + 1 < input_.size() && input_[pos_ + 1] == '/') {
         pos_ += 2;
-        return {TokenKind::DoubleSlash, "//"};
+        return ReturnToken(token, {TokenKind::DoubleSlash, "//"});
       }
       if (pos_ + 1 < input_.size() && input_[pos_ + 1] == ':') {
         pos_ += 2;
-        return {TokenKind::SlashColon, "/:"};
+        return ReturnToken(token, {TokenKind::SlashColon, "/:"});
       }
     }
 
     ++pos_;
     switch (c) {
     case '+':
-      return {TokenKind::Plus, "+"};
+      return ReturnToken(token, {TokenKind::Plus, "+"});
     case '-':
-      return {TokenKind::Minus, "-"};
+      return ReturnToken(token, {TokenKind::Minus, "-"});
     case '*':
-      return {TokenKind::Star, "*"};
+      return ReturnToken(token, {TokenKind::Star, "*"});
     case '%':
-      return {TokenKind::Percent, "%"};
+      return ReturnToken(token, {TokenKind::Percent, "%"});
     case '^':
-      return {TokenKind::Caret, "^"};
+      return ReturnToken(token, {TokenKind::Caret, "^"});
     case '&':
-      return {TokenKind::Ampersand, "&"};
+      return ReturnToken(token, {TokenKind::Ampersand, "&"});
     case '(':
-      return {TokenKind::LParen, "("};
+      return ReturnToken(token, {TokenKind::LParen, "("});
     case ')':
-      return {TokenKind::RParen, ")"};
+      return ReturnToken(token, {TokenKind::RParen, ")"});
     case ',':
-      return {TokenKind::Comma, ","};
+      return ReturnToken(token, {TokenKind::Comma, ","});
     default:
-      throw std::runtime_error(std::string("Unexpected character '") + c + "' in expression");
+      return Fail(std::string("Unexpected character '") + c + "' in expression", error_message);
     }
   }
 
-  Token peek() {
+  bool peek(Token &token, std::string *error_message = nullptr) {
     size_t saved = pos_;
-    Token t = next();
+    const bool ok = next(token, error_message);
     pos_ = saved;
-    return t;
+    return ok;
   }
 
 private:
+  static bool ReturnToken(Token &token, Token next_token) {
+    token = std::move(next_token);
+    return true;
+  }
+
+  static bool Fail(std::string message, std::string *error_message) {
+    if (error_message != nullptr) {
+      *error_message = std::move(message);
+    }
+    return false;
+  }
+
   void skip_ws() {
     while (pos_ < input_.size() && std::isspace(static_cast<unsigned char>(input_[pos_])))
       ++pos_;
@@ -167,23 +169,77 @@ private:
 
 class Parser {
 public:
-  explicit Parser(const std::string &input) : tok_(input) { advance(); }
+  explicit Parser(const std::string &input) : tok_(input) {}
 
-  NodePtr parse_expr() { return parse_xor(); }
-
-  void expect_eof() const {
-    if (cur_.kind != TokenKind::Eof)
-      throw std::runtime_error("Unexpected token '" + cur_.text + "' after expression");
+  bool parse(NodePtr &node, std::string *error_message = nullptr) {
+    if (!advance()) {
+      node.reset();
+      return Finish(node, error_message);
+    }
+    node = parse_expr();
+    if (ok_ && node == nullptr) {
+      ok_ = false;
+      if (error_.empty()) {
+        error_ = "Expression parser failed to produce an AST.";
+      }
+    }
+    if (ok_) {
+      ok_ = expect_eof();
+    }
+    return Finish(node, error_message);
   }
 
 private:
-  void advance() { cur_ = tok_.next(); }
+  bool advance() {
+    if (!tok_.next(cur_, &error_)) {
+      ok_ = false;
+      return false;
+    }
+    return true;
+  }
+
+  NodePtr parse_expr() { return parse_xor(); }
+
+  NodePtr fail(std::string message) {
+    if (ok_) {
+      ok_ = false;
+      error_ = std::move(message);
+    }
+    return nullptr;
+  }
+
+  bool expect_eof() {
+    if (cur_.kind == TokenKind::Eof) {
+      return true;
+    }
+    error_ = "Unexpected token '" + cur_.text + "' after expression";
+    return false;
+  }
+
+  bool Finish(NodePtr &node, std::string *error_message) {
+    if (!ok_) {
+      node.reset();
+      if (error_message != nullptr) {
+        *error_message = error_;
+      }
+      return false;
+    }
+    if (error_message != nullptr) {
+      error_message->clear();
+    }
+    return true;
+  }
 
   NodePtr parse_xor() {
     NodePtr lhs = parse_and();
+    if (!ok_)
+      return nullptr;
     while (cur_.kind == TokenKind::Caret) {
-      advance();
+      if (!advance())
+        return nullptr;
       NodePtr rhs = parse_and();
+      if (!ok_ || rhs == nullptr)
+        return nullptr;
       lhs = std::make_unique<BinOp>(std::move(lhs), BinOpKind::BitXor, std::move(rhs));
     }
     return lhs;
@@ -191,9 +247,14 @@ private:
 
   NodePtr parse_and() {
     NodePtr lhs = parse_add();
+    if (!ok_)
+      return nullptr;
     while (cur_.kind == TokenKind::Ampersand) {
-      advance();
+      if (!advance())
+        return nullptr;
       NodePtr rhs = parse_add();
+      if (!ok_ || rhs == nullptr)
+        return nullptr;
       lhs = std::make_unique<BinOp>(std::move(lhs), BinOpKind::BitAnd, std::move(rhs));
     }
     return lhs;
@@ -201,10 +262,15 @@ private:
 
   NodePtr parse_add() {
     NodePtr lhs = parse_mul();
+    if (!ok_)
+      return nullptr;
     while (cur_.kind == TokenKind::Plus || cur_.kind == TokenKind::Minus) {
       BinOpKind op = (cur_.kind == TokenKind::Plus) ? BinOpKind::Add : BinOpKind::Sub;
-      advance();
+      if (!advance())
+        return nullptr;
       NodePtr rhs = parse_mul();
+      if (!ok_ || rhs == nullptr)
+        return nullptr;
       lhs = std::make_unique<BinOp>(std::move(lhs), op, std::move(rhs));
     }
     return lhs;
@@ -212,6 +278,8 @@ private:
 
   NodePtr parse_mul() {
     NodePtr lhs = parse_unary();
+    if (!ok_)
+      return nullptr;
     while (cur_.kind == TokenKind::Star || cur_.kind == TokenKind::DoubleSlash ||
            cur_.kind == TokenKind::SlashColon || cur_.kind == TokenKind::Percent) {
       BinOpKind op;
@@ -229,8 +297,11 @@ private:
         op = BinOpKind::Mod;
         break;
       }
-      advance();
+      if (!advance())
+        return nullptr;
       NodePtr rhs = parse_unary();
+      if (!ok_ || rhs == nullptr)
+        return nullptr;
       lhs = std::make_unique<BinOp>(std::move(lhs), op, std::move(rhs));
     }
     return lhs;
@@ -238,12 +309,20 @@ private:
 
   NodePtr parse_unary() {
     if (cur_.kind == TokenKind::Minus) {
-      advance();
-      return std::make_unique<UnaryOp>(UnaryOpKind::USub, parse_unary());
+      if (!advance())
+        return nullptr;
+      NodePtr operand = parse_unary();
+      return ok_ && operand != nullptr
+                 ? std::make_unique<UnaryOp>(UnaryOpKind::USub, std::move(operand))
+                 : nullptr;
     }
     if (cur_.kind == TokenKind::Plus) {
-      advance();
-      return std::make_unique<UnaryOp>(UnaryOpKind::UAdd, parse_unary());
+      if (!advance())
+        return nullptr;
+      NodePtr operand = parse_unary();
+      return ok_ && operand != nullptr
+                 ? std::make_unique<UnaryOp>(UnaryOpKind::UAdd, std::move(operand))
+                 : nullptr;
     }
     return parse_atom();
   }
@@ -251,49 +330,73 @@ private:
   NodePtr parse_atom() {
     if (cur_.kind == TokenKind::Integer) {
       int64_t v = cur_.value;
-      advance();
+      if (!advance())
+        return nullptr;
       return std::make_unique<Constant>(v);
     }
     if (cur_.kind == TokenKind::Name) {
       std::string nm = cur_.text;
-      advance();
+      if (!advance())
+        return nullptr;
       if (cur_.kind == TokenKind::LParen) {
-        advance(); // '('
+        if (!advance()) // '('
+          return nullptr;
         std::vector<NodePtr> args;
         if (cur_.kind != TokenKind::RParen) {
-          args.push_back(parse_expr());
+          NodePtr arg = parse_expr();
+          if (!ok_ || arg == nullptr)
+            return nullptr;
+          args.push_back(std::move(arg));
           while (cur_.kind == TokenKind::Comma) {
-            advance();
-            args.push_back(parse_expr());
+            if (!advance())
+              return nullptr;
+            arg = parse_expr();
+            if (!ok_ || arg == nullptr)
+              return nullptr;
+            args.push_back(std::move(arg));
           }
         }
         if (cur_.kind != TokenKind::RParen)
-          throw std::runtime_error("Expected ')' after function arguments");
-        advance(); // ')'
+          return fail("Expected ')' after function arguments");
+        if (!advance()) // ')'
+          return nullptr;
         return std::make_unique<Call>(nm, std::move(args));
       }
       return std::make_unique<Name>(nm);
     }
     if (cur_.kind == TokenKind::LParen) {
-      advance(); // '('
+      if (!advance()) // '('
+        return nullptr;
       NodePtr inner = parse_expr();
+      if (!ok_ || inner == nullptr)
+        return nullptr;
       if (cur_.kind != TokenKind::RParen)
-        throw std::runtime_error("Expected ')'");
-      advance(); // ')'
+        return fail("Expected ')'");
+      if (!advance()) // ')'
+        return nullptr;
       return inner;
     }
-    throw std::runtime_error("Unexpected token '" + cur_.text + "' in expression");
+    return fail("Unexpected token '" + cur_.text + "' in expression");
   }
 
   Tokenizer tok_;
   Token cur_;
+  bool ok_{true};
+  std::string error_;
 };
 
 NodePtr parse(const std::string &expr) {
-  Parser p(expr);
-  NodePtr n = p.parse_expr();
-  p.expect_eof();
-  return n;
+  NodePtr tree;
+  std::string error;
+  if (!try_parse(expr, tree, &error)) {
+    throw std::runtime_error(error);
+  }
+  return tree;
+}
+
+bool try_parse(const std::string &expr, NodePtr &tree, std::string *error_message) {
+  Parser parser(expr);
+  return parser.parse(tree, error_message);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1549,17 +1652,12 @@ namespace {
 bool TryDifferenceLinearCombination(const std::string &expr1, const std::string &expr2,
                                     AddVisitorResult &out) {
   NodePtr tree;
-  if (!TryParseExpression(expr1 + "-(" + expr2 + ")", tree)) {
+  if (!try_parse(expr1 + "-(" + expr2 + ")", tree)) {
     return false;
   }
-  try {
-    out = AddVisitorResult{};
-    run_add_visitor(*tree, out);
-    return true;
-  } catch (const std::runtime_error &) {
-    out = AddVisitorResult{};
-    return false;
-  }
+  out = AddVisitorResult{};
+  run_add_visitor(*tree, out);
+  return true;
 }
 
 } // namespace
@@ -1741,7 +1839,7 @@ SimplifyResult simplify_expression(int64_t value) { return value; }
 
 SimplifyResult simplify_expression(const std::string &expr) {
   NodePtr tree;
-  if (!TryParseExpression(expr, tree)) {
+  if (!try_parse(expr, tree)) {
     // Unparsable expression: return unchanged (matches Python behaviour for
     // expressions with invalid syntax like ONNX '::' node names)
     return expr;
@@ -1917,7 +2015,7 @@ int64_t evaluate_expression(const std::string &expr,
 
 std::unordered_set<std::string> parse_expression_tokens(const std::string &expr) {
   NodePtr tree;
-  if (!TryParseExpression(expr, tree)) {
+  if (!try_parse(expr, tree)) {
     return {expr};
   }
   std::unordered_set<std::string> out;
@@ -1948,7 +2046,7 @@ std::string
 rename_dynamic_expression(const std::string &expression,
                           const std::unordered_map<std::string, std::string> &replacements) {
   NodePtr tree;
-  if (!TryParseExpression(expression, tree)) {
+  if (!try_parse(expression, tree)) {
     return expression;
   }
 
@@ -2131,7 +2229,7 @@ DimType dim_min(const DimType &a, const DimType &b) {
 static std::optional<std::pair<std::string, int64_t>>
 extract_floordiv_chain(const std::string &simplified_str) {
   NodePtr node;
-  if (!TryParseExpression(simplified_str, node)) {
+  if (!try_parse(simplified_str, node)) {
     return std::nullopt;
   }
 

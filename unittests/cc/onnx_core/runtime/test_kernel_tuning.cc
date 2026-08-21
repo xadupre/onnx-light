@@ -157,6 +157,10 @@ TEST(KernelTuningParameters, ProvidesStrictTypedAccess) {
   KernelTuningParameters parameters = MakeDefaults();
 
   EXPECT_TRUE(parameters.Contains("algorithm.tile_m"));
+  ASSERT_NE(parameters.TryGet<int64_t>("algorithm.tile_m"), nullptr);
+  EXPECT_EQ(*parameters.TryGet<int64_t>("algorithm.tile_m"), 64);
+  EXPECT_EQ(parameters.TryGet<double>("algorithm.tile_m"), nullptr);
+  EXPECT_EQ(parameters.TryGet<int64_t>("missing"), nullptr);
   EXPECT_EQ(parameters.Get<int64_t>("algorithm.tile_m"), 64);
   EXPECT_DOUBLE_EQ(parameters.Get<double>("algorithm.minimum_margin"), 0.05);
   EXPECT_TRUE(parameters.Get<bool>("algorithm.pack_b"));
@@ -166,12 +170,18 @@ TEST(KernelTuningParameters, ProvidesStrictTypedAccess) {
 }
 
 TEST(KernelTuningSchema, AcceptsCompleteParametersAndRunsValidationHook) {
-  KernelTuningSchema schema(MakeDefaults(), [](const KernelTuningParameters &parameters) {
-    if (parameters.Get<int64_t>("algorithm.tile_m") <= 0 ||
-        parameters.Get<int64_t>("parallel.minimum_tasks") <= 0) {
-      throw std::invalid_argument("Tile and task sizes must be positive.");
-    }
-  });
+  KernelTuningSchema schema(KernelTuningSchema::WithQueryValidation(
+      MakeDefaults(), [](const KernelTuningParameters &parameters) -> std::optional<std::string> {
+        const int64_t *tile_m = parameters.TryGet<int64_t>("algorithm.tile_m");
+        const int64_t *minimum_tasks = parameters.TryGet<int64_t>("parallel.minimum_tasks");
+        if (tile_m == nullptr || minimum_tasks == nullptr) {
+          return "Tile and task sizes must be present.";
+        }
+        if (*tile_m <= 0 || *minimum_tasks <= 0) {
+          return "Tile and task sizes must be positive.";
+        }
+        return std::nullopt;
+      }));
   KernelTuningParameters parameters = MakeDefaults();
   parameters.values["algorithm.tile_m"] = int64_t{128};
   std::string error;
@@ -235,6 +245,29 @@ TEST(KernelTuningSchema, RejectsInvalidKeysNamesAndPortableDefaults) {
                                     throw std::invalid_argument("Invalid portable defaults.");
                                   }),
                std::invalid_argument);
+}
+
+TEST(KernelTuningSchema, PreservesThrowingHookCompatibility) {
+  KernelTuningSchema schema(MakeDefaults(), [](const KernelTuningParameters &parameters) {
+    if (parameters.Get<int64_t>("algorithm.tile_m") <= 0) {
+      throw std::invalid_argument("Tile size must be positive.");
+    }
+  });
+  KernelTuningParameters invalid = MakeDefaults();
+  invalid.values["algorithm.tile_m"] = int64_t{0};
+  std::string error;
+
+  EXPECT_FALSE(schema.TryValidate(invalid, &error));
+  EXPECT_EQ(error, "Tile size must be positive.");
+  EXPECT_THROW(schema.Validate(invalid), std::invalid_argument);
+}
+
+TEST(KernelTuningSchema, EmptyBraceStillSelectsCompatibilityConstructor) {
+  KernelTuningSchema schema(MakeDefaults(), {});
+  std::string error;
+
+  EXPECT_TRUE(schema.TryValidate(MakeDefaults(), &error));
+  EXPECT_TRUE(error.empty());
 }
 
 TEST(KernelTuningRegistry, KeepsPublishedGenerationsImmutable) {

@@ -1234,7 +1234,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_prop_ro("events", [](const ParallelRegionReport &report) { return report.events(); })
       .def_prop_ro("dropped_events", &ParallelRegionReport::dropped_events);
 
-  nb::class_<ParallelRegionCollector, std::shared_ptr<ParallelRegionCollector>>(
+  nb::class_<ParallelRegionCollector>(
       rt_mod, "ParallelRegionCollector",
       "Fixed-capacity parallel-region collector. Inspect data through report snapshots.")
       .def(nb::init<size_t>(), nb::arg("capacity"))

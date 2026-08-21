@@ -5,7 +5,7 @@ ParallelFor profiling and hardware counters
 
 :Date: 2026-08
 
-**portable profiling foundation complete**
+**Linux grouped hardware counters complete**
 
 Objective
 +++++++++
@@ -151,10 +151,13 @@ must never block inference or grow without a configured bound.
 Hardware-counter backend
 ++++++++++++++++++++++++
 
-Linux support should use ``perf_event_open`` with one grouped collector for
-cycles, retired instructions, LLC references, and LLC misses. It records
-``time_enabled`` and ``time_running`` and either scales multiplexed counts or
-marks them unsuitable according to an explicit policy.
+Linux support uses ``perf_event_open`` with one grouped collector for cycles,
+retired instructions, LLC references, and LLC misses. It records
+``time_enabled`` and ``time_running`` and marks a sample ``multiplexed`` unless
+those values are equal; counts are never scaled. The thread-bound group is valid
+only for isolated single-thread regions. Multi-thread regions are marked
+unsuitable rather than presenting partial caller-thread counts as aggregate
+measurements.
 
 Windows and macOS need separate backends. Until implemented, they return
 ``unsupported`` while portable timing remains available. Counter collection is
@@ -240,7 +243,7 @@ Implementation sequence
        distinguishable and agree with ``perf stat`` within tolerance. The C++
        and Python examples document permissions and degrade to portable timing
        when counters are unavailable.
-     - Planned
+     - Complete
    * - `Profile PR05 (#4639)
        <https://github.com/xadupre/onnx-light/issues/4639>`_
      - Calibration diagnostics integration.

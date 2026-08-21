@@ -9,6 +9,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <source_location>
 #include <span>
@@ -19,6 +20,36 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
+
+/** Describes the outcome of an optional hardware-counter measurement. */
+enum class HardwareCounterStatus : uint8_t {
+  kDisabled,
+  kUnsupported,
+  kPermissionDenied,
+  kMultiplexed,
+  kOverflowed,
+  kValid,
+};
+
+/// Returns the stable lowercase name of a hardware-counter status.
+const char *HardwareCounterStatusName(HardwareCounterStatus status) noexcept;
+
+/** Holds one grouped hardware-counter sample. Counts are present only when valid. */
+struct HardwareCounterSample {
+  HardwareCounterStatus status = HardwareCounterStatus::kDisabled;
+  std::optional<uint64_t> cpu_cycles;
+  std::optional<uint64_t> retired_instructions;
+  std::optional<uint64_t> llc_references;
+  std::optional<uint64_t> llc_misses;
+  std::optional<uint64_t> time_enabled;
+  std::optional<uint64_t> time_running;
+};
+
+/** Opaque state returned when a grouped hardware-counter measurement begins. */
+struct HardwareCounterMeasurement {
+  HardwareCounterStatus status = HardwareCounterStatus::kDisabled;
+  bool active = false;
+};
 
 /** Describes one portable ParallelFor execution. */
 struct ParallelRegionEvent {
@@ -36,6 +67,7 @@ struct ParallelRegionEvent {
   std::optional<uint64_t> wall_time_ns;
   std::optional<uint64_t> process_cpu_time_ns;
   std::optional<double> cpu_utilization;
+  HardwareCounterSample counters;
   uint64_t executor_instance_id = 0;
   bool nested_inline = false;
 };
@@ -59,9 +91,14 @@ struct ParallelRegionReportEvent {
   std::optional<uint64_t> wall_time_ns;
   std::optional<uint64_t> process_cpu_time_ns;
   std::optional<double> cpu_utilization;
-  /// Remains unavailable until a hardware-counter backend supplies it.
+  HardwareCounterStatus counter_status = HardwareCounterStatus::kDisabled;
+  std::optional<uint64_t> cpu_cycles;
+  std::optional<uint64_t> retired_instructions;
+  std::optional<uint64_t> llc_references;
+  std::optional<uint64_t> llc_misses;
+  std::optional<uint64_t> counter_time_enabled;
+  std::optional<uint64_t> counter_time_running;
   std::optional<double> ipc;
-  /// Remains unavailable until a hardware-counter backend supplies it.
   std::optional<double> llc_miss_rate;
   uint64_t executor_instance_id = 0;
   bool nested_inline = false;
@@ -104,14 +141,22 @@ std::optional<uint64_t> ReadProcessCpuTimeNs() noexcept;
  */
 class ParallelRegionCollector {
 public:
-  /// Allocates storage for exactly ``capacity`` events.
-  explicit ParallelRegionCollector(size_t capacity);
+  /// Allocates storage and optionally enables Linux grouped hardware counters.
+  explicit ParallelRegionCollector(size_t capacity, bool hardware_counters = false);
+  ~ParallelRegionCollector();
 
   ParallelRegionCollector(const ParallelRegionCollector &) = delete;
   ParallelRegionCollector &operator=(const ParallelRegionCollector &) = delete;
 
   /// Records an event or increments the dropped count when storage is full.
   void Record(ParallelRegionEvent event) noexcept;
+
+  /// Starts one grouped measurement, or returns its explicit unavailable status.
+  HardwareCounterMeasurement BeginHardwareCounters() noexcept;
+
+  /// Stops and returns one grouped measurement, rejecting non-isolated regions.
+  HardwareCounterSample EndHardwareCounters(HardwareCounterMeasurement measurement,
+                                            bool isolated = true) noexcept;
 
   /// Returns the configured event capacity.
   size_t capacity() const noexcept { return events_.size(); }
@@ -128,9 +173,11 @@ public:
   ParallelRegionReport Report() const;
 
 private:
+  class HardwareCounterBackend;
   std::vector<ParallelRegionEvent> events_;
   std::atomic<size_t> next_event_{0};
   std::atomic<uint64_t> dropped_events_{0};
+  std::unique_ptr<HardwareCounterBackend> hardware_counter_backend_;
 };
 
 /// Returns the non-owning collector installed on the calling thread.

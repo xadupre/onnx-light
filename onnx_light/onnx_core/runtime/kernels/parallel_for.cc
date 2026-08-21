@@ -306,6 +306,7 @@ void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx
 
   const auto start = std::chrono::steady_clock::now();
   const std::optional<uint64_t> process_cpu_start = ReadProcessCpuTimeNs();
+  const HardwareCounterMeasurement counter_measurement = collector->BeginHardwareCounters();
   const uint64_t region_id = NextParallelRegionId();
   const uint64_t parent_region_id = CurrentParallelRegionId();
   const uint64_t run_id = CurrentParallelRegionRunId();
@@ -347,6 +348,8 @@ void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx
               *process_cpu_end >= *process_cpu_start
           ? std::optional<uint64_t>(*process_cpu_end - *process_cpu_start)
           : std::nullopt;
+  const HardwareCounterSample counters =
+      collector->EndHardwareCounters(counter_measurement, admitted == 1);
   collector->Record(ParallelRegionEvent{
       .region_id = region_id,
       .parent_region_id = parent_region_id,
@@ -363,6 +366,7 @@ void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx
       .process_cpu_time_ns = process_cpu_time_ns,
       .cpu_utilization =
           ComputeCpuUtilization(process_cpu_time_ns, wall_time_ns, static_cast<int32_t>(admitted)),
+      .counters = counters,
       .executor_instance_id = 0,
       .nested_inline = nested_inline,
   });

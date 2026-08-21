@@ -202,10 +202,10 @@ private:
 #endif
   }
 
-  HardwareCounterStatus status_ = HardwareCounterStatus::kDisabled;
   bool enabled_ = false;
   std::atomic_flag busy_ = ATOMIC_FLAG_INIT;
 #if defined(__linux__)
+  HardwareCounterStatus status_ = HardwareCounterStatus::kDisabled;
   bool open_attempted_ = false;
   std::thread::id owner_thread_;
   std::array<int, 4> file_descriptors_ = {-1, -1, -1, -1};

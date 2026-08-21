@@ -248,48 +248,38 @@ namespace {
 
 int PriorityRank(TaskPriority priority) { return static_cast<int>(priority); }
 
-size_t EstimatedBytes(const TaskDescriptor &task) {
-  const size_t first =
-      task.estimated_input_bytes > std::numeric_limits<size_t>::max() - task.estimated_output_bytes
-          ? std::numeric_limits<size_t>::max()
-          : task.estimated_input_bytes + task.estimated_output_bytes;
-  return first > std::numeric_limits<size_t>::max() - task.peak_temporary_bytes
-             ? std::numeric_limits<size_t>::max()
-             : first + task.peak_temporary_bytes;
+size_t SaturatingAdd(size_t left, size_t right) {
+  return left > std::numeric_limits<size_t>::max() - right ? std::numeric_limits<size_t>::max()
+                                                           : left + right;
 }
 
-enum class BudgetDomain {
-  kGeneral,
-  kIo,
-  kPreparation,
-  kPrepared,
+struct BudgetAmounts {
+  size_t global = 0;
+  size_t general = 0;
+  size_t io = 0;
+  size_t preparation = 0;
+  size_t prepared = 0;
+  size_t execution = 0;
 };
 
-BudgetDomain DomainFor(const TaskDescriptor &task) {
+BudgetAmounts EstimatedBytes(const TaskDescriptor &task) {
+  BudgetAmounts amounts;
+  amounts.global =
+      SaturatingAdd(SaturatingAdd(task.estimated_input_bytes, task.estimated_output_bytes),
+                    task.peak_temporary_bytes);
   if (task.resource == ResourceClass::kIo) {
-    return BudgetDomain::kIo;
+    amounts.io = amounts.global;
+  } else if (task.kind == TaskKind::kPrepare) {
+    amounts.preparation = SaturatingAdd(task.estimated_input_bytes, task.peak_temporary_bytes);
+    amounts.prepared = task.estimated_output_bytes;
+  } else if (task.kind == TaskKind::kPublish) {
+    amounts.prepared = amounts.global;
+  } else if (task.kind == TaskKind::kExecute) {
+    amounts.execution = amounts.global;
+  } else {
+    amounts.general = amounts.global;
   }
-  if (task.kind == TaskKind::kPrepare) {
-    return BudgetDomain::kPreparation;
-  }
-  if (task.kind == TaskKind::kPublish) {
-    return BudgetDomain::kPrepared;
-  }
-  return BudgetDomain::kGeneral;
-}
-
-size_t DomainCap(const PreparedSchedulerOptions &options, BudgetDomain domain) {
-  switch (domain) {
-  case BudgetDomain::kIo:
-    return options.io_memory_budget;
-  case BudgetDomain::kPreparation:
-    return options.preparation_memory_budget;
-  case BudgetDomain::kPrepared:
-    return options.prepared_memory_budget;
-  case BudgetDomain::kGeneral:
-    return std::numeric_limits<size_t>::max();
-  }
-  return std::numeric_limits<size_t>::max();
+  return amounts;
 }
 
 bool IsTerminal(TaskStatus status) {
@@ -319,15 +309,22 @@ struct PreparedExecutionState::SchedulerState {
     io_pool.Start(static_cast<int32_t>(options.io_workers));
   }
 
-  bool TryAcquire(const TaskDescriptor &task, bool critical_pending, size_t &new_total) {
-    const size_t bytes = EstimatedBytes(task);
-    const BudgetDomain domain = DomainFor(task);
-    const size_t domain_cap = DomainCap(options, domain);
-    EXT_ENFORCE(bytes <= options.global_memory_budget, "Prepared task ", task.id.value,
+  void Validate(const TaskDescriptor &task) const {
+    const BudgetAmounts bytes = EstimatedBytes(task);
+    EXT_ENFORCE(bytes.global <= options.global_memory_budget, "Prepared task ", task.id.value,
                 " exceeds the global memory budget.");
-    EXT_ENFORCE(bytes <= domain_cap, "Prepared task ", task.id.value,
-                " exceeds its arena memory budget.");
+    EXT_ENFORCE(bytes.io <= options.io_memory_budget, "Prepared task ", task.id.value,
+                " exceeds the I/O memory budget.");
+    EXT_ENFORCE(bytes.preparation <= options.preparation_memory_budget, "Prepared task ",
+                task.id.value, " exceeds the preparation memory budget.");
+    EXT_ENFORCE(bytes.prepared <= options.prepared_memory_budget, "Prepared task ", task.id.value,
+                " exceeds the prepared memory budget.");
+    EXT_ENFORCE(bytes.execution <= options.execution_memory_budget, "Prepared task ", task.id.value,
+                " exceeds the execution memory budget.");
+  }
 
+  bool TryAcquire(const TaskDescriptor &task, bool critical_pending, size_t &new_total) {
+    const BudgetAmounts bytes = EstimatedBytes(task);
     std::lock_guard<std::mutex> lock(mutex);
     const bool speculative = task.priority != TaskPriority::kCritical && critical_pending;
     if (task.resource == ResourceClass::kIo) {
@@ -339,13 +336,22 @@ struct PreparedExecutionState::SchedulerState {
     const size_t global_cap = speculative
                                   ? options.global_memory_budget - options.reserved_critical_memory
                                   : options.global_memory_budget;
-    size_t &domain_used = Used(domain);
-    if (bytes > global_cap - std::min(global_cap, global_used) ||
-        bytes > domain_cap - std::min(domain_cap, domain_used)) {
+    if (bytes.global > global_cap - std::min(global_cap, global_used) ||
+        bytes.io > options.io_memory_budget - std::min(options.io_memory_budget, io_used) ||
+        bytes.preparation > options.preparation_memory_budget -
+                                std::min(options.preparation_memory_budget, preparation_used) ||
+        bytes.prepared > options.prepared_memory_budget -
+                             std::min(options.prepared_memory_budget, prepared_used) ||
+        bytes.execution > options.execution_memory_budget -
+                              std::min(options.execution_memory_budget, execution_used)) {
       return false;
     }
-    global_used += bytes;
-    domain_used += bytes;
+    global_used += bytes.global;
+    general_used += bytes.general;
+    io_used += bytes.io;
+    preparation_used += bytes.preparation;
+    prepared_used += bytes.prepared;
+    execution_used += bytes.execution;
     active_io += task.resource == ResourceClass::kIo ? 1 : 0;
     peak_global_used = std::max(peak_global_used, global_used);
     new_total = global_used;
@@ -353,25 +359,15 @@ struct PreparedExecutionState::SchedulerState {
   }
 
   void Release(const TaskDescriptor &task) {
-    const size_t bytes = EstimatedBytes(task);
+    const BudgetAmounts bytes = EstimatedBytes(task);
     std::lock_guard<std::mutex> lock(mutex);
-    global_used -= bytes;
-    Used(DomainFor(task)) -= bytes;
+    global_used -= bytes.global;
+    general_used -= bytes.general;
+    io_used -= bytes.io;
+    preparation_used -= bytes.preparation;
+    prepared_used -= bytes.prepared;
+    execution_used -= bytes.execution;
     active_io -= task.resource == ResourceClass::kIo ? 1 : 0;
-  }
-
-  size_t &Used(BudgetDomain domain) {
-    switch (domain) {
-    case BudgetDomain::kIo:
-      return io_used;
-    case BudgetDomain::kPreparation:
-      return preparation_used;
-    case BudgetDomain::kPrepared:
-      return prepared_used;
-    case BudgetDomain::kGeneral:
-      return general_used;
-    }
-    return general_used;
   }
 
   PreparedSchedulerOptions options;
@@ -382,6 +378,7 @@ struct PreparedExecutionState::SchedulerState {
   size_t io_used = 0;
   size_t preparation_used = 0;
   size_t prepared_used = 0;
+  size_t execution_used = 0;
   size_t active_io = 0;
   size_t peak_global_used = 0;
 };
@@ -523,6 +520,9 @@ PreparedExecutionResult PreparedExecutionPlan::Run(PreparedExecutionState &state
     task_indices.emplace(task.id.value, run_tasks.size());
     run_tasks.push_back(RunTask{&task, request.completion, request.producer, false,
                                 is_session ? task.priority : TaskPriority::kCritical});
+  }
+  for (const RunTask &task : run_tasks) {
+    state.scheduler_->Validate(*task.descriptor);
   }
   for (auto task = run_tasks.rbegin(); task != run_tasks.rend(); ++task) {
     for (const TaskId dependency : task->descriptor->dependencies) {

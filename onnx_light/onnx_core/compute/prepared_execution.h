@@ -166,6 +166,7 @@ struct PreparedSchedulerOptions {
   size_t global_memory_budget = std::numeric_limits<size_t>::max();
   size_t preparation_memory_budget = std::numeric_limits<size_t>::max();
   size_t prepared_memory_budget = std::numeric_limits<size_t>::max();
+  size_t execution_memory_budget = std::numeric_limits<size_t>::max();
   size_t io_memory_budget = std::numeric_limits<size_t>::max();
   size_t reserved_critical_memory = 0;
 };

@@ -26,6 +26,11 @@ uint64_t Replay(const ExecutionPlan &plan) {
 
 int main(int argc, char **argv) {
   const int iterations = argc > 1 ? std::atoi(argv[1]) : 100000;
+  const double maximum_overhead_ratio = argc > 2 ? std::atof(argv[2]) : 50.0;
+  if (iterations <= 0 || maximum_overhead_ratio <= 0) {
+    std::cerr << "iterations and maximum overhead ratio must be positive\n";
+    return 1;
+  }
   GraphProto graph;
   graph.add_input()->set_name("X");
   graph.add_output()->set_name("Y");
@@ -69,9 +74,11 @@ int main(int argc, char **argv) {
       std::chrono::duration<double, std::nano>(direct_end - direct_start).count() / iterations;
   const double prepared_ns =
       std::chrono::duration<double, std::nano>(prepared_end - prepared_start).count() / iterations;
+  const double overhead_ratio = prepared_ns / direct_ns;
   std::cout << "direct_execution_plan_ns=" << direct_ns << '\n'
             << "prepared_hot_path_ns=" << prepared_ns << '\n'
-            << "overhead_ratio=" << prepared_ns / direct_ns << '\n'
+            << "overhead_ratio=" << overhead_ratio << '\n'
+            << "maximum_overhead_ratio=" << maximum_overhead_ratio << '\n'
             << "checksum=" << direct_checksum + prepared_checksum << '\n';
-  return 0;
+  return overhead_ratio <= maximum_overhead_ratio ? 0 : 2;
 }

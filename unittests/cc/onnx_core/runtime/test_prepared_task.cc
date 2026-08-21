@@ -329,6 +329,29 @@ TEST(PreparedExecutionPlan, EnforcesGlobalAndIoMemoryBudgets) {
   EXPECT_LE(result.peak_in_flight_bytes, 8u);
 }
 
+TEST(PreparedExecutionPlan, EnforcesPreparedAndExecutionMemoryBudgets) {
+  TaskDescriptor prepare{TaskId{1}, TaskScope::kSession, TaskKind::kPrepare, ResourceClass::kCpu};
+  prepare.estimated_output_bytes = 9;
+  PreparedExecutionPlan preparation_plan({prepare});
+  PreparedExecutionState preparation_state(1, 1, std::numeric_limits<size_t>::max(),
+                                           std::numeric_limits<size_t>::max(),
+                                           PreparedSchedulerOptions{.prepared_memory_budget = 8});
+  EXPECT_THROW(preparation_plan.RunSequential(
+                   preparation_state, [](const TaskDescriptor &, PreparedExecutionState &) {}),
+               std::runtime_error);
+
+  TaskDescriptor execute{TaskId{1}, TaskScope::kInvocation, TaskKind::kExecute,
+                         ResourceClass::kCpu};
+  execute.peak_temporary_bytes = 9;
+  PreparedExecutionPlan execution_plan({execute});
+  PreparedExecutionState execution_state(1, 1, std::numeric_limits<size_t>::max(),
+                                         std::numeric_limits<size_t>::max(),
+                                         PreparedSchedulerOptions{.execution_memory_budget = 8});
+  EXPECT_THROW(execution_plan.RunSequential(
+                   execution_state, [](const TaskDescriptor &, PreparedExecutionState &) {}),
+               std::runtime_error);
+}
+
 TEST(PreparedExecutionPlan, FullyPreparedRunUsesEpochHotPathWithoutEnqueues) {
   const PreparedObjectRequirement requirement{PreparedKey{"hot"}, "source"};
   TaskDescriptor publish{TaskId{1}, TaskScope::kSession, TaskKind::kPublish,

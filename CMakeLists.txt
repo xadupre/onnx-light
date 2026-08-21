@@ -1118,6 +1118,11 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
     if(benchmark_target STREQUAL "bench_graph_builder")
       target_link_libraries(${benchmark_target} PRIVATE lib_onnx_shape lib_onnx_op)
     endif()
+    if(benchmark_target STREQUAL "bench_load_external_nocopy")
+      target_link_libraries(${benchmark_target} PRIVATE lib_onnx_core)
+      target_compile_definitions(${benchmark_target} PRIVATE
+          ONNX_LIGHT_BENCH_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/fixtures")
+    endif()
   endforeach()
 endif()
 

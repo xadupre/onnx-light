@@ -27,11 +27,12 @@
  * approach but skip the extra copy step.
  *
  * Usage:
- *   bench_load_external_nocopy [-n iters] [-t threads] [-i n_init] [-d dim]
+ *   python -m benchmarks.fixtures.generate_prepared_execution_external
+ *   bench_load_external_nocopy [-n iters] [-m model.onnx] [-w weights.data]
  */
 
 #include "onnx.h"
-#include "onnx_helper.h"
+#include "onnx_core/compute/resolved_model_fixture.h"
 #include "stream.h"
 
 #include <chrono>
@@ -46,61 +47,22 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
 using namespace ONNX_LIGHT_NAMESPACE::utils;
 
-static const std::string kOnnxFile = "bench_ext_nc.onnx";
-static const std::string kDataFile = "bench_ext_nc.onnx.data";
+#ifndef ONNX_LIGHT_BENCH_FIXTURE_DIR
+#define ONNX_LIGHT_BENCH_FIXTURE_DIR "benchmarks/fixtures"
+#endif
+
+static const std::string kOnnxFile =
+    ONNX_LIGHT_BENCH_FIXTURE_DIR "/prepared_execution_external.onnx";
+static const std::string kDataFile =
+    ONNX_LIGHT_BENCH_FIXTURE_DIR "/prepared_execution_external.data";
+static constexpr uint64_t kFixturePayloadBytes = 16;
 
 /** Size of a virtual-memory page; used to stride through tensor bytes when
  *  forcing page faults in ``touch_all_raw_data()``. */
 static constexpr size_t kPageSize = 4096;
-
-/**
- * Builds a synthetic ModelProto with n_init float tensors of shape [dim, dim].
- *
- * @param n_init Number of initializer tensors to add to the graph.
- * @param dim Side length of each square float weight matrix.
- * @return A fully populated ModelProto ready for serialization.
- */
-static ModelProto build_model(int n_init, int dim) {
-  ModelProto model;
-  model.set_ir_version(9);
-  model.set_producer_name("bench_load_external_nocopy");
-
-  GraphProto *graph = model.add_graph();
-  graph->set_name("bench_graph");
-
-  const size_t n_floats = static_cast<size_t>(dim) * static_cast<size_t>(dim);
-  const size_t n_bytes = n_floats * sizeof(float);
-
-  std::vector<uint8_t> raw(n_bytes);
-  for (size_t i = 0; i < n_bytes; ++i) {
-    raw[i] = static_cast<uint8_t>((i * 2654435761ULL) >> 24);
-  }
-
-  for (int i = 0; i < n_init; ++i) {
-    TensorProto *tensor = graph->add_initializer();
-    tensor->set_name("W" + std::to_string(i));
-    tensor->set_data_type(TensorProto::DataType::FLOAT);
-    tensor->add_dims(static_cast<int64_t>(dim));
-    tensor->add_dims(static_cast<int64_t>(dim));
-    tensor->set_raw_data(raw);
-  }
-
-  return model;
-}
-
-/**
- * Saves the model to two files (onnx + external data).
- *
- * @param model ModelProto to serialize.
- */
-static void save_model(ModelProto &model) {
-  TwoFilesWriteStream wstream(kOnnxFile, kDataFile);
-  SerializeOptions sopts;
-  sopts.raw_data_threshold = 0;
-  SerializeModelProtoToStream(model, wstream, sopts);
-}
 
 /**
  * Touches every page of every tensor's raw_data to force mmap page faults.
@@ -140,7 +102,9 @@ static uint64_t touch_all_raw_data(const ModelProto &m) {
  * @param n_iters Number of load iterations.
  * @return Pair of (total tensor count, byte checksum) across all iterations.
  */
-static std::pair<size_t, uint64_t> run_load_external_nocopy(int n_iters) {
+static std::pair<size_t, uint64_t> run_load_external_nocopy(int n_iters,
+                                                            const std::string &model_path,
+                                                            const std::string &weights_path) {
   ParseOptions opts;
   opts.no_copy = true;
 
@@ -148,7 +112,7 @@ static std::pair<size_t, uint64_t> run_load_external_nocopy(int n_iters) {
   uint64_t checksum = 0;
   for (int i = 0; i < n_iters; ++i) {
     ModelProto m;
-    TwoFilesStream rstream(kOnnxFile, kDataFile);
+    TwoFilesStream rstream(model_path, weights_path);
     m.ParseFromStream(rstream, opts);
     total_tensors += m.ref_graph().ref_initializer().size();
     checksum += touch_all_raw_data(m);
@@ -166,7 +130,9 @@ static std::pair<size_t, uint64_t> run_load_external_nocopy(int n_iters) {
  * @param n_iters Number of load iterations.
  * @return Pair of (total tensor count, byte checksum) across all iterations.
  */
-static std::pair<size_t, uint64_t> run_load_external_copy(int n_iters) {
+static std::pair<size_t, uint64_t> run_load_external_copy(int n_iters,
+                                                          const std::string &model_path,
+                                                          const std::string &weights_path) {
   ParseOptions opts;
   // no_copy stays false
 
@@ -174,7 +140,7 @@ static std::pair<size_t, uint64_t> run_load_external_copy(int n_iters) {
   uint64_t checksum = 0;
   for (int i = 0; i < n_iters; ++i) {
     ModelProto m;
-    TwoFilesStream rstream(kOnnxFile, kDataFile);
+    TwoFilesStream rstream(model_path, weights_path);
     m.ParseFromStream(rstream, opts);
     total_tensors += m.ref_graph().ref_initializer().size();
     checksum += touch_all_raw_data(m);
@@ -184,56 +150,50 @@ static std::pair<size_t, uint64_t> run_load_external_copy(int n_iters) {
 
 int main(int argc, char *argv[]) {
   int n_iters = 20;
-  int n_threads = 1;
-  int n_init = 40;
-  int dim = 2048;
+  std::string model_path = kOnnxFile;
+  std::string weights_path = kDataFile;
 
   for (int i = 1; i + 1 < argc; ++i) {
     if (std::strcmp(argv[i], "-n") == 0) {
       n_iters = std::atoi(argv[++i]);
-    } else if (std::strcmp(argv[i], "-t") == 0) {
-      n_threads = std::atoi(argv[++i]);
-    } else if (std::strcmp(argv[i], "-i") == 0) {
-      n_init = std::atoi(argv[++i]);
-    } else if (std::strcmp(argv[i], "-d") == 0) {
-      dim = std::atoi(argv[++i]);
+    } else if (std::strcmp(argv[i], "-m") == 0) {
+      model_path = argv[++i];
+    } else if (std::strcmp(argv[i], "-w") == 0) {
+      weights_path = argv[++i];
     }
   }
-  (void)n_threads; // reserved for future parallel variant
 
   std::cout << "bench_load_external_nocopy\n"
             << "  n_iters  = " << n_iters << "\n"
-            << "  n_threads= " << n_threads << "\n"
-            << "  n_init   = " << n_init << "\n"
-            << "  dim      = " << dim << "\n";
+            << "  model    = " << model_path << "\n"
+            << "  weights  = " << weights_path << "\n";
 
-  ModelProto model = build_model(n_init, dim);
-  save_model(model);
+  ResolvedModelFixture resolved(
+      model_path, {PayloadManifestEntry{"W", weights_path, 0, kFixturePayloadBytes, true}});
+  const std::vector<uint8_t> expected_output = resolved.ReadPayload("W");
 
-  if (std::filesystem::exists(kDataFile)) {
+  if (std::filesystem::exists(weights_path)) {
     const double data_mb =
-        static_cast<double>(std::filesystem::file_size(kDataFile)) / (1024.0 * 1024.0);
+        static_cast<double>(std::filesystem::file_size(weights_path)) / (1024.0 * 1024.0);
     std::cout << "  data_mb  = " << data_mb << " MB\n\n";
   }
 
   // --- no-copy (mmap + touch) ---
   auto t0 = std::chrono::high_resolution_clock::now();
-  auto [nc_tensors, nc_checksum] = run_load_external_nocopy(n_iters);
+  auto [nc_tensors, nc_checksum] = run_load_external_nocopy(n_iters, model_path, weights_path);
   auto t1 = std::chrono::high_resolution_clock::now();
   const double nc_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
   // --- standard copy + touch ---
   auto t2 = std::chrono::high_resolution_clock::now();
-  auto [cp_tensors, cp_checksum] = run_load_external_copy(n_iters);
+  auto [cp_tensors, cp_checksum] = run_load_external_copy(n_iters, model_path, weights_path);
   auto t3 = std::chrono::high_resolution_clock::now();
   const double cp_ms = std::chrono::duration<double, std::milli>(t3 - t2).count();
 
   std::cout << "load/2filex1/onnxlight-nocopy : " << nc_ms / n_iters << " ms/iter"
             << "  (total_tensors=" << nc_tensors << ", checksum=" << nc_checksum << ")\n"
             << "load/2filex1/onnxlight        : " << cp_ms / n_iters << " ms/iter"
-            << "  (total_tensors=" << cp_tensors << ", checksum=" << cp_checksum << ")\n";
-
-  std::remove(kOnnxFile.c_str());
-  std::remove(kDataFile.c_str());
+            << "  (total_tensors=" << cp_tensors << ", checksum=" << cp_checksum << ")\n"
+            << "  deterministic_output_bytes = " << expected_output.size() << "\n";
   return 0;
 }

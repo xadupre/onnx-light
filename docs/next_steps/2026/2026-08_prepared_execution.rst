@@ -1454,12 +1454,14 @@ release order, and allocator ownership.
 Implementation order
 ++++++++++++++++++++
 
-#. Add a valid external-data model benchmark that is never rewritten by the
-   benchmark.
+#. **Implemented:** add a valid deterministic external-data model benchmark
+   backed by model and payload files produced by a checked-in onnx-light
+   generator script that the benchmark never rewrites.
 #. Consume a deterministic frozen ``ResolvedModel`` fixture conforming to
    :ref:`l-next-steps-model-resolution` and reject every read not present in its
-   active payload manifest.
-#. Extract a persistent ``WorkerPool`` below the current ``onnx_proto``
+   active payload manifest. **Implemented by the temporary
+   ``ResolvedModelFixture`` boundary; the production resolver remains step 4.**
+#. **Implemented:** extract a persistent ``WorkerPool`` below the current ``onnx_proto``
    ``ThreadPool`` API, then add the common task, dependency, resource,
    completion, scope, and diagnostic types used by the unified runtime plan;
    keep the existing ``ExecutionPlan`` behavior unchanged during migration.

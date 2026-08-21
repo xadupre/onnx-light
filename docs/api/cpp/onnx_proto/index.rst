@@ -13,6 +13,7 @@ onnx_proto
     simple_string
     simple_span
     thread_pool
+    worker_pool
     fields
     onnx_verify
     serialize_options

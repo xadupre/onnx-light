@@ -166,7 +166,7 @@ Implementation sequence
      - Compact ``op``, ``inp``, ``out``, and ``init`` Python facade.
      - Existing ``make_*`` behavior is unchanged; compact calls cover standard,
        optional, variadic, multi-output, custom-operator, and invalid cases.
-     - Planned
+     - Completed
    * - Builder PR02
      - Deterministic short and detailed ``LocalRewriting`` display.
      - Reports are readable in Python and plain documentation while replay data

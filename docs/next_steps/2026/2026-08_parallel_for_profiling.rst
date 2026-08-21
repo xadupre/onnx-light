@@ -54,6 +54,26 @@ Profile PR01 explicitly excludes process CPU time, Python bindings,
 backends. Those additions depend on the portable event contract and land in
 later batches.
 
+Documentation examples
++++++++++++++++++++++++
+
+Profile PR03 adds runnable documentation examples for both public inspection
+surfaces:
+
+* a C++ example configures a bounded collector through
+  ``RuntimeSessionOptions``, runs a session, and inspects region events and the
+  dropped-event count;
+* a Python example enables profiling, runs inference, and displays source
+  location, participant counts, wall time, CPU utilization, IPC, and LLC miss
+  rate when those metrics are available.
+
+The examples keep profiling disabled by default and show how to distinguish an
+unavailable metric from a valid zero value. The Python example must remain
+usable before hardware counters are enabled. Profile PR04 extends both examples
+with Linux ``perf_event_open`` setup, permission requirements, multiplexing
+semantics, and the explicit ``unsupported`` and ``permission_denied`` states;
+other platforms continue to demonstrate portable timing only.
+
 Metric definitions
 ++++++++++++++++++
 
@@ -187,32 +207,43 @@ Implementation sequence
      - Scope
      - Merge criterion
      - Status
-   * - Profile PR01
+   * - `Profile PR01 (#4635)
+       <https://github.com/xadupre/onnx-light/issues/4635>`_
      - Portable event contract and bounded session collector.
      - Disabled execution has no instrumentation work; enabled serial,
        parallel, limited, and nested regions emit truthful bounded events.
      - Ready
-   * - Profile PR02
+   * - `Profile PR02 (#4636)
+       <https://github.com/xadupre/onnx-light/issues/4636>`_
      - Run/parent identity, process CPU time, and normalized utilization.
      - Nested and concurrent regions retain identity and report explicit metric
        validity.
      - Planned
-   * - Profile PR03
-     - C++ report API and Python inspection.
+   * - `Profile PR03 (#4637)
+       <https://github.com/xadupre/onnx-light/issues/4637>`_
+     - C++ report API, Python inspection, and runnable documentation examples
+       for both APIs.
      - Bounded events and dropped counts are inspectable without exposing
-       mutable collector storage.
+       mutable collector storage. The examples enable profiling explicitly,
+       inspect portable metrics, and handle unavailable optional metrics.
      - Planned
-   * - Profile PR04
-     - Linux grouped ``perf_event_open`` collector.
+   * - `Profile PR04 (#4638)
+       <https://github.com/xadupre/onnx-light/issues/4638>`_
+     - Linux grouped ``perf_event_open`` collector and counter-specific
+       documentation.
      - Unsupported, denied, multiplexed, and valid samples remain
-       distinguishable and agree with ``perf stat`` within tolerance.
+       distinguishable and agree with ``perf stat`` within tolerance. The C++
+       and Python examples document permissions and degrade to portable timing
+       when counters are unavailable.
      - Planned
-   * - Profile PR05
+   * - `Profile PR05 (#4639)
+       <https://github.com/xadupre/onnx-light/issues/4639>`_
      - Calibration diagnostics integration.
      - Metrics explain candidates but never override correctness or elapsed
        time selection.
      - Planned
-   * - Profile PR06
+   * - `Profile PR06 (#4640)
+       <https://github.com/xadupre/onnx-light/issues/4640>`_
      - Additional platform backends.
      - A backend lands only with equivalent documented and tested semantics.
      - Optional

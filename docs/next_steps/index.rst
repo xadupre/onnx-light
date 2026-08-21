@@ -6,6 +6,7 @@ Next Steps
 
 :Date: 2026-08
 
+
 Recommended implementation order
 --------------------------------
 
@@ -26,87 +27,27 @@ execution. Within the runtime track, the order above is mandatory: profiling
 or tuning a hidden global pool would produce profiles that a session cannot
 reproduce.
 
-Large-model startup follows one explicit four-document sequence:
+Large-model startup follows the four-plan sequence documented in
+:ref:`l-next-steps-fast-loading-sequence`.
 
-1. fix existing parser, external-data, and initializer-materialization defects
-   in :ref:`l-next-steps-model-loading-bug-fixes`;
-2. implement :ref:`l-next-steps-prepared-execution`;
-3. complete the ownership-aware cross-repository work in
-   :ref:`l-next-steps-model-loading`;
-4. connect adaptive I/O, model resolution, prepared tensors, and first-token
-   overlap in :ref:`l-next-steps-native-fast-loading-completion`.
-
-Parallel-for profiling may proceed alongside step 1, but its executor
-instrumentation must be stable before step 2 begins.
-
-Assignable issue sequence:
-
-.. list-table::
-    :header-rows: 1
-    :widths: 12 24 64
-
-    * - Step
-      - Issues
-      - Order
-    * - 1. Bug fixes
-      - #4608--#4610
-      - `#4608 <https://github.com/xadupre/onnx-light/issues/4608>`_ ->
-        `#4609 <https://github.com/xadupre/onnx-light/issues/4609>`_ ->
-        `#4610 <https://github.com/xadupre/onnx-light/issues/4610>`_
-    * - 2. Prepared execution
-      - #4613--#4617
-      - `#4613 <https://github.com/xadupre/onnx-light/issues/4613>`_ ->
-        `#4614 <https://github.com/xadupre/onnx-light/issues/4614>`_ ->
-        `#4615 <https://github.com/xadupre/onnx-light/issues/4615>`_ ->
-        `#4616 <https://github.com/xadupre/onnx-light/issues/4616>`_ ->
-        `#4617 <https://github.com/xadupre/onnx-light/issues/4617>`_
-    * - 3. onnxruntime
-      - #4611--#4612
-      - `#4611 <https://github.com/xadupre/onnx-light/issues/4611>`_ ->
-        `#4612 <https://github.com/xadupre/onnx-light/issues/4612>`_. #4612 is
-        coordination for a PR in ``microsoft/onnxruntime`` and must not be
-        assigned to an agent working only in ``xadupre/onnx-light``.
-    * - 4. Native completion
-      - #4618--#4623
-      - `#4618 <https://github.com/xadupre/onnx-light/issues/4618>`_ ->
-        `#4619 <https://github.com/xadupre/onnx-light/issues/4619>`_ ->
-        `#4620 <https://github.com/xadupre/onnx-light/issues/4620>`_ ->
-        `#4621 <https://github.com/xadupre/onnx-light/issues/4621>`_ ->
-        `#4622 <https://github.com/xadupre/onnx-light/issues/4622>`_ ->
-        `#4623 <https://github.com/xadupre/onnx-light/issues/4623>`_
+All Next Steps
+--------------
 
 .. toctree::
     :maxdepth: 1
-    :caption: Fast-loading implementation sequence
+    :hidden:
 
-    2026/2026-08_model_loading_bug_fixes
-    2026/2026-08_prepared_execution
-    2026/2026-08_onnxruntime_fast_model_loading
-    2026/2026-08_native_fast_loading_completion
-
-.. toctree::
-    :maxdepth: 1
-    :caption: Ready to implement
-
+    2026/2026-08_fast_loading_sequence
     2026/2026-08_parallel_for_profiling
-
-.. toctree::
-    :maxdepth: 1
-    :caption: Discussion
-
     2026/2026-08_custom_types
     2026/2026-08_proto_inheritance
     2026/2026-08_quantization
     2026/2026-08_graph_builder_quantized_tensor
+    2026/2026-08_graph_builder_authoring
     2026/2026-08_mutable_cache
     2026/2026-08_compiled_tensor
     2026/2026-08_model_resolution
     2026/2026-08_split_wheels
-
-.. toctree::
-    :maxdepth: 1
-    :caption: Completed
-
     2025/2025-07_onnx_proto
     2026/2026-06_lib_onnx
     2026/2026-06_kernels_backend_tests
@@ -117,3 +58,100 @@ Assignable issue sequence:
     2026/2026-08_buffer_reuse_arena
     2026/2026-08_graph_builder_optimization
     2026/2026-08_session_execution_pools
+
+Use the search field to filter by status or text, and select a column heading
+to sort the table.
+
+.. list-table::
+    :header-rows: 1
+    :widths: 12 24 32 32
+    :class: sphinx-datatable
+
+    * - Status
+      - Next step
+      - Planned work
+      - Why
+    * - Started
+      - :ref:`l-next-steps-fast-loading-sequence`
+      - Orchestrate the four-step large-model startup roadmap.
+      - Define one dependency order for fast loading.
+    * - Started
+      - :ref:`l-next-steps-parallel-for-profiling`
+      - Add bounded, opt-in ``ParallelFor`` diagnostics and hardware counters.
+      - Explain CPU under-utilization before tuning prepared execution.
+    * - Discussed
+      - :ref:`l-next-steps-custom-types`
+      - Define structured byte-buffer types for custom formats.
+      - ``TypeProto.Opaque`` does not describe serialized layouts.
+    * - Discussed
+      - :ref:`l-next-steps-proto-inheritance`
+      - Add schema inheritance while retaining flat wire encoding.
+      - Reuse common fields without duplicating them across proto families.
+    * - Discussed
+      - :ref:`l-next-steps-quantization`
+      - Describe quantized data families and their proto mappings.
+      - Represent quantization consistently as structured custom types.
+    * - Discussed
+      - :ref:`l-next-steps-graph-builder-quantized-tensor`
+      - Preserve quantized initializers in graph storage.
+      - Avoid implicit dequantization or rewriting by ``GraphBuilder``.
+    * - Discussed
+      - :ref:`l-next-steps-graph-builder-authoring`
+      - Add compact graph authoring and non-gallery runtime walkthroughs.
+      - Make models easier to build, inspect, optimize, and execute.
+    * - Discussed
+      - :ref:`l-next-steps-mutable-cache`
+      - Support in-place KV-cache updates with controlled aliasing.
+      - Avoid duplicating large caches on every update.
+    * - Discussed
+      - :ref:`l-next-steps-compiled-tensor`
+      - Persist packed tensor representations as caches.
+      - Avoid repeating expensive prepacking when a model is reloaded.
+    * - Discussed
+      - :ref:`l-next-steps-model-resolution`
+      - Resolve the final graph and required payloads before I/O.
+      - Load weights only after transformations and liveness analysis.
+    * - Discussed
+      - :ref:`l-next-steps-split-wheels`
+      - Split public features into composable Python wheels.
+      - Let users install only the components they need.
+    * - Completed
+      - :ref:`l-next-steps-onnx-proto`
+      - Build the protobuf-free ONNX message layer.
+      - Provide the project's independent base schema layer.
+    * - Completed
+      - :ref:`l-next-steps-lib-onnx`
+      - Port the ONNX C++ library to ``onnx_proto``.
+      - Run the upstream library without ``libprotobuf``.
+    * - Completed
+      - :ref:`l-next-steps-kernels-backend-tests`
+      - Provide native kernels and backend tests in C++.
+      - Validate the runtime natively without depending on Python.
+    * - Completed
+      - :ref:`l-next-steps-gradient`
+      - Generate backward-pass graphs symbolically.
+      - Support training with a native graph-based gradient pass.
+    * - Completed
+      - :ref:`l-next-steps-ort-onnx-light`
+      - Route onnxruntime protobuf usage through ``onnx-light``.
+      - Provide a build-time alternative to protobuf in onnxruntime.
+    * - Completed
+      - :ref:`l-next-steps-proto-binary-size`
+      - Reduce the ``lib_onnx_proto`` shared-library footprint.
+      - Avoid shipping unused wrapper overhead.
+    * - Completed
+      - :ref:`l-next-steps-processor-aware-kernel-tuning`
+      - Make kernel thresholds processor-specific and persistent.
+      - Adapt thresholds to hardware instead of fixed constants.
+    * - Completed
+      - :ref:`l-next-steps-buffer-reuse-arena`
+      - Reuse execution and I/O buffers safely.
+      - Reduce allocations without breaking NumPy ownership.
+    * - Completed
+      - :ref:`l-next-steps-graph-builder-optimization`
+      - Rewrite local graph patterns to cheaper equivalents.
+      - Add the native optimization engine missing from ``GraphBuilder``.
+    * - Completed
+      - :ref:`l-next-steps-session-execution-pools`
+      - Manage CPU policies and shared executor pools.
+      - Give sessions deterministic, shareable execution resources.

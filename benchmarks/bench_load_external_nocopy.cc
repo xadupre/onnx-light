@@ -57,6 +57,7 @@ static const std::string kOnnxFile =
     ONNX_LIGHT_BENCH_FIXTURE_DIR "/prepared_execution_external.onnx";
 static const std::string kDataFile =
     ONNX_LIGHT_BENCH_FIXTURE_DIR "/prepared_execution_external.data";
+static constexpr uint64_t kFixturePayloadBytes = 16;
 
 /** Size of a virtual-memory page; used to stride through tensor bytes when
  *  forcing page faults in ``touch_all_raw_data()``. */
@@ -166,7 +167,8 @@ int main(int argc, char *argv[]) {
             << "  model    = " << model_path << "\n"
             << "  weights  = " << weights_path << "\n";
 
-  ResolvedModelFixture resolved(model_path, {PayloadManifestEntry{"W", weights_path, 0, 16, true}});
+  ResolvedModelFixture resolved(
+      model_path, {PayloadManifestEntry{"W", weights_path, 0, kFixturePayloadBytes, true}});
   const std::vector<uint8_t> expected_output = resolved.ReadPayload("W");
 
   if (std::filesystem::exists(weights_path)) {

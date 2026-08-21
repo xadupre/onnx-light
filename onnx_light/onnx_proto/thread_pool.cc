@@ -175,6 +175,9 @@ ThreadPool::~ThreadPool() { WaitImpl(false); }
 
 void ThreadPool::Clear() {
   EXT_ENFORCE(!IsStarted(), "Cannot clear the pool if threads are still running.");
+  // Wait() shuts down WorkerPool and clears its queue and exception before it
+  // marks this batch adapter stopped, so every valid Clear() call is already
+  // operating on empty worker state.
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::utils

@@ -67,7 +67,9 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
                                                        : DefaultCpuExecutionPolicy(parameters_)),
       cpu_execution_explicit_(options.cpu_execution.has_value()),
-      cpu_execution_counters_(options.cpu_execution_counters), verbose_(options.verbose) {
+      cpu_execution_counters_(options.cpu_execution_counters),
+      parallel_region_collector_(std::move(options.parallel_region_collector)),
+      verbose_(options.verbose) {
   SetDeclaredShapes(model.graph());
   SetInitializers(model.graph());
 }
@@ -93,7 +95,9 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions 
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
                                                        : DefaultCpuExecutionPolicy(parameters_)),
       cpu_execution_explicit_(options.cpu_execution.has_value()),
-      cpu_execution_counters_(options.cpu_execution_counters), verbose_(options.verbose) {}
+      cpu_execution_counters_(options.cpu_execution_counters),
+      parallel_region_collector_(std::move(options.parallel_region_collector)),
+      verbose_(options.verbose) {}
 
 const std::shared_ptr<CpuExecutor> &RuntimeSession::cpu_executor() {
   if (!cpu_executor_) {
@@ -398,6 +402,9 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   const bool inherits_executor = !cpu_execution_explicit_ && rt.cpu_executor() != nullptr;
   const SessionExecutorScope executor_scope(rt, inherits_executor ? rt.cpu_executor()
                                                                   : cpu_executor().get());
+  const ParallelRegionCollectorScope collector_scope(parallel_region_collector_ != nullptr
+                                                         ? parallel_region_collector_.get()
+                                                         : CurrentParallelRegionCollector());
   SeedInitializers(rt);
   // Kernels are resolved against ``rt`` on the first run and cached; later
   // runs reuse the same built instances without redoing the per-node

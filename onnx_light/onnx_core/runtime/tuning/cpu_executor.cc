@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 #include <limits>
 #include <stdexcept>
@@ -251,7 +252,8 @@ CpuExecutorCounters CpuExecutor::counters() const noexcept {
 }
 
 void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, ParallelRangeFn function,
-                              uint32_t maximum_participants) {
+                              uint32_t maximum_participants, ParallelRegionCollector *collector,
+                              std::string_view label, std::source_location location) {
   if (impl_->process_id != CurrentProcessId()) {
     throw std::runtime_error(
         "CpuExecutor inherited across fork is unusable; acquire a new executor in the child.");
@@ -264,6 +266,10 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
   }
   if (function == nullptr) {
     throw std::invalid_argument("CpuExecutor ParallelFor function must not be null.");
+  }
+  std::chrono::steady_clock::time_point start;
+  if (collector != nullptr) {
+    start = std::chrono::steady_clock::now();
   }
   Impl::CounterState *counters = impl_->counters.load(std::memory_order_relaxed);
   if (counters != nullptr) {
@@ -284,12 +290,32 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
   const uint32_t participant_limit =
       maximum_participants == 0 ? impl_->policy.effective_threads
                                 : std::min(maximum_participants, impl_->policy.effective_threads);
+  const auto record = [&](uint32_t admitted, bool nested_inline) {
+    if (collector == nullptr) {
+      return;
+    }
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    collector->Record(ParallelRegionEvent{
+        label,
+        location,
+        total,
+        grain,
+        static_cast<int32_t>(participant_limit),
+        static_cast<int32_t>(admitted),
+        static_cast<int32_t>(admitted),
+        static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()),
+        impl_->instance_id,
+        nested_inline,
+    });
+  };
   if (nested) {
     if (counters != nullptr) {
       counters->nested_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
     }
     CpuExecutorRegionScope region_scope(this);
     function(context, 0, total);
+    record(1, true);
     return;
   }
   if (total < grain || participant_limit <= 1) {
@@ -298,6 +324,7 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
     }
     CpuExecutorRegionScope region_scope(this);
     function(context, 0, total);
+    record(1, false);
     return;
   }
   const int64_t useful_blocks = total / grain;
@@ -309,6 +336,7 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
     }
     CpuExecutorRegionScope region_scope(this);
     function(context, 0, total);
+    record(1, false);
     return;
   }
 
@@ -318,14 +346,16 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
       total / num_blocks,
       total % num_blocks,
   };
-  impl_->pool->Run(num_blocks, [&range, this](int64_t block_index) {
+  impl_->pool->Run(num_blocks, [&range, this, collector](int64_t block_index) {
     CpuExecutorScope block_scope(this);
     CpuExecutorRegionScope region_scope(this);
+    ParallelRegionCollectorScope collector_scope(collector);
     const int64_t begin =
         block_index * range.base_block_size + std::min(block_index, range.extra_blocks);
     const int64_t end = begin + range.base_block_size + (block_index < range.extra_blocks ? 1 : 0);
     range.function(range.context, begin, end);
   });
+  record(static_cast<uint32_t>(num_blocks), false);
 }
 
 CpuExecutorRegistry::CpuExecutorRegistry(size_t capacity)

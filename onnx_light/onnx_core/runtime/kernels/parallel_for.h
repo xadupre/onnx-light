@@ -4,13 +4,16 @@
 
 #pragma once
 
+#include "onnx_core/runtime/tuning/parallel_region_collector.h"
 #include "onnx_light_helpers.h"
 
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
+#include <source_location>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -130,6 +133,9 @@ public:
               [](void *ctx, int64_t b) { (*static_cast<Callable *>(ctx))(b); });
   }
 
+  /// Returns whether the calling thread is executing a pool region.
+  static bool InParallelRegion() noexcept { return InPool(); }
+
 private:
   void RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn);
   static bool &InPoolFlag() noexcept;
@@ -172,6 +178,9 @@ namespace detail {
 using ParallelRangeFn = void (*)(void *, int64_t, int64_t);
 
 void ParallelForErased(int64_t total, int64_t grain_size, void *task_ctx, ParallelRangeFn task_fn);
+void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx,
+                               ParallelRangeFn task_fn, ParallelRegionCollector *collector,
+                               std::string_view label, std::source_location location);
 
 } // namespace detail
 
@@ -200,15 +209,26 @@ void ParallelForErased(int64_t total, int64_t grain_size, void *task_ctx, Parall
  * @param fn         Callable invoked as ``fn(int64_t begin, int64_t end)`` for
  *                   each block, covering ``[begin, end)``.
  */
-template <typename Fn> void ParallelFor(int64_t total, int64_t grain_size, Fn fn) {
-  detail::ParallelForErased(
-      total, grain_size, static_cast<void *>(&fn),
-      [](void *ctx, int64_t begin, int64_t end) { (*static_cast<Fn *>(ctx))(begin, end); });
+template <typename Fn>
+void ParallelFor(int64_t total, int64_t grain_size, Fn fn, std::string_view label = {},
+                 std::source_location location = std::source_location::current()) {
+  const auto task_fn = [](void *ctx, int64_t begin, int64_t end) {
+    (*static_cast<Fn *>(ctx))(begin, end);
+  };
+  ParallelRegionCollector *collector = CurrentParallelRegionCollector();
+  if (collector == nullptr) {
+    detail::ParallelForErased(total, grain_size, static_cast<void *>(&fn), task_fn);
+    return;
+  }
+  detail::ParallelForErasedProfiled(total, grain_size, static_cast<void *>(&fn), task_fn, collector,
+                                    label, location);
 }
 
 /// Runs ``fn`` over ``[0, total)`` using the default grain size.
-template <typename Fn> void ParallelFor(int64_t total, Fn fn) {
-  ParallelFor(total, kParallelForGrainSize, std::move(fn));
+template <typename Fn>
+void ParallelFor(int64_t total, Fn fn, std::string_view label = {},
+                 std::source_location location = std::source_location::current()) {
+  ParallelFor(total, kParallelForGrainSize, std::move(fn), label, location);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

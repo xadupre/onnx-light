@@ -45,9 +45,12 @@ public:
   bool IsStarted() const;
 
 private:
+  friend class ThreadPool;
+
   void Execute(std::function<void()> &job) noexcept;
   void WorkerLoop();
-  void WaitIdleImpl(bool rethrow_exceptions);
+  std::exception_ptr WaitIdleImpl(bool rethrow_exceptions);
+  std::exception_ptr ShutdownAndTakeException() noexcept;
 
   std::vector<std::thread> workers_;
   std::queue<std::function<void()>> jobs_;

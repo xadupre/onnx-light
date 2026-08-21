@@ -72,7 +72,7 @@ void WorkerPool::WorkerLoop() {
   }
 }
 
-void WorkerPool::WaitIdleImpl(bool rethrow_exceptions) {
+std::exception_ptr WorkerPool::WaitIdleImpl(bool rethrow_exceptions) {
   if (workers_.empty()) {
     while (true) {
       std::function<void()> job;
@@ -98,14 +98,15 @@ void WorkerPool::WaitIdleImpl(bool rethrow_exceptions) {
   }
   if (rethrow_exceptions && error != nullptr)
     std::rethrow_exception(error);
+  return error;
 }
 
-void WorkerPool::WaitIdle() { WaitIdleImpl(true); }
+void WorkerPool::WaitIdle() { (void)WaitIdleImpl(true); }
 
-void WorkerPool::Shutdown() {
+std::exception_ptr WorkerPool::ShutdownAndTakeException() noexcept {
   if (!IsStarted())
-    return;
-  WaitIdleImpl(false);
+    return nullptr;
+  std::exception_ptr error = WaitIdleImpl(false);
   {
     std::lock_guard<std::mutex> lock(mutex_);
     stop_ = true;
@@ -118,7 +119,10 @@ void WorkerPool::Shutdown() {
   workers_.clear();
   std::lock_guard<std::mutex> lock(mutex_);
   started_ = false;
+  return error;
 }
+
+void WorkerPool::Shutdown() { (void)ShutdownAndTakeException(); }
 
 WorkerPool::~WorkerPool() { Shutdown(); }
 
@@ -156,14 +160,8 @@ void ThreadPool::SubmitTask(const std::function<void()> &job) {
 
 void ThreadPool::WaitImpl(bool rethrow_exceptions) {
   std::exception_ptr error;
-  if (workers_.IsStarted()) {
-    try {
-      workers_.WaitIdle();
-    } catch (...) {
-      error = std::current_exception();
-    }
-    workers_.Shutdown();
-  }
+  if (workers_.IsStarted())
+    error = workers_.ShutdownAndTakeException();
   is_started_ = false;
   if (rethrow_exceptions && error != nullptr)
     std::rethrow_exception(error);

@@ -1479,13 +1479,14 @@ Implementation order
 #. **Implemented:** add two dependent inference nodes with independently delayed
    weights and verify that the first node executes before the second weight
    finishes loading, while later inferences reuse resident prepared objects.
-#. Add persistent bounded I/O and CPU queues, inference priority inheritance,
-   reserved critical-path admission, and global/per-arena memory budgets; then
-   compare the same plans in sequential and parallel modes.
-#. Execute sequential inference as a suspendable continuation and add the
-   readiness-epoch hot path; verify that fully prepared inference does not
-   allocate or enqueue one task per node and benchmark its overhead against the
-   current direct ``ExecutionPlan`` replay.
+#. **Implemented:** add persistent bounded I/O queues, reuse the session CPU
+   executor, enforce inference priority inheritance, reserved critical-path
+   admission, and global/per-arena memory budgets, and compare the same plans in
+   sequential and parallel modes.
+#. **Implemented:** execute sequential inference as a suspendable continuation
+   and add the readiness-epoch hot path; verify that fully prepared inference
+   does not allocate or enqueue one task per node and benchmark its overhead
+   against direct ``ExecutionPlan`` replay.
 #. Add ``ExecutionHandle`` for both ``PrepareAsync`` and ``RunAsync``; implement
    synchronous ``Prepare`` and ``Run`` as asynchronous submission followed by
    ``Wait`` over the same scheduler.

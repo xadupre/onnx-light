@@ -6,6 +6,7 @@
 
 #include "onnx_core/compute/prepared_task.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/tuning/cpu_executor.h"
 
 #include <atomic>
 #include <cstddef>
@@ -154,6 +155,19 @@ struct PreparedExecutionResult {
   uint64_t invocation_id = 0;
   std::vector<TaskDiagnostic> diagnostics;
   std::vector<std::pair<TaskId, uint64_t>> session_generations;
+  bool used_hot_path = false;
+  size_t enqueued_tasks = 0;
+  size_t continuation_suspensions = 0;
+  size_t peak_in_flight_bytes = 0;
+};
+
+struct PreparedSchedulerOptions {
+  size_t io_workers = 2;
+  size_t global_memory_budget = std::numeric_limits<size_t>::max();
+  size_t preparation_memory_budget = std::numeric_limits<size_t>::max();
+  size_t prepared_memory_budget = std::numeric_limits<size_t>::max();
+  size_t io_memory_budget = std::numeric_limits<size_t>::max();
+  size_t reserved_critical_memory = 0;
 };
 
 /**
@@ -176,8 +190,22 @@ public:
   PreparedExecutionResult RunSequential(PreparedExecutionState &state,
                                         const PreparedTaskExecutor &executor) const;
 
+  /**
+   * Executes ready tasks using persistent bounded I/O workers and ``cpu_executor``.
+   *
+   * CPU work is dispatched only through the supplied session executor; this
+   * method never creates another CPU worker pool.
+   */
+  PreparedExecutionResult RunParallel(PreparedExecutionState &state,
+                                      const PreparedTaskExecutor &executor,
+                                      CpuExecutor &cpu_executor) const;
+
 private:
+  PreparedExecutionResult Run(PreparedExecutionState &state, const PreparedTaskExecutor &executor,
+                              CpuExecutor *cpu_executor) const;
+
   std::vector<TaskDescriptor> tasks_;
+  std::vector<PreparedKey> prepared_requirements_;
 };
 
 /**
@@ -195,7 +223,8 @@ public:
   explicit PreparedExecutionState(
       size_t preparation_slots = 4, size_t prepared_slots = 4,
       size_t preparation_retention_cap = std::numeric_limits<size_t>::max(),
-      size_t prepared_retention_cap = std::numeric_limits<size_t>::max());
+      size_t prepared_retention_cap = std::numeric_limits<size_t>::max(),
+      PreparedSchedulerOptions scheduler_options = {});
   ~PreparedExecutionState();
 
   PreparationArena &preparation_arena() noexcept { return preparation_arena_; }
@@ -207,13 +236,14 @@ public:
 private:
   friend class PreparedExecutionPlan;
   struct SessionTaskEntry;
+  struct SchedulerState;
   struct SessionTaskRequest {
     uint64_t generation = 0;
     TaskCompletion completion{TaskId{}};
     bool producer = false;
   };
 
-  SessionTaskRequest RequestSessionTask(TaskId task_id);
+  SessionTaskRequest RequestSessionTask(TaskId task_id, bool force_retry);
 
   PreparationArena preparation_arena_;
   PreparedArena prepared_arena_;
@@ -221,6 +251,10 @@ private:
   std::mutex session_tasks_mutex_;
   std::unordered_map<uint64_t, std::unique_ptr<SessionTaskEntry>> session_tasks_;
   std::atomic<uint64_t> next_invocation_id_{0};
+  std::unique_ptr<SchedulerState> scheduler_;
+  std::mutex hot_path_mutex_;
+  const PreparedExecutionPlan *hot_path_plan_ = nullptr;
+  uint64_t hot_path_epoch_ = 0;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

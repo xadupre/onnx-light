@@ -15,6 +15,10 @@
 #include <utility>
 #include <vector>
 
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
+class PreparedExecutionState;
+}
+
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels {
 // Re-exports the runtime types moved to ``onnx_core::runtime`` so
 // kernel implementations below can keep referring to them
@@ -26,6 +30,20 @@ using ::onnx_light::core::runtime::DefaultOpset;
 using ::onnx_light::core::runtime::KernelBase;
 using ::onnx_light::core::runtime::KernelContext;
 using ::onnx_light::core::runtime::OpsetId;
+
+class PreparedGemmB {
+public:
+  PreparedGemmB() = default;
+
+  bool IsReady() const;
+
+private:
+  struct State;
+  explicit PreparedGemmB(std::shared_ptr<State> state) : state_(std::move(state)) {}
+
+  std::shared_ptr<State> state_;
+  friend class Gemm;
+};
 
 // ---------------------------------------------------------------------------
 // Reference implementations of the ``math`` backend test kernels.
@@ -971,8 +989,15 @@ public:
   KernelTuningKey TuningKey(int32_t element_type) const override;
   void Configure(const KernelTuningParameters &parameters) override;
   void Run(RuntimeContext &rt) override;
+  /**
+   * Prepares one immutable constant B in the session's prepared-object store.
+   */
+  PreparedGemmB PrepareConstantB(const Tensor &b, int64_t transB,
+                                 PreparedExecutionState &state) const;
   Tensor operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
                     int64_t transA, int64_t transB, RuntimeContext *rt = nullptr) const;
+  Tensor operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c, float alpha,
+                    float beta, int64_t transA, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
                   int64_t transA, int64_t transB, Tensor &output) const;
 

@@ -14,6 +14,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -22,6 +23,12 @@ struct TaskId {
   uint64_t value = 0;
 
   constexpr bool operator==(const TaskId &) const noexcept = default;
+};
+
+struct PreparedKey {
+  std::string value;
+
+  bool operator==(const PreparedKey &) const noexcept = default;
 };
 
 enum class TaskScope {
@@ -34,6 +41,8 @@ enum class TaskKind {
   kPrepare,
   kExecute,
   kPersist,
+  kPublish,
+  kFallback,
 };
 
 enum class ResourceClass {
@@ -65,6 +74,20 @@ struct TaskDiagnostic {
 };
 
 struct TaskDescriptor {
+  TaskDescriptor() = default;
+  TaskDescriptor(TaskId id_, TaskScope scope_, TaskKind kind_, ResourceClass resource_,
+                 std::vector<TaskId> dependencies_ = {}, size_t estimated_input_bytes_ = 0,
+                 size_t estimated_output_bytes_ = 0, size_t peak_temporary_bytes_ = 0,
+                 std::optional<ActionRange> actions_ = {},
+                 std::vector<PreparedKey> prepared_requirements_ = {},
+                 std::optional<PreparedKey> publishes_ = {}, bool dormant_ = false)
+      : id(id_), scope(scope_), kind(kind_), resource(resource_),
+        dependencies(std::move(dependencies_)), estimated_input_bytes(estimated_input_bytes_),
+        estimated_output_bytes(estimated_output_bytes_),
+        peak_temporary_bytes(peak_temporary_bytes_), actions(actions_),
+        prepared_requirements(std::move(prepared_requirements_)), publishes(std::move(publishes_)),
+        dormant(dormant_) {}
+
   TaskId id;
   TaskScope scope = TaskScope::kInvocation;
   TaskKind kind = TaskKind::kExecute;
@@ -74,6 +97,9 @@ struct TaskDescriptor {
   size_t estimated_output_bytes = 0;
   size_t peak_temporary_bytes = 0;
   std::optional<ActionRange> actions;
+  std::vector<PreparedKey> prepared_requirements;
+  std::optional<PreparedKey> publishes;
+  bool dormant = false;
 };
 
 /**

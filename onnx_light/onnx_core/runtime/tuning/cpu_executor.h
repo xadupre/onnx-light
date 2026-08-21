@@ -5,12 +5,15 @@
 #pragma once
 
 #include "onnx_core/runtime/tuning/cpu_execution_policy.h"
+#include "onnx_core/runtime/tuning/parallel_region_collector.h"
 #include "onnx_light_helpers.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <source_location>
+#include <string_view>
 #include <vector>
 
 /**
@@ -124,7 +127,9 @@ public:
    * @param maximum_participants Optional kernel-specific participant limit.
    */
   void ParallelFor(int64_t total, int64_t grain, void *context, ParallelRangeFn function,
-                   uint32_t maximum_participants = 0);
+                   uint32_t maximum_participants = 0, ParallelRegionCollector *collector = nullptr,
+                   std::string_view label = {},
+                   std::source_location location = std::source_location::current());
 
 private:
   friend class CpuExecutorRegistry;

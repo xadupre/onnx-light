@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
+#include "onnx_core/runtime/tuning/parallel_region_collector.h"
 #include "onnx_core/runtime/tuning/runtime_parameters.h"
 #include "onnx_proto/onnx.h"
 
@@ -19,6 +20,7 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -27,10 +29,12 @@ using core::runtime::CpuAffinityPolicy;
 using core::runtime::CpuExecutionPolicy;
 using core::runtime::CpuExecutor;
 using core::runtime::CurrentCpuExecutor;
+using core::runtime::CurrentParallelRegionCollector;
 using core::runtime::ExecutionPlan;
 using core::runtime::KernelContext;
 using core::runtime::ParallelFor;
 using core::runtime::ParallelForThreadCount;
+using core::runtime::ParallelRegionCollector;
 using core::runtime::RuntimeContext;
 using core::runtime::RuntimeEventAction;
 using core::runtime::RuntimeParameters;
@@ -219,6 +223,33 @@ TEST(SessionExecutor, ObservedParticipantsMatchTheRequestedThreadCount) {
   ExecutorObservation observation;
   RunObserver(session, rt, observation, 8);
   EXPECT_EQ(observation.block_threads.size(), 2u);
+}
+
+TEST(SessionExecutor, RunInstallsAndRetainsParallelRegionCollector) {
+  const GraphProto graph = MakeObserverGraph();
+  RuntimeContext rt(KernelContext(core::runtime::DefaultOpset(18)));
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  auto collector = std::make_shared<ParallelRegionCollector>(1);
+  const std::weak_ptr<ParallelRegionCollector> retained = collector;
+  RuntimeSession session(plan, RuntimeSessionOptions{
+                                   .parameters = RuntimeParameters(2),
+                                   .parallel_region_collector = collector,
+                               });
+  collector.reset();
+  ExecutorObservation observation;
+
+  RunObserver(session, rt, observation, 8);
+
+  ASSERT_FALSE(retained.expired());
+  ASSERT_EQ(session.parallel_region_collector()->events().size(), 1u);
+  const auto &event = session.parallel_region_collector()->events()[0];
+  EXPECT_EQ(event.requested_threads, 2);
+  EXPECT_EQ(event.admitted_threads, 2);
+  EXPECT_EQ(event.observed_threads, 2);
+  EXPECT_EQ(event.executor_instance_id, session.cpu_executor()->instance_id());
+  EXPECT_NE(std::string_view(event.location.file_name()).find("test_session_executor.cc"),
+            std::string_view::npos);
+  EXPECT_EQ(CurrentParallelRegionCollector(), nullptr);
 }
 
 TEST(SessionExecutor, SerialSessionRunsEveryRangeInline) {

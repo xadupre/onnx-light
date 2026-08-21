@@ -5,7 +5,7 @@ ParallelFor profiling and hardware counters
 
 :Date: 2026-08
 
-**implementation ready**
+**portable profiling foundation complete**
 
 Objective
 +++++++++
@@ -191,7 +191,7 @@ Implementation sequence
      - Portable event contract and bounded session collector.
      - Disabled execution has no instrumentation work; enabled serial,
        parallel, limited, and nested regions emit truthful bounded events.
-     - Ready
+     - Complete
    * - Profile PR02
      - Run/parent identity, process CPU time, and normalized utilization.
      - Nested and concurrent regions retain identity and report explicit metric

@@ -288,6 +288,62 @@ void ParallelForErased(int64_t total, int64_t grain_size, void *task_ctx, Parall
                          [&range](int64_t block_index) { RunParallelBlock(range, block_index); });
 }
 
+void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx,
+                               ParallelRangeFn task_fn, ParallelRegionCollector *collector,
+                               std::string_view label, std::source_location location) {
+  if (total <= 0) {
+    return;
+  }
+  EXT_ENFORCE_INVALID(grain_size > 0, "ParallelFor grain_size must be positive, got ", grain_size,
+                      ".");
+  if (CpuExecutor *executor = CurrentCpuExecutor(); executor != nullptr) {
+    executor->ParallelFor(total, grain_size, task_ctx, task_fn, 0, collector, label, location);
+    return;
+  }
+
+  const auto start = std::chrono::steady_clock::now();
+  const int64_t max_threads = ParallelForThreadCount();
+  uint32_t admitted = 1;
+  bool nested_inline = false;
+  if (total < grain_size || max_threads <= 1) {
+    ParallelRegionCollectorScope collector_scope(collector);
+    task_fn(task_ctx, static_cast<int64_t>(0), total);
+  } else {
+    const int64_t max_useful_blocks = total / grain_size;
+    const int64_t num_blocks = std::min(max_threads, max_useful_blocks);
+    if (num_blocks <= 1) {
+      ParallelRegionCollectorScope collector_scope(collector);
+      task_fn(task_ctx, static_cast<int64_t>(0), total);
+    } else {
+      nested_inline = ThreadPool::InParallelRegion();
+      admitted = nested_inline ? 1 : static_cast<uint32_t>(num_blocks);
+      ParallelRange range{
+          task_ctx,
+          task_fn,
+          total / num_blocks,
+          total % num_blocks,
+      };
+      GlobalThreadPool().Run(num_blocks, [&range, collector](int64_t block_index) {
+        ParallelRegionCollectorScope collector_scope(collector);
+        RunParallelBlock(range, block_index);
+      });
+    }
+  }
+  const auto elapsed = std::chrono::steady_clock::now() - start;
+  collector->Record(ParallelRegionEvent{
+      label,
+      location,
+      total,
+      grain_size,
+      static_cast<int32_t>(max_threads),
+      static_cast<int32_t>(admitted),
+      static_cast<int32_t>(admitted),
+      static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()),
+      0,
+      nested_inline,
+  });
+}
+
 } // namespace detail
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

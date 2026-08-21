@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
+#include "onnx_core/runtime/tuning/parallel_region_collector.h"
 #include "onnx_core/runtime/tuning/runtime_parameters.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
@@ -64,6 +65,8 @@ struct RuntimeSessionOptions {
   std::optional<CpuExecutionPolicy> cpu_execution = std::nullopt;
   /// Enables optional executor dispatch counters for inspection.
   bool cpu_execution_counters = false;
+  /// Optional bounded collector retained and installed for every session run.
+  std::shared_ptr<ParallelRegionCollector> parallel_region_collector = nullptr;
   int verbose = 0;
   bool check_shapes = false;
   /// When ``false`` (the default), :cpp:func:`RuntimeSession::Run` verifies
@@ -280,6 +283,11 @@ public:
     return allow_external_output_allocators_;
   }
 
+  /// Returns the optional collector retained by this session.
+  const std::shared_ptr<ParallelRegionCollector> &parallel_region_collector() const noexcept {
+    return parallel_region_collector_;
+  }
+
   /// Records the declared (possibly symbolic) shapes carried by ``graph``'s
   /// inputs, outputs and ``value_info`` so that, when :cpp:func:`check_shapes`
   /// is enabled, :cpp:func:`Run` can validate concrete tensor shapes against
@@ -438,6 +446,8 @@ private:
   bool cpu_execution_explicit_ = false;
   /// Whether this session enables optional executor dispatch counters.
   bool cpu_execution_counters_ = false;
+  /// Optional bounded profiling collector installed for each run.
+  std::shared_ptr<ParallelRegionCollector> parallel_region_collector_;
   /// Lease on the shared executor, acquired on first use by
   /// :cpp:func:`cpu_executor`.
   std::shared_ptr<CpuExecutor> cpu_executor_;

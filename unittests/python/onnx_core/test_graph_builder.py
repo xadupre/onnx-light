@@ -13,7 +13,10 @@ from __future__ import annotations
 
 import unittest
 
+import numpy
+
 import onnx_light.onnx as onnxl
+import onnx_light.onnx.checker as checker
 import onnx_light.onnx.helper as oh
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
@@ -25,6 +28,78 @@ FLOAT = onnxl.TensorProto.FLOAT
 
 
 class TestGraphBuilder(ExtTestCase):
+    def test_compact_standard_roundtrip(self):
+        builder = GraphBuilder("g")
+        self.assertIs(builder.op, builder.op)
+        x = builder.inp("x", FLOAT, [None, 3])
+        bias = builder.init(numpy.array([1, 2, 3], dtype=numpy.float32), name="bias")
+        added = builder.op.Add(x, bias)
+        output = builder.op.Relu(added, outputs="y", name="relu")
+        self.assertEqual(builder.out(output, FLOAT, [None, 3]), "y")
+
+        model = builder.to_onnx("model")
+        checker.check_model(model)
+        roundtrip = onnxl.ModelProto()
+        roundtrip.ParseFromString(model.SerializeToString())
+        self.assertEqual(roundtrip.SerializeToString(), model.SerializeToString())
+        self.assertEqual([node.op_type for node in model.graph.node], ["Add", "Relu"])
+        self.assertEqual(model.graph.node[1].name, "relu")
+
+    def test_compact_optional_variadic_and_numpy_inputs(self):
+        builder = GraphBuilder("g")
+        x = builder.inp("x", FLOAT, [3])
+        clipped = builder.op.Clip(x, None, numpy.array([1], dtype=numpy.float32))
+        summed = builder.op.Sum(clipped, x, x)
+        builder.out(summed)
+        graph = builder.to_onnx("graph")
+        self.assertEqual(list(graph.node[0].input)[:2], ["x", ""])
+        self.assertEqual(len(graph.initializer), 1)
+        self.assertEqual(list(graph.node[1].input), [clipped, "x", "x"])
+
+    def test_compact_multi_output(self):
+        builder = GraphBuilder("g")
+        x = builder.inp("x", FLOAT, [4])
+        k = builder.init(numpy.array([2], dtype=numpy.int64))
+        values, indices = builder.op.TopK(x, k, outputs=["values", "indices"], axis=0)
+        self.assertEqual((values, indices), ("values", "indices"))
+        generated = builder.op.TopK(x, k, outputs=2)
+        self.assertEqual(len(generated), 2)
+
+    def test_compact_custom_operator_without_schema(self):
+        builder = GraphBuilder("g")
+        builder.set_opset_version("com.example", 7)
+        x = builder.inp("x", FLOAT, [2])
+        outputs = builder.op.CustomOp(
+            x, domain="com.example", outputs=["left", "right"], name="custom", alpha=1.5
+        )
+        self.assertEqual(outputs, ("left", "right"))
+        model = builder.to_onnx("model")
+        node = model.graph.node[0]
+        self.assertEqual(
+            (node.op_type, node.domain, node.name), ("CustomOp", "com.example", "custom")
+        )
+        self.assertEqual(list(node.input), ["x"])
+        self.assertEqual(list(node.output), ["left", "right"])
+        self.assertEqual(node.attribute[0].name, "alpha")
+        self.assertEqual(
+            {opset.domain: opset.version for opset in model.opset_import}["com.example"], 7
+        )
+
+    def test_compact_rejects_invalid_calls(self):
+        builder = GraphBuilder("g")
+        x = builder.inp("x", FLOAT, [2])
+        self.assertRaise(lambda: builder.op.UnknownOperator(x), ValueError)
+        self.assertRaise(lambda: builder.op.Relu(x, unknown_attribute=1), ValueError)
+        self.assertRaise(
+            lambda: builder.op.CustomOp(x, domain="com.missing", outputs="y"), ValueError
+        )
+        self.assertRaise(lambda: builder.op.Relu(1), TypeError)
+        self.assertRaise(lambda: builder.op.Relu(x, outputs=0), ValueError)
+        self.assertRaise(lambda: builder.init([1, 2]), TypeError)
+        self.assertRaise(lambda: builder.inp("x", FLOAT, [2]), ValueError)
+        self.assertRaise(lambda: builder.init(numpy.array([1]), name="x"), ValueError)
+        self.assertRaise(lambda: builder.out(x, shape=[2]), ValueError)
+
     def test_starts_empty(self):
         builder = GraphBuilder("g")
         self.assertFalse(builder.has_name("x"))

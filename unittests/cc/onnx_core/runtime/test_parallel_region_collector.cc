@@ -11,7 +11,9 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string_view>
+#include <thread>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
@@ -64,7 +66,16 @@ TEST(ParallelRegionCollector, RecordsSerialLimitedAndParallelRegions) {
   EXPECT_EQ(parallel.admitted_threads, 2);
   EXPECT_EQ(parallel.observed_threads, 2);
   EXPECT_EQ(parallel.executor_instance_id, parallel_executor->instance_id());
-  EXPECT_GT(parallel.wall_time_ns, 0u);
+  ASSERT_TRUE(parallel.wall_time_ns.has_value());
+  EXPECT_GT(*parallel.wall_time_ns, 0u);
+  ASSERT_TRUE(parallel.process_cpu_time_ns.has_value());
+  ASSERT_TRUE(parallel.cpu_utilization.has_value());
+  EXPECT_DOUBLE_EQ(*parallel.cpu_utilization, static_cast<double>(*parallel.process_cpu_time_ns) /
+                                                  static_cast<double>(*parallel.wall_time_ns) /
+                                                  parallel.admitted_threads);
+  EXPECT_NE(parallel.region_id, 0u);
+  EXPECT_NE(parallel.run_id, 0u);
+  EXPECT_EQ(parallel.calling_thread_id, std::this_thread::get_id());
 }
 
 TEST(ParallelRegionCollector, PropagatesToWorkersAndMarksNestedInline) {
@@ -95,9 +106,23 @@ TEST(ParallelRegionCollector, PropagatesToWorkersAndMarksNestedInline) {
   EXPECT_TRUE(collector.events()[0].nested_inline);
   EXPECT_EQ(collector.events()[0].admitted_threads, 1);
   EXPECT_EQ(collector.events()[0].observed_threads, 1);
+  EXPECT_EQ(collector.events()[0].parent_region_id, collector.events()[1].region_id);
+  EXPECT_EQ(collector.events()[0].run_id, collector.events()[1].run_id);
+  EXPECT_NE(collector.events()[0].calling_thread_id, collector.events()[1].calling_thread_id);
   EXPECT_EQ(collector.events()[1].label, "outer");
   EXPECT_FALSE(collector.events()[1].nested_inline);
   EXPECT_EQ(collector.events()[1].admitted_threads, 2);
+}
+
+TEST(ParallelRegionCollector, ComputesNormalizedCpuUtilization) {
+  const std::optional<double> utilization = ComputeCpuUtilization(uint64_t{600}, uint64_t{100}, 3);
+  ASSERT_TRUE(utilization.has_value());
+  EXPECT_DOUBLE_EQ(*utilization, 2.0);
+
+  EXPECT_FALSE(ComputeCpuUtilization(std::nullopt, uint64_t{100}, 2).has_value());
+  EXPECT_FALSE(ComputeCpuUtilization(uint64_t{100}, std::nullopt, 2).has_value());
+  EXPECT_FALSE(ComputeCpuUtilization(uint64_t{100}, uint64_t{0}, 2).has_value());
+  EXPECT_FALSE(ComputeCpuUtilization(uint64_t{100}, uint64_t{100}, 0).has_value());
 }
 
 TEST(ParallelRegionCollector, MarksLimitedStandaloneWorkerCallsNestedInline) {
@@ -151,8 +176,12 @@ TEST(ParallelRegionCollector, ReportsEventsDroppedBeyondCapacity) {
 
 TEST(ParallelRegionCollector, DisabledPathDoesNotCreateEvents) {
   EXPECT_EQ(CurrentParallelRegionCollector(), nullptr);
+  EXPECT_EQ(CurrentParallelRegionRunId(), 0u);
+  EXPECT_EQ(CurrentParallelRegionId(), 0u);
   ParallelFor(8, 1, [](int64_t, int64_t) {}, "disabled");
   EXPECT_EQ(CurrentParallelRegionCollector(), nullptr);
+  EXPECT_EQ(CurrentParallelRegionRunId(), 0u);
+  EXPECT_EQ(CurrentParallelRegionId(), 0u);
 }
 
 } // namespace

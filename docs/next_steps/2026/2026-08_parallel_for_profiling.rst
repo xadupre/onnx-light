@@ -109,6 +109,9 @@ An opt-in collector receives one bounded event per region:
 
     struct ParallelRegionEvent {
       uint64_t region_id;
+      uint64_t parent_region_id;
+      uint64_t run_id;
+      std::thread::id calling_thread_id;
       std::string_view label;
       std::source_location location;
       int64_t total_iterations;
@@ -116,8 +119,8 @@ An opt-in collector receives one bounded event per region:
       int32_t requested_threads;
       int32_t admitted_threads;
       int32_t observed_threads;
-      uint64_t wall_time_ns;
-      uint64_t process_cpu_time_ns;
+      std::optional<uint64_t> wall_time_ns;
+      std::optional<uint64_t> process_cpu_time_ns;
       std::optional<double> cpu_utilization;
       HardwareCounterSample counters;
     };
@@ -158,10 +161,12 @@ Windows and macOS need separate backends. Until implemented, they return
 disabled by default because permissions, system configuration, and
 virtualization commonly prevent reliable access.
 
-Process CPU time is portable only as an aggregate across process threads. It is
-acceptable for isolated diagnostic runs but can include unrelated concurrent
-work. A later worker-level collector may sum per-thread CPU clocks when the
-thread pool can identify every participant without adding steady-state cost.
+Process CPU time is portable only as an aggregate across process threads, and an
+unavailable or invalid clock sample is represented by no value rather than
+zero. It is acceptable for isolated diagnostic runs but can include unrelated
+concurrent process work. A later worker-level collector may sum per-thread CPU
+clocks when the thread pool can identify every participant without adding
+steady-state cost.
 
 Integration with runtime events and tuning
 ++++++++++++++++++++++++++++++++++++++++++
@@ -218,7 +223,7 @@ Implementation sequence
      - Run/parent identity, process CPU time, and normalized utilization.
      - Nested and concurrent regions retain identity and report explicit metric
        validity.
-     - Planned
+     - Complete
    * - `Profile PR03 (#4637)
        <https://github.com/xadupre/onnx-light/issues/4637>`_
      - C++ report API, Python inspection, and runnable documentation examples

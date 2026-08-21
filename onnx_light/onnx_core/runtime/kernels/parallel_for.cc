@@ -10,8 +10,10 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <system_error>
+#include <thread>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
@@ -302,17 +304,22 @@ void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx
   }
 
   const auto start = std::chrono::steady_clock::now();
+  const std::optional<uint64_t> process_cpu_start = ReadProcessCpuTimeNs();
+  const uint64_t region_id = NextParallelRegionId();
+  const uint64_t parent_region_id = CurrentParallelRegionId();
+  const uint64_t run_id = CurrentParallelRegionRunId();
+  const std::thread::id calling_thread_id = std::this_thread::get_id();
   const int64_t max_threads = ParallelForThreadCount();
   uint32_t admitted = 1;
   const bool nested_inline = ThreadPool::InParallelRegion();
   if (total < grain_size || max_threads <= 1) {
-    ParallelRegionCollectorScope collector_scope(collector);
+    ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
     task_fn(task_ctx, static_cast<int64_t>(0), total);
   } else {
     const int64_t max_useful_blocks = total / grain_size;
     const int64_t num_blocks = std::min(max_threads, max_useful_blocks);
     if (num_blocks <= 1) {
-      ParallelRegionCollectorScope collector_scope(collector);
+      ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
       task_fn(task_ctx, static_cast<int64_t>(0), total);
     } else {
       admitted = nested_inline ? 1 : static_cast<uint32_t>(num_blocks);
@@ -322,24 +329,41 @@ void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx
           total / num_blocks,
           total % num_blocks,
       };
-      GlobalThreadPool().Run(num_blocks, [&range, collector](int64_t block_index) {
-        ParallelRegionCollectorScope collector_scope(collector);
-        RunParallelBlock(range, block_index);
-      });
+      GlobalThreadPool().Run(
+          num_blocks, [&range, collector, run_id, region_id](int64_t block_index) {
+            ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
+            RunParallelBlock(range, block_index);
+          });
     }
   }
   const auto elapsed = std::chrono::steady_clock::now() - start;
+  const int64_t wall_time = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
+  const std::optional<uint64_t> wall_time_ns =
+      wall_time > 0 ? std::optional<uint64_t>(static_cast<uint64_t>(wall_time)) : std::nullopt;
+  const std::optional<uint64_t> process_cpu_end = ReadProcessCpuTimeNs();
+  const std::optional<uint64_t> process_cpu_time_ns =
+      process_cpu_start.has_value() && process_cpu_end.has_value() &&
+              *process_cpu_end >= *process_cpu_start
+          ? std::optional<uint64_t>(*process_cpu_end - *process_cpu_start)
+          : std::nullopt;
   collector->Record(ParallelRegionEvent{
-      label,
-      location,
-      total,
-      grain_size,
-      static_cast<int32_t>(max_threads),
-      static_cast<int32_t>(admitted),
-      static_cast<int32_t>(admitted),
-      static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()),
-      0,
-      nested_inline,
+      .region_id = region_id,
+      .parent_region_id = parent_region_id,
+      .run_id = run_id,
+      .calling_thread_id = calling_thread_id,
+      .label = label,
+      .location = location,
+      .total_iterations = total,
+      .grain_size = grain_size,
+      .requested_threads = static_cast<int32_t>(max_threads),
+      .admitted_threads = static_cast<int32_t>(admitted),
+      .observed_threads = static_cast<int32_t>(admitted),
+      .wall_time_ns = wall_time_ns,
+      .process_cpu_time_ns = process_cpu_time_ns,
+      .cpu_utilization =
+          ComputeCpuUtilization(process_cpu_time_ns, wall_time_ns, static_cast<int32_t>(admitted)),
+      .executor_instance_id = 0,
+      .nested_inline = nested_inline,
   });
 }
 

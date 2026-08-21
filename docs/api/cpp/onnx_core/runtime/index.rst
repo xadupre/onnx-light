@@ -39,6 +39,7 @@ a dependency from ``onnx_core`` back onto ``onnx_kernels``.
     kernel_dispatch_table
     cpu_executor
     cpu_execution_policy
+    parallel_region_collector
     kernel_tuning
     kernel_tuning_cache
     parallel_for

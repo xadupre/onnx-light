@@ -12,8 +12,10 @@
 #include <optional>
 #include <source_location>
 #include <span>
+#include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -36,6 +38,53 @@ struct ParallelRegionEvent {
   std::optional<double> cpu_utilization;
   uint64_t executor_instance_id = 0;
   bool nested_inline = false;
+};
+
+/** Owns one event copied from a bounded parallel-region collector. */
+struct ParallelRegionReportEvent {
+  uint64_t region_id = 0;
+  uint64_t parent_region_id = 0;
+  uint64_t run_id = 0;
+  std::thread::id calling_thread_id;
+  std::string label;
+  std::string file_name;
+  std::string function_name;
+  uint_least32_t line = 0;
+  uint_least32_t column = 0;
+  int64_t total_iterations = 0;
+  int64_t grain_size = 0;
+  int32_t requested_threads = 0;
+  int32_t admitted_threads = 0;
+  int32_t observed_threads = 0;
+  std::optional<uint64_t> wall_time_ns;
+  std::optional<uint64_t> process_cpu_time_ns;
+  std::optional<double> cpu_utilization;
+  /// Remains unavailable until a hardware-counter backend supplies it.
+  std::optional<double> ipc;
+  /// Remains unavailable until a hardware-counter backend supplies it.
+  std::optional<double> llc_miss_rate;
+  uint64_t executor_instance_id = 0;
+  bool nested_inline = false;
+};
+
+/** Immutable snapshot of bounded parallel-region profiling data. */
+class ParallelRegionReport {
+public:
+  ParallelRegionReport() = default;
+
+  /// Returns the copied events in collector order.
+  const std::vector<ParallelRegionReportEvent> &events() const noexcept { return events_; }
+
+  /// Returns the dropped-event count captured with the snapshot.
+  uint64_t dropped_events() const noexcept { return dropped_events_; }
+
+private:
+  friend class ParallelRegionCollector;
+  ParallelRegionReport(std::vector<ParallelRegionReportEvent> events, uint64_t dropped_events)
+      : events_(std::move(events)), dropped_events_(dropped_events) {}
+
+  std::vector<ParallelRegionReportEvent> events_;
+  uint64_t dropped_events_ = 0;
 };
 
 /// Returns normalized process CPU utilization when all inputs are valid.
@@ -74,6 +123,9 @@ public:
   uint64_t dropped_events() const noexcept {
     return dropped_events_.load(std::memory_order_relaxed);
   }
+
+  /// Returns an owning snapshot that is independent of the collector storage.
+  ParallelRegionReport Report() const;
 
 private:
   std::vector<ParallelRegionEvent> events_;

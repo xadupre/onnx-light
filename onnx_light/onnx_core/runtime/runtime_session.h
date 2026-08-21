@@ -288,6 +288,12 @@ public:
     return parallel_region_collector_;
   }
 
+  /// Returns an owning profiling snapshot, or an empty report when profiling is disabled.
+  ParallelRegionReport parallel_region_report() const {
+    return parallel_region_collector_ != nullptr ? parallel_region_collector_->Report()
+                                                 : ParallelRegionReport{};
+  }
+
   /// Records the declared (possibly symbolic) shapes carried by ``graph``'s
   /// inputs, outputs and ``value_info`` so that, when :cpp:func:`check_shapes`
   /// is enabled, :cpp:func:`Run` can validate concrete tensor shapes against

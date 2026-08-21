@@ -55,6 +55,38 @@ std::span<const ParallelRegionEvent> ParallelRegionCollector::events() const noe
       events_.data(), std::min(next_event_.load(std::memory_order_relaxed), events_.size()));
 }
 
+ParallelRegionReport ParallelRegionCollector::Report() const {
+  const std::span<const ParallelRegionEvent> current_events = events();
+  std::vector<ParallelRegionReportEvent> report_events;
+  report_events.reserve(current_events.size());
+  for (const ParallelRegionEvent &event : current_events) {
+    report_events.push_back(ParallelRegionReportEvent{
+        .region_id = event.region_id,
+        .parent_region_id = event.parent_region_id,
+        .run_id = event.run_id,
+        .calling_thread_id = event.calling_thread_id,
+        .label = std::string(event.label),
+        .file_name = event.location.file_name(),
+        .function_name = event.location.function_name(),
+        .line = event.location.line(),
+        .column = event.location.column(),
+        .total_iterations = event.total_iterations,
+        .grain_size = event.grain_size,
+        .requested_threads = event.requested_threads,
+        .admitted_threads = event.admitted_threads,
+        .observed_threads = event.observed_threads,
+        .wall_time_ns = event.wall_time_ns,
+        .process_cpu_time_ns = event.process_cpu_time_ns,
+        .cpu_utilization = event.cpu_utilization,
+        .ipc = std::nullopt,
+        .llc_miss_rate = std::nullopt,
+        .executor_instance_id = event.executor_instance_id,
+        .nested_inline = event.nested_inline,
+    });
+  }
+  return ParallelRegionReport(std::move(report_events), dropped_events());
+}
+
 ParallelRegionCollector *CurrentParallelRegionCollector() noexcept {
   return CurrentContext().collector;
 }

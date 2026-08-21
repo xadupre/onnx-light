@@ -252,6 +252,18 @@ TEST(SessionExecutor, RunInstallsAndRetainsParallelRegionCollector) {
   EXPECT_EQ(CurrentParallelRegionCollector(), nullptr);
 }
 
+TEST(SessionExecutor, ReportsAnEmptySnapshotWhenProfilingIsDisabled) {
+  const GraphProto graph = MakeObserverGraph();
+  RuntimeContext rt(KernelContext(core::runtime::DefaultOpset(18)));
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan, RuntimeSessionOptions{.parameters = RuntimeParameters(1)});
+
+  const auto report = session.parallel_region_report();
+
+  EXPECT_TRUE(report.events().empty());
+  EXPECT_EQ(report.dropped_events(), 0u);
+}
+
 TEST(SessionExecutor, ConcurrentRunsUseIndependentCollectorsAndRunIds) {
   auto first_collector = std::make_shared<ParallelRegionCollector>(1);
   auto second_collector = std::make_shared<ParallelRegionCollector>(1);

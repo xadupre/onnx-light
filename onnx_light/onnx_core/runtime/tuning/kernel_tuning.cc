@@ -253,10 +253,23 @@ void CalibrationReporter::AddDiagnostic(std::string message) {
   diagnostics_.push_back(std::move(message));
 }
 
+CalibrationReporter::CalibrationReporter(const CalibrationOptions &options) {
+  if (options.profiling_capacity != 0) {
+    parallel_region_collector_ = std::make_unique<ParallelRegionCollector>(
+        options.profiling_capacity, options.profiling_hardware_counters);
+  }
+}
+
 void CalibrationReporter::RecordBenchmark(uint64_t memory_bytes, uint64_t duration_ns) {
   ++benchmark_cases_;
   peak_memory_bytes_ = std::max(peak_memory_bytes_, memory_bytes);
   measured_duration_ns_ += duration_ns;
+}
+
+std::optional<ParallelRegionReport> CalibrationReporter::parallel_region_report() const {
+  return parallel_region_collector_ != nullptr
+             ? std::optional<ParallelRegionReport>(parallel_region_collector_->Report())
+             : std::nullopt;
 }
 
 bool KernelTuningParameters::Contains(std::string_view name) const {
@@ -999,8 +1012,15 @@ CalibrationBatchReport CalibrateRegisteredKernels(const KernelCalibrationSelecti
       continue;
     }
 
-    CalibrationReporter reporter;
-    KernelTuningParameters parameters = function(key, execution, options, reporter);
+    CalibrationReporter reporter(options);
+    KernelTuningParameters parameters = [&]() {
+      if (ParallelRegionCollector *collector = reporter.parallel_region_collector();
+          collector != nullptr) {
+        ParallelRegionCollectorScope collector_scope(collector);
+        return function(key, execution, options, reporter);
+      }
+      return function(key, execution, options, reporter);
+    }();
     std::shared_ptr<const KernelTuningSchema> schema = registry.FindSchema(key);
     if (schema == nullptr) {
       throw std::invalid_argument("Kernel tuning schema disappeared during calibration.");
@@ -1013,6 +1033,9 @@ CalibrationBatchReport CalibrateRegisteredKernels(const KernelCalibrationSelecti
     if (reporter.benchmark_cases() != 0) {
       report.resources.push_back({key, reporter.benchmark_cases(), reporter.peak_memory_bytes(),
                                   reporter.measured_duration_ns()});
+    }
+    if (std::optional<ParallelRegionReport> parallel_regions = reporter.parallel_region_report()) {
+      report.candidate_diagnostics.push_back({key, std::move(*parallel_regions)});
     }
   }
 

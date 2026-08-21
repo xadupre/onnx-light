@@ -179,10 +179,12 @@ existing runtime run/node identifiers. The current tensor-mutation
 ``RuntimeEvent`` remains unchanged; embedding high-frequency loop records in
 that payload would mix value lifetime with scheduler telemetry.
 
-Calibration may request the collector and include the resulting metrics in its
-diagnostics. Candidate selection remains based on validated outputs and stable
-elapsed-time wins. IPC or LLC misses can explain a choice but cannot override a
-slower candidate automatically.
+Calibration requests a bounded collector with ``profiling_capacity`` and may
+enable Linux counters with ``profiling_hardware_counters``. Candidate
+diagnostics retain the event validity fields and dropped-event count. Candidate
+selection remains based on validated outputs and stable elapsed-time wins. IPC
+or LLC misses explain a choice but cannot override a slower candidate
+automatically.
 
 Benchmark and acceptance criteria
 +++++++++++++++++++++++++++++++++
@@ -249,7 +251,7 @@ Implementation sequence
      - Calibration diagnostics integration.
      - Metrics explain candidates but never override correctness or elapsed
        time selection.
-     - Planned
+     - Complete
    * - `Profile PR06 (#4640)
        <https://github.com/xadupre/onnx-light/issues/4640>`_
      - Additional platform backends.

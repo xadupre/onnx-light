@@ -6,6 +6,7 @@
 
 #include "onnx_core/platform/cpu_descriptor.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
+#include "onnx_core/runtime/tuning/parallel_region_collector.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_light_helpers.h"
 
@@ -161,6 +162,8 @@ struct CalibrationOptions {
   uint64_t maximum_duration_ms = 0;
   uint64_t maximum_memory_bytes = 0;
   std::optional<uint32_t> maximum_threads;
+  size_t profiling_capacity = 0;
+  bool profiling_hardware_counters = false;
 };
 
 /** Describes one deterministic input generated for a calibration benchmark. */
@@ -209,6 +212,9 @@ struct KernelCalibrationBenchmark {
 /** Collects diagnostics emitted by one calibration callback. */
 class CalibrationReporter {
 public:
+  CalibrationReporter() = default;
+  explicit CalibrationReporter(const CalibrationOptions &options);
+
   /** Appends one diagnostic message. */
   void AddDiagnostic(std::string message);
 
@@ -227,11 +233,20 @@ public:
   /** Returns the accumulated benchmark measurement duration. */
   uint64_t measured_duration_ns() const noexcept { return measured_duration_ns_; }
 
+  /** Returns the optional collector used for this candidate. */
+  ParallelRegionCollector *parallel_region_collector() const noexcept {
+    return parallel_region_collector_.get();
+  }
+
+  /** Returns the candidate profiling snapshot when profiling was requested. */
+  std::optional<ParallelRegionReport> parallel_region_report() const;
+
 private:
   std::vector<std::string> diagnostics_;
   uint64_t benchmark_cases_ = 0;
   uint64_t peak_memory_bytes_ = 0;
   uint64_t measured_duration_ns_ = 0;
+  std::unique_ptr<ParallelRegionCollector> parallel_region_collector_;
 };
 
 /** Calibrates one exact, registered kernel tuning key. */
@@ -253,6 +268,12 @@ struct KernelCalibrationResourceUsage {
   uint64_t measured_duration_ns = 0;
 };
 
+/** Associates bounded ParallelFor diagnostics with one calibrated candidate. */
+struct KernelCalibrationCandidateDiagnostic {
+  KernelTuningKey key;
+  ParallelRegionReport parallel_regions;
+};
+
 /** Reports one explicit batch calibration and its atomic publication. */
 struct CalibrationBatchReport {
   uint64_t published_generation = 0;
@@ -261,6 +282,7 @@ struct CalibrationBatchReport {
   std::vector<KernelTuningKey> unsupported;
   std::vector<KernelCalibrationDiagnostic> diagnostics;
   std::vector<KernelCalibrationResourceUsage> resources;
+  std::vector<KernelCalibrationCandidateDiagnostic> candidate_diagnostics;
 
   /** Returns successfully validated profiles. */
   std::span<const KernelTuningParameters> successful_profiles() const noexcept {

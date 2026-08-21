@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -145,6 +146,35 @@ struct MaterializationTaskDescriptors {
   TaskDescriptor dormant_fallback;
 };
 
+class PreparedExecutionState;
+
+using PreparedTaskExecutor = std::function<void(const TaskDescriptor &, PreparedExecutionState &)>;
+
+struct PreparedExecutionResult {
+  uint64_t invocation_id = 0;
+  std::vector<TaskDiagnostic> diagnostics;
+  std::vector<std::pair<TaskId, uint64_t>> session_generations;
+};
+
+/**
+ * Describes session preparation and invocation execution in one immutable graph.
+ */
+class ONNX_LIGHT_CORE_API PreparedExecutionPlan {
+public:
+  explicit PreparedExecutionPlan(std::vector<TaskDescriptor> tasks);
+
+  const std::vector<TaskDescriptor> &tasks() const noexcept { return tasks_; }
+
+  /**
+   * Executes session producers and the invocation tasks through completion events.
+   */
+  PreparedExecutionResult RunSequential(PreparedExecutionState &state,
+                                        const PreparedTaskExecutor &executor) const;
+
+private:
+  std::vector<TaskDescriptor> tasks_;
+};
+
 /**
  * Expands one selected recipe into its session-scoped preparation task chain.
  */
@@ -161,6 +191,7 @@ public:
       size_t preparation_slots = 4, size_t prepared_slots = 4,
       size_t preparation_retention_cap = std::numeric_limits<size_t>::max(),
       size_t prepared_retention_cap = std::numeric_limits<size_t>::max());
+  ~PreparedExecutionState();
 
   PreparationArena &preparation_arena() noexcept { return preparation_arena_; }
   PreparedArena &prepared_arena() noexcept { return prepared_arena_; }
@@ -169,9 +200,22 @@ public:
   uint64_t readiness_epoch() const noexcept { return objects_.readiness_epoch(); }
 
 private:
+  friend class PreparedExecutionPlan;
+  struct SessionTaskEntry;
+  struct SessionTaskRequest {
+    uint64_t generation = 0;
+    TaskCompletion completion{TaskId{}};
+    bool producer = false;
+  };
+
+  SessionTaskRequest RequestSessionTask(TaskId task_id);
+
   PreparationArena preparation_arena_;
   PreparedArena prepared_arena_;
   PreparedObjectStore objects_;
+  std::mutex session_tasks_mutex_;
+  std::unordered_map<uint64_t, std::unique_ptr<SessionTaskEntry>> session_tasks_;
+  std::atomic<uint64_t> next_invocation_id_{0};
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

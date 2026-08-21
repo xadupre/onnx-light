@@ -163,3 +163,67 @@ TEST(MaterializationRecipe, ExpandsSessionLoadPrepackPublishAndDormantFallback) 
   EXPECT_EQ(tasks.dormant_fallback.kind, TaskKind::kFallback);
   EXPECT_TRUE(tasks.dormant_fallback.dormant);
 }
+
+TEST(PreparedExecutionPlan, RejectsUnstableDependencies) {
+  EXPECT_THROW(PreparedExecutionPlan({
+                   TaskDescriptor{TaskId{2},
+                                  TaskScope::kInvocation,
+                                  TaskKind::kExecute,
+                                  ResourceClass::kCpu,
+                                  {TaskId{1}}},
+               }),
+               std::runtime_error);
+}
+
+TEST(PreparedExecutionPlan, RetriesFailedSessionGenerationAndKeepsInvocationsSeparate) {
+  PreparedExecutionPlan plan({
+      TaskDescriptor{TaskId{10}, TaskScope::kSession, TaskKind::kPrepare, ResourceClass::kCpu},
+      TaskDescriptor{TaskId{20},
+                     TaskScope::kInvocation,
+                     TaskKind::kExecute,
+                     ResourceClass::kCpu,
+                     {TaskId{10}}},
+  });
+  PreparedExecutionState state;
+  int session_executions = 0;
+  int invocation_executions = 0;
+
+  const PreparedExecutionResult failed =
+      plan.RunSequential(state, [&](const TaskDescriptor &task, PreparedExecutionState &) {
+        if (task.scope == TaskScope::kSession) {
+          ++session_executions;
+          throw std::runtime_error("weight unavailable");
+        }
+        ++invocation_executions;
+      });
+  ASSERT_EQ(failed.diagnostics.size(), 2u);
+  EXPECT_EQ(failed.diagnostics[0].task_id.value, 10u);
+  EXPECT_EQ(failed.diagnostics[0].status, TaskStatus::kFailed);
+  EXPECT_EQ(failed.diagnostics[1].task_id.value, 20u);
+  EXPECT_EQ(failed.diagnostics[1].status, TaskStatus::kSuppressed);
+  ASSERT_TRUE(failed.diagnostics[1].caused_by.has_value());
+  EXPECT_EQ(failed.diagnostics[1].caused_by->value, 10u);
+
+  const auto successful_executor = [&](const TaskDescriptor &task, PreparedExecutionState &) {
+    if (task.scope == TaskScope::kSession) {
+      ++session_executions;
+    } else {
+      ++invocation_executions;
+    }
+  };
+  const PreparedExecutionResult second = plan.RunSequential(state, successful_executor);
+  const PreparedExecutionResult third = plan.RunSequential(state, successful_executor);
+
+  EXPECT_NE(failed.invocation_id, second.invocation_id);
+  EXPECT_NE(second.invocation_id, third.invocation_id);
+  EXPECT_EQ(session_executions, 2);
+  EXPECT_EQ(invocation_executions, 2);
+  ASSERT_EQ(failed.session_generations.size(), 1u);
+  ASSERT_EQ(second.session_generations.size(), 1u);
+  ASSERT_EQ(third.session_generations.size(), 1u);
+  EXPECT_EQ(failed.session_generations[0].second, 1u);
+  EXPECT_EQ(second.session_generations[0].second, 2u);
+  EXPECT_EQ(third.session_generations[0].second, 2u);
+  EXPECT_EQ(second.diagnostics[1].status, TaskStatus::kSucceeded);
+  EXPECT_EQ(third.diagnostics[1].status, TaskStatus::kSucceeded);
+}

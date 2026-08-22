@@ -48,6 +48,7 @@ using core::runtime::ExecuteAction;
 using core::runtime::ExecuteActionKind;
 using core::runtime::ExecutionArena;
 using core::runtime::ExecutionPlan;
+using core::runtime::HardwareCounterStatusName;
 using core::runtime::IOArena;
 using core::runtime::KernelContext;
 using core::runtime::Map;
@@ -1219,6 +1220,25 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                    [](const ParallelRegionReportEvent &event) { return event.process_cpu_time_ns; })
       .def_prop_ro("cpu_utilization",
                    [](const ParallelRegionReportEvent &event) { return event.cpu_utilization; })
+      .def_prop_ro("counter_status",
+                   [](const ParallelRegionReportEvent &event) {
+                     return HardwareCounterStatusName(event.counter_status);
+                   })
+      .def_prop_ro("cpu_cycles",
+                   [](const ParallelRegionReportEvent &event) { return event.cpu_cycles; })
+      .def_prop_ro(
+          "retired_instructions",
+          [](const ParallelRegionReportEvent &event) { return event.retired_instructions; })
+      .def_prop_ro("llc_references",
+                   [](const ParallelRegionReportEvent &event) { return event.llc_references; })
+      .def_prop_ro("llc_misses",
+                   [](const ParallelRegionReportEvent &event) { return event.llc_misses; })
+      .def_prop_ro(
+          "counter_time_enabled",
+          [](const ParallelRegionReportEvent &event) { return event.counter_time_enabled; })
+      .def_prop_ro(
+          "counter_time_running",
+          [](const ParallelRegionReportEvent &event) { return event.counter_time_running; })
       .def_prop_ro("ipc", [](const ParallelRegionReportEvent &event) { return event.ipc; })
       .def_prop_ro("llc_miss_rate",
                    [](const ParallelRegionReportEvent &event) { return event.llc_miss_rate; })
@@ -1237,7 +1257,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   nb::class_<ParallelRegionCollector>(
       rt_mod, "ParallelRegionCollector",
       "Fixed-capacity parallel-region collector. Inspect data through report snapshots.")
-      .def(nb::init<size_t>(), nb::arg("capacity"))
+      .def(nb::init<size_t, bool>(), nb::arg("capacity"), nb::arg("hardware_counters") = false)
       .def_prop_ro("capacity", &ParallelRegionCollector::capacity)
       .def("report", &ParallelRegionCollector::Report,
            "Returns an immutable owning snapshot of the events collected so far.");

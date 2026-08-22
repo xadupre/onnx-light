@@ -59,6 +59,7 @@ All Next Steps
     2026/2026-08_buffer_reuse_arena
     2026/2026-08_graph_builder_optimization
     2026/2026-08_session_execution_pools
+    2026/2026-08_kernel_parallelization
 
 Use the search field to filter by status or text, and select a column heading
 to sort the table.
@@ -156,3 +157,7 @@ to sort the table.
       - :ref:`l-next-steps-session-execution-pools`
       - Manage CPU policies and shared executor pools.
       - Give sessions deterministic, shareable execution resources.
+    * - Started
+      - :ref:`l-next-steps-kernel-parallelization`
+      - Inventory kernel parallel coverage and publish cross-machine baselines.
+      - Rank native-kernel bottlenecks before selecting the next migration batch.

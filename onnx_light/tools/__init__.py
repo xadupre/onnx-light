@@ -24,11 +24,23 @@ Currently provided helpers:
   :mod:`onnx_light.onnx.helper` expression (``api="onnx-compact"``) or as
   a :class:`~onnx_light.onnx_core.graph_builder.GraphBuilder` script
   (``api="builder"``).
+* :func:`onnx_light.tools.build_kernel_inventory` -- enumerate every
+  registered native kernel path and classify it as ``serial``,
+  ``parallel_fixed_policy``, ``tunable`` or ``calibratable``.
+* :func:`onnx_light.tools.run_kernel_baseline_report` -- run the
+  deterministic benchmark corpus and combine it with the kernel inventory
+  into one machine-readable cross-machine baseline report.
 """
 
 from __future__ import annotations
 
 from .dot import to_dot, to_dot_graph
+from .kernel_baseline import (
+    get_cpu_descriptor,
+    run_benchmark_corpus,
+    run_kernel_baseline_report,
+)
+from .kernel_inventory import build_kernel_inventory
 from .mermaid import to_mermaid, to_mermaid_graph
 from .pretty_print import pretty_onnx
 from ._proto_utils import (
@@ -40,9 +52,13 @@ from .svg import to_svg, to_svg_graph
 from .translate import translate, translate_header
 
 __all__ = [
+    "build_kernel_inventory",
     "compute_value_and_node_tags",
+    "get_cpu_descriptor",
     "infer_value_and_node_tags",
     "pretty_onnx",
+    "run_benchmark_corpus",
+    "run_kernel_baseline_report",
     "to_dot",
     "to_dot_graph",
     "to_mermaid",

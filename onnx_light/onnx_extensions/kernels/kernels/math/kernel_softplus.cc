@@ -32,10 +32,7 @@ Softplus::Softplus(const KernelContext &ctx)
     : ParallelTunableKernel(ctx, "Softplus", kSupportedElementTypes, kPortableParallelMinimum,
                             kTuningAbi) {}
 
-void Softplus::RegisterTuningSchemas() {
-  tuning::RegisterParallelTuningSchemas("Softplus", kSupportedElementTypes,
-                                        kPortableParallelMinimum, kTuningAbi);
-}
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(Softplus)
 
 Tensor Softplus::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();

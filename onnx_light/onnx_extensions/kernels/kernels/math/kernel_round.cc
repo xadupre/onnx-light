@@ -54,10 +54,7 @@ Round::Round(const KernelContext &ctx)
     : ParallelTunableKernel(ctx, "Round", kSupportedElementTypes, kPortableParallelMinimum,
                             kTuningAbi) {}
 
-void Round::RegisterTuningSchemas() {
-  tuning::RegisterParallelTuningSchemas("Round", kSupportedElementTypes, kPortableParallelMinimum,
-                                        kTuningAbi);
-}
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(Round)
 
 Tensor Round::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();

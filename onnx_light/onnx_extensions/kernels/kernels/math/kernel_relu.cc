@@ -113,10 +113,7 @@ Relu::Relu(const KernelContext &ctx)
     : ParallelTunableKernel(ctx, "Relu", kSupportedElementTypes, kPortableParallelMinimum,
                             kTuningAbi) {}
 
-void Relu::RegisterTuningSchemas() {
-  tuning::RegisterParallelTuningSchemas("Relu", kSupportedElementTypes, kPortableParallelMinimum,
-                                        kTuningAbi);
-}
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(Relu)
 
 Tensor Relu::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();

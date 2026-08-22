@@ -41,10 +41,7 @@ HardSwish::HardSwish(const KernelContext &ctx)
     : ParallelTunableKernel(ctx, "HardSwish", kSupportedElementTypes, kPortableParallelMinimum,
                             kTuningAbi) {}
 
-void HardSwish::RegisterTuningSchemas() {
-  tuning::RegisterParallelTuningSchemas("HardSwish", kSupportedElementTypes,
-                                        kPortableParallelMinimum, kTuningAbi);
-}
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(HardSwish)
 
 Tensor HardSwish::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();

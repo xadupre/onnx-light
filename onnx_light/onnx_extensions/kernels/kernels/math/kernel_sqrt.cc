@@ -32,10 +32,7 @@ Sqrt::Sqrt(const KernelContext &ctx)
     : ParallelTunableKernel(ctx, "Sqrt", kSupportedElementTypes, kPortableParallelMinimum,
                             kTuningAbi) {}
 
-void Sqrt::RegisterTuningSchemas() {
-  tuning::RegisterParallelTuningSchemas("Sqrt", kSupportedElementTypes, kPortableParallelMinimum,
-                                        kTuningAbi);
-}
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(Sqrt)
 
 Tensor Sqrt::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();

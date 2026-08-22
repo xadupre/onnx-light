@@ -32,10 +32,7 @@ Reciprocal::Reciprocal(const KernelContext &ctx)
     : ParallelTunableKernel(ctx, "Reciprocal", kSupportedElementTypes, kPortableParallelMinimum,
                             kTuningAbi) {}
 
-void Reciprocal::RegisterTuningSchemas() {
-  tuning::RegisterParallelTuningSchemas("Reciprocal", kSupportedElementTypes,
-                                        kPortableParallelMinimum, kTuningAbi);
-}
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(Reciprocal)
 
 Tensor Reciprocal::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();

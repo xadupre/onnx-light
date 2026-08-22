@@ -70,3 +70,17 @@ void ConfigureParallelTuning(std::string_view kernel,
                              ParallelTuning &tuning, uint32_t tuning_abi = 1);
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::tuning
+
+/**
+ * Defines ``ClassName::RegisterTuningSchemas()`` for one ``ParallelTunableKernel`` subclass.
+ *
+ * Expects ``kSupportedElementTypes``, ``kPortableParallelMinimum``, and ``kTuningAbi`` to be
+ * in scope at the point of invocation (typically declared in the kernel's anonymous
+ * namespace, right above the macro invocation), and registers ``ClassName`` (stringified) as
+ * the schema name so it always matches the kernel's class name.
+ */
+#define ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(ClassName)                                      \
+  void ClassName::RegisterTuningSchemas() {                                                        \
+    tuning::RegisterParallelTuningSchemas(#ClassName, kSupportedElementTypes,                      \
+                                          kPortableParallelMinimum, kTuningAbi);                   \
+  }

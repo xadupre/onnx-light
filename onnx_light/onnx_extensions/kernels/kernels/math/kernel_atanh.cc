@@ -31,10 +31,7 @@ Atanh::Atanh(const KernelContext &ctx)
     : ParallelTunableKernel(ctx, "Atanh", kSupportedElementTypes, kPortableParallelMinimum,
                             kTuningAbi) {}
 
-void Atanh::RegisterTuningSchemas() {
-  tuning::RegisterParallelTuningSchemas("Atanh", kSupportedElementTypes, kPortableParallelMinimum,
-                                        kTuningAbi);
-}
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(Atanh)
 
 Tensor Atanh::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();

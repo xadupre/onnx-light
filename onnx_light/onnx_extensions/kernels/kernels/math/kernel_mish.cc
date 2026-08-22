@@ -96,10 +96,7 @@ Mish::Mish(const KernelContext &ctx)
     : ParallelTunableKernel(ctx, "Mish", kSupportedElementTypes, kPortableParallelMinimum,
                             kTuningAbi) {}
 
-void Mish::RegisterTuningSchemas() {
-  tuning::RegisterParallelTuningSchemas("Mish", kSupportedElementTypes, kPortableParallelMinimum,
-                                        kTuningAbi);
-}
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(Mish)
 
 Tensor Mish::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();

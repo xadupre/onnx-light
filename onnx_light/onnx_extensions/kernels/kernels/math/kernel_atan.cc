@@ -31,10 +31,7 @@ Atan::Atan(const KernelContext &ctx)
     : ParallelTunableKernel(ctx, "Atan", kSupportedElementTypes, kPortableParallelMinimum,
                             kTuningAbi) {}
 
-void Atan::RegisterTuningSchemas() {
-  tuning::RegisterParallelTuningSchemas("Atan", kSupportedElementTypes, kPortableParallelMinimum,
-                                        kTuningAbi);
-}
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(Atan)
 
 Tensor Atan::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();

@@ -30,14 +30,14 @@ std::string PyValueName(nb::handle value) { return nb::cast<std::string>(nb::str
 
 class PyPatternOptimization : public PatternOptimization {
 public:
-  NB_TRAMPOLINE(PatternOptimization, 3);
+  NB_TRAMPOLINE(PatternOptimization);
 
   std::set<std::string> FastOpType() const override {
     NB_OVERRIDE_NAME("fast_op_type", FastOpType);
   }
 
   MatchResult Match(GraphGraph &graph, const NodeProto &candidate) const override {
-    nb::detail::ticket ticket(nb_trampoline, "match", true);
+    nb::detail::ticket ticket(nb_trampoline, "match", nb::detail::str_hash("match"), true);
     nb::object result = nb_trampoline.base().attr(ticket.key)(
         nb::cast(&graph, nb::rv_policy::reference), nb::cast(&candidate, nb::rv_policy::reference));
     return nb::cast<MatchResult>(result);
@@ -45,7 +45,7 @@ public:
 
   utils::RepeatedProtoField<NodeProto>
   Apply(GraphGraph &graph, const std::vector<const NodeProto *> &nodes) const override {
-    nb::detail::ticket ticket(nb_trampoline, "apply", true);
+    nb::detail::ticket ticket(nb_trampoline, "apply", nb::detail::str_hash("apply"), true);
     nb::list borrowed_nodes;
     for (const NodeProto *node : nodes) {
       borrowed_nodes.append(nb::cast(node, nb::rv_policy::reference));

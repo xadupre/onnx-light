@@ -4,7 +4,12 @@
 
 #include "prepared_execution.h"
 
+#include "worker_pool.h"
+
+#include <algorithm>
+#include <condition_variable>
 #include <functional>
+#include <limits>
 #include <stdexcept>
 #include <thread>
 #include <unordered_set>
@@ -214,6 +219,7 @@ PreparedExecutionPlan::PreparedExecutionPlan(std::vector<TaskDescriptor> tasks)
     : tasks_(std::move(tasks)) {
   std::unordered_map<uint64_t, TaskScope> scopes;
   std::unordered_set<uint64_t> dormant;
+  std::unordered_set<std::string> prepared_requirements;
   for (const TaskDescriptor &task : tasks_) {
     EXT_ENFORCE(task.id.value != 0, "Prepared task IDs must not be zero.");
     EXT_ENFORCE(scopes.emplace(task.id.value, task.scope).second, "Duplicate prepared task ID ",
@@ -231,132 +237,512 @@ PreparedExecutionPlan::PreparedExecutionPlan(std::vector<TaskDescriptor> tasks)
     if (task.dormant) {
       dormant.insert(task.id.value);
     }
+    for (const PreparedKey &key : task.prepared_requirements) {
+      if (prepared_requirements.insert(key.value).second) {
+        prepared_requirements_.push_back(key);
+      }
+    }
   }
 }
 
 namespace {
 
-bool DependencySucceeded(const TaskCompletion &dependency, TaskCompletion &completion,
-                         TaskId dependency_id) {
-  try {
-    dependency.Wait();
-  } catch (...) {
-    completion.Suppress(dependency_id, "Prepared task dependency failed.");
-    return false;
+int PriorityRank(TaskPriority priority) { return static_cast<int>(priority); }
+
+size_t SaturatingAdd(size_t left, size_t right) {
+  return left > std::numeric_limits<size_t>::max() - right ? std::numeric_limits<size_t>::max()
+                                                           : left + right;
+}
+
+struct BudgetAmounts {
+  size_t global = 0;
+  size_t general = 0;
+  size_t io = 0;
+  size_t preparation = 0;
+  size_t prepared = 0;
+  size_t execution = 0;
+};
+
+BudgetAmounts EstimatedBytes(const TaskDescriptor &task) {
+  BudgetAmounts amounts;
+  amounts.global =
+      SaturatingAdd(SaturatingAdd(task.estimated_input_bytes, task.estimated_output_bytes),
+                    task.peak_temporary_bytes);
+  if (task.resource == ResourceClass::kIo) {
+    amounts.io = amounts.global;
+  } else if (task.kind == TaskKind::kPrepare) {
+    amounts.preparation = SaturatingAdd(task.estimated_input_bytes, task.peak_temporary_bytes);
+    amounts.prepared = task.estimated_output_bytes;
+  } else if (task.kind == TaskKind::kPublish) {
+    amounts.prepared = amounts.global;
+  } else if (task.kind == TaskKind::kExecute) {
+    amounts.execution = amounts.global;
+  } else {
+    amounts.general = amounts.global;
   }
-  if (dependency.status() != TaskStatus::kSucceeded) {
-    completion.Suppress(dependency_id, "Prepared task dependency did not succeed.");
-    return false;
+  return amounts;
+}
+
+bool IsTerminal(TaskStatus status) {
+  return status == TaskStatus::kSucceeded || status == TaskStatus::kFailed ||
+         status == TaskStatus::kCancelled || status == TaskStatus::kSuppressed;
+}
+
+bool AllPreparedRequirementsResident(const std::vector<TaskDescriptor> &tasks,
+                                     const PreparedObjectStore &objects) {
+  for (const TaskDescriptor &task : tasks) {
+    for (const PreparedKey &key : task.prepared_requirements) {
+      if (!objects.Find(key).has_value()) {
+        return false;
+      }
+    }
   }
   return true;
 }
 
 } // namespace
 
+struct PreparedExecutionState::SchedulerState {
+  explicit SchedulerState(PreparedSchedulerOptions options_) : options(std::move(options_)) {
+    EXT_ENFORCE(options.io_workers > 0, "Prepared scheduler requires at least one I/O worker.");
+    EXT_ENFORCE(options.reserved_critical_memory <= options.global_memory_budget,
+                "Reserved critical memory exceeds the global memory budget.");
+    io_pool.Start(static_cast<int32_t>(options.io_workers));
+  }
+
+  void Validate(const TaskDescriptor &task) const {
+    const BudgetAmounts bytes = EstimatedBytes(task);
+    EXT_ENFORCE(bytes.global <= options.global_memory_budget, "Prepared task ", task.id.value,
+                " exceeds the global memory budget.");
+    EXT_ENFORCE(bytes.io <= options.io_memory_budget, "Prepared task ", task.id.value,
+                " exceeds the I/O memory budget.");
+    EXT_ENFORCE(bytes.preparation <= options.preparation_memory_budget, "Prepared task ",
+                task.id.value, " exceeds the preparation memory budget.");
+    EXT_ENFORCE(bytes.prepared <= options.prepared_memory_budget, "Prepared task ", task.id.value,
+                " exceeds the prepared memory budget.");
+    EXT_ENFORCE(bytes.execution <= options.execution_memory_budget, "Prepared task ", task.id.value,
+                " exceeds the execution memory budget.");
+  }
+
+  bool TryAcquire(const TaskDescriptor &task, bool critical_pending, size_t &new_total) {
+    const BudgetAmounts bytes = EstimatedBytes(task);
+    std::lock_guard<std::mutex> lock(mutex);
+    const bool speculative = task.priority != TaskPriority::kCritical && critical_pending;
+    if (task.resource == ResourceClass::kIo) {
+      const size_t io_limit = speculative ? options.io_workers - 1 : options.io_workers;
+      if (active_io >= io_limit) {
+        return false;
+      }
+    }
+    const size_t global_cap = speculative
+                                  ? options.global_memory_budget - options.reserved_critical_memory
+                                  : options.global_memory_budget;
+    if (bytes.global > global_cap - std::min(global_cap, global_used) ||
+        bytes.io > options.io_memory_budget - std::min(options.io_memory_budget, io_used) ||
+        bytes.preparation > options.preparation_memory_budget -
+                                std::min(options.preparation_memory_budget, preparation_used) ||
+        bytes.prepared > options.prepared_memory_budget -
+                             std::min(options.prepared_memory_budget, prepared_used) ||
+        bytes.execution > options.execution_memory_budget -
+                              std::min(options.execution_memory_budget, execution_used)) {
+      return false;
+    }
+    global_used += bytes.global;
+    general_used += bytes.general;
+    io_used += bytes.io;
+    preparation_used += bytes.preparation;
+    prepared_used += bytes.prepared;
+    execution_used += bytes.execution;
+    active_io += task.resource == ResourceClass::kIo ? 1 : 0;
+    peak_global_used = std::max(peak_global_used, global_used);
+    new_total = global_used;
+    return true;
+  }
+
+  void Release(const TaskDescriptor &task) {
+    const BudgetAmounts bytes = EstimatedBytes(task);
+    std::lock_guard<std::mutex> lock(mutex);
+    global_used -= bytes.global;
+    general_used -= bytes.general;
+    io_used -= bytes.io;
+    preparation_used -= bytes.preparation;
+    prepared_used -= bytes.prepared;
+    execution_used -= bytes.execution;
+    active_io -= task.resource == ResourceClass::kIo ? 1 : 0;
+  }
+
+  PreparedSchedulerOptions options;
+  utils::WorkerPool io_pool;
+  std::mutex mutex;
+  size_t global_used = 0;
+  size_t general_used = 0;
+  size_t io_used = 0;
+  size_t preparation_used = 0;
+  size_t prepared_used = 0;
+  size_t execution_used = 0;
+  size_t active_io = 0;
+  size_t peak_global_used = 0;
+};
+
 PreparedExecutionResult
 PreparedExecutionPlan::RunSequential(PreparedExecutionState &state,
                                      const PreparedTaskExecutor &executor) const {
+  return Run(state, executor, nullptr);
+}
+
+PreparedExecutionResult PreparedExecutionPlan::RunParallel(PreparedExecutionState &state,
+                                                           const PreparedTaskExecutor &executor,
+                                                           CpuExecutor &cpu_executor) const {
+  return Run(state, executor, &cpu_executor);
+}
+
+PreparedExecutionResult PreparedExecutionPlan::Run(PreparedExecutionState &state,
+                                                   const PreparedTaskExecutor &executor,
+                                                   CpuExecutor *cpu_executor) const {
   EXT_ENFORCE(static_cast<bool>(executor), "Prepared execution requires a task executor.");
   const uint64_t invocation_id = ++state.next_invocation_id_;
-  std::unordered_map<uint64_t, PreparedExecutionState::SessionTaskRequest> session;
-  std::unordered_map<uint64_t, TaskCompletion> invocation;
+  const uint64_t readiness_epoch = state.readiness_epoch();
+  bool hot_path = false;
+  {
+    std::lock_guard<std::mutex> lock(state.hot_path_mutex_);
+    hot_path = state.hot_path_plan_ == this && state.hot_path_epoch_ == readiness_epoch;
+  }
+  std::vector<std::shared_ptr<const AllocationHandle>> hot_path_pins;
+  if (hot_path) {
+    hot_path_pins.reserve(prepared_requirements_.size());
+    for (const PreparedKey &key : prepared_requirements_) {
+      const std::optional<PreparedObjectView> view = state.objects().Find(key);
+      if (!view.has_value()) {
+        hot_path = false;
+        break;
+      }
+      hot_path_pins.push_back(view->pin);
+    }
+    hot_path = hot_path && state.readiness_epoch() == readiness_epoch;
+  }
+  if (hot_path) {
+    PreparedExecutionResult result;
+    result.invocation_id = invocation_id;
+    result.used_hot_path = true;
+    result.diagnostics.reserve(tasks_.size());
+    const CpuExecutorScope executor_scope(cpu_executor);
+    for (const TaskDescriptor &task : tasks_) {
+      if (task.dormant) {
+        result.diagnostics.push_back({task.id, TaskStatus::kPending, {}, std::nullopt});
+        continue;
+      }
+      if (task.scope == TaskScope::kSession) {
+        const auto request = state.RequestSessionTask(task.id, false);
+        result.diagnostics.push_back(request.completion.diagnostic());
+        result.session_generations.emplace_back(task.id, request.generation);
+        continue;
+      }
+      std::optional<TaskId> failed_dependency;
+      for (const TaskId dependency : task.dependencies) {
+        const auto found = std::find_if(result.diagnostics.begin(), result.diagnostics.end(),
+                                        [dependency](const TaskDiagnostic &diagnostic) {
+                                          return diagnostic.task_id == dependency &&
+                                                 diagnostic.status != TaskStatus::kSucceeded;
+                                        });
+        if (found != result.diagnostics.end()) {
+          failed_dependency = dependency;
+          break;
+        }
+      }
+      if (failed_dependency.has_value()) {
+        result.diagnostics.push_back({task.id, TaskStatus::kSuppressed,
+                                      "Prepared task dependency did not succeed.",
+                                      failed_dependency});
+        continue;
+      }
+      try {
+        executor(task, state);
+        result.diagnostics.push_back({task.id, TaskStatus::kSucceeded, {}, std::nullopt});
+      } catch (...) {
+        result.diagnostics.push_back(
+            {task.id, TaskStatus::kFailed, "Prepared invocation task failed.", std::nullopt});
+      }
+    }
+    return result;
+  }
 
-  for (const TaskDescriptor &task : tasks_) {
-    if (task.dormant) {
+  std::unordered_map<uint64_t, PreparedExecutionState::SessionTaskRequest> session;
+  std::unordered_set<uint64_t> replay_session_tasks;
+  for (auto task = tasks_.rbegin(); task != tasks_.rend(); ++task) {
+    if (task->scope != TaskScope::kSession || task->dormant) {
       continue;
     }
-    if (task.scope == TaskScope::kSession) {
-      session.emplace(task.id.value, state.RequestSessionTask(task.id));
-    } else {
+    const bool missing_publication =
+        task->publishes.has_value() && !state.objects().Find(*task->publishes).has_value();
+    if (missing_publication || replay_session_tasks.count(task->id.value) != 0) {
+      replay_session_tasks.insert(task->id.value);
+      for (const TaskId dependency : task->dependencies) {
+        replay_session_tasks.insert(dependency.value);
+      }
+    }
+  }
+  for (const TaskDescriptor &task : tasks_) {
+    if (!task.dormant && task.scope == TaskScope::kSession) {
+      session.emplace(task.id.value, state.RequestSessionTask(
+                                         task.id, replay_session_tasks.count(task.id.value) != 0));
+    }
+  }
+
+  std::unordered_map<uint64_t, TaskCompletion> invocation;
+  invocation.reserve(tasks_.size() - session.size());
+  for (const TaskDescriptor &task : tasks_) {
+    if (!task.dormant && task.scope == TaskScope::kInvocation) {
       invocation.emplace(task.id.value, TaskCompletion(task.id));
     }
   }
 
-  bool has_producers = false;
+  struct RunTask {
+    const TaskDescriptor *descriptor = nullptr;
+    TaskCompletion completion{TaskId{}};
+    bool producer = false;
+    bool dispatched = false;
+    TaskPriority effective_priority = TaskPriority::kBackground;
+  };
+  std::vector<RunTask> run_tasks;
+  run_tasks.reserve(tasks_.size());
+  std::unordered_map<uint64_t, size_t> task_indices;
+  task_indices.reserve(tasks_.size());
   for (const TaskDescriptor &task : tasks_) {
-    if (!task.dormant && task.scope == TaskScope::kSession && session.at(task.id.value).producer) {
-      has_producers = true;
-      break;
+    if (task.dormant) {
+      continue;
     }
+    const bool is_session = task.scope == TaskScope::kSession;
+    auto request =
+        is_session
+            ? session.at(task.id.value)
+            : PreparedExecutionState::SessionTaskRequest{0, invocation.at(task.id.value), true};
+    task_indices.emplace(task.id.value, run_tasks.size());
+    run_tasks.push_back(RunTask{&task, request.completion, request.producer, false,
+                                is_session ? task.priority : TaskPriority::kCritical});
   }
-  std::thread producer;
-  if (has_producers) {
-    producer = std::thread([&]() {
-      for (const TaskDescriptor &task : tasks_) {
-        if (task.dormant || task.scope != TaskScope::kSession) {
-          continue;
-        }
-        auto request = session.at(task.id.value);
-        if (!request.producer) {
-          continue;
-        }
-        request.completion.MarkRunning();
-        bool ready = true;
-        for (const TaskId dependency_id : task.dependencies) {
-          if (!DependencySucceeded(session.at(dependency_id.value).completion, request.completion,
-                                   dependency_id)) {
-            ready = false;
-            break;
-          }
-        }
-        if (!ready) {
-          continue;
-        }
-        try {
-          executor(task, state);
-          request.completion.Succeed();
-        } catch (...) {
-          request.completion.Fail(std::current_exception(), "Prepared session task failed.");
-        }
+  for (const RunTask &task : run_tasks) {
+    state.scheduler_->Validate(*task.descriptor);
+  }
+  for (auto task = run_tasks.rbegin(); task != run_tasks.rend(); ++task) {
+    for (const TaskId dependency : task->descriptor->dependencies) {
+      RunTask &producer = run_tasks.at(task_indices.at(dependency.value));
+      if (PriorityRank(task->effective_priority) > PriorityRank(producer.effective_priority)) {
+        producer.effective_priority = task->effective_priority;
       }
-    });
+    }
   }
 
-  for (const TaskDescriptor &task : tasks_) {
-    if (task.dormant || task.scope != TaskScope::kInvocation) {
-      continue;
+  std::mutex progress_mutex;
+  std::condition_variable progress;
+  size_t active_io = 0;
+  bool active_session_cpu = false;
+  size_t progress_epoch = 0;
+  size_t peak_in_flight = 0;
+  size_t continuation_suspensions = 0;
+  std::jthread session_worker;
+  auto execute_task = [&](RunTask &task) {
+    try {
+      TaskDescriptor scheduled = *task.descriptor;
+      scheduled.priority = task.effective_priority;
+      executor(scheduled, state);
+      task.completion.Succeed();
+    } catch (...) {
+      task.completion.Fail(std::current_exception(), task.descriptor->scope == TaskScope::kSession
+                                                         ? "Prepared session task failed."
+                                                         : "Prepared invocation task failed.");
     }
-    TaskCompletion &completion = invocation.at(task.id.value);
-    bool ready = true;
-    for (const TaskId dependency_id : task.dependencies) {
-      const auto session_dependency = session.find(dependency_id.value);
-      const TaskCompletion &dependency = session_dependency != session.end()
-                                             ? session_dependency->second.completion
-                                             : invocation.at(dependency_id.value);
-      if (!DependencySucceeded(dependency, completion, dependency_id)) {
-        ready = false;
-        break;
+    state.scheduler_->Release(*task.descriptor);
+  };
+
+  size_t terminal_count = 0;
+  while (terminal_count < run_tasks.size()) {
+    terminal_count = 0;
+    bool critical_pending = false;
+    for (const RunTask &task : run_tasks) {
+      const TaskStatus status = task.completion.status();
+      terminal_count += IsTerminal(status) ? 1 : 0;
+      critical_pending |= !IsTerminal(status) && task.effective_priority == TaskPriority::kCritical;
+    }
+    if (terminal_count == run_tasks.size()) {
+      break;
+    }
+
+    std::vector<RunTask *> ready;
+    bool changed_status = false;
+    for (RunTask &task : run_tasks) {
+      if (task.dispatched || !task.producer || task.completion.status() != TaskStatus::kPending) {
+        continue;
+      }
+      bool dependencies_ready = true;
+      for (const TaskId dependency : task.descriptor->dependencies) {
+        const TaskStatus status =
+            run_tasks.at(task_indices.at(dependency.value)).completion.status();
+        if (IsTerminal(status) && status != TaskStatus::kSucceeded) {
+          task.completion.Suppress(dependency, "Prepared task dependency did not succeed.");
+          changed_status = true;
+          dependencies_ready = false;
+          break;
+        }
+        if (status != TaskStatus::kSucceeded) {
+          dependencies_ready = false;
+          break;
+        }
+      }
+      if (dependencies_ready) {
+        ready.push_back(&task);
       }
     }
-    if (!ready) {
-      continue;
+    std::stable_sort(ready.begin(), ready.end(), [](const RunTask *left, const RunTask *right) {
+      return PriorityRank(left->effective_priority) > PriorityRank(right->effective_priority);
+    });
+
+    bool dispatched_any = false;
+    std::vector<RunTask *> cpu_tasks;
+    std::vector<RunTask *> session_cpu_tasks;
+    bool session_cpu_busy = false;
+    {
+      std::lock_guard<std::mutex> lock(progress_mutex);
+      session_cpu_busy = active_session_cpu;
     }
-    completion.MarkRunning();
-    try {
-      executor(task, state);
-      completion.Succeed();
-    } catch (...) {
-      completion.Fail(std::current_exception(), "Prepared invocation task failed.");
+    for (RunTask *task : ready) {
+      const bool sequential_session_cpu = cpu_executor == nullptr &&
+                                          task->descriptor->resource == ResourceClass::kCpu &&
+                                          task->descriptor->scope == TaskScope::kSession;
+      if (sequential_session_cpu && (session_cpu_busy || !session_cpu_tasks.empty())) {
+        continue;
+      }
+      TaskDescriptor admitted = *task->descriptor;
+      admitted.priority = task->effective_priority;
+      size_t total = 0;
+      if (!state.scheduler_->TryAcquire(admitted, critical_pending, total)) {
+        continue;
+      }
+      peak_in_flight = std::max(peak_in_flight, total);
+      task->dispatched = true;
+      task->completion.MarkRunning();
+      dispatched_any = true;
+      if (task->descriptor->resource == ResourceClass::kIo) {
+        {
+          std::lock_guard<std::mutex> lock(progress_mutex);
+          ++active_io;
+        }
+        state.scheduler_->io_pool.Enqueue([&, task]() {
+          execute_task(*task);
+          {
+            std::lock_guard<std::mutex> lock(progress_mutex);
+            --active_io;
+            ++progress_epoch;
+            progress.notify_all();
+          }
+        });
+      } else if (task->descriptor->resource == ResourceClass::kCpu && cpu_executor != nullptr) {
+        cpu_tasks.push_back(task);
+      } else if (sequential_session_cpu) {
+        session_cpu_tasks.push_back(task);
+      } else {
+        const CpuExecutorScope scope(cpu_executor);
+        execute_task(*task);
+      }
+    }
+
+    if (!session_cpu_tasks.empty()) {
+      if (session_worker.joinable()) {
+        session_worker.join();
+      }
+      {
+        std::lock_guard<std::mutex> lock(progress_mutex);
+        active_session_cpu = true;
+      }
+      session_worker = std::jthread([&, tasks = std::move(session_cpu_tasks)]() {
+        for (RunTask *task : tasks) {
+          execute_task(*task);
+        }
+        {
+          std::lock_guard<std::mutex> lock(progress_mutex);
+          active_session_cpu = false;
+          ++progress_epoch;
+          progress.notify_all();
+        }
+      });
+    }
+
+    if (!cpu_tasks.empty()) {
+      struct CpuBatch {
+        std::vector<RunTask *> *tasks;
+        decltype(execute_task) *execute;
+      } batch{&cpu_tasks, &execute_task};
+      cpu_executor->ParallelFor(static_cast<int64_t>(cpu_tasks.size()), 1, &batch,
+                                [](void *context, int64_t begin, int64_t end) noexcept {
+                                  auto &work = *static_cast<CpuBatch *>(context);
+                                  for (int64_t i = begin; i < end; ++i) {
+                                    (*work.execute)(*work.tasks->at(static_cast<size_t>(i)));
+                                  }
+                                });
+      progress.notify_all();
+    }
+
+    if (!dispatched_any) {
+      if (changed_status) {
+        continue;
+      }
+      bool waited = false;
+      for (RunTask &task : run_tasks) {
+        if (!task.producer && !IsTerminal(task.completion.status())) {
+          ++continuation_suspensions;
+          try {
+            task.completion.Wait();
+          } catch (...) {
+          }
+          waited = true;
+          break;
+        }
+      }
+      if (!waited) {
+        std::unique_lock<std::mutex> lock(progress_mutex);
+        if (active_io != 0 || active_session_cpu) {
+          ++continuation_suspensions;
+          const size_t observed_epoch = progress_epoch;
+          progress.wait(lock, [&]() { return progress_epoch != observed_epoch; });
+        } else {
+          EXT_ENFORCE(false, "Prepared scheduler could not admit a ready task.");
+        }
+      }
     }
   }
-  if (producer.joinable()) {
-    producer.join();
+  {
+    std::unique_lock<std::mutex> lock(progress_mutex);
+    progress.wait(lock, [&]() { return active_io == 0 && !active_session_cpu; });
+  }
+  if (session_worker.joinable()) {
+    session_worker.join();
   }
 
   PreparedExecutionResult result;
   result.invocation_id = invocation_id;
+  result.enqueued_tasks = std::count_if(run_tasks.begin(), run_tasks.end(),
+                                        [](const RunTask &task) { return task.dispatched; });
+  result.continuation_suspensions = continuation_suspensions;
+  result.peak_in_flight_bytes = peak_in_flight;
   result.diagnostics.reserve(tasks_.size());
   result.session_generations.reserve(session.size());
   for (const TaskDescriptor &task : tasks_) {
     if (task.dormant) {
-      result.diagnostics.push_back(
-          TaskDiagnostic{task.id, TaskStatus::kPending, std::string(), std::nullopt});
-    } else if (task.scope == TaskScope::kSession) {
-      result.diagnostics.push_back(session.at(task.id.value).completion.diagnostic());
-      result.session_generations.emplace_back(task.id, session.at(task.id.value).generation);
-    } else {
-      result.diagnostics.push_back(invocation.at(task.id.value).diagnostic());
+      result.diagnostics.push_back({task.id, TaskStatus::kPending, {}, std::nullopt});
+      continue;
     }
+    const RunTask &run_task = run_tasks.at(task_indices.at(task.id.value));
+    result.diagnostics.push_back(run_task.completion.diagnostic());
+    if (task.scope == TaskScope::kSession) {
+      result.session_generations.emplace_back(task.id, session.at(task.id.value).generation);
+    }
+  }
+  const bool succeeded = std::all_of(run_tasks.begin(), run_tasks.end(), [](const RunTask &task) {
+    return task.completion.status() == TaskStatus::kSucceeded;
+  });
+  if (succeeded && AllPreparedRequirementsResident(tasks_, state.objects())) {
+    std::lock_guard<std::mutex> lock(state.hot_path_mutex_);
+    state.hot_path_plan_ = this;
+    state.hot_path_epoch_ = state.readiness_epoch();
   }
   return result;
 }
@@ -371,21 +757,24 @@ struct PreparedExecutionState::SessionTaskEntry {
 
 PreparedExecutionState::PreparedExecutionState(size_t preparation_slots, size_t prepared_slots,
                                                size_t preparation_retention_cap,
-                                               size_t prepared_retention_cap)
+                                               size_t prepared_retention_cap,
+                                               PreparedSchedulerOptions scheduler_options)
     : preparation_arena_(preparation_slots, preparation_retention_cap),
-      prepared_arena_(prepared_slots, prepared_retention_cap) {}
+      prepared_arena_(prepared_slots, prepared_retention_cap),
+      scheduler_(std::make_unique<SchedulerState>(std::move(scheduler_options))) {}
 
 PreparedExecutionState::~PreparedExecutionState() = default;
 
 PreparedExecutionState::SessionTaskRequest
-PreparedExecutionState::RequestSessionTask(TaskId task_id) {
+PreparedExecutionState::RequestSessionTask(TaskId task_id, bool force_retry) {
   std::lock_guard<std::mutex> lock(session_tasks_mutex_);
   auto [found, inserted] =
       session_tasks_.try_emplace(task_id.value, std::make_unique<SessionTaskEntry>(task_id));
   SessionTaskEntry &entry = *found->second;
   const TaskStatus status = entry.completion->status();
-  const bool producer = inserted || status == TaskStatus::kFailed ||
-                        status == TaskStatus::kCancelled || status == TaskStatus::kSuppressed;
+  const bool producer = inserted || (force_retry && status == TaskStatus::kSucceeded) ||
+                        status == TaskStatus::kFailed || status == TaskStatus::kCancelled ||
+                        status == TaskStatus::kSuppressed;
   if (!inserted && producer) {
     ++entry.generation;
     entry.completion = std::make_shared<TaskCompletion>(task_id);

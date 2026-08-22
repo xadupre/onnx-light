@@ -178,9 +178,9 @@ if(ONNX_LIGHT_BUILD_PYTHON)
     # When cross-compiling, the interpreter and target dev libraries must be
     # located independently (host ``Python`` interpreter + target ``Python3``
     # development package).
-    find_package(Python3 3.10 REQUIRED COMPONENTS Development.Module
+    find_package(Python3 3.12 REQUIRED COMPONENTS Development.Module
       OPTIONAL_COMPONENTS Development.SABIModule)
-    find_package(Python 3.10 REQUIRED COMPONENTS Interpreter)
+    find_package(Python 3.12 REQUIRED COMPONENTS Interpreter)
 
     # nanobind >= 2.13 only auto-runs its own find_package(Python ...) when
     # neither Python::Interpreter nor Python::Module exist yet. Since
@@ -194,7 +194,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
       add_library(Python::SABIModule ALIAS Python3::SABIModule)
     endif()
   else()
-    find_package(Python 3.10 REQUIRED COMPONENTS Interpreter Development.Module
+    find_package(Python 3.12 REQUIRED COMPONENTS Interpreter Development.Module
       OPTIONAL_COMPONENTS Development.SABIModule)
   endif()
 

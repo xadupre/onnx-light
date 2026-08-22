@@ -27,21 +27,13 @@ constexpr std::array<int32_t, 3> kSupportedElementTypes = {
 
 } // namespace
 
-Atanh::Atanh(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+Atanh::Atanh(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Atanh", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
 
 void Atanh::RegisterTuningSchemas() {
   tuning::RegisterParallelTuningSchemas("Atanh", kSupportedElementTypes, kPortableParallelMinimum,
                                         kTuningAbi);
-}
-
-KernelTuningKey Atanh::TuningKey(int32_t element_type) const {
-  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
-             ? tuning::MakePortableTuningKey("Atanh", element_type, kTuningAbi)
-             : KernelTuningKey{};
-}
-
-void Atanh::Configure(const KernelTuningParameters &parameters) {
-  tuning::ConfigureParallelTuning("Atanh", parameters, tuning_, kTuningAbi);
 }
 
 Tensor Atanh::operator()(const Tensor &x, RuntimeContext *rt) const {
@@ -63,7 +55,7 @@ void Atanh::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[static_cast<size_t>(i)] = std::atanh(px[i]);
       }
@@ -72,12 +64,12 @@ void Atanh::operator()(const Tensor &x, Tensor &output) const {
   }
   case DataType::FLOAT16:
     detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
-                                 tuning_.parallel_minimum_elements,
+                                 tuning().parallel_minimum_elements,
                                  [](float v) { return std::atanh(v); });
     return;
   case DataType::BFLOAT16:
     detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                 tuning_.parallel_minimum_elements,
+                                 tuning().parallel_minimum_elements,
                                  [](float v) { return std::atanh(v); });
     return;
   default:

@@ -56,7 +56,9 @@ KernelTuningParameters CalibrateLog(const KernelTuningKey &key,
 
 } // namespace
 
-Log::Log(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+Log::Log(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Log", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
 
 void Log::RegisterTuningSchemas() {
   tuning::RegisterParallelTuningSchemas("Log", kSupportedElementTypes, kPortableParallelMinimum,
@@ -65,16 +67,6 @@ void Log::RegisterTuningSchemas() {
     const KernelTuningKey key = tuning::MakePortableTuningKey("Log", element_type, kTuningAbi);
     core::runtime::RegisterKernelCalibrationFunction(key, CalibrateLog);
   }
-}
-
-KernelTuningKey Log::TuningKey(int32_t element_type) const {
-  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
-             ? tuning::MakePortableTuningKey("Log", element_type, kTuningAbi)
-             : KernelTuningKey{};
-}
-
-void Log::Configure(const KernelTuningParameters &parameters) {
-  tuning::ConfigureParallelTuning("Log", parameters, tuning_, kTuningAbi);
 }
 
 Tensor Log::operator()(const Tensor &x, RuntimeContext *rt) const {
@@ -96,7 +88,7 @@ void Log::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = std::log(px[i]);
       }
@@ -106,7 +98,7 @@ void Log::operator()(const Tensor &x, Tensor &output) const {
   case DataType::DOUBLE: {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = std::log(px[i]);
       }
@@ -115,12 +107,12 @@ void Log::operator()(const Tensor &x, Tensor &output) const {
   }
   case DataType::FLOAT16:
     detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
-                                 tuning_.parallel_minimum_elements,
+                                 tuning().parallel_minimum_elements,
                                  [](float v) { return std::log(v); });
     return;
   case DataType::BFLOAT16:
     detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                 tuning_.parallel_minimum_elements,
+                                 tuning().parallel_minimum_elements,
                                  [](float v) { return std::log(v); });
     return;
   default:

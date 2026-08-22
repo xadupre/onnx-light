@@ -28,21 +28,13 @@ constexpr std::array<int32_t, 4> kSupportedElementTypes = {
 
 } // namespace
 
-Ceil::Ceil(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+Ceil::Ceil(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Ceil", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
 
 void Ceil::RegisterTuningSchemas() {
   tuning::RegisterParallelTuningSchemas("Ceil", kSupportedElementTypes, kPortableParallelMinimum,
                                         kTuningAbi);
-}
-
-KernelTuningKey Ceil::TuningKey(int32_t element_type) const {
-  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
-             ? tuning::MakePortableTuningKey("Ceil", element_type, kTuningAbi)
-             : KernelTuningKey{};
-}
-
-void Ceil::Configure(const KernelTuningParameters &parameters) {
-  tuning::ConfigureParallelTuning("Ceil", parameters, tuning_, kTuningAbi);
 }
 
 Tensor Ceil::operator()(const Tensor &x, RuntimeContext *rt) const {
@@ -64,7 +56,7 @@ void Ceil::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = std::ceil(px[i]);
       }
@@ -74,7 +66,7 @@ void Ceil::operator()(const Tensor &x, Tensor &output) const {
   case DataType::DOUBLE: {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = std::ceil(px[i]);
       }
@@ -83,12 +75,12 @@ void Ceil::operator()(const Tensor &x, Tensor &output) const {
   }
   case DataType::FLOAT16:
     detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
-                                 tuning_.parallel_minimum_elements,
+                                 tuning().parallel_minimum_elements,
                                  [](float v) { return std::ceil(v); });
     return;
   case DataType::BFLOAT16:
     detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                 tuning_.parallel_minimum_elements,
+                                 tuning().parallel_minimum_elements,
                                  [](float v) { return std::ceil(v); });
     return;
   default:

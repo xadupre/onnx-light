@@ -56,7 +56,9 @@ KernelTuningParameters CalibrateSigmoid(const KernelTuningKey &key,
 
 } // namespace
 
-Sigmoid::Sigmoid(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+Sigmoid::Sigmoid(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Sigmoid", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
 
 void Sigmoid::RegisterTuningSchemas() {
   tuning::RegisterParallelTuningSchemas("Sigmoid", kSupportedElementTypes, kPortableParallelMinimum,
@@ -65,16 +67,6 @@ void Sigmoid::RegisterTuningSchemas() {
     const KernelTuningKey key = tuning::MakePortableTuningKey("Sigmoid", element_type, kTuningAbi);
     core::runtime::RegisterKernelCalibrationFunction(key, CalibrateSigmoid);
   }
-}
-
-KernelTuningKey Sigmoid::TuningKey(int32_t element_type) const {
-  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
-             ? tuning::MakePortableTuningKey("Sigmoid", element_type, kTuningAbi)
-             : KernelTuningKey{};
-}
-
-void Sigmoid::Configure(const KernelTuningParameters &parameters) {
-  tuning::ConfigureParallelTuning("Sigmoid", parameters, tuning_, kTuningAbi);
 }
 
 Tensor Sigmoid::operator()(const Tensor &x, RuntimeContext *rt) const {
@@ -96,7 +88,7 @@ void Sigmoid::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = 1.0f / (1.0f + std::exp(-px[i]));
       }
@@ -106,7 +98,7 @@ void Sigmoid::operator()(const Tensor &x, Tensor &output) const {
   case DataType::DOUBLE: {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = 1.0 / (1.0 + std::exp(-px[i]));
       }
@@ -115,12 +107,12 @@ void Sigmoid::operator()(const Tensor &x, Tensor &output) const {
   }
   case DataType::FLOAT16:
     detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
-                                 tuning_.parallel_minimum_elements,
+                                 tuning().parallel_minimum_elements,
                                  [](float v) { return 1.0f / (1.0f + std::exp(-v)); });
     return;
   case DataType::BFLOAT16:
     detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                 tuning_.parallel_minimum_elements,
+                                 tuning().parallel_minimum_elements,
                                  [](float v) { return 1.0f / (1.0f + std::exp(-v)); });
     return;
   default:

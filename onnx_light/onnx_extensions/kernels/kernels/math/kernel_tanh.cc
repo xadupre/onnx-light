@@ -56,7 +56,9 @@ KernelTuningParameters CalibrateTanh(const KernelTuningKey &key,
 
 } // namespace
 
-Tanh::Tanh(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+Tanh::Tanh(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Tanh", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
 
 void Tanh::RegisterTuningSchemas() {
   tuning::RegisterParallelTuningSchemas("Tanh", kSupportedElementTypes, kPortableParallelMinimum,
@@ -65,16 +67,6 @@ void Tanh::RegisterTuningSchemas() {
     const KernelTuningKey key = tuning::MakePortableTuningKey("Tanh", element_type, kTuningAbi);
     core::runtime::RegisterKernelCalibrationFunction(key, CalibrateTanh);
   }
-}
-
-KernelTuningKey Tanh::TuningKey(int32_t element_type) const {
-  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
-             ? tuning::MakePortableTuningKey("Tanh", element_type, kTuningAbi)
-             : KernelTuningKey{};
-}
-
-void Tanh::Configure(const KernelTuningParameters &parameters) {
-  tuning::ConfigureParallelTuning("Tanh", parameters, tuning_, kTuningAbi);
 }
 
 Tensor Tanh::operator()(const Tensor &x, RuntimeContext *rt) const {
@@ -96,7 +88,7 @@ void Tanh::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = std::tanh(px[i]);
       }
@@ -106,7 +98,7 @@ void Tanh::operator()(const Tensor &x, Tensor &output) const {
   case DataType::DOUBLE: {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = std::tanh(px[i]);
       }
@@ -115,12 +107,12 @@ void Tanh::operator()(const Tensor &x, Tensor &output) const {
   }
   case DataType::FLOAT16:
     detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
-                                 tuning_.parallel_minimum_elements,
+                                 tuning().parallel_minimum_elements,
                                  [](float v) { return std::tanh(v); });
     return;
   case DataType::BFLOAT16:
     detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                 tuning_.parallel_minimum_elements,
+                                 tuning().parallel_minimum_elements,
                                  [](float v) { return std::tanh(v); });
     return;
   default:

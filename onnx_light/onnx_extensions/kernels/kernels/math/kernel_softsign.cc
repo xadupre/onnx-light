@@ -28,21 +28,13 @@ constexpr std::array<int32_t, 4> kSupportedElementTypes = {
 
 } // namespace
 
-Softsign::Softsign(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+Softsign::Softsign(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Softsign", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
 
 void Softsign::RegisterTuningSchemas() {
   tuning::RegisterParallelTuningSchemas("Softsign", kSupportedElementTypes,
                                         kPortableParallelMinimum, kTuningAbi);
-}
-
-KernelTuningKey Softsign::TuningKey(int32_t element_type) const {
-  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
-             ? tuning::MakePortableTuningKey("Softsign", element_type, kTuningAbi)
-             : KernelTuningKey{};
-}
-
-void Softsign::Configure(const KernelTuningParameters &parameters) {
-  tuning::ConfigureParallelTuning("Softsign", parameters, tuning_, kTuningAbi);
 }
 
 Tensor Softsign::operator()(const Tensor &x, RuntimeContext *rt) const {
@@ -64,7 +56,7 @@ void Softsign::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = px[i] / (1.0f + std::fabs(px[i]));
       }
@@ -74,7 +66,7 @@ void Softsign::operator()(const Tensor &x, Tensor &output) const {
   case DataType::DOUBLE: {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = px[i] / (1.0 + std::fabs(px[i]));
       }
@@ -83,12 +75,12 @@ void Softsign::operator()(const Tensor &x, Tensor &output) const {
   }
   case DataType::FLOAT16:
     detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
-                                 tuning_.parallel_minimum_elements,
+                                 tuning().parallel_minimum_elements,
                                  [](float v) { return v / (1.0f + std::fabs(v)); });
     return;
   case DataType::BFLOAT16:
     detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                 tuning_.parallel_minimum_elements,
+                                 tuning().parallel_minimum_elements,
                                  [](float v) { return v / (1.0f + std::fabs(v)); });
     return;
   default:

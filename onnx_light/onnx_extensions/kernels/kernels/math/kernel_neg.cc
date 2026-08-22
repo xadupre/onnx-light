@@ -46,21 +46,13 @@ template <typename T> void NegInt(const Tensor &x, Tensor &output, int64_t grain
 
 } // namespace
 
-Neg::Neg(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+Neg::Neg(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Neg", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
 
 void Neg::RegisterTuningSchemas() {
   tuning::RegisterParallelTuningSchemas("Neg", kSupportedElementTypes, kPortableParallelMinimum,
                                         kTuningAbi);
-}
-
-KernelTuningKey Neg::TuningKey(int32_t element_type) const {
-  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
-             ? tuning::MakePortableTuningKey("Neg", element_type, kTuningAbi)
-             : KernelTuningKey{};
-}
-
-void Neg::Configure(const KernelTuningParameters &parameters) {
-  tuning::ConfigureParallelTuning("Neg", parameters, tuning_, kTuningAbi);
 }
 
 Tensor Neg::operator()(const Tensor &x, RuntimeContext *rt) const {
@@ -82,7 +74,7 @@ void Neg::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = -px[i];
       }
@@ -92,7 +84,7 @@ void Neg::operator()(const Tensor &x, Tensor &output) const {
   case DataType::DOUBLE: {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = -px[i];
       }
@@ -101,23 +93,23 @@ void Neg::operator()(const Tensor &x, Tensor &output) const {
   }
   case DataType::FLOAT16:
     detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
-                                 tuning_.parallel_minimum_elements, [](float v) { return -v; });
+                                 tuning().parallel_minimum_elements, [](float v) { return -v; });
     return;
   case DataType::BFLOAT16:
     detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                 tuning_.parallel_minimum_elements, [](float v) { return -v; });
+                                 tuning().parallel_minimum_elements, [](float v) { return -v; });
     return;
   case DataType::INT8:
-    NegInt<int8_t>(x, output, tuning_.parallel_minimum_elements);
+    NegInt<int8_t>(x, output, tuning().parallel_minimum_elements);
     return;
   case DataType::INT16:
-    NegInt<int16_t>(x, output, tuning_.parallel_minimum_elements);
+    NegInt<int16_t>(x, output, tuning().parallel_minimum_elements);
     return;
   case DataType::INT32:
-    NegInt<int32_t>(x, output, tuning_.parallel_minimum_elements);
+    NegInt<int32_t>(x, output, tuning().parallel_minimum_elements);
     return;
   case DataType::INT64:
-    NegInt<int64_t>(x, output, tuning_.parallel_minimum_elements);
+    NegInt<int64_t>(x, output, tuning().parallel_minimum_elements);
     return;
   default:
     EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,

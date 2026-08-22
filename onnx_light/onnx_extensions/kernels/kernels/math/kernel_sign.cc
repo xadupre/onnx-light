@@ -57,21 +57,13 @@ template <typename T> void SignSigned(const Tensor &x, Tensor &output, int64_t g
 
 } // namespace
 
-Sign::Sign(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+Sign::Sign(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Sign", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
 
 void Sign::RegisterTuningSchemas() {
   tuning::RegisterParallelTuningSchemas("Sign", kSupportedElementTypes, kPortableParallelMinimum,
                                         kTuningAbi);
-}
-
-KernelTuningKey Sign::TuningKey(int32_t element_type) const {
-  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
-             ? tuning::MakePortableTuningKey("Sign", element_type, kTuningAbi)
-             : KernelTuningKey{};
-}
-
-void Sign::Configure(const KernelTuningParameters &parameters) {
-  tuning::ConfigureParallelTuning("Sign", parameters, tuning_, kTuningAbi);
 }
 
 Tensor Sign::operator()(const Tensor &x, RuntimeContext *rt) const {
@@ -93,7 +85,7 @@ void Sign::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = (px[i] > 0.0f) ? 1.0f : (px[i] < 0.0f ? -1.0f : 0.0f);
       }
@@ -103,7 +95,7 @@ void Sign::operator()(const Tensor &x, Tensor &output) const {
   case DataType::DOUBLE: {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = (px[i] > 0.0) ? 1.0 : (px[i] < 0.0 ? -1.0 : 0.0);
       }
@@ -112,37 +104,37 @@ void Sign::operator()(const Tensor &x, Tensor &output) const {
   }
   case DataType::FLOAT16:
     detail::UnaryHalfElementwise(
-        x, output, Float16BitsToFloat, FloatToFloat16Bits, tuning_.parallel_minimum_elements,
+        x, output, Float16BitsToFloat, FloatToFloat16Bits, tuning().parallel_minimum_elements,
         [](float v) { return (v > 0.0f) ? 1.0f : (v < 0.0f ? -1.0f : 0.0f); });
     return;
   case DataType::BFLOAT16:
     detail::UnaryHalfElementwise(
-        x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits, tuning_.parallel_minimum_elements,
+        x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits, tuning().parallel_minimum_elements,
         [](float v) { return (v > 0.0f) ? 1.0f : (v < 0.0f ? -1.0f : 0.0f); });
     return;
   case DataType::UINT8:
-    SignUnsigned<uint8_t>(x, output, tuning_.parallel_minimum_elements);
+    SignUnsigned<uint8_t>(x, output, tuning().parallel_minimum_elements);
     return;
   case DataType::UINT16:
-    SignUnsigned<uint16_t>(x, output, tuning_.parallel_minimum_elements);
+    SignUnsigned<uint16_t>(x, output, tuning().parallel_minimum_elements);
     return;
   case DataType::UINT32:
-    SignUnsigned<uint32_t>(x, output, tuning_.parallel_minimum_elements);
+    SignUnsigned<uint32_t>(x, output, tuning().parallel_minimum_elements);
     return;
   case DataType::UINT64:
-    SignUnsigned<uint64_t>(x, output, tuning_.parallel_minimum_elements);
+    SignUnsigned<uint64_t>(x, output, tuning().parallel_minimum_elements);
     return;
   case DataType::INT8:
-    SignSigned<int8_t>(x, output, tuning_.parallel_minimum_elements);
+    SignSigned<int8_t>(x, output, tuning().parallel_minimum_elements);
     return;
   case DataType::INT16:
-    SignSigned<int16_t>(x, output, tuning_.parallel_minimum_elements);
+    SignSigned<int16_t>(x, output, tuning().parallel_minimum_elements);
     return;
   case DataType::INT32:
-    SignSigned<int32_t>(x, output, tuning_.parallel_minimum_elements);
+    SignSigned<int32_t>(x, output, tuning().parallel_minimum_elements);
     return;
   case DataType::INT64:
-    SignSigned<int64_t>(x, output, tuning_.parallel_minimum_elements);
+    SignSigned<int64_t>(x, output, tuning().parallel_minimum_elements);
     return;
   default:
     EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,

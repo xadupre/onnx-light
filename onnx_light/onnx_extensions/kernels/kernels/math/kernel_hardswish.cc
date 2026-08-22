@@ -38,21 +38,12 @@ inline float HardSwishOp(float v) {
 } // namespace
 
 HardSwish::HardSwish(const KernelContext &ctx)
-    : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+    : ParallelTunableKernel(ctx, "HardSwish", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
 
 void HardSwish::RegisterTuningSchemas() {
   tuning::RegisterParallelTuningSchemas("HardSwish", kSupportedElementTypes,
                                         kPortableParallelMinimum, kTuningAbi);
-}
-
-KernelTuningKey HardSwish::TuningKey(int32_t element_type) const {
-  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
-             ? tuning::MakePortableTuningKey("HardSwish", element_type, kTuningAbi)
-             : KernelTuningKey{};
-}
-
-void HardSwish::Configure(const KernelTuningParameters &parameters) {
-  tuning::ConfigureParallelTuning("HardSwish", parameters, tuning_, kTuningAbi);
 }
 
 Tensor HardSwish::operator()(const Tensor &x, RuntimeContext *rt) const {
@@ -74,7 +65,7 @@ void HardSwish::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[static_cast<size_t>(i)] = HardSwishOp(px[i]);
       }
@@ -83,11 +74,11 @@ void HardSwish::operator()(const Tensor &x, Tensor &output) const {
   }
   case DataType::FLOAT16:
     detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
-                                 tuning_.parallel_minimum_elements, HardSwishOp);
+                                 tuning().parallel_minimum_elements, HardSwishOp);
     return;
   case DataType::BFLOAT16:
     detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                 tuning_.parallel_minimum_elements, HardSwishOp);
+                                 tuning().parallel_minimum_elements, HardSwishOp);
     return;
   default:
     EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,

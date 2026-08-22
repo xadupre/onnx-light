@@ -92,34 +92,26 @@ void ValidateOutput(const Tensor &x, const Tensor &output) {
 
 } // namespace
 
-Mish::Mish(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+Mish::Mish(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Mish", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
 
 void Mish::RegisterTuningSchemas() {
   tuning::RegisterParallelTuningSchemas("Mish", kSupportedElementTypes, kPortableParallelMinimum,
                                         kTuningAbi);
 }
 
-KernelTuningKey Mish::TuningKey(int32_t element_type) const {
-  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
-             ? tuning::MakePortableTuningKey("Mish", element_type, kTuningAbi)
-             : KernelTuningKey{};
-}
-
-void Mish::Configure(const KernelTuningParameters &parameters) {
-  tuning::ConfigureParallelTuning("Mish", parameters, tuning_, kTuningAbi);
-}
-
 Tensor Mish::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
   Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, out_n_bytes)
                   : MakeOutputTensor(x.data_type, x.shape, out_n_bytes, nullptr);
-  Dispatch(x, out, tuning_.parallel_minimum_elements);
+  Dispatch(x, out, tuning().parallel_minimum_elements);
   return out;
 }
 
 void Mish::operator()(const Tensor &x, Tensor &output) const {
   ValidateOutput(x, output);
-  Dispatch(x, output, tuning_.parallel_minimum_elements);
+  Dispatch(x, output, tuning().parallel_minimum_elements);
 }
 
 void Mish::Run(RuntimeContext &rt) {

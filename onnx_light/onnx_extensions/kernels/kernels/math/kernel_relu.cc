@@ -109,34 +109,26 @@ void ValidateOutput(const Tensor &x, const Tensor &output) {
 
 } // namespace
 
-Relu::Relu(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+Relu::Relu(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Relu", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
 
 void Relu::RegisterTuningSchemas() {
   tuning::RegisterParallelTuningSchemas("Relu", kSupportedElementTypes, kPortableParallelMinimum,
                                         kTuningAbi);
 }
 
-KernelTuningKey Relu::TuningKey(int32_t element_type) const {
-  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
-             ? tuning::MakePortableTuningKey("Relu", element_type, kTuningAbi)
-             : KernelTuningKey{};
-}
-
-void Relu::Configure(const KernelTuningParameters &parameters) {
-  tuning::ConfigureParallelTuning("Relu", parameters, tuning_, kTuningAbi);
-}
-
 Tensor Relu::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
   Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, out_n_bytes)
                   : MakeOutputTensor(x.data_type, x.shape, out_n_bytes, nullptr);
-  Dispatch(x, out, tuning_.parallel_minimum_elements);
+  Dispatch(x, out, tuning().parallel_minimum_elements);
   return out;
 }
 
 void Relu::operator()(const Tensor &x, Tensor &output) const {
   ValidateOutput(x, output);
-  Dispatch(x, output, tuning_.parallel_minimum_elements);
+  Dispatch(x, output, tuning().parallel_minimum_elements);
 }
 
 void Relu::Run(RuntimeContext &rt) {

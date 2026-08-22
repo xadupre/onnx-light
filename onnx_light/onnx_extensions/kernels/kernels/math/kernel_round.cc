@@ -50,21 +50,13 @@ void RoundHalf(const Tensor &x, Tensor &output, DecodeFunc decode, EncodeFunc en
 
 } // namespace
 
-Round::Round(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+Round::Round(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Round", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
 
 void Round::RegisterTuningSchemas() {
   tuning::RegisterParallelTuningSchemas("Round", kSupportedElementTypes, kPortableParallelMinimum,
                                         kTuningAbi);
-}
-
-KernelTuningKey Round::TuningKey(int32_t element_type) const {
-  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
-             ? tuning::MakePortableTuningKey("Round", element_type, kTuningAbi)
-             : KernelTuningKey{};
-}
-
-void Round::Configure(const KernelTuningParameters &parameters) {
-  tuning::ConfigureParallelTuning("Round", parameters, tuning_, kTuningAbi);
 }
 
 Tensor Round::operator()(const Tensor &x, RuntimeContext *rt) const {
@@ -86,7 +78,7 @@ void Round::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       const int previous_rounding_mode = std::fegetround();
       std::fesetround(FE_TONEAREST);
       for (int64_t i = begin; i < end; ++i) {
@@ -97,11 +89,12 @@ void Round::operator()(const Tensor &x, Tensor &output) const {
     return;
   }
   case DataType::FLOAT16:
-    RoundHalf(x, output, Float16BitsToFloat, FloatToFloat16Bits, tuning_.parallel_minimum_elements);
+    RoundHalf(x, output, Float16BitsToFloat, FloatToFloat16Bits,
+              tuning().parallel_minimum_elements);
     return;
   case DataType::BFLOAT16:
     RoundHalf(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-              tuning_.parallel_minimum_elements);
+              tuning().parallel_minimum_elements);
     return;
   default:
     EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,

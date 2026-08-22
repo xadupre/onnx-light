@@ -164,6 +164,14 @@ Windows and macOS need separate backends. Until implemented, they return
 disabled by default because permissions, system configuration, and
 virtualization commonly prevent reliable access.
 
+Profile PR06 deliberately stays unimplemented until a concrete platform, API,
+and validation environment are identified: adding a Windows or macOS backend
+without an authoritative profiling tool to validate against (equivalent to
+``perf stat`` on Linux) would leave its counter semantics untested and risks
+diverging from the established validity/status model. The portable-timing
+fallback already covers those platforms, so no functional gap blocks users in
+the meantime.
+
 Process CPU time is portable only as an aggregate across process threads, and an
 unavailable or invalid clock sample is represented by no value rather than
 zero. It is acceptable for isolated diagnostic runs but can include unrelated
@@ -256,4 +264,5 @@ Implementation sequence
        <https://github.com/xadupre/onnx-light/issues/4640>`_
      - Additional platform backends.
      - A backend lands only with equivalent documented and tested semantics.
-     - Optional
+     - Deferred: optional, unassigned until a concrete platform, API, and
+       validation environment are identified.

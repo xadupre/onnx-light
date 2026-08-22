@@ -43,26 +43,6 @@ from onnx_light.onnx.reference import ReferenceEvaluator
 BENCHMARK_OPS = ["abs", "relu", "sigmoid", "sqrt", "exp", "erf", "add", "mul", "div"]
 
 
-def find_benchmark_case(op_name: str):
-    """Returns the single float32 benchmark :class:`TestCase` for ``op_name``.
-
-    Returns:
-        The unique :class:`TestCase` whose name matches
-        ``test_cc_<op_name>_benchmark``.
-
-    Raises:
-        ValueError: If zero or more than one case matches, which would
-            indicate the backend test registry changed shape.
-    """
-    pattern = f"^test_cc_{op_name}_benchmark$"
-    matches = collect_test_cases_by_name(pattern, mode=TestMode.BENCHMARK)
-    if len(matches) != 1:
-        raise ValueError(
-            f"Expected exactly one benchmark case matching {pattern!r}, got {len(matches)}."
-        )
-    return matches[0]
-
-
 # %%
 # Measurement grid
 # ----------------
@@ -128,7 +108,13 @@ def benchmark_case(op_name: str) -> dict:
         and the median execution time measured for each runtime.
     """
 
-    tc = find_benchmark_case(op_name)
+    pattern = f"^test_cc_{op_name}_benchmark$"
+    matches = collect_test_cases_by_name(pattern, mode=TestMode.BENCHMARK)
+    if len(matches) != 1:
+        raise ValueError(
+            f"Expected exactly one benchmark case matching {pattern!r}, got {len(matches)}."
+        )
+    tc = matches[0]
     model = tc.model
     input_names = [vi.name for vi in model.graph.input]
     data_set = tc.data_sets[0]

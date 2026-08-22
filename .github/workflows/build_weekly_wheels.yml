@@ -51,7 +51,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v4.1.1
         env:
-          CIBW_BUILD: "cp311-* cp312-* cp313-* cp314-* cp314t-*"
+          CIBW_BUILD: "cp312-* cp313-* cp314-* cp314t-*"
           CIBW_ARCHS: ${{ matrix.arch }}
           # The default cibuildwheel manylinux2014 image ships GCC 10, which
           # rejects some of our recursive container templates (e.g. the
@@ -105,7 +105,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v4.1.1
         env:
-          CIBW_BUILD: "cp311-* cp312-* cp313-* cp314-* cp314t-*"
+          CIBW_BUILD: "cp312-* cp313-* cp314-* cp314t-*"
           CIBW_ARCHS: ${{ matrix.arch }}
           # See build_release_wheel.yml for the --ignore-in-wheel rationale:
           # lib_onnx_proto.dll is already bundled next to the extensions.
@@ -145,7 +145,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v4.1.1
         env:
-          CIBW_BUILD: "cp311-* cp312-* cp313-* cp314-* cp314t-*"
+          CIBW_BUILD: "cp312-* cp313-* cp314-* cp314t-*"
           CIBW_ARCHS: universal2
           # Bump the macOS deployment target high enough to satisfy the
           # minimum target of Homebrew's ``libcrypto.3.dylib`` (which is

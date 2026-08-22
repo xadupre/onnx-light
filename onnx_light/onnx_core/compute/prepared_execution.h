@@ -212,6 +212,9 @@ private:
 
   static ExecutionHandle Submit(std::function<PreparedExecutionResult(std::atomic<bool> &)> work);
 
+  /** Blocks until done without rethrowing; safe to call while unwinding. */
+  void WaitQuiet() noexcept;
+
   std::shared_ptr<Shared> shared_;
 };
 
@@ -252,20 +255,20 @@ public:
    * the returned handle.
    */
   ExecutionHandle PrepareAsync(PreparedExecutionState &state, const PreparedTaskExecutor &executor,
-                              CpuExecutor *cpu_executor = nullptr) const;
+                               CpuExecutor *cpu_executor = nullptr) const;
 
   /**
    * Submits every task in this plan and returns immediately.
    *
-   * ``state``, ``executor``, and (when supplied) ``cpu_executor`` must outlive
-   * the returned handle.
+   * This plan, ``state``, ``executor``, and (when supplied) ``cpu_executor``
+   * must all outlive the returned handle.
    */
   ExecutionHandle RunAsync(PreparedExecutionState &state, const PreparedTaskExecutor &executor,
-                          CpuExecutor *cpu_executor = nullptr) const;
+                           CpuExecutor *cpu_executor = nullptr) const;
 
   /** Synchronous ``PrepareAsync`` followed by ``Wait``. */
   void Prepare(PreparedExecutionState &state, const PreparedTaskExecutor &executor,
-              CpuExecutor *cpu_executor = nullptr) const;
+               CpuExecutor *cpu_executor = nullptr) const;
 
 private:
   PreparedExecutionResult Run(PreparedExecutionState &state, const PreparedTaskExecutor &executor,

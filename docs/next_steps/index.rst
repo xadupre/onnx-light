@@ -109,11 +109,12 @@ these four objectives.
       - :ref:`l-next-steps-parallel-for-profiling`
       - Measures work decomposition, utilization, and hardware counters so
         tuning decisions have evidence.
-    * - Planned
+    * - Started
       - 1
       - :ref:`l-next-steps-kernel-parallelization`
-      - Migrates measured kernel families through the tuning and calibration
-        APIs.
+      - Inventories kernel parallel coverage, publishes cross-machine
+        baselines, then migrates measured kernel families through the tuning
+        and calibration APIs.
     * - Discussed
       - 2, 4
       - :ref:`l-next-steps-custom-types`

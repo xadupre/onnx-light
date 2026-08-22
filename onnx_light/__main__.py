@@ -124,6 +124,30 @@ run
 tune-kernels
     Proposes calibration updates for tuning keys missing from the local cache.
     It is read-only unless ``--apply`` is specified.
+
+kernel-baseline
+    Produces the kernel inventory (coverage state per registered kernel path)
+    and a deterministic benchmark corpus report, combined into one
+    machine-readable JSON document. Read-only: it never modifies the kernel
+    tuning cache and never invokes ``onnxruntime``.
+
+    Usage::
+
+        python -m onnx_light kernel-baseline [--output report.json]
+
+    Options:
+
+    ``--output PATH`` / ``-o PATH``
+        Write the JSON report to *PATH* instead of printing it to stdout.
+    ``--repeat N``
+        Measured repetitions per benchmark case (default ``5``).
+    ``--warmup N``
+        Warm-up repetitions before measuring (default ``2``).
+    ``--seed SEED``
+        Integer seed for the deterministic input generator (default ``0``).
+    ``--no-diagnostics``
+        Skip the extra profiling run that reports grain size and hardware
+        counters for each case.
 """
 
 from __future__ import annotations
@@ -207,6 +231,26 @@ def _cmd_tune_kernels(args: argparse.Namespace) -> None:
                 f"  {item['library']}/{item['kernel']}/{item['implementation']} "
                 f"dtype={item['element_type']} abi={item['tuning_abi']}"
             )
+
+
+def _cmd_kernel_baseline(args: argparse.Namespace) -> None:
+    """Produces the kernel inventory and benchmark corpus baseline report."""
+    from .tools import kernel_baseline
+
+    report = kernel_baseline.run_kernel_baseline_report(
+        repeat=args.repeat,
+        warmup=args.warmup,
+        seed=args.seed,
+        collect_diagnostics=not args.no_diagnostics,
+    )
+    text = json.dumps(report, indent=2, sort_keys=True)
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as output_file:
+            output_file.write(text)
+            output_file.write("\n")
+        print(f"kernel-baseline: wrote {args.output}")
+    else:
+        print(text)
 
 
 def _print_shape_inference_events(events: list) -> None:
@@ -1107,6 +1151,33 @@ def _build_parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="Print the complete JSON report."
     )
     tuning_parser.set_defaults(func=_cmd_tune_kernels)
+
+    # --- kernel-baseline -------------------------------------------------------
+    baseline_parser = subparsers.add_parser(
+        "kernel-baseline",
+        help=(
+            "Produce the kernel inventory and deterministic benchmark corpus report "
+            "(read-only; does not modify the kernel tuning cache)."
+        ),
+    )
+    baseline_parser.add_argument(
+        "--output", "-o", help="Write the JSON report to this path instead of stdout."
+    )
+    baseline_parser.add_argument(
+        "--repeat", type=int, default=5, help="Measured repetitions per benchmark case."
+    )
+    baseline_parser.add_argument(
+        "--warmup", type=int, default=2, help="Warm-up repetitions before measuring."
+    )
+    baseline_parser.add_argument(
+        "--seed", type=int, default=0, help="Seed for the deterministic input generator."
+    )
+    baseline_parser.add_argument(
+        "--no-diagnostics",
+        action="store_true",
+        help="Skip the extra profiling run reporting grain size and hardware counters.",
+    )
+    baseline_parser.set_defaults(func=_cmd_kernel_baseline)
 
     return parser
 

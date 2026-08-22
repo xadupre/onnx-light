@@ -5,7 +5,7 @@ Kernel parallelization and tuning sequence
 
 :Date: 2026-08
 
-**planned**
+**Step E in progress**
 
 Objective
 +++++++++
@@ -66,7 +66,11 @@ step and produces the input required by the next one.
         parallel regions, including correctness inputs and benchmark shapes.
       - Migration order must follow measured impact rather than source-file
         order or intuition.
-      - Planned
+      - Started (``onnx_light.tools.kernel_inventory`` and
+        ``onnx_light.tools.kernel_baseline`` cover every native kernel path
+        and the x86-64 baseline report; the ORT-attribution deliverable from
+        Step D is still outstanding, so this evidence only ranks native
+        ``onnx-light`` kernels)
     * - F. Kernel migration
       - Step E
       - A serial implementation and one or more bounded parallel candidates
@@ -105,6 +109,87 @@ calibration and default promotion.
 
 Only #4669 is immediately assignable. Each later issue states its prerequisite
 and must remain unassigned until that prerequisite is closed.
+
+Coverage states
++++++++++++++++
+
+``onnx_light.tools.kernel_inventory`` enumerates every registered native
+kernel path from the built-in dispatch table and assigns it exactly one of
+the following coverage states, recorded once per ``(domain, op_type, device,
+element_type)`` path. ``validate_inventory()`` guarantees no path is left
+unclassified.
+
+``serial``
+    No ``ParallelFor`` call site was found in the kernel's source file and no
+    tuning schema is registered for it. The kernel always runs on the calling
+    thread; a ``serial_reason`` field records why (e.g. control-flow operators
+    that recurse into another session, or operators whose per-call cost never
+    justifies worker wake-up).
+
+``parallel_fixed_policy``
+    The kernel calls ``ParallelFor`` but has no registered tuning schema: the
+    grain size and participant limits are compiled constants
+    (``kParallelForGrainSize`` and friends), not processor-specific.
+
+``tunable``
+    The kernel registers a ``KernelTuningSchema``: its named thresholds have
+    portable defaults and may be overridden by a persisted profile.
+
+``calibratable``
+    A subset of ``tunable`` paths that additionally register a
+    ``KernelCalibrationFunction`` (``RegisterKernelTuningSchema`` +
+    calibration callback), so ``CalibrateRegisteredKernels`` can measure a
+    value instead of requiring a hand-picked one.
+
+Benchmark corpus and machine reports
++++++++++++++++++++++++++++++++++++
+
+``onnx_light.tools.kernel_baseline`` runs a deliberately small and
+representative benchmark corpus rather than an exhaustive one: one
+memory-bound unary kernel (``Abs``), one compute-bound kernel with an
+existing tuning schema (``Gemm``), and one boolean/logical kernel (``Not``),
+each measured at a small, medium, and large shape under a forced serial
+policy (``CpuExecutionPolicy.num_threads = 1``) and the default
+session-thread policy (``CpuExecutionPolicy.num_threads = 0``). Every case
+reports the CPU descriptor, executor policy, wall time, process CPU
+utilization, requested/admitted/observed participants, grain size, and
+hardware counters when the platform collector supports them (Linux only in
+this version; other platforms report ``unsupported`` rather than fabricating
+zero values). Model construction (``startup``) and steady-state execution
+(``kernel execution``) are timed separately, and the tool never invokes
+``onnxruntime``, so only native ``onnx-light`` kernels enter the migration
+ranking -- it does not substitute for Step D's ORT attribution. Running the
+corpus never writes to the kernel tuning cache: it only reads
+``kernel_tuning_parameters()`` and constructs ordinary ``RuntimeSession``
+instances. It is exposed as ``python -m onnx_light kernel-baseline``.
+
+Published machine reports live under
+``docs/next_steps/2026/kernel_parallelization_reports/``. Each file records
+the host CPU descriptor in its own JSON payload so that an x86-64 and an
+ARM64 report can be compared using the same schema and benchmark cases
+without merging them into a single file. An x86-64 baseline is published;
+an ARM64 report is pending access to hardware.
+
+First migration batch
+++++++++++++++++++++++
+
+Ranking the x86-64 baseline (see
+``kernel_parallelization_reports/x86_64_baseline.json``) by large-shape
+serial-vs-session-thread speedup and by absolute large-shape wall time
+identifies ``Gemm`` (``FLOAT``, ``DOUBLE``, ``FLOAT16``, ``BFLOAT16``,
+already ``tunable`` via ``KernelTuningSchema`` but still running with its
+portable single-block defaults) as the largest compute-bound outlier, and the
+still ``parallel_fixed_policy`` transcendental unary kernels ``Log``,
+``Tanh``, and ``Sigmoid`` (``Exp`` already migrated to ``tunable``, alongside
+``Abs``) as the next fixed-grain-size candidates: they show the largest gap
+between the serial and session-thread policies of the sampled kernels. The
+next implementation batch should (1) calibrate ``Gemm``'s existing tuning
+parameters (``algorithm.tile_m/tile_n/tile_k``,
+``parallel.fmas_per_work_unit``, ``parallel.minimum_tasks``, ...) instead of
+relying on its portable defaults, and (2) give ``Log``, ``Tanh``, and
+``Sigmoid`` their own ``KernelTuningSchema`` (mirroring ``Abs``'s
+``CalibrateAbs``) before selecting further kernels, then confirm the ranking
+against an ARM64 report once one is available.
 
 Per-kernel implementation loop
 ++++++++++++++++++++++++++++++

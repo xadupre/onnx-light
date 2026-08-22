@@ -5,6 +5,7 @@
 #include "thread_pool.h"
 #include <cstddef>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <istream>
 #include <iterator>
@@ -91,6 +92,13 @@ inline uint64_t encodeZigZag64(int64_t n) {
  *  tensor alignment requirement (16 / 32 / 64 bytes) when combined with an
  *  aligned file offset. */
 std::shared_ptr<uint8_t> mmap_file_as_shared_ptr(const std::string &file_path, int64_t file_size);
+
+/** Validates that *candidate_path* is not a symlink, resolves inside *base_dir*, and has
+ *  no more than one hard link, before it is opened, mapped, or read as external tensor
+ *  data. Throws (EXT_ENFORCE/EXT_THROW) on any violation: a symlink, a path that
+ *  canonicalizes outside *base_dir*, or a file with additional hard links. */
+void validate_external_weights_read_path(const std::filesystem::path &candidate_path,
+                                         const std::filesystem::path &base_dir);
 
 class StringStream;
 

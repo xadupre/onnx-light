@@ -106,6 +106,12 @@ std::filesystem::path validate_external_location_is_next_to_model(const std::str
   return final_path;
 }
 
+} // namespace
+
+// Validates that *candidate_path* is not a symlink, resolves inside *base_dir*, and
+// has no more than one hard link. Shared by external-data reads (TwoFilesStream) and
+// the MappedPayload contract (onnx_mapped_payload.cc) so both apply the same confinement
+// rules before a path is opened or memory-mapped.
 void validate_external_weights_read_path(const std::filesystem::path &candidate_path,
                                          const std::filesystem::path &base_dir) {
   EXT_ENFORCE(!std::filesystem::is_symlink(candidate_path), "External data file '",
@@ -132,8 +138,6 @@ void validate_external_weights_read_path(const std::filesystem::path &candidate_
   EXT_ENFORCE(hc <= 1, "External data file '", candidate_path.string(),
               "' has multiple hard links (", static_cast<int64_t>(hc), "), which is not allowed.");
 }
-
-} // namespace
 
 // Maps an entire file into read-only virtual memory and returns a shared_ptr<uint8_t>
 // whose deleter unmaps the region.  On POSIX, mmap(MAP_PRIVATE|PROT_READ) is used;

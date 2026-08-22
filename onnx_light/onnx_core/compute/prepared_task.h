@@ -52,6 +52,12 @@ enum class ResourceClass {
   kDevice,
 };
 
+enum class TaskPriority {
+  kBackground,
+  kPrefetch,
+  kCritical,
+};
+
 enum class TaskStatus {
   kPending,
   kRunning,
@@ -80,13 +86,14 @@ struct TaskDescriptor {
                  size_t estimated_output_bytes_ = 0, size_t peak_temporary_bytes_ = 0,
                  std::optional<ActionRange> actions_ = {},
                  std::vector<PreparedKey> prepared_requirements_ = {},
-                 std::optional<PreparedKey> publishes_ = {}, bool dormant_ = false)
+                 std::optional<PreparedKey> publishes_ = {}, bool dormant_ = false,
+                 TaskPriority priority_ = TaskPriority::kPrefetch)
       : id(id_), scope(scope_), kind(kind_), resource(resource_),
         dependencies(std::move(dependencies_)), estimated_input_bytes(estimated_input_bytes_),
         estimated_output_bytes(estimated_output_bytes_),
         peak_temporary_bytes(peak_temporary_bytes_), actions(actions_),
         prepared_requirements(std::move(prepared_requirements_)), publishes(std::move(publishes_)),
-        dormant(dormant_) {}
+        dormant(dormant_), priority(priority_) {}
 
   TaskId id;
   TaskScope scope = TaskScope::kInvocation;
@@ -100,6 +107,7 @@ struct TaskDescriptor {
   std::vector<PreparedKey> prepared_requirements;
   std::optional<PreparedKey> publishes;
   bool dormant = false;
+  TaskPriority priority = TaskPriority::kPrefetch;
 };
 
 /**

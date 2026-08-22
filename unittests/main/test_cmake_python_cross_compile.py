@@ -12,10 +12,10 @@ class TestCMakePythonCrossCompile(unittest.TestCase):
 
         expected_ordered_snippets = [
             (
-                "find_package(Python3 3.10 REQUIRED COMPONENTS Development.Module\n"
+                "find_package(Python3 3.12 REQUIRED COMPONENTS Development.Module\n"
                 "      OPTIONAL_COMPONENTS Development.SABIModule)"
             ),
-            "find_package(Python 3.10 REQUIRED COMPONENTS Interpreter)",
+            "find_package(Python 3.12 REQUIRED COMPONENTS Interpreter)",
             "if(NOT TARGET Python::Module)",
             "add_library(Python::Module ALIAS Python3::Module)",
             "if(TARGET Python3::SABIModule AND NOT TARGET Python::SABIModule)",

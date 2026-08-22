@@ -6,12 +6,14 @@
 #include "onnx_core/compute/prepared_task.h"
 #include "onnx_core/compute/resolved_model_fixture.h"
 #include <atomic>
+#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
 #include <stdexcept>
 #include <thread>
+#include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
 
@@ -226,4 +228,177 @@ TEST(PreparedExecutionPlan, RetriesFailedSessionGenerationAndKeepsInvocationsSep
   EXPECT_EQ(third.session_generations[0].second, 2u);
   EXPECT_EQ(second.diagnostics[1].status, TaskStatus::kSucceeded);
   EXPECT_EQ(third.diagnostics[1].status, TaskStatus::kSucceeded);
+}
+
+TEST(PreparedExecutionPlan, ParallelModeUsesSuppliedCpuExecutorAndMatchesSequentialResult) {
+  PreparedExecutionPlan plan({
+      TaskDescriptor{TaskId{1}, TaskScope::kSession, TaskKind::kReadPayload, ResourceClass::kIo},
+      TaskDescriptor{
+          TaskId{2}, TaskScope::kSession, TaskKind::kPrepare, ResourceClass::kCpu, {TaskId{1}}},
+      TaskDescriptor{
+          TaskId{3}, TaskScope::kInvocation, TaskKind::kExecute, ResourceClass::kCpu, {TaskId{2}}},
+  });
+  PreparedExecutionState sequential_state;
+  PreparedExecutionState parallel_state;
+  std::atomic<int> sequential_value{0};
+  std::atomic<int> parallel_value{0};
+
+  const PreparedExecutionResult sequential = plan.RunSequential(
+      sequential_state, [&](const TaskDescriptor &task, PreparedExecutionState &) {
+        sequential_value.fetch_add(static_cast<int>(task.id.value));
+      });
+
+  CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  const std::shared_ptr<CpuExecutor> cpu_executor = GlobalCpuExecutorRegistry().Acquire(policy);
+  const size_t live_pools = GlobalCpuExecutorRegistry().live_pool_count();
+  std::atomic<bool> used_supplied_executor{true};
+  const PreparedExecutionResult parallel = plan.RunParallel(
+      parallel_state,
+      [&](const TaskDescriptor &task, PreparedExecutionState &) {
+        if (task.resource == ResourceClass::kCpu) {
+          used_supplied_executor =
+              used_supplied_executor && CurrentCpuExecutor() == cpu_executor.get();
+        }
+        parallel_value.fetch_add(static_cast<int>(task.id.value));
+      },
+      *cpu_executor);
+
+  EXPECT_EQ(parallel_value, sequential_value);
+  EXPECT_TRUE(used_supplied_executor);
+  EXPECT_EQ(GlobalCpuExecutorRegistry().live_pool_count(), live_pools);
+  ASSERT_EQ(parallel.diagnostics.size(), sequential.diagnostics.size());
+  for (size_t i = 0; i < parallel.diagnostics.size(); ++i) {
+    EXPECT_EQ(parallel.diagnostics[i].status, sequential.diagnostics[i].status);
+  }
+}
+
+TEST(PreparedExecutionPlan, InheritsCriticalPriorityAndReservesIoAdmission) {
+  TaskDescriptor background{TaskId{1}, TaskScope::kSession, TaskKind::kPersist, ResourceClass::kIo};
+  background.priority = TaskPriority::kBackground;
+  TaskDescriptor required{TaskId{2}, TaskScope::kSession, TaskKind::kReadPayload,
+                          ResourceClass::kIo};
+  required.priority = TaskPriority::kBackground;
+  PreparedExecutionPlan plan({
+      background,
+      required,
+      TaskDescriptor{
+          TaskId{3}, TaskScope::kInvocation, TaskKind::kExecute, ResourceClass::kCpu, {TaskId{2}}},
+  });
+  PreparedExecutionState state(
+      1, 1, std::numeric_limits<size_t>::max(), std::numeric_limits<size_t>::max(),
+      PreparedSchedulerOptions{.io_workers = 1, .reserved_critical_memory = 1});
+  std::mutex order_mutex;
+  std::vector<uint64_t> order;
+
+  plan.RunSequential(state, [&](const TaskDescriptor &task, PreparedExecutionState &) {
+    std::lock_guard<std::mutex> lock(order_mutex);
+    order.push_back(task.id.value);
+    if (task.id.value == 2) {
+      EXPECT_EQ(task.priority, TaskPriority::kCritical);
+    }
+  });
+
+  ASSERT_EQ(order.size(), 3u);
+  EXPECT_EQ(order[0], 2u);
+  EXPECT_EQ(order[1], 3u);
+  EXPECT_EQ(order[2], 1u);
+}
+
+TEST(PreparedExecutionPlan, EnforcesGlobalAndIoMemoryBudgets) {
+  TaskDescriptor first{TaskId{1}, TaskScope::kSession, TaskKind::kReadPayload, ResourceClass::kIo};
+  first.estimated_input_bytes = 8;
+  TaskDescriptor second{TaskId{2}, TaskScope::kSession, TaskKind::kReadPayload, ResourceClass::kIo};
+  second.estimated_input_bytes = 8;
+  PreparedExecutionPlan plan({first, second});
+  PreparedExecutionState state(
+      1, 1, std::numeric_limits<size_t>::max(), std::numeric_limits<size_t>::max(),
+      PreparedSchedulerOptions{.io_workers = 2, .global_memory_budget = 12, .io_memory_budget = 8});
+  std::atomic<int> active{0};
+  std::atomic<int> maximum_active{0};
+
+  const PreparedExecutionResult result =
+      plan.RunSequential(state, [&](const TaskDescriptor &, PreparedExecutionState &) {
+        const int current = ++active;
+        maximum_active = std::max(maximum_active.load(), current);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        --active;
+      });
+
+  EXPECT_EQ(maximum_active, 1);
+  EXPECT_LE(result.peak_in_flight_bytes, 8u);
+}
+
+TEST(PreparedExecutionPlan, EnforcesPreparedAndExecutionMemoryBudgets) {
+  TaskDescriptor prepare{TaskId{1}, TaskScope::kSession, TaskKind::kPrepare, ResourceClass::kCpu};
+  prepare.estimated_output_bytes = 9;
+  PreparedExecutionPlan preparation_plan({prepare});
+  PreparedExecutionState preparation_state(1, 1, std::numeric_limits<size_t>::max(),
+                                           std::numeric_limits<size_t>::max(),
+                                           PreparedSchedulerOptions{.prepared_memory_budget = 8});
+  EXPECT_THROW(preparation_plan.RunSequential(
+                   preparation_state, [](const TaskDescriptor &, PreparedExecutionState &) {}),
+               std::runtime_error);
+
+  TaskDescriptor execute{TaskId{1}, TaskScope::kInvocation, TaskKind::kExecute,
+                         ResourceClass::kCpu};
+  execute.peak_temporary_bytes = 9;
+  PreparedExecutionPlan execution_plan({execute});
+  PreparedExecutionState execution_state(1, 1, std::numeric_limits<size_t>::max(),
+                                         std::numeric_limits<size_t>::max(),
+                                         PreparedSchedulerOptions{.execution_memory_budget = 8});
+  EXPECT_THROW(execution_plan.RunSequential(
+                   execution_state, [](const TaskDescriptor &, PreparedExecutionState &) {}),
+               std::runtime_error);
+}
+
+TEST(PreparedExecutionPlan, FullyPreparedRunUsesEpochHotPathWithoutEnqueues) {
+  const PreparedObjectRequirement requirement{PreparedKey{"hot"}, "source"};
+  TaskDescriptor publish{TaskId{1}, TaskScope::kSession, TaskKind::kPublish,
+                         ResourceClass::kInline};
+  publish.publishes = requirement.key;
+  TaskDescriptor first_action{
+      TaskId{2}, TaskScope::kInvocation, TaskKind::kExecute, ResourceClass::kCpu, {TaskId{1}}};
+  first_action.prepared_requirements = {requirement.key};
+  TaskDescriptor second_action{
+      TaskId{3}, TaskScope::kInvocation, TaskKind::kExecute, ResourceClass::kCpu, {TaskId{2}}};
+  second_action.prepared_requirements = {requirement.key};
+  PreparedExecutionPlan plan({publish, first_action, second_action});
+  PreparedExecutionState state;
+  int invocation_executions = 0;
+  const auto executor = [&](const TaskDescriptor &task, PreparedExecutionState &run_state) {
+    if (task.scope == TaskScope::kSession) {
+      PreparedObjectRequest request = run_state.objects().Request(requirement);
+      AllocationHandle allocation(&run_state.prepared_arena(),
+                                  run_state.prepared_arena().Allocate(1));
+      run_state.objects().Publish(request, std::move(allocation));
+    } else {
+      ++invocation_executions;
+    }
+  };
+
+  const PreparedExecutionResult cold = plan.RunSequential(state, executor);
+  const PreparedExecutionResult hot = plan.RunSequential(state, executor);
+
+  EXPECT_FALSE(cold.used_hot_path);
+  EXPECT_EQ(cold.enqueued_tasks, 3u);
+  EXPECT_TRUE(hot.used_hot_path);
+  EXPECT_EQ(hot.enqueued_tasks, 0u);
+  EXPECT_EQ(invocation_executions, 4);
+
+  bool remained_pinned = false;
+  const PreparedExecutionResult evicting =
+      plan.RunSequential(state, [&](const TaskDescriptor &task, PreparedExecutionState &run_state) {
+        if (task.scope == TaskScope::kInvocation && task.id.value == 2) {
+          EXPECT_TRUE(run_state.objects().Evict(requirement.key));
+          remained_pinned = run_state.prepared_arena().allocated_count() == 1;
+        }
+      });
+  EXPECT_TRUE(evicting.used_hot_path);
+  EXPECT_TRUE(remained_pinned);
+  EXPECT_EQ(state.prepared_arena().allocated_count(), 0u);
+
+  const PreparedExecutionResult reloaded = plan.RunSequential(state, executor);
+  EXPECT_FALSE(reloaded.used_hot_path);
+  EXPECT_EQ(reloaded.enqueued_tasks, 3u);
 }

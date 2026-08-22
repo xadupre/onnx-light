@@ -253,10 +253,32 @@ void CalibrationReporter::AddDiagnostic(std::string message) {
   diagnostics_.push_back(std::move(message));
 }
 
+CalibrationReporter::CalibrationReporter(const CalibrationOptions &options) {
+  if (options.profiling_capacity != 0) {
+    parallel_region_collector_ = std::make_unique<ParallelRegionCollector>(
+        options.profiling_capacity, options.profiling_hardware_counters);
+  }
+}
+
 void CalibrationReporter::RecordBenchmark(uint64_t memory_bytes, uint64_t duration_ns) {
   ++benchmark_cases_;
   peak_memory_bytes_ = std::max(peak_memory_bytes_, memory_bytes);
   measured_duration_ns_ += duration_ns;
+}
+
+void CalibrationReporter::ProfileCandidate(const std::function<void()> &run) {
+  if (parallel_region_collector_ == nullptr) {
+    return;
+  }
+  ParallelRegionCollectorScope collector_scope(parallel_region_collector_.get());
+  run();
+}
+
+void CalibrationReporter::FinalizeCandidateDiagnostics() {
+  if (parallel_region_collector_ != nullptr && !parallel_region_report_.has_value()) {
+    parallel_region_report_ = parallel_region_collector_->Report();
+    parallel_region_collector_.reset();
+  }
 }
 
 bool KernelTuningParameters::Contains(std::string_view name) const {
@@ -821,6 +843,7 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
     reporter.AddDiagnostic(key.kernel +
                            " kept the portable threshold because parallel execution is "
                            "unavailable.");
+    reporter.FinalizeCandidateDiagnostics();
     return selected;
   }
 
@@ -830,7 +853,7 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
   const uint64_t duration_ms = options.maximum_duration_ms == 0
                                    ? benchmark.default_maximum_duration_ms
                                    : options.maximum_duration_ms;
-  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(duration_ms);
+  auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(duration_ms);
   const auto validate =
       benchmark.validate_output ? benchmark.validate_output : ExactCalibrationOutput;
   benchmark.reference.configure(benchmark.serial_parameter_value);
@@ -910,6 +933,13 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
           static_cast<double>(reference_ns) * (1.0 - benchmark.minimum_speedup)) {
         group_won = false;
       }
+      const auto profiling_begin = std::chrono::steady_clock::now();
+      reporter.ProfileCandidate(run_candidate);
+      if (!validate(reference_output, candidate_output)) {
+        throw std::runtime_error(key.kernel + " calibration case '" + benchmark_case.name +
+                                 "' profiled candidate output differs from the reference output.");
+      }
+      deadline += std::chrono::steady_clock::now() - profiling_begin;
     }
 
     if (group_measured && group_won) {
@@ -942,6 +972,7 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
                            " calibration found no stable parallel crossover; kept the portable "
                            "threshold.");
   }
+  reporter.FinalizeCandidateDiagnostics();
   return selected;
 }
 
@@ -999,7 +1030,7 @@ CalibrationBatchReport CalibrateRegisteredKernels(const KernelCalibrationSelecti
       continue;
     }
 
-    CalibrationReporter reporter;
+    CalibrationReporter reporter(options);
     KernelTuningParameters parameters = function(key, execution, options, reporter);
     std::shared_ptr<const KernelTuningSchema> schema = registry.FindSchema(key);
     if (schema == nullptr) {
@@ -1013,6 +1044,10 @@ CalibrationBatchReport CalibrateRegisteredKernels(const KernelCalibrationSelecti
     if (reporter.benchmark_cases() != 0) {
       report.resources.push_back({key, reporter.benchmark_cases(), reporter.peak_memory_bytes(),
                                   reporter.measured_duration_ns()});
+    }
+    if (const std::optional<ParallelRegionReport> &parallel_regions =
+            reporter.parallel_region_report()) {
+      report.candidate_diagnostics.push_back({key, *parallel_regions});
     }
   }
 

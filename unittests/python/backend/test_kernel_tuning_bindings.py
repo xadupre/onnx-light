@@ -25,9 +25,38 @@ class TestKernelTuningBindings(ExtTestCase):
         policy.num_threads = 1
         policy.affinity_policy = rt.CpuAffinityPolicy.NONE
 
-        report = rt.calibrate_kernel_tuning("not_registered", save=False, cpu_execution=policy)
+        report = rt.calibrate_kernel_tuning(
+            "not_registered",
+            save=False,
+            cpu_execution=policy,
+            profiling_capacity=4,
+            profiling_hardware_counters=False,
+        )
 
         self.assertEqual(report["calibrated"], [])
+        self.assertEqual(report["candidate_diagnostics"], [])
+
+    def test_calibration_exposes_bounded_parallel_diagnostics(self):
+        report = rt.calibrate_kernel_tuning(
+            "Abs",
+            element_types=[int(TensorProto.FLOAT)],
+            maximum_duration_ms=25,
+            save=False,
+            profiling_capacity=1,
+            profiling_hardware_counters=False,
+        )
+
+        self.assertEqual(len(report["candidate_diagnostics"]), 1)
+        diagnostic = report["candidate_diagnostics"][0]
+        self.assertEqual(diagnostic["kernel"], "Abs")
+        self.assertLessEqual(len(diagnostic["events"]), 1)
+        self.assertGreaterEqual(diagnostic["dropped_events"], 0)
+        if diagnostic["events"]:
+            event = diagnostic["events"][0]
+            self.assertIn("cpu_utilization", event)
+            self.assertEqual(event["counter_status"], "disabled")
+            self.assertIsNone(event["ipc"])
+            self.assertIsNone(event["llc_miss_rate"])
 
     def test_lists_registered_parameters_and_defaults(self):
         report = kernel_tuning.kernel_tuning_parameters(

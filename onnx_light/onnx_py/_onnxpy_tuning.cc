@@ -14,6 +14,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -112,6 +113,41 @@ nb::dict KeyToDict(const rt::KernelTuningKey &key) {
   result["element_type"] = key.element_type;
   result["device"] = static_cast<int32_t>(key.device);
   result["tuning_abi"] = key.tuning_abi;
+  return result;
+}
+
+nb::dict ParallelRegionToDict(const rt::ParallelRegionReportEvent &event) {
+  std::ostringstream calling_thread_id;
+  calling_thread_id << event.calling_thread_id;
+  nb::dict result;
+  result["region_id"] = event.region_id;
+  result["parent_region_id"] = event.parent_region_id;
+  result["run_id"] = event.run_id;
+  result["calling_thread_id"] = calling_thread_id.str();
+  result["label"] = event.label;
+  result["file_name"] = event.file_name;
+  result["function_name"] = event.function_name;
+  result["line"] = event.line;
+  result["column"] = event.column;
+  result["total_iterations"] = event.total_iterations;
+  result["grain_size"] = event.grain_size;
+  result["requested_threads"] = event.requested_threads;
+  result["admitted_threads"] = event.admitted_threads;
+  result["observed_threads"] = event.observed_threads;
+  result["wall_time_ns"] = event.wall_time_ns;
+  result["process_cpu_time_ns"] = event.process_cpu_time_ns;
+  result["cpu_utilization"] = event.cpu_utilization;
+  result["counter_status"] = rt::HardwareCounterStatusName(event.counter_status);
+  result["cpu_cycles"] = event.cpu_cycles;
+  result["retired_instructions"] = event.retired_instructions;
+  result["llc_references"] = event.llc_references;
+  result["llc_misses"] = event.llc_misses;
+  result["counter_time_enabled"] = event.counter_time_enabled;
+  result["counter_time_running"] = event.counter_time_running;
+  result["ipc"] = event.ipc;
+  result["llc_miss_rate"] = event.llc_miss_rate;
+  result["executor_instance_id"] = event.executor_instance_id;
+  result["nested_inline"] = event.nested_inline;
   return result;
 }
 
@@ -344,7 +380,8 @@ nb::dict Calibrate(const std::string &kernel, const std::vector<int32_t> &elemen
                    const std::string &library, const std::optional<std::string> &implementation,
                    bool only_missing, uint64_t maximum_duration_ms, uint64_t maximum_memory_bytes,
                    bool save, const std::optional<std::string> &path,
-                   const std::optional<rt::CpuExecutionPolicy> &cpu_execution) {
+                   const std::optional<rt::CpuExecutionPolicy> &cpu_execution,
+                   size_t profiling_capacity, bool profiling_hardware_counters) {
   rt::KernelCalibrationSelection selection =
       MakeSelection(kernel, library, implementation, std::nullopt);
   selection.element_types = element_types;
@@ -352,6 +389,8 @@ nb::dict Calibrate(const std::string &kernel, const std::vector<int32_t> &elemen
   rt::CalibrationOptions options;
   options.maximum_duration_ms = maximum_duration_ms;
   options.maximum_memory_bytes = maximum_memory_bytes;
+  options.profiling_capacity = profiling_capacity;
+  options.profiling_hardware_counters = profiling_hardware_counters;
   std::shared_ptr<rt::CpuExecutor> executor;
   if (cpu_execution.has_value()) {
     executor = rt::GlobalCpuExecutorRegistry().Acquire(*cpu_execution);
@@ -380,6 +419,19 @@ nb::dict Calibrate(const std::string &kernel, const std::vector<int32_t> &elemen
     diagnostics.append(std::move(item));
   }
   result["diagnostics"] = std::move(diagnostics);
+  nb::list candidate_diagnostics;
+  for (const rt::KernelCalibrationCandidateDiagnostic &diagnostic :
+       calibration.candidate_diagnostics) {
+    nb::dict item = KeyToDict(diagnostic.key);
+    nb::list events;
+    for (const rt::ParallelRegionReportEvent &event : diagnostic.parallel_regions.events()) {
+      events.append(ParallelRegionToDict(event));
+    }
+    item["events"] = std::move(events);
+    item["dropped_events"] = diagnostic.parallel_regions.dropped_events();
+    candidate_diagnostics.append(std::move(item));
+  }
+  result["candidate_diagnostics"] = std::move(candidate_diagnostics);
   if (save && !calibration.calibrated.empty()) {
     rt::KernelTuningCacheOptions cache_options;
     if (path.has_value()) {
@@ -433,5 +485,7 @@ void AddOnnxPyTuning(nb::module_ &rt_mod) {
              nb::arg("maximum_duration_ms") = uint64_t{0},
              nb::arg("maximum_memory_bytes") = uint64_t{0}, nb::arg("save") = true,
              nb::arg("path") = nb::none(), nb::arg("cpu_execution").none() = nb::none(),
+             nb::arg("profiling_capacity") = size_t{0},
+             nb::arg("profiling_hardware_counters") = false,
              "Calibrates selected registered keys and optionally persists successful profiles.");
 }

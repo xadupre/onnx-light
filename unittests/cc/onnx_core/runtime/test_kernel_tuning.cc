@@ -11,11 +11,13 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <optional>
 #include <sstream>
+#include <thread>
 #include <unordered_set>
 #include <utility>
 
@@ -61,6 +63,33 @@ CpuExecutionDescriptor MakeExecution() {
   execution.processor.features.Add(platform::CpuFeature::kAvx2);
   execution.effective_threads = 8;
   return execution;
+}
+
+void RecordAttractiveCandidateProfile() {
+  ParallelRegionCollector *collector = CurrentParallelRegionCollector();
+  if (collector == nullptr) {
+    return;
+  }
+  HardwareCounterSample counters;
+  counters.status = HardwareCounterStatus::kValid;
+  counters.cpu_cycles = 1;
+  counters.retired_instructions = 100;
+  counters.llc_references = 100;
+  counters.llc_misses = 0;
+  counters.time_enabled = 1;
+  counters.time_running = 1;
+  ParallelRegionEvent event;
+  event.label = "candidate";
+  event.total_iterations = 16;
+  event.grain_size = 1;
+  event.requested_threads = 2;
+  event.admitted_threads = 2;
+  event.observed_threads = 2;
+  event.wall_time_ns = 1;
+  event.process_cpu_time_ns = 2;
+  event.cpu_utilization = 1.0;
+  event.counters = counters;
+  collector->Record(std::move(event));
 }
 
 KernelTuningParameters WithTileM(int64_t tile_m) {
@@ -532,14 +561,137 @@ TEST(KernelCalibration, ValidatesCandidateOutput) {
     std::fill_n(output.AsFloat(), output.element_count(), 0.0f);
   };
   benchmark.candidate.run = [](std::span<const Tensor>, Tensor &output) {
+    RecordAttractiveCandidateProfile();
+    std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
+  };
+  CpuExecutionDescriptor execution = MakeExecution();
+  execution.effective_threads = static_cast<uint32_t>(ParallelForThreadCount());
+  CalibrationOptions options;
+  options.profiling_capacity = 1;
+  CalibrationReporter reporter(options);
+
+  EXPECT_THROW(CalibrateKernelBenchmark(defaults.key, execution, options, reporter, benchmark),
+               std::runtime_error);
+  reporter.FinalizeCandidateDiagnostics();
+  ASSERT_TRUE(reporter.parallel_region_report().has_value());
+  EXPECT_TRUE(reporter.parallel_region_report()->events().empty());
+}
+
+TEST(KernelCalibration, ProfilesCandidatesWithoutOverridingElapsedTimeSelection) {
+  KernelTuningParameters defaults = MakeDefaults();
+  defaults.key.library = "calibration_profile_selection_test";
+  RegisterKernelTuningSchema(KernelTuningSchema(defaults));
+  RegisterKernelCalibrationFunction(
+      defaults.key, [defaults](const KernelTuningKey &key, const CpuExecutionDescriptor &execution,
+                               const CalibrationOptions &options, CalibrationReporter &reporter) {
+        KernelCalibrationBenchmark benchmark;
+        benchmark.portable_parameters = defaults;
+        benchmark.parameter_name = "algorithm.tile_m";
+        benchmark.cases = MakeElementwiseCalibrationCases(DataType::FLOAT, 1, 16, 16, false);
+        benchmark.repetitions = 2;
+        benchmark.required_consecutive_wins = 1;
+        benchmark.minimum_speedup = 0.0;
+        benchmark.reference.configure = [](int64_t) {};
+        benchmark.candidate.configure = [](int64_t) {};
+        benchmark.reference.run = [](std::span<const Tensor>, Tensor &output) {
+          std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
+        };
+        benchmark.candidate.run = [](std::span<const Tensor>, Tensor &output) {
+          RecordAttractiveCandidateProfile();
+          std::this_thread::sleep_for(std::chrono::milliseconds(2));
+          std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
+        };
+        return CalibrateKernelBenchmark(key, execution, options, reporter, benchmark);
+      });
+
+  KernelCalibrationSelection selection;
+  selection.library = defaults.key.library;
+  CalibrationOptions options;
+  options.profiling_capacity = 1;
+  options.execution = CpuExecutionDescriptor{platform::GetCpuDescriptor(), 2};
+  CalibrationExecutorScope executor_scope(2);
+
+  const CalibrationBatchReport report = CalibrateRegisteredKernels(selection, options);
+
+  ASSERT_EQ(report.calibrated.size(), 1u);
+  EXPECT_EQ(report.calibrated[0].Get<int64_t>("algorithm.tile_m"), 64);
+  ASSERT_EQ(report.candidate_diagnostics.size(), 1u);
+  const ParallelRegionReport &profile = report.candidate_diagnostics[0].parallel_regions;
+  ASSERT_EQ(profile.events().size(), 1u);
+  EXPECT_EQ(profile.dropped_events(), 0u);
+  EXPECT_EQ(profile.events()[0].counter_status, HardwareCounterStatus::kValid);
+  EXPECT_DOUBLE_EQ(*profile.events()[0].ipc, 100.0);
+  EXPECT_DOUBLE_EQ(*profile.events()[0].llc_miss_rate, 0.0);
+}
+
+TEST(KernelCalibration, DoesNotRunDiagnosticCandidateWhenProfilingIsDisabled) {
+  if (ParallelForThreadCount() == 1) {
+    GTEST_SKIP() << "Parallel calibration is unavailable.";
+  }
+  KernelTuningParameters defaults = MakeDefaults();
+  KernelCalibrationBenchmark benchmark;
+  benchmark.portable_parameters = defaults;
+  benchmark.parameter_name = "algorithm.tile_m";
+  benchmark.cases = MakeElementwiseCalibrationCases(DataType::FLOAT, 1, 16, 16, false);
+  benchmark.repetitions = 1;
+  benchmark.required_consecutive_wins = 1;
+  benchmark.reference.configure = [](int64_t) {};
+  benchmark.candidate.configure = [](int64_t) {};
+  benchmark.reference.run = [](std::span<const Tensor>, Tensor &output) {
+    std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
+  };
+  int candidate_runs = 0;
+  benchmark.candidate.run = [&candidate_runs](std::span<const Tensor>, Tensor &output) {
+    ++candidate_runs;
     std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
   };
   CpuExecutionDescriptor execution = MakeExecution();
   execution.effective_threads = static_cast<uint32_t>(ParallelForThreadCount());
   CalibrationReporter reporter;
 
-  EXPECT_THROW(CalibrateKernelBenchmark(defaults.key, execution, {}, reporter, benchmark),
-               std::runtime_error);
+  CalibrateKernelBenchmark(defaults.key, execution, {}, reporter, benchmark);
+
+  EXPECT_EQ(candidate_runs, 2);
+  EXPECT_FALSE(reporter.parallel_region_report().has_value());
+}
+
+TEST(KernelCalibration, RetainsBoundedDiagnosticsWhenCountersAreDisabled) {
+  KernelTuningParameters defaults = MakeDefaults();
+  defaults.key.library = "calibration_profile_disabled_counters_test";
+  RegisterKernelTuningSchema(KernelTuningSchema(defaults));
+  RegisterKernelCalibrationFunction(
+      defaults.key, [defaults](const KernelTuningKey &, const CpuExecutionDescriptor &,
+                               const CalibrationOptions &, CalibrationReporter &reporter) {
+        reporter.ProfileCandidate([]() {
+          ParallelFor(8, 1, [](int64_t, int64_t) {}, "first");
+          ParallelFor(8, 1, [](int64_t, int64_t) {}, "dropped");
+        });
+        reporter.FinalizeCandidateDiagnostics();
+        return defaults;
+      });
+
+  KernelCalibrationSelection selection;
+  selection.library = defaults.key.library;
+  CalibrationOptions options;
+  options.profiling_capacity = 1;
+  options.execution = CpuExecutionDescriptor{platform::GetCpuDescriptor(), 2};
+  CalibrationExecutorScope executor_scope(2);
+
+  const CalibrationBatchReport report = CalibrateRegisteredKernels(selection, options);
+
+  ASSERT_EQ(report.calibrated.size(), 1u);
+  ASSERT_EQ(report.candidate_diagnostics.size(), 1u);
+  const ParallelRegionReport &profile = report.candidate_diagnostics[0].parallel_regions;
+  ASSERT_EQ(profile.events().size(), 1u);
+  EXPECT_EQ(profile.dropped_events(), 1u);
+  const ParallelRegionReportEvent &event = profile.events()[0];
+  EXPECT_TRUE(event.wall_time_ns.has_value());
+  EXPECT_TRUE(event.process_cpu_time_ns.has_value());
+  EXPECT_TRUE(event.cpu_utilization.has_value());
+  EXPECT_EQ(event.counter_status, HardwareCounterStatus::kDisabled);
+  EXPECT_FALSE(event.cpu_cycles.has_value());
+  EXPECT_FALSE(event.ipc.has_value());
+  EXPECT_FALSE(event.llc_miss_rate.has_value());
 }
 
 TEST(KernelCalibration, CallbackFailurePropagatesWithoutPublishingBatch) {

@@ -5,7 +5,7 @@ Using ``onnx-light`` fast loading in ``onnxruntime``
 
 :Date: 2026-08
 
-**blocked by prepared execution**
+**planned; prepared execution is available**
 
 Objective
 +++++++++

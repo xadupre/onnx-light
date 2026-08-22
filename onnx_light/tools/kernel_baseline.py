@@ -23,16 +23,18 @@ import os
 import platform
 import re
 import time
+from types import ModuleType
 from typing import Any
 
 import numpy
 
+from . import kernel_inventory
+
+resource: ModuleType | None
 try:
     import resource  # Unix-only; process CPU time falls back to None on Windows.
 except ImportError:  # pragma: no cover - exercised only on Windows.
     resource = None
-
-from . import kernel_inventory
 
 __all__ = [
     "BENCHMARK_CORPUS",
@@ -151,7 +153,7 @@ def _run_policy_case(
     collect_diagnostics: bool,
 ) -> dict[str, Any]:
     """Runs one ``(model, cpu policy)`` combination and measures timing and CPU use."""
-    from onnx_light.onnx_py import _onnxpykernels
+    from onnx_light.onnx_py import _onnxpykernels  # type: ignore[attr-defined]
 
     runtime = _onnxpykernels.runtime
 
@@ -186,7 +188,7 @@ def _run_policy_case(
         session.run(context)
         per_call_seconds.append(time.perf_counter() - call_start)
     wall_seconds = time.perf_counter() - wall_before
-    if ru_before is not None:
+    if resource is not None and ru_before is not None:
         ru_after = resource.getrusage(resource.RUSAGE_SELF)
         cpu_seconds = (ru_after.ru_utime + ru_after.ru_stime) - (
             ru_before.ru_utime + ru_before.ru_stime

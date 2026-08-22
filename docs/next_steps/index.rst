@@ -10,26 +10,29 @@ Next Steps
 Recommended implementation order
 --------------------------------
 
-Runtime execution work should proceed in dependency order:
+The roadmap has four objectives:
 
-1. implement Profile PR01 from
-   :ref:`l-next-steps-parallel-for-profiling`: first record a fixed maximum
-   number of platform-independent profiling events; when profiling is disabled,
-   the runtime must not collect data or perform any instrumentation work;
-2. add process CPU time, inspection, hardware counters, and calibration
-   diagnostics only after that event contract is stable;
-3. use that same executor when the fast-loading sequence reaches
-   :ref:`l-next-steps-prepared-execution`, rather than creating another
-   scheduler pool.
+1. **Parallelize and tune kernels on multiple machines.** Define a safe default
+   for every tunable kernel, then let each user calibrate that kernel and store
+   the best parameters for their machine. See
+   :ref:`l-next-steps-kernel-parallelization` and
+   :ref:`l-next-steps-processor-aware-kernel-tuning`.
+2. **Parallelize model startup.** Read and transform the model concurrently,
+   then create kernels and prepack their weights through one memory-bounded
+   execution plan. See :ref:`l-next-steps-fast-loading-sequence` and
+   :ref:`l-next-steps-prepared-execution`.
+3. **Integrate the startup path with ONNX Runtime.** Let ORT use ``onnx-light``
+   payload ownership, prepared data, and direct-read contracts to reduce session
+   startup and time to first token. See :ref:`l-next-steps-model-loading`.
+4. **Manage persistent state.** Use ownership-aware arenas for KV caches and
+   other state that survives one graph invocation, without copying or
+   accidentally recycling live storage. See :ref:`l-next-steps-mutable-cache`
+   and :ref:`l-next-steps-buffer-reuse-arena`.
 
-Model-format work such as custom types, quantization, compiled tensors, and
-model resolution may proceed independently until it reaches prepared
-execution. Within the runtime track, the order above is mandatory: profiling
-or tuning a hidden global pool would produce profiles that a session cannot
-reproduce.
-
-Large-model startup follows the four-plan sequence documented in
-:ref:`l-next-steps-fast-loading-sequence`.
+The dependency order is **1 -> 2 -> 3**: startup needs the kernel executor and
+tuning decisions, and ORT integration needs the completed startup ownership
+contract. Objective 4 branches from objective 2 because persistent state reuses
+its arena and lifetime rules; it does not depend on the ORT integration.
 
 All Next Steps
 --------------
@@ -40,6 +43,7 @@ All Next Steps
 
     2026/2026-08_fast_loading_sequence
     2026/2026-08_parallel_for_profiling
+    2026/2026-08_kernel_parallelization
     2026/2026-08_custom_types
     2026/2026-08_proto_inheritance
     2026/2026-08_quantization
@@ -59,105 +63,143 @@ All Next Steps
     2026/2026-08_buffer_reuse_arena
     2026/2026-08_graph_builder_optimization
     2026/2026-08_session_execution_pools
-    2026/2026-08_kernel_parallelization
 
 Use the search field to filter by status or text, and select a column heading
 to sort the table.
 
+``1``--``4`` refer to the four objectives above. ``Foundation`` supplies a
+shared prerequisite. ``Independent`` is useful work but is not required by
+these four objectives.
+
 .. list-table::
     :header-rows: 1
-    :widths: 12 24 32 32
+    :widths: 12 12 28 48
     :class: sphinx-datatable
 
     * - Status
-      - Next step
-      - Planned work
-      - Why
+      - Objective
+      - Plan
+      - Contribution
     * - Started
+      - 2, 3
       - :ref:`l-next-steps-fast-loading-sequence`
-      - Orchestrate the four-step large-model startup roadmap.
-      - Define one dependency order for fast loading.
-    * - Started
+      - Orders the four startup plans: bug fixes, prepared execution, ORT
+        integration, then native completion.
+    * - Completed
+      - 2
+      - :ref:`l-next-steps-model-loading-bug-fixes`
+      - Makes parsing, external data, and initializer materialization reliable
+        before asynchronous work starts.
+    * - Completed
+      - 2
+      - :ref:`l-next-steps-prepared-execution`
+      - Provides the dependency graph, bounded scheduling, kernel creation, and
+        prepacking needed by parallel startup.
+    * - Planned
+      - 3
+      - :ref:`l-next-steps-model-loading`
+      - Defines the ownership and direct-read contract consumed by ORT.
+    * - Blocked
+      - 2, 3
+      - :ref:`l-next-steps-native-fast-loading-completion`
+      - Connects adaptive I/O, model resolution, prepared tensors, and
+        first-token overlap after the ORT contract is available.
+    * - Completed
+      - 1
       - :ref:`l-next-steps-parallel-for-profiling`
-      - Add bounded, opt-in ``ParallelFor`` diagnostics and hardware counters.
-      - Explain CPU under-utilization before tuning prepared execution.
-    * - Discussed
-      - :ref:`l-next-steps-custom-types`
-      - Define structured byte-buffer types for custom formats.
-      - ``TypeProto.Opaque`` does not describe serialized layouts.
-    * - Discussed
-      - :ref:`l-next-steps-proto-inheritance`
-      - Add schema inheritance while retaining flat wire encoding.
-      - Reuse common fields without duplicating them across proto families.
-    * - Discussed
-      - :ref:`l-next-steps-quantization`
-      - Describe quantized data families and their proto mappings.
-      - Represent quantization consistently as structured custom types.
-    * - Discussed
-      - :ref:`l-next-steps-graph-builder-quantized-tensor`
-      - Preserve quantized initializers in graph storage.
-      - Avoid implicit dequantization or rewriting by ``GraphBuilder``.
-    * - Discussed
-      - :ref:`l-next-steps-graph-builder-authoring`
-      - Add compact graph authoring and non-gallery runtime walkthroughs.
-      - Make models easier to build, inspect, optimize, and execute.
-    * - Discussed
-      - :ref:`l-next-steps-mutable-cache`
-      - Support in-place KV-cache updates with controlled aliasing.
-      - Avoid duplicating large caches on every update.
-    * - Discussed
-      - :ref:`l-next-steps-compiled-tensor`
-      - Persist packed tensor representations as caches.
-      - Avoid repeating expensive prepacking when a model is reloaded.
-    * - Discussed
-      - :ref:`l-next-steps-model-resolution`
-      - Resolve the final graph and required payloads before I/O.
-      - Load weights only after transformations and liveness analysis.
-    * - Discussed
-      - :ref:`l-next-steps-split-wheels`
-      - Split public features into composable Python wheels.
-      - Let users install only the components they need.
-    * - Completed
-      - :ref:`l-next-steps-onnx-proto`
-      - Build the protobuf-free ONNX message layer.
-      - Provide the project's independent base schema layer.
-    * - Completed
-      - :ref:`l-next-steps-lib-onnx`
-      - Port the ONNX C++ library to ``onnx_proto``.
-      - Run the upstream library without ``libprotobuf``.
-    * - Completed
-      - :ref:`l-next-steps-kernels-backend-tests`
-      - Provide native kernels and backend tests in C++.
-      - Validate the runtime natively without depending on Python.
-    * - Completed
-      - :ref:`l-next-steps-gradient`
-      - Generate backward-pass graphs symbolically.
-      - Support training with a native graph-based gradient pass.
-    * - Completed
-      - :ref:`l-next-steps-ort-onnx-light`
-      - Route onnxruntime protobuf usage through ``onnx-light``.
-      - Provide a build-time alternative to protobuf in onnxruntime.
-    * - Completed
-      - :ref:`l-next-steps-proto-binary-size`
-      - Reduce the ``lib_onnx_proto`` shared-library footprint.
-      - Avoid shipping unused wrapper overhead.
-    * - Completed
-      - :ref:`l-next-steps-processor-aware-kernel-tuning`
-      - Make kernel thresholds processor-specific and persistent.
-      - Adapt thresholds to hardware instead of fixed constants.
-    * - Completed
-      - :ref:`l-next-steps-buffer-reuse-arena`
-      - Reuse execution and I/O buffers safely.
-      - Reduce allocations without breaking NumPy ownership.
-    * - Completed
-      - :ref:`l-next-steps-graph-builder-optimization`
-      - Rewrite local graph patterns to cheaper equivalents.
-      - Add the native optimization engine missing from ``GraphBuilder``.
-    * - Completed
-      - :ref:`l-next-steps-session-execution-pools`
-      - Manage CPU policies and shared executor pools.
-      - Give sessions deterministic, shareable execution resources.
+      - Measures work decomposition, utilization, and hardware counters so
+        tuning decisions have evidence.
     * - Started
+      - 1
       - :ref:`l-next-steps-kernel-parallelization`
-      - Inventory kernel parallel coverage and publish cross-machine baselines.
-      - Rank native-kernel bottlenecks before selecting the next migration batch.
+      - Inventories kernel parallel coverage, publishes cross-machine
+        baselines, then migrates measured kernel families through the tuning
+        and calibration APIs.
+    * - Discussed
+      - 2, 4
+      - :ref:`l-next-steps-custom-types`
+      - Describes structured byte buffers used by packed weights and persistent
+        state.
+    * - Discussed
+      - Foundation
+      - :ref:`l-next-steps-proto-inheritance`
+      - Reuses common schema fields without changing the flat wire format.
+    * - Discussed
+      - 1, 2, 4
+      - :ref:`l-next-steps-quantization`
+      - Defines quantized layouts consumed by kernels, prepared weights, and
+        persistent cache pages.
+    * - Discussed
+      - 2, 4
+      - :ref:`l-next-steps-graph-builder-quantized-tensor`
+      - Preserves quantized initializers until preparation or persistent-state
+        allocation.
+    * - Discussed
+      - Foundation
+      - :ref:`l-next-steps-graph-builder-authoring`
+      - Supplies reproducible models and workflows used to exercise the four
+        objectives.
+    * - Discussed
+      - 4
+      - :ref:`l-next-steps-mutable-cache`
+      - Defines in-place KV-cache updates, aliasing, capacity, and persistence.
+    * - Discussed
+      - 2, 3
+      - :ref:`l-next-steps-compiled-tensor`
+      - Persists packed weights so startup and ORT integration can avoid
+        repeated prepacking.
+    * - Discussed
+      - 2, 3
+      - :ref:`l-next-steps-model-resolution`
+      - Determines the final graph and live payloads before parallel reads or
+        ORT handoff.
+    * - Discussed
+      - Foundation
+      - :ref:`l-next-steps-split-wheels`
+      - Packages runtime capabilities independently; it does not change their
+        execution order.
+    * - Completed
+      - Foundation
+      - :ref:`l-next-steps-onnx-proto`
+      - Supplies the protobuf-free model representation used by startup and ORT.
+    * - Completed
+      - Foundation
+      - :ref:`l-next-steps-lib-onnx`
+      - Supplies ONNX validation and transformation without ``libprotobuf``.
+    * - Completed
+      - 1
+      - :ref:`l-next-steps-kernels-backend-tests`
+      - Provides the native kernels and correctness corpus required before
+        parallel variants are accepted.
+    * - Completed
+      - Independent
+      - :ref:`l-next-steps-gradient`
+      - Supports training graphs but is not a prerequisite for the four
+        objectives.
+    * - Completed
+      - 3
+      - :ref:`l-next-steps-ort-onnx-light`
+      - Establishes the existing ORT build-time integration that the optimized
+        startup contract extends.
+    * - Completed
+      - 3
+      - :ref:`l-next-steps-proto-binary-size`
+      - Keeps the library embedded by ORT small.
+    * - Completed
+      - 1
+      - :ref:`l-next-steps-processor-aware-kernel-tuning`
+      - Provides schemas, defaults, calibration, user overrides, immutable
+        snapshots, and persistent machine profiles.
+    * - Completed
+      - 2, 4
+      - :ref:`l-next-steps-buffer-reuse-arena`
+      - Supplies ownership-aware reusable storage for startup buffers and
+        persistent state.
+    * - Completed
+      - 2, 3
+      - :ref:`l-next-steps-graph-builder-optimization`
+      - Finalizes graph rewrites before live payload selection and ORT handoff.
+    * - Completed
+      - 1, 2
+      - :ref:`l-next-steps-session-execution-pools`
+      - Supplies the shared executor used by parallel kernels and startup tasks.

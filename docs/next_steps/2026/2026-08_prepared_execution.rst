@@ -5,7 +5,7 @@ Prepared and asynchronous execution
 
 :Date: 2026-08
 
-**blocked by model-loading bug fixes**
+**Implemented**
 
 Objective
 +++++++++

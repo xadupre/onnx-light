@@ -285,7 +285,11 @@ nb::dict ListParameters(const std::optional<std::string> &kernel, const std::str
       item["cached_values"] = ValuesToDict(cached->parameters);
     }
     const rt::KernelTuningParameters *active = snapshot.Resolve(key, execution);
-    item["active_values"] = active == nullptr ? nb::none() : ValuesToDict(*active);
+    if (active == nullptr) {
+      item["active_values"] = nb::none();
+    } else {
+      item["active_values"] = ValuesToDict(*active);
+    }
     item["active_source"] =
         active == nullptr ? "none"
                           : (snapshot.HasPublishedProfile(key, execution)

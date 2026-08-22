@@ -4,21 +4,24 @@ description = "onnx without protobuf"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "win-64"]
 
-# Conda-only environment (no PyPI mapping required) providing the
-# build/runtime/dev/docs dependencies declared in pyproject.toml.
+# Environment providing the build/runtime/dev/docs dependencies declared in
+# pyproject.toml. nanobind comes from PyPI until version 3 is available on
+# conda-forge.
 # After running `pixi install`, build/install the package itself with:
 #     pixi run pip install --no-build-isolation -e .
 
 [dependencies]
-python = ">=3.11"
+python = ">=3.12"
 numpy = ">=2.2"
 ml_dtypes = ">=0.5.0"
 cmake = ">=3.27"
 ninja = "*"
 cxx-compiler = "*"
 scikit-build-core = ">=0.3.3"
-nanobind = ">=1.3.2"
 pip = "*"
+
+[pypi-dependencies]
+nanobind = ">=3.0.0"
 
 [feature.dev-no-onnx.dependencies]
 black = "==26.5.1"

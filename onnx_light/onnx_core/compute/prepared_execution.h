@@ -172,6 +172,53 @@ struct PreparedSchedulerOptions {
 };
 
 /**
+ * Owns the completion state of one ``PrepareAsync``/``RunAsync`` submission.
+ *
+ * The handle is movable but not copyable. It keeps the submission's borrowed
+ * ``PreparedExecutionState`` and task executor referenced by the caller alive
+ * for as long as the submission still runs: destroying (or move-assigning
+ * over) a live handle blocks until every task the submission still owns
+ * reaches a terminal state, so no detached task can outlive the context or
+ * input state its submission borrowed. ``Cancel()`` only affects tasks this
+ * submission produces; shared session-scoped work still required elsewhere
+ * is left untouched.
+ */
+class ONNX_LIGHT_CORE_API ExecutionHandle final {
+public:
+  ExecutionHandle();
+  ExecutionHandle(ExecutionHandle &&) noexcept;
+  ExecutionHandle &operator=(ExecutionHandle &&) noexcept;
+  ExecutionHandle(const ExecutionHandle &) = delete;
+  ExecutionHandle &operator=(const ExecutionHandle &) = delete;
+  ~ExecutionHandle();
+
+  /** Blocks until every required task finishes and rethrows the first error. */
+  const PreparedExecutionResult &Wait();
+
+  /** Returns whether the submission has already reached a terminal state. */
+  bool IsReady() const;
+
+  /**
+   * Cooperatively cancels tasks this submission has not yet dispatched.
+   *
+   * Already-running tasks finish normally; downstream tasks are suppressed.
+   * Session-scoped work owned by another submission is left untouched.
+   */
+  void Cancel();
+
+private:
+  friend class PreparedExecutionPlan;
+  struct Shared;
+
+  static ExecutionHandle Submit(std::function<PreparedExecutionResult(std::atomic<bool> &)> work);
+
+  /** Blocks until done without rethrowing; safe to call while unwinding. */
+  void WaitQuiet() noexcept;
+
+  std::shared_ptr<Shared> shared_;
+};
+
+/**
  * Describes session preparation and invocation execution in one immutable graph.
  */
 class ONNX_LIGHT_CORE_API PreparedExecutionPlan {
@@ -201,9 +248,32 @@ public:
                                       const PreparedTaskExecutor &executor,
                                       CpuExecutor &cpu_executor) const;
 
+  /**
+   * Submits only this plan's session-scoped tasks and returns immediately.
+   *
+   * ``state``, ``executor``, and (when supplied) ``cpu_executor`` must outlive
+   * the returned handle.
+   */
+  ExecutionHandle PrepareAsync(PreparedExecutionState &state, const PreparedTaskExecutor &executor,
+                               CpuExecutor *cpu_executor = nullptr) const;
+
+  /**
+   * Submits every task in this plan and returns immediately.
+   *
+   * This plan, ``state``, ``executor``, and (when supplied) ``cpu_executor``
+   * must all outlive the returned handle.
+   */
+  ExecutionHandle RunAsync(PreparedExecutionState &state, const PreparedTaskExecutor &executor,
+                           CpuExecutor *cpu_executor = nullptr) const;
+
+  /** Synchronous ``PrepareAsync`` followed by ``Wait``. */
+  void Prepare(PreparedExecutionState &state, const PreparedTaskExecutor &executor,
+               CpuExecutor *cpu_executor = nullptr) const;
+
 private:
   PreparedExecutionResult Run(PreparedExecutionState &state, const PreparedTaskExecutor &executor,
-                              CpuExecutor *cpu_executor) const;
+                              CpuExecutor *cpu_executor,
+                              const std::atomic<bool> *cancel_requested = nullptr) const;
 
   std::vector<TaskDescriptor> tasks_;
   std::vector<PreparedKey> prepared_requirements_;

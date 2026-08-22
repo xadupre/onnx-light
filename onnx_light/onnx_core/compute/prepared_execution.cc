@@ -384,21 +384,141 @@ struct PreparedExecutionState::SchedulerState {
   size_t peak_global_used = 0;
 };
 
+struct ExecutionHandle::Shared {
+  std::thread worker;
+  std::mutex mutex;
+  std::condition_variable completed;
+  bool done = false;
+  PreparedExecutionResult result;
+  std::exception_ptr error;
+  std::atomic<bool> cancel_requested{false};
+
+  ~Shared() {
+    // Wait()/the destructor already join the worker on every reachable path;
+    // detaching here is only a defensive fallback for an abandoned Shared.
+    if (worker.joinable()) {
+      worker.detach();
+    }
+  }
+};
+
+ExecutionHandle::ExecutionHandle() = default;
+ExecutionHandle::ExecutionHandle(ExecutionHandle &&) noexcept = default;
+ExecutionHandle::~ExecutionHandle() { WaitQuiet(); }
+
+ExecutionHandle &ExecutionHandle::operator=(ExecutionHandle &&other) noexcept {
+  if (this != &other) {
+    WaitQuiet();
+    shared_ = std::move(other.shared_);
+  }
+  return *this;
+}
+
+void ExecutionHandle::WaitQuiet() noexcept {
+  if (shared_ == nullptr) {
+    return;
+  }
+  {
+    std::unique_lock<std::mutex> lock(shared_->mutex);
+    shared_->completed.wait(lock, [&]() { return shared_->done; });
+  }
+  if (shared_->worker.joinable()) {
+    shared_->worker.join();
+  }
+}
+
+ExecutionHandle
+ExecutionHandle::Submit(std::function<PreparedExecutionResult(std::atomic<bool> &)> work) {
+  ExecutionHandle handle;
+  handle.shared_ = std::make_shared<Shared>();
+  Shared *shared = handle.shared_.get();
+  shared->worker = std::thread([shared, work = std::move(work)]() mutable {
+    PreparedExecutionResult result;
+    std::exception_ptr error;
+    try {
+      result = work(shared->cancel_requested);
+    } catch (...) {
+      error = std::current_exception();
+    }
+    {
+      std::lock_guard<std::mutex> lock(shared->mutex);
+      shared->result = std::move(result);
+      shared->error = std::move(error);
+      shared->done = true;
+    }
+    shared->completed.notify_all();
+  });
+  return handle;
+}
+
+const PreparedExecutionResult &ExecutionHandle::Wait() {
+  EXT_ENFORCE(shared_ != nullptr, "Wait() called on an empty ExecutionHandle.");
+  WaitQuiet();
+  if (shared_->error != nullptr) {
+    std::rethrow_exception(shared_->error);
+  }
+  return shared_->result;
+}
+
+bool ExecutionHandle::IsReady() const {
+  EXT_ENFORCE(shared_ != nullptr, "IsReady() called on an empty ExecutionHandle.");
+  std::lock_guard<std::mutex> lock(shared_->mutex);
+  return shared_->done;
+}
+
+void ExecutionHandle::Cancel() {
+  EXT_ENFORCE(shared_ != nullptr, "Cancel() called on an empty ExecutionHandle.");
+  shared_->cancel_requested.store(true);
+}
+
 PreparedExecutionResult
 PreparedExecutionPlan::RunSequential(PreparedExecutionState &state,
                                      const PreparedTaskExecutor &executor) const {
-  return Run(state, executor, nullptr);
+  return RunAsync(state, executor, nullptr).Wait();
 }
 
 PreparedExecutionResult PreparedExecutionPlan::RunParallel(PreparedExecutionState &state,
                                                            const PreparedTaskExecutor &executor,
                                                            CpuExecutor &cpu_executor) const {
-  return Run(state, executor, &cpu_executor);
+  return RunAsync(state, executor, &cpu_executor).Wait();
 }
 
-PreparedExecutionResult PreparedExecutionPlan::Run(PreparedExecutionState &state,
-                                                   const PreparedTaskExecutor &executor,
-                                                   CpuExecutor *cpu_executor) const {
+ExecutionHandle PreparedExecutionPlan::PrepareAsync(PreparedExecutionState &state,
+                                                    const PreparedTaskExecutor &executor,
+                                                    CpuExecutor *cpu_executor) const {
+  std::vector<TaskDescriptor> session_tasks;
+  session_tasks.reserve(tasks_.size());
+  for (const TaskDescriptor &task : tasks_) {
+    if (task.scope == TaskScope::kSession) {
+      session_tasks.push_back(task);
+    }
+  }
+  auto session_plan = std::make_shared<PreparedExecutionPlan>(std::move(session_tasks));
+  return ExecutionHandle::Submit(
+      [session_plan, &state, &executor, cpu_executor](std::atomic<bool> &cancel_requested) {
+        return session_plan->Run(state, executor, cpu_executor, &cancel_requested);
+      });
+}
+
+ExecutionHandle PreparedExecutionPlan::RunAsync(PreparedExecutionState &state,
+                                                const PreparedTaskExecutor &executor,
+                                                CpuExecutor *cpu_executor) const {
+  return ExecutionHandle::Submit(
+      [this, &state, &executor, cpu_executor](std::atomic<bool> &cancel_requested) {
+        return Run(state, executor, cpu_executor, &cancel_requested);
+      });
+}
+
+void PreparedExecutionPlan::Prepare(PreparedExecutionState &state,
+                                    const PreparedTaskExecutor &executor,
+                                    CpuExecutor *cpu_executor) const {
+  PrepareAsync(state, executor, cpu_executor).Wait();
+}
+
+PreparedExecutionResult
+PreparedExecutionPlan::Run(PreparedExecutionState &state, const PreparedTaskExecutor &executor,
+                           CpuExecutor *cpu_executor,
+                           const std::atomic<bool> *cancel_requested) const {
   EXT_ENFORCE(static_cast<bool>(executor), "Prepared execution requires a task executor.");
   const uint64_t invocation_id = ++state.next_invocation_id_;
   const uint64_t readiness_epoch = state.readiness_epoch();
@@ -569,8 +689,14 @@ PreparedExecutionResult PreparedExecutionPlan::Run(PreparedExecutionState &state
 
     std::vector<RunTask *> ready;
     bool changed_status = false;
+    const bool cancelling = cancel_requested != nullptr && cancel_requested->load();
     for (RunTask &task : run_tasks) {
       if (task.dispatched || !task.producer || task.completion.status() != TaskStatus::kPending) {
+        continue;
+      }
+      if (cancelling && task.descriptor->scope == TaskScope::kInvocation) {
+        task.completion.Cancel("Prepared invocation was cancelled.");
+        changed_status = true;
         continue;
       }
       bool dependencies_ready = true;

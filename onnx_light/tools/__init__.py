@@ -35,11 +35,7 @@ Currently provided helpers:
 from __future__ import annotations
 
 from .dot import to_dot, to_dot_graph
-from .kernel_baseline import (
-    get_cpu_descriptor,
-    run_benchmark_corpus,
-    run_kernel_baseline_report,
-)
+from .kernel_baseline import get_cpu_descriptor, run_benchmark_corpus, run_kernel_baseline_report
 from .kernel_inventory import build_kernel_inventory
 from .mermaid import to_mermaid, to_mermaid_graph
 from .pretty_print import pretty_onnx

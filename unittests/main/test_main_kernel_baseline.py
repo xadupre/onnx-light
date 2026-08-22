@@ -31,21 +31,17 @@ class TestMainKernelBaselineParser(unittest.TestCase):
 
 class TestMainKernelBaseline(unittest.TestCase):
     _SMALL_CASES = (
-        {
-            "op_type": "Not",
-            "arity": "unary",
-            "element_type": "BOOL",
-            "shapes": (("small", 64),),
-        },
+        {"op_type": "Not", "arity": "unary", "element_type": "BOOL", "shapes": (("small", 64),)},
     )
 
     def test_writes_json_report_to_file(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             output_path = os.path.join(tmp_dir, "report.json")
-            with mock.patch(
-                "onnx_light.tools.kernel_baseline.BENCHMARK_CORPUS", self._SMALL_CASES
-            ), mock.patch(
-                "onnx_light.tools.kernel_baseline.CPU_POLICIES", (("serial", 1),)
+            with (
+                mock.patch(
+                    "onnx_light.tools.kernel_baseline.BENCHMARK_CORPUS", self._SMALL_CASES
+                ),
+                mock.patch("onnx_light.tools.kernel_baseline.CPU_POLICIES", (("serial", 1),)),
             ):
                 main(
                     [
@@ -67,9 +63,10 @@ class TestMainKernelBaseline(unittest.TestCase):
         self.assertEqual(len(report["benchmarks"]), 1)
 
     def test_prints_json_report_to_stdout(self):
-        with mock.patch(
-            "onnx_light.tools.kernel_baseline.BENCHMARK_CORPUS", self._SMALL_CASES
-        ), mock.patch("onnx_light.tools.kernel_baseline.CPU_POLICIES", (("serial", 1),)):
+        with (
+            mock.patch("onnx_light.tools.kernel_baseline.BENCHMARK_CORPUS", self._SMALL_CASES),
+            mock.patch("onnx_light.tools.kernel_baseline.CPU_POLICIES", (("serial", 1),)),
+        ):
             buffer = io.StringIO()
             with redirect_stdout(buffer):
                 main(["kernel-baseline", "--repeat", "1", "--warmup", "0", "--no-diagnostics"])

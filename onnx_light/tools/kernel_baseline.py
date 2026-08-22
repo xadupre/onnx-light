@@ -22,11 +22,15 @@ from __future__ import annotations
 import os
 import platform
 import re
-import resource
 import time
 from typing import Any
 
 import numpy
+
+try:
+    import resource  # Unix-only; process CPU time falls back to None on Windows.
+except ImportError:  # pragma: no cover - exercised only on Windows.
+    resource = None
 
 from . import kernel_inventory
 
@@ -123,12 +127,12 @@ def _make_model(case: dict[str, Any], size: int):
 def _make_inputs(case: dict[str, Any], size: int, seed: int) -> dict[str, numpy.ndarray]:
     """Builds deterministic NumPy inputs for the given benchmark ``case``."""
     generator = numpy.random.default_rng(seed)
-    if case["element_type"] == "BOOL":
-        make_array = lambda shape: generator.integers(0, 2, size=shape).astype(numpy.bool_)  # noqa: E731
-    else:
-        make_array = lambda shape: generator.uniform(-10.0, 10.0, size=shape).astype(  # noqa: E731
-            numpy.float32
-        )
+
+    def make_array(shape: tuple[int, ...]) -> numpy.ndarray:
+        if case["element_type"] == "BOOL":
+            return generator.integers(0, 2, size=shape).astype(numpy.bool_)
+        return generator.uniform(-10.0, 10.0, size=shape).astype(numpy.float32)
+
     if case["arity"] == "unary":
         return {"X": make_array((size,))}
     if case["arity"] == "gemm":
@@ -159,8 +163,9 @@ def _run_policy_case(
         session = runtime.RuntimeSession(model, opts)
         context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
         for name, array in inputs.items():
+            raw = numpy.ascontiguousarray(array).view(numpy.uint8).ravel()
             tensor = runtime.tensor_from_numpy(
-                name, elem_type, list(array.shape), array.view(numpy.uint8), copy=False,
+                name, elem_type, list(array.shape), raw, copy=False
             )
             context.set(name, tensor)
         return session, context
@@ -173,7 +178,7 @@ def _run_policy_case(
     for _ in range(warmup):
         session.run(context)
 
-    ru_before = resource.getrusage(resource.RUSAGE_SELF)
+    ru_before = resource.getrusage(resource.RUSAGE_SELF) if resource is not None else None
     wall_before = time.perf_counter()
     per_call_seconds = []
     for _ in range(repeat):
@@ -181,11 +186,16 @@ def _run_policy_case(
         session.run(context)
         per_call_seconds.append(time.perf_counter() - call_start)
     wall_seconds = time.perf_counter() - wall_before
-    ru_after = resource.getrusage(resource.RUSAGE_SELF)
-    cpu_seconds = (ru_after.ru_utime + ru_after.ru_stime) - (
-        ru_before.ru_utime + ru_before.ru_stime
+    if ru_before is not None:
+        ru_after = resource.getrusage(resource.RUSAGE_SELF)
+        cpu_seconds = (ru_after.ru_utime + ru_after.ru_stime) - (
+            ru_before.ru_utime + ru_before.ru_stime
+        )
+    else:
+        cpu_seconds = None
+    cpu_utilization = (
+        cpu_seconds / wall_seconds if cpu_seconds is not None and wall_seconds > 0 else None
     )
-    cpu_utilization = cpu_seconds / wall_seconds if wall_seconds > 0 else None
 
     diagnostics: dict[str, Any] | None = None
     if collect_diagnostics:
@@ -198,9 +208,7 @@ def _run_policy_case(
         report = diag_session.parallel_region_report()
         events = list(report.events)
         if events:
-            representative = max(
-                events, key=lambda event: event.wall_time_ns or 0
-            )
+            representative = max(events, key=lambda event: event.wall_time_ns or 0)
             diagnostics = {
                 "grain_size": representative.grain_size,
                 "requested_threads": representative.requested_threads,

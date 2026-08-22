@@ -124,13 +124,17 @@ First migration batch
 Ranking the x86-64 baseline (see
 ``kernel_parallelization_reports/x86_64_baseline.json``) by large-shape
 serial-vs-session-thread speedup and by absolute large-shape wall time
-identifies ``Gemm`` (``FLOAT``, already tunable but currently using its
-portable single-block default) and the still ``parallel_fixed_policy``
-transcendental unary kernels (``Exp``, ``Log``, ``Tanh``, ``Sigmoid``) sharing
-``Abs``'s fixed grain size as the first concrete migration candidates: they
-show the largest large-shape wall time and the largest gap between the
-serial and session-thread policies of the sampled kernels. The next
-implementation batch should give ``Exp``, ``Log``, ``Tanh``, and ``Sigmoid``
-their own ``KernelTuningSchema`` (mirroring ``Abs``'s ``CalibrateAbs``) before
-selecting further kernels, and confirm the ranking against an ARM64 report
-once one is available.
+identifies ``Gemm`` (``FLOAT``, ``DOUBLE``, ``FLOAT16``, ``BFLOAT16``,
+already ``tunable`` via ``KernelTuningSchema`` but still running with its
+portable single-block defaults) as the largest compute-bound outlier, and the
+still ``parallel_fixed_policy`` transcendental unary kernels ``Log``,
+``Tanh``, and ``Sigmoid`` (``Exp`` already migrated to ``tunable``, alongside
+``Abs``) as the next fixed-grain-size candidates: they show the largest gap
+between the serial and session-thread policies of the sampled kernels. The
+next implementation batch should (1) calibrate ``Gemm``'s existing tuning
+parameters (``algorithm.tile_m/tile_n/tile_k``,
+``parallel.fmas_per_work_unit``, ``parallel.minimum_tasks``, ...) instead of
+relying on its portable defaults, and (2) give ``Log``, ``Tanh``, and
+``Sigmoid`` their own ``KernelTuningSchema`` (mirroring ``Abs``'s
+``CalibrateAbs``) before selecting further kernels, then confirm the ranking
+against an ARM64 report once one is available.

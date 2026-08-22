@@ -71,7 +71,7 @@ class TestKernelBaseline(ExtTestCase):
     def test_run_kernel_baseline_report_does_not_modify_tuning_cache(self):
         from onnx_light.kernel_tuning import kernel_tuning_parameters
 
-        before = kernel_tuning_parameters(kernel="Abs", element_type=int(1))
+        before = kernel_tuning_parameters(kernel="Abs", element_type=1)
         report = kernel_baseline.run_kernel_baseline_report(
             cases=(
                 {
@@ -86,7 +86,7 @@ class TestKernelBaseline(ExtTestCase):
             warmup=0,
             collect_diagnostics=False,
         )
-        after = kernel_tuning_parameters(kernel="Abs", element_type=int(1))
+        after = kernel_tuning_parameters(kernel="Abs", element_type=1)
         self.assertEqual(before["kernels"], after["kernels"])
         self.assertIn("cpu_descriptor", report)
         self.assertIn("inventory", report)

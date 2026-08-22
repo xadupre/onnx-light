@@ -5,6 +5,8 @@ onnx_light.tools
     :maxdepth: 1
 
     dot
+    kernel_baseline
+    kernel_inventory
     mermaid
     pretty_print
     schema_comparison

@@ -50,11 +50,7 @@ _DEFAULT_KERNEL_SOURCE_ROOT = (
 _DISPATCH_ENTRY_RE = re.compile(r'\{"([^"]+)",\s*MakeKernel<onnx_kernels::kernel::(\w+)>\(\)\}')
 _PARALLEL_FOR_RE = re.compile(r"\bParallelFor\s*[(<]")
 
-__all__ = [
-    "build_kernel_inventory",
-    "dispatch_table_entries",
-    "validate_inventory",
-]
+__all__ = ["build_kernel_inventory", "dispatch_table_entries", "validate_inventory"]
 
 
 def dispatch_table_entries(
@@ -69,8 +65,10 @@ def dispatch_table_entries(
     Returns:
         One entry per registered ``(domain, op_type)`` identifier, in file order.
     """
-    path = Path(dispatch_table_path) if dispatch_table_path is not None else (
-        _DEFAULT_DISPATCH_TABLE_PATH
+    path = (
+        Path(dispatch_table_path)
+        if dispatch_table_path is not None
+        else (_DEFAULT_DISPATCH_TABLE_PATH)
     )
     text = path.read_text(encoding="utf-8")
     entries = []
@@ -85,9 +83,9 @@ def _kernel_source_files(kernel_source_root: Path) -> list[Path]:
 
 
 def _find_owning_source(
-    class_name: str, source_files: list[Path], cache: dict[str, Path | None]
-) -> Path | None:
-    """Returns the ``.cc`` file implementing ``class_name`` (``ClassName::`` marker)."""
+    class_name: str, source_files: list[Path], cache: dict[str, tuple[Path, str] | None]
+) -> tuple[Path, str] | None:
+    """Returns the ``(.cc file, text)`` implementing ``class_name`` (``ClassName::`` marker)."""
     if class_name in cache:
         return cache[class_name]
     marker = re.compile(r"\b" + re.escape(class_name) + r"::")
@@ -95,7 +93,7 @@ def _find_owning_source(
     for source_file in source_files:
         text = source_file.read_text(encoding="utf-8", errors="ignore")
         if marker.search(text):
-            found = source_file
+            found = (source_file, text)
             break
     cache[class_name] = found
     return found
@@ -136,11 +134,13 @@ def build_kernel_inventory(
         implementation)``. Every registered kernel path appears exactly once.
     """
     entries = dispatch_table_entries(dispatch_table_path)
-    source_root = Path(kernel_source_root) if kernel_source_root is not None else (
-        _DEFAULT_KERNEL_SOURCE_ROOT
+    source_root = (
+        Path(kernel_source_root)
+        if kernel_source_root is not None
+        else (_DEFAULT_KERNEL_SOURCE_ROOT)
     )
     source_files = _kernel_source_files(source_root)
-    owner_cache: dict[str, Path | None] = {}
+    owner_cache: dict[str, tuple[Path, str] | None] = {}
 
     if tuning_report is None:
         from onnx_light.kernel_tuning import kernel_tuning_parameters
@@ -154,12 +154,10 @@ def build_kernel_inventory(
     rows: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str, int | None, str]] = set()
     for domain, op_type, class_name in entries:
-        source = _find_owning_source(class_name, source_files, owner_cache)
+        owning = _find_owning_source(class_name, source_files, owner_cache)
+        source, text = owning if owning is not None else (None, None)
         source_rel = str(source.relative_to(_REPO_ROOT)) if source is not None else None
-        uses_parallel_for = False
-        if source is not None:
-            text = source.read_text(encoding="utf-8", errors="ignore")
-            uses_parallel_for = bool(_PARALLEL_FOR_RE.search(text))
+        uses_parallel_for = bool(text is not None and _PARALLEL_FOR_RE.search(text))
 
         tuning_entries = tuning_by_op_type.get(op_type)
         if tuning_entries:
@@ -198,14 +196,12 @@ def build_kernel_inventory(
                     "element_type": None,
                     "implementation": "portable",
                     "tuning_abi": None,
-                    "coverage_state": "parallel_fixed_policy"
-                    if uses_parallel_for
-                    else "serial",
+                    "coverage_state": "parallel_fixed_policy" if uses_parallel_for else "serial",
                     "uses_parallel_for": uses_parallel_for,
                     "source_file": source_rel,
-                    "serial_reason": None
-                    if uses_parallel_for
-                    else _serial_reason(op_type, source_rel),
+                    "serial_reason": (
+                        None if uses_parallel_for else _serial_reason(op_type, source_rel)
+                    ),
                     "parameter_names": [],
                 }
             )

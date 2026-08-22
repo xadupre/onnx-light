@@ -74,7 +74,13 @@ class TestKernelInventory(ExtTestCase):
         rows = kernel_inventory.build_kernel_inventory(tuning_report=self._fake_tuning_report([]))
         kernel_inventory.validate_inventory(rows)
         identities = [
-            (row["domain"], row["op_type"], row["device"], row["element_type"], row["implementation"])
+            (
+                row["domain"],
+                row["op_type"],
+                row["device"],
+                row["element_type"],
+                row["implementation"],
+            )
             for row in rows
         ]
         self.assertEqual(len(identities), len(set(identities)))

@@ -11,6 +11,7 @@
 #include <functional>
 #include <limits>
 #include <stdexcept>
+#include <thread>
 #include <unordered_set>
 #include <utility>
 
@@ -534,9 +535,11 @@ PreparedExecutionResult PreparedExecutionPlan::Run(PreparedExecutionState &state
   std::mutex progress_mutex;
   std::condition_variable progress;
   size_t active_io = 0;
+  bool active_session_cpu = false;
   size_t progress_epoch = 0;
   size_t peak_in_flight = 0;
   size_t continuation_suspensions = 0;
+  std::jthread session_worker;
   auto execute_task = [&](RunTask &task) {
     try {
       TaskDescriptor scheduled = *task.descriptor;
@@ -595,7 +598,19 @@ PreparedExecutionResult PreparedExecutionPlan::Run(PreparedExecutionState &state
 
     bool dispatched_any = false;
     std::vector<RunTask *> cpu_tasks;
+    std::vector<RunTask *> session_cpu_tasks;
+    bool session_cpu_busy = false;
+    {
+      std::lock_guard<std::mutex> lock(progress_mutex);
+      session_cpu_busy = active_session_cpu;
+    }
     for (RunTask *task : ready) {
+      const bool sequential_session_cpu = cpu_executor == nullptr &&
+                                          task->descriptor->resource == ResourceClass::kCpu &&
+                                          task->descriptor->scope == TaskScope::kSession;
+      if (sequential_session_cpu && (session_cpu_busy || !session_cpu_tasks.empty())) {
+        continue;
+      }
       TaskDescriptor admitted = *task->descriptor;
       admitted.priority = task->effective_priority;
       size_t total = 0;
@@ -622,10 +637,33 @@ PreparedExecutionResult PreparedExecutionPlan::Run(PreparedExecutionState &state
         });
       } else if (task->descriptor->resource == ResourceClass::kCpu && cpu_executor != nullptr) {
         cpu_tasks.push_back(task);
+      } else if (sequential_session_cpu) {
+        session_cpu_tasks.push_back(task);
       } else {
         const CpuExecutorScope scope(cpu_executor);
         execute_task(*task);
       }
+    }
+
+    if (!session_cpu_tasks.empty()) {
+      if (session_worker.joinable()) {
+        session_worker.join();
+      }
+      {
+        std::lock_guard<std::mutex> lock(progress_mutex);
+        active_session_cpu = true;
+      }
+      session_worker = std::jthread([&, tasks = std::move(session_cpu_tasks)]() {
+        for (RunTask *task : tasks) {
+          execute_task(*task);
+        }
+        {
+          std::lock_guard<std::mutex> lock(progress_mutex);
+          active_session_cpu = false;
+          ++progress_epoch;
+          progress.notify_all();
+        }
+      });
     }
 
     if (!cpu_tasks.empty()) {
@@ -661,7 +699,7 @@ PreparedExecutionResult PreparedExecutionPlan::Run(PreparedExecutionState &state
       }
       if (!waited) {
         std::unique_lock<std::mutex> lock(progress_mutex);
-        if (active_io != 0) {
+        if (active_io != 0 || active_session_cpu) {
           ++continuation_suspensions;
           const size_t observed_epoch = progress_epoch;
           progress.wait(lock, [&]() { return progress_epoch != observed_epoch; });
@@ -673,7 +711,10 @@ PreparedExecutionResult PreparedExecutionPlan::Run(PreparedExecutionState &state
   }
   {
     std::unique_lock<std::mutex> lock(progress_mutex);
-    progress.wait(lock, [&]() { return active_io == 0; });
+    progress.wait(lock, [&]() { return active_io == 0 && !active_session_cpu; });
+  }
+  if (session_worker.joinable()) {
+    session_worker.join();
   }
 
   PreparedExecutionResult result;

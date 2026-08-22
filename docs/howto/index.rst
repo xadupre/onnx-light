@@ -8,6 +8,7 @@ How-to Python / C++
 
     command_line
     install_onnx_light
+    graph_builder_basics
     replace_onnx
     onnxruntime_migration
     link_prebuilt_cpp

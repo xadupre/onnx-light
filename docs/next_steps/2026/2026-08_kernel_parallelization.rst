@@ -214,7 +214,10 @@ candidate never exceeds a bounded duration or memory budget. Calibrating
 ``parallel.minimum_elements`` schemas above where the baseline shows a
 measurable gap remain outstanding; promoting any winning candidate to a
 portable default belongs to the next issue, along with confirming the
-ranking against an ARM64 report once one is available.
+ranking against an ARM64 report once one is available. A C++ test
+(``KernelClass.GemmCalibratesParallelMinimumTasksThreshold``) exercises
+``CalibrateGemm`` through ``CalibrateRegisteredKernels`` and asserts the
+published candidate validates against the registered schema.
 
 Per-kernel implementation loop
 ++++++++++++++++++++++++++++++

@@ -23,7 +23,9 @@ namespace {
 
 // Returns the OS memory-mapping granularity (POSIX page size / Windows allocation
 // granularity). mmap_file_as_shared_ptr (stream.cc) maps whole files at offset 0, so a
-// mapped payload's base address always has this alignment.
+// mapped payload's base address always has this alignment. On Windows the mapping's
+// base-address alignment is governed by dwAllocationGranularity (typically 64 KiB),
+// not dwPageSize (typically 4 KiB): using the page size would overstate the guarantee.
 size_t SystemPageAlignment() {
 #if !defined(_WIN32)
   static const size_t page_size = [] {
@@ -34,7 +36,8 @@ size_t SystemPageAlignment() {
   static const size_t page_size = [] {
     SYSTEM_INFO info;
     ::GetSystemInfo(&info);
-    return info.dwPageSize > 0 ? static_cast<size_t>(info.dwPageSize) : size_t{4096};
+    return info.dwAllocationGranularity > 0 ? static_cast<size_t>(info.dwAllocationGranularity)
+                                            : size_t{65536};
   }();
 #endif
   return page_size;
@@ -115,13 +118,17 @@ MappedPayloadSource::ResolveAndValidate(const std::string &relative_or_absolute_
 
 MappedPayloadSource::CachedMapping
 MappedPayloadSource::EnsureMapping(const std::string &canonical_path) {
+  // The stat + cache-lookup + mmap sequence runs entirely under the lock so two
+  // threads racing to map the same not-yet-cached file cannot both create a
+  // mapping (which would hand out two different owners/generations for the
+  // same file content).
+  std::lock_guard<std::mutex> lock(mutex_);
   std::error_code ec;
   const auto file_size = std::filesystem::file_size(canonical_path, ec);
   EXT_ENFORCE(!ec, "MappedPayloadSource: cannot stat source file '", canonical_path,
               "': ", ec.message());
   const int64_t current_size = static_cast<int64_t>(file_size);
 
-  std::lock_guard<std::mutex> lock(mutex_);
   auto it = mappings_.find(canonical_path);
   if (it != mappings_.end() && it->second.size == current_size) {
     // Cache hit: the file did not change size since it was last mapped. A same-size

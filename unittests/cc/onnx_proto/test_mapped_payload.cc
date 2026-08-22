@@ -111,8 +111,8 @@ TEST_F(MappedPayloadTest, OutOfRangeRequestThrows) {
 
   MappedPayloadSource source(base_dir_.string());
   EXPECT_THROW(source.Borrow("weights.bin", 8, 16), std::exception);
-  EXPECT_THROW(source.Borrow("weights.bin", -1, 4), std::exception);
-  EXPECT_THROW(source.Borrow("weights.bin", 0, -1), std::exception);
+  EXPECT_THROW(source.Borrow("weights.bin", int64_t{-1}, 4), std::exception);
+  EXPECT_THROW(source.Borrow("weights.bin", 0, int64_t{-1}), std::exception);
 }
 
 TEST_F(MappedPayloadTest, FileReplacementProducesNewGenerationAndBytes) {

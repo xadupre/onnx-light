@@ -988,7 +988,14 @@ if(ONNX_LIGHT_BUILD_TESTS)
       <string>
       <vector>
   )
-  gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 120)
+  # DISCOVERY_MODE PRE_TEST defers running the freshly-linked binary with
+  # ``--gtest_list_tests`` until ``ctest`` actually executes, instead of
+  # running it as a POST_BUILD step right after linking (the default). On
+  # macOS CI, invoking a shared-library-linked executable immediately after
+  # linking can intermittently fail (the process exits before writing
+  # anything), which CMake then reports as a JSON parse error in
+  # ParseTestList.cmake because the discovery output file is empty.
+  gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 120 DISCOVERY_MODE PRE_TEST)
 
   # This executable deliberately links only lib_onnx_core. It verifies that the
   # generic registry works without, and does not pull in, lib_onnx_patterns.
@@ -999,7 +1006,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_PROTO_PATH}"
   )
   target_link_libraries(test_pattern_registry_core PRIVATE lib_onnx_core GTest::gtest_main)
-  gtest_discover_tests(test_pattern_registry_core DISCOVERY_TIMEOUT 120)
+  gtest_discover_tests(test_pattern_registry_core DISCOVERY_TIMEOUT 120 DISCOVERY_MODE PRE_TEST)
 
   add_executable(test_stream_class_print "${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}")
   target_include_directories(test_stream_class_print PRIVATE
@@ -1009,7 +1016,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_COMMON_PATH}"
   )
   target_link_libraries(test_stream_class_print PRIVATE lib_onnx_proto GTest::gtest_main)
-  gtest_discover_tests(test_stream_class_print DISCOVERY_TIMEOUT 120)
+  gtest_discover_tests(test_stream_class_print DISCOVERY_TIMEOUT 120 DISCOVERY_MODE PRE_TEST)
 
   add_custom_target(onnx_cpp_tests SOURCES ${ONNX_CPP_ALL_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto" PREFIX "Source Files/cc/onnx_proto"

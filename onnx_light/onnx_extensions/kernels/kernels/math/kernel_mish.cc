@@ -9,6 +9,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
@@ -19,12 +20,18 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 
 constexpr const char *kName = "kernel::Mish";
+constexpr uint32_t kTuningAbi = 2;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
 
-template <typename T> void ComputeInPlace(const Tensor &x, Tensor &output) {
+constexpr std::array<int32_t, 4> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::DOUBLE),
+    static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16)};
+
+template <typename T> void ComputeInPlace(const Tensor &x, Tensor &output, int64_t grain_size) {
   const int64_t n = x.element_count();
   const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.mutable_bytes());
-  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+  ParallelFor(n, grain_size, [px, py](int64_t begin, int64_t end) {
     for (int64_t i = begin; i < end; ++i) {
       const T v = px[i];
       // Numerically stable softplus: log1p(exp(-|x|)) + max(x, 0).
@@ -38,11 +45,12 @@ template <typename T> void ComputeInPlace(const Tensor &x, Tensor &output) {
 using DecodeFunc = float (*)(uint16_t);
 using EncodeFunc = uint16_t (*)(float);
 
-void ComputeHalf(const Tensor &x, Tensor &output, DecodeFunc decode, EncodeFunc encode) {
+void ComputeHalf(const Tensor &x, Tensor &output, DecodeFunc decode, EncodeFunc encode,
+                 int64_t grain_size) {
   const int64_t n = x.element_count();
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
   uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
-  ParallelFor(n, [px, py, decode, encode](int64_t begin, int64_t end) {
+  ParallelFor(n, grain_size, [px, py, decode, encode](int64_t begin, int64_t end) {
     for (int64_t i = begin; i < end; ++i) {
       const float v = decode(px[i]);
       const float abs_x = std::fabs(v);
@@ -52,19 +60,19 @@ void ComputeHalf(const Tensor &x, Tensor &output, DecodeFunc decode, EncodeFunc 
   });
 }
 
-void Dispatch(const Tensor &x, Tensor &output) {
+void Dispatch(const Tensor &x, Tensor &output, int64_t grain_size) {
   switch (static_cast<DataType>(x.data_type)) {
   case DataType::FLOAT:
-    ComputeInPlace<float>(x, output);
+    ComputeInPlace<float>(x, output, grain_size);
     return;
   case DataType::DOUBLE:
-    ComputeInPlace<double>(x, output);
+    ComputeInPlace<double>(x, output, grain_size);
     return;
   case DataType::FLOAT16:
-    ComputeHalf(x, output, Float16BitsToFloat, FloatToFloat16Bits);
+    ComputeHalf(x, output, Float16BitsToFloat, FloatToFloat16Bits, grain_size);
     return;
   case DataType::BFLOAT16:
-    ComputeHalf(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits);
+    ComputeHalf(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits, grain_size);
     return;
   default:
     EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,
@@ -84,17 +92,34 @@ void ValidateOutput(const Tensor &x, const Tensor &output) {
 
 } // namespace
 
+Mish::Mish(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+
+void Mish::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("Mish", kSupportedElementTypes, kPortableParallelMinimum,
+                                        kTuningAbi);
+}
+
+KernelTuningKey Mish::TuningKey(int32_t element_type) const {
+  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
+             ? tuning::MakePortableTuningKey("Mish", element_type, kTuningAbi)
+             : KernelTuningKey{};
+}
+
+void Mish::Configure(const KernelTuningParameters &parameters) {
+  tuning::ConfigureParallelTuning("Mish", parameters, tuning_, kTuningAbi);
+}
+
 Tensor Mish::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
   Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, out_n_bytes)
                   : MakeOutputTensor(x.data_type, x.shape, out_n_bytes, nullptr);
-  Dispatch(x, out);
+  Dispatch(x, out, tuning_.parallel_minimum_elements);
   return out;
 }
 
 void Mish::operator()(const Tensor &x, Tensor &output) const {
   ValidateOutput(x, output);
-  Dispatch(x, output);
+  Dispatch(x, output, tuning_.parallel_minimum_elements);
 }
 
 void Mish::Run(RuntimeContext &rt) {

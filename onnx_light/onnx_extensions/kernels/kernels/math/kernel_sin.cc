@@ -9,6 +9,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <array>
 #include <cmath>
 #include <stdexcept>
 
@@ -17,8 +18,31 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 
 constexpr const char *kName = "kernel::Sin";
+constexpr uint32_t kTuningAbi = 2;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+
+constexpr std::array<int32_t, 3> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::FLOAT16),
+    static_cast<int32_t>(DataType::BFLOAT16)};
 
 } // namespace
+
+Sin::Sin(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+
+void Sin::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("Sin", kSupportedElementTypes, kPortableParallelMinimum,
+                                        kTuningAbi);
+}
+
+KernelTuningKey Sin::TuningKey(int32_t element_type) const {
+  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
+             ? tuning::MakePortableTuningKey("Sin", element_type, kTuningAbi)
+             : KernelTuningKey{};
+}
+
+void Sin::Configure(const KernelTuningParameters &parameters) {
+  tuning::ConfigureParallelTuning("Sin", parameters, tuning_, kTuningAbi);
+}
 
 Tensor Sin::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
@@ -39,7 +63,7 @@ void Sin::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[static_cast<size_t>(i)] = std::sin(px[i]);
       }
@@ -48,10 +72,12 @@ void Sin::operator()(const Tensor &x, Tensor &output) const {
   }
   case DataType::FLOAT16:
     detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
+                                 tuning_.parallel_minimum_elements,
                                  [](float v) { return std::sin(v); });
     return;
   case DataType::BFLOAT16:
     detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
+                                 tuning_.parallel_minimum_elements,
                                  [](float v) { return std::sin(v); });
     return;
   default:

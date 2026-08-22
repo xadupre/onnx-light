@@ -107,8 +107,8 @@ first measured migration batch ->
 `#4672 <https://github.com/xadupre/onnx-light/issues/4672>`_ cross-machine
 calibration and default promotion.
 
-Only #4669 is immediately assignable. Each later issue states its prerequisite
-and must remain unassigned until that prerequisite is closed.
+#4669 and #4670 are closed. Each later issue states its prerequisite and must
+remain unassigned until that prerequisite is closed.
 
 Coverage states
 +++++++++++++++
@@ -176,20 +176,32 @@ First migration batch
 Ranking the x86-64 baseline (see
 ``kernel_parallelization_reports/x86_64_baseline.json``) by large-shape
 serial-vs-session-thread speedup and by absolute large-shape wall time
-identifies ``Gemm`` (``FLOAT``, ``DOUBLE``, ``FLOAT16``, ``BFLOAT16``,
+identified ``Gemm`` (``FLOAT``, ``DOUBLE``, ``FLOAT16``, ``BFLOAT16``,
 already ``tunable`` via ``KernelTuningSchema`` but still running with its
 portable single-block defaults) as the largest compute-bound outlier, and the
-still ``parallel_fixed_policy`` transcendental unary kernels ``Log``,
+then-``parallel_fixed_policy`` transcendental unary kernels ``Log``,
 ``Tanh``, and ``Sigmoid`` (``Exp`` already migrated to ``tunable``, alongside
-``Abs``) as the next fixed-grain-size candidates: they show the largest gap
-between the serial and session-thread policies of the sampled kernels. The
-next implementation batch should (1) calibrate ``Gemm``'s existing tuning
+``Abs``) as the next fixed-grain-size candidates: they showed the largest gap
+between the serial and session-thread policies of the sampled kernels.
+
+Every remaining ``parallel_fixed_policy`` path in the built-in kernel
+dispatch table (``onnx_light.tools.kernel_inventory`` reports zero of them)
+has since been migrated: ``Log``, ``Tanh``, and ``Sigmoid`` each register a
+``KernelTuningSchema`` with a calibration callback mirroring ``Abs``'s
+``CalibrateAbs``, and every other fixed-grain unary math kernel (``Acos``,
+``Acosh``, ``Asin``, ``Asinh``, ``Atan``, ``Atanh``, ``Ceil``, ``Cos``,
+``Cosh``, ``Erf``, ``Floor``, ``HardSwish``, ``Mish``, ``Neg``,
+``Reciprocal``, ``Relu``, ``Round``, ``Sign``, ``Sin``, ``Sinh``,
+``Softplus``, ``Softsign``, ``Sqrt``, and ``Tan``) registers the same
+portable ``parallel.minimum_elements`` schema as the logical kernels
+(``And``, ``Or``, ...), without a calibration callback. The next
+implementation batch should (1) calibrate ``Gemm``'s existing tuning
 parameters (``algorithm.tile_m/tile_n/tile_k``,
 ``parallel.fmas_per_work_unit``, ``parallel.minimum_tasks``, ...) instead of
-relying on its portable defaults, and (2) give ``Log``, ``Tanh``, and
-``Sigmoid`` their own ``KernelTuningSchema`` (mirroring ``Abs``'s
-``CalibrateAbs``) before selecting further kernels, then confirm the ranking
-against an ARM64 report once one is available.
+relying on its portable defaults, and (2) calibrate the newly registered
+``parallel.minimum_elements`` schemas above where the baseline shows a
+measurable gap, then confirm the ranking against an ARM64 report once one is
+available.
 
 Per-kernel implementation loop
 ++++++++++++++++++++++++++++++

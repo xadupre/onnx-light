@@ -10,6 +10,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <array>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -19,12 +20,21 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 
 constexpr const char *kName = "kernel::Relu";
+constexpr uint32_t kTuningAbi = 2;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
 
-template <typename T> void ComputeInPlace(const Tensor &x, Tensor &output) {
+constexpr std::array<int32_t, 8> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT),   static_cast<int32_t>(DataType::DOUBLE),
+    static_cast<int32_t>(DataType::INT8),    static_cast<int32_t>(DataType::INT16),
+    static_cast<int32_t>(DataType::INT32),   static_cast<int32_t>(DataType::INT64),
+    static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16),
+};
+
+template <typename T> void ComputeInPlace(const Tensor &x, Tensor &output, int64_t grain_size) {
   const int64_t n = x.element_count();
   const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.mutable_bytes());
-  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+  ParallelFor(n, grain_size, [px, py](int64_t begin, int64_t end) {
     for (int64_t i = begin; i < end; ++i) {
       const T v = px[i];
       py[i] = v > static_cast<T>(0) ? v : static_cast<T>(0);
@@ -32,11 +42,11 @@ template <typename T> void ComputeInPlace(const Tensor &x, Tensor &output) {
   });
 }
 
-void ComputeFloat16(const Tensor &x, Tensor &output) {
+void ComputeFloat16(const Tensor &x, Tensor &output, int64_t grain_size) {
   const int64_t n = x.element_count();
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
   uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
-  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+  ParallelFor(n, grain_size, [px, py](int64_t begin, int64_t end) {
     for (int64_t i = begin; i < end; ++i) {
       const float v = Float16BitsToFloat(px[i]);
       py[i] = FloatToFloat16Bits(v > 0.0f ? v : 0.0f);
@@ -44,11 +54,11 @@ void ComputeFloat16(const Tensor &x, Tensor &output) {
   });
 }
 
-void ComputeBfloat16(const Tensor &x, Tensor &output) {
+void ComputeBfloat16(const Tensor &x, Tensor &output, int64_t grain_size) {
   const int64_t n = x.element_count();
   const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
   uint16_t *py = reinterpret_cast<uint16_t *>(output.mutable_bytes());
-  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+  ParallelFor(n, grain_size, [px, py](int64_t begin, int64_t end) {
     for (int64_t i = begin; i < end; ++i) {
       const float v = Bfloat16BitsToFloat(px[i]);
       py[i] = FloatToBfloat16Bits(v > 0.0f ? v : 0.0f);
@@ -56,31 +66,31 @@ void ComputeBfloat16(const Tensor &x, Tensor &output) {
   });
 }
 
-void Dispatch(const Tensor &x, Tensor &output) {
+void Dispatch(const Tensor &x, Tensor &output, int64_t grain_size) {
   switch (static_cast<DataType>(x.data_type)) {
   case DataType::FLOAT:
-    ComputeInPlace<float>(x, output);
+    ComputeInPlace<float>(x, output, grain_size);
     return;
   case DataType::DOUBLE:
-    ComputeInPlace<double>(x, output);
+    ComputeInPlace<double>(x, output, grain_size);
     return;
   case DataType::INT8:
-    ComputeInPlace<int8_t>(x, output);
+    ComputeInPlace<int8_t>(x, output, grain_size);
     return;
   case DataType::INT16:
-    ComputeInPlace<int16_t>(x, output);
+    ComputeInPlace<int16_t>(x, output, grain_size);
     return;
   case DataType::INT32:
-    ComputeInPlace<int32_t>(x, output);
+    ComputeInPlace<int32_t>(x, output, grain_size);
     return;
   case DataType::INT64:
-    ComputeInPlace<int64_t>(x, output);
+    ComputeInPlace<int64_t>(x, output, grain_size);
     return;
   case DataType::FLOAT16:
-    ComputeFloat16(x, output);
+    ComputeFloat16(x, output, grain_size);
     return;
   case DataType::BFLOAT16:
-    ComputeBfloat16(x, output);
+    ComputeBfloat16(x, output, grain_size);
     return;
   default:
     EXT_THROW_INVALID(
@@ -99,17 +109,34 @@ void ValidateOutput(const Tensor &x, const Tensor &output) {
 
 } // namespace
 
+Relu::Relu(const KernelContext &ctx) : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+
+void Relu::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("Relu", kSupportedElementTypes, kPortableParallelMinimum,
+                                        kTuningAbi);
+}
+
+KernelTuningKey Relu::TuningKey(int32_t element_type) const {
+  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
+             ? tuning::MakePortableTuningKey("Relu", element_type, kTuningAbi)
+             : KernelTuningKey{};
+}
+
+void Relu::Configure(const KernelTuningParameters &parameters) {
+  tuning::ConfigureParallelTuning("Relu", parameters, tuning_, kTuningAbi);
+}
+
 Tensor Relu::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t out_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
   Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, out_n_bytes)
                   : MakeOutputTensor(x.data_type, x.shape, out_n_bytes, nullptr);
-  Dispatch(x, out);
+  Dispatch(x, out, tuning_.parallel_minimum_elements);
   return out;
 }
 
 void Relu::operator()(const Tensor &x, Tensor &output) const {
   ValidateOutput(x, output);
-  Dispatch(x, output);
+  Dispatch(x, output, tuning_.parallel_minimum_elements);
 }
 
 void Relu::Run(RuntimeContext &rt) {

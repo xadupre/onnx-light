@@ -9,6 +9,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <array>
 #include <cmath>
 #include <stdexcept>
 #include <string>
@@ -18,8 +19,32 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 
 constexpr const char *kName = "kernel::Reciprocal";
+constexpr uint32_t kTuningAbi = 2;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+
+constexpr std::array<int32_t, 4> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::DOUBLE),
+    static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16)};
 
 } // namespace
+
+Reciprocal::Reciprocal(const KernelContext &ctx)
+    : KernelBase(ctx), tuning_(kPortableParallelMinimum) {}
+
+void Reciprocal::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("Reciprocal", kSupportedElementTypes,
+                                        kPortableParallelMinimum, kTuningAbi);
+}
+
+KernelTuningKey Reciprocal::TuningKey(int32_t element_type) const {
+  return tuning::IsSupportedElementType(element_type, kSupportedElementTypes)
+             ? tuning::MakePortableTuningKey("Reciprocal", element_type, kTuningAbi)
+             : KernelTuningKey{};
+}
+
+void Reciprocal::Configure(const KernelTuningParameters &parameters) {
+  tuning::ConfigureParallelTuning("Reciprocal", parameters, tuning_, kTuningAbi);
+}
 
 Tensor Reciprocal::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
@@ -40,7 +65,7 @@ void Reciprocal::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = 1.0f / px[i];
       }
@@ -50,7 +75,7 @@ void Reciprocal::operator()(const Tensor &x, Tensor &output) const {
   case DataType::DOUBLE: {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning_.parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = 1.0 / px[i];
       }
@@ -59,10 +84,12 @@ void Reciprocal::operator()(const Tensor &x, Tensor &output) const {
   }
   case DataType::FLOAT16:
     detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
+                                 tuning_.parallel_minimum_elements,
                                  [](float v) { return 1.0f / v; });
     return;
   case DataType::BFLOAT16:
     detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
+                                 tuning_.parallel_minimum_elements,
                                  [](float v) { return 1.0f / v; });
     return;
   default:

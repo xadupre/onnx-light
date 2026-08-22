@@ -112,7 +112,12 @@ class TestDocumentationExamples(ExtTestCase):
             if (
                 not reason
                 and not has_onnxruntime()
-                and name in {"plot_save_ort_flatbuffers.py", "plot_qwen3_init_benchmark.py"}
+                and name
+                in {
+                    "plot_save_ort_flatbuffers.py",
+                    "plot_qwen3_init_benchmark.py",
+                    "plot_backend_benchmark_vs_onnxruntime.py",
+                }
             ):
                 reason = "onnxruntime is missing"
 

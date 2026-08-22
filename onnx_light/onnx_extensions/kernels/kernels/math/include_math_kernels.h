@@ -98,11 +98,13 @@ private:
 };
 
 /// Element-wise arc cosine: y = acos(x), with x in [-1, 1] and y in [0, pi].
-class Acos : public KernelBase {
+class Acos : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Acos";
+  explicit Acos(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -111,11 +113,13 @@ public:
 };
 
 /// Element-wise inverse hyperbolic cosine: y = acosh(x), with x >= 1.
-class Acosh : public KernelBase {
+class Acosh : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Acosh";
+  explicit Acosh(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -124,11 +128,13 @@ public:
 };
 
 /// Element-wise arc sine: y = asin(x), with x in [-1, 1] and y in [-pi/2, pi/2].
-class Asin : public KernelBase {
+class Asin : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Asin";
+  explicit Asin(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -137,11 +143,13 @@ public:
 };
 
 /// Element-wise inverse hyperbolic sine: y = asinh(x), defined for all real x.
-class Asinh : public KernelBase {
+class Asinh : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Asinh";
+  explicit Asinh(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -150,11 +158,13 @@ public:
 };
 
 /// Element-wise arc tangent: y = atan(x), defined for all real x.
-class Atan : public KernelBase {
+class Atan : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Atan";
+  explicit Atan(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -163,11 +173,13 @@ public:
 };
 
 /// Element-wise inverse hyperbolic tangent: y = atanh(x), with x in (-1, 1).
-class Atanh : public KernelBase {
+class Atanh : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Atanh";
+  explicit Atanh(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -176,11 +188,13 @@ public:
 };
 
 /// Element-wise cosine: y = cos(x), defined for all real x with y in [-1, 1].
-class Cos : public KernelBase {
+class Cos : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Cos";
+  explicit Cos(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -189,11 +203,13 @@ public:
 };
 
 /// Element-wise hyperbolic cosine: y = cosh(x), defined for all real x with y >= 1.
-class Cosh : public KernelBase {
+class Cosh : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Cosh";
+  explicit Cosh(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -222,11 +238,13 @@ public:
 };
 
 /// Element-wise ceiling: y = ceil(x), the smallest integer >= x.
-class Ceil : public KernelBase {
+class Ceil : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Ceil";
+  explicit Ceil(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -235,11 +253,13 @@ public:
 };
 
 /// Element-wise floor: y = floor(x), the largest integer <= x.
-class Floor : public KernelBase {
+class Floor : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Floor";
+  explicit Floor(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -271,11 +291,13 @@ public:
 };
 
 /// Element-wise sign: y = sign(x), returning -1 for x<0, 0 for x==0, +1 for x>0.
-class Sign : public KernelBase {
+class Sign : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Sign";
+  explicit Sign(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -284,11 +306,13 @@ public:
 };
 
 /// Element-wise round to nearest integer, ties to even (banker's rounding).
-class Round : public KernelBase {
+class Round : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Round";
+  explicit Round(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -320,11 +344,13 @@ private:
 };
 
 /// Element-wise error function: y = erf(x), defined for all real x.
-class Erf : public KernelBase {
+class Erf : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Erf";
+  explicit Erf(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -333,11 +359,13 @@ public:
 };
 
 /// Element-wise natural logarithm: y = log(x), with x > 0.
-class Log : public KernelBase {
+class Log : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Log";
+  explicit Log(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -346,11 +374,13 @@ public:
 };
 
 /// Element-wise reciprocal: y = 1 / x (Inf for x = 0).
-class Reciprocal : public KernelBase {
+class Reciprocal : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Reciprocal";
+  explicit Reciprocal(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -359,11 +389,13 @@ public:
 };
 
 /// Element-wise square root: y = sqrt(x), with x >= 0 (NaN otherwise).
-class Sqrt : public KernelBase {
+class Sqrt : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Sqrt";
+  explicit Sqrt(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -372,11 +404,13 @@ public:
 };
 
 /// Element-wise logistic sigmoid: y = 1 / (1 + exp(-x)).
-class Sigmoid : public KernelBase {
+class Sigmoid : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Sigmoid";
+  explicit Sigmoid(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -400,11 +434,13 @@ public:
 
 /// Element-wise HardSwish activation:
 ///     y = x * max(0, min(1, x/6 + 0.5)) = x * HardSigmoid(x; alpha=1/6, beta=0.5).
-class HardSwish : public KernelBase {
+class HardSwish : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:HardSwish";
+  explicit HardSwish(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -428,11 +464,13 @@ public:
 };
 
 /// Element-wise sine: y = sin(x), defined for all real x with y in [-1, 1].
-class Sin : public KernelBase {
+class Sin : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Sin";
+  explicit Sin(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -469,11 +507,13 @@ public:
 };
 
 /// Element-wise softplus activation: y = ln(1 + exp(x)).
-class Softplus : public KernelBase {
+class Softplus : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Softplus";
+  explicit Softplus(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -483,11 +523,13 @@ public:
 
 /// Element-wise Mish activation: y = x * tanh(softplus(x)) =
 /// x * tanh(ln(1 + exp(x))).
-class Mish : public KernelBase {
+class Mish : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Mish";
+  explicit Mish(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -496,11 +538,13 @@ public:
 };
 
 /// Element-wise softsign activation: y = x / (1 + |x|).
-class Softsign : public KernelBase {
+class Softsign : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Softsign";
+  explicit Softsign(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -565,11 +609,13 @@ public:
 };
 
 /// Element-wise hyperbolic sine: y = sinh(x), defined for all real x.
-class Sinh : public KernelBase {
+class Sinh : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Sinh";
+  explicit Sinh(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -578,11 +624,13 @@ public:
 };
 
 /// Element-wise tangent: y = tan(x); undefined at x = (2k+1) * pi/2.
-class Tan : public KernelBase {
+class Tan : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Tan";
+  explicit Tan(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -591,11 +639,13 @@ public:
 };
 
 /// Element-wise hyperbolic tangent: y = tanh(x), with y in (-1, 1).
-class Tanh : public KernelBase {
+class Tanh : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Tanh";
+  explicit Tanh(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -605,11 +655,13 @@ public:
 
 /// Element-wise rectified linear unit: ``y = max(0, x)``. Defined for both
 /// floating-point and signed integer tensors (see schema since v14).
-class Relu : public KernelBase {
+class Relu : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Relu";
+  explicit Relu(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
@@ -888,11 +940,13 @@ public:
 /// Element-wise negation: y = -x. Mirrors the upstream ONNX ``Neg``
 /// reference implementation (``np.negative``). Only the FLOAT dtype is
 /// supported.
-class Neg : public KernelBase {
+class Neg : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Neg";
+  explicit Neg(const KernelContext &ctx);
+  /// Registers one portable tuning schema for every supported element type.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, Tensor &output) const;
 

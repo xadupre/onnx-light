@@ -9,6 +9,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <array>
 #include <cmath>
 #include <stdexcept>
 #include <string>
@@ -19,15 +20,24 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 
 constexpr const char *kName = "kernel::Neg";
+constexpr uint32_t kTuningAbi = 2;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+
+constexpr std::array<int32_t, 8> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT),   static_cast<int32_t>(DataType::DOUBLE),
+    static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16),
+    static_cast<int32_t>(DataType::INT8),    static_cast<int32_t>(DataType::INT16),
+    static_cast<int32_t>(DataType::INT32),   static_cast<int32_t>(DataType::INT64),
+};
 
 // Negates a signed integer tensor using unsigned two's complement arithmetic so
 // that the minimum-value edge case (e.g. -INT8_MIN) wraps correctly without UB.
-template <typename T> void NegInt(const Tensor &x, Tensor &output) {
+template <typename T> void NegInt(const Tensor &x, Tensor &output, int64_t grain_size) {
   using U = std::make_unsigned_t<T>;
   const int64_t n = x.element_count();
   const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.mutable_bytes());
-  ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+  ParallelFor(n, grain_size, [px, py](int64_t begin, int64_t end) {
     for (int64_t i = begin; i < end; ++i) {
       py[i] = static_cast<T>(U{0} - static_cast<U>(px[i]));
     }
@@ -35,6 +45,12 @@ template <typename T> void NegInt(const Tensor &x, Tensor &output) {
 }
 
 } // namespace
+
+Neg::Neg(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Neg", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(Neg)
 
 Tensor Neg::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
@@ -55,7 +71,7 @@ void Neg::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = -px[i];
       }
@@ -65,7 +81,7 @@ void Neg::operator()(const Tensor &x, Tensor &output) const {
   case DataType::DOUBLE: {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = -px[i];
       }
@@ -74,23 +90,23 @@ void Neg::operator()(const Tensor &x, Tensor &output) const {
   }
   case DataType::FLOAT16:
     detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
-                                 [](float v) { return -v; });
+                                 tuning().parallel_minimum_elements, [](float v) { return -v; });
     return;
   case DataType::BFLOAT16:
     detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
-                                 [](float v) { return -v; });
+                                 tuning().parallel_minimum_elements, [](float v) { return -v; });
     return;
   case DataType::INT8:
-    NegInt<int8_t>(x, output);
+    NegInt<int8_t>(x, output, tuning().parallel_minimum_elements);
     return;
   case DataType::INT16:
-    NegInt<int16_t>(x, output);
+    NegInt<int16_t>(x, output, tuning().parallel_minimum_elements);
     return;
   case DataType::INT32:
-    NegInt<int32_t>(x, output);
+    NegInt<int32_t>(x, output, tuning().parallel_minimum_elements);
     return;
   case DataType::INT64:
-    NegInt<int64_t>(x, output);
+    NegInt<int64_t>(x, output, tuning().parallel_minimum_elements);
     return;
   default:
     EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,

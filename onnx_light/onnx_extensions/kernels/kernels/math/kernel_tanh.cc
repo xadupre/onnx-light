@@ -9,6 +9,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <array>
 #include <cmath>
 #include <stdexcept>
 #include <string>
@@ -18,8 +19,55 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 
 constexpr const char *kName = "kernel::Tanh";
+constexpr uint32_t kTuningAbi = 2;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+
+constexpr std::array<int32_t, 4> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::DOUBLE),
+    static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16)};
+
+KernelTuningParameters CalibrateTanh(const KernelTuningKey &key,
+                                     const CpuExecutionDescriptor &execution,
+                                     const CalibrationOptions &options,
+                                     CalibrationReporter &reporter) {
+  const KernelContext context{DefaultOpset(13)};
+  Tanh reference{context};
+  Tanh candidate{context};
+  KernelCalibrationBenchmark benchmark;
+  benchmark.portable_parameters = {
+      key, {{std::string(tuning::kParallelMinimumElements), kPortableParallelMinimum}}};
+  benchmark.parameter_name = std::string(tuning::kParallelMinimumElements);
+  benchmark.cases = MakeElementwiseCalibrationCases(key.element_type, 1, int64_t{1} << 14,
+                                                    int64_t{1} << 23, false);
+  benchmark.reference.configure = [&](int64_t value) {
+    reference.Configure({key, {{benchmark.parameter_name, value}}});
+  };
+  benchmark.reference.run = [&](std::span<const Tensor> inputs, Tensor &output) {
+    reference(inputs[0], output);
+  };
+  benchmark.candidate.configure = [&](int64_t value) {
+    candidate.Configure({key, {{benchmark.parameter_name, value}}});
+  };
+  benchmark.candidate.run = [&](std::span<const Tensor> inputs, Tensor &output) {
+    candidate(inputs[0], output);
+  };
+  return CalibrateKernelBenchmark(key, execution, options, reporter, benchmark);
+}
 
 } // namespace
+
+Tanh::Tanh(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Tanh", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+
+void Tanh::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("Tanh", kSupportedElementTypes, kPortableParallelMinimum,
+                                        kTuningAbi);
+  for (int32_t element_type : kSupportedElementTypes) {
+    const KernelTuningKey key = tuning::MakePortableTuningKey("Tanh", element_type, kTuningAbi);
+    core::runtime::RegisterKernelCalibrationFunction(key, CalibrateTanh);
+  }
+}
 
 Tensor Tanh::operator()(const Tensor &x, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
@@ -40,7 +88,7 @@ void Tanh::operator()(const Tensor &x, Tensor &output) const {
   case DataType::FLOAT: {
     const float *px = x.AsFloat();
     float *py = output.AsFloat();
-    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = std::tanh(px[i]);
       }
@@ -50,7 +98,7 @@ void Tanh::operator()(const Tensor &x, Tensor &output) const {
   case DataType::DOUBLE: {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    ParallelFor(n, [px, py](int64_t begin, int64_t end) {
+    ParallelFor(n, tuning().parallel_minimum_elements, [px, py](int64_t begin, int64_t end) {
       for (int64_t i = begin; i < end; ++i) {
         py[i] = std::tanh(px[i]);
       }
@@ -59,10 +107,12 @@ void Tanh::operator()(const Tensor &x, Tensor &output) const {
   }
   case DataType::FLOAT16:
     detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
+                                 tuning().parallel_minimum_elements,
                                  [](float v) { return std::tanh(v); });
     return;
   case DataType::BFLOAT16:
     detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
+                                 tuning().parallel_minimum_elements,
                                  [](float v) { return std::tanh(v); });
     return;
   default:

@@ -5,15 +5,16 @@ Completing native fast model loading
 
 :Date: 2026-08
 
-**blocked by prepared execution**
+**blocked by onnxruntime integration**
 
 Objective
 +++++++++
 
-This is step 4 of the fast-loading sequence. It starts only after
-:ref:`l-next-steps-prepared-execution` provides session-scoped preparation
-tasks, dependency events, bounded I/O and CPU resources, prepared-object
-residency, and synchronous/asynchronous execution through one plan.
+This is step 4 of the fast-loading sequence. It consumes the session-scoped
+preparation tasks, dependency events, bounded resources, and prepared-object
+residency from :ref:`l-next-steps-prepared-execution`. It starts after
+:ref:`l-next-steps-model-loading` establishes the ownership contract with
+onnxruntime.
 
 The objective is to connect the native loader, graph resolver, prepared tensor
 cache, and prepared executor end to end. The target is time to first token and

@@ -42,6 +42,9 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx_core.shape_inference import (
+    INPLACE_REUSE_METADATA_KEY,
+    RELEASE_AFTER_METADATA_KEY,
+    RELEASE_AFTER_SHAPE_TAG_METADATA_KEY,
     ComputeContext,
     ShapesContext,
     apply_inferred_shapes_to_model,
@@ -51,6 +54,17 @@ from onnx_light.onnx_core.shape_inference import (
     write_inplace_reuse_to_metadata,
 )
 from onnx_light.tools import pretty_onnx
+
+# Not exposed as a Python constant yet; mirrors the C++
+# ``onnx_compute::kNotUsedAfterMetadataKey`` used by
+# :func:`write_inplace_reuse_to_metadata`.
+NOT_USED_AFTER_METADATA_KEY = "onnx_light.not_used_after"
+
+
+def _metadata_value(node, key: str) -> str:
+    """Returns the ``metadata_props`` value for ``key`` on ``node``, or ``""``."""
+    return next((entry.value for entry in node.metadata_props if entry.key == key), "")
+
 
 # Make sure the built-in operator schemas are registered before running
 # shape inference (the C++ dispatch table looks them up).
@@ -119,6 +133,10 @@ print("\nValue tags:")
 for name, tag in sorted(value_tags.items()):
     print(f"  {name:<12} {tag}")
 
+print("\nNode tags:")
+for node, tag in zip(model.graph.node, node_tags):
+    print(f"  {node.op_type:<10} outputs={list(node.output)!s:<16} tag={tag}")
+
 #####################################
 # 3. constant
 # +++++++++++
@@ -157,8 +175,16 @@ for name in ("W", "two", "const_prod", "added", "relu_out", "x_shape", "Z"):
 # :func:`compute_inplace_reuse` returns, for every node, the list of
 # ``InPlaceReuse`` opportunities (which output can reuse which input
 # buffer). :func:`write_inplace_reuse_to_metadata` additionally records
-# *release* information: the ``onnx_light.release_after`` metadata entry on
-# a node lists the values that are no longer needed once that node has run.
+# *release* information on ``metadata_props``:
+#
+# * ``onnx_light.inplace_reuse`` — the in-place opportunities, as
+#   ``output_index:input_index:kind`` triplets.
+# * ``onnx_light.release_after`` — the values that are no longer needed
+#   once the node has run.
+# * ``onnx_light.release_after_shape_tag`` — the subset of those released
+#   values that carry the ``"shape"`` tag (from ``value_tags`` above).
+# * ``onnx_light.not_used_after`` — declared graph inputs or initializers
+#   that reach their last use at this node.
 #
 # Here ``relu_out = Relu(added)`` can overwrite the buffer of ``added`` in
 # place (same element type and shape), and ``added`` is released right
@@ -167,16 +193,19 @@ for name in ("W", "two", "const_prod", "added", "relu_out", "x_shape", "Z"):
 reuse = compute_inplace_reuse(shapes_ctx, model.graph)
 write_inplace_reuse_to_metadata(shapes_ctx, model.graph, value_tags)
 
-print("\nIn-place reuse and release-after per node:")
+print("\nIn-place reuse and release information per node:")
 for node, node_reuse in zip(model.graph.node, reuse):
     reuse_desc = ", ".join(
         f"out{r.output_index}=in{r.input_index}({r.kind.name})" for r in node_reuse
     )
-    release = next(
-        (entry.value for entry in node.metadata_props if entry.key == "onnx_light.release_after"),
-        "",
-    )
+    inplace_metadata = _metadata_value(node, INPLACE_REUSE_METADATA_KEY)
+    release_after = _metadata_value(node, RELEASE_AFTER_METADATA_KEY)
+    release_after_shape_tag = _metadata_value(node, RELEASE_AFTER_SHAPE_TAG_METADATA_KEY)
+    not_used_after = _metadata_value(node, NOT_USED_AFTER_METADATA_KEY)
     print(
         f"  {node.op_type:<10} outputs={list(node.output)!s:<16} "
-        f"inplace=[{reuse_desc}] release_after={release!r}"
+        f"inplace=[{reuse_desc}] (metadata={inplace_metadata!r}) "
+        f"release_after={release_after!r} "
+        f"release_after_shape_tag={release_after_shape_tag!r} "
+        f"not_used_after={not_used_after!r}"
     )

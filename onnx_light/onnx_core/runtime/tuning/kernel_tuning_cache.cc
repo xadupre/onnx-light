@@ -4,6 +4,8 @@
 
 #include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
 
+#include "onnx_core/runtime/tuning/runtime_parameters.h"
+
 #include <algorithm>
 #include <cerrno>
 #include <charconv>
@@ -267,7 +269,12 @@ ParsedCache ParseCache(std::istream &input) {
 CpuExecutionDescriptor CurrentExecutionDescriptor() {
   CpuExecutionDescriptor execution;
   execution.processor = platform::GetCpuDescriptor();
-  execution.effective_threads = execution.processor.logical_cores.value_or(1);
+  // Matches the default (``num_threads == 0``) thread-count resolution used
+  // by ``RuntimeSession`` and ``ParallelForThreadCount``'s no-executor
+  // fallback, so a profile persisted without an explicit execution
+  // descriptor still matches the descriptor a later default-policy session
+  // resolves when reloading the cache.
+  execution.effective_threads = static_cast<uint32_t>(RuntimeParameters().EffectiveNumThreads());
   return execution;
 }
 

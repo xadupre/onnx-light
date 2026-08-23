@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
+#include "onnx_core/runtime/tuning/runtime_parameters.h"
 
 #include <gtest/gtest.h>
 
@@ -931,6 +932,37 @@ TEST(KernelTuningCache, ReportsMissingFileWithoutPublishing) {
 
   EXPECT_EQ(report.status, KernelTuningCacheLoadStatus::kNotFound);
   EXPECT_EQ(GetKernelTuningRegistry().Snapshot().generation(), before.generation());
+}
+
+TEST(KernelTuningCache, DefaultExecutionDescriptorMatchesDefaultSessionThreadCount) {
+  // A profile persisted without an explicit execution descriptor (the common
+  // case for an ad hoc calibration run) must be found again by a later
+  // reload that also omits the descriptor, exactly like the default
+  // (num_threads == 0) execution a RuntimeSession or ParallelForThreadCount
+  // resolves without an explicit CpuExecutor. Regression test for a mismatch
+  // where the cache defaulted to the raw logical-core count while sessions
+  // default to RuntimeParameters().EffectiveNumThreads() (physical cores
+  // when available), so SMT machines never matched a persisted profile.
+  KernelTuningParameters defaults = MakeDefaults();
+  defaults.key.library = "cache_default_execution_test";
+  RegisterKernelTuningSchema(KernelTuningSchema(defaults));
+  TemporaryCache cache("default_execution");
+
+  KernelTuningCacheUpdateReport update = UpdateKernelTuningCache(
+      std::span<const KernelTuningParameters>(&defaults, 1), {cache.path(), std::nullopt});
+  ASSERT_EQ(update.status, KernelTuningCacheUpdateStatus::kUpdated);
+
+  const KernelTuningCacheInspectionReport inspection =
+      InspectKernelTuningCache({cache.path(), std::nullopt});
+  ASSERT_EQ(inspection.profiles.size(), 1u);
+  EXPECT_EQ(inspection.profiles[0].execution.effective_threads,
+            static_cast<uint32_t>(RuntimeParameters().EffectiveNumThreads()));
+
+  KernelCalibrationSelection selection;
+  selection.library = defaults.key.library;
+  const KernelTuningCacheLoadReport loaded =
+      LoadKernelTuningCache(selection, {cache.path(), std::nullopt});
+  EXPECT_EQ(loaded.loaded, std::vector<KernelTuningKey>({defaults.key}));
 }
 
 TEST(KernelTuningCache, AtomicallyCreatesMergesAndReplacesProfiles) {

@@ -1,0 +1,795 @@
+{
+  "cache_path": "<local kernel tuning cache path>",
+  "calibratable_keys": 37,
+  "calibrated_profiles": [
+    {
+      "device": -1,
+      "element_type": 1,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 3,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 5,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 6,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 7,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 10,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 65536
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 11,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 16,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 1,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "parallel.minimum_elements": 32768
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 2,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 3,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 4,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "parallel.minimum_elements": 32768
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 5,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "parallel.minimum_elements": 65536
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 6,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "parallel.minimum_elements": 16384
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 7,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 10,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 11,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 12,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 13,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 16,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 1,
+      "implementation": "portable",
+      "kernel": "Gemm",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "algorithm.pack_b_minimum_elements": 16384,
+        "algorithm.skinny_m_limit": 8,
+        "algorithm.tile_k": 256,
+        "algorithm.tile_m": 64,
+        "algorithm.tile_n": 256,
+        "conversion.parallel_minimum_elements": 1048576,
+        "parallel.fmas_per_work_unit": 256,
+        "parallel.minimum_tasks": 1
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 10,
+      "implementation": "portable",
+      "kernel": "Gemm",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "algorithm.pack_b_minimum_elements": 16384,
+        "algorithm.skinny_m_limit": 8,
+        "algorithm.tile_k": 256,
+        "algorithm.tile_m": 64,
+        "algorithm.tile_n": 256,
+        "conversion.parallel_minimum_elements": 1048576,
+        "parallel.fmas_per_work_unit": 256,
+        "parallel.minimum_tasks": 1
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 11,
+      "implementation": "portable",
+      "kernel": "Gemm",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "algorithm.pack_b_minimum_elements": 16384,
+        "algorithm.skinny_m_limit": 8,
+        "algorithm.tile_k": 256,
+        "algorithm.tile_m": 64,
+        "algorithm.tile_n": 256,
+        "conversion.parallel_minimum_elements": 1048576,
+        "parallel.fmas_per_work_unit": 256,
+        "parallel.minimum_tasks": 1
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 16,
+      "implementation": "portable",
+      "kernel": "Gemm",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "algorithm.pack_b_minimum_elements": 16384,
+        "algorithm.skinny_m_limit": 8,
+        "algorithm.tile_k": 256,
+        "algorithm.tile_m": 64,
+        "algorithm.tile_n": 256,
+        "conversion.parallel_minimum_elements": 1048576,
+        "parallel.fmas_per_work_unit": 256,
+        "parallel.minimum_tasks": 1
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 1,
+      "implementation": "portable",
+      "kernel": "Log",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 10,
+      "implementation": "portable",
+      "kernel": "Log",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 11,
+      "implementation": "portable",
+      "kernel": "Log",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 16,
+      "implementation": "portable",
+      "kernel": "Log",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 9,
+      "implementation": "portable",
+      "kernel": "Not",
+      "library": "onnx_light",
+      "tuning_abi": 1,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 1,
+      "implementation": "portable",
+      "kernel": "Sigmoid",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 10,
+      "implementation": "portable",
+      "kernel": "Sigmoid",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 11,
+      "implementation": "portable",
+      "kernel": "Sigmoid",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 16,
+      "implementation": "portable",
+      "kernel": "Sigmoid",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 1,
+      "implementation": "portable",
+      "kernel": "Tanh",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 10,
+      "implementation": "portable",
+      "kernel": "Tanh",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 11,
+      "implementation": "portable",
+      "kernel": "Tanh",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    },
+    {
+      "device": -1,
+      "element_type": 16,
+      "implementation": "portable",
+      "kernel": "Tanh",
+      "library": "onnx_light",
+      "tuning_abi": 2,
+      "values": {
+        "parallel.minimum_elements": 8192
+      }
+    }
+  ],
+  "cpu_descriptor": {
+    "architecture": "x86_64",
+    "logical_cores": 4,
+    "model_name": "AMD EPYC 7763 64-Core Processor",
+    "processor": "x86_64",
+    "system": "Linux",
+    "system_release": "6.17.0-1022-azure",
+    "vendor": "AuthenticAMD"
+  },
+  "diagnostics": [
+    {
+      "device": -1,
+      "element_type": 1,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "message": "Abs selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 3,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "message": "Abs selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 5,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "message": "Abs selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 6,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "message": "Abs selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 7,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "message": "Abs selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 10,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "message": "Abs selected parallel.minimum_elements=65536.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 11,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "message": "Abs selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 16,
+      "implementation": "portable",
+      "kernel": "Abs",
+      "library": "onnx_light",
+      "message": "Abs selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 1,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "message": "Add selected parallel.minimum_elements=32768.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 2,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "message": "Add selected parallel.minimum_elements=8192.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 3,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "message": "Add selected parallel.minimum_elements=8192.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 4,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "message": "Add selected parallel.minimum_elements=32768.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 5,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "message": "Add selected parallel.minimum_elements=65536.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 6,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "message": "Add selected parallel.minimum_elements=16384.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 7,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "message": "Add selected parallel.minimum_elements=8192.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 10,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "message": "Add selected parallel.minimum_elements=8192.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 11,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "message": "Add selected parallel.minimum_elements=8192.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 12,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "message": "Add selected parallel.minimum_elements=8192.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 13,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "message": "Add selected parallel.minimum_elements=8192.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 16,
+      "implementation": "portable",
+      "kernel": "Add",
+      "library": "onnx_light",
+      "message": "Add selected parallel.minimum_elements=8192.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 1,
+      "implementation": "portable",
+      "kernel": "Gemm",
+      "library": "onnx_light",
+      "message": "Gemm selected parallel.minimum_tasks=1.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 10,
+      "implementation": "portable",
+      "kernel": "Gemm",
+      "library": "onnx_light",
+      "message": "Gemm selected parallel.minimum_tasks=1.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 11,
+      "implementation": "portable",
+      "kernel": "Gemm",
+      "library": "onnx_light",
+      "message": "Gemm selected parallel.minimum_tasks=1.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 16,
+      "implementation": "portable",
+      "kernel": "Gemm",
+      "library": "onnx_light",
+      "message": "Gemm selected parallel.minimum_tasks=1.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 1,
+      "implementation": "portable",
+      "kernel": "Log",
+      "library": "onnx_light",
+      "message": "Log selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 10,
+      "implementation": "portable",
+      "kernel": "Log",
+      "library": "onnx_light",
+      "message": "Log selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 11,
+      "implementation": "portable",
+      "kernel": "Log",
+      "library": "onnx_light",
+      "message": "Log selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 16,
+      "implementation": "portable",
+      "kernel": "Log",
+      "library": "onnx_light",
+      "message": "Log selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 9,
+      "implementation": "portable",
+      "kernel": "Not",
+      "library": "onnx_light",
+      "message": "Not selected parallel.minimum_elements=8192.",
+      "tuning_abi": 1
+    },
+    {
+      "device": -1,
+      "element_type": 1,
+      "implementation": "portable",
+      "kernel": "Sigmoid",
+      "library": "onnx_light",
+      "message": "Sigmoid selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 10,
+      "implementation": "portable",
+      "kernel": "Sigmoid",
+      "library": "onnx_light",
+      "message": "Sigmoid selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 11,
+      "implementation": "portable",
+      "kernel": "Sigmoid",
+      "library": "onnx_light",
+      "message": "Sigmoid selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 16,
+      "implementation": "portable",
+      "kernel": "Sigmoid",
+      "library": "onnx_light",
+      "message": "Sigmoid selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 1,
+      "implementation": "portable",
+      "kernel": "Tanh",
+      "library": "onnx_light",
+      "message": "Tanh selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 10,
+      "implementation": "portable",
+      "kernel": "Tanh",
+      "library": "onnx_light",
+      "message": "Tanh selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 11,
+      "implementation": "portable",
+      "kernel": "Tanh",
+      "library": "onnx_light",
+      "message": "Tanh selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    },
+    {
+      "device": -1,
+      "element_type": 16,
+      "implementation": "portable",
+      "kernel": "Tanh",
+      "library": "onnx_light",
+      "message": "Tanh selected parallel.minimum_elements=8192.",
+      "tuning_abi": 2
+    }
+  ],
+  "reload_verification": {
+    "incompatible_keys": 0,
+    "invalid_keys": 0,
+    "load_status": "loaded",
+    "loaded_keys": 37,
+    "published_profiles_resolved": 37
+  },
+  "remaining_missing_after_apply": 258,
+  "selected_keys": 295,
+  "unsupported_keys": 258
+}

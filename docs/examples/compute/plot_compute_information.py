@@ -4,7 +4,6 @@
 Computing shape, tag, constant, release and in-place information
 ================================================================
 
-
 *onnx-light* derives several pieces of information about a graph before it
 is executed:
 
@@ -97,8 +96,8 @@ print(pretty_onnx(model))
 # into ``model.graph.value_info`` and ``model.graph.output``.
 
 shapes_ctx = ShapesContext()
-compute_shape_model(shapes_ctx, model, prefill_with_value_info_output=True)
-apply_inferred_shapes_to_model(model)
+compute_shape_model(shapes_ctx, model)
+apply_inferred_shapes_to_model(shapes_ctx, model)
 
 print("Inferred shapes:")
 for name in ("two", "const_prod", "added", "relu_out", "x_shape", "Z"):

@@ -2896,6 +2896,36 @@ TEST(KernelClass, GemmParallelTilesPreserveSerialReductionBits) {
   EXPECT_EQ(std::memcmp(actual.bytes(), expected.bytes(), actual.size_bytes()), 0);
 }
 
+// Exercises the calibration function ``Gemm::RegisterTuningSchemas()``
+// registers for ``parallel.minimum_tasks``: it runs the bounded crossover
+// search against the portable tile defaults and must publish a validated
+// candidate for the FLOAT tuning key.
+TEST(KernelClass, GemmCalibratesParallelMinimumTasksThreshold) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Gemm gemm_kernel{ctx};
+  const auto float_key = gemm_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+
+  core::runtime::KernelCalibrationSelection selection;
+  selection.library = float_key.library;
+  selection.kernels = {float_key.kernel};
+  selection.element_types = {float_key.element_type};
+
+  core::runtime::CalibrationOptions options;
+  options.maximum_duration_ms = 1000;
+
+  const core::runtime::CalibrationBatchReport report =
+      core::runtime::CalibrateRegisteredKernels(selection, options);
+
+  ASSERT_EQ(report.calibrated.size(), 1u);
+  EXPECT_EQ(report.calibrated[0].key, float_key);
+  EXPECT_TRUE(report.calibrated[0].Contains("parallel.minimum_tasks"));
+  EXPECT_TRUE(report.unsupported.empty());
+
+  const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(float_key);
+  ASSERT_NE(schema, nullptr);
+  EXPECT_NO_THROW(schema->Validate(report.calibrated[0]));
+}
+
 // Verifies that ``kernel::MatMul`` produces FLOAT16 / BFLOAT16 outputs that
 // numerically match the FLOAT computation rounded through the same dtype.
 TEST(KernelClass, MatMulHalfPrecisionMatchesFloatReference) {

@@ -5,7 +5,7 @@ Kernel parallelization and tuning sequence
 
 :Date: 2026-08
 
-**Step E in progress**
+**Step F in progress**
 
 Objective
 +++++++++
@@ -77,7 +77,12 @@ step and produces the input required by the next one.
         for each selected kernel, all controlled by named tuning parameters.
       - Calibration needs valid candidates with identical numerical and error
         behavior.
-      - Planned
+      - Started (``Gemm`` already ran through ``ParallelFor`` with tunable
+        tile and grain parameters; it now also registers a calibration
+        candidate for ``parallel.minimum_tasks`` mirroring the unary
+        ``CalibrateAbs`` pattern. Calibrating the remaining ``Gemm``
+        parameters (tile/pack sizes) and promoting any candidate to a
+        portable default remain outstanding and belong to the next issue)
     * - G. Calibration
       - Step F
       - Validated processor-specific profiles published through
@@ -194,14 +199,25 @@ has since been migrated: ``Log``, ``Tanh``, and ``Sigmoid`` each register a
 ``Reciprocal``, ``Relu``, ``Round``, ``Sign``, ``Sin``, ``Sinh``,
 ``Softplus``, ``Softsign``, ``Sqrt``, and ``Tan``) registers the same
 portable ``parallel.minimum_elements`` schema as the logical kernels
-(``And``, ``Or``, ...), without a calibration callback. The next
-implementation batch should (1) calibrate ``Gemm``'s existing tuning
-parameters (``algorithm.tile_m/tile_n/tile_k``,
-``parallel.fmas_per_work_unit``, ``parallel.minimum_tasks``, ...) instead of
-relying on its portable defaults, and (2) calibrate the newly registered
+(``And``, ``Or``, ...), without a calibration callback.
+
+``Gemm`` now registers a bounded ``CalibrateGemm`` candidate for
+``parallel.minimum_tasks`` (the threshold on the ``ParallelFor`` task-grid
+size, tested with fixed ``tile_m``/``tile_n``/``k`` at the portable
+defaults), mirroring the unary ``CalibrateAbs`` crossover search: reference
+and candidate share the same deterministic tiled accumulation order, so their
+outputs are bit-identical regardless of the selected threshold, and the
+candidate never exceeds a bounded duration or memory budget. Calibrating
+``Gemm``'s remaining algorithm parameters
+(``algorithm.tile_m/tile_n/tile_k``, ``algorithm.pack_b_minimum_elements``,
+``parallel.fmas_per_work_unit``) and the newly registered
 ``parallel.minimum_elements`` schemas above where the baseline shows a
-measurable gap, then confirm the ranking against an ARM64 report once one is
-available.
+measurable gap remain outstanding; promoting any winning candidate to a
+portable default belongs to the next issue, along with confirming the
+ranking against an ARM64 report once one is available. A C++ test
+(``KernelClass.GemmCalibratesParallelMinimumTasksThreshold``) exercises
+``CalibrateGemm`` through ``CalibrateRegisteredKernels`` and asserts the
+published candidate validates against the registered schema.
 
 Per-kernel implementation loop
 ++++++++++++++++++++++++++++++

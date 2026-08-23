@@ -58,6 +58,20 @@ class TestKernelTuningBindings(ExtTestCase):
             self.assertIsNone(event["ipc"])
             self.assertIsNone(event["llc_miss_rate"])
 
+    def test_calibrates_gemm_parallel_minimum_tasks(self):
+        report = rt.calibrate_kernel_tuning(
+            "Gemm",
+            element_types=[int(TensorProto.FLOAT)],
+            maximum_duration_ms=1000,
+            save=False,
+            profiling_capacity=1,
+            profiling_hardware_counters=False,
+        )
+
+        self.assertEqual(len(report["candidate_diagnostics"]), 1)
+        diagnostic = report["candidate_diagnostics"][0]
+        self.assertEqual(diagnostic["kernel"], "Gemm")
+
     def test_lists_registered_parameters_and_defaults(self):
         report = kernel_tuning.kernel_tuning_parameters(
             kernel="Abs", element_type=int(TensorProto.FLOAT)

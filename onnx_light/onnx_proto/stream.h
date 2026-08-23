@@ -220,6 +220,11 @@ public:
   virtual void ReadDelayedBlock(DelayedBlock &block);
   /** Blocks until all pending asynchronous read blocks have completed. */
   virtual void WaitForDelayedBlock();
+  /** Returns the total number of bytes submitted as delayed blocks and not yet awaited, i.e.
+   *  the "bytes in flight" under the current submit-then-wait model. Zero when no delayed
+   *  block has been submitted (including every metadata-only or wholly mapped/borrowed parse,
+   *  which never submits one). */
+  virtual int64_t TotalDelayedBlockBytes() const { return 0; }
 
   // protobuf ZeroCopyInputStream-compatible interface. These mirror the methods
   // of google::protobuf::io::ArrayInputStream (see ArrayInputStream in
@@ -657,6 +662,10 @@ public:
   virtual void StartThreadPool(size_t n_threads) override;
   virtual void ReadDelayedBlock(DelayedBlock &block) override;
   virtual void WaitForDelayedBlock() override;
+  /** Returns the sum of the sizes of every block submitted via ReadDelayedBlock since the last
+   *  StartThreadPool() call; covers both this stream and TwoFilesStream (which reuses blocks_
+   *  for both the primary and weights substream). */
+  virtual int64_t TotalDelayedBlockBytes() const override;
 
 protected:
   virtual void LimitTo(uint64_t len) override;
@@ -749,6 +758,13 @@ public:
    *  After this call write_raw_bytes_in_second_stream submits writes asynchronously. */
   void StartWriteThreadPool(int32_t n_threads);
 
+  /** Sets the minimum block size (bytes) a single second-stream write must reach to be
+   *  submitted to the write thread pool once parallel writing has started; writes below this
+   *  threshold are written on the calling thread to avoid thread-pool overhead. Defaults to
+   *  ``0`` (always parallel once ``StartWriteThreadPool`` has been called). May be called
+   *  before or after ``StartWriteThreadPool``. */
+  inline void SetMinParallelBlockSize(int64_t n_bytes) { min_parallel_block_size_ = n_bytes; }
+
   /** Blocks until all pending write tasks have completed and stops the thread pool. */
   void WaitForWriteCompletion();
 
@@ -799,6 +815,9 @@ protected:
   std::unordered_map<std::string, int64_t> extra_virtual_write_pos_;
   /** Thread pool used for parallel writes to the weights file. */
   ThreadPool write_thread_pool_;
+  /** Minimum block size (bytes) required for a write to be submitted to
+   *  write_thread_pool_ instead of being written inline. See SetMinParallelBlockSize. */
+  int64_t min_parallel_block_size_ = 0;
 };
 
 /** Two-file reader for ONNX models with external tensor data.

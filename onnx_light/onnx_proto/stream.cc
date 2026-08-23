@@ -1209,9 +1209,32 @@ void FileStream::StartThreadPool(size_t n_threads) {
   thread_pool_.Start(static_cast<int32_t>(n_threads));
 }
 
+int64_t FileStream::TotalDelayedBlockBytes() const {
+  int64_t total = 0;
+  for (const DelayedBlock &block : blocks_)
+    total += static_cast<int64_t>(block.size);
+  return total;
+}
+
 //////////////////////
 // TwoFilesWriteStream
 //////////////////////
+
+namespace {
+/** Writes *n_bytes* from *ptr* into the file at *wpath* at the given random-access *offset*.
+ *  Shared by the async (thread-pool-submitted) and synchronous (below-threshold) paths of
+ *  TwoFilesWriteStream::write_raw_bytes_in_second_stream so both write at the same virtual
+ *  offset regardless of whether the write is queued or executed inline. */
+void WriteBytesAtOffset(const std::string &wpath, const uint8_t *ptr, int64_t n_bytes,
+                        int64_t offset) {
+  std::fstream f(wpath, std::ios::binary | std::ios::in | std::ios::out);
+  EXT_ENFORCE(f.is_open(), "Failed to open weights file for parallel write: ", wpath);
+  f.seekp(offset);
+  f.write(reinterpret_cast<const char *>(ptr), n_bytes);
+  EXT_ENFORCE(!f.fail(), "Write failed for weights file: ", wpath, " at offset=", offset,
+              " n_bytes=", n_bytes);
+}
+} // namespace
 
 TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path,
                                          const std::string &weights_file)
@@ -1350,21 +1373,22 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
     if (parallel_write_) {
       // `virtual_write_pos_` is only ever read and written on the serialization (calling) thread —
       // worker threads capture `offset` by value and never touch `virtual_write_pos_` — so no
-      // synchronization is needed here.
+      // synchronization is needed here. Every write once StartWriteThreadPool has been called
+      // consumes a slice of the virtual offset space, whether it is queued on the thread pool or
+      // written inline below the minimum parallel block size, so later writes keep landing at the
+      // right offset either way.
       int64_t offset = virtual_write_pos_;
       virtual_write_pos_ += n_bytes;
       // `ptr` points into a TensorProto::raw_data_ vector owned by the ModelProto that was passed
       // to SerializeModelProtoToStream.  WaitForWriteCompletion() is called before that function
       // returns, so the pointed-to memory is guaranteed to outlive every task.
       const std::string &wpath = weights_stream_.file_path();
-      write_thread_pool_.SubmitTask([wpath, ptr, n_bytes, offset]() {
-        std::fstream f(wpath, std::ios::binary | std::ios::in | std::ios::out);
-        EXT_ENFORCE(f.is_open(), "Failed to open weights file for parallel write: ", wpath);
-        f.seekp(offset);
-        f.write(reinterpret_cast<const char *>(ptr), n_bytes);
-        EXT_ENFORCE(!f.fail(), "Write failed for weights file: ", wpath, " at offset=", offset,
-                    " n_bytes=", n_bytes);
-      });
+      if (n_bytes >= min_parallel_block_size_) {
+        write_thread_pool_.SubmitTask(
+            [wpath, ptr, n_bytes, offset]() { WriteBytesAtOffset(wpath, ptr, n_bytes, offset); });
+      } else {
+        WriteBytesAtOffset(wpath, ptr, n_bytes, offset);
+      }
     } else {
       weights_stream_.write_raw_bytes(ptr, n_bytes);
     }
@@ -1381,14 +1405,12 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
     int64_t offset = pos;
     pos += n_bytes;
     const std::string wpath = it->second->file_path();
-    write_thread_pool_.SubmitTask([wpath, ptr, n_bytes, offset]() {
-      std::fstream f(wpath, std::ios::binary | std::ios::in | std::ios::out);
-      EXT_ENFORCE(f.is_open(), "Failed to open weights file for parallel write: ", wpath);
-      f.seekp(offset);
-      f.write(reinterpret_cast<const char *>(ptr), n_bytes);
-      EXT_ENFORCE(!f.fail(), "Write failed for weights file: ", wpath, " at offset=", offset,
-                  " n_bytes=", n_bytes);
-    });
+    if (n_bytes >= min_parallel_block_size_) {
+      write_thread_pool_.SubmitTask(
+          [wpath, ptr, n_bytes, offset]() { WriteBytesAtOffset(wpath, ptr, n_bytes, offset); });
+    } else {
+      WriteBytesAtOffset(wpath, ptr, n_bytes, offset);
+    }
   } else {
     it->second->write_raw_bytes(ptr, n_bytes);
   }

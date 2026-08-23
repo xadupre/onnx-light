@@ -1140,3 +1140,289 @@ TEST(onnx_threads, MmapFileStreamBasicLoad) {
 
   std::remove(onnx_path.c_str());
 }
+
+// -----------------------------------------------------------------------
+// min_parallel_block_size / adaptive I/O policy tests (Native PR01)
+// -----------------------------------------------------------------------
+
+// Verify that a parallel parse of a wholly no_copy (borrowed) external-data model never starts
+// a thread pool: no_copy tensors borrow bytes directly and never submit a delayed block.
+TEST(onnx_threads, ParseModelProtoSkipsThreadPoolForNoCopyExternalData) {
+  const int num_tensors = 8;
+  const int tensor_floats = 32;
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_no_copy_no_pool.onnx";
+  std::string data_path = "test_no_copy_no_pool.onnx.data";
+  {
+    utils::TwoFilesWriteStream wstream(onnx_path, data_path);
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    SerializeProtoToStream(model, wstream, opts);
+  }
+
+  ModelProto model2;
+  {
+    utils::TwoFilesStream rstream(onnx_path, data_path);
+    ParseOptions opts;
+    opts.num_threads = 4;
+    opts.no_copy = true;
+    ParseProtoFromStream(model2, rstream, opts);
+    EXPECT_FALSE(rstream.HasParallelizationStarted())
+        << "no_copy parses never submit a delayed block, so no thread pool should start.";
+  }
+
+  std::remove(onnx_path.c_str());
+  std::remove(data_path.c_str());
+}
+
+// Same guarantee, but for a stream opened with use_mmap_weights=true instead of
+// ParseOptions::no_copy.
+TEST(onnx_threads, ParseModelProtoSkipsThreadPoolForMmapWeights) {
+  const int num_tensors = 8;
+  const int tensor_floats = 32;
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_mmap_weights_no_pool.onnx";
+  std::string data_path = "test_mmap_weights_no_pool.onnx.data";
+  {
+    utils::TwoFilesWriteStream wstream(onnx_path, data_path);
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    SerializeProtoToStream(model, wstream, opts);
+  }
+
+  ModelProto model2;
+  {
+    utils::TwoFilesStream rstream(onnx_path, data_path, /*use_mmap_weights=*/true);
+    ParseOptions opts;
+    opts.num_threads = 4;
+    ParseProtoFromStream(model2, rstream, opts);
+    EXPECT_FALSE(rstream.HasParallelizationStarted())
+        << "use_mmap_weights parses borrow bytes directly, so no thread pool should start.";
+  }
+
+  std::remove(onnx_path.c_str());
+  std::remove(data_path.c_str());
+}
+
+// Verify that ParseOptions::skip_raw_data alone does not exempt *external-data* tensors from
+// being read: only no_copy / use_mmap_weights (borrowing) do, since skip_raw_data only omits
+// *inline* raw_data bytes (see TensorProto::ParseFromStream). External-data tensors are always
+// resolved, so a delayed block may still be submitted and the thread pool still starts.
+TEST(onnx_threads, ParseModelProtoSkipRawDataStillReadsExternalData) {
+  const int num_tensors = 8;
+  const int tensor_floats = 32;
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_skip_raw_data_external.onnx";
+  std::string data_path = "test_skip_raw_data_external.onnx.data";
+  {
+    utils::TwoFilesWriteStream wstream(onnx_path, data_path);
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    SerializeProtoToStream(model, wstream, opts);
+  }
+
+  ModelProto model2;
+  {
+    utils::TwoFilesStream rstream(onnx_path, data_path);
+    ParseOptions opts;
+    opts.num_threads = 4;
+    opts.skip_raw_data = true;
+    ParseProtoFromStream(model2, rstream, opts);
+  }
+  // External-data tensors are still fully resolved even with skip_raw_data=true.
+  ASSERT_EQ(model.ref_graph().ref_initializer().size(),
+            model2.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
+              model2.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Mismatch at initializer " << i;
+  }
+
+  std::remove(onnx_path.c_str());
+  std::remove(data_path.c_str());
+}
+
+// Verify that a metadata-only, single-file parse (skip_raw_data=true, no external data) never
+// submits a delayed block: raw_data fields at or above the threshold are skipped entirely
+// instead of being queued on the thread pool.
+TEST(onnx_threads, ParseModelProtoSkipRawDataSubmitsNoDelayedBlocksForInlineData) {
+  const int num_tensors = 8;
+  const int tensor_floats = 32; // 128 bytes per tensor
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_skip_raw_data_inline.onnx";
+  {
+    utils::FileWriteStream wstream(onnx_path);
+    SerializeOptions opts;
+    model.SerializeToStream(wstream, opts);
+  }
+
+  ModelProto model2;
+  {
+    utils::FileStream rstream(onnx_path);
+    ParseOptions opts;
+    opts.num_threads = 4;
+    opts.skip_raw_data = true;
+    opts.raw_data_threshold = 4; // every tensor's raw_data clears the threshold and is skipped.
+    ParseProtoFromStream(model2, rstream, opts);
+    EXPECT_EQ(rstream.TotalDelayedBlockBytes(), 0)
+        << "skip_raw_data must never submit a delayed block for skipped inline raw_data.";
+  }
+
+  std::remove(onnx_path.c_str());
+}
+
+// Verify that setting min_parallel_block_size above every tensor's size still produces a
+// byte-identical round trip: every block should be routed to the synchronous path instead of
+// the thread pool, on both the write and the read side.
+TEST(onnx_threads, MinParallelBlockSizeGatesSmallReadsAndWrites) {
+  const int num_tensors = 12;
+  const int tensor_floats = 16; // 64 bytes per tensor: well below a large min_parallel_block_size.
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string seq_onnx = "test_min_block_seq.onnx";
+  std::string seq_data = "test_min_block_seq.onnx.data";
+  std::string par_onnx = "test_min_block_par.onnx";
+  std::string par_data = "test_min_block_par.onnx.data";
+
+  // Sequential (num_threads=1) reference.
+  {
+    utils::TwoFilesWriteStream wstream(seq_onnx, seq_data);
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    SerializeProtoToStream(model, wstream, opts);
+  }
+
+  // Parallel, but with min_parallel_block_size larger than every tensor: every block must be
+  // written synchronously despite num_threads > 1.
+  {
+    utils::TwoFilesWriteStream wstream(par_onnx, par_data);
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    opts.num_threads = 4;
+    opts.min_parallel_block_size = 1 << 20; // 1 MiB, larger than any tensor here.
+    SerializeProtoToStream(model, wstream, opts);
+  }
+
+  std::ifstream f_seq(seq_data, std::ios::binary);
+  std::ifstream f_par(par_data, std::ios::binary);
+  ASSERT_TRUE(f_seq.is_open());
+  ASSERT_TRUE(f_par.is_open());
+  std::vector<uint8_t> seq_bytes((std::istreambuf_iterator<char>(f_seq)),
+                                 std::istreambuf_iterator<char>());
+  std::vector<uint8_t> par_bytes((std::istreambuf_iterator<char>(f_par)),
+                                 std::istreambuf_iterator<char>());
+  ASSERT_EQ(seq_bytes.size(), par_bytes.size());
+  EXPECT_EQ(seq_bytes, par_bytes);
+
+  // Round trip: read the parallel-written file back with a high min_parallel_block_size and
+  // multiple threads requested; every read must also stay on the synchronous path.
+  ModelProto model2;
+  {
+    utils::TwoFilesStream rstream(par_onnx, par_data);
+    ParseOptions popts;
+    popts.num_threads = 4;
+    popts.min_parallel_block_size = 1 << 20;
+    ParseProtoFromStream(model2, rstream, popts);
+  }
+  ASSERT_EQ(model.ref_graph().ref_initializer().size(),
+            model2.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
+              model2.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Mismatch at initializer " << i;
+  }
+
+  std::remove(seq_onnx.c_str());
+  std::remove(seq_data.c_str());
+  std::remove(par_onnx.c_str());
+  std::remove(par_data.c_str());
+}
+
+// Same as above, but mixing tiny and large tensors so some blocks land above and some below the
+// threshold within the same write/read, exercising both code paths together.
+TEST(onnx_threads, MinParallelBlockSizeMixedSizesRoundTrip) {
+  ModelProto model;
+  model.set_ir_version(7);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("test_graph_mixed");
+  const int64_t threshold = 1024; // bytes
+  for (int i = 0; i < 10; ++i) {
+    TensorProto *t = graph->add_initializer();
+    t->set_name("w" + std::to_string(i));
+    t->set_data_type(TensorProto::DataType::FLOAT);
+    // Alternate between tiny (below threshold) and large (above threshold) tensors.
+    const int floats = (i % 2 == 0) ? 8 : 1024;
+    t->ref_dims().push_back(floats);
+    std::vector<uint8_t> raw(static_cast<size_t>(floats) * 4, static_cast<uint8_t>(i % 256));
+    t->set_raw_data(raw);
+  }
+
+  std::string onnx_path = "test_min_block_mixed.onnx";
+  std::string data_path = "test_min_block_mixed.onnx.data";
+  {
+    utils::TwoFilesWriteStream wstream(onnx_path, data_path);
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    opts.num_threads = 3;
+    opts.min_parallel_block_size = threshold;
+    SerializeProtoToStream(model, wstream, opts);
+  }
+
+  ModelProto model2;
+  {
+    utils::TwoFilesStream rstream(onnx_path, data_path);
+    ParseOptions popts;
+    popts.num_threads = 3;
+    popts.min_parallel_block_size = threshold;
+    ParseProtoFromStream(model2, rstream, popts);
+  }
+
+  ASSERT_EQ(model.ref_graph().ref_initializer().size(),
+            model2.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
+              model2.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Mismatch at initializer " << i;
+  }
+
+  std::remove(onnx_path.c_str());
+  std::remove(data_path.c_str());
+}
+
+// Verify that the automatic (num_threads < 0) parse populates ParseOptions::io_trace with a
+// resolved, non-default policy and observed byte counters.
+TEST(onnx_threads, ParseModelProtoPopulatesIOTrace) {
+  const int num_tensors = 16;
+  const int tensor_floats = 256; // 1024 bytes per tensor.
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_io_trace.onnx";
+  std::string data_path = "test_io_trace.onnx.data";
+  {
+    utils::TwoFilesWriteStream wstream(onnx_path, data_path);
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    SerializeProtoToStream(model, wstream, opts);
+  }
+
+  ModelProto model2;
+  utils::IOPolicyTrace trace;
+  {
+    utils::TwoFilesStream rstream(onnx_path, data_path);
+    ParseOptions opts;
+    opts.num_threads = -1; // auto
+    opts.io_trace = &trace;
+    ParseProtoFromStream(model2, rstream, opts);
+  }
+
+  EXPECT_GT(trace.resolved_workers, 0);
+  EXPECT_GT(trace.resolved_min_block_size, 0);
+  EXPECT_GT(trace.physical_bytes, 0);
+
+  std::remove(onnx_path.c_str());
+  std::remove(data_path.c_str());
+}

@@ -22,8 +22,10 @@ import numpy as np
 
 from onnx_light import kernel_tuning
 from onnx_light.onnx import TensorProto
-from onnx_light.onnx.reference import ReferenceEvaluator
 from onnx_light.onnx_lib import parser
+from onnx_light.onnx_py import _onnxpykernels
+
+runtime = _onnxpykernels.runtime
 
 #####################################
 # Discover the parameters and defaults
@@ -104,17 +106,80 @@ print("active source:", abs_tuning["active_source"])
 #
 # A session created after the profile is loaded resolves it once and copies the
 # typed value into its ``Abs`` kernel. Steady-state calls do not read the cache
-# or registry again.
+# or registry again. The output cannot reveal which threshold was used, because
+# serial and parallel execution have identical semantics. A parallel-region
+# collector makes the difference observable.
 
 model = parser.parse_model(
     '<ir_version: 10, opset_import: ["" : 18]>'
-    "agraph (float[4] x) => (float[4] y) { y = Abs(x) }"
+    "agraph (float[N] x) => (float[N] y) { y = Abs(x) }"
 )
-session = ReferenceEvaluator(model)
-x = np.array([-1.0, 2.0, -3.5, 0.0], dtype=np.float32)
-(y,) = session.run(None, {"x": x})
+probe_elements = max(2, chosen_minimum * 2)
+x = -np.ones(probe_elements, dtype=np.float32)
+tensor_proto = TensorProto()
+tensor_proto.name = "x"
+tensor_proto.dims.append(probe_elements)
+tensor_proto.data_type = element_type
+tensor_proto.raw_data = x.tobytes()
+
+
+def make_profiled_session():
+    """Creates an uninitialized two-thread session and its runtime context."""
+    collector = runtime.ParallelRegionCollector(capacity=4)
+    options = runtime.RuntimeSessionOptions(
+        parameters=runtime.RuntimeParameters(2), parallel_region_collector=collector
+    )
+    context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
+    context.set("x", runtime.tensor_from_proto(tensor_proto))
+    return runtime.RuntimeSession(model, options), context
+
+
+# Tuning profiles include the effective thread count, so ``num_threads=2``
+# matches the sessions below. First force this exact input below the active
+# crossover. The first run initializes the kernel and copies
+# ``probe_elements + 1`` into the session.
+kernel_tuning.set_kernel_tuning_parameters(
+    "Abs",
+    element_type,
+    {"parallel.minimum_elements": probe_elements + 1},
+    path=str(cache_path),
+    num_threads=2,
+)
+serial_session, serial_context = make_profiled_session()
+serial_session.run(serial_context)
+serial_events = serial_session.parallel_region_report().events
+assert len(serial_events) == 1
+assert serial_events[0].admitted_threads == 1
+
+# Restore the chosen value. The initialized session remains serial because it
+# does not consult the registry again, while a new session copies the new
+# threshold and enters ParallelFor for the same input.
+kernel_tuning.set_kernel_tuning_parameters(
+    "Abs",
+    element_type,
+    {"parallel.minimum_elements": chosen_minimum},
+    path=str(cache_path),
+    num_threads=2,
+)
+serial_session.run(serial_context)
+serial_events = serial_session.parallel_region_report().events
+assert len(serial_events) == 2
+assert all(event.admitted_threads == 1 for event in serial_events)
+
+tuned_session, tuned_context = make_profiled_session()
+tuned_session.run(tuned_context)
+tuned_events = tuned_session.parallel_region_report().events
+assert len(tuned_events) == 1
+assert tuned_events[0].requested_threads == 2
+assert tuned_events[0].admitted_threads == 2
+
+y = runtime.tensor_to_numpy(tuned_context.get("y")).view(np.float32)
 np.testing.assert_array_equal(y, np.abs(x))
-print("Abs output:", y)
+print(
+    f"same {probe_elements}-element input: old session admitted "
+    f"{serial_events[-1].admitted_threads} participant, new session admitted "
+    f"{tuned_events[0].admitted_threads}"
+)
 
 #####################################
 # Calibrate the kernel

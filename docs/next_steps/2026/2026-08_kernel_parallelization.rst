@@ -5,7 +5,7 @@ Kernel parallelization and tuning sequence
 
 :Date: 2026-08
 
-**Step F in progress**
+**Step G in progress (x86-64 calibrated; ARM64 pending hardware access)**
 
 Objective
 +++++++++
@@ -90,7 +90,16 @@ step and produces the input required by the next one.
         ``UpdateKernelTuningCache``.
       - Rollout needs repeatable decisions that a later session can load
         without benchmarking during inference.
-      - Planned
+      - Started (every calibratable key -- ``Abs``, ``Add``, ``Gemm``,
+        ``Log``, ``Not``, ``Sigmoid``, ``Tanh`` -- was calibrated on the
+        x86-64 sandbox machine with ``python -m onnx_light tune-kernels
+        --apply`` and persisted through ``UpdateKernelTuningCache``; a fresh
+        process reloaded that cache and resolved every one of the 37
+        calibrated keys through their exact processor and execution
+        descriptor. None of the calibrated values were promoted to portable
+        schema defaults, because only one architecture was measured; see
+        ``kernel_parallelization_reports/x86_64_calibration.json``. An ARM64
+        machine profile remains outstanding, blocked on hardware access)
     * - H. Acceptance
       - Step G
       - Cross-platform correctness, determinism, memory, latency, throughput,
@@ -98,7 +107,8 @@ step and produces the input required by the next one.
         baselines from Step C.
       - Only candidates that improve the declared workload without regressions
         become defaults or published profiles.
-      - Planned
+      - Planned (blocked on an ARM64 measurement to compare against the
+        x86-64 calibration report)
 
 Assignable issue sequence
 +++++++++++++++++++++++++
@@ -218,6 +228,51 @@ ranking against an ARM64 report once one is available. A C++ test
 (``KernelClass.GemmCalibratesParallelMinimumTasksThreshold``) exercises
 ``CalibrateGemm`` through ``CalibrateRegisteredKernels`` and asserts the
 published candidate validates against the registered schema.
+
+Cross-machine calibration and default promotion
++++++++++++++++++++++++++++++++++++++++++++++++
+
+Every calibratable key registered after Step F (``Abs``, ``Add``, ``Gemm``,
+``Log``, ``Not``, ``Sigmoid``, and ``Tanh``, 37 ``(kernel, element_type)``
+keys in total) was calibrated on the x86-64 sandbox machine with
+``python -m onnx_light tune-kernels --apply`` and persisted through
+``UpdateKernelTuningCache``. A fresh process then reloaded that cache with
+``load_kernel_tuning_cache``/``kernel_tuning_parameters`` and resolved all 37
+profiles through their exact ``KernelTuningKey`` and
+``CpuExecutionDescriptor`` identity, with zero incompatible or invalid
+entries -- proving persisted profiles survive a process restart without
+recalibration or extra registry access. See
+``kernel_parallelization_reports/x86_64_calibration.json`` for the complete
+selected values and per-key diagnostics.
+
+This pass fixed a real cross-process matching defect uncovered while
+verifying the reload: ``KernelTuningCacheOptions::execution``, when left
+unset (the common case for an ad hoc calibration run), fell back to the
+processor's raw logical-core count in ``CurrentExecutionDescriptor()``,
+while a default (``num_threads == 0``) ``RuntimeSession`` and
+``ParallelForThreadCount()``'s no-executor fallback both resolve to
+``RuntimeParameters::EffectiveNumThreads()`` (physical cores when
+detected). On any machine with simultaneous multithreading these two counts
+differ, so a profile persisted without an explicit execution descriptor
+could never be found again by the default query path. ``CurrentExecutionDescriptor()``
+now reuses ``RuntimeParameters::EffectiveNumThreads()``, and
+``KernelTuningCache.DefaultExecutionDescriptorMatchesDefaultSessionThreadCount``
+guards the fix.
+
+None of the calibrated x86-64 values were promoted to the portable schema
+defaults in ``portable_parallel_tuning.cc``/``portable_gemm_tuning.cc``:
+only one architecture was measured in this pass, and promoting an untested
+value risks an undeclared regression on ARM64, which the acceptance
+criteria for this step explicitly forbid. Instead, the calibrated values
+stay in the persisted machine cache, where they are selected only for the
+exact processor and execution descriptor recorded during calibration --
+this machine already benefits from them (for example unary
+``parallel.minimum_elements`` dropped from the portable default of 32768 to
+8192, and ``Gemm``'s ``parallel.minimum_tasks`` dropped from 2 to 1) without
+changing behavior anywhere else. Publishing an ARM64 report and comparing it
+against ``x86_64_calibration.json`` is the next measured step before any
+default promotion; it remains blocked on ARM64 hardware access, matching the
+Step E baseline's outstanding ARM64 gap.
 
 Per-kernel implementation loop
 ++++++++++++++++++++++++++++++

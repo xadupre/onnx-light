@@ -1237,9 +1237,13 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
     if (has_eligible_reads && external_weights && options.num_threads < 0) {
       // Calibrate the worker count and minimum block size to the storage actually backing the
       // weights file (mostly resident in the OS page cache vs. cold) instead of a blind
-      // hardware_concurrency() guess.
+      // hardware_concurrency() guess. Callers that already know their storage kind should set
+      // ParseOptions::io_storage_kind explicitly; the mincore-based probe below is only a
+      // best-effort fallback for callers that did not.
       const utils::IOStorageKind kind =
-          utils::DetectIOStorageKind(two_stream_ptr->weights_file_path());
+          options.io_storage_kind.has_value()
+              ? *options.io_storage_kind
+              : utils::DetectIOStorageKind(two_stream_ptr->weights_file_path());
       const utils::IOPolicy policy =
           utils::ResolveIOPolicy(kind, two_stream_ptr->weights_size(), options.num_threads,
                                  options.min_parallel_block_size);

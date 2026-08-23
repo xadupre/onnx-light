@@ -1426,3 +1426,36 @@ TEST(onnx_threads, ParseModelProtoPopulatesIOTrace) {
   std::remove(onnx_path.c_str());
   std::remove(data_path.c_str());
 }
+
+TEST(onnx_threads, ParseModelProtoHonorsExplicitIOStorageKind) {
+  const int num_tensors = 16;
+  const int tensor_floats = 256; // 1024 bytes per tensor.
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_io_storage_kind_override.onnx";
+  std::string data_path = "test_io_storage_kind_override.onnx.data";
+  {
+    utils::TwoFilesWriteStream wstream(onnx_path, data_path);
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    SerializeProtoToStream(model, wstream, opts);
+  }
+
+  // An explicit io_storage_kind must be honored as-is and skip the mincore-based probe
+  // (DetectIOStorageKind), whatever the file's actual page-cache residency is.
+  ModelProto model2;
+  utils::IOPolicyTrace trace;
+  {
+    utils::TwoFilesStream rstream(onnx_path, data_path);
+    ParseOptions opts;
+    opts.num_threads = -1; // auto
+    opts.io_storage_kind = utils::IOStorageKind::kColdStorage;
+    opts.io_trace = &trace;
+    ParseProtoFromStream(model2, rstream, opts);
+  }
+
+  EXPECT_EQ(trace.storage_kind, utils::IOStorageKind::kColdStorage);
+
+  std::remove(onnx_path.c_str());
+  std::remove(data_path.c_str());
+}

@@ -21,18 +21,19 @@ The roadmap has four objectives:
    then create kernels and prepack their weights through one memory-bounded
    execution plan. See :ref:`l-next-steps-fast-loading-sequence` and
    :ref:`l-next-steps-prepared-execution`.
-3. **Integrate the startup path with ONNX Runtime.** Let ORT use ``onnx-light``
-   payload ownership, prepared data, and direct-read contracts to reduce session
-   startup and time to first token. See :ref:`l-next-steps-model-loading`.
-4. **Manage persistent state.** Use ownership-aware arenas for KV caches and
+3. **Manage persistent state.** Use ownership-aware arenas for KV caches and
    other state that survives one graph invocation, without copying or
    accidentally recycling live storage. See :ref:`l-next-steps-mutable-cache`
    and :ref:`l-next-steps-buffer-reuse-arena`.
+4. **Integrate the completed startup path with ONNX Runtime.** Only after the
+   native loader is complete, let ORT consume ``onnx-light`` payload ownership,
+   prepared data, and direct-read contracts. See
+   :ref:`l-next-steps-model-loading`.
 
-The dependency order is **1 -> 2 -> 3**: startup needs the kernel executor and
-tuning decisions, and ORT integration needs the completed startup ownership
-contract. Objective 4 branches from objective 2 because persistent state reuses
-its arena and lifetime rules; it does not depend on the ORT integration.
+The execution order is **1 -> 2 -> native loading completion -> 4**. Objective
+3 branches from objective 2 because persistent state reuses its arena and
+lifetime rules; it does not depend on the final ORT integration. Objective
+numbers identify themes, not permission to start cross-repository work early.
 
 All Next Steps
 --------------
@@ -81,10 +82,10 @@ these four objectives.
       - Plan
       - Contribution
     * - Started
-      - 2, 3
+      - 2
       - :ref:`l-next-steps-fast-loading-sequence`
-      - Orders the four startup plans: bug fixes, prepared execution, ORT
-        integration, then native completion.
+      - Orders the four startup plans: bug fixes, prepared execution, native
+        completion, then final ORT integration.
     * - Completed
       - 2
       - :ref:`l-next-steps-model-loading-bug-fixes`
@@ -96,14 +97,15 @@ these four objectives.
       - Provides the dependency graph, bounded scheduling, kernel creation, and
         prepacking needed by parallel startup.
     * - Planned
-      - 3
-      - :ref:`l-next-steps-model-loading`
-      - Defines the ownership and direct-read contract consumed by ORT.
-    * - Blocked
-      - 2, 3
+      - 2
       - :ref:`l-next-steps-native-fast-loading-completion`
       - Connects adaptive I/O, model resolution, prepared tensors, and
-        first-token overlap after the ORT contract is available.
+        first-token overlap before any new work in onnxruntime.
+    * - Blocked
+      - 4
+      - :ref:`l-next-steps-model-loading`
+      - Final cross-repository integration; blocked until every native loading
+        issue through #4623 is closed.
     * - Completed
       - 1
       - :ref:`l-next-steps-parallel-for-profiling`
@@ -116,7 +118,7 @@ these four objectives.
         baselines, then migrates measured kernel families through the tuning
         and calibration APIs.
     * - Discussed
-      - 2, 4
+      - 2, 3
       - :ref:`l-next-steps-custom-types`
       - Describes structured byte buffers used by packed weights and persistent
         state.
@@ -125,12 +127,12 @@ these four objectives.
       - :ref:`l-next-steps-proto-inheritance`
       - Reuses common schema fields without changing the flat wire format.
     * - Discussed
-      - 1, 2, 4
+      - 1, 2, 3
       - :ref:`l-next-steps-quantization`
       - Defines quantized layouts consumed by kernels, prepared weights, and
         persistent cache pages.
     * - Discussed
-      - 2, 4
+      - 2, 3
       - :ref:`l-next-steps-graph-builder-quantized-tensor`
       - Preserves quantized initializers until preparation or persistent-state
         allocation.
@@ -140,16 +142,16 @@ these four objectives.
       - Supplies reproducible models and workflows used to exercise the four
         objectives.
     * - Discussed
-      - 4
+      - 3
       - :ref:`l-next-steps-mutable-cache`
       - Defines in-place KV-cache updates, aliasing, capacity, and persistence.
     * - Discussed
-      - 2, 3
+      - 2, 4
       - :ref:`l-next-steps-compiled-tensor`
       - Persists packed weights so startup and ORT integration can avoid
         repeated prepacking.
     * - Discussed
-      - 2, 3
+      - 2, 4
       - :ref:`l-next-steps-model-resolution`
       - Determines the final graph and live payloads before parallel reads or
         ORT handoff.
@@ -177,12 +179,12 @@ these four objectives.
       - Supports training graphs but is not a prerequisite for the four
         objectives.
     * - Completed
-      - 3
+      - 4
       - :ref:`l-next-steps-ort-onnx-light`
       - Establishes the existing ORT build-time integration that the optimized
         startup contract extends.
     * - Completed
-      - 3
+      - 4
       - :ref:`l-next-steps-proto-binary-size`
       - Keeps the library embedded by ORT small.
     * - Completed
@@ -191,12 +193,12 @@ these four objectives.
       - Provides schemas, defaults, calibration, user overrides, immutable
         snapshots, and persistent machine profiles.
     * - Completed
-      - 2, 4
+      - 2, 3
       - :ref:`l-next-steps-buffer-reuse-arena`
       - Supplies ownership-aware reusable storage for startup buffers and
         persistent state.
     * - Completed
-      - 2, 3
+      - 2, 4
       - :ref:`l-next-steps-graph-builder-optimization`
       - Finalizes graph rewrites before live payload selection and ORT handoff.
     * - Completed

@@ -5,14 +5,15 @@ Using ``onnx-light`` fast loading in ``onnxruntime``
 
 :Date: 2026-08
 
-**planned; prepared execution is available**
+**blocked; final step after native completion**
 
 Objective
 +++++++++
 
-This is step 3 of the fast-loading sequence, after
-:ref:`l-next-steps-prepared-execution` and immediately before
-:ref:`l-next-steps-native-fast-loading-completion`.
+This is step 4 and the final part of the fast-loading sequence. It starts only
+after :ref:`l-next-steps-native-fast-loading-completion` has stabilized the
+native ownership, payload-resolution, prepared-object, overlap, residency, and
+device-variant contracts.
 
 The completed :ref:`l-next-steps-ort-onnx-light` roadmap made
 ``onnxruntime_USE_ONNX_LIGHT`` a build-time replacement for protobuf and the
@@ -20,8 +21,7 @@ standard ``onnx`` library. The bug-fix roadmap accelerates that compatibility
 path without changing ORT. This document contains only the additional
 ownership-aware work that requires an explicit contract between repositories.
 Native graph resolution, prepared caches, offloading, and first-token overlap
-are not ORT PRs and live in
-:ref:`l-next-steps-native-fast-loading-completion`.
+are completed first in ``xadupre/onnx-light``; they are not ORT PRs.
 
 Benchmark contract
 ++++++++++++++++++
@@ -79,8 +79,8 @@ alignment, relocation, or another physical layout. Otherwise ``onnx-light``
 must describe the source range so ORT reads directly into its final allocation;
 it must not introduce an intermediate whole-tensor buffer.
 
-ORT PR01 -- expose the payload contract
-+++++++++++++++++++++++++++++++++++++++
+Completed prerequisite -- expose the payload contract
+++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 **Repository:** ``xadupre/onnx-light``
 
@@ -111,15 +111,20 @@ Acceptance:
 ``PayloadIdentity``, ``MappedPayload``, ``FinalDestinationReadDescriptor``, and
 ``MappedPayloadSource`` are exposed independently of ORT, built on the existing
 ``mmap_file_as_shared_ptr`` / ``validate_external_weights_read_path``
-confinement helpers in ``stream.h``. ORT PR02 can now proceed.
+confinement helpers in ``stream.h``. This early onnx-light prerequisite does
+not start the onnxruntime implementation; that work remains blocked until the
+native completion roadmap is finished.
 
-ORT PR02 -- consume owned payloads in session state
-+++++++++++++++++++++++++++++++++++++++++++++++++++
+Final ORT PR -- consume owned payloads in session state
++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 **Repository:** ``microsoft/onnxruntime``
 
-This PR follows microsoft/onnxruntime#29723 and depends on ORT PR01. Attach
-``MappedPayload::owner`` to ``SessionState`` and create an immutable CPU
+Tracked by `issue #4612
+<https://github.com/xadupre/onnx-light/issues/4612>`_. This PR follows
+microsoft/onnxruntime#29723 and depends on the completed
+onnx-light payload contract plus every native completion issue through #4623.
+Attach ``MappedPayload::owner`` to ``SessionState`` and create an immutable CPU
 initializer view only when the selected consumers permit borrowing. Otherwise
 read through the final-destination descriptor into the final ORT allocation.
 
@@ -146,6 +151,6 @@ reason and are never converted into empty tensors or successful sessions.
 Completion
 ++++++++++
 
-After both repository PRs merge, the prepared-object ownership ABI is available
-to ORT and the remaining native loading work continues in
-:ref:`l-next-steps-native-fast-loading-completion`.
+After the final onnxruntime PR merges, run the complete four-configuration
+benchmark contract. This closes the fast-loading sequence; no unfinished
+onnx-light loading issue may be deferred behind the cross-repository work.

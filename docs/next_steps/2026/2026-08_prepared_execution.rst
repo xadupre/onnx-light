@@ -11,8 +11,9 @@ Objective
 +++++++++
 
 This is step 2 of the fast-loading sequence, after
-:ref:`l-next-steps-model-loading-bug-fixes` and before the explicit
-:ref:`l-next-steps-model-loading` integration with onnxruntime.
+:ref:`l-next-steps-model-loading-bug-fixes` and before
+:ref:`l-next-steps-native-fast-loading-completion`. Explicit integration with
+onnxruntime is the final step, after the native path is complete.
 
 The first objective is to reduce model loading time. This plan consumes the
 immutable ``ResolvedModel`` contract defined by
@@ -20,7 +21,7 @@ immutable ``ResolvedModel`` contract defined by
 prepared-object bindings, and minimal payload manifest are frozen before this
 plan creates or submits any weight-read task. The first implementation may use
 a deterministic resolved-model fixture; the production resolver and selective
-payload integration are completed in the fourth roadmap step.
+payload integration are completed in the third roadmap step.
 
 The execution plan may be submitted as soon as its structure and prepared-object
 requirements are known. It does not wait for every initialization task: each
@@ -46,10 +47,10 @@ This document implements the reusable execution substrate:
 * ``PrepareAsync``/``RunAsync`` with synchronous wrappers.
 
 The production model resolver, adaptive loader policy, persisted prepared
-cache, eviction/offloading policy, and device-placement variants are step 4,
+cache, eviction/offloading policy, and device-placement variants are step 3,
 :ref:`l-next-steps-native-fast-loading-completion`. They remain described here
 where they constrain the core interfaces, but are not merge criteria for the
-step 3 implementation.
+step 2 implementation.
 
 Plan architecture
 +++++++++++++++++
@@ -1221,7 +1222,7 @@ prepack.
       - 0.016 MiB
       - LM-head + L0 resident
 
-At step 4, for example, the approximate live total managed by these arenas is:
+At step 3, for example, the approximate live total managed by these arenas is:
 
 .. code-block:: text
 
@@ -1460,7 +1461,7 @@ Implementation order
 #. Consume a deterministic frozen ``ResolvedModel`` fixture conforming to
    :ref:`l-next-steps-model-resolution` and reject every read not present in its
    active payload manifest. **Implemented by the temporary
-   ``ResolvedModelFixture`` boundary; the production resolver remains step 4.**
+   ``ResolvedModelFixture`` boundary; the production resolver remains step 3.**
 #. **Implemented:** extract a persistent ``WorkerPool`` below the current ``onnx_proto``
    ``ThreadPool`` API, then add the common task, dependency, resource,
    completion, scope, and diagnostic types used by the unified runtime plan;

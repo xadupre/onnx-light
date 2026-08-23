@@ -5,23 +5,23 @@ Completing native fast model loading
 
 :Date: 2026-08
 
-**blocked by onnxruntime integration**
+**planned; native prerequisites are available**
 
 Objective
 +++++++++
 
-This is step 4 of the fast-loading sequence. It consumes the session-scoped
+This is step 3 of the fast-loading sequence. It consumes the session-scoped
 preparation tasks, dependency events, bounded resources, and prepared-object
-residency from :ref:`l-next-steps-prepared-execution`. It starts after
-:ref:`l-next-steps-model-loading` establishes the ownership contract with
-onnxruntime.
+residency from :ref:`l-next-steps-prepared-execution`. The onnx-light payload
+ownership contract from issue #4611 is already available. This work does not
+depend on onnxruntime consuming that contract.
 
 The objective is to connect the native loader, graph resolver, prepared tensor
 cache, and prepared executor end to end. The target is time to first token and
 fully prepared state, not a parser-only ``load()`` number.
 
-Final PR01 -- adaptive external-data I/O
-++++++++++++++++++++++++++++++++++++++++
+Native PR01 -- adaptive external-data I/O
++++++++++++++++++++++++++++++++++++++++++
 
 **Repository:** ``xadupre/onnx-light``
 
@@ -38,8 +38,8 @@ Acceptance:
 * traces report resolved workers, thresholds, physical bytes, logical bytes,
   page faults, and bytes in flight.
 
-Final PR02 -- resolve before materializing payloads
-+++++++++++++++++++++++++++++++++++++++++++++++++++
+Native PR02 -- resolve before materializing payloads
+++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 **Repository:** ``xadupre/onnx-light``
 
@@ -51,7 +51,7 @@ prepared object.
 
 This PR does not claim a gain when every serialized initializer remains live.
 If representative fixtures avoid no material payload bytes, fold the manifest
-plumbing into Final PR03 instead of shipping a standalone performance PR.
+plumbing into Native PR03 instead of shipping a standalone performance PR.
 
 Acceptance:
 
@@ -60,8 +60,8 @@ Acceptance:
 * graph transformations cannot mutate requirements after reads begin;
 * eager loading remains a diagnosed fallback for unsupported transformations.
 
-Final PR03 -- consume prepared tensors before portable weights
-++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Native PR03 -- consume prepared tensors before portable weights
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 **Repository:** ``xadupre/onnx-light``
 
@@ -79,8 +79,8 @@ Acceptance:
 * warm prepared-cache ``T_first_token`` improves by at least 20% on the reduced
   fixture, or profiling proves preparation is not on its critical path.
 
-Final PR04 -- connect and tune first-token overlap
-++++++++++++++++++++++++++++++++++++++++++++++++++
+Native PR04 -- connect and tune first-token overlap
++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 **Repository:** ``xadupre/onnx-light``
 
@@ -101,8 +101,8 @@ Acceptance:
 * dedicated x86 and ARM results separate cold storage, warm page cache, warm
   prepared cache, first token, and fully prepared milestones.
 
-Final PR05 -- add prepared-object eviction and reload
-+++++++++++++++++++++++++++++++++++++++++++++++++++++
+Native PR05 -- add prepared-object eviction and reload
+++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 **Repository:** ``xadupre/onnx-light``
 
@@ -118,8 +118,8 @@ Acceptance:
   prepacking its portable source;
 * critical reloads outrank speculative preparation and background cache writes.
 
-Final PR06 -- add device preparation variants
-++++++++++++++++++++++++++++++++++++++++++++++
+Native PR06 -- add device preparation variants
++++++++++++++++++++++++++++++++++++++++++++++++
 
 **Repository:** ``xadupre/onnx-light``
 
@@ -138,13 +138,16 @@ Acceptance:
 Completion criteria
 +++++++++++++++++++
 
-The four-document roadmap is complete when bug fixes are merged, ORT consumes
-the explicit payload contract safely, prepared execution is stable, and the
-native path:
+The native-completion step is complete when prepared execution is stable and
+the native path:
 
 * reads only the frozen live payload set;
 * loads compatible prepared weights without their portable counterparts;
 * overlaps later preparation with useful inference;
 * reports truthful time, memory, I/O, page-fault, and copy counters;
-* compares native ``.onnx`` plus prepared store against ORT protobuf ``.onnx``,
-  ORT plus ``onnx-light``, and ORT ``.ort``.
+* compares native ``.onnx`` plus prepared store against ORT protobuf ``.onnx``
+  and ORT ``.ort``.
+
+Only after all six native issues are closed does
+:ref:`l-next-steps-model-loading` begin the final onnxruntime implementation
+and add the ORT-plus-onnx-light integrated comparison.

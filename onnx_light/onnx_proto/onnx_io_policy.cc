@@ -26,21 +26,25 @@ struct IOKindDefaults {
   int64_t min_block_size;
 };
 
-IOKindDefaults DefaultsFor(IOStorageKind kind) {
+IOKindDefaults DefaultsFor(IOStorageKind kind, int32_t hw) {
   switch (kind) {
   case IOStorageKind::kMmap:
     // Mapped bytes are resolved through page faults; no worker pool is ever useful.
     return {0, 0};
   case IOStorageKind::kWarmPageCache:
-    // Memory-bandwidth bound: many workers copying small blocks in parallel help.
-    return {8, 1 * kMiB};
+    // Memory-bandwidth bound: many workers copying small blocks in parallel help. Use every
+    // logical processor, matching the previous blind hardware_concurrency() default so this,
+    // the most common case, never regresses.
+    return {hw, 1 * kMiB};
   case IOStorageKind::kColdStorage:
-    // Disk-latency bound: fewer, larger reads reduce seek overhead.
-    return {2, 16 * kMiB};
+    // Disk-latency bound: larger reads reduce seek overhead, but still scale worker count with
+    // the machine (half of hw, at least 1) instead of an arbitrary tiny constant.
+    return {std::max<int32_t>(1, hw / 2), 16 * kMiB};
   case IOStorageKind::kBufferedReads:
   default:
-    // Unknown/mixed: a conservative middle ground.
-    return {4, 4 * kMiB};
+    // Unknown/mixed (also the only outcome on non-Linux platforms today): keep the previous
+    // blind hardware_concurrency() default so unsupported platforms never regress.
+    return {hw, 4 * kMiB};
   }
 }
 
@@ -48,7 +52,9 @@ IOKindDefaults DefaultsFor(IOStorageKind kind) {
 
 IOPolicy ResolveIOPolicy(IOStorageKind kind, int64_t total_bytes, int32_t requested_num_threads,
                          int64_t requested_min_block_size) {
-  const IOKindDefaults defaults = DefaultsFor(kind);
+  const int32_t hw =
+      std::max<int32_t>(1, static_cast<int32_t>(std::thread::hardware_concurrency()));
+  const IOKindDefaults defaults = DefaultsFor(kind, hw);
   IOPolicy policy;
   policy.min_block_size =
       requested_min_block_size > 0 ? requested_min_block_size : defaults.min_block_size;
@@ -67,11 +73,10 @@ IOPolicy ResolveIOPolicy(IOStorageKind kind, int64_t total_bytes, int32_t reques
   }
 
   // Automatic policy (requested_num_threads <= 0): derive the worker count from the storage
-  // kind's ceiling, the number of logical processors, and the amount of work actually
-  // available, so a small external-data file never pays for workers it cannot keep busy.
-  const int32_t hw =
-      std::max<int32_t>(1, static_cast<int32_t>(std::thread::hardware_concurrency()));
-  int32_t workers = std::min(defaults.max_workers, hw);
+  // kind's ceiling (already expressed relative to hw by DefaultsFor()) and the amount of work
+  // actually available, so a small external-data file never pays for workers it cannot keep
+  // busy.
+  int32_t workers = defaults.max_workers;
   if (policy.min_block_size > 0 && total_bytes > 0) {
     const int64_t useful_workers = std::max<int64_t>(1, total_bytes / policy.min_block_size);
     workers = static_cast<int32_t>(std::min<int64_t>(workers, useful_workers));

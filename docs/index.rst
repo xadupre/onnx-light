@@ -105,10 +105,16 @@ projects can link only what they need:
   history), checker, inliner, shape inference and version converter.
 - ``onnx_light::lib_onnx_shape`` – shape-inference dispatch table,
   expression engine and graph optimization helpers.
+- ``onnx_light::lib_onnx_patterns`` – concrete ONNX graph-rewriting
+  patterns registered through ``onnx_patterns::RegisterPatterns()``; the
+  generic pattern-optimization interface and registry remain in
+  ``lib_onnx_core``.
 - ``onnx_light::lib_onnx_kernels`` – C++ kernels, a C++ reference implementation,
   it is used to generate the expected outputs for the backend test.
 - ``onnx_light::lib_onnx_backend_test`` – C++ backend test
   infrastructure and reference operator kernels.
+- ``onnx_light::lib_onnx_gradient`` – reverse-mode automatic
+  differentiation for ONNX graphs.
 
 In addition, ``onnx_light::onnx_lib`` replicates the current C++ API
 from :epkg:`onnx` package.

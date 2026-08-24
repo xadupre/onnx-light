@@ -40,7 +40,7 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[docs]" -v
       - name: Install ONNX weekly
-        run: pip install --upgrade onnx-weekly
+        run: pip uninstall -y onnx && pip install --upgrade onnx-weekly
       - name: pip freeze
         run: pip freeze
       - name: Build documentation

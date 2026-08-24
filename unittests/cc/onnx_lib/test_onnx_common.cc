@@ -141,11 +141,11 @@ TEST(onnx_common, ProtoUtilAndFileUtils) {
 
   ModelProto model;
   model.add_graph()->set_name("loaded");
+  model.set_doc_string(std::string(16384, 'x'));
   std::string serialized;
   model.SerializeToString(serialized);
 
-  const fs::path temp_dir = fs::temp_directory_path();
-  const fs::path file_path = temp_dir / "onnx_light_common_file_utils.onnx";
+  const fs::path file_path = fs::current_path() / "onnx_light_common_file_utils.onnx";
   {
     std::ofstream out(file_path, std::ios::binary);
     out.write(serialized.data(), static_cast<std::streamsize>(serialized.size()));
@@ -155,6 +155,7 @@ TEST(onnx_common, ProtoUtilAndFileUtils) {
   ONNX_LIGHT_NAMESPACE::LoadProtoFromPath(file_path.string(), loaded);
   EXPECT_TRUE(loaded.has_graph());
   EXPECT_EQ(loaded.ref_graph().ref_name(), "loaded");
+  EXPECT_EQ(loaded.ref_doc_string(), model.ref_doc_string());
 
   fs::remove(file_path);
 }

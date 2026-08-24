@@ -18,6 +18,10 @@ get_test_cases_for_op = _case_base.get_test_cases_for_op
 
 def _expected_attention_opset_version(case_name: str) -> int:
     """Returns the expected Attention opset version for a backend test case name."""
+    # Opset 25 adds local-window attention through ``left_window_size`` and
+    # ``right_window_size``.
+    if "local_window" in case_name or "bidirectional_window" in case_name:
+        return 25
     # ``cases_attention.cc`` registers opset-24 variants for names that contain
     # ``nonpad`` (new ``nonpad_kv_seqlen`` input path) and for explicit ``_24_``
     # parity aliases that mirror upstream ONNX backend names.

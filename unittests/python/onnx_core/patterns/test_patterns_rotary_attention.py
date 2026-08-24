@@ -593,7 +593,7 @@ def _make_attention_gqa(
         nodes.append(oh.make_node("Squeeze", ["value_e", "axis1"], ["value_r"]))
     attention_inputs = ["query", "key_r", "value_r", "mask"]
     if active_optional:
-        attention_inputs.append("active_optional")
+        attention_inputs.extend(["active_optional", "active_optional"])
     nodes.append(oh.make_node("Attention", attention_inputs, ["Y"], scale=0.11))
     key_value_heads = 2 if reshape else 1
     query_heads = 4 if reshape else 2

@@ -87,7 +87,7 @@ private:
  */
 class ONNX_LIGHT_CORE_API PreparedObjectStore {
 public:
-  PreparedObjectStore();
+  explicit PreparedObjectStore(size_t residency_budget = std::numeric_limits<size_t>::max());
   ~PreparedObjectStore();
 
   /** Returns the resident generation or elects one caller to produce a new one. */
@@ -112,15 +112,22 @@ public:
   bool Evict(const PreparedKey &key);
 
   PreparedResidencyState State(const PreparedKey &key) const;
+  size_t resident_bytes() const;
+  size_t residency_budget() const noexcept { return residency_budget_; }
   uint64_t readiness_epoch() const noexcept { return readiness_epoch_.load(); }
 
 private:
   struct Entry;
+  struct PinCounter;
+  struct ResidencyTracker;
 
   static void ValidateGeneration(const Entry &entry, const PreparedObjectRequest &request);
 
-  mutable std::mutex mutex_;
   std::unordered_map<PreparedKey, std::unique_ptr<Entry>, PreparedKeyHash> entries_;
+  size_t residency_budget_;
+  size_t resident_bytes_ = 0;
+  mutable uint64_t access_epoch_ = 0;
+  std::shared_ptr<ResidencyTracker> residency_tracker_;
   std::atomic<uint64_t> readiness_epoch_{0};
 };
 

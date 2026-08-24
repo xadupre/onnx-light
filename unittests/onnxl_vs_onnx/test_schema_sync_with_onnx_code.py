@@ -90,7 +90,7 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
                     index = close_paren + 1
                     continue
 
-                attributes = set(re.findall(r'\.Attr\(\s*"([^"]+)"', schema_body))
+                attributes = cls._extract_attributes(source, schema_body)
                 blocks.append((op_name, opset_version, attributes))
 
             index = close_paren + 1
@@ -147,6 +147,80 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
                     return position
             position += 1
 
+        return -1
+
+    @classmethod
+    def _extract_attributes(cls, source: str, schema_body: str) -> set[str]:
+        """Extracts attributes from an inline schema or a zero-argument schema helper."""
+        attributes = set(re.findall(r'\.Attr\(\s*"([^"]+)"', schema_body))
+        helper_match = re.fullmatch(r"([A-Za-z_]\w*)\s*\(\s*\)\s*;?", schema_body.strip())
+        if attributes or helper_match is None:
+            return attributes
+
+        helper_name = helper_match.group(1)
+        definition = re.search(
+            rf"\b(?:static\s+)?OpSchema\s+{re.escape(helper_name)}\s*\(\s*\)\s*\{{", source
+        )
+        if definition is None:
+            return attributes
+
+        open_brace = source.find("{", definition.start())
+        close_brace = cls._find_matching_brace(source, open_brace)
+        if close_brace < 0:
+            return attributes
+        return set(re.findall(r'\.Attr\(\s*"([^"]+)"', source[open_brace + 1 : close_brace]))
+
+    @classmethod
+    def _find_matching_brace(cls, source: str, open_brace: int) -> int:
+        """Finds the matching closing brace while ignoring strings and comments."""
+        depth = 0
+        position = open_brace
+        while position < len(source):
+            if source.startswith("//", position):
+                newline = source.find("\n", position + 2)
+                if newline < 0:
+                    return -1
+                position = newline + 1
+                continue
+            if source.startswith("/*", position):
+                comment_end = source.find("*/", position + 2)
+                if comment_end < 0:
+                    return -1
+                position = comment_end + 2
+                continue
+            if source.startswith('R"', position):
+                delimiter_end = source.find("(", position + 2)
+                if delimiter_end < 0:
+                    return -1
+                delimiter = source[position + 2 : delimiter_end]
+                closing = ")" + delimiter + '"'
+                raw_end = source.find(closing, delimiter_end + 1)
+                if raw_end < 0:
+                    return -1
+                position = raw_end + len(closing)
+                continue
+            if source[position] in {'"', "'"}:
+                quote = source[position]
+                position += 1
+                escaped = False
+                while position < len(source):
+                    char = source[position]
+                    if escaped:
+                        escaped = False
+                    elif char == "\\":
+                        escaped = True
+                    elif char == quote:
+                        position += 1
+                        break
+                    position += 1
+                continue
+            if source[position] == "{":
+                depth += 1
+            elif source[position] == "}":
+                depth -= 1
+                if depth == 0:
+                    return position
+            position += 1
         return -1
 
     @classmethod
@@ -245,6 +319,19 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
         }
         source_schema_keys = self._collect_registered_schema_keys(defs_root)
         self.assertEqual(onnx_light_schema_keys, source_schema_keys)
+
+    def test_extract_schema_attributes_from_helper(self):
+        source = """
+        static OpSchema MakeExampleSchema() {
+          return OpSchema()
+              .Attr("alpha", "first", AttributeProto::FLOAT)
+              .Attr("beta", R"DOC({ ignored })DOC", AttributeProto::INT);
+        }
+        ONNX_OPERATOR_SET_SCHEMA(Example, 25, MakeExampleSchema());
+        """
+        self.assertEqual(
+            self._extract_schema_blocks(source), [("Example", 25, {"alpha", "beta"})]
+        )
 
     def test_preview_operators_separated_from_preview_training(self):
         defs_root = Path(__file__).resolve().parents[2] / "onnx_light" / "onnx_lib" / "defs"

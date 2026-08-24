@@ -2,17 +2,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_lib/defs/operator_sets.h"
 #include "onnx_op/operator_sets_nn.h"
 
 #include <gtest/gtest.h>
 
+#include <unordered_map>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-constexpr size_t kExpectedAttentionSchemaCount = 2;
+constexpr size_t kExpectedAttentionSchemaCount = 3;
 constexpr size_t kExpectedAveragePoolSchemaCount = 6;
 constexpr size_t kExpectedBatchNormalizationSchemaCount = 6;
 constexpr size_t kExpectedCausalConvWithStateSchemaCount = 1;
@@ -66,6 +68,46 @@ FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int versi
     }
   }
   return nullptr;
+}
+
+TEST(OnnxOpNnRegistrationTest, Attention25MetadataMatchesFullSchema) {
+  const std::vector<core::schema::LightOpSchema> attention_schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("Attention");
+  const core::schema::LightOpSchema *const light = FindByVersion(attention_schemas, 25);
+  ASSERT_NE(light, nullptr);
+
+  const OpSchema full = GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 25, Attention)>();
+  EXPECT_EQ(light->doc(), full.doc());
+  ASSERT_EQ(light->inputs().size(), full.inputs().size());
+  ASSERT_EQ(light->outputs().size(), full.outputs().size());
+  for (size_t i = 0; i < light->inputs().size(); ++i) {
+    EXPECT_EQ(light->inputs()[i].description, full.inputs()[i].GetDescription()) << i;
+  }
+  for (size_t i = 0; i < light->outputs().size(); ++i) {
+    EXPECT_EQ(light->outputs()[i].description, full.outputs()[i].GetDescription()) << i;
+  }
+
+  ASSERT_EQ(light->attributes().size(), full.attributes().size());
+  std::unordered_map<std::string, const core::schema::AttributeParam *> light_attributes;
+  for (const auto &attr : light->attributes()) {
+    light_attributes.emplace(attr.name, &attr);
+  }
+  for (const auto &[name, attr] : full.attributes()) {
+    ASSERT_EQ(light_attributes.count(name), 1u) << name;
+    const core::schema::AttributeParam &light_attr = *light_attributes.at(name);
+    EXPECT_EQ(light_attr.description, attr.description) << name;
+    EXPECT_EQ(light_attr.required, attr.required) << name;
+    EXPECT_EQ(static_cast<int>(light_attr.type), static_cast<int>(attr.type)) << name;
+    if (attr.default_value.type() == AttributeProto::UNDEFINED) {
+      EXPECT_TRUE(std::holds_alternative<std::monostate>(light_attr.default_value)) << name;
+    } else if (attr.type == AttributeProto::INT) {
+      ASSERT_TRUE(std::holds_alternative<int64_t>(light_attr.default_value)) << name;
+      EXPECT_EQ(std::get<int64_t>(light_attr.default_value), attr.default_value.i()) << name;
+    } else if (attr.type == AttributeProto::FLOAT) {
+      ASSERT_TRUE(std::holds_alternative<double>(light_attr.default_value)) << name;
+      EXPECT_DOUBLE_EQ(std::get<double>(light_attr.default_value), attr.default_value.f()) << name;
+    }
+  }
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsAveragePoolSchemasWithoutShapeInference) {

@@ -1405,6 +1405,7 @@ public:
 };
 
 // Forward declarations for ai.onnx version 25
+class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 25, Attention);
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 25, Cast);
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 25, CastLike);
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 25, Constant);
@@ -1428,6 +1429,7 @@ class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 25, QuantizeLinear);
 class OpSet_Onnx_ver25 {
 public:
   static void ForEachSchema(const std::function<void(OpSchema &&)> &fn) {
+    fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 25, Attention)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 25, Cast)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 25, CastLike)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 25, Constant)>());

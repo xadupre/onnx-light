@@ -1024,6 +1024,34 @@ TEST(KernelClass, AttentionCausalMasksFuturePositions) {
   EXPECT_GT(Y.AsFloat()[3], -100.0f);
 }
 
+TEST(KernelClass, AttentionAppliesBidirectionalWindow) {
+  const Tensor Q = Tensor::FromFloat("", {1, 1, 5, 1}, std::vector<float>(5, 0.0f));
+  const Tensor K = Tensor::FromFloat("", {1, 1, 5, 1}, std::vector<float>(5, 0.0f));
+  const Tensor V = Tensor::FromFloat("", {1, 1, 5, 1}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
+
+  const Attention attention{AttentionKernelContext()};
+  Attention::Attributes attrs;
+  attrs.left_window_size = 1;
+  attrs.right_window_size = 2;
+  const Tensor Y = attention(Q, K, V, attrs).Y;
+
+  ASSERT_EQ(Y.shape, (std::vector<int64_t>{1, 1, 5, 1}));
+  const std::vector<float> expected{1.0f, 1.5f, 2.5f, 3.0f, 3.5f};
+  for (size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(Y.AsFloat()[i], expected[i]);
+  }
+}
+
+TEST(KernelClass, AttentionRejectsInvalidWindow) {
+  const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 1}, {0.0f});
+  const Tensor K = Tensor::FromFloat("", {1, 1, 1, 1}, {0.0f});
+  const Tensor V = Tensor::FromFloat("", {1, 1, 1, 1}, {0.0f});
+  const Attention attention{AttentionKernelContext()};
+  Attention::Attributes attrs;
+  attrs.left_window_size = -2;
+  EXPECT_THROW(attention(Q, K, V, attrs), std::invalid_argument);
+}
+
 TEST(KernelClass, AttentionCausalExternalCacheIsOffsetAware) {
   // External/static KV cache decode (mirrors onnx/onnx#8068): a single query
   // (q_seq=1) attends a 3-key cache with ``nonpad_kv_seqlen=[3]`` and no

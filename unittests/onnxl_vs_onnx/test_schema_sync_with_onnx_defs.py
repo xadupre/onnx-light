@@ -9,6 +9,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
     # SwiGLU (onnx#8202) may not yet be present in the installed onnx; the empty
     # domain string is the default ai.onnx domain used by the registered schemas.
     SWIGLU_KEY = ("", "SwiGLU", 28)
+    ATTENTION_25_KEY = ("", "Attention", 25)
 
     @classmethod
     def setUpClass(cls):
@@ -36,6 +37,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             onnx_light_schema_keys.discard(flex_attention_key)
         if self.SWIGLU_KEY not in onnx_schema_keys:
             onnx_light_schema_keys.discard(self.SWIGLU_KEY)
+        if self.ATTENTION_25_KEY not in onnx_schema_keys:
+            onnx_light_schema_keys.discard(self.ATTENTION_25_KEY)
 
         self.assertEqual(onnx_light_schema_keys, onnx_schema_keys)
 
@@ -46,6 +49,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
         if self.SWIGLU_KEY not in onnx_dict:
             light_dict.pop(self.SWIGLU_KEY, None)
+        if self.ATTENTION_25_KEY not in onnx_dict:
+            light_dict.pop(self.ATTENTION_25_KEY, None)
         self.assertEqual(set(light_dict), set(onnx_dict))
         for key, schema in light_dict.items():
             with self.subTest(key=key):
@@ -75,6 +80,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
         if self.SWIGLU_KEY not in onnx_dict:
             light_dict.pop(self.SWIGLU_KEY, None)
+        if self.ATTENTION_25_KEY not in onnx_dict:
+            light_dict.pop(self.ATTENTION_25_KEY, None)
         self.assertEqual(set(light_dict), set(onnx_dict))
 
         def _normalize(text):
@@ -106,6 +113,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
         if self.SWIGLU_KEY not in onnx_dict:
             light_dict.pop(self.SWIGLU_KEY, None)
+        if self.ATTENTION_25_KEY not in onnx_dict:
+            light_dict.pop(self.ATTENTION_25_KEY, None)
         self.assertEqual(set(light_dict), set(onnx_dict))
         for key, lights in light_dict.items():
             schema = onnx_dict[key]

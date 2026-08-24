@@ -31,6 +31,7 @@ void AttentionPropagateElemTypeFromInputToOutput(InferenceContext &ctx);
 
 /** Implements CausalMask for Attention. */
 bool AttentionAppendFunctionCausalMask(const FunctionBodyBuildContext &ctx,
-                                       FunctionBuilder &builder, bool padding);
+                                       FunctionBuilder &builder, bool padding,
+                                       bool cast_mask_to_bias = false);
 
 } // namespace ONNX_LIGHT_NAMESPACE

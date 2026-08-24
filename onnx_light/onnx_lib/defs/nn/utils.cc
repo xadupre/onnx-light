@@ -44,7 +44,7 @@ void AttentionPropagateElemTypeFromInputToOutput(InferenceContext &ctx) {
       }
       const auto *const kv_num_heads_attr = ctx.getAttribute("kv_num_heads");
       if (kv_num_heads_attr == nullptr) {
-        fail_type_inference("3D inputs expected to have q_num_heads attribute.");
+        fail_type_inference("3D inputs expected to have kv_num_heads attribute.");
       }
     }
 
@@ -187,7 +187,8 @@ void AttentionPropagateElemTypeFromInputToOutput(InferenceContext &ctx) {
 }
 
 bool AttentionAppendFunctionCausalMask(const FunctionBodyBuildContext &ctx,
-                                       FunctionBuilder &builder, bool padding) {
+                                       FunctionBuilder &builder, bool padding,
+                                       bool cast_mask_to_bias) {
   builder.Add("NewKVSeqLen =  Shape <start = -2, end = -1> (PresentKey)")
       .Add("AttnBiasShape = Concat <axis = 0> (QSeqLen, NewKVSeqLen)");
   float neg_inf = -std::numeric_limits<float>::infinity();
@@ -254,8 +255,13 @@ bool AttentionAppendFunctionCausalMask(const FunctionBodyBuildContext &ctx,
       builder.Add("RangeRow2DPast = Add(RangeRow2D, PastKVSeqLen)")
           .Add("BoolMaskTri = Less(RangeRow2DPast, RangeCol2D)");
     }
-    builder.Add("MaskTri = Where(BoolMaskTri, FloatNegInf, ScalarZero)")
-        .Add("AttnBiasCausalOrNot = Add(AttnBias, MaskTri)");
+    if (cast_mask_to_bias) {
+      builder.Add("MaskTriFloat = Where(BoolMaskTri, FloatNegInf, ScalarZero)")
+          .Add("MaskTri = CastLike(MaskTriFloat, AttnBias)");
+    } else {
+      builder.Add("MaskTri = Where(BoolMaskTri, FloatNegInf, ScalarZero)");
+    }
+    builder.Add("AttnBiasCausalOrNot = Add(AttnBias, MaskTri)");
   } else {
     builder.Add("AttnBiasCausalOrNot = Identity(AttnBias)");
   }

@@ -785,6 +785,124 @@ Q*sqrt(scale) K*sqrt(scale) |
 
 )DOC";
 
+constexpr const char *kAttentionDocOpset25 = R"DOC(
+
+Computes scaled dot product attention on query, key and value tensors, using an optional attention mask if passed.
+
+This operator covers self and cross variants of the attention operation based on sequence lengths of K, Q and V.
+
+For self attention, `kv_sequence_length` equals to `q_sequence_length`.
+
+For cross attention, query and key might have different lengths.
+
+This operator also covers the 3 following variants based on the number of heads:
+1) Multi-headed Attention (MHA): Described in the paper https://arxiv.org/pdf/1706.03762, `q_num_heads = kv_num_heads`.
+2) Group-query Attention (GQA): Described in the paper https://arxiv.org/pdf/2305.13245, `q_num_heads > kv_num_heads`, `q_num_heads % kv_num_heads == 0`.
+3) Multi-query Attention (MQA): Described in the paper https://arxiv.org/pdf/1911.02150, `q_num_heads > kv_num_heads`, `kv_num_heads=1`.
+
+Attention bias to be added is calculated based on `attn_mask` input and `is_causal` attribute:
+1) `attn_mask`: A boolean mask where a value of `True` indicates that the element should take part in attention or a float mask of the same type as query, key, value that is added to the attention score.
+2) If `is_causal` is set to `1`, causal masking is applied with bottom-right (offset-aware) alignment: query `i` attends key `j` iff `j <= i + offset`, as illustrated below.
+
+```
+  2D causal mask for Attention (PR onnx/onnx#8068)
+   S_q=4 queries, S_k=8 keys
+   Rule: query i attends key j iff j <= i + offset
+         offset = nonpad_kv_seqlen - S_q
+
+   nonpad_kv_seqlen=4, offset=4-4=0
+
+          k0  k1  k2  k3  k4  k5  k6  k7
+         +----+----+----+----+----+----+----+----+
+    q0   | ## |    |    |    |    |    |    |    |
+         +----+----+----+----+----+----+----+----+
+    q1   | ## | ## |    |    |    |    |    |    |
+         +----+----+----+----+----+----+----+----+
+    q2   | ## | ## | ## |    |    |    |    |    |
+         +----+----+----+----+----+----+----+----+
+    q3   | ## | ## | ## | ## |    |    |    |    |
+         +----+----+----+----+----+----+----+----+
+
+
+   nonpad_kv_seqlen=8, offset=8-4=4
+
+          k0  k1  k2  k3  k4  k5  k6  k7
+         +----+----+----+----+----+----+----+----+
+    q0   | ## | ## | ## | ## | ## |    |    |    |
+         +----+----+----+----+----+----+----+----+
+    q1   | ## | ## | ## | ## | ## | ## |    |    |
+         +----+----+----+----+----+----+----+----+
+    q2   | ## | ## | ## | ## | ## | ## | ## |    |
+         +----+----+----+----+----+----+----+----+
+    q3   | ## | ## | ## | ## | ## | ## | ## | ## |
+         +----+----+----+----+----+----+----+----+
+```
+
+With `nonpad_kv_seqlen=4` (offset=0), the mask is the standard lower-triangular. With `nonpad_kv_seqlen=8` (offset=4), the diagonal shifts right by 4, so each query sees the 4 additional valid cached keys.
+
+`offset` is the count of valid keys preceding the current query block: `offset = past_sequence_length` when `past_key` is provided; `offset = nonpad_kv_seqlen - q_sequence_length` (per batch) when an external cache is indicated by `nonpad_kv_seqlen` without `past_key`; `offset = 0` when neither is provided (the no-cache case, which reduces to the standard lower-triangular mask). When `offset < 0` (`nonpad_kv_seqlen < q_sequence_length`, i.e. more query tokens than cached keys) the leading query rows have an empty key set (no key satisfies `j <= i + offset`) and are fully masked. The causal frontier is computed independently of `attn_mask` and is then composed with it additively: a boolean `attn_mask` intersects the allowed set (its disallowed positions contribute `-inf` to the bias), while a float `attn_mask` is added to the attention scores rather than disabling positions. A fully-masked query row (no key attended, including the negative-offset leading rows) produces a zero output row, not `NaN`, for both `Y` and the mode-`3` `qk_matmul_output` debug output; the mode-`3` `qk_matmul_output` is emitted at the operator's output precision (`T1`).
+
+`left_window_size` and `right_window_size` independently restrict the keys visible to each query. A query at absolute position `p = offset + query_index` attends keys `j` satisfying `p - left_window_size <= j <= p + right_window_size` for each nonnegative bound. A value of `-1` leaves that side unbounded. For example, `(left_window_size=2, right_window_size=0)` is a causal left-looking window containing the current key and two preceding keys, while `(left_window_size=2, right_window_size=1)` is an asymmetric bidirectional window. Window bounds are composed with `is_causal` and `attn_mask`; when `is_causal=1`, the causal upper bound still excludes future keys.
+
+```
+  2D sliding-window mask for Attention (opset 25)
+   S_q=4 queries, S_k=6 keys, left_window_size=2, right_window_size=1, offset=0
+
+          k0  k1  k2  k3  k4  k5
+         +----+----+----+----+----+----+
+    q0   | ## | ## |    |    |    |    |
+         +----+----+----+----+----+----+
+    q1   | ## | ## | ## |    |    |    |
+         +----+----+----+----+----+----+
+    q2   | ## | ## | ## | ## |    |    |
+         +----+----+----+----+----+----+
+    q3   |    | ## | ## | ## | ## |    |
+         +----+----+----+----+----+----+
+
+   q0 attends {k0,k1}, q1 attends {k0,k1,k2}, q2 attends {k0,k1,k2,k3},
+   q3 attends {k1,k2,k3,k4}.
+```
+
+With respect to KV cache update, this operator allows the following two use cases:
+
+1) Cache update happens inside the Attention operator. In this case, the `K` and `V` inputs contain only the incoming
+tokens for the current autoregressive step, and the four optional inputs/outputs past and present key and value are
+all needed. The Attention op performs a Concat operation on the past and incoming key and value to form the present
+key and value, respectively. Note that this only works correctly for the special case where the past key and value
+do not contain padded tokens.
+2) Cache update happens outside the Attention operator (for example, through the `TensorScatter` operator). In this
+case, the `K` and `V` inputs correspond to the entire cache tensor, so the four optional inputs/outputs past and
+present key and value should not be used. An additional input `nonpad_kv_seqlen` of shape (batch_size,) may be
+provided to indicate the number of non-padding tokens in each sample of the batch to save unnecessary computation.
+Here, the kv_sequence dimension of `attn_mask` can be shorter than `K` and `V`, but still needs to be at least as long
+as the maximum value of `nonpad_kv_seqlen`.
+
+Both past and present state key/values are optional. They shall be used together, and not allowed to use only one of them.
+The following pattern is applied to the Q, K and V inputs after appropriate reshaping of K and V inputs based on sequence lengths and num heads provided:
+
+```
+  The following pattern is applied by this operator:
+      Q          K          V
+      |          |          |
+Q*sqrt(scale) K*sqrt(scale) |
+      |          |          |
+      |       Transpose     |
+      |          |          |
+      ---MatMul---          |
+            |               |
+  softcap (if provided)     |
+            |               |
+ at_mask---Add              |
+            |               |
+         Softmax            |
+            |               |
+            -----MatMul------
+                   |
+                   Y
+```
+
+)DOC";
+
 } // namespace
 
 std::string MakeBatchNormalizationDoc(int since_version) {
@@ -811,6 +929,8 @@ std::string MakeAttentionDoc(int since_version) {
     return kAttentionDocOpset23;
   case 24:
     return kAttentionDocOpset24;
+  case 25:
+    return kAttentionDocOpset25;
   default:
     return "";
   }

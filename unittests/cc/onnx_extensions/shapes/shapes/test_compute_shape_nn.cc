@@ -1169,6 +1169,18 @@ TEST(OnnxOptimShapesNnAttention, RejectsInvalidGqa) {
                std::invalid_argument);
 }
 
+TEST(OnnxOptimShapesNnAttention, RejectsInvalidWindowAttribute) {
+  NodeProto node = MakeAttentionNode();
+  auto *attr = node.add_attribute();
+  attr->set_name("left_window_size");
+  attr->set_type(AttributeProto::INT);
+  attr->set_i(-2);
+  core::shapes::ShapesContext ctx;
+  SetAttnInputs(ctx, ShapeAttn4(1, 2, 4, 8), ShapeAttn4(1, 2, 4, 8), ShapeAttn4(1, 2, 4, 8));
+  EXPECT_THROW(onnx_shapes::shapes::nn::ComputeShapeAttention(ctx, node, "Q", "K", "V"),
+               std::invalid_argument);
+}
+
 TEST(OnnxOptimShapesNnAttention, RejectsWrongRank) {
   NodeProto node = MakeAttentionNode();
   core::shapes::ShapesContext ctx;

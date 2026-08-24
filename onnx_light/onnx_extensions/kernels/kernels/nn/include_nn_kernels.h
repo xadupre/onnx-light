@@ -820,16 +820,18 @@ public:
   /// must both be positive; otherwise both default to ``0`` (auto-detected
   /// from the rank-4 input shapes).
   struct Attributes {
-    bool has_scale = false;        ///< When true, ``scale`` overrides the default.
-    float scale = 0.0f;            ///< Multiplier applied to the ``Q @ K^T`` dot product
-                                   ///< before the optional bias and softmax. When
-                                   ///< ``has_scale`` is false the kernel uses
-                                   ///< ``1 / sqrt(head_size)`` instead.
-    bool is_causal = false;        ///< When true, applies a causal upper-triangular ``-inf`` mask.
-    float softcap = 0.0f;          ///< When ``> 0``, applies ``softcap * tanh(s / softcap)``.
-    int qk_matmul_output_mode = 0; ///< 0: raw; 1: + bias; 2: after softcap; 3: after softmax.
-    int64_t q_num_heads = 0;       ///< Required when inputs are rank-3.
-    int64_t kv_num_heads = 0;      ///< Required when inputs are rank-3.
+    bool has_scale = false;         ///< When true, ``scale`` overrides the default.
+    float scale = 0.0f;             ///< Multiplier applied to the ``Q @ K^T`` dot product
+                                    ///< before the optional bias and softmax. When
+                                    ///< ``has_scale`` is false the kernel uses
+                                    ///< ``1 / sqrt(head_size)`` instead.
+    bool is_causal = false;         ///< When true, applies a causal upper-triangular ``-inf`` mask.
+    float softcap = 0.0f;           ///< When ``> 0``, applies ``softcap * tanh(s / softcap)``.
+    int qk_matmul_output_mode = 0;  ///< 0: raw; 1: + bias; 2: after softcap; 3: after softmax.
+    int64_t q_num_heads = 0;        ///< Required when inputs are rank-3.
+    int64_t kv_num_heads = 0;       ///< Required when inputs are rank-3.
+    int64_t left_window_size = -1;  ///< -1 is unbounded; otherwise includes this many left keys.
+    int64_t right_window_size = -1; ///< -1 is unbounded; otherwise includes this many right keys.
   };
 
   /// Bundles every output produced by the kernel. ``Y`` is always

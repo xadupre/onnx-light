@@ -5,6 +5,7 @@ adapters
     :maxdepth: 1
 
     Attention_24_23
+    Attention_25_24
     adapter
     axes_attribute_to_input
     axes_input_to_attribute

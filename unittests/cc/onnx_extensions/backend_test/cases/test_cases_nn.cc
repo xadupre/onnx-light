@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -475,15 +476,35 @@ TEST(BackendTestCase, AttentionCasesArePresent) {
   auto cases = CollectTestCases("Attention");
   const TestCase *basic = nullptr;
   const TestCase *gqa = nullptr;
+  const std::set<std::string> expected_window_cases = {
+      "test_cc_attention_3d_local_window",
+      "test_cc_attention_bidirectional_window",
+      "test_cc_attention_local_window",
+      "test_cc_attention_local_window_default",
+      "test_cc_attention_local_window_ext_cache_float16_mask",
+      "test_cc_attention_local_window_ext_cache_rank2_mask",
+      "test_cc_attention_local_window_ext_cache_rank3_head_mask",
+      "test_cc_attention_local_window_ext_cache_rank4_batch_mask",
+      "test_cc_attention_local_window_gqa_rank4_mask",
+      "test_cc_attention_local_window_rank1_boolean_mask",
+      "test_cc_attention_local_window_with_past",
+  };
+  std::set<std::string> found_window_cases;
   for (const auto &c : cases) {
     if (c.name == "test_cc_attention_4d") {
       basic = &c;
     } else if (c.name == "test_cc_attention_4d_gqa") {
       gqa = &c;
     }
+    if (expected_window_cases.count(c.name) != 0) {
+      found_window_cases.insert(c.name);
+      ASSERT_EQ(c.model().ref_opset_import().size(), 1u);
+      EXPECT_EQ(c.model().ref_opset_import()[0].version(), 25);
+    }
   }
   ASSERT_NE(basic, nullptr);
   ASSERT_NE(gqa, nullptr);
+  EXPECT_EQ(found_window_cases, expected_window_cases);
 
   for (const TestCase *tc : {basic, gqa}) {
     const GraphProto &graph = tc->model().ref_graph();

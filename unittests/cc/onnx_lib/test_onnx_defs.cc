@@ -2,6 +2,7 @@
 #include "../common/tensor.h"
 #include "../defs/data_propagators.h"
 #include "../defs/doc_strings.h"
+#include "../defs/operator_sets.h"
 #include "../defs/operator_sets_preview.h"
 #include "../defs/schema.h"
 #include "onnx.h"
@@ -470,6 +471,28 @@ TEST(onnx_defs, Schema_PreviewFlexAttentionDefinition) {
   EXPECT_EQ(schema.SinceVersion(), 1);
   EXPECT_EQ(schema.support_level(), OpSchema::SupportType::EXPERIMENTAL);
   EXPECT_TRUE(schema.HasContextDependentFunction());
+}
+
+TEST(onnx_defs, Schema_Attention25WindowAttributes) {
+  const OpSchema schema = GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 25, Attention)>();
+  EXPECT_EQ(schema.Name(), "Attention");
+  EXPECT_EQ(schema.SinceVersion(), 25);
+  EXPECT_EQ(schema.attributes().size(), 9u);
+  for (const char *name :
+       {"is_causal", "scale", "q_num_heads", "kv_num_heads", "softmax_precision", "softcap",
+        "qk_matmul_output_mode", "left_window_size", "right_window_size"}) {
+    EXPECT_EQ(schema.attributes().count(name), 1u) << name;
+  }
+  ASSERT_EQ(schema.attributes().count("left_window_size"), 1u);
+  ASSERT_EQ(schema.attributes().count("right_window_size"), 1u);
+  EXPECT_EQ(schema.attributes().at("left_window_size").default_value.i(), -1);
+  EXPECT_EQ(schema.attributes().at("right_window_size").default_value.i(), -1);
+  EXPECT_NE(std::string(schema.doc()).find("2D sliding-window mask for Attention (opset 25)"),
+            std::string::npos);
+  EXPECT_EQ(schema.inputs().at(4).GetDescription(),
+            "Past state for key with shape `(batch_size, kv_num_heads, past_sequence_length, "
+            "head_size)`. Must be used together with `past_value` input.");
+  EXPECT_EQ(schema.outputs().at(0).GetDescription().find("The output tensor."), 0u);
 }
 
 // ===========================================================================

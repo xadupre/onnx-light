@@ -237,6 +237,14 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
   CheckRank4Float(Q4, "Q");
   CheckRank4Float(K4, "K");
   CheckRank4Float(V4, "V");
+  EXT_ENFORCE_INVALID(attrs.left_window_size >= -1,
+                      "kernel::Attention: 'left_window_size' must be -1 or nonnegative.");
+  EXT_ENFORCE_INVALID(attrs.right_window_size >= -1,
+                      "kernel::Attention: 'right_window_size' must be -1 or nonnegative.");
+  EXT_ENFORCE_INVALID((past_key == nullptr) == (past_value == nullptr),
+                      "kernel::Attention: past_key and past_value must be provided together.");
+  EXT_ENFORCE_INVALID(nonpad_kv_seqlen == nullptr || past_key == nullptr,
+                      "kernel::Attention: nonpad_kv_seqlen cannot be combined with past cache.");
 
   const int64_t batch_size = Q4.shape[0];
   const int64_t q_num_heads = Q4.shape[1];
@@ -380,6 +388,11 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
             if (j > i + causal_offset) {
               b_val = -std::numeric_limits<double>::infinity();
             }
+          }
+          const int64_t window_diff = i + causal_offset - j;
+          if ((attrs.left_window_size >= 0 && window_diff > attrs.left_window_size) ||
+              (attrs.right_window_size >= 0 && -window_diff > attrs.right_window_size)) {
+            b_val = -std::numeric_limits<double>::infinity();
           }
           if (nonpad_lengths != nullptr && j >= nonpad_lengths[b]) {
             // Padding position: suppressed regardless of the supplied mask.
@@ -649,6 +662,8 @@ void Attention::Run(RuntimeContext &rt) {
       static_cast<int>(GetAttributeIntOrDefault(node, "qk_matmul_output_mode", 0));
   attrs.q_num_heads = GetAttributeIntOrDefault(node, "q_num_heads", 0);
   attrs.kv_num_heads = GetAttributeIntOrDefault(node, "kv_num_heads", 0);
+  attrs.left_window_size = GetAttributeIntOrDefault(node, "left_window_size", -1);
+  attrs.right_window_size = GetAttributeIntOrDefault(node, "right_window_size", -1);
 
   onnx_kernels::kernel::Attention kernel(rt.kernel_ctx());
   onnx_kernels::kernel::Attention::Result result =

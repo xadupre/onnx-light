@@ -72,6 +72,43 @@ class TestVersionConverter(ExtTestCase):
         assert converted_model.graph.node[0].op_type == "Add"
         assert converted_model.opset_import[0].version == 2
 
+    def test_attention_24_to_25(self) -> None:
+        node = oh.make_node("Attention", ["Q", "K", "V"], ["Y"])
+        graph = oh.make_graph(
+            [node],
+            "attention",
+            [
+                oh.make_tensor_value_info("Q", onnxl.TensorProto.FLOAT, (1, 1, 2, 4)),
+                oh.make_tensor_value_info("K", onnxl.TensorProto.FLOAT, (1, 1, 2, 4)),
+                oh.make_tensor_value_info("V", onnxl.TensorProto.FLOAT, (1, 1, 2, 4)),
+            ],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, (1, 1, 2, 4))],
+        )
+        converted = self._converted(graph, oh.make_operatorsetid("", 24), 25)
+        assert converted.opset_import[0].version == 25
+
+    def test_attention_25_to_24_window_conversion(self) -> None:
+        def make_graph(window: int) -> onnxl.GraphProto:
+            node = oh.make_node(
+                "Attention", ["Q", "K", "V"], ["Y"], left_window_size=window, right_window_size=-1
+            )
+            return oh.make_graph(
+                [node],
+                "attention",
+                [
+                    oh.make_tensor_value_info("Q", onnxl.TensorProto.FLOAT, (1, 1, 2, 4)),
+                    oh.make_tensor_value_info("K", onnxl.TensorProto.FLOAT, (1, 1, 2, 4)),
+                    oh.make_tensor_value_info("V", onnxl.TensorProto.FLOAT, (1, 1, 2, 4)),
+                ],
+                [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, (1, 1, 2, 4))],
+            )
+
+        converted = self._converted(make_graph(-1), oh.make_operatorsetid("", 25), 24)
+        assert converted.opset_import[0].version == 24
+        assert not converted.graph.node[0].attribute
+        with self.assertRaisesRegex(RuntimeError, "left_window_size must be -1"):
+            self._converted(make_graph(1), oh.make_operatorsetid("", 25), 24)
+
     # Test 3: Non-Existent Op Conversion: Cos: 8 -> 6
     def test_non_existent_op(self) -> None:
         def test() -> None:

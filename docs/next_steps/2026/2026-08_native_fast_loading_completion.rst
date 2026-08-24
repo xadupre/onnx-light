@@ -5,7 +5,7 @@ Completing native fast model loading
 
 :Date: 2026-08
 
-**planned; native prerequisites are available**
+**in progress; native PR01--PR03 are implemented**
 
 Objective
 +++++++++
@@ -72,6 +72,8 @@ Native PR03 -- consume prepared tensors before portable weights
 
 **Repository:** ``xadupre/onnx-light``
 
+**Implemented by issue #4620.**
+
 Implement the CPU subset of :ref:`l-next-steps-compiled-tensor`. Resolve source
 digest, CPU/ISA, runtime, kernel layout, and format compatibility from metadata.
 On a hit, read or map the packed payload and skip the portable source and
@@ -85,6 +87,14 @@ Acceptance:
 * stale, corrupt, wrong-ISA, and wrong-layout entries are diagnosed misses;
 * warm prepared-cache ``T_first_token`` improves by at least 20% on the reduced
   fixture, or profiling proves preparation is not on its critical path.
+
+The native prepared-tensor cache validates the source digest, CPU architecture
+and ISA, runtime version, kernel layout, format version, payload length, and
+payload digest before publication. Compatible entries publish directly without
+calling the portable loader or prepacker. Diagnosed misses publish the freshly
+prepared value first and atomically replace the cache entry on a background
+writer. ``bench_prepared_cache_startup`` compares these two first-token paths on
+the reduced fixture and enforces the 20% warm-cache target.
 
 Native PR04 -- connect and tune first-token overlap
 +++++++++++++++++++++++++++++++++++++++++++++++++++

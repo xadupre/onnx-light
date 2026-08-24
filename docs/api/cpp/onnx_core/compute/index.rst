@@ -29,5 +29,6 @@ back into the model (value_info and node metadata); and
     execute_action
     execution_plan
     prepared_execution
+    prepared_tensor_cache
     prepared_task
     resolved_model_fixture

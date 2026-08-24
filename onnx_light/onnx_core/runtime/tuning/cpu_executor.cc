@@ -440,7 +440,7 @@ CpuExecutorRegistry::Acquire(const ResolvedCpuExecutionPolicy &policy) {
   }
   std::shared_ptr<CpuExecutor> executor(new CpuExecutor(policy));
   std::shared_ptr<CpuExecutor> retained_executor;
-  if (policy.effective_threads > 1 && policy.spin.policy == CpuSpinPolicy::kParkImmediately) {
+  if (policy.effective_threads > 1) {
     retained_executor = executor;
   }
   entries_.push_back(Entry{key, executor, std::move(retained_executor)});

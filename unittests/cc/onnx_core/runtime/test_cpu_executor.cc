@@ -104,17 +104,19 @@ TEST(CpuExecutorRegistry, CapacityRejectsAdditionalLivePolicy) {
   EXPECT_EQ(registry.live_pool_count(), 2u);
 }
 
-TEST(CpuExecutorRegistry, LastLeaseDestroysPoolImmediately) {
+TEST(CpuExecutorRegistry, BoundedSpinPoolSurvivesBetweenLeases) {
   CpuExecutorRegistry registry(1);
   std::weak_ptr<CpuExecutor> observer;
+  uint64_t instance_id = 0;
   {
     std::shared_ptr<CpuExecutor> lease = registry.Acquire(NoAffinityPolicy(2));
     observer = lease;
-    EXPECT_FALSE(observer.expired());
+    instance_id = lease->instance_id();
   }
 
-  EXPECT_TRUE(observer.expired());
-  EXPECT_EQ(registry.live_pool_count(), 0u);
+  EXPECT_FALSE(observer.expired());
+  EXPECT_EQ(registry.live_pool_count(), 1u);
+  EXPECT_EQ(registry.Acquire(NoAffinityPolicy(2))->instance_id(), instance_id);
 }
 
 TEST(CpuExecutorRegistry, ParkImmediatelyPoolSurvivesBetweenLeases) {
@@ -132,15 +134,15 @@ TEST(CpuExecutorRegistry, ParkImmediatelyPoolSurvivesBetweenLeases) {
   EXPECT_EQ(registry.Acquire(ParkImmediatelyPolicy(2))->instance_id(), instance_id);
 }
 
-TEST(CpuExecutorRegistry, CapacityEvictsIdleParkImmediatelyPool) {
+TEST(CpuExecutorRegistry, CapacityEvictsIdleBoundedSpinPool) {
   CpuExecutorRegistry registry(1);
   std::weak_ptr<CpuExecutor> first;
   {
-    std::shared_ptr<CpuExecutor> lease = registry.Acquire(ParkImmediatelyPolicy(2));
+    std::shared_ptr<CpuExecutor> lease = registry.Acquire(NoAffinityPolicy(2));
     first = lease;
   }
 
-  std::shared_ptr<CpuExecutor> replacement = registry.Acquire(ParkImmediatelyPolicy(3));
+  std::shared_ptr<CpuExecutor> replacement = registry.Acquire(NoAffinityPolicy(3));
 
   EXPECT_TRUE(first.expired());
   EXPECT_EQ(replacement->effective_threads(), 3u);
@@ -155,11 +157,11 @@ TEST(CpuExecutorRegistry, CapacityDoesNotEvictLeasedParkImmediatelyPool) {
   EXPECT_EQ(registry.live_pool_count(), 1u);
 }
 
-TEST(CpuExecutorRegistry, SerialParkImmediatelyExecutorIsNotRetained) {
+TEST(CpuExecutorRegistry, SerialExecutorIsNotRetained) {
   CpuExecutorRegistry registry(1);
   std::weak_ptr<CpuExecutor> observer;
   {
-    std::shared_ptr<CpuExecutor> lease = registry.Acquire(ParkImmediatelyPolicy(1));
+    std::shared_ptr<CpuExecutor> lease = registry.Acquire(NoAffinityPolicy(1));
     observer = lease;
   }
 

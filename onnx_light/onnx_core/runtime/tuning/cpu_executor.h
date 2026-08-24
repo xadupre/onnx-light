@@ -176,11 +176,11 @@ private:
 /**
  * Leases compatible shared executors from a process-owned bounded registry.
  *
- * The registry stores weak references to executors whose workers spin and
- * stops them when their final lease is released. Executors whose workers park
- * immediately are retained for reuse because idle workers consume no CPU.
- * Retained idle executors are evicted when the bounded capacity is needed for
- * another policy.
+ * The registry retains multithreaded executors so compatible sessions reuse
+ * the same operating-system threads. Bounded spinning ends in a parked wait,
+ * so an idle retained executor eventually consumes no CPU regardless of its
+ * spin policy. Idle executors are evicted when the bounded capacity is needed
+ * for another policy. Serial executors have no workers and are not retained.
  */
 class CpuExecutorRegistry {
 public:

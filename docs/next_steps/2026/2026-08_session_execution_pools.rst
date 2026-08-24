@@ -227,12 +227,12 @@ The key does not include diagnostics, counters, session identifiers, or
 kernel-specific thresholds. Two sessions share only when their immutable keys
 are equal.
 
-Leases are reference-counted. The registry retains only weak references to
-pools whose workers spin, so releasing the last lease stops those workers
-immediately. A pool configured to park immediately is retained between leases:
-its idle workers consume no CPU and the next compatible session can reuse
-them instead of creating operating-system threads again. Retained idle pools
-are evicted when the bounded registry needs room for another policy.
+Leases are reference-counted. The registry retains every multithreaded pool
+between leases so that the next compatible session reuses the same
+operating-system threads. This applies with or without spin: spinning is
+always bounded, after which idle workers park and consume no CPU. Serial
+executors have no workers and therefore need no retention. Retained idle
+pools are evicted when the bounded registry needs room for another policy.
 
 A registry accepts at most its configured number of incompatible pools; the
 process-owned registry defaults to eight. Capacity exhaustion fails explicitly

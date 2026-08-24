@@ -118,7 +118,27 @@ std::vector<LightOpSchema> BuildModSchemas() {
 
 std::vector<LightOpSchema> BuildPowSchemas() {
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(2);
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Pow", kOnnxDomain, 15, MakePowDoc(),
+      {
+          {"X", "First operand, base of the exponent.", "T"},
+          {"Y", "Second operand, power of the exponent.", "T1"},
+      },
+      {
+          {"Z", "Output tensor.", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kInt32, TensorType::kInt64, TensorType::kFloat16, TensorType::kFloat,
+            TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain input X and output types to float/int tensors."},
+          {"T1",
+           {TensorType::kUint8, TensorType::kUint16, TensorType::kUint32, TensorType::kUint64,
+            TensorType::kInt8, TensorType::kInt16, TensorType::kInt32, TensorType::kInt64,
+            TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain input Y types to float/int tensors."},
+      }));
   schemas.push_back(
       LightOpSchema("Pow", kOnnxDomain, 7, MakePowDoc(),
                     {

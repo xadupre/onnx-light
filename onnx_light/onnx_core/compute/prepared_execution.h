@@ -148,6 +148,7 @@ struct MaterializationTaskDescriptors {
 };
 
 class PreparedExecutionState;
+class RequiredPayloadManifest;
 
 using PreparedTaskExecutor = std::function<void(const TaskDescriptor &, PreparedExecutionState &)>;
 
@@ -224,6 +225,8 @@ private:
 class ONNX_LIGHT_CORE_API PreparedExecutionPlan {
 public:
   explicit PreparedExecutionPlan(std::vector<TaskDescriptor> tasks);
+  PreparedExecutionPlan(std::vector<TaskDescriptor> tasks,
+                        const RequiredPayloadManifest &payload_manifest);
 
   const std::vector<TaskDescriptor> &tasks() const noexcept { return tasks_; }
 

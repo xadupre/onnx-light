@@ -87,13 +87,13 @@ struct TaskDescriptor {
                  std::optional<ActionRange> actions_ = {},
                  std::vector<PreparedKey> prepared_requirements_ = {},
                  std::optional<PreparedKey> publishes_ = {}, bool dormant_ = false,
-                 TaskPriority priority_ = TaskPriority::kPrefetch)
+                 TaskPriority priority_ = TaskPriority::kPrefetch, std::string payload_id_ = {})
       : id(id_), scope(scope_), kind(kind_), resource(resource_),
         dependencies(std::move(dependencies_)), estimated_input_bytes(estimated_input_bytes_),
         estimated_output_bytes(estimated_output_bytes_),
         peak_temporary_bytes(peak_temporary_bytes_), actions(actions_),
         prepared_requirements(std::move(prepared_requirements_)), publishes(std::move(publishes_)),
-        dormant(dormant_), priority(priority_) {}
+        dormant(dormant_), priority(priority_), payload_id(std::move(payload_id_)) {}
 
   TaskId id;
   TaskScope scope = TaskScope::kInvocation;
@@ -108,6 +108,7 @@ struct TaskDescriptor {
   std::optional<PreparedKey> publishes;
   bool dormant = false;
   TaskPriority priority = TaskPriority::kPrefetch;
+  std::string payload_id;
 };
 
 /**

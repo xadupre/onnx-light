@@ -81,16 +81,93 @@ TEST(ResolvedModelFixture, ReadsOnlyActivePayloadManifestEntries) {
     stream.write("01234567", 8);
   }
 
-  ResolvedModelFixture resolved("resolved_model_fixture.onnx",
-                                {
-                                    PayloadManifestEntry{"active", path, 2, 4, true},
-                                    PayloadManifestEntry{"inactive", path, 0, 2, false},
-                                });
+  ResolvedModelFixture resolved(
+      "resolved_model_fixture.onnx",
+      RequiredPayloadManifest::Freeze({
+          PayloadManifestEntry{"active", path, 2, 4},
+          PayloadManifestEntry{"inactive", path, 0, 2, PayloadResolution::kDead},
+      }));
 
   EXPECT_EQ(resolved.ReadPayload("active"), (std::vector<uint8_t>{'2', '3', '4', '5'}));
   EXPECT_THROW(resolved.ReadPayload("inactive"), std::runtime_error);
   EXPECT_THROW(resolved.ReadPayload("missing"), std::runtime_error);
   std::filesystem::remove(path);
+}
+
+TEST(RequiredPayloadManifest, FreezesLivePayloadsAndReportsAvoidedBytes) {
+  RequiredPayloadManifest manifest = RequiredPayloadManifest::Freeze({
+      PayloadManifestEntry{"if_else", "if.bin", 0, 11, PayloadResolution::kDead},
+      PayloadManifestEntry{"debug_head", "debug.bin", 0, 13, PayloadResolution::kDead},
+      PayloadManifestEntry{"rewritten", "rewrite.bin", 0, 17, PayloadResolution::kSuperseded},
+      PayloadManifestEntry{"portable", "weights.bin", 0, 19,
+                           PayloadResolution::kPreparedCacheReplaced},
+      PayloadManifestEntry{"packed", "cache.bin", 0, 7},
+      PayloadManifestEntry{"portable_fallback", "weights.bin", 0, 19,
+                           PayloadResolution::kDormantFallback},
+  });
+
+  EXPECT_TRUE(manifest.ContainsActive("packed"));
+  EXPECT_FALSE(manifest.ContainsActive("if_else"));
+  EXPECT_FALSE(manifest.ContainsActive("debug_head"));
+  EXPECT_FALSE(manifest.ContainsActive("rewritten"));
+  EXPECT_FALSE(manifest.ContainsActive("portable"));
+  EXPECT_FALSE(manifest.ContainsActive("portable_fallback"));
+  EXPECT_EQ(manifest.avoided().dead_bytes, 24u);
+  EXPECT_EQ(manifest.avoided().superseded_bytes, 17u);
+  EXPECT_EQ(manifest.avoided().cache_replaced_bytes, 19u);
+  EXPECT_EQ(manifest.avoided().total_bytes(), 60u);
+}
+
+TEST(RequiredPayloadManifest, DiagnosesEagerFallbackForUnsupportedTransformation) {
+  RequiredPayloadManifest manifest = RequiredPayloadManifest::Freeze(
+      {
+          PayloadManifestEntry{"live", "weights.bin", 0, 7},
+          PayloadManifestEntry{"otherwise_dead", "weights.bin", 7, 11, PayloadResolution::kDead},
+      },
+      "payload-dependent graph rewrite");
+
+  EXPECT_TRUE(manifest.uses_eager_fallback());
+  EXPECT_EQ(*manifest.eager_fallback_diagnostic(), "payload-dependent graph rewrite");
+  EXPECT_TRUE(manifest.ContainsActive("live"));
+  EXPECT_TRUE(manifest.ContainsActive("otherwise_dead"));
+  EXPECT_EQ(manifest.avoided().total_bytes(), 0u);
+}
+
+TEST(ResolvedModelFixture, ReadTasksMustNameAnActiveFrozenManifestEntry) {
+  const std::filesystem::path path = "resolved_model_task_fixture.data";
+  {
+    std::ofstream stream(path, std::ios::binary);
+    stream.write("0123", 4);
+  }
+  ResolvedModelFixture resolved(
+      "resolved_model_fixture.onnx",
+      RequiredPayloadManifest::Freeze({PayloadManifestEntry{"live", path, 1, 2}}));
+  TaskDescriptor active{TaskId{1}, TaskScope::kSession, TaskKind::kReadPayload, ResourceClass::kIo};
+  active.payload_id = "live";
+  TaskDescriptor absent{TaskId{2}, TaskScope::kSession, TaskKind::kReadPayload, ResourceClass::kIo};
+  absent.payload_id = "absent";
+  TaskDescriptor unnamed{TaskId{3}, TaskScope::kSession, TaskKind::kReadPayload,
+                         ResourceClass::kIo};
+
+  EXPECT_EQ(resolved.ReadPayload(active), (std::vector<uint8_t>{'1', '2'}));
+  EXPECT_THROW(resolved.ReadPayload(absent), std::runtime_error);
+  EXPECT_THROW(resolved.ReadPayload(unnamed), std::runtime_error);
+  std::filesystem::remove(path);
+}
+
+TEST(PreparedExecutionPlan, RejectsReadsOutsideFrozenManifest) {
+  const RequiredPayloadManifest manifest =
+      RequiredPayloadManifest::Freeze({PayloadManifestEntry{"live", "weights.bin", 0, 4}});
+  TaskDescriptor live{TaskId{1}, TaskScope::kSession, TaskKind::kReadPayload, ResourceClass::kIo};
+  live.payload_id = "live";
+  TaskDescriptor absent{TaskId{2}, TaskScope::kSession, TaskKind::kReadPayload, ResourceClass::kIo};
+  absent.payload_id = "absent";
+  TaskDescriptor unnamed{TaskId{3}, TaskScope::kSession, TaskKind::kReadPayload,
+                         ResourceClass::kIo};
+
+  EXPECT_NO_THROW(PreparedExecutionPlan({live}, manifest));
+  EXPECT_THROW(PreparedExecutionPlan({absent}, manifest), std::runtime_error);
+  EXPECT_THROW(PreparedExecutionPlan({unnamed}, manifest), std::runtime_error);
 }
 
 TEST(PreparedObjectStore, SharesOneInFlightGenerationAndPublishesAtomically) {
@@ -158,6 +235,7 @@ TEST(MaterializationRecipe, ExpandsSessionLoadPrepackPublishAndDormantFallback) 
 
   EXPECT_EQ(tasks.load.scope, TaskScope::kSession);
   EXPECT_EQ(tasks.load.kind, TaskKind::kReadPayload);
+  EXPECT_EQ(tasks.load.payload_id, "B");
   EXPECT_EQ(tasks.prepack.dependencies, (std::vector<TaskId>{TaskId{10}}));
   EXPECT_EQ(tasks.publish.dependencies, (std::vector<TaskId>{TaskId{11}}));
   ASSERT_TRUE(tasks.publish.publishes.has_value());

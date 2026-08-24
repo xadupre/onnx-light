@@ -958,6 +958,19 @@ FileWriteStream::FileWriteStream(const std::string &file_path)
               "(see GHSA-8qff-7g33-75mx).");
   }
   file_stream_.open(file_path, std::ios::binary);
+  if (!file_stream_.is_open() && std::filesystem::exists(file_path)) {
+    // On Windows, opening an existing file with truncation (the mode above) fails with
+    // ERROR_USER_MAPPED_FILE when some other memory-mapped view of the same path is still
+    // alive — e.g. re-saving a no_copy-loaded model back to its own external-data location,
+    // whose bytes are still borrowed from an active MapViewOfFile mapping. Retry without
+    // requesting truncation: this only avoids resizing the file down to zero at open time;
+    // pre_allocate()/write_raw_bytes_at_offset() below can still seek past the current end to
+    // grow the file as needed.
+    file_stream_.clear();
+    file_stream_.open(file_path, std::ios::binary | std::ios::in | std::ios::out);
+  }
+  EXT_ENFORCE(file_stream_.is_open(), "FileWriteStream: failed to open file for writing: ",
+              file_path);
 }
 
 void FileWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {

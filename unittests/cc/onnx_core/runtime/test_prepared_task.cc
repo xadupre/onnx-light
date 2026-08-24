@@ -285,6 +285,108 @@ TEST(MaterializationRecipe, PackedPayloadSkipsPrepack) {
   EXPECT_EQ(tasks.load.payload_id, "B.packed");
 }
 
+TEST(PreparedExecutionPlan, ConnectsSelectedRecipesAndExactPreparedKeyDependencies) {
+  const RequiredPayloadManifest manifest = RequiredPayloadManifest::Freeze({
+      PayloadManifestEntry{"embedding.packed", "prepared.bin", 0, 8},
+      PayloadManifestEntry{"decoder.source", "weights.bin", 8, 16},
+      PayloadManifestEntry{"embedding.source", "weights.bin", 0, 8,
+                           PayloadResolution::kPreparedCacheReplaced},
+  });
+  PreparedRequirementDescriptor embedding{
+      PreparedObjectRequirement{PreparedKey{"embedding"}, "embedding.source"},
+      {MaterializationRecipe{MaterializationRecipeKind::kReadPackedPayload, "embedding.packed",
+                             "embedding-layout"}}};
+  PreparedRequirementDescriptor decoder{
+      PreparedObjectRequirement{PreparedKey{"decoder.1"}, "decoder.source"},
+      {MaterializationRecipe{MaterializationRecipeKind::kReadSourceAndPrepack, "decoder.source",
+                             "decoder-layout"}}};
+  TaskDescriptor first_token{TaskId{20}, TaskScope::kInvocation, TaskKind::kExecute,
+                             ResourceClass::kCpu};
+  first_token.prepared_requirements = {embedding.requirement.key};
+  TaskDescriptor later{
+      TaskId{21}, TaskScope::kInvocation, TaskKind::kExecute, ResourceClass::kCpu, {TaskId{20}}};
+  later.prepared_requirements = {decoder.requirement.key};
+  later.priority = TaskPriority::kPrefetch;
+
+  PreparedExecutionPlan plan({first_token, later},
+                             {
+                                 PreparedMaterialization{embedding, embedding.recipes.front(),
+                                                         TaskId{1}, TaskPriority::kCritical},
+                                 PreparedMaterialization{decoder, decoder.recipes.front(),
+                                                         TaskId{5}, TaskPriority::kPrefetch},
+                             },
+                             manifest);
+
+  ASSERT_EQ(plan.tasks().size(), 10u);
+  EXPECT_EQ(plan.tasks()[0].payload_id, "embedding.packed");
+  EXPECT_TRUE(plan.tasks()[1].dormant);
+  EXPECT_EQ(plan.tasks()[4].payload_id, "decoder.source");
+  EXPECT_EQ(plan.tasks()[8].dependencies, (std::vector<TaskId>{TaskId{3}}));
+  EXPECT_EQ(plan.tasks()[9].dependencies, (std::vector<TaskId>{TaskId{20}, TaskId{7}}));
+}
+
+TEST(PreparedExecutionPlan, TraceProvesFirstTokenOverlapsLaterPreparationWithinBudget) {
+  const RequiredPayloadManifest manifest = RequiredPayloadManifest::Freeze({
+      PayloadManifestEntry{"embedding", "weights.bin", 0, 4},
+      PayloadManifestEntry{"decoder.1", "weights.bin", 4, 4},
+  });
+  PreparedRequirementDescriptor embedding{
+      PreparedObjectRequirement{PreparedKey{"embedding.prepared"}, "embedding"},
+      {MaterializationRecipe{MaterializationRecipeKind::kReadSourceAndPrepack, "embedding",
+                             "embedding-layout"}}};
+  PreparedRequirementDescriptor decoder{
+      PreparedObjectRequirement{PreparedKey{"decoder.1.prepared"}, "decoder.1"},
+      {MaterializationRecipe{MaterializationRecipeKind::kReadSourceAndPrepack, "decoder.1",
+                             "decoder-layout"}}};
+  TaskDescriptor first_token{TaskId{20}, TaskScope::kInvocation, TaskKind::kExecute,
+                             ResourceClass::kCpu};
+  first_token.prepared_requirements = {embedding.requirement.key};
+  TaskDescriptor later{
+      TaskId{21}, TaskScope::kInvocation, TaskKind::kExecute, ResourceClass::kCpu, {TaskId{20}}};
+  later.prepared_requirements = {decoder.requirement.key};
+  later.priority = TaskPriority::kPrefetch;
+  PreparedExecutionPlan plan({first_token, later},
+                             {
+                                 PreparedMaterialization{embedding, embedding.recipes.front(),
+                                                         TaskId{1}, TaskPriority::kCritical},
+                                 PreparedMaterialization{decoder, decoder.recipes.front(),
+                                                         TaskId{5}, TaskPriority::kPrefetch},
+                             },
+                             manifest);
+  PreparedExecutionState state(
+      1, 2, std::numeric_limits<size_t>::max(), std::numeric_limits<size_t>::max(),
+      PreparedSchedulerOptions{.io_workers = 2, .global_memory_budget = 8});
+
+  const PreparedExecutionResult result =
+      plan.RunSequential(state, [&](const TaskDescriptor &task, PreparedExecutionState &run_state) {
+        if (task.kind == TaskKind::kReadPayload) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(task.id.value == 5 ? 30 : 2));
+        } else if (task.kind == TaskKind::kPublish) {
+          const PreparedObjectRequirement requirement{*task.publishes, task.payload_id};
+          PreparedObjectRequest request = run_state.objects().Request(requirement);
+          AllocationHandle allocation(&run_state.prepared_arena(),
+                                      run_state.prepared_arena().Allocate(1));
+          run_state.objects().Publish(request, std::move(allocation));
+        }
+      });
+
+  const auto trace_for = [&](uint64_t task_id) {
+    return std::find_if(result.trace.begin(), result.trace.end(),
+                        [task_id](const auto &event) { return event.task_id.value == task_id; });
+  };
+  const auto later_read = trace_for(5);
+  const auto first_execution = trace_for(20);
+  const auto early_read = trace_for(1);
+  ASSERT_NE(later_read, result.trace.end());
+  ASSERT_NE(first_execution, result.trace.end());
+  ASSERT_NE(early_read, result.trace.end());
+  EXPECT_LT(first_execution->start_ns, later_read->end_ns);
+  EXPECT_EQ(early_read->priority, TaskPriority::kCritical);
+  EXPECT_EQ(later_read->priority, TaskPriority::kPrefetch);
+  EXPECT_GT(result.peak_in_flight_bytes, 0u);
+  EXPECT_LE(result.peak_in_flight_bytes, 8u);
+}
+
 TEST(PreparedTensorCache, MissPublishesAndPersistsReusableAtomicEntry) {
   const std::filesystem::path path = "prepared_tensor_cache_entry.bin";
   std::filesystem::remove(path);

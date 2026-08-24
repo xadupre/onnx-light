@@ -242,6 +242,70 @@ TEST(PreparedObjectStore, EvictionReturnsAllocationToItsOriginalArena) {
   EXPECT_EQ(state.objects().State(requirement.key), PreparedResidencyState::kAbsent);
 }
 
+TEST(PreparedObjectStore, ResidencyBudgetSkipsPinsAndEvictsLeastRecentlyUsedObject) {
+  PreparedExecutionState state(1, 2, std::numeric_limits<size_t>::max(),
+                               std::numeric_limits<size_t>::max(),
+                               PreparedSchedulerOptions{.prepared_memory_budget = 8});
+  const PreparedObjectRequirement first{PreparedKey{"first"}, "first.packed"};
+  const PreparedObjectRequirement second{PreparedKey{"second"}, "second.packed"};
+  const PreparedObjectRequirement third{PreparedKey{"third"}, "third.packed"};
+  const auto publish = [&](const PreparedObjectRequirement &requirement, char value) {
+    PreparedObjectRequest request = state.objects().Request(requirement);
+    AllocationHandle allocation = state.AllocatePrepared(4);
+    std::memset(allocation.buffer()->data(), value, 4);
+    state.objects().Publish(request, std::move(allocation));
+  };
+  publish(first, '1');
+  publish(second, '2');
+  std::optional<PreparedObjectView> first_pin = state.objects().Find(first.key);
+  ASSERT_TRUE(first_pin.has_value());
+
+  std::atomic<bool> published{false};
+  std::thread publisher([&]() {
+    publish(third, '3');
+    published = true;
+  });
+  publisher.join();
+
+  EXPECT_TRUE(published);
+  EXPECT_EQ(state.objects().resident_bytes(), 8u);
+  EXPECT_EQ(state.objects().State(first.key), PreparedResidencyState::kResident);
+  EXPECT_EQ(state.objects().State(second.key), PreparedResidencyState::kPersisted);
+  ASSERT_NE(first_pin->buffer, nullptr);
+  EXPECT_EQ(std::memcmp(first_pin->buffer->data(), "1111", 4), 0);
+  EXPECT_EQ(state.prepared_arena().allocated_count(), 2u);
+}
+
+TEST(PreparedObjectStore, ResidencyAdmissionWaitsUntilActiveConsumerReleasesPin) {
+  PreparedExecutionState state(1, 1, std::numeric_limits<size_t>::max(),
+                               std::numeric_limits<size_t>::max(),
+                               PreparedSchedulerOptions{.prepared_memory_budget = 4});
+  const PreparedObjectRequirement first{PreparedKey{"first"}, "first.packed"};
+  PreparedObjectRequest first_request = state.objects().Request(first);
+  AllocationHandle first_allocation = state.AllocatePrepared(4);
+  state.objects().Publish(first_request, std::move(first_allocation));
+  std::optional<PreparedObjectView> pin = state.objects().Find(first.key);
+  ASSERT_TRUE(pin.has_value());
+  std::atomic<bool> published{false};
+
+  std::thread publisher([&]() {
+    const PreparedObjectRequirement second{PreparedKey{"second"}, "second.packed"};
+    PreparedObjectRequest request = state.objects().Request(second);
+    state.objects().Publish(request, state.AllocatePrepared(4));
+    published = true;
+  });
+  while (state.objects().waiting_admissions() == 0) {
+    std::this_thread::yield();
+  }
+  EXPECT_FALSE(published.load());
+  pin.reset();
+  publisher.join();
+
+  EXPECT_TRUE(published);
+  EXPECT_EQ(state.objects().State(first.key), PreparedResidencyState::kPersisted);
+  EXPECT_EQ(state.objects().resident_bytes(), 4u);
+}
+
 TEST(PreparedExecutionState, PreparationScratchReturnsToPreparationArena) {
   PreparedExecutionState state(1, 1);
   {
@@ -385,6 +449,68 @@ TEST(PreparedExecutionPlan, TraceProvesFirstTokenOverlapsLaterPreparationWithinB
   EXPECT_EQ(later_read->priority, TaskPriority::kPrefetch);
   EXPECT_GT(result.peak_in_flight_bytes, 0u);
   EXPECT_LE(result.peak_in_flight_bytes, 8u);
+}
+
+TEST(PreparedExecutionPlan, CriticalEvictionReloadReadsOnlyPackedPayloadBeforeBackgroundWork) {
+  const RequiredPayloadManifest manifest = RequiredPayloadManifest::Freeze({
+      PayloadManifestEntry{"weight.packed", "prepared.onnx.data", 0, 4},
+  });
+  PreparedRequirementDescriptor requirement{
+      PreparedObjectRequirement{PreparedKey{"weight"}, "weight.source"},
+      {MaterializationRecipe{MaterializationRecipeKind::kReadPackedPayload, "weight.packed",
+                             "packed-layout"}}};
+  TaskDescriptor background{TaskId{10}, TaskScope::kSession, TaskKind::kPersist,
+                            ResourceClass::kIo};
+  background.priority = TaskPriority::kBackground;
+  TaskDescriptor execute{TaskId{20}, TaskScope::kInvocation, TaskKind::kExecute,
+                         ResourceClass::kCpu};
+  execute.prepared_requirements = {requirement.requirement.key};
+  PreparedExecutionPlan plan({background, execute},
+                             {PreparedMaterialization{requirement, requirement.recipes.front(),
+                                                      TaskId{1}, TaskPriority::kPrefetch}},
+                             manifest);
+  PreparedExecutionState state(
+      1, 2, std::numeric_limits<size_t>::max(), std::numeric_limits<size_t>::max(),
+      PreparedSchedulerOptions{.io_workers = 1, .prepared_memory_budget = 4});
+  PreparedObjectRequest initial = state.objects().Request(requirement.requirement);
+  AllocationHandle initial_allocation = state.AllocatePrepared(4);
+  state.objects().Publish(initial, std::move(initial_allocation));
+  EXPECT_TRUE(state.objects().Evict(requirement.requirement.key));
+  std::mutex order_mutex;
+  std::vector<TaskKind> order;
+  size_t packed_reads = 0;
+  size_t source_reads = 0;
+  size_t prepacks = 0;
+
+  const PreparedExecutionResult result =
+      plan.RunSequential(state, [&](const TaskDescriptor &task, PreparedExecutionState &run_state) {
+        {
+          std::lock_guard<std::mutex> lock(order_mutex);
+          order.push_back(task.kind);
+        }
+        if (task.kind == TaskKind::kReadPayload) {
+          if (task.payload_id == "weight.packed") {
+            ++packed_reads;
+          } else {
+            ++source_reads;
+          }
+        } else if (task.kind == TaskKind::kPrepare) {
+          ++prepacks;
+        } else if (task.kind == TaskKind::kPublish) {
+          PreparedObjectRequest request = run_state.objects().Request(
+              PreparedObjectRequirement{*task.publishes, task.payload_id});
+          AllocationHandle allocation = run_state.AllocatePrepared(4);
+          run_state.objects().Publish(request, std::move(allocation));
+        }
+      });
+
+  ASSERT_FALSE(order.empty());
+  EXPECT_EQ(order.front(), TaskKind::kReadPayload);
+  EXPECT_EQ(packed_reads, 1u);
+  EXPECT_EQ(source_reads, 0u);
+  EXPECT_EQ(prepacks, 0u);
+  EXPECT_EQ(result.trace.front().priority, TaskPriority::kCritical);
+  EXPECT_EQ(state.objects().resident_bytes(), 4u);
 }
 
 TEST(PreparedTensorCache, MissPublishesAndPersistsReusableAtomicEntry) {

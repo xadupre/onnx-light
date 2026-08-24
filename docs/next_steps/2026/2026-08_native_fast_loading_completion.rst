@@ -141,6 +141,8 @@ Native PR05 -- add prepared-object eviction and reload
 
 **Repository:** ``xadupre/onnx-light``
 
+**Implemented by issue #4622.**
+
 Add pinning, bounded prepared residency, eviction, and reload from the
 companion prepared model. An active inference pins every object it consumes;
 eviction may remove residency but never identity or an in-use allocation.
@@ -152,6 +154,14 @@ Acceptance:
 * a later token reloads a compatible packed payload without reading or
   prepacking its portable source;
 * critical reloads outrank speculative preparation and background cache writes.
+
+The prepared scheduler's memory budget now also bounds completed object
+residency. Least-recently-used inactive generations are evicted first, while
+consumer pins delay eviction until the active task releases them. Eviction keeps
+the object key and materialization recipe, so later invocations replay only the
+selected companion packed-payload read and publication tasks. Existing
+dependency priority propagation promotes demanded reloads above prefetch and
+background persistence work.
 
 Native PR06 -- add device preparation variants
 +++++++++++++++++++++++++++++++++++++++++++++++

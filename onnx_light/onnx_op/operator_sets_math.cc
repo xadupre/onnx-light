@@ -126,7 +126,7 @@ std::vector<LightOpSchema> BuildPowSchemas() {
           {"Y", "Second operand, power of the exponent.", "T1"},
       },
       {
-          {"Z", "Output tensor.", "T"},
+          {"Z", "Output tensor", "T"},
       },
       {
           {"T",

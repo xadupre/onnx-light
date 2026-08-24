@@ -102,6 +102,15 @@ bool ReadCacheEntry(const std::filesystem::path &path, CacheEntry &entry, std::s
     diagnostic = "prepared cache metadata is corrupt";
     return false;
   }
+  const std::streampos payload_position = input.tellg();
+  input.seekg(0, std::ios::end);
+  const std::streampos file_end = input.tellg();
+  if (payload_position < 0 || file_end < payload_position ||
+      static_cast<uint64_t>(file_end - payload_position) != payload_size) {
+    diagnostic = "prepared cache payload length is corrupt";
+    return false;
+  }
+  input.seekg(payload_position);
   entry.metadata.required_isa = platform::CpuFeatureSet(required_isa);
   entry.payload.resize(static_cast<size_t>(payload_size));
   input.read(reinterpret_cast<char *>(entry.payload.data()),
@@ -231,7 +240,17 @@ bool WriteCacheEntry(const std::filesystem::path &path, const PreparedTensorMeta
 
 } // namespace
 
-PreparedTensorCache::~PreparedTensorCache() { WaitForBackgroundWrites(); }
+PreparedTensorCache::~PreparedTensorCache() {
+  WaitForBackgroundWrites();
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    stop_writer_ = true;
+  }
+  writer_ready_.notify_one();
+  if (writer_.joinable()) {
+    writer_.join();
+  }
+}
 
 PreparedTensorLoadResult PreparedTensorCache::LoadOrPrepare(
     const std::filesystem::path &cache_path, const PreparedTensorMetadata &required_metadata,
@@ -284,26 +303,46 @@ PreparedTensorLoadResult PreparedTensorCache::LoadOrPrepare(
 void PreparedTensorCache::PersistInBackground(std::filesystem::path cache_path,
                                               PreparedTensorMetadata metadata,
                                               std::vector<uint8_t> payload) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  writers_.emplace_back([this, cache_path = std::move(cache_path), metadata = std::move(metadata),
-                         payload = std::move(payload)]() {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    pending_.push_back(
+        PersistenceRequest{std::move(cache_path), std::move(metadata), std::move(payload)});
+    ++pending_writes_;
+    if (!writer_.joinable()) {
+      writer_ = std::thread([this]() { WriterLoop(); });
+    }
+  }
+  writer_ready_.notify_one();
+}
+
+void PreparedTensorCache::WriterLoop() {
+  while (true) {
+    PersistenceRequest request;
+    {
+      std::unique_lock<std::mutex> lock(mutex_);
+      writer_ready_.wait(lock, [this]() { return stop_writer_ || !pending_.empty(); });
+      if (stop_writer_ && pending_.empty()) {
+        return;
+      }
+      request = std::move(pending_.front());
+      pending_.pop_front();
+    }
     std::string diagnostic;
-    if (!WriteCacheEntry(cache_path, metadata, payload, diagnostic)) {
-      std::lock_guard<std::mutex> diagnostic_lock(mutex_);
+    if (!WriteCacheEntry(request.cache_path, request.metadata, request.payload, diagnostic)) {
+      std::lock_guard<std::mutex> lock(mutex_);
       persistence_diagnostics_.push_back(std::move(diagnostic));
     }
-  });
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      --pending_writes_;
+    }
+    writer_ready_.notify_all();
+  }
 }
 
 void PreparedTensorCache::WaitForBackgroundWrites() {
-  std::vector<std::thread> writers;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    writers.swap(writers_);
-  }
-  for (std::thread &writer : writers) {
-    writer.join();
-  }
+  std::unique_lock<std::mutex> lock(mutex_);
+  writer_ready_.wait(lock, [this]() { return pending_writes_ == 0; });
 }
 
 std::vector<std::string> PreparedTensorCache::TakePersistenceDiagnostics() {

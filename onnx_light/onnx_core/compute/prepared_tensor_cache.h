@@ -7,6 +7,8 @@
 #include "onnx_core/platform/cpu_descriptor.h"
 #include "onnx_light_helpers.h"
 
+#include <condition_variable>
+#include <deque>
 #include <filesystem>
 #include <functional>
 #include <mutex>
@@ -76,11 +78,22 @@ public:
   std::vector<std::string> TakePersistenceDiagnostics();
 
 private:
+  struct PersistenceRequest {
+    std::filesystem::path cache_path;
+    PreparedTensorMetadata metadata;
+    std::vector<uint8_t> payload;
+  };
+
   void PersistInBackground(std::filesystem::path cache_path, PreparedTensorMetadata metadata,
                            std::vector<uint8_t> payload);
+  void WriterLoop();
 
   std::mutex mutex_;
-  std::vector<std::thread> writers_;
+  std::condition_variable writer_ready_;
+  std::deque<PersistenceRequest> pending_;
+  std::thread writer_;
+  size_t pending_writes_ = 0;
+  bool stop_writer_ = false;
   std::vector<std::string> persistence_diagnostics_;
 };
 

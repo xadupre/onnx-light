@@ -312,7 +312,11 @@ TEST(PreparedTensorCache, MissPublishesAndPersistsReusableAtomicEntry) {
   cache.WaitForBackgroundWrites();
   EXPECT_TRUE(cache.TakePersistenceDiagnostics().empty());
   EXPECT_TRUE(std::filesystem::exists(path));
-  EXPECT_FALSE(std::filesystem::exists(path.string() + ".tmp"));
+  for (const std::filesystem::directory_entry &entry :
+       std::filesystem::directory_iterator(path.parent_path().empty() ? "." : path.parent_path())) {
+    EXPECT_EQ(entry.path().filename().string().find(path.filename().string() + ".tmp."),
+              std::string::npos);
+  }
 
   published.clear();
   const PreparedTensorLoadResult hit = cache.LoadOrPrepare(
@@ -385,6 +389,21 @@ TEST(PreparedTensorCache, DiagnosesCorruptPayloadAsMiss) {
   EXPECT_FALSE(result.cache_hit);
   EXPECT_EQ(result.miss_reason, PreparedCacheMissReason::kCorrupt);
   EXPECT_NE(result.diagnostic.find("corrupt"), std::string::npos);
+  cache.WaitForBackgroundWrites();
+
+  {
+    std::fstream entry(path, std::ios::binary | std::ios::in | std::ios::out);
+    entry.seekp(-19, std::ios::end);
+    const uint64_t impossible_size = std::numeric_limits<uint64_t>::max();
+    entry.write(reinterpret_cast<const char *>(&impossible_size), sizeof(impossible_size));
+  }
+  const PreparedTensorLoadResult impossible_length = cache.LoadOrPrepare(
+      path, TestPreparedMetadata(), []() { return std::vector<uint8_t>{8}; },
+      [](const std::vector<uint8_t> &source) { return source; },
+      [](const std::vector<uint8_t> &) {});
+  EXPECT_FALSE(impossible_length.cache_hit);
+  EXPECT_EQ(impossible_length.miss_reason, PreparedCacheMissReason::kCorrupt);
+  EXPECT_NE(impossible_length.diagnostic.find("corrupt"), std::string::npos);
   cache.WaitForBackgroundWrites();
   std::filesystem::remove(path);
 }

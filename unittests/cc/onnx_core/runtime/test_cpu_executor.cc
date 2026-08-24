@@ -30,6 +30,14 @@ ResolvedCpuExecutionPolicy NoAffinityPolicy(uint32_t participants) {
   return ResolveCpuExecutionPolicy(request);
 }
 
+ResolvedCpuExecutionPolicy ParkImmediatelyPolicy(uint32_t participants) {
+  CpuExecutionPolicy request;
+  request.num_threads = static_cast<int32_t>(participants);
+  request.affinity_policy = CpuAffinityPolicy::kNone;
+  request.spin_policy = CpuSpinPolicy::kParkImmediately;
+  return ResolveCpuExecutionPolicy(request);
+}
+
 struct RangeObservation {
   explicit RangeObservation(size_t size) : visits(size, 0) {}
 
@@ -103,6 +111,56 @@ TEST(CpuExecutorRegistry, LastLeaseDestroysPoolImmediately) {
     std::shared_ptr<CpuExecutor> lease = registry.Acquire(NoAffinityPolicy(2));
     observer = lease;
     EXPECT_FALSE(observer.expired());
+  }
+
+  EXPECT_TRUE(observer.expired());
+  EXPECT_EQ(registry.live_pool_count(), 0u);
+}
+
+TEST(CpuExecutorRegistry, ParkImmediatelyPoolSurvivesBetweenLeases) {
+  CpuExecutorRegistry registry(1);
+  std::weak_ptr<CpuExecutor> observer;
+  uint64_t instance_id = 0;
+  {
+    std::shared_ptr<CpuExecutor> lease = registry.Acquire(ParkImmediatelyPolicy(2));
+    observer = lease;
+    instance_id = lease->instance_id();
+  }
+
+  EXPECT_FALSE(observer.expired());
+  EXPECT_EQ(registry.live_pool_count(), 1u);
+  EXPECT_EQ(registry.Acquire(ParkImmediatelyPolicy(2))->instance_id(), instance_id);
+}
+
+TEST(CpuExecutorRegistry, CapacityEvictsIdleParkImmediatelyPool) {
+  CpuExecutorRegistry registry(1);
+  std::weak_ptr<CpuExecutor> first;
+  {
+    std::shared_ptr<CpuExecutor> lease = registry.Acquire(ParkImmediatelyPolicy(2));
+    first = lease;
+  }
+
+  std::shared_ptr<CpuExecutor> replacement = registry.Acquire(ParkImmediatelyPolicy(3));
+
+  EXPECT_TRUE(first.expired());
+  EXPECT_EQ(replacement->effective_threads(), 3u);
+  EXPECT_EQ(registry.live_pool_count(), 1u);
+}
+
+TEST(CpuExecutorRegistry, CapacityDoesNotEvictLeasedParkImmediatelyPool) {
+  CpuExecutorRegistry registry(1);
+  std::shared_ptr<CpuExecutor> active = registry.Acquire(ParkImmediatelyPolicy(2));
+
+  EXPECT_THROW(registry.Acquire(ParkImmediatelyPolicy(3)), std::runtime_error);
+  EXPECT_EQ(registry.live_pool_count(), 1u);
+}
+
+TEST(CpuExecutorRegistry, SerialParkImmediatelyExecutorIsNotRetained) {
+  CpuExecutorRegistry registry(1);
+  std::weak_ptr<CpuExecutor> observer;
+  {
+    std::shared_ptr<CpuExecutor> lease = registry.Acquire(ParkImmediatelyPolicy(1));
+    observer = lease;
   }
 
   EXPECT_TRUE(observer.expired());

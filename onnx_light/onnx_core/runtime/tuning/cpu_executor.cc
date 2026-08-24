@@ -434,12 +434,16 @@ CpuExecutorRegistry::Acquire(const ResolvedCpuExecutionPolicy &policy) {
     }
     entries_.erase(found);
   }
-  if (entries_.size() >= capacity_) {
+  if (entries_.size() >= capacity_ && !EvictIdleRetainedLocked()) {
     throw std::runtime_error(
         "CpuExecutorRegistry capacity exhausted by incompatible live policies.");
   }
   std::shared_ptr<CpuExecutor> executor(new CpuExecutor(policy));
-  entries_.push_back(Entry{key, executor});
+  std::shared_ptr<CpuExecutor> retained_executor;
+  if (policy.effective_threads > 1 && policy.spin.policy == CpuSpinPolicy::kParkImmediately) {
+    retained_executor = executor;
+  }
+  entries_.push_back(Entry{key, executor, std::move(retained_executor)});
   return executor;
 }
 
@@ -462,6 +466,17 @@ void CpuExecutorRegistry::RemoveExpiredLocked() {
   entries_.erase(std::remove_if(entries_.begin(), entries_.end(),
                                 [](const Entry &entry) { return entry.executor.expired(); }),
                  entries_.end());
+}
+
+bool CpuExecutorRegistry::EvictIdleRetainedLocked() {
+  auto idle = std::find_if(entries_.begin(), entries_.end(), [](const Entry &entry) {
+    return entry.retained_executor != nullptr && entry.retained_executor.use_count() == 1;
+  });
+  if (idle == entries_.end()) {
+    return false;
+  }
+  entries_.erase(idle);
+  return true;
 }
 
 CpuExecutorRegistry &GlobalCpuExecutorRegistry() {

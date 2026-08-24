@@ -227,11 +227,17 @@ The key does not include diagnostics, counters, session identifiers, or
 kernel-specific thresholds. Two sessions share only when their immutable keys
 are equal.
 
-Leases are reference-counted. The registry retains weak references, so
-releasing the last lease stops the pool immediately. A registry accepts at
-most its configured number of simultaneously live incompatible pools; the
-process-owned registry defaults to eight. Capacity exhaustion fails explicitly,
-and expired entries never consume capacity.
+Leases are reference-counted. The registry retains only weak references to
+pools whose workers spin, so releasing the last lease stops those workers
+immediately. A pool configured to park immediately is retained between leases:
+its idle workers consume no CPU and the next compatible session can reuse
+them instead of creating operating-system threads again. Retained idle pools
+are evicted when the bounded registry needs room for another policy.
+
+A registry accepts at most its configured number of incompatible pools; the
+process-owned registry defaults to eight. Capacity exhaustion fails explicitly
+when every entry is actively leased, and expired entries never consume
+capacity.
 
 A serial policy does not create worker threads. An executor records its
 creating process and rejects dispatch after ``fork``; inherited worker state is

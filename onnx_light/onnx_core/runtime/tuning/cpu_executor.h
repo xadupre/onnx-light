@@ -176,10 +176,11 @@ private:
 /**
  * Leases compatible shared executors from a process-owned bounded registry.
  *
- * The registry stores weak references. Compatible callers receive the same
- * executor while at least one lease remains. Releasing the final lease stops
- * and destroys its workers immediately. Capacity limits simultaneously live
- * incompatible pools; expired entries never consume capacity.
+ * The registry retains multithreaded executors so compatible sessions reuse
+ * the same operating-system threads. Bounded spinning ends in a parked wait,
+ * so an idle retained executor eventually consumes no CPU regardless of its
+ * spin policy. Idle executors are evicted when the bounded capacity is needed
+ * for another policy. Serial executors have no workers and are not retained.
  */
 class CpuExecutorRegistry {
 public:
@@ -205,10 +206,12 @@ private:
   struct Entry {
     CpuExecutorKey key;
     std::weak_ptr<CpuExecutor> executor;
+    std::shared_ptr<CpuExecutor> retained_executor;
   };
 
   void ResetAfterForkLocked(uint64_t process_id);
   void RemoveExpiredLocked();
+  bool EvictIdleRetainedLocked();
 
   size_t capacity_;
   uint64_t process_id_;

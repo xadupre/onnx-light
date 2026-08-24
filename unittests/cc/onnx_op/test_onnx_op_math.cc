@@ -108,7 +108,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> mean_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Mean");
 
-  EXPECT_EQ(schemas.size(), 182u);
+  EXPECT_EQ(schemas.size(), 183u);
 
   // Neg has three versioned schemas (v1, v6, v13).
   ASSERT_EQ(neg_schemas.size(), 3u);
@@ -292,6 +292,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const core::schema::LightOpSchema *const sub_v6 = FindByVersion(sub_schemas, 6);
   const core::schema::LightOpSchema *const mod_v13 = FindByVersion(mod_schemas, 13);
   const core::schema::LightOpSchema *const mod_v10 = FindByVersion(mod_schemas, 10);
+  const core::schema::LightOpSchema *const pow_v15 = FindByVersion(pow_schemas, 15);
   const core::schema::LightOpSchema *const pow_v7 = FindByVersion(pow_schemas, 7);
   const core::schema::LightOpSchema *const pow_v1 = FindByVersion(pow_schemas, 1);
   const core::schema::LightOpSchema *const abs_v13 = FindByVersion(abs_schemas, 13);
@@ -363,8 +364,18 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, sub_v6);
   ASSERT_NE(nullptr, mod_v13);
   ASSERT_NE(nullptr, mod_v10);
+  ASSERT_NE(nullptr, pow_v15);
   ASSERT_NE(nullptr, pow_v7);
   ASSERT_NE(nullptr, pow_v1);
+  ASSERT_EQ(pow_schemas.size(), 3u);
+  EXPECT_EQ(pow_v15->inputs()[0].type, "T");
+  EXPECT_EQ(pow_v15->inputs()[1].type, "T1");
+  EXPECT_EQ(pow_v15->outputs()[0].type, "T");
+  ASSERT_EQ(pow_v15->type_constraints().size(), 2u);
+  EXPECT_EQ(pow_v15->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(pow_v15->type_constraints()[0].allowed_type_strs.size(), 6u);
+  EXPECT_EQ(pow_v15->type_constraints()[1].type_param_str, "T1");
+  EXPECT_EQ(pow_v15->type_constraints()[1].allowed_type_strs.size(), 12u);
 
   // PRelu has five versioned schemas (v1, v6, v7, v9, v16). The element type
   // set widens over time and the v16 schema ships with a function body.

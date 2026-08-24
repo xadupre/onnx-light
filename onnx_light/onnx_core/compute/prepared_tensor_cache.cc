@@ -212,7 +212,7 @@ bool WriteCacheEntry(const std::filesystem::path &path, const PreparedTensorMeta
     return false;
   }
 #else
-  const int descriptor = ::open(temporary.c_str(), O_RDONLY);
+  const int descriptor = ::open(temporary.c_str(), O_RDWR);
   if (descriptor < 0 || ::fsync(descriptor) != 0) {
     if (descriptor >= 0) {
       ::close(descriptor);

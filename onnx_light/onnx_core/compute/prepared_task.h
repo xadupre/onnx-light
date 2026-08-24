@@ -39,6 +39,7 @@ enum class TaskScope {
 enum class TaskKind {
   kReadPayload,
   kPrepare,
+  kCopy,
   kExecute,
   kPersist,
   kPublish,

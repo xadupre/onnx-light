@@ -5,7 +5,7 @@ Completing native fast model loading
 
 :Date: 2026-08
 
-**in progress; native PR01--PR04 are implemented**
+**implemented; native PR01--PR06 are implemented**
 
 Objective
 +++++++++
@@ -168,6 +168,8 @@ Native PR06 -- add device preparation variants
 
 **Repository:** ``xadupre/onnx-light``
 
+**Implemented by issue #4623.**
+
 After fixed CPU placement is stable, add one CUDA ``Gemm`` whose initialization
 chooses CPU-pack-plus-copy or device-side packing. Add alternative execution
 device variants and residency policy only after that path is measurable.
@@ -179,6 +181,33 @@ Acceptance:
 * the selected variant records its device, layout, ABI, and source lineage;
 * unsupported or failed variants fall back explicitly without publishing a
   partial prepared object.
+
+The fixed-placement CUDA ``Gemm`` preparation contract now expands either
+``I/O -> CPU pack -> device copy -> publish`` or
+``I/O -> device copy -> device pack -> publish`` with explicit resource classes.
+Backend submissions return an explicit completion event and retain their source
+owners until that event completes. The published allocation retains a separate
+device owner through residency, active-consumer pins, and eviction.
+
+The prepared key length-prefixes the CUDA ordinal and architecture, packed
+layout, kernel ABI, and ordered source lineage. Unsupported preferred paths
+select the alternative directly. Failed submitted paths mark their generation
+failed before the alternative produces a new generation, so only a complete
+event-confirmed allocation can become resident. This PR deliberately adds no
+dynamic placement or device-specific residency policy.
+
+Validation on the PR build host used a kernel-enabled release build. The five
+focused CUDA preparation tests and the fifteen existing prepared scheduler and
+residency tests passed in approximately 52--54 ms. The 4 MiB prepared-cache benchmark measured
+35.744 ms for portable preparation and 6.319 ms for the warm prepared entry
+(82.3% improvement). The unchanged hot-path benchmark measured 39.407
+microseconds of prepared dispatch overhead and did not meet its existing
+1-microsecond envelope; the same benchmark and asynchronous dispatch path are
+unchanged from the branch baseline, so that existing miss is not attributed to
+device preparation. This host exposes no ``nvidia-smi``, so these results validate
+the backend contract and fallback/ownership behavior but are not concrete CUDA
+kernel timings; a CUDA backend must supply and measure the two submission
+callbacks before adding placement or residency variants.
 
 Completion criteria
 +++++++++++++++++++

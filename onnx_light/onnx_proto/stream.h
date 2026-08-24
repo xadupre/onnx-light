@@ -610,6 +610,12 @@ public:
    *  Flushes immediately so the ofstream buffer is clear before parallel tasks write concurrently.
    */
   void pre_allocate(int64_t total_bytes);
+  /** Writes *n_bytes* from *data* at the given random-access *offset*, seeking the stream's own
+   *  already-open ``file_stream_`` first instead of opening a new file handle. Only safe to call
+   *  from the single thread that owns this stream (no internal locking): used for below-threshold
+   *  writes that skip the thread pool and therefore never run concurrently with another writer
+   *  of this same stream. */
+  void write_raw_bytes_at_offset(const uint8_t *data, offset_t n_bytes, int64_t offset);
 
 protected:
   /** Absolute path of the destination file. */

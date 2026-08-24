@@ -1011,6 +1011,14 @@ void FileWriteStream::pre_allocate(int64_t total_bytes) {
   written_bytes_ = static_cast<uint64_t>(total_bytes);
 }
 
+void FileWriteStream::write_raw_bytes_at_offset(const uint8_t *data, offset_t n_bytes,
+                                                int64_t offset) {
+  file_stream_.seekp(offset);
+  file_stream_.write(reinterpret_cast<const char *>(data), n_bytes);
+  EXT_ENFORCE(!file_stream_.fail(), "Write failed for file: ", file_path_, " at offset=", offset,
+              " n_bytes=", n_bytes);
+}
+
 /////////////
 // FileStream
 /////////////
@@ -1387,7 +1395,10 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
         write_thread_pool_.SubmitTask(
             [wpath, ptr, n_bytes, offset]() { WriteBytesAtOffset(wpath, ptr, n_bytes, offset); });
       } else {
-        WriteBytesAtOffset(wpath, ptr, n_bytes, offset);
+        // Below-threshold writes never run concurrently with another writer of this stream (they
+        // execute synchronously on the calling thread), so reuse the already-open weights_stream_
+        // file handle instead of opening a brand-new fstream per call.
+        weights_stream_.write_raw_bytes_at_offset(ptr, n_bytes, offset);
       }
     } else {
       weights_stream_.write_raw_bytes(ptr, n_bytes);
@@ -1404,12 +1415,14 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
     int64_t &pos = extra_virtual_write_pos_[active_weights_location_];
     int64_t offset = pos;
     pos += n_bytes;
-    const std::string wpath = it->second->file_path();
     if (n_bytes >= min_parallel_block_size_) {
+      const std::string wpath = it->second->file_path();
       write_thread_pool_.SubmitTask(
           [wpath, ptr, n_bytes, offset]() { WriteBytesAtOffset(wpath, ptr, n_bytes, offset); });
     } else {
-      WriteBytesAtOffset(wpath, ptr, n_bytes, offset);
+      // Same reasoning as above: below-threshold writes run synchronously on the calling
+      // thread, so they can safely reuse the already-open per-location file handle.
+      it->second->write_raw_bytes_at_offset(ptr, n_bytes, offset);
     }
   } else {
     it->second->write_raw_bytes(ptr, n_bytes);

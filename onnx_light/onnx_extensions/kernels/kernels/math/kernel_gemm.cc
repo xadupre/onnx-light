@@ -301,8 +301,7 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB,
                             state.preparation_arena().Allocate(b.size_bytes()));
     std::memcpy(source.buffer()->data(), b.bytes(), b.size_bytes());
 
-    AllocationHandle packed(&state.prepared_arena(),
-                            state.prepared_arena().Allocate(b.size_bytes()));
+    AllocationHandle packed = state.AllocatePrepared(b.size_bytes());
     const int64_t k = transB ? b.shape[1] : b.shape[0];
     const int64_t n = transB ? b.shape[0] : b.shape[1];
     const size_t element_size = b.element_size();

@@ -243,7 +243,7 @@ TEST(PreparedObjectStore, EvictionReturnsAllocationToItsOriginalArena) {
 }
 
 TEST(PreparedObjectStore, ResidencyBudgetSkipsPinsAndEvictsLeastRecentlyUsedObject) {
-  PreparedExecutionState state(1, 3, std::numeric_limits<size_t>::max(),
+  PreparedExecutionState state(1, 2, std::numeric_limits<size_t>::max(),
                                std::numeric_limits<size_t>::max(),
                                PreparedSchedulerOptions{.prepared_memory_budget = 8});
   const PreparedObjectRequirement first{PreparedKey{"first"}, "first.packed"};
@@ -251,7 +251,7 @@ TEST(PreparedObjectStore, ResidencyBudgetSkipsPinsAndEvictsLeastRecentlyUsedObje
   const PreparedObjectRequirement third{PreparedKey{"third"}, "third.packed"};
   const auto publish = [&](const PreparedObjectRequirement &requirement, char value) {
     PreparedObjectRequest request = state.objects().Request(requirement);
-    AllocationHandle allocation(&state.prepared_arena(), state.prepared_arena().Allocate(4));
+    AllocationHandle allocation = state.AllocatePrepared(4);
     std::memset(allocation.buffer()->data(), value, 4);
     state.objects().Publish(request, std::move(allocation));
   };
@@ -277,27 +277,24 @@ TEST(PreparedObjectStore, ResidencyBudgetSkipsPinsAndEvictsLeastRecentlyUsedObje
 }
 
 TEST(PreparedObjectStore, ResidencyAdmissionWaitsUntilActiveConsumerReleasesPin) {
-  PreparedExecutionState state(1, 2, std::numeric_limits<size_t>::max(),
+  PreparedExecutionState state(1, 1, std::numeric_limits<size_t>::max(),
                                std::numeric_limits<size_t>::max(),
                                PreparedSchedulerOptions{.prepared_memory_budget = 4});
   const PreparedObjectRequirement first{PreparedKey{"first"}, "first.packed"};
   PreparedObjectRequest first_request = state.objects().Request(first);
-  AllocationHandle first_allocation(&state.prepared_arena(), state.prepared_arena().Allocate(4));
+  AllocationHandle first_allocation = state.AllocatePrepared(4);
   state.objects().Publish(first_request, std::move(first_allocation));
   std::optional<PreparedObjectView> pin = state.objects().Find(first.key);
   ASSERT_TRUE(pin.has_value());
-  std::atomic<bool> publishing{false};
   std::atomic<bool> published{false};
 
   std::thread publisher([&]() {
     const PreparedObjectRequirement second{PreparedKey{"second"}, "second.packed"};
     PreparedObjectRequest request = state.objects().Request(second);
-    AllocationHandle allocation(&state.prepared_arena(), state.prepared_arena().Allocate(4));
-    publishing = true;
-    state.objects().Publish(request, std::move(allocation));
+    state.objects().Publish(request, state.AllocatePrepared(4));
     published = true;
   });
-  while (!publishing.load()) {
+  while (state.objects().waiting_admissions() == 0) {
     std::this_thread::yield();
   }
   EXPECT_FALSE(published.load());
@@ -476,7 +473,7 @@ TEST(PreparedExecutionPlan, CriticalEvictionReloadReadsOnlyPackedPayloadBeforeBa
       1, 2, std::numeric_limits<size_t>::max(), std::numeric_limits<size_t>::max(),
       PreparedSchedulerOptions{.io_workers = 1, .prepared_memory_budget = 4});
   PreparedObjectRequest initial = state.objects().Request(requirement.requirement);
-  AllocationHandle initial_allocation(&state.prepared_arena(), state.prepared_arena().Allocate(4));
+  AllocationHandle initial_allocation = state.AllocatePrepared(4);
   state.objects().Publish(initial, std::move(initial_allocation));
   EXPECT_TRUE(state.objects().Evict(requirement.requirement.key));
   std::mutex order_mutex;
@@ -502,8 +499,7 @@ TEST(PreparedExecutionPlan, CriticalEvictionReloadReadsOnlyPackedPayloadBeforeBa
         } else if (task.kind == TaskKind::kPublish) {
           PreparedObjectRequest request = run_state.objects().Request(
               PreparedObjectRequirement{*task.publishes, task.payload_id});
-          AllocationHandle allocation(&run_state.prepared_arena(),
-                                      run_state.prepared_arena().Allocate(4));
+          AllocationHandle allocation = run_state.AllocatePrepared(4);
           run_state.objects().Publish(request, std::move(allocation));
         }
       });

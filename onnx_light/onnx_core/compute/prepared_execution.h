@@ -15,6 +15,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -111,8 +112,12 @@ public:
   /** Evicts a resident generation and returns its allocation to its owner. */
   bool Evict(const PreparedKey &key);
 
+  /** Makes room for an allocation before it consumes a prepared-arena slot. */
+  void AdmitAllocation(size_t n_bytes);
+
   PreparedResidencyState State(const PreparedKey &key) const;
   size_t resident_bytes() const;
+  size_t waiting_admissions() const;
   size_t residency_budget() const noexcept { return residency_budget_; }
   uint64_t readiness_epoch() const noexcept { return readiness_epoch_.load(); }
 
@@ -126,6 +131,7 @@ private:
   std::unordered_map<PreparedKey, std::unique_ptr<Entry>, PreparedKeyHash> entries_;
   size_t residency_budget_;
   size_t resident_bytes_ = 0;
+  size_t waiting_admissions_ = 0;
   mutable uint64_t access_epoch_ = 0;
   std::shared_ptr<ResidencyTracker> residency_tracker_;
   std::atomic<uint64_t> readiness_epoch_{0};
@@ -331,6 +337,7 @@ public:
 
   PreparationArena &preparation_arena() noexcept { return preparation_arena_; }
   PreparedArena &prepared_arena() noexcept { return prepared_arena_; }
+  AllocationHandle AllocatePrepared(size_t n_bytes);
   PreparedObjectStore &objects() noexcept { return objects_; }
   const PreparedObjectStore &objects() const noexcept { return objects_; }
   uint64_t readiness_epoch() const noexcept { return objects_.readiness_epoch(); }
@@ -355,6 +362,7 @@ private:
   std::atomic<uint64_t> next_invocation_id_{0};
   std::unique_ptr<SchedulerState> scheduler_;
   std::mutex hot_path_mutex_;
+  std::shared_mutex residency_run_mutex_;
   const PreparedExecutionPlan *hot_path_plan_ = nullptr;
   uint64_t hot_path_epoch_ = 0;
 };

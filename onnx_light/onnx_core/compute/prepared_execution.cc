@@ -174,7 +174,9 @@ void PreparedObjectStore::Publish(const PreparedObjectRequest &request,
       }
     }
     if (candidate == nullptr) {
+      ++waiting_admissions_;
       residency_tracker_->changed.wait(lock);
+      --waiting_admissions_;
       continue;
     }
     candidate->state = PreparedResidencyState::kEvicting;
@@ -193,6 +195,39 @@ void PreparedObjectStore::Publish(const PreparedObjectRequest &request,
   entry.state = PreparedResidencyState::kResident;
   ++readiness_epoch_;
   entry.completion->Succeed();
+  lock.unlock();
+  evicted.clear();
+}
+
+void PreparedObjectStore::AdmitAllocation(size_t n_bytes) {
+  EXT_ENFORCE(n_bytes <= residency_budget_,
+              "Prepared allocation exceeds the prepared residency budget.");
+  std::vector<std::shared_ptr<AllocationHandle>> evicted;
+  std::unique_lock<std::mutex> lock(residency_tracker_->mutex);
+  while (resident_bytes_ > residency_budget_ - n_bytes) {
+    Entry *candidate = nullptr;
+    for (const auto &[key, value] : entries_) {
+      Entry &possible = *value;
+      if (possible.state == PreparedResidencyState::kResident && possible.pins->active == 0 &&
+          (candidate == nullptr || possible.last_access < candidate->last_access)) {
+        candidate = &possible;
+      }
+    }
+    if (candidate == nullptr) {
+      ++waiting_admissions_;
+      residency_tracker_->changed.wait(lock);
+      --waiting_admissions_;
+      continue;
+    }
+    candidate->state = PreparedResidencyState::kEvicting;
+    resident_bytes_ -= candidate->resident_bytes;
+    candidate->resident_bytes = 0;
+    evicted.push_back(std::move(candidate->allocation));
+    candidate->allocation = std::make_shared<AllocationHandle>();
+    candidate->pins = std::make_shared<PinCounter>();
+    candidate->state = PreparedResidencyState::kPersisted;
+    ++readiness_epoch_;
+  }
   lock.unlock();
   evicted.clear();
 }
@@ -273,6 +308,11 @@ PreparedResidencyState PreparedObjectStore::State(const PreparedKey &key) const 
 size_t PreparedObjectStore::resident_bytes() const {
   std::lock_guard<std::mutex> lock(residency_tracker_->mutex);
   return resident_bytes_;
+}
+
+size_t PreparedObjectStore::waiting_admissions() const {
+  std::lock_guard<std::mutex> lock(residency_tracker_->mutex);
+  return waiting_admissions_;
 }
 
 MaterializationTaskDescriptors
@@ -688,6 +728,8 @@ PreparedExecutionPlan::Run(PreparedExecutionState &state, const PreparedTaskExec
                            CpuExecutor *cpu_executor,
                            const std::atomic<bool> *cancel_requested) const {
   EXT_ENFORCE(static_cast<bool>(executor), "Prepared execution requires a task executor.");
+  std::shared_lock<std::shared_mutex> hot_run_lock(state.residency_run_mutex_);
+  std::unique_lock<std::shared_mutex> cold_run_lock;
   const uint64_t invocation_id = ++state.next_invocation_id_;
   const uint64_t readiness_epoch = state.readiness_epoch();
   bool hot_path = false;
@@ -757,6 +799,14 @@ PreparedExecutionPlan::Run(PreparedExecutionState &state, const PreparedTaskExec
       }
     }
     return result;
+  }
+
+  hot_run_lock.unlock();
+  cold_run_lock = std::unique_lock<std::shared_mutex>(state.residency_run_mutex_);
+  if (!AllPreparedRequirementsResident(tasks_, state.objects())) {
+    for (const PreparedKey &key : prepared_requirements_) {
+      state.objects().Evict(key);
+    }
   }
 
   std::unordered_map<uint64_t, PreparedExecutionState::SessionTaskRequest> session;
@@ -908,7 +958,13 @@ PreparedExecutionPlan::Run(PreparedExecutionState &state, const PreparedTaskExec
       }
     }
     std::stable_sort(ready.begin(), ready.end(), [](const RunTask *left, const RunTask *right) {
-      return PriorityRank(left->effective_priority) > PriorityRank(right->effective_priority);
+      const int left_priority = PriorityRank(left->effective_priority);
+      const int right_priority = PriorityRank(right->effective_priority);
+      if (left_priority != right_priority) {
+        return left_priority > right_priority;
+      }
+      return left->descriptor->scope == TaskScope::kInvocation &&
+             right->descriptor->scope == TaskScope::kSession;
     });
 
     bool dispatched_any = false;
@@ -1085,6 +1141,11 @@ PreparedExecutionState::PreparedExecutionState(size_t preparation_slots, size_t 
       scheduler_(std::make_unique<SchedulerState>(std::move(scheduler_options))) {}
 
 PreparedExecutionState::~PreparedExecutionState() = default;
+
+AllocationHandle PreparedExecutionState::AllocatePrepared(size_t n_bytes) {
+  objects_.AdmitAllocation(n_bytes);
+  return AllocationHandle(&prepared_arena_, prepared_arena_.Allocate(n_bytes));
+}
 
 PreparedExecutionState::SessionTaskRequest
 PreparedExecutionState::RequestSessionTask(TaskId task_id, bool force_retry) {

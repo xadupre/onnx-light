@@ -958,6 +958,19 @@ FileWriteStream::FileWriteStream(const std::string &file_path)
               "(see GHSA-8qff-7g33-75mx).");
   }
   file_stream_.open(file_path, std::ios::binary);
+  if (!file_stream_.is_open() && std::filesystem::exists(file_path)) {
+    // On Windows, opening an existing file with truncation (the mode above) fails with
+    // ERROR_USER_MAPPED_FILE when some other memory-mapped view of the same path is still
+    // alive — e.g. re-saving a no_copy-loaded model back to its own external-data location,
+    // whose bytes are still borrowed from an active MapViewOfFile mapping. Retry without
+    // requesting truncation: this only avoids resizing the file down to zero at open time;
+    // pre_allocate()/write_raw_bytes_at_offset() below can still seek past the current end to
+    // grow the file as needed.
+    file_stream_.clear();
+    file_stream_.open(file_path, std::ios::binary | std::ios::in | std::ios::out);
+  }
+  EXT_ENFORCE(file_stream_.is_open(),
+              "FileWriteStream: failed to open file for writing: ", file_path);
 }
 
 void FileWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {
@@ -1009,6 +1022,14 @@ void FileWriteStream::pre_allocate(int64_t total_bytes) {
   file_stream_.write(reinterpret_cast<const char *>(&zero), 1);
   file_stream_.flush();
   written_bytes_ = static_cast<uint64_t>(total_bytes);
+}
+
+void FileWriteStream::write_raw_bytes_at_offset(const uint8_t *data, offset_t n_bytes,
+                                                int64_t offset) {
+  file_stream_.seekp(offset);
+  file_stream_.write(reinterpret_cast<const char *>(data), n_bytes);
+  EXT_ENFORCE(!file_stream_.fail(), "Write failed for file: ", file_path_, " at offset=", offset,
+              " n_bytes=", n_bytes);
 }
 
 /////////////
@@ -1209,9 +1230,32 @@ void FileStream::StartThreadPool(size_t n_threads) {
   thread_pool_.Start(static_cast<int32_t>(n_threads));
 }
 
+int64_t FileStream::TotalDelayedBlockBytes() const {
+  int64_t total = 0;
+  for (const DelayedBlock &block : blocks_)
+    total += static_cast<int64_t>(block.size);
+  return total;
+}
+
 //////////////////////
 // TwoFilesWriteStream
 //////////////////////
+
+namespace {
+/** Writes *n_bytes* from *ptr* into the file at *wpath* at the given random-access *offset*.
+ *  Shared by the async (thread-pool-submitted) and synchronous (below-threshold) paths of
+ *  TwoFilesWriteStream::write_raw_bytes_in_second_stream so both write at the same virtual
+ *  offset regardless of whether the write is queued or executed inline. */
+void WriteBytesAtOffset(const std::string &wpath, const uint8_t *ptr, int64_t n_bytes,
+                        int64_t offset) {
+  std::fstream f(wpath, std::ios::binary | std::ios::in | std::ios::out);
+  EXT_ENFORCE(f.is_open(), "Failed to open weights file for parallel write: ", wpath);
+  f.seekp(offset);
+  f.write(reinterpret_cast<const char *>(ptr), n_bytes);
+  EXT_ENFORCE(!f.fail(), "Write failed for weights file: ", wpath, " at offset=", offset,
+              " n_bytes=", n_bytes);
+}
+} // namespace
 
 TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path,
                                          const std::string &weights_file)
@@ -1350,21 +1394,25 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
     if (parallel_write_) {
       // `virtual_write_pos_` is only ever read and written on the serialization (calling) thread —
       // worker threads capture `offset` by value and never touch `virtual_write_pos_` — so no
-      // synchronization is needed here.
+      // synchronization is needed here. Every write once StartWriteThreadPool has been called
+      // consumes a slice of the virtual offset space, whether it is queued on the thread pool or
+      // written inline below the minimum parallel block size, so later writes keep landing at the
+      // right offset either way.
       int64_t offset = virtual_write_pos_;
       virtual_write_pos_ += n_bytes;
       // `ptr` points into a TensorProto::raw_data_ vector owned by the ModelProto that was passed
       // to SerializeModelProtoToStream.  WaitForWriteCompletion() is called before that function
       // returns, so the pointed-to memory is guaranteed to outlive every task.
       const std::string &wpath = weights_stream_.file_path();
-      write_thread_pool_.SubmitTask([wpath, ptr, n_bytes, offset]() {
-        std::fstream f(wpath, std::ios::binary | std::ios::in | std::ios::out);
-        EXT_ENFORCE(f.is_open(), "Failed to open weights file for parallel write: ", wpath);
-        f.seekp(offset);
-        f.write(reinterpret_cast<const char *>(ptr), n_bytes);
-        EXT_ENFORCE(!f.fail(), "Write failed for weights file: ", wpath, " at offset=", offset,
-                    " n_bytes=", n_bytes);
-      });
+      if (n_bytes >= min_parallel_block_size_) {
+        write_thread_pool_.SubmitTask(
+            [wpath, ptr, n_bytes, offset]() { WriteBytesAtOffset(wpath, ptr, n_bytes, offset); });
+      } else {
+        // Below-threshold writes never run concurrently with another writer of this stream (they
+        // execute synchronously on the calling thread), so reuse the already-open weights_stream_
+        // file handle instead of opening a brand-new fstream per call.
+        weights_stream_.write_raw_bytes_at_offset(ptr, n_bytes, offset);
+      }
     } else {
       weights_stream_.write_raw_bytes(ptr, n_bytes);
     }
@@ -1380,15 +1428,15 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
     int64_t &pos = extra_virtual_write_pos_[active_weights_location_];
     int64_t offset = pos;
     pos += n_bytes;
-    const std::string wpath = it->second->file_path();
-    write_thread_pool_.SubmitTask([wpath, ptr, n_bytes, offset]() {
-      std::fstream f(wpath, std::ios::binary | std::ios::in | std::ios::out);
-      EXT_ENFORCE(f.is_open(), "Failed to open weights file for parallel write: ", wpath);
-      f.seekp(offset);
-      f.write(reinterpret_cast<const char *>(ptr), n_bytes);
-      EXT_ENFORCE(!f.fail(), "Write failed for weights file: ", wpath, " at offset=", offset,
-                  " n_bytes=", n_bytes);
-    });
+    if (n_bytes >= min_parallel_block_size_) {
+      const std::string wpath = it->second->file_path();
+      write_thread_pool_.SubmitTask(
+          [wpath, ptr, n_bytes, offset]() { WriteBytesAtOffset(wpath, ptr, n_bytes, offset); });
+    } else {
+      // Same reasoning as above: below-threshold writes run synchronously on the calling
+      // thread, so they can safely reuse the already-open per-location file handle.
+      it->second->write_raw_bytes_at_offset(ptr, n_bytes, offset);
+    }
   } else {
     it->second->write_raw_bytes(ptr, n_bytes);
   }

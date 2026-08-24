@@ -1,8 +1,10 @@
 #pragma once
 
+#include "onnx_io_policy.h"
 #include "stream.h"
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -112,6 +114,21 @@ struct ParseOptions : TensorBufferOptions {
    *  ``num_threads`` is greater than 1 or negative.  ``num_threads == 0`` and
    *  ``num_threads == 1`` both disable parallelization. */
   inline bool is_parallel() const { return num_threads > 1 || num_threads < 0; }
+  /** Storage kind backing the external-data file(s) being read, used to calibrate the automatic
+   *  worker count/block size (see :cpp:func:`utils::ResolveIOPolicy`) when ``num_threads < 0``.
+   *  - ``std::nullopt`` (default): probe the actual file with
+   *    :cpp:func:`utils::DetectIOStorageKind` (a best-effort ``mincore`` page-cache residency
+   *    sample on Linux; a conservative default elsewhere).
+   *  - set to a specific :cpp:enum:`utils::IOStorageKind`: use it directly and skip the probe.
+   *    Callers that already know how their weights are stored (for example weights streamed
+   *    from a network mount, always cold, or pre-warmed into the page cache by a prior read)
+   *    should set this explicitly instead of relying on the heuristic. */
+  std::optional<utils::IOStorageKind> io_storage_kind = std::nullopt;
+  /** Optional trace populated with the adaptive external-data I/O policy actually applied to
+   *  this parse (resolved worker count, block size threshold, storage kind, and observed byte
+   *  counters); see :cpp:class:`utils::IOPolicyTrace`. Left untouched (``nullptr``) by default;
+   *  the caller owns the pointed-to object and must keep it alive for the duration of the parse. */
+  utils::IOPolicyTrace *io_trace = nullptr;
   /** If true, raw_data blocks are not copied into a new buffer.  Inline protobuf raw_data
    * borrows directly from the source bytes buffer (for example the bytes passed to
    * ParseFromString), so the caller MUST keep that buffer alive for as long as any
@@ -222,6 +239,12 @@ struct SerializeOptions : TensorBufferOptions {
    *  ``num_threads`` is greater than 1 or negative.  ``num_threads == 0`` and
    *  ``num_threads == 1`` both disable parallelization. */
   inline bool is_parallel() const { return num_threads > 1 || num_threads < 0; }
+  /** Optional trace populated with the adaptive external-data I/O policy actually applied to
+   *  this serialization (resolved worker count, block size threshold, storage kind, and observed
+   *  byte counters); see :cpp:class:`utils::IOPolicyTrace`. Left untouched (``nullptr``) by
+   *  default; the caller owns the pointed-to object and must keep it alive for the duration of
+   *  the serialization. */
+  utils::IOPolicyTrace *io_trace = nullptr;
   /** if true, tensors already marked with data_location=EXTERNAL are serialized using their
    * external_data metadata location (can target multiple weights files). */
   bool use_external_data_location = true;

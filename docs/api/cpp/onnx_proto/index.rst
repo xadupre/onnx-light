@@ -9,6 +9,7 @@ onnx_proto
     onnx_alias
     onnx_crypt
     onnx_mapped_payload
+    onnx_io_policy
     stream_class
     stream
     simple_string

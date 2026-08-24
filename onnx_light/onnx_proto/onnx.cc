@@ -845,7 +845,10 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
         } else {
           ref_raw_data().resize(size);
         }
-        if (options.is_parallel()) {
+        // Only submit this tensor's read as a delayed block when it clears the caller's
+        // minimum block size: tiny external tensors below the threshold are cheaper to read
+        // inline than to hand off to the thread pool (submission + synchronization overhead).
+        if (options.is_parallel() && size >= options.min_parallel_block_size) {
           utils::DelayedBlock block;
           block.size = size;
           block.data = ref_raw_data().data();

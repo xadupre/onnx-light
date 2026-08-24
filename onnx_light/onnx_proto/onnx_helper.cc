@@ -3,6 +3,7 @@
 #define _GNU_SOURCE
 #endif
 #include "onnx_helper.h"
+#include "onnx_io_policy.h"
 #include <array>
 #include <cerrno>
 #include <charconv>
@@ -86,7 +87,7 @@ static inline offset_t align_up(offset_t offset, int64_t alignment) {
   return ((offset + alignment - 1) / alignment) * alignment;
 }
 
-static uint8_t TouchesRawDataPages(const utils::ByteSpan &raw_data) {
+static uint8_t TouchesRawDataPages(const utils::ByteSpan &raw_data, uint64_t *out_pages_touched) {
   static constexpr size_t kPageSize = 4096;
   const size_t n_bytes = raw_data.size();
   if (n_bytes == 0) {
@@ -94,19 +95,24 @@ static uint8_t TouchesRawDataPages(const utils::ByteSpan &raw_data) {
   }
   const volatile uint8_t *data = raw_data.data();
   uint8_t checksum = 0;
+  uint64_t pages = 0;
   for (size_t i = 0; i < n_bytes; i += kPageSize) {
     checksum = static_cast<uint8_t>(checksum + data[i]);
+    ++pages;
   }
   checksum = static_cast<uint8_t>(checksum + data[n_bytes - 1]);
+  if (out_pages_touched != nullptr)
+    *out_pages_touched += pages;
   return checksum;
 }
 
-static uint64_t TouchesAllModelRawDataPages(ModelProto &model) {
+static uint64_t TouchesAllModelRawDataPages(ModelProto &model,
+                                            uint64_t *out_pages_touched = nullptr) {
   uint64_t checksum = 0;
   IteratorTensorProto it(&model.ref_graph());
   while (it.next()) {
     if (it->has_raw_data()) {
-      checksum += TouchesRawDataPages(it->ref_raw_data());
+      checksum += TouchesRawDataPages(it->ref_raw_data(), out_pages_touched);
     }
   }
   return checksum;
@@ -1110,6 +1116,19 @@ bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
         model, options.raw_data_threshold, weight_path.string(), options.use_external_data_location,
         options.max_external_file_size, options.alignment);
     if (options.is_parallel() && total_external_size > 0) {
+      // External-data writes are always cold (a brand-new or truncated destination file), so
+      // there is no page-cache residency to probe; resolve the automatic worker count and
+      // minimum block size from that assumption alone.
+      const utils::IOPolicy write_policy =
+          utils::ResolveIOPolicy(utils::IOStorageKind::kColdStorage, total_external_size,
+                                 options.num_threads, options.min_parallel_block_size);
+      two_stream.SetMinParallelBlockSize(write_policy.min_block_size);
+      if (options.io_trace != nullptr) {
+        options.io_trace->storage_kind = utils::IOStorageKind::kColdStorage;
+        options.io_trace->resolved_workers = write_policy.workers;
+        options.io_trace->resolved_min_block_size = write_policy.min_block_size;
+        options.io_trace->physical_bytes = total_external_size;
+      }
       if (options.max_external_file_size <= 0) {
         // Single weights file: one pre-allocation covers everything.
         two_stream.pre_allocate_weights(total_external_size);
@@ -1148,7 +1167,7 @@ bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
           two_stream.pre_allocate_weights(kv.first, kv.second);
         }
       }
-      two_stream.StartWriteThreadPool(options.num_threads);
+      two_stream.StartWriteThreadPool(write_policy.workers);
     }
   }
   SerializeSizeResult total_size = model.SerializeSize(stream, options);
@@ -1198,18 +1217,58 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
     EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
                 "ParseModelProtoFromStream: unrecognised SerializeFormat value ",
                 static_cast<int>(options.format), "; only kOnnx is currently supported.");
+    // Delayed blocks are only ever submitted for external-data tensor reads (see
+    // TensorProto::ParseFromStream), never for the main structure stream. A wholly
+    // borrowed/mapped parse (no_copy or file_load_mode=MMAP) never submits one either, since
+    // those tensors borrow bytes directly instead of copying them through the thread pool.
+    // Note: ParseOptions::skip_raw_data only omits *inline* raw_data bytes; external-data
+    // tensors are always resolved (from a shared weights buffer or the weights file) regardless
+    // of that flag, so it does not affect eligibility here. Detecting this up front means
+    // borrowed/mapped loads never pay for creating a worker-thread pool that would receive no
+    // task.
+    const bool external_weights = stream.ExternalWeights();
+    utils::TwoFilesStream *two_stream_ptr =
+        external_weights ? &dynamic_cast<utils::TwoFilesStream &>(stream) : nullptr;
+    const bool has_eligible_reads =
+        options.is_parallel() &&
+        (!external_weights || (!options.no_copy && !two_stream_ptr->use_mmap_weights()));
+
+    int32_t num_threads = options.num_threads;
+    if (has_eligible_reads && external_weights && options.num_threads < 0) {
+      // Calibrate the worker count and minimum block size to the storage actually backing the
+      // weights file (mostly resident in the OS page cache vs. cold) instead of a blind
+      // hardware_concurrency() guess. Callers that already know their storage kind should set
+      // ParseOptions::io_storage_kind explicitly; the mincore-based probe below is only a
+      // best-effort fallback for callers that did not.
+      const utils::IOStorageKind kind =
+          options.io_storage_kind.has_value()
+              ? *options.io_storage_kind
+              : utils::DetectIOStorageKind(two_stream_ptr->weights_file_path());
+      const utils::IOPolicy policy =
+          utils::ResolveIOPolicy(kind, two_stream_ptr->weights_size(), options.num_threads,
+                                 options.min_parallel_block_size);
+      num_threads = policy.workers;
+      if (options.min_parallel_block_size <= 0)
+        options.min_parallel_block_size = policy.min_block_size;
+      if (options.io_trace != nullptr) {
+        options.io_trace->storage_kind = kind;
+        options.io_trace->resolved_workers = policy.workers;
+        options.io_trace->resolved_min_block_size = policy.min_block_size;
+        options.io_trace->physical_bytes = two_stream_ptr->weights_size();
+      }
+    }
     // Mirror SerializeModelProtoToStream: start the thread pool when requested and
     // wait for all delayed reads once parsing is complete.
-    if (options.is_parallel() && !stream.HasParallelizationStarted())
-      stream.StartThreadPool(options.num_threads);
-    if (stream.ExternalWeights()) {
+    if (has_eligible_reads && !stream.HasParallelizationStarted())
+      stream.StartThreadPool(static_cast<size_t>(num_threads));
+    if (external_weights) {
       // no_copy ownership model:
       // - External-data tensors borrow slices from TwoFilesStream shared weights buffers.
       //   TensorProto::raw_data stores a shared_ptr owner (ByteSpan::owner_) so those
       //   mmap-backed buffers stay alive as long as the parsed model keeps borrowed tensors.
       // - Inline protobuf raw_data borrowed from an input bytes buffer is different:
       //   the caller must keep the original bytes object alive for the model lifetime.
-      utils::TwoFilesStream &two_stream = dynamic_cast<utils::TwoFilesStream &>(stream);
+      utils::TwoFilesStream &two_stream = *two_stream_ptr;
       std::filesystem::path parent_path = two_stream.file_path();
       parent_path = parent_path.parent_path();
       std::filesystem::path weight_path = two_stream.weights_file_path();
@@ -1221,12 +1280,18 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
       }
     }
     model.ParseFromStream(stream, options);
-    if (options.is_parallel())
+    if (has_eligible_reads)
       stream.WaitForDelayedBlock();
+    if (options.io_trace != nullptr)
+      options.io_trace->bytes_in_flight = stream.TotalDelayedBlockBytes();
     if (options._touch_raw_data_pages) {
-      (void)TouchesAllModelRawDataPages(model);
+      uint64_t pages_touched = 0;
+      (void)TouchesAllModelRawDataPages(model,
+                                        options.io_trace != nullptr ? &pages_touched : nullptr);
+      if (options.io_trace != nullptr)
+        options.io_trace->page_faults = pages_touched;
     }
-    if (stream.ExternalWeights() && clear_external_data)
+    if (external_weights && clear_external_data)
       ClearExternalData(model);
   }
 }

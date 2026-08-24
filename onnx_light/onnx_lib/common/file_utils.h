@@ -8,6 +8,7 @@
 #include "path.h"
 #include "proto_utils.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -34,8 +35,19 @@ template <typename T> void LoadProtoFromPath(const std::string &proto_path, T &p
   if (!proto_stream.is_open()) {
     ONNX_THROW("Unable to open proto file: ", proto_path, ". Please check if it is a valid proto.");
   }
-  std::string data{std::istreambuf_iterator<char>{proto_stream}, std::istreambuf_iterator<char>{}};
-  if (proto_stream.bad()) {
+  std::error_code size_error;
+  const std::uintmax_t file_size = std::filesystem::file_size(proto_u8_path, size_error);
+  std::string data;
+  bool read_ok = false;
+  if (!size_error) {
+    data.resize(file_size);
+    proto_stream.read(data.data(), static_cast<std::streamsize>(file_size));
+    read_ok = static_cast<std::uintmax_t>(proto_stream.gcount()) == file_size;
+  } else {
+    data.assign(std::istreambuf_iterator<char>{proto_stream}, std::istreambuf_iterator<char>{});
+    read_ok = !proto_stream.bad();
+  }
+  if (!read_ok) {
     ONNX_THROW("Unable to read proto file: ", proto_path, ". Please check if it is a valid proto.");
   }
   if (!ParseProtoFromBytes(&proto, data.c_str(), data.size())) {

@@ -13,6 +13,20 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+int64_t RawDataElementCount(const TensorProto &tensor, size_t element_size, bool exact_fit) {
+  const int64_t num_elements = safe_dim_product(tensor.dims(), [&](const char *msg) {
+    ONNX_ASSERTM(false, msg, " for tensor: ", tensor.name())
+  });
+  const size_t size = tensor.ref_raw_data().size();
+  const auto available = static_cast<uint64_t>(size / element_size);
+  const auto required = static_cast<uint64_t>(num_elements);
+  ONNX_ASSERTM(
+      !(exact_fit ? (available != required || size % element_size != 0) : available < required),
+      "Data size mismatch. Tensor: ", tensor.name(), " has ", size, " bytes of raw_data for ",
+      num_elements, " elements of size ", element_size);
+  return num_elements;
+}
+
 #define DEFINE_PARSE_DATA(type, typed_data_fetch)                                                  \
   template <> std::vector<type> ParseData(const TensorProto *tensor) {                             \
     std::vector<type> res;                                                                         \
@@ -20,6 +34,10 @@ namespace ONNX_LIGHT_NAMESPACE {
       const auto &data = tensor->typed_data_fetch();                                               \
       res.insert(res.end(), data.begin(), data.end());                                             \
       return res;                                                                                  \
+    }                                                                                              \
+    /* A dimensionless local tensor is an unshaped payload, not necessarily a scalar. */           \
+    if (tensor->dims_size() > 0) {                                                                 \
+      return ParseRawData<type>(*tensor);                                                          \
     }                                                                                              \
     const utils::ByteSpan &raw_data = tensor->ref_raw_data();                                      \
     /* copy byte-wise: raw_data may be unaligned for type */                                       \

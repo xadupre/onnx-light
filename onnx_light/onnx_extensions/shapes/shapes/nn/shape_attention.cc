@@ -87,6 +87,38 @@ void ReadHeadAttributes(const NodeProto &node, int64_t &q_num_heads, bool &has_q
   }
 }
 
+void ValidateAttention25Attributes(const NodeProto &node, int64_t input_rank) {
+  bool has_q_num_heads = false;
+  bool has_kv_num_heads = false;
+  for (const auto &attr : node.attribute()) {
+    if (attr.name() == "left_window_size" || attr.name() == "right_window_size") {
+      EXT_ENFORCE_INVALID(attr.i() >= -1, "ComputeShapeAttention: '", attr.name(),
+                          "' must be -1 or nonnegative.");
+    } else if (attr.name() == "q_num_heads") {
+      has_q_num_heads = true;
+    } else if (attr.name() == "kv_num_heads") {
+      has_kv_num_heads = true;
+    }
+  }
+  EXT_ENFORCE_INVALID(input_rank != 4 || (!has_q_num_heads && !has_kv_num_heads),
+                      "ComputeShapeAttention: q_num_heads and kv_num_heads must not be specified "
+                      "for rank-4 inputs.");
+
+  const bool has_past_key = node.input_size() > 4 && !node.input(4).empty();
+  const bool has_past_value = node.input_size() > 5 && !node.input(5).empty();
+  const bool has_nonpad = node.input_size() > 6 && !node.input(6).empty();
+  const bool has_present_key = node.output_size() > 1 && !node.output(1).empty();
+  const bool has_present_value = node.output_size() > 2 && !node.output(2).empty();
+  EXT_ENFORCE_INVALID(has_past_key == has_past_value,
+                      "ComputeShapeAttention: past_key and past_value must be provided together.");
+  EXT_ENFORCE_INVALID(
+      has_present_key == has_present_value,
+      "ComputeShapeAttention: present_key and present_value must be requested together.");
+  EXT_ENFORCE_INVALID(
+      !has_nonpad || (!has_past_key && !has_present_key),
+      "ComputeShapeAttention: nonpad_kv_seqlen cannot be combined with cache tensors.");
+}
+
 // Handles the rank-3 (packed) form of Attention, where Q, K and V have shapes
 // ``(batch, q_sequence_length, q_num_heads * head_size)`` and
 // ``(batch, kv_sequence_length, kv_num_heads * head_size)``. The
@@ -204,6 +236,7 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
       !(q_shape.Rank() != k_shape.Rank() || q_shape.Rank() != v_shape.Rank()),
       "ComputeShapeAttention: inputs 'Q', 'K' and 'V' must share the same rank, got ",
       q_shape.Rank(), ", ", k_shape.Rank(), " and ", v_shape.Rank(), ".");
+  ValidateAttention25Attributes(node, q_shape.Rank());
   if (q_shape.Rank() == 3) {
     ComputeShapeAttentionRank3(ctx, node, Q, K, V, past_key, past_value);
     return;

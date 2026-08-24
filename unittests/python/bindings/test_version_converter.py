@@ -72,6 +72,43 @@ class TestVersionConverter(ExtTestCase):
         assert converted_model.graph.node[0].op_type == "Add"
         assert converted_model.opset_import[0].version == 2
 
+    def test_attention_24_to_25(self) -> None:
+        node = oh.make_node("Attention", ["Q", "K", "V"], ["Y"])
+        graph = oh.make_graph(
+            [node],
+            "attention",
+            [
+                oh.make_tensor_value_info("Q", onnxl.TensorProto.FLOAT, (1, 1, 2, 4)),
+                oh.make_tensor_value_info("K", onnxl.TensorProto.FLOAT, (1, 1, 2, 4)),
+                oh.make_tensor_value_info("V", onnxl.TensorProto.FLOAT, (1, 1, 2, 4)),
+            ],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, (1, 1, 2, 4))],
+        )
+        converted = self._converted(graph, oh.make_operatorsetid("", 24), 25)
+        assert converted.opset_import[0].version == 25
+
+    def test_attention_25_to_24_window_conversion(self) -> None:
+        def make_graph(window: int) -> onnxl.GraphProto:
+            node = oh.make_node(
+                "Attention", ["Q", "K", "V"], ["Y"], left_window_size=window, right_window_size=-1
+            )
+            return oh.make_graph(
+                [node],
+                "attention",
+                [
+                    oh.make_tensor_value_info("Q", onnxl.TensorProto.FLOAT, (1, 1, 2, 4)),
+                    oh.make_tensor_value_info("K", onnxl.TensorProto.FLOAT, (1, 1, 2, 4)),
+                    oh.make_tensor_value_info("V", onnxl.TensorProto.FLOAT, (1, 1, 2, 4)),
+                ],
+                [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, (1, 1, 2, 4))],
+            )
+
+        converted = self._converted(make_graph(-1), oh.make_operatorsetid("", 25), 24)
+        assert converted.opset_import[0].version == 24
+        assert not converted.graph.node[0].attribute
+        with self.assertRaisesRegex(RuntimeError, "left_window_size must be -1"):
+            self._converted(make_graph(1), oh.make_operatorsetid("", 25), 24)
+
     # Test 3: Non-Existent Op Conversion: Cos: 8 -> 6
     def test_non_existent_op(self) -> None:
         def test() -> None:
@@ -1080,16 +1117,20 @@ class TestVersionConverter(ExtTestCase):
         assert converted_model.graph.node[1].attribute[0].name == "mode"
         assert converted_model.opset_import[0].version == to_opset
 
-    def helper_upsample_with_initializer(self, raw_scale: bool = False) -> None:
-        """Helper for Upsample Adapter: 9 -> 8 with initializer."""
+    def helper_upsample_with_initializer(
+        self, raw_scale: bool = False, scale_name: str = "Scales"
+    ) -> None:
+        """Tests Upsample Adapter 9 -> 8 with an initializer."""
         from_opset = 9
         to_opset = 8
         data_type = onnxl.TensorProto.FLOAT
 
-        nodes = [oh.make_node("Upsample", inputs=["X", "Scales"], outputs=["Y"], mode="nearest")]
+        nodes = [
+            oh.make_node("Upsample", inputs=["X", scale_name], outputs=["Y"], mode="nearest")
+        ]
         scale_value = [1.0, 1.0, 2.0, 3.0]
         scale_tensor = oh.make_tensor(
-            "Scales",
+            scale_name,
             onnxl.TensorProto.FLOAT,
             [4],
             bytes(struct.pack("4f", *scale_value)) if raw_scale else scale_value,
@@ -1100,7 +1141,7 @@ class TestVersionConverter(ExtTestCase):
             "test_upsample",
             [
                 oh.make_tensor_value_info("X", data_type, [1, 1, 2, 2]),
-                oh.make_tensor_value_info("Scales", data_type, [4]),
+                oh.make_tensor_value_info(scale_name, data_type, [4]),
             ],
             [oh.make_tensor_value_info("Y", data_type, [1, 1, 4, 6])],
             [scale_tensor],
@@ -1153,6 +1194,11 @@ class TestVersionConverter(ExtTestCase):
     # Test Upsample Adapter: 9 -> 8 with initializer
     def test_upsample_with_initializer_9_8(self) -> None:
         self.helper_upsample_with_initializer(raw_scale=False)
+
+    def test_upsample_with_long_initializer_name_9_8(self) -> None:
+        self.helper_upsample_with_initializer(
+            raw_scale=False, scale_name="scale_initializer_name_longer_than_sso"
+        )
 
     # Test Upsample Adapter: 9 -> 8 with raw constant
     def test_upsample_with_raw_constant_node_9_8(self) -> None:

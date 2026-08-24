@@ -25,6 +25,8 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+// windows.h defines OPTIONAL, which clashes with enum members in onnx-data.pb.h.
+#undef OPTIONAL
 #endif
 
 namespace ONNX_LIGHT_NAMESPACE {

@@ -200,7 +200,7 @@ jobs:
             --max-installed-size 1258291
 
       - name: Install ONNX weekly
-        run: pip install --upgrade onnx-weekly
+        run: pip uninstall -y onnx && pip install --upgrade onnx-weekly
 
       - name: pip freeze
         run: pip freeze
@@ -286,7 +286,7 @@ jobs:
         run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 
       - name: Install ONNX weekly
-        run: pip install --upgrade onnx-weekly
+        run: pip uninstall -y onnx && pip install --upgrade onnx-weekly
 
       - name: pip freeze
         run: pip freeze

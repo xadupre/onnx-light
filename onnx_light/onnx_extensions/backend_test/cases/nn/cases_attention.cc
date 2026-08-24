@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <limits>
 #include <vector>
 
@@ -78,6 +79,126 @@ Tensor MakeDeterministicFloatTensor(const std::vector<int64_t> &shape, uint32_t 
     values[static_cast<size_t>(i)] = lo + (hi - lo) * u;
   }
   return Tensor::FromFloat("", shape, values);
+}
+
+Tensor MakeConstantFloatTensor(const std::vector<int64_t> &shape, float value) {
+  int64_t count = 1;
+  for (int64_t dimension : shape) {
+    count *= dimension;
+  }
+  return Tensor::FromFloat("", shape, std::vector<float>(static_cast<size_t>(count), value));
+}
+
+Tensor MakePositionValueTensor4(int64_t batch, int64_t heads, int64_t sequence_length,
+                                int64_t head_size, int64_t position_offset = 0) {
+  std::vector<float> values(static_cast<size_t>(batch * heads * sequence_length * head_size));
+  for (int64_t b = 0; b < batch; ++b) {
+    for (int64_t h = 0; h < heads; ++h) {
+      for (int64_t s = 0; s < sequence_length; ++s) {
+        for (int64_t d = 0; d < head_size; ++d) {
+          values[static_cast<size_t>(((b * heads + h) * sequence_length + s) * head_size + d)] =
+              static_cast<float>(100 * h + 10 * d + position_offset + s);
+        }
+      }
+    }
+  }
+  return Tensor::FromFloat("", {batch, heads, sequence_length, head_size}, values);
+}
+
+Tensor MakePositionValueTensor3(int64_t batch, int64_t heads, int64_t sequence_length,
+                                int64_t head_size) {
+  std::vector<float> values(static_cast<size_t>(batch * sequence_length * heads * head_size));
+  for (int64_t b = 0; b < batch; ++b) {
+    for (int64_t s = 0; s < sequence_length; ++s) {
+      for (int64_t h = 0; h < heads; ++h) {
+        for (int64_t d = 0; d < head_size; ++d) {
+          values[static_cast<size_t>((b * sequence_length + s) * heads * head_size + h * head_size +
+                                     d)] = static_cast<float>(100 * h + 10 * d + s);
+        }
+      }
+    }
+  }
+  return Tensor::FromFloat("", {batch, sequence_length, heads * head_size}, values);
+}
+
+using WindowMaskPredicate = std::function<bool(int64_t, int64_t, int64_t, int64_t)>;
+
+struct UniformWindowReference {
+  Tensor Y;
+  Tensor probabilities;
+};
+
+UniformWindowReference MakeUniformWindowReference4(
+    int64_t batch, int64_t query_heads, int64_t kv_heads, int64_t query_length, int64_t kv_length,
+    int64_t value_head_size, int64_t left_window_size, int64_t right_window_size, bool is_causal,
+    const std::vector<int64_t> &offsets, const std::vector<int64_t> &valid_lengths,
+    const WindowMaskPredicate &mask_allows) {
+  std::vector<float> y_values(
+      static_cast<size_t>(batch * query_heads * query_length * value_head_size), 0.0f);
+  std::vector<float> probability_values(
+      static_cast<size_t>(batch * query_heads * query_length * kv_length), 0.0f);
+  const int64_t group_size = query_heads / kv_heads;
+  for (int64_t b = 0; b < batch; ++b) {
+    const int64_t offset = offsets.empty() ? 0 : offsets[static_cast<size_t>(b)];
+    const int64_t valid_length =
+        valid_lengths.empty() ? kv_length : valid_lengths[static_cast<size_t>(b)];
+    for (int64_t h = 0; h < query_heads; ++h) {
+      const int64_t kv_head = h / group_size;
+      for (int64_t i = 0; i < query_length; ++i) {
+        std::vector<int64_t> allowed;
+        for (int64_t j = 0; j < kv_length; ++j) {
+          const int64_t difference = i + offset - j;
+          if (j >= valid_length || (is_causal && difference < 0) ||
+              (left_window_size >= 0 && difference > left_window_size) ||
+              (right_window_size >= 0 && -difference > right_window_size) ||
+              (mask_allows && !mask_allows(b, h, i, j))) {
+            continue;
+          }
+          allowed.push_back(j);
+        }
+        if (allowed.empty()) {
+          continue;
+        }
+        const float probability = 1.0f / static_cast<float>(allowed.size());
+        for (int64_t j : allowed) {
+          probability_values[static_cast<size_t>(
+              ((b * query_heads + h) * query_length + i) * kv_length + j)] = probability;
+        }
+        for (int64_t d = 0; d < value_head_size; ++d) {
+          float sum = 0.0f;
+          for (int64_t j : allowed) {
+            sum += static_cast<float>(100 * kv_head + 10 * d + j);
+          }
+          y_values[static_cast<size_t>(
+              ((b * query_heads + h) * query_length + i) * value_head_size + d)] =
+              sum / static_cast<float>(allowed.size());
+        }
+      }
+    }
+  }
+  return {Tensor::FromFloat("", {batch, query_heads, query_length, value_head_size}, y_values),
+          Tensor::FromFloat("", {batch, query_heads, query_length, kv_length}, probability_values)};
+}
+
+Tensor CollapseReferenceToRank3(const Tensor &rank4) {
+  const int64_t batch = rank4.shape[0];
+  const int64_t heads = rank4.shape[1];
+  const int64_t sequence_length = rank4.shape[2];
+  const int64_t head_size = rank4.shape[3];
+  std::vector<float> values(static_cast<size_t>(rank4.element_count()));
+  const float *source = rank4.AsFloat();
+  for (int64_t b = 0; b < batch; ++b) {
+    for (int64_t h = 0; h < heads; ++h) {
+      for (int64_t s = 0; s < sequence_length; ++s) {
+        for (int64_t d = 0; d < head_size; ++d) {
+          values[static_cast<size_t>((b * sequence_length + s) * heads * head_size + h * head_size +
+                                     d)] =
+              source[((b * heads + h) * sequence_length + s) * head_size + d];
+        }
+      }
+    }
+  }
+  return Tensor::FromFloat("", {batch, sequence_length, heads * head_size}, values);
 }
 
 // ---- Deterministic small input tensors --------------------------------
@@ -2025,6 +2146,252 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
            });
     registry.back().atol = 5e-3;
     registry.back().rtol = 5e-3;
+  }
+
+  // -------------------------------------------------------------------
+  // Attention-25 local-window cases from onnx/onnx#8108. Q and K are zero
+  // so the independently constructed expected outputs are exact uniform
+  // averages over the positions retained by cache, mask, causal, and window
+  // rules. This avoids deriving expected values from the kernel under test.
+  const OpsetId opset25 = DefaultOpset(25);
+
+  {
+    Tensor Q = MakeConstantFloatTensor({2, 3, 4, 8}, 0.0f);
+    Tensor K = MakeConstantFloatTensor({2, 3, 6, 8}, 0.0f);
+    Tensor V = MakePositionValueTensor4(2, 3, 6, 8);
+    Tensor Y = MakeUniformWindowReference4(2, 3, 3, 4, 6, 8, 2, -1, true, {}, {}, {}).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "is_causal", 1);
+    AddInt(node, "left_window_size", 2);
+    Expect(registry, std::move(node), "test_cc_attention_local_window", {opset25}, [=]() -> IoData {
+      return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+    });
+  }
+
+  {
+    Tensor Q = MakeConstantFloatTensor({1, 1, 5, 1}, 0.0f);
+    Tensor K = MakeConstantFloatTensor({1, 1, 5, 1}, 0.0f);
+    Tensor V = MakePositionValueTensor4(1, 1, 5, 1);
+    Tensor Y = MakeUniformWindowReference4(1, 1, 1, 5, 5, 1, 1, 2, false, {}, {}, {}).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "left_window_size", 1);
+    AddInt(node, "right_window_size", 2);
+    Expect(registry, std::move(node), "test_cc_attention_bidirectional_window", {opset25},
+           [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
+  }
+
+  {
+    Tensor Q = MakeConstantFloatTensor({2, 3, 4, 8}, 0.0f);
+    Tensor K = MakeConstantFloatTensor({2, 3, 6, 8}, 0.0f);
+    Tensor V = MakePositionValueTensor4(2, 3, 6, 8);
+    Tensor Y = MakeUniformWindowReference4(2, 3, 3, 4, 6, 8, -1, -1, false, {}, {}, {}).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "left_window_size", -1);
+    AddInt(node, "right_window_size", -1);
+    Expect(registry, std::move(node), "test_cc_attention_local_window_default", {opset25},
+           [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
+  }
+
+  {
+    Tensor Q = MakeConstantFloatTensor({2, 3, 4, 8}, 0.0f);
+    Tensor K = MakeConstantFloatTensor({2, 3, 6, 8}, 0.0f);
+    Tensor V = MakePositionValueTensor4(2, 3, 6, 8);
+    Tensor mask = Tensor::FromBool("", {6}, {1, 1, 1, 1, 0, 0});
+    const WindowMaskPredicate mask_allows = [](int64_t, int64_t, int64_t, int64_t j) {
+      return j < 4;
+    };
+    Tensor Y = MakeUniformWindowReference4(2, 3, 3, 4, 6, 8, 2, -1, true, {}, {}, mask_allows).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
+    AddInt(node, "is_causal", 1);
+    AddInt(node, "left_window_size", 2);
+    Expect(registry, std::move(node), "test_cc_attention_local_window_rank1_boolean_mask",
+           {opset25}, [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
+                           {std::move(Y)}};
+           });
+  }
+
+  {
+    Tensor Q = MakeConstantFloatTensor({2, 3, 4, 8}, 0.0f);
+    Tensor K = MakeConstantFloatTensor({2, 3, 2, 8}, 0.0f);
+    Tensor V = MakePositionValueTensor4(2, 3, 2, 8, 8);
+    Tensor past_key = MakeConstantFloatTensor({2, 3, 8, 8}, 0.0f);
+    Tensor past_value = MakePositionValueTensor4(2, 3, 8, 8);
+    Tensor Y = MakeUniformWindowReference4(2, 3, 3, 4, 10, 8, 2, -1, true, {8, 8}, {}, {}).Y;
+    Tensor present_key = MakeConstantFloatTensor({2, 3, 10, 8}, 0.0f);
+    Tensor present_value = MakePositionValueTensor4(2, 3, 10, 8);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value"});
+    AddInt(node, "is_causal", 1);
+    AddInt(node, "left_window_size", 2);
+    Expect(registry, std::move(node), "test_cc_attention_local_window_with_past", {opset25},
+           [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(past_key),
+                            std::move(past_value)},
+                           {std::move(Y), std::move(present_key), std::move(present_value)}};
+           });
+  }
+
+  {
+    Tensor Q = MakeConstantFloatTensor({2, 3, 4, 8}, 0.0f);
+    Tensor K = MakeConstantFloatTensor({2, 3, 8, 8}, 0.0f);
+    Tensor V = MakePositionValueTensor4(2, 3, 8, 8);
+    std::vector<float> mask_values(static_cast<size_t>(3 * 4 * 8), 0.0f);
+    for (int64_t h = 0; h < 3; ++h) {
+      for (int64_t i = 0; i < 4; ++i) {
+        mask_values[static_cast<size_t>((h * 4 + i) * 8 + h)] =
+            -std::numeric_limits<float>::infinity();
+      }
+    }
+    Tensor mask = Tensor::FromFloat("", {3, 4, 8}, mask_values);
+    Tensor nonpad = Tensor::FromInt64("", {2}, {6, 7});
+    const WindowMaskPredicate mask_allows = [](int64_t, int64_t h, int64_t, int64_t j) {
+      return j != h;
+    };
+    Tensor Y =
+        MakeUniformWindowReference4(2, 3, 3, 4, 8, 8, 2, -1, true, {2, 3}, {6, 7}, mask_allows).Y;
+    NodeProto node =
+        MakeAttentionNode({"Q", "K", "V", "attn_mask", "", "", "nonpad_kv_seqlen"}, {"Y"});
+    AddInt(node, "is_causal", 1);
+    AddInt(node, "left_window_size", 2);
+    Expect(registry, std::move(node), "test_cc_attention_local_window_ext_cache_rank3_head_mask",
+           {opset25}, [=]() -> IoData {
+             return IoData{
+                 {std::move(Q), std::move(K), std::move(V), std::move(mask), std::move(nonpad)},
+                 {std::move(Y)}};
+           });
+  }
+
+  {
+    Tensor Q = MakeConstantFloatTensor({2, 3, 4, 8}, 0.0f);
+    Tensor K = MakeConstantFloatTensor({2, 3, 8, 8}, 0.0f);
+    Tensor V = MakePositionValueTensor4(2, 3, 8, 8);
+    std::vector<float> mask_values(static_cast<size_t>(2 * 4 * 8), 0.0f);
+    for (int64_t b = 0; b < 2; ++b) {
+      for (int64_t i = 0; i < 4; ++i) {
+        mask_values[static_cast<size_t>((b * 4 + i) * 8 + b)] =
+            -std::numeric_limits<float>::infinity();
+      }
+    }
+    Tensor mask = Tensor::FromFloat("", {2, 1, 4, 8}, mask_values);
+    Tensor nonpad = Tensor::FromInt64("", {2}, {6, 7});
+    const WindowMaskPredicate mask_allows = [](int64_t b, int64_t, int64_t, int64_t j) {
+      return j != b;
+    };
+    Tensor Y =
+        MakeUniformWindowReference4(2, 3, 3, 4, 8, 8, 2, -1, true, {2, 3}, {6, 7}, mask_allows).Y;
+    NodeProto node =
+        MakeAttentionNode({"Q", "K", "V", "attn_mask", "", "", "nonpad_kv_seqlen"}, {"Y"});
+    AddInt(node, "is_causal", 1);
+    AddInt(node, "left_window_size", 2);
+    Expect(registry, std::move(node), "test_cc_attention_local_window_ext_cache_rank4_batch_mask",
+           {opset25}, [=]() -> IoData {
+             return IoData{
+                 {std::move(Q), std::move(K), std::move(V), std::move(mask), std::move(nonpad)},
+                 {std::move(Y)}};
+           });
+  }
+
+  {
+    Tensor Q = MakeConstantFloatTensor({2, 3, 4, 8}, 0.0f);
+    Tensor K = MakeConstantFloatTensor({2, 3, 8, 8}, 0.0f);
+    Tensor V = MakePositionValueTensor4(2, 3, 8, 8);
+    Tensor mask = Tensor::FromFloat(
+        "", {1, 8},
+        {0.0f, -std::numeric_limits<float>::infinity(), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f});
+    Tensor nonpad = Tensor::FromInt64("", {2}, {6, 7});
+    const WindowMaskPredicate mask_allows = [](int64_t, int64_t, int64_t, int64_t j) {
+      return j != 1;
+    };
+    Tensor Y =
+        MakeUniformWindowReference4(2, 3, 3, 4, 8, 8, 2, -1, true, {2, 3}, {6, 7}, mask_allows).Y;
+    NodeProto node =
+        MakeAttentionNode({"Q", "K", "V", "attn_mask", "", "", "nonpad_kv_seqlen"}, {"Y"});
+    AddInt(node, "is_causal", 1);
+    AddInt(node, "left_window_size", 2);
+    Expect(registry, std::move(node), "test_cc_attention_local_window_ext_cache_rank2_mask",
+           {opset25}, [=]() -> IoData {
+             return IoData{
+                 {std::move(Q), std::move(K), std::move(V), std::move(mask), std::move(nonpad)},
+                 {std::move(Y)}};
+           });
+  }
+
+  {
+    Tensor Q32 = MakeConstantFloatTensor({2, 3, 4, 8}, 0.0f);
+    Tensor K32 = MakeConstantFloatTensor({2, 3, 8, 8}, 0.0f);
+    Tensor V32 = MakeConstantFloatTensor({2, 3, 8, 8}, 1.0f);
+    Tensor mask32 = MakeConstantFloatTensor({1, 8}, 0.0f);
+    Tensor Y32 = MakeConstantFloatTensor({2, 3, 4, 8}, 1.0f);
+    Tensor Q = FloatToFloat16Tensor("", Q32);
+    Tensor K = FloatToFloat16Tensor("", K32);
+    Tensor V = FloatToFloat16Tensor("", V32);
+    Tensor mask = FloatToFloat16Tensor("", mask32);
+    Tensor Y = FloatToFloat16Tensor("", Y32);
+    Tensor nonpad = Tensor::FromInt64("", {2}, {6, 7});
+    NodeProto node =
+        MakeAttentionNode({"Q", "K", "V", "attn_mask", "", "", "nonpad_kv_seqlen"}, {"Y"});
+    AddInt(node, "is_causal", 1);
+    AddInt(node, "left_window_size", 2);
+    Expect(registry, std::move(node), "test_cc_attention_local_window_ext_cache_float16_mask",
+           {opset25}, [=]() -> IoData {
+             return IoData{
+                 {std::move(Q), std::move(K), std::move(V), std::move(mask), std::move(nonpad)},
+                 {std::move(Y)}};
+           });
+  }
+
+  {
+    Tensor Q = MakeConstantFloatTensor({2, 4, 32}, 0.0f);
+    Tensor K = MakeConstantFloatTensor({2, 6, 8}, 0.0f);
+    Tensor V = MakePositionValueTensor3(2, 1, 6, 6);
+    Tensor Y4 = MakeUniformWindowReference4(2, 4, 1, 4, 6, 6, 2, -1, true, {}, {}, {}).Y;
+    Tensor Y = CollapseReferenceToRank3(Y4);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "q_num_heads", 4);
+    AddInt(node, "kv_num_heads", 1);
+    AddInt(node, "is_causal", 1);
+    AddInt(node, "left_window_size", 2);
+    Expect(registry, std::move(node), "test_cc_attention_3d_local_window", {opset25},
+           [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
+           });
+  }
+
+  {
+    Tensor Q = MakeConstantFloatTensor({2, 4, 4, 8}, 0.0f);
+    Tensor K = MakeConstantFloatTensor({2, 2, 6, 8}, 0.0f);
+    Tensor V = MakePositionValueTensor4(2, 2, 6, 6);
+    std::vector<uint8_t> mask_values(static_cast<size_t>(2 * 4 * 4 * 6), 1);
+    for (int64_t b = 0; b < 2; ++b) {
+      for (int64_t h = 0; h < 4; ++h) {
+        for (int64_t j = 0; j < 6; ++j) {
+          mask_values[static_cast<size_t>(((b * 4 + h) * 4) * 6 + j)] = 0;
+        }
+      }
+    }
+    Tensor mask = Tensor::FromBool("", {2, 4, 4, 6}, mask_values);
+    const WindowMaskPredicate mask_allows = [](int64_t, int64_t, int64_t i, int64_t) {
+      return i != 0;
+    };
+    UniformWindowReference reference =
+        MakeUniformWindowReference4(2, 4, 2, 4, 6, 6, 2, -1, true, {}, {}, mask_allows);
+    NodeProto node =
+        MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y", "", "", "qk_matmul_output"});
+    AddInt(node, "is_causal", 1);
+    AddInt(node, "left_window_size", 2);
+    AddFloat(node, "softcap", 2.0f);
+    AddInt(node, "softmax_precision", static_cast<int64_t>(DataType::DOUBLE));
+    AddInt(node, "qk_matmul_output_mode", 3);
+    Expect(registry, std::move(node), "test_cc_attention_local_window_gqa_rank4_mask", {opset25},
+           [=]() -> IoData {
+             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
+                           {std::move(reference.Y), std::move(reference.probabilities)}};
+           });
   }
 }
 

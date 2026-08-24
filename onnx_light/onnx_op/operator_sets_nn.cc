@@ -1117,13 +1117,32 @@ const char *const kAttentionAttnMaskDescriptionVer24 =
     "or a float mask of the same type as query, key, value that is added to the "
     "attention score.";
 
+const char *const kAttentionAttnMaskDescriptionVer25 =
+    "Attention mask. "
+    "Shape must be broadcastable to "
+    "`(batch_size, q_num_heads, q_sequence_length, total_sequence_length)` "
+    "where `total_sequence_length = past_sequence_length + kv_sequence_length`. "
+    "The last dimension can also be shorter than `total_sequence_length` and will be "
+    "padded to `total_sequence_length` with negative infinity. "
+    "Two types of masks are supported: a boolean mask where a value of `True` indicates "
+    "that the element should take part in attention, "
+    "or a float mask of the same type as query, key, value that is added to the attention score.";
+
 const char *const kAttentionPastKeyDescription =
     "past state cache for key with shape `(batch_size, kv_num_heads, "
     "past_sequence_length, head_size)`";
 
+const char *const kAttentionPastKeyDescriptionVer25 =
+    "Past state for key with shape `(batch_size, kv_num_heads, past_sequence_length, head_size)`. "
+    "Must be used together with `past_value` input.";
+
 const char *const kAttentionPastValueDescription =
     "past state cache for value with shape `(batch_size, kv_num_heads, "
     "past_sequence_length, v_head_size)`";
+
+const char *const kAttentionPastValueDescriptionVer25 =
+    "Past state for value with shape `(batch_size, kv_num_heads, past_sequence_length, "
+    "v_head_size)`. Must be used together with `past_key` input.";
 
 const char *const kAttentionNonpadKvSeqlenDescription =
     "A vector of integers of shape `(batch_size,)` that indicates the number of valid "
@@ -1133,8 +1152,21 @@ const char *const kAttentionNonpadKvSeqlenDescription =
     "`past_key` and `past_value` inputs or `present_key` and `present_value` outputs "
     "(See the KV cache use cases in the operator description).";
 
+const char *const kAttentionNonpadKvSeqlenDescriptionVer25 =
+    "A vector of integers of shape `(batch_size,)` that indicates the number of valid "
+    "(i.e., non-padding) tokens in each sample. A padding mask can be derived from this. "
+    "This should not be used together with `past_key` and `past_value` inputs or "
+    "`present_key` and `present_value` outputs "
+    "(see the KV cache use cases in the operator description).";
+
 const char *const kAttentionYDescription =
     "The output tensor . "
+    "4D tensor with shape `(batch_size, q_num_heads, q_sequence_length, v_head_size)` "
+    "or 3D tensor with shape `(batch_size, q_sequence_length, hidden_size)`. "
+    "For cases with a 3D input tensor, `hidden_size = q_num_heads * v_head_size`";
+
+const char *const kAttentionYDescriptionVer25 =
+    "The output tensor. "
     "4D tensor with shape `(batch_size, q_num_heads, q_sequence_length, v_head_size)` "
     "or 3D tensor with shape `(batch_size, q_sequence_length, hidden_size)`. "
     "For cases with a 3D input tensor, `hidden_size = q_num_heads * v_head_size`";
@@ -1177,21 +1209,87 @@ LightOpSchema MakeAttentionSchema(int since_version) {
       {"K", kAttentionKDescription, "T1"},
       {"V", kAttentionVDescription, "T2"},
       {"attn_mask",
-       since_version >= 24 ? kAttentionAttnMaskDescriptionVer24
-                           : kAttentionAttnMaskDescriptionVer23,
+       since_version >= 25 ? kAttentionAttnMaskDescriptionVer25
+                           : (since_version >= 24 ? kAttentionAttnMaskDescriptionVer24
+                                                  : kAttentionAttnMaskDescriptionVer23),
        "U"},
-      {"past_key", kAttentionPastKeyDescription, "T1"},
-      {"past_value", kAttentionPastValueDescription, "T2"},
+      {"past_key",
+       since_version >= 25 ? kAttentionPastKeyDescriptionVer25 : kAttentionPastKeyDescription,
+       "T1"},
+      {"past_value",
+       since_version >= 25 ? kAttentionPastValueDescriptionVer25 : kAttentionPastValueDescription,
+       "T2"},
   };
   if (since_version >= 24) {
-    inputs.push_back({"nonpad_kv_seqlen", kAttentionNonpadKvSeqlenDescription, "tensor(int64)"});
+    inputs.push_back({"nonpad_kv_seqlen",
+                      since_version >= 25 ? kAttentionNonpadKvSeqlenDescriptionVer25
+                                          : kAttentionNonpadKvSeqlenDescription,
+                      "tensor(int64)"});
   }
   std::vector<FormalParameter> outputs = {
-      {"Y", kAttentionYDescription, "T1"},
+      {"Y", since_version >= 25 ? kAttentionYDescriptionVer25 : kAttentionYDescription, "T1"},
       {"present_key", kAttentionPresentKeyDescription, "T1"},
       {"present_value", kAttentionPresentValueDescription, "T2"},
       {"qk_matmul_output", kAttentionQkMatmulOutputDescription, "T1"},
   };
+  std::vector<AttributeParam> attributes;
+  if (since_version >= 25) {
+    attributes = {
+        {"is_causal",
+         "If set to `1`, causal masking is applied. For a square Q/K (no cache offset) this is a "
+         "lower-triangular matrix. In general the mask is bottom-right (offset-aware): query "
+         "in-block index `i` attends key `j` iff `j <= i + offset`, where `offset` is the count of "
+         "valid keys preceding the query block (`past_sequence_length` for an internal `past_key` "
+         "cache, or `nonpad_kv_seqlen - q_sequence_length` per batch for an external cache). When "
+         "`offset = 0` this reduces to the lower-triangular (top-left) mask.",
+         AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+        {"scale",
+         "Scaling factor applied to $Q*K^T$. Default value is `1/sqrt(head_size)`. To prevent "
+         "[numerical overflow](https://tinyurl.com/sudb9s96), scale `Q`, `K` by `sqrt(scale)` "
+         "before matmul.",
+         AttributeType::FLOAT, /*required=*/false, std::monostate{}},
+        {"q_num_heads", "Number of heads of query. Must be used with 3D inputs of Q, K and V. ",
+         AttributeType::INT, /*required=*/false, std::monostate{}},
+        {"kv_num_heads",
+         "Number of heads of key and value. Must be used with 3D inputs of Q, K and V. ",
+         AttributeType::INT, /*required=*/false, std::monostate{}},
+        {"softmax_precision",
+         "Specifies the precision for softmax computation. If provided, "
+         "the attention weights will be cast to this type before softmax "
+         "and then cast back to the original type. "
+         "Supported values are: `1` (FLOAT), `10` (FLOAT16), `11` (DOUBLE), "
+         "`16` (BFLOAT16).",
+         AttributeType::INT, /*required=*/false, std::monostate{}},
+        {"softcap",
+         "Soft cap for attention logits, applied as `softcap * tanh(logits / softcap)`. "
+         "Default value of `0.0` means no soft capping is applied. "
+         "The soft cap is applied before mask / bias addition and softmax.",
+         AttributeType::FLOAT, /*required=*/false, 0.0f},
+        {"qk_matmul_output_mode",
+         "Determines what the optional 4th output contains: "
+         "`0` (default): raw QK matmul result; "
+         "`1`: after softcap (before bias addition); "
+         "`2`: QK + softcap + bias; "
+         "`3`: post-softmax probabilities (after fully-masked-row guard). "
+         "In mode `3`, a fully-masked query row (every key disallowed) "
+         "is a zero row, consistent with the corresponding row of the primary output `Y`. "
+         "The mode-`3` output is emitted at the operator's output precision (`T1`); when "
+         "`softmax_precision` differs from `T1` this is a cast of the softmax result to `T1`.",
+         AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+        {"left_window_size",
+         "Maximum number of positions to the left of the current absolute query position that may "
+         "be attended. A value of `0` allows the current position but no preceding position, while "
+         "`-1` leaves the left side unbounded. This bound is composed with `is_causal` and "
+         "`attn_mask`.",
+         AttributeType::INT, /*required=*/false, static_cast<int64_t>(-1)},
+        {"right_window_size",
+         "Maximum number of positions to the right of the current absolute query position that "
+         "may be attended. A value of `0` allows the current position but no following position, "
+         "while `-1` leaves the right side unbounded. Set `is_causal=0` to use a positive right "
+         "window.",
+         AttributeType::INT, /*required=*/false, static_cast<int64_t>(-1)},
+    };
+  }
   return LightOpSchema(
       "Attention", kOnnxDomain, since_version, MakeAttentionDoc(since_version), std::move(inputs),
       std::move(outputs),
@@ -1201,6 +1299,7 @@ LightOpSchema MakeAttentionSchema(int since_version) {
           {"U", AttentionMaskTypes(),
            "Constrain output 'mask' types to boolean tensors and input types."},
       },
+      std::move(attributes),
       /*has_function_implementation=*/true);
 }
 
@@ -2048,6 +2147,7 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
       {"Attention",
        [] {
          return std::vector<LightOpSchema>{
+             MakeAttentionSchema(25),
              MakeAttentionSchema(24),
              MakeAttentionSchema(23),
          };

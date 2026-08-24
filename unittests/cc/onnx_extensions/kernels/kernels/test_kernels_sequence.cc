@@ -764,6 +764,15 @@ TEST(KernelClass, SplitToSequenceNegativeAxisIsAccepted) {
   EXPECT_EQ(out.at(1).shape, (std::vector<int64_t>{2, 2}));
 }
 
+TEST(KernelClass, SplitToSequenceRejectsZeroScalarSplit) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SplitToSequence op{ctx};
+  Tensor input = Tensor::FromFloat("", {2, 4}, std::vector<float>(8, 0.f));
+  Tensor split = Tensor::FromInt64("", {}, {0});
+
+  EXPECT_THROW(op(input, &split, /*axis=*/1), std::invalid_argument);
+}
+
 TEST(KernelClass, SplitToSequenceRejectsScalarInput) {
   const KernelContext ctx{DefaultOpset(11)};
   SplitToSequence op{ctx};

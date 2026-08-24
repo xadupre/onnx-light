@@ -2,6 +2,7 @@
 #include "../common/tensor.h"
 #include "../defs/data_propagators.h"
 #include "../defs/doc_strings.h"
+#include "../defs/operator_sets.h"
 #include "../defs/operator_sets_preview.h"
 #include "../defs/schema.h"
 #include "onnx.h"
@@ -472,6 +473,28 @@ TEST(onnx_defs, Schema_PreviewFlexAttentionDefinition) {
   EXPECT_TRUE(schema.HasContextDependentFunction());
 }
 
+TEST(onnx_defs, Schema_Attention25WindowAttributes) {
+  const OpSchema schema = GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 25, Attention)>();
+  EXPECT_EQ(schema.Name(), "Attention");
+  EXPECT_EQ(schema.SinceVersion(), 25);
+  EXPECT_EQ(schema.attributes().size(), 9u);
+  for (const char *name :
+       {"is_causal", "scale", "q_num_heads", "kv_num_heads", "softmax_precision", "softcap",
+        "qk_matmul_output_mode", "left_window_size", "right_window_size"}) {
+    EXPECT_EQ(schema.attributes().count(name), 1u) << name;
+  }
+  ASSERT_EQ(schema.attributes().count("left_window_size"), 1u);
+  ASSERT_EQ(schema.attributes().count("right_window_size"), 1u);
+  EXPECT_EQ(schema.attributes().at("left_window_size").default_value.i(), -1);
+  EXPECT_EQ(schema.attributes().at("right_window_size").default_value.i(), -1);
+  EXPECT_NE(std::string(schema.doc()).find("2D sliding-window mask for Attention (opset 25)"),
+            std::string::npos);
+  EXPECT_EQ(schema.inputs().at(4).GetDescription(),
+            "Past state for key with shape `(batch_size, kv_num_heads, past_sequence_length, "
+            "head_size)`. Must be used together with `past_value` input.");
+  EXPECT_EQ(schema.outputs().at(0).GetDescription().find("The output tensor."), 0u);
+}
+
 // ===========================================================================
 // tensor_util.cc tests
 // ===========================================================================
@@ -591,6 +614,65 @@ TEST(onnx_defs, ParseData_Int32_FromRawData_TensorProto) {
   EXPECT_EQ(data[2], raw_vals[2]);
 }
 
+TEST(onnx_defs, ParseData_Int32_FromRawData_UsesDimensions) {
+  TensorProto tensor;
+  tensor.add_dims(1);
+  tensor.set_raw_data(std::string("\x01\0\0\0\x02\0\0\0", 8));
+
+  const auto data = ParseData<int32_t>(&tensor);
+  ASSERT_EQ(data.size(), 1u);
+  EXPECT_EQ(data[0], 1);
+}
+
+TEST(onnx_defs, ParseData_Int32_FromRawData_IgnoresTrailingPartialElement) {
+  TensorProto tensor;
+  tensor.add_dims(1);
+  tensor.set_raw_data(std::string("\x01\0\0\0\x7f", 5));
+
+  const auto data = ParseData<int32_t>(&tensor);
+  ASSERT_EQ(data.size(), 1u);
+  EXPECT_EQ(data[0], 1);
+}
+
+TEST(onnx_defs, ParseData_Float_FromRawData_UsesDimensions) {
+  TensorProto tensor;
+  tensor.add_dims(2);
+  tensor.set_raw_data(std::string("\0\0\x80\x3f\0\0\0\xc0", 8));
+
+  const auto data = ParseData<float>(&tensor);
+  ASSERT_EQ(data.size(), 2u);
+  EXPECT_FLOAT_EQ(data[0], 1.0F);
+  EXPECT_FLOAT_EQ(data[1], -2.0F);
+}
+
+TEST(onnx_defs, ParseData_Uint64_FromRawData_UsesDimensions) {
+  TensorProto tensor;
+  tensor.add_dims(1);
+  tensor.set_raw_data(std::string("\x01\0\0\0\0\0\0\0\x02\0\0\0\0\0\0\0", 16));
+
+  const auto data = ParseData<uint64_t>(&tensor);
+  ASSERT_EQ(data.size(), 1u);
+  EXPECT_EQ(data[0], 1u);
+}
+
+#ifndef ONNX_NO_EXCEPTIONS
+TEST(onnx_defs, ParseData_Int32_FromRawData_RejectsTooShortPayload) {
+  TensorProto tensor;
+  tensor.add_dims(2);
+  tensor.set_raw_data(std::string("\x01\0\0\0", 4));
+
+  EXPECT_THROW(ParseData<int32_t>(&tensor), std::runtime_error);
+}
+#endif // ONNX_NO_EXCEPTIONS
+
+TEST(onnx_defs, ParseData_Int32_FromRawData_EmptyTensor) {
+  TensorProto tensor;
+  tensor.add_dims(0);
+  tensor.set_raw_data(std::string("\x01\0\0\0", 4));
+
+  EXPECT_TRUE(ParseData<int32_t>(&tensor).empty());
+}
+
 TEST(onnx_defs, ParseData_Int32_FromEmptyRawData_TensorProto) {
   TensorProto tensor;
   tensor.set_raw_data(std::string());
@@ -598,6 +680,41 @@ TEST(onnx_defs, ParseData_Int32_FromEmptyRawData_TensorProto) {
   auto data = ParseData<int32_t>(&tensor);
   EXPECT_TRUE(data.empty());
 }
+
+TEST(onnx_defs, ParseRawData_DecodesLittleEndian) {
+  TensorProto tensor;
+  tensor.add_dims(2);
+  tensor.set_raw_data(std::string("\x01\0\0\0\xfe\xff\xff\xff", 8));
+
+  const auto data = ParseRawData<int32_t>(tensor, true);
+  ASSERT_EQ(data.size(), 2u);
+  EXPECT_EQ(data[0], 1);
+  EXPECT_EQ(data[1], -2);
+}
+
+#ifndef ONNX_NO_EXCEPTIONS
+TEST(onnx_defs, ParseRawData_ExactFitRejectsSizeMismatch) {
+  TensorProto tensor;
+  tensor.set_name("weights");
+  tensor.add_dims(2);
+  tensor.set_raw_data(std::string("\0\x3c", 2));
+
+  EXPECT_THROW(ParseRawData<uint16_t>(tensor, true), std::runtime_error);
+
+  tensor.clear_dims();
+  tensor.add_dims(1);
+  tensor.set_raw_data(std::string("\0\x3c\0\x40", 4));
+  EXPECT_THROW(ParseRawData<uint16_t>(tensor, true), std::runtime_error);
+
+  tensor.set_raw_data(std::string("\0\x3c\x7f", 3));
+  EXPECT_THROW(ParseRawData<uint16_t>(tensor, true), std::runtime_error);
+
+  tensor.clear_dims();
+  tensor.add_dims(0);
+  tensor.set_raw_data(std::string("\0\x3c", 2));
+  EXPECT_THROW(ParseRawData<uint16_t>(tensor, true), std::runtime_error);
+}
+#endif // ONNX_NO_EXCEPTIONS
 
 // ===========================================================================
 // doc_strings.cc tests

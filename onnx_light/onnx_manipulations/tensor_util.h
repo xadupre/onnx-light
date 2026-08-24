@@ -13,8 +13,14 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cstddef>
+#include <cstring>
+#include <type_traits>
 #include <vector>
 
+#include "onnx_lib/common/platform_helpers.h"
+#include "onnx_lib/common/safe_math.h"
 #include "onnx_lib/common/tensor.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -27,6 +33,41 @@ namespace ONNX_LIGHT_NAMESPACE {
  * @return A vector containing tensor data converted to T.
  */
 template <typename T> std::vector<T> ParseData(const TensorProto *tensor);
+
+/**
+ * Returns the element count implied by tensor dimensions after validating raw data size.
+ *
+ * @param tensor Source tensor.
+ * @param element_size Size of one decoded element.
+ * @param exact_fit Whether raw data must contain exactly the implied number of elements.
+ * @return The number of elements implied by the tensor dimensions.
+ */
+int64_t RawDataElementCount(const TensorProto &tensor, size_t element_size, bool exact_fit);
+
+/**
+ * Decodes little-endian raw tensor data as values of type T.
+ *
+ * @tparam T Arithmetic element type to decode.
+ * @param tensor Source tensor.
+ * @param exact_fit Whether raw data must contain exactly the implied number of elements.
+ * @return A vector containing the decoded elements.
+ */
+template <typename T>
+std::vector<T> ParseRawData(const TensorProto &tensor, bool exact_fit = false) {
+  static_assert(std::is_arithmetic_v<T>, "T must be an arithmetic type");
+  const auto num_elements = static_cast<size_t>(RawDataElementCount(tensor, sizeof(T), exact_fit));
+  std::vector<T> values(num_elements);
+  if (num_elements != 0) {
+    std::memcpy(values.data(), tensor.ref_raw_data().data(), num_elements * sizeof(T));
+    if (!is_processor_little_endian()) {
+      for (T &value : values) {
+        auto *start = reinterpret_cast<std::byte *>(&value);
+        std::reverse(start, start + sizeof(T));
+      }
+    }
+  }
+  return values;
+}
 
 /**
  * Extracts typed element data from a Tensor wrapper.

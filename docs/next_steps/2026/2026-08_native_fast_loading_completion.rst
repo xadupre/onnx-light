@@ -5,7 +5,7 @@ Completing native fast model loading
 
 :Date: 2026-08
 
-**in progress; native PR01--PR03 are implemented**
+**in progress; native PR01--PR04 are implemented**
 
 Objective
 +++++++++
@@ -101,6 +101,8 @@ Native PR04 -- connect and tune first-token overlap
 
 **Repository:** ``xadupre/onnx-light``
 
+**Implemented by issue #4621.**
+
 Connect the frozen payload manifest and prepared-cache choices to the
 session-scoped tasks in :ref:`l-next-steps-prepared-execution`. Prioritize
 embeddings and early decoder blocks; prepare later blocks under bounded memory
@@ -117,6 +119,22 @@ Acceptance:
 * synchronous mode remains the correctness reference;
 * dedicated x86 and ARM results separate cold storage, warm page cache, warm
   prepared cache, first token, and fully prepared milestones.
+
+``PreparedMaterialization`` now joins each resolver-selected packed or portable
+recipe to its manifest-backed session task chain. Invocation descriptors name
+only the ``PreparedKey`` objects they consume; plan construction adds those exact
+publisher dependencies and rejects missing or ambiguous publishers. Critical
+embedding and early-block chains outrank explicitly prefetched later blocks while
+the existing per-resource and global admission budgets remain authoritative.
+
+Every executed task also emits a timestamped ``PreparedTaskTrace`` interval with
+its effective priority and resource class. This makes I/O, prepack, and inference
+overlap directly testable instead of inferring it from aggregate load time.
+``bench_prepared_cache_startup`` reports portable and prepared-cache first-token
+times, while ``bench_prepared_hot_path`` reports the fully prepared cost against
+the direct ``ExecutionPlan`` envelope. Run both binaries on each x86 and ARM
+target, once after dropping the storage cache and once with a warm page cache;
+retain their machine-readable output as the dedicated platform result.
 
 Native PR05 -- add prepared-object eviction and reload
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++

@@ -9,8 +9,10 @@
 #include "worker_pool.h"
 
 #include <algorithm>
+#include <chrono>
 #include <condition_variable>
 #include <functional>
+#include <iterator>
 #include <limits>
 #include <stdexcept>
 #include <thread>
@@ -224,6 +226,25 @@ ExpandMaterializationRecipe(const PreparedRequirementDescriptor &requirement,
 
 PreparedExecutionPlan::PreparedExecutionPlan(std::vector<TaskDescriptor> tasks)
     : tasks_(std::move(tasks)) {
+  std::unordered_map<std::string, TaskId> publishers;
+  for (const TaskDescriptor &task : tasks_) {
+    if (!task.dormant && task.publishes.has_value()) {
+      EXT_ENFORCE(publishers.emplace(task.publishes->value, task.id).second,
+                  "Multiple active prepared tasks publish key '", task.publishes->value, "'.");
+    }
+  }
+  for (TaskDescriptor &task : tasks_) {
+    for (const PreparedKey &key : task.prepared_requirements) {
+      const auto publisher = publishers.find(key.value);
+      EXT_ENFORCE(publisher != publishers.end(), "Prepared task ", task.id.value, " requires key '",
+                  key.value, "' without an active publisher.");
+      if (std::find(task.dependencies.begin(), task.dependencies.end(), publisher->second) ==
+          task.dependencies.end()) {
+        task.dependencies.push_back(publisher->second);
+      }
+    }
+  }
+
   std::unordered_map<uint64_t, TaskScope> scopes;
   std::unordered_set<uint64_t> dormant;
   std::unordered_set<std::string> prepared_requirements;
@@ -268,7 +289,45 @@ PreparedExecutionPlan::PreparedExecutionPlan(std::vector<TaskDescriptor> tasks,
 
 namespace {
 
+std::vector<TaskDescriptor>
+ConnectMaterializations(std::vector<TaskDescriptor> invocation_tasks,
+                        std::vector<PreparedMaterialization> materializations,
+                        const RequiredPayloadManifest &payload_manifest) {
+  std::vector<TaskDescriptor> tasks;
+  tasks.reserve(invocation_tasks.size() + materializations.size() * 4);
+  for (const PreparedMaterialization &materialization : materializations) {
+    MaterializationTaskDescriptors expanded = ExpandMaterializationRecipe(
+        materialization.requirement, materialization.selected, materialization.first_task_id);
+    const auto payload =
+        std::find_if(payload_manifest.entries().begin(), payload_manifest.entries().end(),
+                     [&](const PayloadManifestEntry &entry) {
+                       return entry.id == materialization.selected.payload_id;
+                     });
+    if (payload != payload_manifest.entries().end() &&
+        payload->length <= static_cast<uint64_t>(std::numeric_limits<size_t>::max())) {
+      expanded.load.estimated_output_bytes = static_cast<size_t>(payload->length);
+    }
+    expanded.load.priority = materialization.priority;
+    expanded.prepack.priority = materialization.priority;
+    expanded.publish.priority = materialization.priority;
+    expanded.dormant_fallback.priority = materialization.priority;
+    tasks.push_back(std::move(expanded.load));
+    tasks.push_back(std::move(expanded.prepack));
+    tasks.push_back(std::move(expanded.publish));
+    tasks.push_back(std::move(expanded.dormant_fallback));
+  }
+  tasks.insert(tasks.end(), std::make_move_iterator(invocation_tasks.begin()),
+               std::make_move_iterator(invocation_tasks.end()));
+  return tasks;
+}
+
 int PriorityRank(TaskPriority priority) { return static_cast<int>(priority); }
+
+uint64_t TraceTimestamp() {
+  return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                   std::chrono::steady_clock::now().time_since_epoch())
+                                   .count());
+}
 
 size_t SaturatingAdd(size_t left, size_t right) {
   return left > std::numeric_limits<size_t>::max() - right ? std::numeric_limits<size_t>::max()
@@ -322,6 +381,13 @@ bool AllPreparedRequirementsResident(const std::vector<TaskDescriptor> &tasks,
 }
 
 } // namespace
+
+PreparedExecutionPlan::PreparedExecutionPlan(std::vector<TaskDescriptor> invocation_tasks,
+                                             std::vector<PreparedMaterialization> materializations,
+                                             const RequiredPayloadManifest &payload_manifest)
+    : PreparedExecutionPlan(ConnectMaterializations(std::move(invocation_tasks),
+                                                    std::move(materializations), payload_manifest),
+                            payload_manifest) {}
 
 struct PreparedExecutionState::SchedulerState {
   explicit SchedulerState(PreparedSchedulerOptions options_) : options(std::move(options_)) {
@@ -596,10 +662,15 @@ PreparedExecutionPlan::Run(PreparedExecutionState &state, const PreparedTaskExec
                                       failed_dependency});
         continue;
       }
+      const uint64_t start_ns = TraceTimestamp();
       try {
         executor(task, state);
+        result.trace.push_back({task.id, task.scope, task.kind, task.resource, task.priority,
+                                start_ns, TraceTimestamp()});
         result.diagnostics.push_back({task.id, TaskStatus::kSucceeded, {}, std::nullopt});
       } catch (...) {
+        result.trace.push_back({task.id, task.scope, task.kind, task.resource, task.priority,
+                                start_ns, TraceTimestamp()});
         result.diagnostics.push_back(
             {task.id, TaskStatus::kFailed, "Prepared invocation task failed.", std::nullopt});
       }
@@ -658,8 +729,7 @@ PreparedExecutionPlan::Run(PreparedExecutionState &state, const PreparedTaskExec
             ? session.at(task.id.value)
             : PreparedExecutionState::SessionTaskRequest{0, invocation.at(task.id.value), true};
     task_indices.emplace(task.id.value, run_tasks.size());
-    run_tasks.push_back(RunTask{&task, request.completion, request.producer, false,
-                                is_session ? task.priority : TaskPriority::kCritical});
+    run_tasks.push_back(RunTask{&task, request.completion, request.producer, false, task.priority});
   }
   for (const RunTask &task : run_tasks) {
     state.scheduler_->Validate(*task.descriptor);
@@ -680,8 +750,11 @@ PreparedExecutionPlan::Run(PreparedExecutionState &state, const PreparedTaskExec
   size_t progress_epoch = 0;
   size_t peak_in_flight = 0;
   size_t continuation_suspensions = 0;
+  std::mutex trace_mutex;
+  std::vector<PreparedTaskTrace> trace;
   std::jthread session_worker;
   auto execute_task = [&](RunTask &task) {
+    const uint64_t start_ns = TraceTimestamp();
     try {
       TaskDescriptor scheduled = *task.descriptor;
       scheduled.priority = task.effective_priority;
@@ -691,6 +764,12 @@ PreparedExecutionPlan::Run(PreparedExecutionState &state, const PreparedTaskExec
       task.completion.Fail(std::current_exception(), task.descriptor->scope == TaskScope::kSession
                                                          ? "Prepared session task failed."
                                                          : "Prepared invocation task failed.");
+    }
+    const uint64_t end_ns = TraceTimestamp();
+    {
+      std::lock_guard<std::mutex> lock(trace_mutex);
+      trace.push_back({task.descriptor->id, task.descriptor->scope, task.descriptor->kind,
+                       task.descriptor->resource, task.effective_priority, start_ns, end_ns});
     }
     state.scheduler_->Release(*task.descriptor);
   };
@@ -870,6 +949,11 @@ PreparedExecutionPlan::Run(PreparedExecutionState &state, const PreparedTaskExec
                                         [](const RunTask &task) { return task.dispatched; });
   result.continuation_suspensions = continuation_suspensions;
   result.peak_in_flight_bytes = peak_in_flight;
+  std::stable_sort(trace.begin(), trace.end(),
+                   [](const PreparedTaskTrace &left, const PreparedTaskTrace &right) {
+                     return left.start_ns < right.start_ns;
+                   });
+  result.trace = std::move(trace);
   result.diagnostics.reserve(tasks_.size());
   result.session_generations.reserve(session.size());
   for (const TaskDescriptor &task : tasks_) {

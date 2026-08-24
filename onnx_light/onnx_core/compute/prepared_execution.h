@@ -147,10 +147,27 @@ struct MaterializationTaskDescriptors {
   TaskDescriptor dormant_fallback;
 };
 
+struct PreparedMaterialization {
+  PreparedRequirementDescriptor requirement;
+  MaterializationRecipe selected;
+  TaskId first_task_id;
+  TaskPriority priority = TaskPriority::kPrefetch;
+};
+
 class PreparedExecutionState;
 class RequiredPayloadManifest;
 
 using PreparedTaskExecutor = std::function<void(const TaskDescriptor &, PreparedExecutionState &)>;
+
+struct PreparedTaskTrace {
+  TaskId task_id;
+  TaskScope scope = TaskScope::kInvocation;
+  TaskKind kind = TaskKind::kExecute;
+  ResourceClass resource = ResourceClass::kCpu;
+  TaskPriority priority = TaskPriority::kPrefetch;
+  uint64_t start_ns = 0;
+  uint64_t end_ns = 0;
+};
 
 struct PreparedExecutionResult {
   uint64_t invocation_id = 0;
@@ -160,6 +177,7 @@ struct PreparedExecutionResult {
   size_t enqueued_tasks = 0;
   size_t continuation_suspensions = 0;
   size_t peak_in_flight_bytes = 0;
+  std::vector<PreparedTaskTrace> trace;
 };
 
 struct PreparedSchedulerOptions {
@@ -226,6 +244,9 @@ class ONNX_LIGHT_CORE_API PreparedExecutionPlan {
 public:
   explicit PreparedExecutionPlan(std::vector<TaskDescriptor> tasks);
   PreparedExecutionPlan(std::vector<TaskDescriptor> tasks,
+                        const RequiredPayloadManifest &payload_manifest);
+  PreparedExecutionPlan(std::vector<TaskDescriptor> invocation_tasks,
+                        std::vector<PreparedMaterialization> materializations,
                         const RequiredPayloadManifest &payload_manifest);
 
   const std::vector<TaskDescriptor> &tasks() const noexcept { return tasks_; }

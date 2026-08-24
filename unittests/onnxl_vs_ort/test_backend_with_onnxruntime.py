@@ -78,6 +78,8 @@ ORT_EXCLUDE_REGEX = [
     # causal frontier for an external KV cache (``nonpad_kv_seqlen`` without
     # ``past_key``); see ONNX PR #8068.
     r"^test_cc_attention_4d_causal_nonpad_kv_continued_prefill$",
+    # ORT 1.27 does not yet register the opset-25 local-window attributes.
+    r"^test_cc_attention_(?:.*local_window.*|bidirectional_window)$",
     # Preview training ops are not registered in ORT.
     r"^test_cc_adam_",
     r"^test_adam$",

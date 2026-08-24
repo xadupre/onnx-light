@@ -43,6 +43,8 @@ Native PR02 -- resolve before materializing payloads
 
 **Repository:** ``xadupre/onnx-light``
 
+**Implemented by issue #4619.**
+
 Implement the executable slice of :ref:`l-next-steps-model-resolution` that
 freezes ``RequiredPayloadManifest`` before large reads. Concrete useful cases
 include a constant ``If`` branch, unused training/debug heads, initializers
@@ -59,6 +61,11 @@ Acceptance:
 * dead, superseded, and prepared-cache-replaced payload bytes are counted;
 * graph transformations cannot mutate requirements after reads begin;
 * eager loading remains a diagnosed fallback for unsupported transformations.
+
+The native prepared-task boundary now carries payload identities and validates
+every read against an immutable manifest. The manifest reports bytes omitted
+as dead, superseded, or replaced by a prepared-cache payload; unsupported
+transformations explicitly select and diagnose eager loading.
 
 Native PR03 -- consume prepared tensors before portable weights
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

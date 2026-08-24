@@ -4,6 +4,8 @@
 
 #include "prepared_execution.h"
 
+#include "resolved_model_fixture.h"
+
 #include "worker_pool.h"
 
 #include <algorithm>
@@ -203,6 +205,7 @@ ExpandMaterializationRecipe(const PreparedRequirementDescriptor &requirement,
   MaterializationTaskDescriptors descriptors;
   descriptors.load =
       TaskDescriptor{load_id, TaskScope::kSession, TaskKind::kReadPayload, ResourceClass::kIo};
+  descriptors.load.payload_id = selected.payload_id;
   descriptors.prepack = TaskDescriptor{
       prepack_id, TaskScope::kSession, TaskKind::kPrepare, ResourceClass::kCpu, {load_id}};
   descriptors.publish = TaskDescriptor{
@@ -242,6 +245,20 @@ PreparedExecutionPlan::PreparedExecutionPlan(std::vector<TaskDescriptor> tasks)
         prepared_requirements_.push_back(key);
       }
     }
+  }
+}
+
+PreparedExecutionPlan::PreparedExecutionPlan(std::vector<TaskDescriptor> tasks,
+                                             const RequiredPayloadManifest &payload_manifest)
+    : PreparedExecutionPlan(std::move(tasks)) {
+  for (const TaskDescriptor &task : tasks_) {
+    if (task.kind != TaskKind::kReadPayload) {
+      continue;
+    }
+    EXT_ENFORCE(!task.payload_id.empty(), "Payload-read task ", task.id.value,
+                " does not name a frozen manifest entry.");
+    EXT_ENFORCE(payload_manifest.ContainsActive(task.payload_id), "Payload-read task ",
+                task.id.value, " names inactive or absent payload '", task.payload_id, "'.");
   }
 }
 

@@ -168,8 +168,8 @@ int main(int argc, char *argv[]) {
             << "  model    = " << model_path << "\n"
             << "  weights  = " << weights_path << "\n";
 
-  ResolvedModelFixture resolved(
-      model_path, {PayloadManifestEntry{"W", weights_path, 0, kFixturePayloadBytes, true}});
+  ResolvedModelFixture resolved(model_path, RequiredPayloadManifest::Freeze({PayloadManifestEntry{
+                                                "W", weights_path, 0, kFixturePayloadBytes}}));
   const std::vector<uint8_t> expected_output = resolved.ReadPayload("W");
 
   if (std::filesystem::exists(weights_path)) {

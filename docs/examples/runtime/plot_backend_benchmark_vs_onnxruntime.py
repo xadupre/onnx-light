@@ -55,22 +55,32 @@ if os.environ.get("UNITTEST_GOING") == "1":
 else:
     warmup, repeat = 3, 7
 
+MAX_MEASURE_DURATION = 2.0
 
-def measure(function, warmup: int, repeat: int) -> float:
+
+def measure(
+    function, warmup: int, repeat: int, max_duration: float = MAX_MEASURE_DURATION
+) -> float:
     """Measures a callable after warm-up and returns its median time per call.
 
     Returns:
-        The median wall-clock duration, in seconds, of ``repeat`` calls to
-        ``function`` (excluding the ``warmup`` calls).
+        The median wall-clock duration, in seconds, of at most ``repeat``
+        calls to ``function`` (excluding the ``warmup`` calls). Measurement
+        stops once their cumulative duration reaches ``max_duration``.
     """
 
     for _ in range(warmup):
         function()
     timings = []
+    total_duration = 0.0
     for _ in range(repeat):
         start = time.perf_counter()
         function()
-        timings.append(time.perf_counter() - start)
+        duration = time.perf_counter() - start
+        timings.append(duration)
+        total_duration += duration
+        if total_duration >= max_duration:
+            break
     return float(numpy.median(timings))
 
 

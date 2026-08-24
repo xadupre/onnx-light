@@ -397,6 +397,50 @@ TEST(onnx_shape_inference, InferShapesImpl_ModelGraph) {
   EXPECT_EQ(dims[1].ref_dim_value(), kExpectedDim1);
 }
 
+TEST(onnx_shape_inference, InferShapesImpl_SplitToSequenceRejectsZeroScalarSplit) {
+  for (const int64_t version : {int64_t{11}, int64_t{24}}) {
+    ModelProto model;
+    model.set_ir_version(IR_VERSION);
+    auto *opset = model.add_opset_import();
+    opset->set_domain("");
+    opset->set_version(version);
+
+    GraphProto *graph = model.mutable_graph();
+    graph->set_name("split_to_sequence_zero_scalar");
+
+    ValueInfoProto *input = graph->add_input();
+    input->set_name("input");
+    TypeProto::Tensor *input_tensor = input->mutable_type()->mutable_tensor_type();
+    input_tensor->set_elem_type(TensorProto::FLOAT);
+    input_tensor->mutable_shape()->add_dim()->set_dim_value(6);
+    input_tensor->mutable_shape()->add_dim()->set_dim_value(4);
+
+    ValueInfoProto *split = graph->add_input();
+    split->set_name("split");
+    TypeProto::Tensor *split_tensor = split->mutable_type()->mutable_tensor_type();
+    split_tensor->set_elem_type(TensorProto::INT32);
+    split_tensor->mutable_shape();
+
+    ValueInfoProto *output = graph->add_output();
+    output->set_name("output_sequence");
+
+    TensorProto *initializer = graph->add_initializer();
+    initializer->set_name("split");
+    initializer->set_data_type(TensorProto::INT32);
+    initializer->add_int32_data(0);
+
+    NodeProto *node = graph->add_node();
+    node->set_op_type("SplitToSequence");
+    *node->add_input() = "input";
+    *node->add_input() = "split";
+    *node->add_output() = "output_sequence";
+
+    EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                              ShapeInferenceOptions(false, 1, false)),
+                 ONNX_LIGHT_NAMESPACE::InferenceError);
+  }
+}
+
 TEST(onnx_shape_inference, InferShapesImpl_RNNBidirectionalLayout0) {
   ModelProto model;
   model.set_ir_version(IR_VERSION);

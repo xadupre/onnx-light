@@ -1165,6 +1165,21 @@ TEST(OnnxOptimShapeSplitToSequence, KnownScalarSplitProducesEqualChunks) {
   }
 }
 
+TEST(OnnxOptimShapeSplitToSequence, RejectsZeroScalarSplit) {
+  NodeProto node = MakeSplitToSequenceNode("x", "out", /*with_split=*/true, /*axis=*/1);
+  core::shapes::ShapesContext ctx;
+  ctx.Set("x", core::symbolic::SymTensor(
+                   nullptr, core::symbolic::TensorType::kFloat,
+                   core::symbolic::SymShape{core::symbolic::SymDim(3), core::symbolic::SymDim(6)}));
+  core::symbolic::SymTensor split_t(nullptr, core::symbolic::TensorType::kInt64,
+                                    core::symbolic::SymShape{});
+  split_t.SetValueAsShape(core::symbolic::SymShape{core::symbolic::SymDim(int64_t{0})});
+  ctx.Set("split", std::move(split_t));
+
+  EXPECT_THROW(onnx_shapes::shapes::sequence::ComputeShapeSplitToSequence(ctx, node),
+               std::invalid_argument);
+}
+
 TEST(OnnxOptimShapeSplitToSequence, UnknownSplitValueLeavesShapesUnresolved) {
   NodeProto node = MakeSplitToSequenceNode("x", "out", /*with_split=*/true, /*axis=*/0);
   core::shapes::ShapesContext ctx;

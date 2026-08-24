@@ -969,8 +969,8 @@ FileWriteStream::FileWriteStream(const std::string &file_path)
     file_stream_.clear();
     file_stream_.open(file_path, std::ios::binary | std::ios::in | std::ios::out);
   }
-  EXT_ENFORCE(file_stream_.is_open(), "FileWriteStream: failed to open file for writing: ",
-              file_path);
+  EXT_ENFORCE(file_stream_.is_open(),
+              "FileWriteStream: failed to open file for writing: ", file_path);
 }
 
 void FileWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {

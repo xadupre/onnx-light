@@ -585,6 +585,15 @@ public:
   use_list uses() const;
 
   /**
+   * @brief Returns true if this value has a use in its current graph.
+   *
+   * This O(1) check skips the nested-subgraph capture scan performed by
+   * @ref uses(), so callers must establish that control-flow subgraphs do not
+   * need to be considered.
+   */
+  bool hasUsesInCurrentGraph() const { return !uses_in_current_graph_.empty(); }
+
+  /**
    * @brief Replaces all uses of this value with @p newValue.
    *
    * Also propagates element type and size information to @p newValue, and
@@ -609,7 +618,11 @@ public:
    */
   Value *copyMetadata(const Value *from) {
     setElemType(from->elemType());
-    setSizes(from->sizes());
+    if (from->has_sizes()) {
+      setSizes(from->sizes());
+    } else {
+      wipeSizes();
+    }
     if (from->has_unique_name()) {
       setUniqueName(from->uniqueName());
     }
@@ -803,6 +816,18 @@ public:
   bool hasUses() const {
     for (const auto *o : outputs()) {
       if (!o->uses().empty())
+        return true;
+    }
+    return false;
+  }
+  /**
+   * @brief Returns true if any output has a use in the current graph.
+   *
+   * This avoids the nested-subgraph capture scan performed by @ref hasUses().
+   */
+  bool hasUsesInCurrentGraph() const {
+    for (const auto *o : outputs()) {
+      if (o->hasUsesInCurrentGraph())
         return true;
     }
     return false;
@@ -1449,16 +1474,20 @@ public:
    * @param name Name of the initializer to remove.
    */
   void eraseInitializer(const std::string &name) {
-    initializers_.erase(
-        std::remove_if(initializers_.begin(), initializers_.end(),
-                       [&name](Tensor &initializer) { return initializer.name() == name; }),
-        initializers_.end());
+    // Preserves an aliased initializer name before erasure invalidates its storage.
+    // NOLINTNEXTLINE(performance-unnecessary-copy-initialization)
+    const std::string stable_name = name;
+    initializers_.erase(std::remove_if(initializers_.begin(), initializers_.end(),
+                                       [&stable_name](Tensor &initializer) {
+                                         return initializer.name() == stable_name;
+                                       }),
+                        initializers_.end());
     initializer_names_.erase(
-        std::remove(initializer_names_.begin(), initializer_names_.end(), name),
+        std::remove(initializer_names_.begin(), initializer_names_.end(), stable_name),
         initializer_names_.end());
-    releaseName(name);
+    releaseName(stable_name);
     for (size_t i = 0; i < initializer_node_->outputs().size(); i++) {
-      if (initializer_node_->outputs()[i]->uniqueName() == name) {
+      if (initializer_node_->outputs()[i]->uniqueName() == stable_name) {
         initializer_node_->eraseOutput(i);
         break;
       }

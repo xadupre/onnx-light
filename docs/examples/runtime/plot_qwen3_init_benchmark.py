@@ -50,7 +50,16 @@ else:
     N_ITER, N_WARMUP = 5, 1
 
 
-def measure(name: str, fn, n: int = N_ITER, warmup: int = N_WARMUP) -> dict:
+MAX_MEASURE_DURATION = 2.0
+
+
+def measure(
+    name: str,
+    fn,
+    n: int = N_ITER,
+    warmup: int = N_WARMUP,
+    max_duration: float = MAX_MEASURE_DURATION,
+) -> dict:
     """Runs *fn* with warm-up iterations and records timing statistics.
 
     Args:
@@ -67,10 +76,15 @@ def measure(name: str, fn, n: int = N_ITER, warmup: int = N_WARMUP) -> dict:
     for _ in range(max(0, warmup)):
         fn()
     times = []
+    total_duration = 0.0
     for _ in range(max(1, n)):
         start = time.perf_counter()
         fn()
-        times.append(time.perf_counter() - start)
+        duration = time.perf_counter() - start
+        times.append(duration)
+        total_duration += duration
+        if total_duration >= max_duration:
+            break
     values = np.array(times)
     return {
         "name": name,
@@ -204,12 +218,12 @@ def main() -> None:
     def init_onnx_light() -> None:
         ReferenceEvaluator(model)
 
-    print("-- benchmark onnxruntime initialization")
-    ort_stats = measure("onnxruntime", init_onnxruntime)
     print("-- benchmark onnx-light initialization")
     onnxl_stats = measure("onnx-light", init_onnx_light)
+    print("-- benchmark onnxruntime initialization")
+    ort_stats = measure("onnxruntime", init_onnxruntime)
 
-    results = pandas.DataFrame([ort_stats, onnxl_stats])
+    results = pandas.DataFrame([onnxl_stats, ort_stats])
     for column in ("median", "avg", "min", "max", "std"):
         results[f"{column} (ms)"] = results[column] * 1e3
     print(results.to_string(index=False))

@@ -210,6 +210,10 @@ ExpandMaterializationRecipe(const PreparedRequirementDescriptor &requirement,
       prepack_id, TaskScope::kSession, TaskKind::kPrepare, ResourceClass::kCpu, {load_id}};
   descriptors.publish = TaskDescriptor{
       publish_id, TaskScope::kSession, TaskKind::kPublish, ResourceClass::kInline, {prepack_id}};
+  if (selected.kind == MaterializationRecipeKind::kReadPackedPayload) {
+    descriptors.prepack.dormant = true;
+    descriptors.publish.dependencies = {load_id};
+  }
   descriptors.publish.publishes = requirement.requirement.key;
   descriptors.dormant_fallback =
       TaskDescriptor{fallback_id, TaskScope::kSession, TaskKind::kFallback, ResourceClass::kIo};

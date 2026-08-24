@@ -4,6 +4,7 @@
 
 #include "onnx_core/compute/prepared_execution.h"
 #include "onnx_core/compute/prepared_task.h"
+#include "onnx_core/compute/prepared_tensor_cache.h"
 #include "onnx_core/compute/resolved_model_fixture.h"
 #include <atomic>
 #include <chrono>
@@ -16,6 +17,33 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
+
+namespace {
+
+PreparedTensorMetadata TestPreparedMetadata() {
+  PreparedTensorMetadata metadata;
+  metadata.source_digest = "source-digest";
+  metadata.architecture = "x86_64";
+  metadata.runtime = "onnx-light";
+  metadata.runtime_version = "1";
+  metadata.kernel_layout = "gemm-transB=0";
+  metadata.format_version = "1";
+  return metadata;
+}
+
+void PopulatePreparedCache(const std::filesystem::path &path,
+                           const PreparedTensorMetadata &metadata) {
+  PreparedTensorCache cache;
+  cache.LoadOrPrepare(
+      path, metadata, []() { return std::vector<uint8_t>{1, 2, 3}; },
+      [](const std::vector<uint8_t> &source) {
+        return std::vector<uint8_t>{source[2], source[1], source[0]};
+      },
+      [](const std::vector<uint8_t> &) {});
+  cache.WaitForBackgroundWrites();
+}
+
+} // namespace
 
 TEST(PreparedTask, DescriptorCarriesSchedulingMetadata) {
   TaskDescriptor descriptor{
@@ -242,6 +270,123 @@ TEST(MaterializationRecipe, ExpandsSessionLoadPrepackPublishAndDormantFallback) 
   EXPECT_EQ(tasks.publish.publishes->value, "gemm:B:packed");
   EXPECT_EQ(tasks.dormant_fallback.kind, TaskKind::kFallback);
   EXPECT_TRUE(tasks.dormant_fallback.dormant);
+}
+
+TEST(MaterializationRecipe, PackedPayloadSkipsPrepack) {
+  PreparedRequirementDescriptor requirement{
+      PreparedObjectRequirement{PreparedKey{"gemm:B:packed"}, "B"},
+      {MaterializationRecipe{MaterializationRecipeKind::kReadPackedPayload, "B.packed",
+                             "gemm-transB=0"}}};
+  const MaterializationTaskDescriptors tasks =
+      ExpandMaterializationRecipe(requirement, requirement.recipes.front(), TaskId{20});
+
+  EXPECT_TRUE(tasks.prepack.dormant);
+  EXPECT_EQ(tasks.publish.dependencies, (std::vector<TaskId>{TaskId{20}}));
+  EXPECT_EQ(tasks.load.payload_id, "B.packed");
+}
+
+TEST(PreparedTensorCache, MissPublishesAndPersistsReusableAtomicEntry) {
+  const std::filesystem::path path = "prepared_tensor_cache_entry.bin";
+  std::filesystem::remove(path);
+  int source_reads = 0;
+  int prepacks = 0;
+  std::vector<uint8_t> published;
+  PreparedTensorCache cache;
+  const PreparedTensorLoadResult miss = cache.LoadOrPrepare(
+      path, TestPreparedMetadata(),
+      [&]() {
+        ++source_reads;
+        return std::vector<uint8_t>{1, 2, 3};
+      },
+      [&](const std::vector<uint8_t> &source) {
+        ++prepacks;
+        return std::vector<uint8_t>{source[2], source[1], source[0]};
+      },
+      [&](const std::vector<uint8_t> &prepared) { published = prepared; });
+
+  EXPECT_FALSE(miss.cache_hit);
+  EXPECT_EQ(miss.miss_reason, PreparedCacheMissReason::kNotFound);
+  EXPECT_EQ(source_reads, 1);
+  EXPECT_EQ(prepacks, 1);
+  EXPECT_EQ(published, (std::vector<uint8_t>{3, 2, 1}));
+  cache.WaitForBackgroundWrites();
+  EXPECT_TRUE(cache.TakePersistenceDiagnostics().empty());
+  EXPECT_TRUE(std::filesystem::exists(path));
+  EXPECT_FALSE(std::filesystem::exists(path.string() + ".tmp"));
+
+  published.clear();
+  const PreparedTensorLoadResult hit = cache.LoadOrPrepare(
+      path, TestPreparedMetadata(),
+      [&]() {
+        ++source_reads;
+        return std::vector<uint8_t>{9};
+      },
+      [&](const std::vector<uint8_t> &source) {
+        ++prepacks;
+        return source;
+      },
+      [&](const std::vector<uint8_t> &prepared) { published = prepared; });
+  EXPECT_TRUE(hit.cache_hit);
+  EXPECT_EQ(hit.miss_reason, PreparedCacheMissReason::kNone);
+  EXPECT_EQ(source_reads, 1);
+  EXPECT_EQ(prepacks, 1);
+  EXPECT_EQ(published, (std::vector<uint8_t>{3, 2, 1}));
+  std::filesystem::remove(path);
+}
+
+TEST(PreparedTensorCache, DiagnosesStaleIsaLayoutRuntimeAndFormatMisses) {
+  const std::filesystem::path path = "prepared_tensor_cache_incompatible.bin";
+  PreparedTensorMetadata cached = TestPreparedMetadata();
+  cached.required_isa.Add(ONNX_LIGHT_NAMESPACE::core::platform::CpuFeature::kAvx2);
+
+  const auto expect_miss = [&](PreparedTensorMetadata required,
+                               PreparedCacheMissReason expected_reason) {
+    std::filesystem::remove(path);
+    PopulatePreparedCache(path, cached);
+    PreparedTensorCache cache;
+    const PreparedTensorLoadResult result = cache.LoadOrPrepare(
+        path, required, []() { return std::vector<uint8_t>{4}; },
+        [](const std::vector<uint8_t> &source) { return source; },
+        [](const std::vector<uint8_t> &) {});
+    EXPECT_FALSE(result.cache_hit);
+    EXPECT_EQ(result.miss_reason, expected_reason);
+    EXPECT_FALSE(result.diagnostic.empty());
+    cache.WaitForBackgroundWrites();
+  };
+
+  PreparedTensorMetadata required = cached;
+  required.source_digest = "new-source";
+  expect_miss(required, PreparedCacheMissReason::kStaleSource);
+  required = cached;
+  required.required_isa = {};
+  expect_miss(required, PreparedCacheMissReason::kWrongIsa);
+  required = cached;
+  required.kernel_layout = "gemm-transB=1";
+  expect_miss(required, PreparedCacheMissReason::kWrongLayout);
+  required = cached;
+  required.runtime_version = "2";
+  expect_miss(required, PreparedCacheMissReason::kWrongRuntime);
+  required = cached;
+  required.format_version = "2";
+  expect_miss(required, PreparedCacheMissReason::kWrongFormat);
+  std::filesystem::remove(path);
+}
+
+TEST(PreparedTensorCache, DiagnosesCorruptPayloadAsMiss) {
+  const std::filesystem::path path = "prepared_tensor_cache_corrupt.bin";
+  PopulatePreparedCache(path, TestPreparedMetadata());
+  std::filesystem::resize_file(path, std::filesystem::file_size(path) - 1);
+
+  PreparedTensorCache cache;
+  const PreparedTensorLoadResult result = cache.LoadOrPrepare(
+      path, TestPreparedMetadata(), []() { return std::vector<uint8_t>{7}; },
+      [](const std::vector<uint8_t> &source) { return source; },
+      [](const std::vector<uint8_t> &) {});
+  EXPECT_FALSE(result.cache_hit);
+  EXPECT_EQ(result.miss_reason, PreparedCacheMissReason::kCorrupt);
+  EXPECT_NE(result.diagnostic.find("corrupt"), std::string::npos);
+  cache.WaitForBackgroundWrites();
+  std::filesystem::remove(path);
 }
 
 TEST(PreparedExecutionPlan, RejectsUnstableDependencies) {

@@ -23,6 +23,13 @@ class TestMainKernel(unittest.TestCase):
         with self.assertRaises(SystemExit):
             parser.parse_args(["kernel"])
 
+    def test_filters_default_to_all(self):
+        args = _build_parser().parse_args(["kernel", "--kernel", "Gemm"])
+        self.assertIsNone(args.library)
+        self.assertIsNone(args.device)
+        self.assertIsNone(args.dtype)
+        self.assertIsNone(args.impl)
+
     def test_lists_registered_kernels(self):
         buffer = io.StringIO()
         with redirect_stdout(buffer):
@@ -58,6 +65,22 @@ class TestMainKernel(unittest.TestCase):
         self.assertEqual(report["kernels"][0]["device_name"], "CPU")
         self.assertEqual(report["kernels"][0]["tunables"], [])
 
+    def test_filters_tunables_by_dtype_and_implementation(self):
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            main(
+                ["kernel", "--kernel", "Gemm", "--dtype", "FLOAT", "--impl", "portable", "--json"]
+            )
+        report = json.loads(buffer.getvalue())
+        self.assertEqual(
+            report["selection"],
+            {"device": "all", "dtype": "FLOAT", "implementation": "portable", "library": "all"},
+        )
+        tunables = report["kernels"][0]["tunables"]
+        self.assertGreater(len(tunables), 0)
+        self.assertEqual({item["element_type"] for item in tunables}, {1})
+        self.assertEqual({item["implementation"] for item in tunables}, {"portable"})
+
     def test_rejects_kernel_not_registered_for_device(self):
         with self.assertRaisesRegex(SystemExit, "device GPU0.*Abs"):
             main(["kernel", "--kernel", "Abs", "--device", "GPU0"])
@@ -75,7 +98,7 @@ class TestMainKernel(unittest.TestCase):
         with redirect_stdout(buffer):
             main(["kernel", "--kernel", "Identity"])
         output = buffer.getvalue()
-        self.assertIn("library=onnx_light device=CPU", output)
+        self.assertIn("library=all device=CPU dtype=all impl=all", output)
         self.assertIn("no tunable parameters", output)
 
     def test_rejects_unknown_kernel(self):
@@ -92,6 +115,10 @@ class TestMainKernel(unittest.TestCase):
             outputs.append(buffer.getvalue())
         self.assertEqual(outputs[0], outputs[1])
         report = json.loads(outputs[0])
+        self.assertEqual(
+            report["selection"],
+            {"device": "all", "dtype": "all", "implementation": "all", "library": "all"},
+        )
         self.assertEqual(
             [kernel["identifier"] for kernel in report["kernels"]],
             ["ai.onnx:Abs", "ai.onnx:Gemm"],

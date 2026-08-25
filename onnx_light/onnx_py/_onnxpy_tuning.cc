@@ -172,7 +172,7 @@ nb::list KeysToList(const std::vector<rt::KernelTuningKey> &keys) {
 }
 
 rt::KernelCalibrationSelection MakeSelection(const std::optional<std::string> &kernel,
-                                             const std::string &library,
+                                             const std::optional<std::string> &library,
                                              const std::optional<std::string> &implementation,
                                              const std::optional<int32_t> &element_type,
                                              const std::optional<int32_t> &device = -1) {
@@ -212,9 +212,9 @@ SelectedKeys(const rt::KernelCalibrationSelection &selection,
     }
   }
   std::sort(keys.begin(), keys.end(), [](const auto &left, const auto &right) {
-    return std::tie(left.library, left.kernel, left.implementation, left.element_type,
+    return std::tie(left.library, left.kernel, left.implementation, left.element_type, left.device,
                     left.tuning_abi) < std::tie(right.library, right.kernel, right.implementation,
-                                                right.element_type, right.tuning_abi);
+                                                right.element_type, right.device, right.tuning_abi);
   });
   return keys;
 }
@@ -248,7 +248,8 @@ nb::dict InspectCache(const std::optional<std::string> &path, int32_t num_thread
   return result;
 }
 
-nb::dict ListParameters(const std::optional<std::string> &kernel, const std::string &library,
+nb::dict ListParameters(const std::optional<std::string> &kernel,
+                        const std::optional<std::string> &library,
                         const std::optional<std::string> &implementation,
                         const std::optional<int32_t> &element_type,
                         const std::optional<std::string> &path, int32_t num_threads,
@@ -478,7 +479,7 @@ void AddOnnxPyTuning(nb::module_ &rt_mod) {
              nb::arg("element_type") = nb::none(), nb::arg("path") = nb::none(),
              nb::arg("num_threads") = 0, nb::arg("device") = -1,
              "Lists registered parameter names, portable defaults, matching cached values, "
-             "and active values.");
+             "and active values. None for library or device selects all values.");
   rt_mod.def("load_kernel_tuning_cache", &LoadCache, nb::arg("kernel") = nb::none(),
              nb::arg("library") = "onnx_light", nb::arg("implementation") = nb::none(),
              nb::arg("element_type") = nb::none(), nb::arg("path") = nb::none(),

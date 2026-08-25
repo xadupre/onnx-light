@@ -200,6 +200,8 @@ class _KernelReportItem(TypedDict):
     library: str
     device: int
     device_name: str
+    dtype: str
+    implementation: str
     tunables: list[_KernelTunable]
 
 
@@ -245,6 +247,11 @@ def _kernel_device_name(device: int) -> str:
     if device == -1:
         return "CPU"
     return f"GPU{device}"
+
+
+def _optional_kernel_device_name(device: int | None) -> str:
+    """Returns the selected device name or ``all``."""
+    return "all" if device is None else _kernel_device_name(device)
 
 
 def _registered_kernel_device(identifier: str) -> int:
@@ -307,7 +314,7 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
     identifiers = [
         identifier
         for identifier in runtime.registered_kernels()
-        if _registered_kernel_device(identifier) == args.device
+        if args.device is None or _registered_kernel_device(identifier) == args.device
     ]
     if args.list:
         if args.json:
@@ -332,41 +339,64 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
     if unknown:
         raise SystemExit(
             f"onnx-light kernel: unknown kernel(s) for device "
-            f"{_kernel_device_name(args.device)}: {', '.join(unknown)}"
+            f"{_optional_kernel_device_name(args.device)}: {', '.join(unknown)}"
         )
 
     tuning_report = kernel_tuning.kernel_tuning_parameters(
-        library=args.library, device=args.device
+        library=args.library,
+        device=args.device,
+        element_type=args.dtype,
+        implementation=args.impl,
     )
-    tuning_by_kernel: dict[str, list[_KernelTunable]] = {}
+    tuning_by_kernel: dict[tuple[str, int], list[_KernelTunable]] = {}
     for item in cast(list[_KernelTunable], tuning_report["kernels"]):
-        tuning_by_kernel.setdefault(item["kernel"], []).append(item)
+        tuning_by_kernel.setdefault((item["kernel"], item["device"]), []).append(item)
 
     report: list[_KernelReportItem] = []
     for identifier in sorted(selected):
         op_type = identifier.split(":", maxsplit=2)[1]
+        device = _registered_kernel_device(identifier)
         tunables = sorted(
-            tuning_by_kernel.get(op_type, []),
+            tuning_by_kernel.get((op_type, device), []),
             key=lambda item: (item["library"], item["implementation"], item["element_type"]),
         )
         report.append(
             {
                 "identifier": identifier,
-                "library": args.library,
-                "device": args.device,
-                "device_name": _kernel_device_name(args.device),
+                "library": args.library or "all",
+                "device": device,
+                "device_name": _kernel_device_name(device),
+                "dtype": ("all" if args.dtype is None else TensorProto.DataType(args.dtype).name),
+                "implementation": args.impl or "all",
                 "tunables": tunables,
             }
         )
 
     if args.json:
-        print(json.dumps({"kernels": report}, indent=2, sort_keys=True))
+        print(
+            json.dumps(
+                {
+                    "selection": {
+                        "library": args.library or "all",
+                        "device": _optional_kernel_device_name(args.device),
+                        "dtype": (
+                            "all" if args.dtype is None else TensorProto.DataType(args.dtype).name
+                        ),
+                        "implementation": args.impl or "all",
+                    },
+                    "kernels": report,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
         return
 
     for kernel in report:
         print(
             f"{kernel['identifier']} library={kernel['library']} "
-            f"device={kernel['device_name']}"
+            f"device={kernel['device_name']} dtype={kernel['dtype']} "
+            f"impl={kernel['implementation']}"
         )
         if not kernel["tunables"]:
             print("  no tunable parameters")
@@ -1325,19 +1355,27 @@ def _build_parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="Print a machine-readable JSON report."
     )
     kernel_parser.add_argument(
-        "--library",
-        default="onnx_light",
-        help="Restrict tuning schemas to this library (default: onnx_light).",
+        "--library", help="Restrict tuning schemas to one library (default: all)."
     )
     kernel_parser.add_argument(
         "--device",
-        default=-1,
         type=_parse_kernel_device,
         metavar="DEVICE",
         help=(
             "Restrict tuning schemas to CPU, Undefined, GPU<N>, or a numeric device "
-            "(default: CPU)."
+            "(default: all)."
         ),
+    )
+    kernel_parser.add_argument(
+        "--dtype",
+        type=_parse_kernel_element_type,
+        metavar="DTYPE",
+        help="Restrict tuning schemas to one ONNX element type name or integer (default: all).",
+    )
+    kernel_parser.add_argument(
+        "--impl",
+        metavar="IMPLEMENTATION",
+        help="Restrict tuning schemas to one implementation (default: all).",
     )
     kernel_parser.set_defaults(func=_cmd_kernel)
 

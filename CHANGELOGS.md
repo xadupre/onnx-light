@@ -5,14 +5,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.21] – Unreleased
 
-### Documentation & CI
+### New Features
 
-- Bumped the release version to `0.1.21`.
+- Added a prepared-execution pipeline with resolved fixtures, persistent prepared-object
+  storage and arenas, constant-B GEMM packing, budgeted scheduling, asynchronous
+  `PrepareAsync`/`RunAsync` handles, and readiness-aware execution.
+- Added bounded prepared-object residency and packed-cache reload, including loading
+  compatible prepared tensors before portable weights and overlapping preparation with
+  first-token execution.
+- Added fixed-placement CUDA GEMM preparation variants.
+- Added bounded `ParallelFor` profiling with run identity, CPU utilization, immutable C++
+  and Python reports, optional Linux hardware counters, and calibration diagnostics.
+- Added compact `GraphBuilder` authoring APIs.
+- Added an adaptive external-data I/O policy and an ORT-independent `MappedPayload`
+  ownership contract for fast model loading.
+
+### Improvements
+
+- Removed compatibility-parser input staging and the external-data pre-scan, resolving
+  descriptors in a single pass while freezing live payload manifests before materialization.
+- Cached runtime initializer tensors per session and reused compatible CPU executor pools.
+- Expanded kernel-tuning schema coverage, added bounded GEMM calibration, and published a
+  verified x86-64 machine profile while retaining conservative portable defaults.
+- Added `Attention` opset 25 local windows and a lightweight `Pow` 15 schema from upstream
+  ONNX changes.
+- Replaced exception-driven C++ control flow with explicit precondition checks.
 
 ### Fixes
 
 - Prevented a lost thread-pool completion notification from blocking parallel regions,
   especially during repeated small GEMM executions on Windows.
+- Fixed the Linux release build when the CPU helper is conditionally unused.
+- Matched persisted tuning profiles to the default session thread count on SMT systems.
+- Propagated upstream ONNX fixes for version-converter initializer lifetime, protobuf file
+  loading, graph-use queries, unknown-rank metadata, and the Windows `OPTIONAL` macro clash.
+- Rejected zero scalar `SplitToSequence` splits and fixed ONNX printer handling of
+  fixed-width raw tensor data.
+
+### Documentation & CI
+
+- Bumped the release version to `0.1.21`.
+- Added runnable guides and galleries for `GraphBuilder`, pattern optimization, runtime
+  execution, kernel tuning, compute analyses, and ONNX Runtime benchmark comparisons.
+- Documented CPU thread-pool dispatch, split the fast-loading work into ordered roadmaps,
+  and clarified the next-step objectives and dependencies.
+- Isolated and bounded benchmark gallery measurements.
+- Fixed macOS GoogleTest discovery by deferring it to `PRE_TEST` mode.
 
 ## [0.1.20] – 2026-08-20
 

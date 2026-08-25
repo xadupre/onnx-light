@@ -166,7 +166,7 @@ import json
 import os
 import re
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 if TYPE_CHECKING:
     from .onnx_proto._helper import TypeProto as _TypeProto
@@ -180,6 +180,27 @@ _EVENT_ACTION_RUN_NODE = "run_node"
 # loaded because shape inference may need their values (e.g. the ``shape``
 # input of a Reshape node).
 _FILLSHAPE_TINY_TENSOR_THRESHOLD = 128
+
+
+class _KernelTunable(TypedDict):
+    library: str
+    kernel: str
+    implementation: str
+    element_type: int
+    device: int
+    device_name: str
+    tuning_abi: int
+    defaults: dict[str, bool | int | float | str]
+    active_values: dict[str, bool | int | float | str]
+    parameter_names: list[str]
+
+
+class _KernelReportItem(TypedDict):
+    identifier: str
+    library: str
+    device: int
+    device_name: str
+    tunables: list[_KernelTunable]
 
 
 def _parse_kernel_element_type(value: str) -> int:
@@ -317,11 +338,11 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
     tuning_report = kernel_tuning.kernel_tuning_parameters(
         library=args.library, device=args.device
     )
-    tuning_by_kernel: dict[str, list[dict[str, Any]]] = {}
-    for item in tuning_report["kernels"]:
+    tuning_by_kernel: dict[str, list[_KernelTunable]] = {}
+    for item in cast(list[_KernelTunable], tuning_report["kernels"]):
         tuning_by_kernel.setdefault(item["kernel"], []).append(item)
 
-    report: list[dict[str, Any]] = []
+    report: list[_KernelReportItem] = []
     for identifier in sorted(selected):
         op_type = identifier.split(":", maxsplit=2)[1]
         tunables = sorted(

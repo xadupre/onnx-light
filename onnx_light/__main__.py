@@ -637,8 +637,8 @@ def _run_backend_test_timing(
     name_regex: str = "",
     mode: str = "test",
     include_big: bool = False,
-    repeat: int = 1,
-    warmup: int = 0,
+    repeat: int = 10,
+    warmup: int = 2,
     timeout_seconds: float = 2.0,
     tuning_comparison: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -1873,7 +1873,7 @@ def _build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""examples:
   Measure matching correctness cases:
-    python -m onnx_light backend --regex ".*not.*" --repeat 3
+    python -m onnx_light backend --regex ".*not.*"
 
   Export timings and machine information to XLSX:
     python -m onnx_light backend --regex ".*not.*" --output backend-not.xlsx
@@ -1902,14 +1902,14 @@ def _build_parser() -> argparse.ArgumentParser:
     backend_test_parser.add_argument(
         "--repeat",
         type=_parse_positive_int,
-        default=1,
-        help="Measured iterations per case (default: 1).",
+        default=10,
+        help="Measured iterations per case (default: 10).",
     )
     backend_test_parser.add_argument(
         "--warmup",
         type=_parse_nonnegative_int,
-        default=0,
-        help="Unmeasured warm-up iterations per case (default: 0).",
+        default=2,
+        help="Unmeasured warm-up iterations per case (default: 2).",
     )
     backend_test_parser.add_argument(
         "--timeout",

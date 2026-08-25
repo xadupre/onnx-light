@@ -29,8 +29,9 @@ benchmark case:
 
 The report separates lazy case materialization, evaluator setup, warm-up, and
 measured execution time for every selected case. ``--repeat`` controls measured
-iterations and ``--warmup`` controls unmeasured iterations. Each case runs in
-an isolated process for at most two seconds by default. ``--timeout SECONDS``
+iterations and ``--warmup`` controls unmeasured iterations. Defaults are ten
+measured iterations after two warm-up iterations. Each case runs in an isolated
+process for at most two seconds by default. ``--timeout SECONDS``
 changes that limit; timed-out cases are stopped, reported with
 ``status=timeout``, and followed by the remaining cases. By default, big cases
 containing ``_big_`` are excluded; ``--include-big`` includes them.

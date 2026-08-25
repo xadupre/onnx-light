@@ -71,9 +71,22 @@ def _measure_backend_test_case(case: Any, repeat: int, warmup: int) -> dict[str,
     }
 
 
-def initialize_backend_test_worker() -> None:
+def initialize_backend_test_worker(tuning: dict[str, Any] | None = None) -> None:
     """Loads backend dependencies before timed work starts."""
     from onnx_light.onnx import backend  # noqa: F401
+
+    if tuning is not None:
+        from onnx_light import kernel_tuning
+
+        kernel_tuning.set_kernel_tuning_parameters(
+            tuning["kernel"],
+            tuning["element_type"],
+            tuning["values"],
+            library=tuning["library"],
+            implementation=tuning["implementation"],
+            tuning_abi=tuning["tuning_abi"],
+            path=tuning["path"],
+        )
 
 
 def backend_test_worker_ready() -> bool:

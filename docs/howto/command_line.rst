@@ -45,6 +45,21 @@ one row per selected case as CSV or XLSX according to the file extension:
 XLSX output contains a ``summary`` sheet with the run configuration and CPU
 descriptor, plus a ``backend`` sheet with one row per case.
 
+Use the same ``--parameter`` syntax as ``kernel --tune`` to run backend cases
+side by side with explicit tuning values. ``--kernel``, ``--dtype`` and
+``--impl`` select the exact tuning schema:
+
+.. code-block:: bash
+
+    python -m onnx_light backend --regex ".*not.*" \
+        --kernel Not --dtype BOOL --impl portable \
+        --parameter parallel.minimum_elements=default,16384,32768
+
+``default`` resolves to the active value and defines the speedup baseline.
+Every selected backend case runs once per distinct value. Text, JSON, CSV and
+XLSX output include the parameter value and speedup. The comparison uses
+temporary worker caches and never modifies the machine tuning cache.
+
 .. _l-cli-kernel:
 
 kernel

@@ -281,7 +281,7 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
     """Lists registered kernels or their tunable parameters."""
     from . import kernel_tuning
     from .onnx import TensorProto
-    from .onnx_py._onnxpykernels import runtime
+    from .onnx_py._onnxpykernels import runtime  # type: ignore[missing-import]
 
     identifiers = [
         identifier
@@ -321,7 +321,7 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
     for item in tuning_report["kernels"]:
         tuning_by_kernel.setdefault(item["kernel"], []).append(item)
 
-    report = []
+    report: list[dict[str, Any]] = []
     for identifier in sorted(selected):
         op_type = identifier.split(":", maxsplit=2)[1]
         tunables = sorted(

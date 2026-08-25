@@ -11,6 +11,28 @@ Command-line interface
 
 The equivalent ``python -m onnx_light`` invocation remains available.
 
+.. _l-cli-backend-test:
+
+backend-test
+------------
+
+Measures C++ backend test cases whose names match an ECMAScript regular
+expression. ``test`` mode generates the ordinary correctness cases, while
+``benchmark`` mode generates enlarged inputs for operators that provide a
+benchmark case:
+
+.. code-block:: bash
+
+    python -m onnx_light backend-test \
+        --regex "^test_cc_(abs|gemm)" \
+        --mode benchmark
+
+The report separates lazy case materialization, evaluator setup, warm-up, and
+measured execution time for every selected case. ``--repeat`` controls measured
+iterations and ``--warmup`` controls unmeasured iterations. By default, big
+cases containing ``_big_`` are excluded; ``--include-big`` includes them.
+``--json`` returns the complete machine-readable report.
+
 .. _l-cli-kernel:
 
 kernel

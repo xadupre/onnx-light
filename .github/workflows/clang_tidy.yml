@@ -44,7 +44,7 @@ jobs:
         run: pip install "nanobind>=3.0.0" numpy scikit-build-core
 
       - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Set parallel build level
         run: |

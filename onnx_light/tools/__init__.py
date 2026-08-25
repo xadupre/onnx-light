@@ -30,10 +30,13 @@ Currently provided helpers:
 * :func:`onnx_light.tools.run_kernel_baseline_report` -- run the
   deterministic benchmark corpus and combine it with the kernel inventory
   into one machine-readable cross-machine baseline report.
+* :func:`onnx_light.tools.run_backend_test_timing` -- measure regex-selected
+  correctness or benchmark-sized backend test cases.
 """
 
 from __future__ import annotations
 
+from .backend_test_timing import run_backend_test_timing
 from .dot import to_dot, to_dot_graph
 from .kernel_baseline import get_cpu_descriptor, run_benchmark_corpus, run_kernel_baseline_report
 from .kernel_inventory import build_kernel_inventory
@@ -53,6 +56,7 @@ __all__ = [
     "get_cpu_descriptor",
     "infer_value_and_node_tags",
     "pretty_onnx",
+    "run_backend_test_timing",
     "run_benchmark_corpus",
     "run_kernel_baseline_report",
     "to_dot",

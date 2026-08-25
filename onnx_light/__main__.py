@@ -125,6 +125,14 @@ tune-kernels
     Proposes calibration updates for tuning keys missing from the local cache.
     It is read-only unless ``--apply`` is specified.
 
+backend-test
+    Measures backend test cases selected by a regular expression.
+
+    Usage::
+
+        onnx-light backend-test --regex "^test_cc_abs" --mode test
+        onnx-light backend-test --regex "_benchmark$" --mode benchmark --json
+
 kernel
     Lists registered native kernels or shows the tunable parameters for a
     selected set of kernels.
@@ -216,6 +224,20 @@ def _parse_kernel_element_type(value: str) -> int:
                 f"unknown ONNX element type {value!r}; use an integer or name such as FLOAT"
             ) from None
         return int(getattr(TensorProto, name))
+
+
+def _parse_positive_int(value: str) -> int:
+    """Parses a strictly positive integer."""
+    if value.isdigit() and int(value) > 0:
+        return int(value)
+    raise argparse.ArgumentTypeError(f"expected a positive integer, got {value!r}")
+
+
+def _parse_nonnegative_int(value: str) -> int:
+    """Parses a non-negative integer."""
+    if value.isdigit():
+        return int(value)
+    raise argparse.ArgumentTypeError(f"expected a non-negative integer, got {value!r}")
 
 
 def _parse_kernel_device(value: str) -> int:
@@ -383,6 +405,37 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
                     f"    {name}: default={tunable['defaults'][name]} "
                     f"active={tunable['active_values'][name]}"
                 )
+
+
+def _cmd_backend_test(args: argparse.Namespace) -> None:
+    """Measures selected backend test cases."""
+    from .tools.backend_test_timing import run_backend_test_timing
+
+    report = run_backend_test_timing(
+        name_regex=args.regex,
+        mode=args.mode,
+        include_big=args.include_big,
+        repeat=args.repeat,
+        warmup=args.warmup,
+    )
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return
+
+    print(
+        f"mode={report['mode']} selected={report['selected']} "
+        f"repeat={report['repeat']} warmup={report['warmup']} "
+        f"collection_ms={report['collection_seconds'] * 1000:.3f}"
+    )
+    for case in report["cases"]:
+        print(
+            f"{case['name']} datasets={case['data_sets']} "
+            f"materialization_ms={case['materialization_seconds'] * 1000:.3f} "
+            f"setup_ms={case['setup_seconds'] * 1000:.3f} "
+            f"run_ms={case['run_seconds'] * 1000:.3f} "
+            f"mean_ms={case['mean_seconds'] * 1000:.3f}"
+        )
+    print(f"total_ms={report['total_seconds'] * 1000:.3f}")
 
 
 def _cmd_kernel_baseline(args: argparse.Namespace) -> None:
@@ -1303,6 +1356,42 @@ def _build_parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="Print the complete JSON report."
     )
     tuning_parser.set_defaults(func=_cmd_tune_kernels)
+
+    # --- backend-test ---------------------------------------------------------
+    backend_test_parser = subparsers.add_parser(
+        "backend-test", help="Measure regex-selected backend test cases."
+    )
+    backend_test_parser.add_argument(
+        "--regex",
+        default="",
+        metavar="PATTERN",
+        help="Select test case names with an ECMAScript regular expression (default: all).",
+    )
+    backend_test_parser.add_argument(
+        "--mode",
+        choices=("test", "benchmark"),
+        default="test",
+        help="Generate correctness or benchmark-sized cases (default: test).",
+    )
+    backend_test_parser.add_argument(
+        "--include-big", action="store_true", help="Include cases whose name contains '_big_'."
+    )
+    backend_test_parser.add_argument(
+        "--repeat",
+        type=_parse_positive_int,
+        default=1,
+        help="Measured iterations per case (default: 1).",
+    )
+    backend_test_parser.add_argument(
+        "--warmup",
+        type=_parse_nonnegative_int,
+        default=0,
+        help="Unmeasured warm-up iterations per case (default: 0).",
+    )
+    backend_test_parser.add_argument(
+        "--json", action="store_true", help="Print the complete machine-readable report."
+    )
+    backend_test_parser.set_defaults(func=_cmd_backend_test)
 
     # --- kernel --------------------------------------------------------------
     kernel_parser = subparsers.add_parser(

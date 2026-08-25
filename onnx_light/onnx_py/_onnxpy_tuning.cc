@@ -392,9 +392,10 @@ nb::dict Calibrate(const std::string &kernel, const std::vector<int32_t> &elemen
                    bool only_missing, uint64_t maximum_duration_ms, uint64_t maximum_memory_bytes,
                    bool save, const std::optional<std::string> &path,
                    const std::optional<rt::CpuExecutionPolicy> &cpu_execution,
-                   size_t profiling_capacity, bool profiling_hardware_counters) {
+                   size_t profiling_capacity, bool profiling_hardware_counters,
+                   const std::optional<int32_t> &device) {
   rt::KernelCalibrationSelection selection =
-      MakeSelection(kernel, library, implementation, std::nullopt);
+      MakeSelection(kernel, library, implementation, std::nullopt, device);
   selection.element_types = element_types;
   selection.only_missing = only_missing;
   rt::CalibrationOptions options;
@@ -497,6 +498,6 @@ void AddOnnxPyTuning(nb::module_ &rt_mod) {
              nb::arg("maximum_memory_bytes") = uint64_t{0}, nb::arg("save") = true,
              nb::arg("path") = nb::none(), nb::arg("cpu_execution").none() = nb::none(),
              nb::arg("profiling_capacity") = size_t{0},
-             nb::arg("profiling_hardware_counters") = false,
+             nb::arg("profiling_hardware_counters") = false, nb::arg("device") = -1,
              "Calibrates selected registered keys and optionally persists successful profiles.");
 }

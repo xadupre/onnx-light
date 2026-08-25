@@ -9,7 +9,8 @@ import argparse
 import io
 import json
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
+from unittest import mock
 
 from onnx_light.__main__ import _build_parser, _parse_kernel_device, main
 from onnx_light.ext_test_case import import_or_skip
@@ -29,6 +30,8 @@ class TestMainKernel(unittest.TestCase):
         self.assertIsNone(args.device)
         self.assertIsNone(args.dtype)
         self.assertIsNone(args.impl)
+        self.assertFalse(args.tune)
+        self.assertFalse(args.verbose)
 
     def test_lists_registered_kernels(self):
         buffer = io.StringIO()
@@ -104,6 +107,66 @@ class TestMainKernel(unittest.TestCase):
     def test_rejects_unknown_kernel(self):
         with self.assertRaisesRegex(SystemExit, "unknown kernel.*DoesNotExist"):
             main(["kernel", "--kernel", "DoesNotExist"])
+
+    def test_tune_rejects_multiple_kernels(self):
+        with self.assertRaisesRegex(SystemExit, "exactly one selected kernel"):
+            main(["kernel", "--kernel", "Abs", "--kernel", "Gemm", "--tune"])
+
+    def test_tune_rejects_fixed_kernel(self):
+        with self.assertRaisesRegex(SystemExit, "no tunable parameters"):
+            main(["kernel", "--kernel", "Identity", "--tune"])
+
+    def test_tune_shows_before_after_and_progress(self):
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        calibration = {
+            "calibrated": [],
+            "skipped": [],
+            "unsupported": [],
+            "diagnostics": [],
+            "candidate_diagnostics": [],
+            "cache_update": None,
+            "published_generation": 0,
+        }
+        with (
+            mock.patch(
+                "onnx_light.kernel_tuning.calibrate_kernel_tuning", return_value=calibration
+            ) as calibrate,
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            main(["kernel", "--kernel", "Abs", "--dtype", "FLOAT", "--tune", "--verbose"])
+        self.assertIn("before:", stdout.getvalue())
+        self.assertIn("after:", stdout.getvalue())
+        self.assertIn("captured parameters before tuning", stderr.getvalue())
+        self.assertIn("calibrating 1/1", stderr.getvalue())
+        self.assertIn("captured parameters after tuning", stderr.getvalue())
+        calibrate.assert_called_once()
+        self.assertEqual(calibrate.call_args.kwargs["device"], -1)
+        self.assertEqual(calibrate.call_args.kwargs["element_types"], [1])
+
+    def test_tune_json_contains_before_and_after(self):
+        stdout = io.StringIO()
+        calibration = {
+            "calibrated": [],
+            "skipped": [],
+            "unsupported": [],
+            "diagnostics": [],
+            "candidate_diagnostics": [],
+            "cache_update": None,
+            "published_generation": 0,
+        }
+        with (
+            mock.patch(
+                "onnx_light.kernel_tuning.calibrate_kernel_tuning", return_value=calibration
+            ),
+            redirect_stdout(stdout),
+        ):
+            main(["kernel", "--kernel", "Abs", "--dtype", "FLOAT", "--tune", "--json"])
+        report = json.loads(stdout.getvalue())
+        self.assertEqual(len(report["before"]), 1)
+        self.assertEqual(len(report["calibrations"]), 1)
+        self.assertEqual(len(report["after"]), 1)
 
     def test_selected_kernel_json_is_deterministic(self):
         arguments = ["kernel", "--kernel", "Gemm", "--kernel", "Abs", "--json"]

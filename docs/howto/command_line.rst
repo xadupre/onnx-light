@@ -29,8 +29,11 @@ benchmark case:
 
 The report separates lazy case materialization, evaluator setup, warm-up, and
 measured execution time for every selected case. ``--repeat`` controls measured
-iterations and ``--warmup`` controls unmeasured iterations. By default, big
-cases containing ``_big_`` are excluded; ``--include-big`` includes them.
+iterations and ``--warmup`` controls unmeasured iterations. Each case runs in
+an isolated process for at most two seconds by default. ``--timeout SECONDS``
+changes that limit; timed-out cases are stopped, reported with
+``status=timeout``, and followed by the remaining cases. By default, big cases
+containing ``_big_`` are excluded; ``--include-big`` includes them.
 ``--json`` returns the complete machine-readable report. ``--output`` writes
 one row per selected case as CSV or XLSX according to the file extension:
 

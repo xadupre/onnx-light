@@ -223,6 +223,19 @@ def _parse_nonnegative_int(value: str) -> int:
     raise argparse.ArgumentTypeError(f"expected a non-negative integer, got {value!r}")
 
 
+def _parse_positive_float(value: str) -> float:
+    """Parses a strictly positive floating-point value."""
+    import math
+
+    try:
+        parsed = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive number, got {value!r}") from None
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive number, got {value!r}")
+    return parsed
+
+
 def _parse_kernel_device(value: str) -> int:
     """Parses a CPU, GPU index, or numeric device identifier."""
     normalized = value.upper()
@@ -455,20 +468,75 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
         print_report(report)
 
 
-def _backend_test_map_to_dict(value: Any) -> dict[Any, Any]:
-    """Converts a backend-test map value to a Python dictionary."""
-    from onnx_light.onnx_lib.backend.test.case.base import _tensor_to_np
+def _measure_backend_test_cases_with_timeout(
+    cases: list[Any],
+    *,
+    mode: str,
+    include_big: bool,
+    repeat: int,
+    warmup: int,
+    timeout_seconds: float,
+) -> list[dict[str, Any]]:
+    """Measures backend cases in a worker that is replaced after a timeout."""
+    import multiprocessing
 
-    keys = _tensor_to_np(value.keys)
-    values = _tensor_to_np(value.values)
-    return dict(zip(keys.tolist(), values.tolist()))
+    from ._backend_cli import (
+        backend_test_worker_ready,
+        initialize_backend_test_worker,
+        measure_backend_test_case_by_name,
+    )
 
+    context = multiprocessing.get_context("spawn")
 
-def _backend_test_data_set_feed(data_set: Any) -> dict[str, Any]:
-    """Builds a name-keyed evaluator feed from one backend-test data set."""
-    feed = {tensor.name: tensor for tensor in data_set.inputs}
-    feed.update({value.name: _backend_test_map_to_dict(value) for value in data_set.maps})
-    return feed
+    def start_worker() -> Any:
+        pool = context.Pool(processes=1, initializer=initialize_backend_test_worker)
+        try:
+            pool.apply_async(backend_test_worker_ready).get(timeout=30)
+        except multiprocessing.TimeoutError:
+            pool.terminate()
+            pool.join()
+            raise RuntimeError("backend worker did not initialize within 30 seconds") from None
+        return pool
+
+    reports = []
+    worker = None
+    try:
+        for case in cases:
+            if worker is None:
+                worker = start_worker()
+            result = worker.apply_async(
+                measure_backend_test_case_by_name, (case.name, mode, include_big, repeat, warmup)
+            )
+            try:
+                reports.append(result.get(timeout=timeout_seconds))
+            except multiprocessing.TimeoutError:
+                worker.terminate()
+                worker.join()
+                worker = None
+                reports.append(
+                    {
+                        "name": case.name,
+                        "kind": case.kind,
+                        "tag": case.tag,
+                        "status": "timeout",
+                        "timed_out": True,
+                        "error": f"exceeded {timeout_seconds:g} seconds",
+                        "data_sets": None,
+                        "materialization_seconds": None,
+                        "setup_seconds": None,
+                        "warmup_seconds": None,
+                        "iteration_seconds": [],
+                        "run_seconds": None,
+                        "mean_seconds": None,
+                        "min_seconds": None,
+                        "max_seconds": None,
+                    }
+                )
+    finally:
+        if worker is not None:
+            worker.close()
+            worker.join()
+    return reports
 
 
 def _run_backend_test_timing(
@@ -478,9 +546,10 @@ def _run_backend_test_timing(
     include_big: bool = False,
     repeat: int = 1,
     warmup: int = 0,
+    timeout_seconds: float = 2.0,
 ) -> dict[str, Any]:
     """Measures backend test cases selected by name and generation mode."""
-    import statistics
+    import math
     import time
 
     if mode not in {"test", "benchmark"}:
@@ -489,9 +558,10 @@ def _run_backend_test_timing(
         raise ValueError(f"repeat must be positive, got {repeat}.")
     if warmup < 0:
         raise ValueError(f"warmup must be non-negative, got {warmup}.")
+    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+        raise ValueError(f"timeout_seconds must be positive and finite, got {timeout_seconds}.")
 
     from onnx_light.onnx import backend
-    from onnx_light.onnx.reference import ReferenceEvaluator
 
     test_mode = backend.TestMode.TEST if mode == "test" else backend.TestMode.BENCHMARK
     total_start = time.perf_counter()
@@ -501,47 +571,14 @@ def _run_backend_test_timing(
     )
     collection_seconds = time.perf_counter() - collection_start
 
-    case_reports = []
-    for case in cases:
-        materialization_start = time.perf_counter()
-        model = case.model
-        data_sets = list(case.data_sets)
-        feeds = [_backend_test_data_set_feed(data_set) for data_set in data_sets]
-        materialization_seconds = time.perf_counter() - materialization_start
-
-        setup_start = time.perf_counter()
-        evaluator = ReferenceEvaluator(model)
-        setup_seconds = time.perf_counter() - setup_start
-
-        warmup_start = time.perf_counter()
-        for _ in range(warmup):
-            for feed in feeds:
-                evaluator.run(None, feed)
-        warmup_seconds = time.perf_counter() - warmup_start
-
-        iteration_seconds = []
-        for _ in range(repeat):
-            iteration_start = time.perf_counter()
-            for feed in feeds:
-                evaluator.run(None, feed)
-            iteration_seconds.append(time.perf_counter() - iteration_start)
-
-        case_reports.append(
-            {
-                "name": case.name,
-                "kind": case.kind,
-                "tag": case.tag,
-                "data_sets": len(data_sets),
-                "materialization_seconds": materialization_seconds,
-                "setup_seconds": setup_seconds,
-                "warmup_seconds": warmup_seconds,
-                "iteration_seconds": iteration_seconds,
-                "run_seconds": sum(iteration_seconds),
-                "mean_seconds": statistics.fmean(iteration_seconds),
-                "min_seconds": min(iteration_seconds),
-                "max_seconds": max(iteration_seconds),
-            }
-        )
+    case_reports = _measure_backend_test_cases_with_timeout(
+        cases,
+        mode=mode,
+        include_big=include_big,
+        repeat=repeat,
+        warmup=warmup,
+        timeout_seconds=timeout_seconds,
+    )
 
     return {
         "name_regex": name_regex,
@@ -549,7 +586,9 @@ def _run_backend_test_timing(
         "include_big": include_big,
         "repeat": repeat,
         "warmup": warmup,
+        "timeout_seconds": timeout_seconds,
         "selected": len(case_reports),
+        "timed_out": sum(case["timed_out"] for case in case_reports),
         "collection_seconds": collection_seconds,
         "cases": case_reports,
         "total_seconds": time.perf_counter() - total_start,
@@ -565,6 +604,7 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
         include_big=args.include_big,
         repeat=args.repeat,
         warmup=args.warmup,
+        timeout_seconds=args.timeout,
     )
     if args.output:
         _write_backend_test_output(report, args.output)
@@ -577,11 +617,15 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
     print(
         f"mode={report['mode']} selected={report['selected']} "
         f"repeat={report['repeat']} warmup={report['warmup']} "
+        f"timeout={report['timeout_seconds']:g}s timed_out={report['timed_out']} "
         f"collection_ms={report['collection_seconds'] * 1000:.3f}"
     )
     for case in report["cases"]:
+        if case["timed_out"]:
+            print(f"{case['name']} status=timeout error={case['error']}")
+            continue
         print(
-            f"{case['name']} datasets={case['data_sets']} "
+            f"{case['name']} status=completed datasets={case['data_sets']} "
             f"materialization_ms={case['materialization_seconds'] * 1000:.3f} "
             f"setup_ms={case['setup_seconds'] * 1000:.3f} "
             f"run_ms={case['run_seconds'] * 1000:.3f} "
@@ -596,10 +640,14 @@ def _backend_test_table(report: dict[str, Any]) -> tuple[list[str], list[list[An
         "name",
         "kind",
         "tag",
+        "status",
+        "timed_out",
+        "error",
         "data_sets",
         "mode",
         "repeat",
         "warmup",
+        "timeout_seconds",
         "collection_seconds",
         "materialization_seconds",
         "setup_seconds",
@@ -618,6 +666,7 @@ def _backend_test_table(report: dict[str, Any]) -> tuple[list[str], list[list[An
             "mode": report["mode"],
             "repeat": report["repeat"],
             "warmup": report["warmup"],
+            "timeout_seconds": report["timeout_seconds"],
             "collection_seconds": report["collection_seconds"],
             "total_seconds": report["total_seconds"],
             "iteration_seconds": json.dumps(case["iteration_seconds"]),
@@ -656,7 +705,9 @@ def _write_backend_test_output(report: dict[str, Any], output: str) -> None:
             "include_big",
             "repeat",
             "warmup",
+            "timeout_seconds",
             "selected",
+            "timed_out",
             "collection_seconds",
             "total_seconds",
         ):
@@ -1562,6 +1613,13 @@ def _build_parser() -> argparse.ArgumentParser:
         type=_parse_nonnegative_int,
         default=0,
         help="Unmeasured warm-up iterations per case (default: 0).",
+    )
+    backend_test_parser.add_argument(
+        "--timeout",
+        type=_parse_positive_float,
+        default=2.0,
+        metavar="SECONDS",
+        help="Stop and mark a backend case after this many seconds (default: 2).",
     )
     backend_test_parser.add_argument(
         "--json", action="store_true", help="Print the complete machine-readable report."

@@ -29,6 +29,7 @@ class TestMainBackendTest(unittest.TestCase):
         self.assertEqual(args.mode, "test")
         self.assertEqual(args.repeat, 1)
         self.assertEqual(args.warmup, 0)
+        self.assertEqual(args.timeout, 2.0)
         self.assertFalse(args.include_big)
         self.assertFalse(args.json)
         self.assertIsNone(args.output)
@@ -39,6 +40,11 @@ class TestMainBackendTest(unittest.TestCase):
             parser.parse_args(["backend", "--repeat", "0"])
         with self.assertRaises(SystemExit):
             parser.parse_args(["backend", "--warmup", "-1"])
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["backend", "--timeout", "0"])
+        for value in ("nan", "inf"):
+            with self.subTest(timeout=value), self.assertRaises(SystemExit):
+                parser.parse_args(["backend", "--timeout", value])
 
     def test_times_one_correctness_case(self):
         report = _run_backend_test_timing(name_regex=r"^test_cc_abs$", repeat=1)
@@ -46,6 +52,8 @@ class TestMainBackendTest(unittest.TestCase):
         self.assertEqual(report["selected"], 1)
         self.assertEqual(report["cases"][0]["name"], "test_cc_abs")
         self.assertEqual(report["cases"][0]["data_sets"], 1)
+        self.assertEqual(report["cases"][0]["status"], "completed")
+        self.assertFalse(report["cases"][0]["timed_out"])
         self.assertEqual(len(report["cases"][0]["iteration_seconds"]), 1)
         self.assertGreaterEqual(report["cases"][0]["run_seconds"], 0)
 
@@ -58,6 +66,16 @@ class TestMainBackendTest(unittest.TestCase):
         self.assertEqual(report["cases"][0]["name"], "test_cc_abs_benchmark")
         self.assertGreater(report["cases"][0]["run_seconds"], 0)
 
+    def test_marks_case_exceeding_timeout(self):
+        report = _run_backend_test_timing(
+            name_regex=r"^test_cc_abs$", repeat=1, timeout_seconds=0.000001
+        )
+        self.assertEqual(report["selected"], 1)
+        self.assertEqual(report["timed_out"], 1)
+        self.assertEqual(report["cases"][0]["status"], "timeout")
+        self.assertTrue(report["cases"][0]["timed_out"])
+        self.assertIsNone(report["cases"][0]["run_seconds"])
+
     def test_json_output(self):
         expected = {
             "name_regex": "abs",
@@ -65,14 +83,18 @@ class TestMainBackendTest(unittest.TestCase):
             "include_big": False,
             "repeat": 2,
             "warmup": 1,
+            "timeout_seconds": 3.5,
             "selected": 0,
+            "timed_out": 0,
             "collection_seconds": 0.1,
             "cases": [],
             "total_seconds": 0.2,
         }
         buffer = io.StringIO()
         with (
-            mock.patch("onnx_light.__main__._run_backend_test_timing", return_value=expected),
+            mock.patch(
+                "onnx_light.__main__._run_backend_test_timing", return_value=expected
+            ) as run_timing,
             redirect_stdout(buffer),
         ):
             main(
@@ -86,16 +108,34 @@ class TestMainBackendTest(unittest.TestCase):
                     "2",
                     "--warmup",
                     "1",
+                    "--timeout",
+                    "3.5",
                     "--json",
                 ]
             )
         self.assertEqual(json.loads(buffer.getvalue()), expected)
+        run_timing.assert_called_once_with(
+            name_regex="abs",
+            mode="benchmark",
+            include_big=False,
+            repeat=2,
+            warmup=1,
+            timeout_seconds=3.5,
+        )
 
     def test_rejects_invalid_counts(self):
         with self.assertRaisesRegex(ValueError, "repeat must be positive"):
             _run_backend_test_timing(repeat=0)
         with self.assertRaisesRegex(ValueError, "warmup must be non-negative"):
             _run_backend_test_timing(warmup=-1)
+        with self.assertRaisesRegex(ValueError, "timeout_seconds must be positive"):
+            _run_backend_test_timing(timeout_seconds=0)
+        for value in (float("nan"), float("inf")):
+            with (
+                self.subTest(timeout=value),
+                self.assertRaisesRegex(ValueError, "timeout_seconds must be positive and finite"),
+            ):
+                _run_backend_test_timing(timeout_seconds=value)
 
     def test_rejects_invalid_regex(self):
         with self.assertRaises(ValueError):
@@ -119,13 +159,18 @@ class TestMainBackendTest(unittest.TestCase):
             "include_big": False,
             "repeat": 2,
             "warmup": 1,
+            "timeout_seconds": 2.0,
             "selected": 1,
+            "timed_out": 0,
             "collection_seconds": 0.1,
             "cases": [
                 {
                     "name": "test_cc_not",
                     "kind": "node",
                     "tag": "Not",
+                    "status": "completed",
+                    "timed_out": False,
+                    "error": None,
                     "data_sets": 1,
                     "materialization_seconds": 0.2,
                     "setup_seconds": 0.3,
@@ -154,8 +199,8 @@ class TestMainBackendTest(unittest.TestCase):
 
             with open(os.path.join(temporary, "not.csv"), encoding="utf-8") as csv_file:
                 csv_text = csv_file.read()
-            self.assertIn("name,kind,tag,data_sets", csv_text)
-            self.assertIn("test_cc_not,node,Not,1", csv_text)
+            self.assertIn("name,kind,tag,status,timed_out,error,data_sets", csv_text)
+            self.assertIn("test_cc_not,node,Not,completed,False,,1", csv_text)
 
             from openpyxl import load_workbook
 
@@ -164,6 +209,8 @@ class TestMainBackendTest(unittest.TestCase):
             summary_values = dict(summary.iter_rows(min_row=2, values_only=True))
             self.assertEqual(summary_values["repeat"], 2)
             self.assertEqual(summary_values["warmup"], 1)
+            self.assertEqual(summary_values["timeout_seconds"], 2)
+            self.assertEqual(summary_values["timed_out"], 0)
             self.assertIn("cpu.architecture", summary_values)
             self.assertIn("cpu.logical_cores", summary_values)
             worksheet = workbook["backend"]

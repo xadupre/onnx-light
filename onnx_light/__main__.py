@@ -130,8 +130,8 @@ backend
         python -m onnx_light backend --regex "_benchmark$" --mode benchmark --json
 
 kernel
-    Lists registered native kernels or shows the tunable parameters for a
-    selected set of kernels.
+    Lists registered native kernels, shows their tunable parameters, or
+    calibrates and persists one selected kernel with ``--tune``.
 
     Usage::
 
@@ -257,7 +257,7 @@ def _registered_kernel_device(identifier: str) -> int:
 
 
 def _cmd_kernel(args: argparse.Namespace) -> None:
-    """Lists registered kernels or their tunable parameters."""
+    """Lists, inspects, or tunes registered kernels."""
     from . import kernel_tuning
     from .onnx import TensorProto
     from .onnx_py._onnxpykernels import runtime  # type: ignore[missing-import]
@@ -1559,7 +1559,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # --- kernel --------------------------------------------------------------
     kernel_parser = subparsers.add_parser(
-        "kernel", help="List registered kernels or inspect their tunable parameters."
+        "kernel",
+        help="List kernels, inspect tunable parameters, or tune one selected kernel.",
+        description=(
+            "Lists registered kernels, inspects their tunable parameters, or calibrates "
+            "and persists one selected kernel with --tune."
+        ),
     )
     kernel_mode = kernel_parser.add_mutually_exclusive_group(required=True)
     kernel_mode.add_argument(

@@ -650,6 +650,7 @@ def _run_backend_test_timing(
     """Measures backend test cases selected by name and generation mode."""
     import math
     import time
+    from pathlib import Path
 
     if mode not in {"test", "benchmark"}:
         raise ValueError(f"Unknown backend test mode {mode!r}; expected 'test' or 'benchmark'.")
@@ -662,8 +663,6 @@ def _run_backend_test_timing(
 
     output_directory = None
     if save_models is not None:
-        from pathlib import Path
-
         output_directory = Path(save_models)
         if output_directory.exists() and not output_directory.is_dir():
             raise SystemExit(
@@ -703,7 +702,6 @@ def _run_backend_test_timing(
             )
     else:
         import tempfile
-        from pathlib import Path
 
         tunable = cast(_KernelTunable, tuning_comparison["tunable"])
         parameter_name = cast(str, tuning_comparison["parameter_name"])
@@ -811,6 +809,8 @@ def _run_backend_test_timing(
         model_bytes = case.pop("model_bytes", None)
         if model_bytes is None:
             continue
+        if output_directory is None:
+            raise RuntimeError("model_bytes captured without an output directory")
         if Path(case["name"]).name != case["name"]:
             raise SystemExit(
                 f"onnx-light backend: test name {case['name']!r} is not a safe model filename"
@@ -1011,6 +1011,7 @@ def _write_backend_test_output(report: dict[str, Any], output: str) -> None:
 
         workbook = Workbook()
         summary = workbook.active
+        assert summary is not None
         summary.title = "summary"
         summary.append(["property", "value"])
         for name in (

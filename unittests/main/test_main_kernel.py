@@ -12,11 +12,12 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
-from onnx_light import kernel_tuning
 from onnx_light.__main__ import _build_parser, _parse_kernel_device, main
 from onnx_light.ext_test_case import import_or_skip
 
 runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
+
+from onnx_light import kernel_tuning  # noqa: E402
 
 
 class TestMainKernel(unittest.TestCase):

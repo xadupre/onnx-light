@@ -43,6 +43,12 @@ class TestKernelTuningBindings(ExtTestCase):
         self.assertEqual(report["calibrated"], [])
         self.assertEqual(report["candidate_diagnostics"], [])
 
+    def test_calibration_filters_device(self):
+        with self.assertRaisesRegex(ValueError, "supports only the CPU device"):
+            rt.calibrate_kernel_tuning(
+                "Abs", element_types=[int(TensorProto.FLOAT)], device=0, save=False
+            )
+
     def test_calibration_exposes_bounded_parallel_diagnostics(self):
         report = rt.calibrate_kernel_tuning(
             "Abs",

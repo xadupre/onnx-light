@@ -49,6 +49,22 @@ considered by ``--list`` and ``--kernel``. Fixed-policy kernels are reported
 with ``no tunable parameters``. Add ``--json`` to either form for deterministic
 machine-readable output.
 
+Add ``--tune`` to calibrate and persist every matching tuning schema for one
+selected native kernel. The command fails when the name or device selection
+resolves to zero or multiple native kernels. It prints the active parameters
+before and after calibration:
+
+.. code-block:: bash
+
+    onnx-light kernel --kernel Gemm \
+        --dtype FLOAT --impl portable \
+        --tune --verbose
+
+``--verbose`` reports calibration progress on stderr. ``--cache`` selects an
+explicit cache file, while ``--maximum-duration-ms`` and
+``--maximum-memory-mb`` bound each calibration. With ``--json``, the
+``before``, ``calibrations`` and ``after`` sections are machine-readable.
+
 .. _l-cli-tune-kernels:
 
 tune-kernels

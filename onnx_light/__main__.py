@@ -190,6 +190,7 @@ class _KernelTunable(TypedDict):
     device: int
     device_name: str
     tuning_abi: int
+    calibratable: bool
     defaults: dict[str, bool | int | float | str]
     active_values: dict[str, bool | int | float | str]
     parameter_names: list[str]
@@ -311,6 +312,9 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
     from .onnx import TensorProto
     from .onnx_py._onnxpykernels import runtime  # type: ignore[missing-import]
 
+    if args.list and args.tune:
+        raise SystemExit("onnx-light kernel: --tune requires --kernel, not --list")
+
     identifiers = [
         identifier
         for identifier in runtime.registered_kernels()
@@ -342,77 +346,136 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
             f"{_optional_kernel_device_name(args.device)}: {', '.join(unknown)}"
         )
 
-    tuning_report = kernel_tuning.kernel_tuning_parameters(
-        library=args.library,
-        device=args.device,
-        element_type=args.dtype,
-        implementation=args.impl,
-    )
-    tuning_by_kernel: dict[tuple[str, int], list[_KernelTunable]] = {}
-    for item in cast(list[_KernelTunable], tuning_report["kernels"]):
-        tuning_by_kernel.setdefault((item["kernel"], item["device"]), []).append(item)
+    selection = {
+        "library": args.library or "all",
+        "device": _optional_kernel_device_name(args.device),
+        "dtype": "all" if args.dtype is None else TensorProto.DataType(args.dtype).name,
+        "implementation": args.impl or "all",
+    }
 
-    report: list[_KernelReportItem] = []
-    for identifier in sorted(selected):
-        op_type = identifier.split(":", maxsplit=2)[1]
-        device = _registered_kernel_device(identifier)
-        tunables = sorted(
-            tuning_by_kernel.get((op_type, device), []),
-            key=lambda item: (item["library"], item["implementation"], item["element_type"]),
+    def build_report() -> list[_KernelReportItem]:
+        tuning_report = kernel_tuning.kernel_tuning_parameters(
+            library=args.library,
+            device=args.device,
+            element_type=args.dtype,
+            implementation=args.impl,
+            path=args.cache,
         )
-        report.append(
-            {
-                "identifier": identifier,
-                "library": args.library or "all",
-                "device": device,
-                "device_name": _kernel_device_name(device),
-                "dtype": ("all" if args.dtype is None else TensorProto.DataType(args.dtype).name),
-                "implementation": args.impl or "all",
-                "tunables": tunables,
-            }
-        )
+        tuning_by_kernel: dict[tuple[str, int], list[_KernelTunable]] = {}
+        for item in cast(list[_KernelTunable], tuning_report["kernels"]):
+            tuning_by_kernel.setdefault((item["kernel"], item["device"]), []).append(item)
 
-    if args.json:
-        print(
-            json.dumps(
-                {
-                    "selection": {
-                        "library": args.library or "all",
-                        "device": _optional_kernel_device_name(args.device),
-                        "dtype": (
-                            "all" if args.dtype is None else TensorProto.DataType(args.dtype).name
-                        ),
-                        "implementation": args.impl or "all",
-                    },
-                    "kernels": report,
-                },
-                indent=2,
-                sort_keys=True,
+        result: list[_KernelReportItem] = []
+        for identifier in sorted(selected):
+            op_type = identifier.split(":", maxsplit=2)[1]
+            device = _registered_kernel_device(identifier)
+            tunables = sorted(
+                tuning_by_kernel.get((op_type, device), []),
+                key=lambda item: (item["library"], item["implementation"], item["element_type"]),
             )
-        )
+            result.append(
+                {
+                    "identifier": identifier,
+                    "library": args.library or "all",
+                    "device": device,
+                    "device_name": _kernel_device_name(device),
+                    "dtype": (
+                        "all" if args.dtype is None else TensorProto.DataType(args.dtype).name
+                    ),
+                    "implementation": args.impl or "all",
+                    "tunables": tunables,
+                }
+            )
+        return result
+
+    def print_report(items: list[_KernelReportItem]) -> None:
+        for kernel in items:
+            print(
+                f"{kernel['identifier']} library={kernel['library']} "
+                f"device={kernel['device_name']} dtype={kernel['dtype']} "
+                f"impl={kernel['implementation']}"
+            )
+            if not kernel["tunables"]:
+                print("  no tunable parameters")
+                continue
+            for tunable in kernel["tunables"]:
+                element_type = TensorProto.DataType(tunable["element_type"]).name
+                print(
+                    f"  {element_type} library={tunable['library']} "
+                    f"device={tunable['device_name']} "
+                    f"implementation={tunable['implementation']} abi={tunable['tuning_abi']}"
+                )
+                for name in tunable["parameter_names"]:
+                    print(
+                        f"    {name}: default={tunable['defaults'][name]} "
+                        f"active={tunable['active_values'][name]}"
+                    )
+
+    report = build_report()
+    if args.tune:
+        import sys
+
+        if len(report) != 1:
+            raise SystemExit(
+                f"onnx-light kernel: --tune requires exactly one selected kernel; "
+                f"got {len(report)}"
+            )
+        tunables = report[0]["tunables"]
+        if not tunables:
+            raise SystemExit("onnx-light kernel: selected kernel has no tunable parameters")
+        unsupported = [item for item in tunables if not item["calibratable"]]
+        if unsupported:
+            raise SystemExit(
+                "onnx-light kernel: selected kernel has parameters without a calibration callback"
+            )
+
+        def progress(message: str) -> None:
+            if args.verbose:
+                print(f"[kernel tune] {message}", file=sys.stderr, flush=True)
+
+        progress("captured parameters before tuning")
+        calibrations = []
+        for index, tunable in enumerate(tunables, 1):
+            dtype = TensorProto.DataType(tunable["element_type"]).name
+            progress(
+                f"calibrating {index}/{len(tunables)}: "
+                f"{tunable['library']}/{tunable['kernel']}/{tunable['implementation']} "
+                f"dtype={dtype} device={tunable['device_name']}"
+            )
+            calibrations.append(
+                kernel_tuning.calibrate_kernel_tuning(
+                    tunable["kernel"],
+                    element_types=[tunable["element_type"]],
+                    library=tunable["library"],
+                    implementation=tunable["implementation"],
+                    maximum_duration_ms=args.maximum_duration_ms,
+                    maximum_memory_bytes=args.maximum_memory_mb << 20,
+                    save=True,
+                    path=args.cache,
+                    device=tunable["device"],
+                )
+            )
+        after = build_report()
+        progress("captured parameters after tuning")
+        tune_report = {
+            "selection": selection,
+            "before": report,
+            "calibrations": calibrations,
+            "after": after,
+        }
+        if args.json:
+            print(json.dumps(tune_report, indent=2, sort_keys=True))
+        else:
+            print("before:")
+            print_report(report)
+            print("after:")
+            print_report(after)
         return
 
-    for kernel in report:
-        print(
-            f"{kernel['identifier']} library={kernel['library']} "
-            f"device={kernel['device_name']} dtype={kernel['dtype']} "
-            f"impl={kernel['implementation']}"
-        )
-        if not kernel["tunables"]:
-            print("  no tunable parameters")
-            continue
-        for tunable in kernel["tunables"]:
-            element_type = TensorProto.DataType(tunable["element_type"]).name
-            print(
-                f"  {element_type} library={tunable['library']} "
-                f"device={tunable['device_name']} "
-                f"implementation={tunable['implementation']} abi={tunable['tuning_abi']}"
-            )
-            for name in tunable["parameter_names"]:
-                print(
-                    f"    {name}: default={tunable['defaults'][name]} "
-                    f"active={tunable['active_values'][name]}"
-                )
+    if args.json:
+        print(json.dumps({"selection": selection, "kernels": report}, indent=2, sort_keys=True))
+    else:
+        print_report(report)
 
 
 def _cmd_kernel_baseline(args: argparse.Namespace) -> None:
@@ -1355,6 +1418,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="Print a machine-readable JSON report."
     )
     kernel_parser.add_argument(
+        "--tune",
+        action="store_true",
+        help="Calibrate and persist the parameters of exactly one selected kernel.",
+    )
+    kernel_parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Report tuning progress to stderr."
+    )
+    kernel_parser.add_argument(
         "--library", help="Restrict tuning schemas to one library (default: all)."
     )
     kernel_parser.add_argument(
@@ -1376,6 +1447,21 @@ def _build_parser() -> argparse.ArgumentParser:
         "--impl",
         metavar="IMPLEMENTATION",
         help="Restrict tuning schemas to one implementation (default: all).",
+    )
+    kernel_parser.add_argument(
+        "--cache", help="Read and persist tuning parameters in this cache file."
+    )
+    kernel_parser.add_argument(
+        "--maximum-duration-ms",
+        type=int,
+        default=0,
+        help="Per-key calibration duration budget; 0 uses the callback default.",
+    )
+    kernel_parser.add_argument(
+        "--maximum-memory-mb",
+        type=int,
+        default=0,
+        help="Calibration memory budget in MiB; 0 uses the callback default.",
     )
     kernel_parser.set_defaults(func=_cmd_kernel)
 

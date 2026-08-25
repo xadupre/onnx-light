@@ -125,6 +125,15 @@ tune-kernels
     Proposes calibration updates for tuning keys missing from the local cache.
     It is read-only unless ``--apply`` is specified.
 
+kernel
+    Lists registered native kernels or shows the tunable parameters for a
+    selected set of kernels.
+
+    Usage::
+
+        onnx-light kernel --list
+        onnx-light kernel --kernel Gemm --kernel Softmax [--json]
+
 kernel-baseline
     Produces the kernel inventory (coverage state per registered kernel path)
     and a deterministic benchmark corpus report, combined into one
@@ -231,6 +240,72 @@ def _cmd_tune_kernels(args: argparse.Namespace) -> None:
                 f"  {item['library']}/{item['kernel']}/{item['implementation']} "
                 f"dtype={item['element_type']} abi={item['tuning_abi']}"
             )
+
+
+def _cmd_kernel(args: argparse.Namespace) -> None:
+    """Lists registered kernels or their tunable parameters."""
+    from . import kernel_tuning
+    from .onnx import TensorProto
+    from .onnx_py._onnxpykernels import runtime
+
+    identifiers = runtime.registered_kernels()
+    if args.list:
+        if args.json:
+            print(json.dumps({"kernels": identifiers}, indent=2))
+        else:
+            print("\n".join(identifiers))
+        return
+
+    selected: set[str] = set()
+    unknown = []
+    for selector in args.kernel:
+        matches = [
+            identifier
+            for identifier in identifiers
+            if identifier == selector
+            or (":" not in selector and identifier.split(":", maxsplit=2)[1] == selector)
+        ]
+        if matches:
+            selected.update(matches)
+        else:
+            unknown.append(selector)
+    if unknown:
+        raise SystemExit(f"onnx-light kernel: unknown kernel(s): {', '.join(unknown)}")
+
+    tuning_report = kernel_tuning.kernel_tuning_parameters()
+    tuning_by_kernel: dict[str, list[dict[str, Any]]] = {}
+    for item in tuning_report["kernels"]:
+        tuning_by_kernel.setdefault(item["kernel"], []).append(item)
+
+    report = []
+    for identifier in sorted(selected):
+        op_type = identifier.split(":", maxsplit=2)[1]
+        tunables = sorted(
+            tuning_by_kernel.get(op_type, []),
+            key=lambda item: (item["library"], item["implementation"], item["element_type"]),
+        )
+        report.append({"identifier": identifier, "tunables": tunables})
+
+    if args.json:
+        print(json.dumps({"kernels": report}, indent=2, sort_keys=True))
+        return
+
+    for kernel in report:
+        print(kernel["identifier"])
+        if not kernel["tunables"]:
+            print("  no tunable parameters")
+            continue
+        for tunable in kernel["tunables"]:
+            element_type = TensorProto.DataType(tunable["element_type"]).name
+            print(
+                f"  {element_type} implementation={tunable['implementation']} "
+                f"abi={tunable['tuning_abi']}"
+            )
+            for name in tunable["parameter_names"]:
+                print(
+                    f"    {name}: default={tunable['defaults'][name]} "
+                    f"active={tunable['active_values'][name]}"
+                )
 
 
 def _cmd_kernel_baseline(args: argparse.Namespace) -> None:
@@ -815,7 +890,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m onnx_light", description="onnx-light command-line utilities."
+        prog="onnx-light", description="onnx-light command-line utilities."
     )
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
     subparsers.required = True
@@ -1151,6 +1226,28 @@ def _build_parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="Print the complete JSON report."
     )
     tuning_parser.set_defaults(func=_cmd_tune_kernels)
+
+    # --- kernel --------------------------------------------------------------
+    kernel_parser = subparsers.add_parser(
+        "kernel", help="List registered kernels or inspect their tunable parameters."
+    )
+    kernel_mode = kernel_parser.add_mutually_exclusive_group(required=True)
+    kernel_mode.add_argument(
+        "--list", action="store_true", help="List every registered native kernel identifier."
+    )
+    kernel_mode.add_argument(
+        "--kernel",
+        action="append",
+        metavar="NAME",
+        help=(
+            "Show tunable parameters for a kernel name or domain-qualified identifier; "
+            "may be specified multiple times."
+        ),
+    )
+    kernel_parser.add_argument(
+        "--json", action="store_true", help="Print a machine-readable JSON report."
+    )
+    kernel_parser.set_defaults(func=_cmd_kernel)
 
     # --- kernel-baseline -------------------------------------------------------
     baseline_parser = subparsers.add_parser(

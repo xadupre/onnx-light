@@ -9,6 +9,7 @@
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/runtime/kernels/cast_sub_byte.h"
+#include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/kernels/random.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
@@ -748,6 +749,18 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                  "KernelDispatchTable (with transparent dispatch to model-local "
                  "FunctionProto's) using a name-keyed RuntimeContext for tensor I/O.";
   AddOnnxPyTuning(rt_mod);
+  rt_mod.def(
+      "registered_kernels",
+      []() {
+        std::vector<std::string> identifiers;
+        identifiers.reserve(core::runtime::KernelDispatchTable().size());
+        for (const auto &entry : core::runtime::KernelDispatchTable()) {
+          identifiers.push_back(entry.first);
+        }
+        std::sort(identifiers.begin(), identifiers.end());
+        return identifiers;
+      },
+      "Returns the sorted identifiers of all registered native kernels.");
 
   // OpsetId — (domain, version) opset identifier consumed by KernelContext.
   nb::class_<OpsetId>(rt_mod, "OpsetId",

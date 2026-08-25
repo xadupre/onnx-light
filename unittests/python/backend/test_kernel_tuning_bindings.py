@@ -20,6 +20,13 @@ from onnx_light import kernel_tuning  # noqa: E402
 
 
 class TestKernelTuningBindings(ExtTestCase):
+    def test_lists_registered_kernels(self):
+        identifiers = rt.registered_kernels()
+        self.assertEqual(identifiers, sorted(identifiers))
+        self.assertEqual(len(identifiers), len(set(identifiers)))
+        self.assertIn("ai.onnx:Abs", identifiers)
+        self.assertIn("ai.onnx:Gemm", identifiers)
+
     def test_calibration_accepts_explicit_cpu_executor(self):
         policy = rt.CpuExecutionPolicy()
         policy.num_threads = 1

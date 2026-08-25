@@ -15,6 +15,9 @@ dependencies = [
     "ml-dtypes>=0.5.0",
 ]
 
+[project.scripts]
+onnx-light = "onnx_light.__main__:main"
+
 [project.optional-dependencies]
 style = [
     "black==26.5.1",

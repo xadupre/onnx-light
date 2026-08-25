@@ -5,10 +5,46 @@
 Command-line interface
 ======================
 
-``onnx-light`` ships a small command-line interface that can be invoked as a
-Python module::
+``onnx-light`` ships a small command-line interface::
 
-    python -m onnx_light <subcommand> [options]
+    onnx-light <subcommand> [options]
+
+The equivalent ``python -m onnx_light`` invocation remains available.
+
+.. _l-cli-kernel:
+
+kernel
+------
+
+Lists every native kernel currently registered by the runtime:
+
+.. code-block:: bash
+
+    onnx-light kernel --list
+
+Select one or more kernels by operator name to display every registered
+tuning schema, including its element type, implementation, ABI, parameter
+names, portable defaults, and active values:
+
+.. code-block:: bash
+
+    onnx-light kernel --kernel Gemm --kernel Softmax
+
+A domain-qualified identifier such as ``ai.onnx:Gemm`` may be used when
+operator names overlap across domains. ``--library`` and ``--device`` select
+the complete tuning-key identity; the defaults are ``onnx_light`` and ``CPU``:
+
+.. code-block:: bash
+
+    onnx-light kernel --kernel Gemm \
+        --library onnx_light --device CPU
+
+Devices accept ``CPU``, ``Undefined``, ``GPU0`` through ``GPU8191``, or their
+numeric value. The output includes both the library and device for every
+tuning schema, and the device also filters the native registrations considered
+by ``--list`` and ``--kernel``. Fixed-policy kernels are reported with ``no
+tunable parameters``. Add ``--json`` to either form for deterministic
+machine-readable output.
 
 .. _l-cli-tune-kernels:
 

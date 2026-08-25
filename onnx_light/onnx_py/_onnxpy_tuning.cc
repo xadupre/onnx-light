@@ -22,6 +22,7 @@
 namespace nb = nanobind;
 namespace rt = ONNX_LIGHT_NAMESPACE::core::runtime;
 namespace platform = ONNX_LIGHT_NAMESPACE::core::platform;
+namespace symbolic = ONNX_LIGHT_NAMESPACE::core::symbolic;
 
 namespace {
 
@@ -112,6 +113,7 @@ nb::dict KeyToDict(const rt::KernelTuningKey &key) {
   result["implementation"] = key.implementation;
   result["element_type"] = key.element_type;
   result["device"] = static_cast<int32_t>(key.device);
+  result["device_name"] = symbolic::DeviceName(key.device);
   result["tuning_abi"] = key.tuning_abi;
   return result;
 }
@@ -172,7 +174,8 @@ nb::list KeysToList(const std::vector<rt::KernelTuningKey> &keys) {
 rt::KernelCalibrationSelection MakeSelection(const std::optional<std::string> &kernel,
                                              const std::string &library,
                                              const std::optional<std::string> &implementation,
-                                             const std::optional<int32_t> &element_type) {
+                                             const std::optional<int32_t> &element_type,
+                                             const std::optional<int32_t> &device = -1) {
   rt::KernelCalibrationSelection selection;
   selection.library = library;
   if (kernel.has_value()) {
@@ -184,7 +187,13 @@ rt::KernelCalibrationSelection MakeSelection(const std::optional<std::string> &k
   if (element_type.has_value()) {
     selection.element_types = {*element_type};
   }
-  selection.device = rt::Device::kCPU;
+  if (device.has_value()) {
+    const auto selected_device = static_cast<rt::Device>(*device);
+    if (symbolic::DeviceName(selected_device) == "Unknown") {
+      throw std::invalid_argument("Unknown kernel tuning device value.");
+    }
+    selection.device = selected_device;
+  }
   return selection;
 }
 
@@ -242,9 +251,10 @@ nb::dict InspectCache(const std::optional<std::string> &path, int32_t num_thread
 nb::dict ListParameters(const std::optional<std::string> &kernel, const std::string &library,
                         const std::optional<std::string> &implementation,
                         const std::optional<int32_t> &element_type,
-                        const std::optional<std::string> &path, int32_t num_threads) {
+                        const std::optional<std::string> &path, int32_t num_threads,
+                        const std::optional<int32_t> &device) {
   const rt::KernelCalibrationSelection selection =
-      MakeSelection(kernel, library, implementation, element_type);
+      MakeSelection(kernel, library, implementation, element_type, device);
   const rt::CpuExecutionDescriptor execution = LocalExecution(num_threads);
   const rt::KernelTuningCacheInspectionReport inspection =
       rt::InspectKernelTuningCache(CacheOptions(path, execution));
@@ -466,7 +476,7 @@ void AddOnnxPyTuning(nb::module_ &rt_mod) {
   rt_mod.def("kernel_tuning_parameters", &ListParameters, nb::arg("kernel") = nb::none(),
              nb::arg("library") = "onnx_light", nb::arg("implementation") = nb::none(),
              nb::arg("element_type") = nb::none(), nb::arg("path") = nb::none(),
-             nb::arg("num_threads") = 0,
+             nb::arg("num_threads") = 0, nb::arg("device") = -1,
              "Lists registered parameter names, portable defaults, matching cached values, "
              "and active values.");
   rt_mod.def("load_kernel_tuning_cache", &LoadCache, nb::arg("kernel") = nb::none(),

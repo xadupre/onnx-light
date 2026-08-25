@@ -102,6 +102,20 @@ persisted, the machine tuning cache path and update status. With ``--json``,
 the ``tuning_options``, ``before``, ``calibrations`` and ``after`` sections are
 machine-readable.
 
+Use ``--parameter NAME=default,VALUE,...`` to compare explicit integer values
+with the kernel's calibration workload:
+
+.. code-block:: bash
+
+    python -m onnx_light kernel --kernel Gemm \
+        --dtype FLOAT --impl portable --tune \
+        --parameter parallel.minimum_tasks=default,1,2,4
+
+``default`` resolves to the current active value and must come first. It is the
+baseline for every reported speedup. The command prints each value's elapsed
+time and speedup side by side, selects the fastest value, and persists it in the
+same tuning cache as a regular calibration.
+
 .. _l-cli-fillshape:
 
 fillshape

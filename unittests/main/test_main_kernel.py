@@ -128,6 +128,7 @@ class TestMainKernel(unittest.TestCase):
             "unsupported": [],
             "diagnostics": [],
             "candidate_diagnostics": [],
+            "comparisons": [],
             "cache_update": None,
             "published_generation": 0,
         }
@@ -176,6 +177,7 @@ class TestMainKernel(unittest.TestCase):
             "unsupported": [],
             "diagnostics": [],
             "candidate_diagnostics": [],
+            "comparisons": [],
             "cache_update": {
                 "status": "updated",
                 "path": "/tmp/kernel_tuning.cache",
@@ -204,6 +206,7 @@ class TestMainKernel(unittest.TestCase):
             "unsupported": [],
             "diagnostics": [],
             "candidate_diagnostics": [],
+            "comparisons": [],
             "cache_update": None,
             "published_generation": 0,
         }
@@ -216,11 +219,105 @@ class TestMainKernel(unittest.TestCase):
             main(["kernel", "--kernel", "Abs", "--dtype", "FLOAT", "--tune", "--json"])
         report = json.loads(stdout.getvalue())
         self.assertEqual(
-            report["tuning_options"], {"maximum_duration_ms": 0, "maximum_memory_mb": 0}
+            report["tuning_options"],
+            {"maximum_duration_ms": 0, "maximum_memory_mb": 0, "parameter": None},
         )
         self.assertEqual(len(report["before"]), 1)
         self.assertEqual(len(report["calibrations"]), 1)
         self.assertEqual(len(report["after"]), 1)
+
+    def test_tune_compares_explicit_parameter_values(self):
+        stdout = io.StringIO()
+        calibration = {
+            "calibrated": [],
+            "skipped": [],
+            "unsupported": [],
+            "diagnostics": [],
+            "candidate_diagnostics": [],
+            "comparisons": [
+                {
+                    "parameter_name": "parallel.minimum_elements",
+                    "baseline_value": 32768,
+                    "selected_value": 16384,
+                    "values": [
+                        {
+                            "value": 32768,
+                            "duration_ns": 2000,
+                            "duration_seconds": 0.000002,
+                            "benchmark_cases": 2,
+                            "speedup": 1.0,
+                        },
+                        {
+                            "value": 16384,
+                            "duration_ns": 1000,
+                            "duration_seconds": 0.000001,
+                            "benchmark_cases": 2,
+                            "speedup": 2.0,
+                        },
+                    ],
+                }
+            ],
+            "cache_update": None,
+            "published_generation": 0,
+        }
+        with (
+            mock.patch(
+                "onnx_light.kernel_tuning.calibrate_kernel_tuning", return_value=calibration
+            ) as calibrate,
+            redirect_stdout(stdout),
+        ):
+            main(
+                [
+                    "kernel",
+                    "--kernel",
+                    "Abs",
+                    "--dtype",
+                    "FLOAT",
+                    "--impl",
+                    "portable",
+                    "--tune",
+                    "--parameter",
+                    "parallel.minimum_elements=default,16384",
+                ]
+            )
+        self.assertIn(
+            "side by side: parallel.minimum_elements baseline=32768 selected=16384",
+            stdout.getvalue(),
+        )
+        self.assertIn("speedup=2.000x selected", stdout.getvalue())
+        self.assertEqual(
+            calibrate.call_args.kwargs["parameter_name"], "parallel.minimum_elements"
+        )
+        self.assertEqual(calibrate.call_args.kwargs["parameter_values"], [32768, 16384])
+
+    def test_parameter_requires_tune(self):
+        with self.assertRaisesRegex(SystemExit, "--parameter requires --tune"):
+            main(
+                [
+                    "kernel",
+                    "--kernel",
+                    "Abs",
+                    "--parameter",
+                    "parallel.minimum_elements=default,1",
+                ]
+            )
+
+    def test_parameter_rejects_non_positive_values(self):
+        with self.assertRaisesRegex(SystemExit, "must be positive integers"):
+            main(
+                [
+                    "kernel",
+                    "--kernel",
+                    "Abs",
+                    "--dtype",
+                    "FLOAT",
+                    "--impl",
+                    "portable",
+                    "--tune",
+                    "--parameter",
+                    "parallel.minimum_elements=default,0",
+                ]
+            )
 
     def test_selected_kernel_json_is_deterministic(self):
         arguments = ["kernel", "--kernel", "Gemm", "--kernel", "Abs", "--json"]

@@ -282,8 +282,10 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
     from .onnx import TensorProto
     from .onnx_py._onnxpykernels import runtime  # type: ignore[missing-import]
 
-    if args.list and args.tune:
-        raise SystemExit("onnx-light kernel: --tune requires --kernel, not --list")
+    if args.list and (args.tune or args.parameter):
+        raise SystemExit("onnx-light kernel: --tune and --parameter require --kernel, not --list")
+    if args.parameter and not args.tune:
+        raise SystemExit("onnx-light kernel: --parameter requires --tune")
 
     identifiers = [
         identifier
@@ -388,6 +390,7 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
         tuning_options = {
             "maximum_duration_ms": args.maximum_duration_ms,
             "maximum_memory_mb": args.maximum_memory_mb,
+            "parameter": args.parameter,
         }
         if len(report) != 1:
             raise SystemExit(
@@ -402,6 +405,60 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
             raise SystemExit(
                 "onnx-light kernel: selected kernel has parameters without a calibration callback"
             )
+        parameter_name = None
+        parameter_values: list[int] = []
+        if args.parameter:
+            if len(tunables) != 1:
+                raise SystemExit(
+                    "onnx-light kernel: --parameter requires exactly one tuning schema; "
+                    "select --dtype and --impl"
+                )
+            parameter_name, separator, value_text = args.parameter.partition("=")
+            value_tokens = value_text.split(",") if separator else []
+            if (
+                not parameter_name
+                or len(value_tokens) < 2
+                or any(not token for token in value_tokens)
+            ):
+                raise SystemExit(
+                    "onnx-light kernel: --parameter expects NAME=default,VALUE[,VALUE...]"
+                )
+            if value_tokens[0].lower() != "default":
+                raise SystemExit(
+                    "onnx-light kernel: the first --parameter value must be default "
+                    "to define the baseline"
+                )
+            tunable = tunables[0]
+            if parameter_name not in tunable["parameter_names"]:
+                raise SystemExit(
+                    f"onnx-light kernel: unknown tunable parameter {parameter_name!r}; "
+                    f"expected one of {', '.join(tunable['parameter_names'])}"
+                )
+            current_value = tunable["active_values"][parameter_name]
+            if isinstance(current_value, bool) or not isinstance(current_value, int):
+                raise SystemExit(
+                    "onnx-light kernel: explicit comparisons currently support "
+                    "integer tunable parameters"
+                )
+            for token in value_tokens:
+                if token.lower() == "default":
+                    parameter_values.append(current_value)
+                    continue
+                try:
+                    value = int(token)
+                except ValueError:
+                    raise SystemExit(
+                        f"onnx-light kernel: invalid integer comparison value {token!r}"
+                    ) from None
+                if value <= 0:
+                    raise SystemExit(
+                        "onnx-light kernel: comparison values must be positive integers"
+                    )
+                parameter_values.append(value)
+            if len(set(parameter_values)) != len(parameter_values):
+                raise SystemExit("onnx-light kernel: comparison values must be distinct")
+            if len(parameter_values) > 64:
+                raise SystemExit("onnx-light kernel: at most 64 comparison values are supported")
 
         def progress(message: str) -> None:
             if args.verbose:
@@ -431,6 +488,8 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
                     save=True,
                     path=args.cache,
                     device=tunable["device"],
+                    parameter_name=parameter_name,
+                    parameter_values=parameter_values,
                 )
             )
         after = build_report()
@@ -450,6 +509,25 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
             print_report(report)
             print("after:")
             print_report(after)
+            for calibration in calibrations:
+                for comparison in calibration["comparisons"]:
+                    print(
+                        f"side by side: {comparison['parameter_name']} "
+                        f"baseline={comparison['baseline_value']} "
+                        f"selected={comparison['selected_value']}"
+                    )
+                    for value in comparison["values"]:
+                        marker = (
+                            " baseline" if value["value"] == comparison["baseline_value"] else ""
+                        )
+                        selected_marker = (
+                            " selected" if value["value"] == comparison["selected_value"] else ""
+                        )
+                        print(
+                            f"  value={value['value']} "
+                            f"time_ms={value['duration_seconds'] * 1000:.3f} "
+                            f"speedup={value['speedup']:.3f}x{marker}{selected_marker}"
+                        )
             cache_updates = [
                 calibration["cache_update"]
                 for calibration in calibrations
@@ -1663,6 +1741,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Calibrate and persist exactly one selected kernel, using the duration "
             "and memory budgets below."
+        ),
+    )
+    kernel_parser.add_argument(
+        "--parameter",
+        metavar="NAME=default,VALUE,...",
+        help=(
+            "Benchmark explicit integer values side by side while tuning; default resolves "
+            "to the current active value and defines the speedup baseline."
         ),
     )
     kernel_parser.add_argument(

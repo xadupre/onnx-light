@@ -108,6 +108,11 @@ The ``python -m onnx_light kernel --kernel NAME --tune`` command calibrates
 and persists one exact selected kernel. Bulk proposal and application remain
 available through the Python API.
 
+An explicit ``--parameter NAME=default,VALUE,...`` comparison reuses the same
+kernel-specific callback workload. Every value runs on the same bounded cases;
+the current active value is the first baseline, and the fastest validated value
+is published and persisted.
+
 See :ref:`l-how-to-tune-kernel-thresholds` for usage and
 :ref:`l-example-plot-kernel-tuning` for an executable Python example. The
 completed implementation history remains in

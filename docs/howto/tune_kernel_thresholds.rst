@@ -97,6 +97,19 @@ and ``--maximum-duration-ms`` or ``--maximum-memory-mb`` to bound calibration.
 The Python functions ``propose_kernel_tuning_updates`` and
 ``apply_kernel_tuning_updates`` remain available for bulk workflows.
 
+To compare explicit values for one integer parameter, list ``default`` first
+so the current active value becomes the speedup baseline:
+
+.. code-block:: bash
+
+    python -m onnx_light kernel \
+        --kernel Abs --dtype FLOAT --impl portable --tune \
+        --parameter parallel.minimum_elements=default,16384,32768,65536
+
+The existing calibration cases measure every value side by side. The fastest
+validated value is persisted, while text and JSON output report elapsed times,
+speedups, the baseline, and the selected value.
+
 Calibrate one kernel from Python
 ++++++++++++++++++++++++++++++++
 

@@ -162,6 +162,8 @@ struct CalibrationOptions {
   uint64_t maximum_duration_ms = 0;
   uint64_t maximum_memory_bytes = 0;
   std::optional<uint32_t> maximum_threads;
+  std::optional<std::string> parameter_name;
+  std::vector<int64_t> parameter_values;
   size_t profiling_capacity = 0;
   bool profiling_hardware_counters = false;
 };
@@ -209,6 +211,21 @@ struct KernelCalibrationBenchmark {
   std::function<bool(const Tensor &, const Tensor &)> validate_output;
 };
 
+/** Reports one explicit tuning value measured across the calibration cases. */
+struct KernelTuningComparisonValue {
+  int64_t value = 0;
+  uint64_t duration_ns = 0;
+  uint64_t benchmark_cases = 0;
+};
+
+/** Reports an explicit side-by-side comparison for one tuning parameter. */
+struct KernelTuningComparison {
+  std::string parameter_name;
+  int64_t baseline_value = 0;
+  int64_t selected_value = 0;
+  std::vector<KernelTuningComparisonValue> values;
+};
+
 /** Collects diagnostics emitted by one calibration callback. */
 class CalibrationReporter {
 public:
@@ -239,6 +256,12 @@ public:
   /** Copies completed profiling data while callback-owned labels remain valid. */
   void FinalizeCandidateDiagnostics();
 
+  /** Stores one completed explicit-value comparison. */
+  void SetComparison(KernelTuningComparison comparison);
+
+  /** Returns the explicit-value comparison produced by the callback. */
+  const std::optional<KernelTuningComparison> &comparison() const noexcept { return comparison_; }
+
   /** Returns the candidate profiling snapshot when profiling was requested. */
   const std::optional<ParallelRegionReport> &parallel_region_report() const noexcept {
     return parallel_region_report_;
@@ -249,6 +272,7 @@ private:
   uint64_t benchmark_cases_ = 0;
   uint64_t peak_memory_bytes_ = 0;
   uint64_t measured_duration_ns_ = 0;
+  std::optional<KernelTuningComparison> comparison_;
   std::unique_ptr<ParallelRegionCollector> parallel_region_collector_;
   std::optional<ParallelRegionReport> parallel_region_report_;
 };
@@ -278,6 +302,12 @@ struct KernelCalibrationCandidateDiagnostic {
   ParallelRegionReport parallel_regions;
 };
 
+/** Associates one explicit-value comparison with its exact key. */
+struct KernelCalibrationComparison {
+  KernelTuningKey key;
+  KernelTuningComparison comparison;
+};
+
 /** Reports one explicit batch calibration and its atomic publication. */
 struct CalibrationBatchReport {
   uint64_t published_generation = 0;
@@ -287,6 +317,7 @@ struct CalibrationBatchReport {
   std::vector<KernelCalibrationDiagnostic> diagnostics;
   std::vector<KernelCalibrationResourceUsage> resources;
   std::vector<KernelCalibrationCandidateDiagnostic> candidate_diagnostics;
+  std::vector<KernelCalibrationComparison> comparisons;
 
   /** Returns successfully validated profiles. */
   std::span<const KernelTuningParameters> successful_profiles() const noexcept {

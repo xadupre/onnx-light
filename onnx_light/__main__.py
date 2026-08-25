@@ -121,17 +121,17 @@ run
         and per output tensor (in that order).  Only ``numpy.ndarray``
         values are stored; non-array outputs (e.g. sequences) are skipped.
 
-tune-kernels
+tune
     Proposes calibration updates for tuning keys missing from the local cache.
     It is read-only unless ``--apply`` is specified.
 
-backend-test
+backend
     Measures backend test cases selected by a regular expression.
 
     Usage::
 
-        python -m onnx_light backend-test --regex "^test_cc_abs" --mode test
-        python -m onnx_light backend-test --regex "_benchmark$" --mode benchmark --json
+        python -m onnx_light backend --regex "^test_cc_abs" --mode test
+        python -m onnx_light backend --regex "_benchmark$" --mode benchmark --json
 
 kernel
     Lists registered native kernels or shows the tunable parameters for a
@@ -1474,10 +1474,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     run_parser.set_defaults(func=_cmd_run)
 
-    # --- tune-kernels --------------------------------------------------------
+    # --- tune ----------------------------------------------------------------
     tuning_parser = subparsers.add_parser(
-        "tune-kernels",
-        help="Propose calibration updates for locally uncovered kernel tuning keys.",
+        "tune", help="Propose calibration updates for locally uncovered kernel tuning keys."
     )
     tuning_parser.add_argument(
         "--kernel",
@@ -1517,9 +1516,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     tuning_parser.set_defaults(func=_cmd_tune_kernels)
 
-    # --- backend-test ---------------------------------------------------------
+    # --- backend --------------------------------------------------------------
     backend_test_parser = subparsers.add_parser(
-        "backend-test", help="Measure regex-selected backend test cases."
+        "backend", help="Measure regex-selected backend test cases."
     )
     backend_test_parser.add_argument(
         "--regex",

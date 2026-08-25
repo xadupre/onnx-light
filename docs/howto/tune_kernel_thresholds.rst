@@ -88,14 +88,14 @@ a compatible profile in the selected cache:
 
 .. code-block:: bash
 
-    python -m onnx_light tune-kernels --json
+    python -m onnx_light tune --json
 
 It is read-only by default. Select a subset and explicitly apply calibratable
 proposals with:
 
 .. code-block:: bash
 
-    python -m onnx_light tune-kernels \
+    python -m onnx_light tune \
         --kernel Abs --kernel Add \
         --element-type FLOAT \
         --apply
@@ -103,7 +103,7 @@ proposals with:
 The equivalent Python functions are ``propose_kernel_tuning_updates`` and
 ``apply_kernel_tuning_updates``. Both reports separate calibratable missing keys
 from kernels that have a schema but no calibration callback. See
-:ref:`l-cli-tune-kernels` for all options.
+:ref:`l-cli-tune` for all options.
 
 Calibrate one kernel from Python
 ++++++++++++++++++++++++++++++++

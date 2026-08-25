@@ -92,7 +92,7 @@ step and produces the input required by the next one.
         without benchmarking during inference.
       - Started (every calibratable key -- ``Abs``, ``Add``, ``Gemm``,
         ``Log``, ``Not``, ``Sigmoid``, ``Tanh`` -- was calibrated on the
-        x86-64 sandbox machine with ``python -m onnx_light tune-kernels
+        x86-64 sandbox machine with ``python -m onnx_light tune
         --apply`` and persisted through ``UpdateKernelTuningCache``; a fresh
         process reloaded that cache and resolved every one of the 37
         calibrated keys through their exact processor and execution
@@ -238,7 +238,7 @@ Cross-machine calibration and default promotion
 Every calibratable key registered after Step F (``Abs``, ``Add``, ``Gemm``,
 ``Log``, ``Not``, ``Sigmoid``, and ``Tanh``, 37 ``(kernel, element_type)``
 keys in total) was calibrated on the x86-64 sandbox machine with
-``python -m onnx_light tune-kernels --apply`` and persisted through
+``python -m onnx_light tune --apply`` and persisted through
 ``UpdateKernelTuningCache``. A fresh process then reloaded that cache with
 ``load_kernel_tuning_cache``/``kernel_tuning_parameters`` and resolved all 37
 profiles through their exact ``KernelTuningKey`` and

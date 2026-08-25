@@ -15,6 +15,15 @@ class TestMainParser(unittest.TestCase):
         with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
             _build_parser().parse_args(["kernel-baseline"])
 
+    def test_rejects_renamed_commands(self):
+        for command in ("tune-kernels", "backend-test"):
+            with (
+                self.subTest(command=command),
+                redirect_stderr(StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                _build_parser().parse_args([command])
+
 
 if __name__ == "__main__":
     unittest.main()

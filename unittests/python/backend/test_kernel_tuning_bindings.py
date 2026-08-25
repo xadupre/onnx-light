@@ -208,7 +208,7 @@ assert kernel["active_source"] == "published_profile", kernel
                     sys.executable,
                     "-m",
                     "onnx_light",
-                    "tune-kernels",
+                    "tune",
                     "--kernel",
                     "Abs",
                     "--element-type",

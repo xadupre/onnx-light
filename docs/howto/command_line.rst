@@ -11,10 +11,10 @@ Command-line interface
 
 The equivalent ``python -m onnx_light`` invocation remains available.
 
-.. _l-cli-backend-test:
+.. _l-cli-backend:
 
-backend-test
-------------
+backend
+-------
 
 Measures C++ backend test cases whose names match an ECMAScript regular
 expression. ``test`` mode generates the ordinary correctness cases, while
@@ -23,7 +23,7 @@ benchmark case:
 
 .. code-block:: bash
 
-    python -m onnx_light backend-test \
+    python -m onnx_light backend \
         --regex "^test_cc_(abs|gemm)" \
         --mode benchmark
 
@@ -89,10 +89,10 @@ the text output reports the machine tuning cache path and update status. With
 ``--json``, the ``before``, ``calibrations`` and ``after`` sections are
 machine-readable.
 
-.. _l-cli-tune-kernels:
+.. _l-cli-tune:
 
-tune-kernels
-------------
+tune
+----
 
 Reports exact tuning keys that have no cache profile compatible with the local
 processor and effective thread count. The command separates missing keys with
@@ -101,14 +101,14 @@ modify the cache by default:
 
 .. code-block:: bash
 
-    python -m onnx_light tune-kernels
+    python -m onnx_light tune
 
 Restrict the proposal to a subset by repeating ``--kernel`` or
 ``--element-type``. Element types accept ONNX names or integer values:
 
 .. code-block:: bash
 
-    python -m onnx_light tune-kernels \
+    python -m onnx_light tune \
         --kernel Abs --kernel Add \
         --element-type FLOAT --element-type DOUBLE
 
@@ -118,7 +118,7 @@ keys:
 
 .. code-block:: bash
 
-    python -m onnx_light tune-kernels \
+    python -m onnx_light tune \
         --kernel Abs --element-type FLOAT \
         --maximum-duration-ms 1000 \
         --maximum-memory-mb 128 \

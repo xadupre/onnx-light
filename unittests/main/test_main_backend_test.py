@@ -1,7 +1,7 @@
 # Copyright (c) ONNX Project Contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for ``python -m onnx_light backend-test``."""
+"""Tests for ``python -m onnx_light backend``."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 
 class TestMainBackendTest(unittest.TestCase):
     def test_parser_defaults(self):
-        args = _build_parser().parse_args(["backend-test"])
+        args = _build_parser().parse_args(["backend"])
         self.assertEqual(args.regex, "")
         self.assertEqual(args.mode, "test")
         self.assertEqual(args.repeat, 1)
@@ -33,9 +33,9 @@ class TestMainBackendTest(unittest.TestCase):
     def test_parser_rejects_invalid_counts(self):
         parser = _build_parser()
         with self.assertRaises(SystemExit):
-            parser.parse_args(["backend-test", "--repeat", "0"])
+            parser.parse_args(["backend", "--repeat", "0"])
         with self.assertRaises(SystemExit):
-            parser.parse_args(["backend-test", "--warmup", "-1"])
+            parser.parse_args(["backend", "--warmup", "-1"])
 
     def test_times_one_correctness_case(self):
         report = _run_backend_test_timing(name_regex=r"^test_cc_abs$", repeat=1)
@@ -74,7 +74,7 @@ class TestMainBackendTest(unittest.TestCase):
         ):
             main(
                 [
-                    "backend-test",
+                    "backend",
                     "--regex",
                     "abs",
                     "--mode",
@@ -100,15 +100,7 @@ class TestMainBackendTest(unittest.TestCase):
 
     def test_python_module_command(self):
         process = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "onnx_light",
-                "backend-test",
-                "--regex",
-                "^test_cc_abs$",
-                "--json",
-            ],
+            [sys.executable, "-m", "onnx_light", "backend", "--regex", "^test_cc_abs$", "--json"],
             check=True,
             capture_output=True,
             text=True,

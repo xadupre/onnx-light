@@ -28,7 +28,7 @@ such access is available.
 calibratable kernel tuning key missing from a tuning cache with:
 
 ```
-python -m onnx_light tune-kernels --apply --cache <path> --json
+python -m onnx_light tune --apply --cache <path> --json
 ```
 
 It then reloads that cache path in a separate process

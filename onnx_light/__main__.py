@@ -492,6 +492,16 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
             print_report(report)
             print("after:")
             print_report(after)
+            cache_updates = [
+                calibration["cache_update"]
+                for calibration in calibrations
+                if calibration["cache_update"] is not None
+            ]
+            for cache_update in cache_updates:
+                print(
+                    f"machine tuning parameters stored in: {cache_update['path']} "
+                    f"(status={cache_update['status']})"
+                )
         return
 
     if args.json:

@@ -84,8 +84,10 @@ before and after calibration:
 
 ``--verbose`` reports calibration progress on stderr. ``--cache`` selects an
 explicit cache file, while ``--maximum-duration-ms`` and
-``--maximum-memory-mb`` bound each calibration. With ``--json``, the
-``before``, ``calibrations`` and ``after`` sections are machine-readable.
+``--maximum-memory-mb`` bound each calibration. When parameters are persisted,
+the text output reports the machine tuning cache path and update status. With
+``--json``, the ``before``, ``calibrations`` and ``after`` sections are
+machine-readable.
 
 .. _l-cli-tune-kernels:
 

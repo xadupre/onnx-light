@@ -83,6 +83,9 @@ class TestMainKernel(unittest.TestCase):
         self.assertGreater(len(tunables), 0)
         self.assertEqual({item["element_type"] for item in tunables}, {1})
         self.assertEqual({item["implementation"] for item in tunables}, {"portable"})
+        self.assertEqual(
+            {tuple(item["parameter_names"]) for item in tunables}, {("parallel.minimum_tasks",)}
+        )
 
     def test_rejects_kernel_not_registered_for_device(self):
         with self.assertRaisesRegex(SystemExit, "device GPU0.*Abs"):
@@ -144,6 +147,34 @@ class TestMainKernel(unittest.TestCase):
         calibrate.assert_called_once()
         self.assertEqual(calibrate.call_args.kwargs["device"], -1)
         self.assertEqual(calibrate.call_args.kwargs["element_types"], [1])
+
+    def test_tune_shows_cache_path_when_parameters_are_persisted(self):
+        stdout = io.StringIO()
+        calibration = {
+            "calibrated": [{"kernel": "Abs"}],
+            "skipped": [],
+            "unsupported": [],
+            "diagnostics": [],
+            "candidate_diagnostics": [],
+            "cache_update": {
+                "status": "updated",
+                "path": "/tmp/kernel_tuning.cache",
+                "updated": [{"kernel": "Abs"}],
+                "diagnostics": [],
+            },
+            "published_generation": 1,
+        }
+        with (
+            mock.patch(
+                "onnx_light.kernel_tuning.calibrate_kernel_tuning", return_value=calibration
+            ),
+            redirect_stdout(stdout),
+        ):
+            main(["kernel", "--kernel", "Abs", "--dtype", "FLOAT", "--tune"])
+        self.assertIn(
+            "machine tuning parameters stored in: /tmp/kernel_tuning.cache (status=updated)",
+            stdout.getvalue(),
+        )
 
     def test_tune_json_contains_before_and_after(self):
         stdout = io.StringIO()

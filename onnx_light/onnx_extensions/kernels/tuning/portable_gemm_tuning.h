@@ -11,15 +11,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::tuning {
 
-inline constexpr const char *kGemmTileM = "algorithm.tile_m";
-inline constexpr const char *kGemmTileN = "algorithm.tile_n";
-inline constexpr const char *kGemmTileK = "algorithm.tile_k";
-inline constexpr const char *kGemmPackBMinimumElements = "algorithm.pack_b_minimum_elements";
-inline constexpr const char *kGemmSkinnyMLimit = "algorithm.skinny_m_limit";
-inline constexpr const char *kGemmParallelFmasPerWorkUnit = "parallel.fmas_per_work_unit";
 inline constexpr const char *kGemmParallelMinimumTasks = "parallel.minimum_tasks";
-inline constexpr const char *kGemmConversionParallelMinimumElements =
-    "conversion.parallel_minimum_elements";
 
 /** Stores the portable Gemm configuration copied into one kernel instance. */
 struct GemmTuning {

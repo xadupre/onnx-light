@@ -1868,7 +1868,21 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # --- backend --------------------------------------------------------------
     backend_test_parser = subparsers.add_parser(
-        "backend", help="Measure regex-selected backend test cases."
+        "backend",
+        help="Measure regex-selected backend test cases.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""examples:
+  Measure matching correctness cases:
+    python -m onnx_light backend --regex ".*not.*" --repeat 3
+
+  Export timings and machine information to XLSX:
+    python -m onnx_light backend --regex ".*not.*" --output backend-not.xlsx
+
+  Compare tuning values without changing the machine cache:
+    python -m onnx_light backend --regex ".*not.*" \\
+      --kernel Not --dtype BOOL --impl portable \\
+      --parameter parallel.minimum_elements=default,16384,32768
+""",
     )
     backend_test_parser.add_argument(
         "--regex",
@@ -1948,6 +1962,21 @@ def _build_parser() -> argparse.ArgumentParser:
             "Lists registered kernels, inspects their tunable parameters, or calibrates "
             "and persists one selected kernel with --tune."
         ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""examples:
+  List every registered kernel:
+    python -m onnx_light kernel --list
+
+  Inspect one kernel's tunable parameters:
+    python -m onnx_light kernel --kernel Gemm --dtype FLOAT --impl portable
+
+  Tune one kernel automatically:
+    python -m onnx_light kernel --kernel Gemm --dtype FLOAT --impl portable --tune
+
+  Compare explicit values and persist the fastest:
+    python -m onnx_light kernel --kernel Gemm --dtype FLOAT --impl portable --tune \\
+      --parameter parallel.minimum_tasks=default,2,4
+""",
     )
     kernel_mode = kernel_parser.add_mutually_exclusive_group(required=True)
     kernel_mode.add_argument(

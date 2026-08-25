@@ -79,7 +79,7 @@ jobs:
         run: sudo apt-get install -y libssl-dev
 
       - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Set parallel build level
         shell: bash
@@ -129,7 +129,7 @@ jobs:
         run: sudo apt-get install -y libssl-dev
 
       - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Set parallel build level
         shell: bash
@@ -174,7 +174,7 @@ jobs:
         run: sudo apt-get install -y libssl-dev
 
       - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Set parallel build level
         shell: bash
@@ -242,7 +242,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Install OpenSSL (macOS)
         if: runner.os == 'macOS'
@@ -343,7 +343,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Set up x86 MSVC for Ninja
         uses: ilammy/msvc-dev-cmd@v1.13.0

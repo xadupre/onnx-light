@@ -65,7 +65,7 @@ jobs:
           echo "build=${tag}-*" >> "$GITHUB_OUTPUT"
 
       - name: Build reduced wheel
-        uses: pypa/cibuildwheel@v4.1.1
+        uses: pypa/cibuildwheel@v4.2.0
         env:
           CIBW_BUILD: ${{ steps.selector.outputs.build }}
           # Restrict to 64-bit x86 only. The cibuildwheel Linux default ("auto")

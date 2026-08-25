@@ -72,14 +72,17 @@ int64_t ParallelForThreadCount() noexcept;
  *
  * Unlike spawning fresh ``std::thread`` objects per call, the workers are
  * created once and briefly spin before parking on a condition variable. Nearby
- * regions therefore avoid scheduler wakeup latency without busy-waiting
- * indefinitely.
+ * full-pool regions therefore avoid scheduler wakeup latency without
+ * busy-waiting indefinitely. A region that needs only part of the pool parks
+ * its workers immediately afterward so unused workers do not interfere with
+ * subsequent limited regions.
  *
  * The pool exposes a single primitive, :cpp:func:`Run`, that executes a set of
- * indexed blocks with a static assignment: block ``0`` runs on the calling
- * thread and block ``j`` runs on worker ``j - 1``. It deliberately offers no
- * reduction/combine step: callers write disjoint output ranges, so results are
- * independent of how blocks map to threads (bit-exact). The pool handles several
+ * indexed blocks: block ``0`` runs on the calling thread and the remaining
+ * blocks are claimed dynamically by workers. It
+ * deliberately offers no reduction/combine step: callers write disjoint output
+ * ranges, so results are independent of how blocks map to threads (bit-exact).
+ * The pool handles several
  * scenarios:
  *   - no workers available (single core): every block runs inline on the caller;
  *   - a single block: runs inline without touching the workers;
@@ -117,10 +120,11 @@ public:
    * Runs ``fn(block)`` for every ``block`` in ``[0, num_blocks)``, then blocks
    * until all blocks finish.
    *
-   * Block ``0`` runs on the calling thread and block ``j`` runs on worker
-   * ``j - 1`` (static assignment). ``fn`` is invoked concurrently and must only
-   * touch data disjoint per block; it must not throw. ``num_blocks`` must not
-   * exceed ``worker_count() + 1`` when workers are used; :cpp:func:`ParallelFor`
+   * Block ``0`` runs on the calling thread and workers dynamically claim the
+   * remaining blocks. Only as many parked workers as there are worker blocks
+   * are notified. ``fn`` is invoked concurrently and must only touch data
+   * disjoint per block; it must not throw. ``num_blocks`` must not exceed
+   * ``worker_count() + 1`` when workers are used; :cpp:func:`ParallelFor`
    * enforces this.
    *
    * @param num_blocks Number of blocks to run. Values ``<= 0`` are a no-op.
@@ -157,8 +161,10 @@ private:
   int64_t num_blocks_ = 0;
   int64_t started_workers_ = 0;
   std::string startup_error_;
+  std::atomic<int64_t> next_block_{1};
   std::atomic<int64_t> remaining_{0};
   std::atomic<uint64_t> generation_{0};
+  std::atomic<bool> park_workers_after_region_{false};
   std::atomic<bool> stop_{false};
 };
 

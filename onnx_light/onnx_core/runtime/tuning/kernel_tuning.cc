@@ -281,6 +281,10 @@ void CalibrationReporter::FinalizeCandidateDiagnostics() {
   }
 }
 
+void CalibrationReporter::SetComparison(KernelTuningComparison comparison) {
+  comparison_ = std::move(comparison);
+}
+
 bool KernelTuningParameters::Contains(std::string_view name) const {
   return values.find(std::string(name)) != values.end();
 }
@@ -814,6 +818,132 @@ int64_t Measure(const std::function<void()> &run) {
 
 } // namespace
 
+KernelTuningParameters CompareKernelBenchmarkValues(const KernelTuningKey &key,
+                                                    const CalibrationOptions &options,
+                                                    CalibrationReporter &reporter,
+                                                    const KernelCalibrationBenchmark &benchmark) {
+  if (!options.parameter_name.has_value() || options.parameter_values.empty()) {
+    throw std::invalid_argument("Explicit tuning comparison requires a parameter and values.");
+  }
+  if (options.parameter_values.size() > 64) {
+    throw std::invalid_argument("Explicit tuning comparison supports at most 64 values.");
+  }
+  if (*options.parameter_name != benchmark.parameter_name) {
+    throw std::invalid_argument("Calibration callback benchmarks parameter '" +
+                                benchmark.parameter_name + "', not '" + *options.parameter_name +
+                                "'.");
+  }
+
+  const uint64_t memory_budget = options.maximum_memory_bytes == 0
+                                     ? benchmark.default_maximum_memory_bytes
+                                     : options.maximum_memory_bytes;
+  const uint64_t duration_ms = options.maximum_duration_ms == 0
+                                   ? benchmark.default_maximum_duration_ms
+                                   : options.maximum_duration_ms;
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(duration_ms);
+  const auto validate =
+      benchmark.validate_output ? benchmark.validate_output : ExactCalibrationOutput;
+  benchmark.reference.configure(benchmark.serial_parameter_value);
+
+  std::vector<uint64_t> durations(options.parameter_values.size(), 0);
+  uint64_t measured_cases = 0;
+  for (const KernelCalibrationCase &benchmark_case : benchmark.cases) {
+    if (benchmark_case.name.empty() || benchmark_case.inputs.empty()) {
+      throw std::invalid_argument("Calibration case name and inputs must not be empty.");
+    }
+    const uint64_t memory_bytes = CaseMemoryBytes(benchmark_case);
+    if (memory_bytes > memory_budget) {
+      continue;
+    }
+
+    std::vector<Tensor> inputs;
+    inputs.reserve(benchmark_case.inputs.size());
+    for (const CalibrationInputSpec &input : benchmark_case.inputs) {
+      inputs.push_back(GenerateCalibrationInput(input));
+    }
+    const uint64_t output_bytes =
+        TensorStorageBytes(benchmark_case.output_element_type, benchmark_case.output_shape);
+    Tensor reference_output =
+        MakeOutputTensor(benchmark_case.output_element_type, benchmark_case.output_shape,
+                         static_cast<size_t>(output_bytes), nullptr);
+    const std::span<const Tensor> input_span(inputs);
+    benchmark.reference.run(input_span, reference_output);
+
+    std::vector<Tensor> candidate_outputs;
+    candidate_outputs.reserve(options.parameter_values.size());
+    for (size_t value_index = 0; value_index < options.parameter_values.size(); ++value_index) {
+      const int64_t value = options.parameter_values[value_index];
+      benchmark.candidate.configure(value);
+      candidate_outputs.push_back(MakeOutputTensor(benchmark_case.output_element_type,
+                                                   benchmark_case.output_shape,
+                                                   static_cast<size_t>(output_bytes), nullptr));
+      benchmark.candidate.run(input_span, candidate_outputs.back());
+      if (!validate(reference_output, candidate_outputs.back())) {
+        throw std::runtime_error(key.kernel + " comparison case '" + benchmark_case.name +
+                                 "' output differs for " + benchmark.parameter_name + "=" +
+                                 std::to_string(value) + ".");
+      }
+    }
+
+    std::vector<std::vector<int64_t>> samples(options.parameter_values.size());
+    std::vector<uint64_t> measured_durations(options.parameter_values.size(), 0);
+    for (std::vector<int64_t> &value_samples : samples) {
+      value_samples.reserve(static_cast<size_t>(benchmark.repetitions));
+    }
+    for (int repetition = 0; repetition < benchmark.repetitions; ++repetition) {
+      for (size_t value_index = 0; value_index < options.parameter_values.size(); ++value_index) {
+        benchmark.candidate.configure(options.parameter_values[value_index]);
+        const auto run_candidate = [&]() {
+          benchmark.candidate.run(input_span, candidate_outputs[value_index]);
+        };
+        const int64_t sample = Measure(run_candidate);
+        samples[value_index].push_back(sample);
+        measured_durations[value_index] += static_cast<uint64_t>(sample);
+      }
+      if (std::chrono::steady_clock::now() >= deadline) {
+        break;
+      }
+    }
+    for (size_t value_index = 0; value_index < options.parameter_values.size(); ++value_index) {
+      reporter.RecordBenchmark(memory_bytes, measured_durations[value_index]);
+      durations[value_index] += static_cast<uint64_t>(Median(std::move(samples[value_index])));
+    }
+    ++measured_cases;
+    if (std::chrono::steady_clock::now() >= deadline) {
+      break;
+    }
+  }
+
+  KernelTuningParameters selected = benchmark.portable_parameters;
+  selected.values[benchmark.parameter_name] = options.parameter_values.front();
+  if (measured_cases == 0) {
+    reporter.AddDiagnostic(key.kernel +
+                           " comparison memory budget is too small; kept the baseline value.");
+    reporter.FinalizeCandidateDiagnostics();
+    return selected;
+  }
+
+  const auto fastest = std::min_element(durations.begin(), durations.end());
+  const size_t fastest_index = static_cast<size_t>(std::distance(durations.begin(), fastest));
+  const int64_t selected_value = options.parameter_values[fastest_index];
+  selected.values[benchmark.parameter_name] = selected_value;
+
+  KernelTuningComparison comparison;
+  comparison.parameter_name = benchmark.parameter_name;
+  comparison.baseline_value = options.parameter_values.front();
+  comparison.selected_value = selected_value;
+  comparison.values.reserve(options.parameter_values.size());
+  for (size_t index = 0; index < options.parameter_values.size(); ++index) {
+    comparison.values.push_back(
+        {options.parameter_values[index], durations[index], measured_cases});
+  }
+  reporter.SetComparison(std::move(comparison));
+  reporter.AddDiagnostic(key.kernel + " selected " + benchmark.parameter_name + "=" +
+                         std::to_string(selected_value) + " from explicit values.");
+  reporter.FinalizeCandidateDiagnostics();
+  return selected;
+}
+
 KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
                                                 const CpuExecutionDescriptor &execution,
                                                 const CalibrationOptions &options,
@@ -836,6 +966,10 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
     throw std::invalid_argument(
         "Calibration requested " + std::to_string(execution.effective_threads) +
         " threads, but ParallelFor uses " + std::to_string(actual_threads) + ".");
+  }
+
+  if (options.parameter_name.has_value() || !options.parameter_values.empty()) {
+    return CompareKernelBenchmarkValues(key, options, reporter, benchmark);
   }
 
   KernelTuningParameters selected = benchmark.portable_parameters;
@@ -1048,6 +1182,9 @@ CalibrationBatchReport CalibrateRegisteredKernels(const KernelCalibrationSelecti
     if (const std::optional<ParallelRegionReport> &parallel_regions =
             reporter.parallel_region_report()) {
       report.candidate_diagnostics.push_back({key, *parallel_regions});
+    }
+    if (const std::optional<KernelTuningComparison> &comparison = reporter.comparison()) {
+      report.comparisons.push_back({key, *comparison});
     }
   }
 

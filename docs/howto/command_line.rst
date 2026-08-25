@@ -11,10 +11,10 @@ Command-line interface
 
 The equivalent ``python -m onnx_light`` invocation remains available.
 
-.. _l-cli-backend-test:
+.. _l-cli-backend:
 
-backend-test
-------------
+backend
+-------
 
 Measures C++ backend test cases whose names match an ECMAScript regular
 expression. ``test`` mode generates the ordinary correctness cases, while
@@ -23,15 +23,54 @@ benchmark case:
 
 .. code-block:: bash
 
-    python -m onnx_light backend-test \
+    python -m onnx_light backend \
         --regex "^test_cc_(abs|gemm)" \
         --mode benchmark
 
 The report separates lazy case materialization, evaluator setup, warm-up, and
 measured execution time for every selected case. ``--repeat`` controls measured
-iterations and ``--warmup`` controls unmeasured iterations. By default, big
-cases containing ``_big_`` are excluded; ``--include-big`` includes them.
-``--json`` returns the complete machine-readable report.
+iterations and ``--warmup`` controls unmeasured iterations. Defaults are ten
+measured iterations after two warm-up iterations. Each case runs in an isolated
+process for at most two seconds by default. ``--timeout SECONDS``
+changes that limit; timed-out cases are stopped, reported with
+``status=timeout``, and followed by the remaining cases. By default, big cases
+containing ``_big_`` are excluded; ``--include-big`` includes them.
+``--json`` returns the complete machine-readable report. ``--output`` writes
+one row per selected case as CSV or XLSX according to the file extension:
+
+.. code-block:: bash
+
+    python -m onnx_light backend --regex ".*not.*" --output not.csv
+    python -m onnx_light backend --regex ".*not.*" --output not.xlsx
+
+XLSX output contains a ``summary`` sheet with the run configuration and CPU
+descriptor, plus a ``backend`` sheet with one row per case.
+
+``--save-models DIRECTORY`` saves every completed test as
+``DIRECTORY/<test-name>.onnx``. The test name is also stored as the ONNX graph
+name. Each model is self-contained in one file; timed-out tests do not produce
+a model:
+
+.. code-block:: bash
+
+    python -m onnx_light backend --regex ".*not.*" \
+        --save-models backend-models
+
+Use the same ``--parameter`` syntax as ``kernel --tune`` to run backend cases
+side by side with explicit tuning values. ``--kernel``, ``--dtype`` and
+``--impl`` select the exact tuning schema:
+
+.. code-block:: bash
+
+    python -m onnx_light backend --regex ".*not.*" \
+        --kernel Not --dtype BOOL --impl portable \
+        --parameter parallel.minimum_elements=default,16384,32768
+
+``default`` resolves to the active value and defines the speedup baseline.
+Every selected backend case runs once per distinct value. Text, JSON, CSV and
+XLSX output include the input shapes, parameter value and speedup. Input shapes
+preserve their input names and dataset grouping. The comparison uses temporary
+worker caches and never modifies the machine tuning cache.
 
 .. _l-cli-kernel:
 
@@ -84,48 +123,25 @@ before and after calibration:
 
 ``--verbose`` reports calibration progress on stderr. ``--cache`` selects an
 explicit cache file, while ``--maximum-duration-ms`` and
-``--maximum-memory-mb`` bound each calibration. When parameters are persisted,
-the text output reports the machine tuning cache path and update status. With
-``--json``, the ``before``, ``calibrations`` and ``after`` sections are
+``--maximum-memory-mb`` bound each calibration; zero uses the callback default.
+The text output reports the selected budgets and, when parameters are
+persisted, the machine tuning cache path and update status. With ``--json``,
+the ``tuning_options``, ``before``, ``calibrations`` and ``after`` sections are
 machine-readable.
 
-.. _l-cli-tune-kernels:
-
-tune-kernels
-------------
-
-Reports exact tuning keys that have no cache profile compatible with the local
-processor and effective thread count. The command separates missing keys with
-calibration callbacks from keys requiring manual calibration. It does not
-modify the cache by default:
+Use ``--parameter NAME=default,VALUE,...`` to compare explicit integer values
+with the kernel's calibration workload:
 
 .. code-block:: bash
 
-    python -m onnx_light tune-kernels
+    python -m onnx_light kernel --kernel Gemm \
+        --dtype FLOAT --impl portable --tune \
+        --parameter parallel.minimum_tasks=default,1,2,4
 
-Restrict the proposal to a subset by repeating ``--kernel`` or
-``--element-type``. Element types accept ONNX names or integer values:
-
-.. code-block:: bash
-
-    python -m onnx_light tune-kernels \
-        --kernel Abs --kernel Add \
-        --element-type FLOAT --element-type DOUBLE
-
-Use ``--json`` for the complete machine-readable report and ``--cache`` for an
-explicit cache path. ``--apply`` is required to calibrate and persist proposed
-keys:
-
-.. code-block:: bash
-
-    python -m onnx_light tune-kernels \
-        --kernel Abs --element-type FLOAT \
-        --maximum-duration-ms 1000 \
-        --maximum-memory-mb 128 \
-        --apply
-
-Each duration budget applies independently to one exact key. Keys without a
-registered callback remain listed after ``--apply``.
+``default`` resolves to the current active value and must come first. It is the
+baseline for every reported speedup. The command prints each value's elapsed
+time and speedup side by side, selects the fastest value, and persists it in the
+same tuning cache as a regular calibration.
 
 .. _l-cli-fillshape:
 

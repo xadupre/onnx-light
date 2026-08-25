@@ -27,9 +27,7 @@ such access is available.
 `x86_64_calibration.json` is produced by calibrating and persisting every
 calibratable kernel tuning key missing from a tuning cache with:
 
-```
-python -m onnx_light tune-kernels --apply --cache <path> --json
-```
+`onnx_light.kernel_tuning.apply_kernel_tuning_updates(path=...)`.
 
 It then reloads that cache path in a separate process
 (`onnx_light.kernel_tuning.load_kernel_tuning_cache` /

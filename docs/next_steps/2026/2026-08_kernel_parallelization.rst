@@ -92,8 +92,8 @@ step and produces the input required by the next one.
         without benchmarking during inference.
       - Started (every calibratable key -- ``Abs``, ``Add``, ``Gemm``,
         ``Log``, ``Not``, ``Sigmoid``, ``Tanh`` -- was calibrated on the
-        x86-64 sandbox machine with ``python -m onnx_light tune-kernels
-        --apply`` and persisted through ``UpdateKernelTuningCache``; a fresh
+        x86-64 sandbox machine with ``apply_kernel_tuning_updates`` and
+        persisted through ``UpdateKernelTuningCache``; a fresh
         process reloaded that cache and resolved every one of the 37
         calibrated keys through their exact processor and execution
         descriptor. None of the calibrated values were promoted to portable
@@ -176,7 +176,9 @@ zero values). Model construction (``startup``) and steady-state execution
 ranking -- it does not substitute for Step D's ORT attribution. Running the
 corpus never writes to the kernel tuning cache: it only reads
 ``kernel_tuning_parameters()`` and constructs ordinary ``RuntimeSession``
-instances. It is exposed as ``python -m onnx_light kernel-baseline``.
+instances. Developers can invoke
+:func:`onnx_light.tools.run_kernel_baseline_report` directly when updating a
+published machine report.
 
 Published machine reports live under
 ``docs/next_steps/2026/kernel_parallelization_reports/``. Each file records
@@ -236,7 +238,7 @@ Cross-machine calibration and default promotion
 Every calibratable key registered after Step F (``Abs``, ``Add``, ``Gemm``,
 ``Log``, ``Not``, ``Sigmoid``, and ``Tanh``, 37 ``(kernel, element_type)``
 keys in total) was calibrated on the x86-64 sandbox machine with
-``python -m onnx_light tune-kernels --apply`` and persisted through
+``apply_kernel_tuning_updates`` and persisted through
 ``UpdateKernelTuningCache``. A fresh process then reloaded that cache with
 ``load_kernel_tuning_cache``/``kernel_tuning_parameters`` and resolved all 37
 profiles through their exact ``KernelTuningKey`` and

@@ -8,6 +8,7 @@ __pycache__/
 *.dll
 *.bin
 *.tmp
+*.xlsx
 
 # Distribution / packaging
 .Python

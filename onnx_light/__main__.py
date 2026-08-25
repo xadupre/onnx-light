@@ -121,50 +121,23 @@ run
         and per output tensor (in that order).  Only ``numpy.ndarray``
         values are stored; non-array outputs (e.g. sequences) are skipped.
 
-tune-kernels
-    Proposes calibration updates for tuning keys missing from the local cache.
-    It is read-only unless ``--apply`` is specified.
-
-backend-test
+backend
     Measures backend test cases selected by a regular expression.
 
     Usage::
 
-        python -m onnx_light backend-test --regex "^test_cc_abs" --mode test
-        python -m onnx_light backend-test --regex "_benchmark$" --mode benchmark --json
+        python -m onnx_light backend --regex "^test_cc_abs" --mode test
+        python -m onnx_light backend --regex "_benchmark$" --mode benchmark --json
 
 kernel
-    Lists registered native kernels or shows the tunable parameters for a
-    selected set of kernels.
+    Lists registered native kernels, shows their tunable parameters, or
+    calibrates and persists one selected kernel with ``--tune``.
 
     Usage::
 
         onnx-light kernel --list
         onnx-light kernel --kernel Gemm --kernel Softmax [--json]
 
-kernel-baseline
-    Produces the kernel inventory (coverage state per registered kernel path)
-    and a deterministic benchmark corpus report, combined into one
-    machine-readable JSON document. Read-only: it never modifies the kernel
-    tuning cache and never invokes ``onnxruntime``.
-
-    Usage::
-
-        python -m onnx_light kernel-baseline [--output report.json]
-
-    Options:
-
-    ``--output PATH`` / ``-o PATH``
-        Write the JSON report to *PATH* instead of printing it to stdout.
-    ``--repeat N``
-        Measured repetitions per benchmark case (default ``5``).
-    ``--warmup N``
-        Warm-up repetitions before measuring (default ``2``).
-    ``--seed SEED``
-        Integer seed for the deterministic input generator (default ``0``).
-    ``--no-diagnostics``
-        Skip the extra profiling run that reports grain size and hardware
-        counters for each case.
 """
 
 from __future__ import annotations
@@ -214,6 +187,60 @@ class _KernelReportItem(TypedDict):
     tunables: list[_KernelTunable]
 
 
+def _resolve_integer_tuning_parameter(
+    command: str, specification: str, tunable: _KernelTunable
+) -> tuple[str, list[int]]:
+    """Resolves an explicit integer tuning comparison specification."""
+    parameter_name, separator, value_text = specification.partition("=")
+    value_tokens = value_text.split(",") if separator else []
+    prefix = f"onnx-light {command}:"
+    if not parameter_name or len(value_tokens) < 2 or any(not token for token in value_tokens):
+        raise SystemExit(f"{prefix} --parameter expects NAME=default,VALUE[,VALUE...]")
+    if value_tokens[0].lower() != "default":
+        raise SystemExit(
+            f"{prefix} the first --parameter value must be default to define the baseline"
+        )
+    if parameter_name not in tunable["parameter_names"]:
+        raise SystemExit(
+            f"{prefix} unknown tunable parameter {parameter_name!r}; "
+            f"expected one of {', '.join(tunable['parameter_names'])}"
+        )
+    current_value = tunable["active_values"][parameter_name]
+    if isinstance(current_value, bool) or not isinstance(current_value, int):
+        raise SystemExit(
+            f"{prefix} explicit comparisons currently support integer tunable parameters"
+        )
+
+    parameter_values: list[int] = []
+    for token in value_tokens:
+        if token.lower() == "default":
+            value = current_value
+        else:
+            try:
+                value = int(token)
+            except ValueError:
+                raise SystemExit(
+                    f"{prefix} invalid value {token!r} for tunable parameter "
+                    f"{parameter_name!r}; expected a positive integer"
+                ) from None
+            if value <= 0:
+                raise SystemExit(
+                    f"{prefix} invalid value {value} for tunable parameter "
+                    f"{parameter_name!r}; expected a positive integer"
+                )
+        if value not in parameter_values:
+            parameter_values.append(value)
+
+    if len(parameter_values) < 2:
+        raise SystemExit(
+            f"{prefix} tunable parameter {parameter_name!r} needs at least two distinct "
+            f"values after resolving default={current_value}; received {', '.join(value_tokens)}"
+        )
+    if len(parameter_values) > 64:
+        raise SystemExit(f"{prefix} at most 64 comparison values are supported")
+    return parameter_name, parameter_values
+
+
 def _parse_kernel_element_type(value: str) -> int:
     """Parses an ONNX element-type integer or enum name."""
     try:
@@ -236,11 +263,31 @@ def _parse_positive_int(value: str) -> int:
     raise argparse.ArgumentTypeError(f"expected a positive integer, got {value!r}")
 
 
+def _parse_non_negative_int(value: str) -> int:
+    """Parses a non-negative integer."""
+    if value.isdigit():
+        return int(value)
+    raise argparse.ArgumentTypeError(f"expected a non-negative integer, got {value!r}")
+
+
 def _parse_nonnegative_int(value: str) -> int:
     """Parses a non-negative integer."""
     if value.isdigit():
         return int(value)
     raise argparse.ArgumentTypeError(f"expected a non-negative integer, got {value!r}")
+
+
+def _parse_positive_float(value: str) -> float:
+    """Parses a strictly positive floating-point value."""
+    import math
+
+    try:
+        parsed = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive number, got {value!r}") from None
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive number, got {value!r}")
+    return parsed
 
 
 def _parse_kernel_device(value: str) -> int:
@@ -283,59 +330,16 @@ def _registered_kernel_device(identifier: str) -> int:
     return -1 if len(parts) == 2 else int(parts[-1])
 
 
-def _cmd_tune_kernels(args: argparse.Namespace) -> None:
-    """Proposes or applies local kernel tuning cache updates."""
-    from . import kernel_tuning
-
-    common = {
-        "kernels": args.kernel,
-        "element_types": args.element_type,
-        "library": args.library,
-        "implementation": args.implementation,
-        "path": args.cache,
-    }
-    if args.apply:
-        report = kernel_tuning.apply_kernel_tuning_updates(
-            **common,
-            maximum_duration_ms=args.maximum_duration_ms,
-            maximum_memory_bytes=args.maximum_memory_mb << 20,
-        )
-        summary = report["remaining"]
-    else:
-        report = kernel_tuning.propose_kernel_tuning_updates(**common)
-        summary = report
-
-    if args.json:
-        print(json.dumps(report, indent=2, sort_keys=True))
-        return
-    action = "remaining" if args.apply else "proposed"
-    print(
-        f"cache={summary['cache_path']} selected={summary['selected']} "
-        f"covered={summary['covered']} missing={len(summary['missing'])}"
-    )
-    print(f"{action} calibrations: {len(summary['calibratable'])}")
-    for item in summary["calibratable"]:
-        print(
-            f"  {item['library']}/{item['kernel']}/{item['implementation']} "
-            f"dtype={item['element_type']} abi={item['tuning_abi']}"
-        )
-    if summary["unsupported"]:
-        print(f"missing without calibration callback: {len(summary['unsupported'])}")
-        for item in summary["unsupported"]:
-            print(
-                f"  {item['library']}/{item['kernel']}/{item['implementation']} "
-                f"dtype={item['element_type']} abi={item['tuning_abi']}"
-            )
-
-
 def _cmd_kernel(args: argparse.Namespace) -> None:
-    """Lists registered kernels or their tunable parameters."""
+    """Lists, inspects, or tunes registered kernels."""
     from . import kernel_tuning
     from .onnx import TensorProto
     from .onnx_py._onnxpykernels import runtime  # type: ignore[missing-import]
 
-    if args.list and args.tune:
-        raise SystemExit("onnx-light kernel: --tune requires --kernel, not --list")
+    if args.list and (args.tune or args.parameter):
+        raise SystemExit("onnx-light kernel: --tune and --parameter require --kernel, not --list")
+    if args.parameter and not args.tune:
+        raise SystemExit("onnx-light kernel: --parameter requires --tune")
 
     identifiers = [
         identifier
@@ -437,6 +441,11 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
     if args.tune:
         import sys
 
+        tuning_options = {
+            "maximum_duration_ms": args.maximum_duration_ms,
+            "maximum_memory_mb": args.maximum_memory_mb,
+            "parameter": args.parameter,
+        }
         if len(report) != 1:
             raise SystemExit(
                 f"onnx-light kernel: --tune requires exactly one selected kernel; "
@@ -450,11 +459,27 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
             raise SystemExit(
                 "onnx-light kernel: selected kernel has parameters without a calibration callback"
             )
+        parameter_name = None
+        parameter_values: list[int] = []
+        if args.parameter:
+            if len(tunables) != 1:
+                raise SystemExit(
+                    "onnx-light kernel: --parameter requires exactly one tuning schema; "
+                    "select --dtype and --impl"
+                )
+            tunable = tunables[0]
+            parameter_name, parameter_values = _resolve_integer_tuning_parameter(
+                "kernel", args.parameter, tunable
+            )
 
         def progress(message: str) -> None:
             if args.verbose:
                 print(f"[kernel tune] {message}", file=sys.stderr, flush=True)
 
+        duration = args.maximum_duration_ms or "callback-default"
+        memory = args.maximum_memory_mb or "callback-default"
+        budget_summary = f"maximum_duration_ms={duration} maximum_memory_mb={memory}"
+        progress(f"budgets: {budget_summary}")
         progress("captured parameters before tuning")
         calibrations = []
         for index, tunable in enumerate(tunables, 1):
@@ -475,12 +500,15 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
                     save=True,
                     path=args.cache,
                     device=tunable["device"],
+                    parameter_name=parameter_name,
+                    parameter_values=parameter_values,
                 )
             )
         after = build_report()
         progress("captured parameters after tuning")
         tune_report = {
             "selection": selection,
+            "tuning_options": tuning_options,
             "before": report,
             "calibrations": calibrations,
             "after": after,
@@ -488,10 +516,30 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
         if args.json:
             print(json.dumps(tune_report, indent=2, sort_keys=True))
         else:
+            print(f"tuning budgets: {budget_summary}")
             print("before:")
             print_report(report)
             print("after:")
             print_report(after)
+            for calibration in calibrations:
+                for comparison in calibration["comparisons"]:
+                    print(
+                        f"side by side: {comparison['parameter_name']} "
+                        f"baseline={comparison['baseline_value']} "
+                        f"selected={comparison['selected_value']}"
+                    )
+                    for value in comparison["values"]:
+                        marker = (
+                            " baseline" if value["value"] == comparison["baseline_value"] else ""
+                        )
+                        selected_marker = (
+                            " selected" if value["value"] == comparison["selected_value"] else ""
+                        )
+                        print(
+                            f"  value={value['value']} "
+                            f"time_ms={value['duration_seconds'] * 1000:.3f} "
+                            f"speedup={value['speedup']:.3f}x{marker}{selected_marker}"
+                        )
             cache_updates = [
                 calibration["cache_update"]
                 for calibration in calibrations
@@ -510,20 +558,82 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
         print_report(report)
 
 
-def _backend_test_map_to_dict(value: Any) -> dict[Any, Any]:
-    """Converts a backend-test map value to a Python dictionary."""
-    from onnx_light.onnx_lib.backend.test.case.base import _tensor_to_np
+def _measure_backend_test_cases_with_timeout(
+    cases: list[Any],
+    *,
+    mode: str,
+    include_big: bool,
+    repeat: int,
+    warmup: int,
+    timeout_seconds: float,
+    tuning: dict[str, Any] | None = None,
+    capture_models: bool = False,
+) -> list[dict[str, Any]]:
+    """Measures backend cases in a worker that is replaced after a timeout."""
+    import multiprocessing
 
-    keys = _tensor_to_np(value.keys)
-    values = _tensor_to_np(value.values)
-    return dict(zip(keys.tolist(), values.tolist()))
+    from ._backend_cli import (
+        backend_test_worker_ready,
+        initialize_backend_test_worker,
+        measure_backend_test_case_by_name,
+    )
 
+    context = multiprocessing.get_context("spawn")
 
-def _backend_test_data_set_feed(data_set: Any) -> dict[str, Any]:
-    """Builds a name-keyed evaluator feed from one backend-test data set."""
-    feed = {tensor.name: tensor for tensor in data_set.inputs}
-    feed.update({value.name: _backend_test_map_to_dict(value) for value in data_set.maps})
-    return feed
+    def start_worker() -> Any:
+        pool = context.Pool(
+            processes=1, initializer=initialize_backend_test_worker, initargs=(tuning,)
+        )
+        try:
+            pool.apply_async(backend_test_worker_ready).get(timeout=30)
+        except multiprocessing.TimeoutError:
+            pool.terminate()
+            pool.join()
+            raise RuntimeError("backend worker did not initialize within 30 seconds") from None
+        return pool
+
+    reports = []
+    worker = None
+    try:
+        for case in cases:
+            if worker is None:
+                worker = start_worker()
+            result = worker.apply_async(
+                measure_backend_test_case_by_name,
+                (case.name, mode, include_big, repeat, warmup, capture_models),
+            )
+            try:
+                reports.append(result.get(timeout=timeout_seconds))
+            except multiprocessing.TimeoutError:
+                worker.terminate()
+                worker.join()
+                worker = None
+                reports.append(
+                    {
+                        "name": case.name,
+                        "kind": case.kind,
+                        "tag": case.tag,
+                        "status": "timeout",
+                        "timed_out": True,
+                        "error": f"exceeded {timeout_seconds:g} seconds",
+                        "data_sets": None,
+                        "input_shapes": None,
+                        "model_bytes": None,
+                        "materialization_seconds": None,
+                        "setup_seconds": None,
+                        "warmup_seconds": None,
+                        "iteration_seconds": [],
+                        "run_seconds": None,
+                        "mean_seconds": None,
+                        "min_seconds": None,
+                        "max_seconds": None,
+                    }
+                )
+    finally:
+        if worker is not None:
+            worker.close()
+            worker.join()
+    return reports
 
 
 def _run_backend_test_timing(
@@ -531,12 +641,16 @@ def _run_backend_test_timing(
     name_regex: str = "",
     mode: str = "test",
     include_big: bool = False,
-    repeat: int = 1,
-    warmup: int = 0,
+    repeat: int = 10,
+    warmup: int = 2,
+    timeout_seconds: float = 2.0,
+    tuning_comparison: dict[str, Any] | None = None,
+    save_models: str | None = None,
 ) -> dict[str, Any]:
     """Measures backend test cases selected by name and generation mode."""
-    import statistics
+    import math
     import time
+    from pathlib import Path
 
     if mode not in {"test", "benchmark"}:
         raise ValueError(f"Unknown backend test mode {mode!r}; expected 'test' or 'benchmark'.")
@@ -544,9 +658,19 @@ def _run_backend_test_timing(
         raise ValueError(f"repeat must be positive, got {repeat}.")
     if warmup < 0:
         raise ValueError(f"warmup must be non-negative, got {warmup}.")
+    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+        raise ValueError(f"timeout_seconds must be positive and finite, got {timeout_seconds}.")
+
+    output_directory = None
+    if save_models is not None:
+        output_directory = Path(save_models)
+        if output_directory.exists() and not output_directory.is_dir():
+            raise SystemExit(
+                f"onnx-light backend: --save-models expects a directory, got {save_models!r}"
+            )
+        output_directory.mkdir(parents=True, exist_ok=True)
 
     from onnx_light.onnx import backend
-    from onnx_light.onnx.reference import ReferenceEvaluator
 
     test_mode = backend.TestMode.TEST if mode == "test" else backend.TestMode.BENCHMARK
     total_start = time.perf_counter()
@@ -556,47 +680,146 @@ def _run_backend_test_timing(
     )
     collection_seconds = time.perf_counter() - collection_start
 
-    case_reports = []
-    for case in cases:
-        materialization_start = time.perf_counter()
-        model = case.model
-        data_sets = list(case.data_sets)
-        feeds = [_backend_test_data_set_feed(data_set) for data_set in data_sets]
-        materialization_seconds = time.perf_counter() - materialization_start
-
-        setup_start = time.perf_counter()
-        evaluator = ReferenceEvaluator(model)
-        setup_seconds = time.perf_counter() - setup_start
-
-        warmup_start = time.perf_counter()
-        for _ in range(warmup):
-            for feed in feeds:
-                evaluator.run(None, feed)
-        warmup_seconds = time.perf_counter() - warmup_start
-
-        iteration_seconds = []
-        for _ in range(repeat):
-            iteration_start = time.perf_counter()
-            for feed in feeds:
-                evaluator.run(None, feed)
-            iteration_seconds.append(time.perf_counter() - iteration_start)
-
-        case_reports.append(
-            {
-                "name": case.name,
-                "kind": case.kind,
-                "tag": case.tag,
-                "data_sets": len(data_sets),
-                "materialization_seconds": materialization_seconds,
-                "setup_seconds": setup_seconds,
-                "warmup_seconds": warmup_seconds,
-                "iteration_seconds": iteration_seconds,
-                "run_seconds": sum(iteration_seconds),
-                "mean_seconds": statistics.fmean(iteration_seconds),
-                "min_seconds": min(iteration_seconds),
-                "max_seconds": max(iteration_seconds),
-            }
+    comparison = None
+    if tuning_comparison is None:
+        case_reports = _measure_backend_test_cases_with_timeout(
+            cases,
+            mode=mode,
+            include_big=include_big,
+            repeat=repeat,
+            warmup=warmup,
+            timeout_seconds=timeout_seconds,
+            capture_models=save_models is not None,
         )
+        for case in case_reports:
+            case.update(
+                {
+                    "parameter_name": None,
+                    "parameter_value": None,
+                    "baseline_value": None,
+                    "speedup": None,
+                }
+            )
+    else:
+        import tempfile
+
+        tunable = cast(_KernelTunable, tuning_comparison["tunable"])
+        parameter_name = cast(str, tuning_comparison["parameter_name"])
+        parameter_values = cast(list[int], tuning_comparison["parameter_values"])
+        reports_by_value = []
+        with tempfile.TemporaryDirectory(prefix="onnx-light-backend-tuning-") as temporary:
+            for value in parameter_values:
+                from . import kernel_tuning
+
+                values = dict(tunable["active_values"])
+                values[parameter_name] = value
+                cache_path = str(Path(temporary) / f"value-{value}.cache")
+                try:
+                    kernel_tuning.set_kernel_tuning_parameters(
+                        tunable["kernel"],
+                        tunable["element_type"],
+                        values,
+                        library=tunable["library"],
+                        implementation=tunable["implementation"],
+                        tuning_abi=tunable["tuning_abi"],
+                        path=cache_path,
+                        load=False,
+                    )
+                except ValueError as exc:
+                    raise SystemExit(
+                        f"onnx-light backend: invalid value {value} for tunable parameter "
+                        f"{parameter_name!r}: {exc}"
+                    ) from exc
+                reports_by_value.append(
+                    _measure_backend_test_cases_with_timeout(
+                        cases,
+                        mode=mode,
+                        include_big=include_big,
+                        repeat=repeat,
+                        warmup=warmup,
+                        timeout_seconds=timeout_seconds,
+                        capture_models=save_models is not None,
+                        tuning={
+                            "kernel": tunable["kernel"],
+                            "element_type": tunable["element_type"],
+                            "library": tunable["library"],
+                            "implementation": tunable["implementation"],
+                            "tuning_abi": tunable["tuning_abi"],
+                            "values": values,
+                            "path": cache_path,
+                        },
+                    )
+                )
+
+        baseline_value = parameter_values[0]
+        baseline_cases = {case["name"]: case for case in reports_by_value[0]}
+        case_reports = []
+        comparison_values = []
+        baseline_run_seconds = sum(
+            case["run_seconds"] for case in reports_by_value[0] if case["run_seconds"] is not None
+        )
+        baseline_timed_out = sum(case["timed_out"] for case in reports_by_value[0])
+        for value, value_reports in zip(parameter_values, reports_by_value):
+            run_seconds = sum(
+                case["run_seconds"] for case in value_reports if case["run_seconds"] is not None
+            )
+            timed_out = sum(case["timed_out"] for case in value_reports)
+            aggregate_speedup = (
+                baseline_run_seconds / run_seconds
+                if run_seconds > 0 and baseline_timed_out == 0 and timed_out == 0
+                else None
+            )
+            comparison_values.append(
+                {
+                    "value": value,
+                    "run_seconds": run_seconds,
+                    "speedup": aggregate_speedup,
+                    "timed_out": timed_out,
+                }
+            )
+            for case in value_reports:
+                baseline_case = baseline_cases[case["name"]]
+                case_speedup = (
+                    baseline_case["run_seconds"] / case["run_seconds"]
+                    if baseline_case["run_seconds"] is not None
+                    and case["run_seconds"] is not None
+                    and case["run_seconds"] > 0
+                    else None
+                )
+                case.update(
+                    {
+                        "parameter_name": parameter_name,
+                        "parameter_value": value,
+                        "baseline_value": baseline_value,
+                        "speedup": case_speedup,
+                    }
+                )
+                case_reports.append(case)
+        comparison = {
+            "kernel": tunable["kernel"],
+            "element_type": tunable["element_type"],
+            "implementation": tunable["implementation"],
+            "parameter_name": parameter_name,
+            "baseline_value": baseline_value,
+            "values": comparison_values,
+        }
+
+    saved_model_paths = {}
+    for case in case_reports:
+        model_bytes = case.pop("model_bytes", None)
+        if model_bytes is None:
+            continue
+        if output_directory is None:
+            raise RuntimeError("model_bytes captured without an output directory")
+        if Path(case["name"]).name != case["name"]:
+            raise SystemExit(
+                f"onnx-light backend: test name {case['name']!r} is not a safe model filename"
+            )
+        model_path = output_directory / f"{case['name']}.onnx"
+        model_path.write_bytes(model_bytes)
+        saved_model_paths[case["name"]] = str(model_path)
+    for case in case_reports:
+        case["model_path"] = saved_model_paths.get(case["name"])
 
     return {
         "name_regex": name_regex,
@@ -604,7 +827,11 @@ def _run_backend_test_timing(
         "include_big": include_big,
         "repeat": repeat,
         "warmup": warmup,
-        "selected": len(case_reports),
+        "timeout_seconds": timeout_seconds,
+        "selected": len(cases),
+        "timed_out": sum(case["timed_out"] for case in case_reports),
+        "tuning_comparison": comparison,
+        "save_models": save_models,
         "collection_seconds": collection_seconds,
         "cases": case_reports,
         "total_seconds": time.perf_counter() - total_start,
@@ -614,13 +841,50 @@ def _run_backend_test_timing(
 def _cmd_backend_test(args: argparse.Namespace) -> None:
     """Measures selected backend test cases."""
 
+    tuning_comparison = None
+    if args.parameter:
+        if not args.kernel or args.dtype is None or not args.impl:
+            raise SystemExit(
+                "onnx-light backend: --parameter requires --kernel, --dtype, and --impl "
+                "to select exactly one tuning schema"
+            )
+        from . import kernel_tuning
+
+        tuning_report = kernel_tuning.kernel_tuning_parameters(
+            kernel=args.kernel,
+            library=args.library,
+            element_type=args.dtype,
+            implementation=args.impl,
+        )
+        tunables = cast(list[_KernelTunable], tuning_report["kernels"])
+        if len(tunables) != 1:
+            raise SystemExit(
+                f"onnx-light backend: tuning selectors matched {len(tunables)} schemas; "
+                "expected exactly one"
+            )
+        parameter_name, parameter_values = _resolve_integer_tuning_parameter(
+            "backend", args.parameter, tunables[0]
+        )
+        tuning_comparison = {
+            "tunable": tunables[0],
+            "parameter_name": parameter_name,
+            "parameter_values": parameter_values,
+        }
+
     report = _run_backend_test_timing(
         name_regex=args.regex,
         mode=args.mode,
         include_big=args.include_big,
         repeat=args.repeat,
         warmup=args.warmup,
+        timeout_seconds=args.timeout,
+        tuning_comparison=tuning_comparison,
+        save_models=args.save_models,
     )
+    if args.output:
+        _write_backend_test_output(report, args.output)
+        print(f"backend: wrote {args.output}")
+        return
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
         return
@@ -628,11 +892,42 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
     print(
         f"mode={report['mode']} selected={report['selected']} "
         f"repeat={report['repeat']} warmup={report['warmup']} "
+        f"timeout={report['timeout_seconds']:g}s timed_out={report['timed_out']} "
         f"collection_ms={report['collection_seconds'] * 1000:.3f}"
     )
-    for case in report["cases"]:
+    if report["tuning_comparison"] is not None:
+        comparison = report["tuning_comparison"]
         print(
-            f"{case['name']} datasets={case['data_sets']} "
+            f"side by side: {comparison['kernel']} {comparison['parameter_name']} "
+            f"baseline={comparison['baseline_value']}"
+        )
+        for value in comparison["values"]:
+            speedup = (
+                f"{value['speedup']:.3f}x" if value["speedup"] is not None else "unavailable"
+            )
+            print(
+                f"  value={value['value']} run_ms={value['run_seconds'] * 1000:.3f} "
+                f"speedup={speedup} timed_out={value['timed_out']}"
+            )
+    for case in report["cases"]:
+        if case["timed_out"]:
+            parameter_text = (
+                f" {case['parameter_name']}={case['parameter_value']}"
+                if case["parameter_name"] is not None
+                else ""
+            )
+            print(f"{case['name']} status=timeout{parameter_text} error={case['error']}")
+            continue
+        comparison_text = (
+            f" {case['parameter_name']}={case['parameter_value']} "
+            f"speedup={case['speedup']:.3f}x"
+            if case["parameter_name"] is not None and case["speedup"] is not None
+            else ""
+        )
+        print(
+            f"{case['name']} status=completed{comparison_text} datasets={case['data_sets']} "
+            f"input_shapes={json.dumps(case['input_shapes'], separators=(',', ':'))} "
+            f"model={case['model_path'] or '-'} "
             f"materialization_ms={case['materialization_seconds'] * 1000:.3f} "
             f"setup_ms={case['setup_seconds'] * 1000:.3f} "
             f"run_ms={case['run_seconds'] * 1000:.3f} "
@@ -641,24 +936,121 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
     print(f"total_ms={report['total_seconds'] * 1000:.3f}")
 
 
-def _cmd_kernel_baseline(args: argparse.Namespace) -> None:
-    """Produces the kernel inventory and benchmark corpus baseline report."""
-    from .tools import kernel_baseline
+def _backend_test_table(report: dict[str, Any]) -> tuple[list[str], list[list[Any]]]:
+    """Returns the columns and rows exported by the backend command."""
+    columns = [
+        "name",
+        "kind",
+        "tag",
+        "status",
+        "timed_out",
+        "error",
+        "parameter_name",
+        "parameter_value",
+        "baseline_value",
+        "speedup",
+        "data_sets",
+        "input_shapes",
+        "model_path",
+        "mode",
+        "repeat",
+        "warmup",
+        "timeout_seconds",
+        "collection_seconds",
+        "materialization_seconds",
+        "setup_seconds",
+        "warmup_seconds",
+        "run_seconds",
+        "mean_seconds",
+        "min_seconds",
+        "max_seconds",
+        "total_seconds",
+        "iteration_seconds",
+    ]
+    rows = []
+    for case in report["cases"]:
+        values = {
+            "parameter_name": None,
+            "parameter_value": None,
+            "baseline_value": None,
+            "speedup": None,
+            "model_path": None,
+            **case,
+            "mode": report["mode"],
+            "repeat": report["repeat"],
+            "warmup": report["warmup"],
+            "timeout_seconds": report["timeout_seconds"],
+            "collection_seconds": report["collection_seconds"],
+            "total_seconds": report["total_seconds"],
+            "input_shapes": json.dumps(case["input_shapes"]),
+            "iteration_seconds": json.dumps(case["iteration_seconds"]),
+        }
+        rows.append([values[column] for column in columns])
+    return columns, rows
 
-    report = kernel_baseline.run_kernel_baseline_report(
-        repeat=args.repeat,
-        warmup=args.warmup,
-        seed=args.seed,
-        collect_diagnostics=not args.no_diagnostics,
+
+def _write_backend_test_output(report: dict[str, Any], output: str) -> None:
+    """Writes a backend timing report selected by the output extension."""
+    from pathlib import Path
+
+    output_path = Path(output)
+    columns, rows = _backend_test_table(report)
+    suffix = output_path.suffix.lower()
+    if suffix == ".csv":
+        import csv
+
+        with output_path.open("w", encoding="utf-8", newline="") as output_file:
+            writer = csv.writer(output_file)
+            writer.writerow(columns)
+            writer.writerows(rows)
+        return
+    if suffix == ".xlsx":
+        from openpyxl import Workbook
+
+        from .tools.kernel_baseline import get_cpu_descriptor
+
+        workbook = Workbook()
+        summary = workbook.active
+        assert summary is not None
+        summary.title = "summary"
+        summary.append(["property", "value"])
+        for name in (
+            "name_regex",
+            "mode",
+            "include_big",
+            "repeat",
+            "warmup",
+            "timeout_seconds",
+            "save_models",
+            "selected",
+            "timed_out",
+            "collection_seconds",
+            "total_seconds",
+        ):
+            summary.append([name, report[name]])
+        if report.get("tuning_comparison") is not None:
+            comparison = report["tuning_comparison"]
+            for name in (
+                "kernel",
+                "element_type",
+                "implementation",
+                "parameter_name",
+                "baseline_value",
+            ):
+                summary.append([f"tuning.{name}", comparison[name]])
+        for name, value in sorted(get_cpu_descriptor().items()):
+            summary.append([f"cpu.{name}", value])
+
+        worksheet = workbook.create_sheet("backend")
+        worksheet.append(columns)
+        for row in rows:
+            worksheet.append(row)
+        workbook.save(output_path)
+        return
+    raise SystemExit(
+        f"onnx-light backend: unsupported output extension {output_path.suffix!r}; "
+        "expected .csv or .xlsx"
     )
-    text = json.dumps(report, indent=2, sort_keys=True)
-    if args.output:
-        with open(args.output, "w", encoding="utf-8") as output_file:
-            output_file.write(text)
-            output_file.write("\n")
-        print(f"kernel-baseline: wrote {args.output}")
-    else:
-        print(text)
 
 
 def _print_shape_inference_events(events: list) -> None:
@@ -1517,52 +1909,26 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     run_parser.set_defaults(func=_cmd_run)
 
-    # --- tune-kernels --------------------------------------------------------
-    tuning_parser = subparsers.add_parser(
-        "tune-kernels",
-        help="Propose calibration updates for locally uncovered kernel tuning keys.",
-    )
-    tuning_parser.add_argument(
-        "--kernel",
-        action="append",
-        help="Restrict to a kernel name; may be specified multiple times.",
-    )
-    tuning_parser.add_argument(
-        "--element-type",
-        action="append",
-        type=_parse_kernel_element_type,
-        help="Restrict to an ONNX element-type integer or name; may be repeated.",
-    )
-    tuning_parser.add_argument(
-        "--library", default="onnx_light", help="Tuning library identifier."
-    )
-    tuning_parser.add_argument("--implementation", help="Restrict to one implementation.")
-    tuning_parser.add_argument("--cache", help="Use this cache instead of the platform default.")
-    tuning_parser.add_argument(
-        "--apply",
-        action="store_true",
-        help="Calibrate and persist proposed keys; without this flag the command is read-only.",
-    )
-    tuning_parser.add_argument(
-        "--maximum-duration-ms",
-        type=int,
-        default=0,
-        help="Per-key calibration duration budget; 0 uses the callback default.",
-    )
-    tuning_parser.add_argument(
-        "--maximum-memory-mb",
-        type=int,
-        default=0,
-        help="Calibration memory budget in MiB; 0 uses the callback default.",
-    )
-    tuning_parser.add_argument(
-        "--json", action="store_true", help="Print the complete JSON report."
-    )
-    tuning_parser.set_defaults(func=_cmd_tune_kernels)
-
-    # --- backend-test ---------------------------------------------------------
+    # --- backend --------------------------------------------------------------
     backend_test_parser = subparsers.add_parser(
-        "backend-test", help="Measure regex-selected backend test cases."
+        "backend",
+        help="Measure regex-selected backend test cases.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""examples:
+  Measure matching correctness cases:
+    python -m onnx_light backend --regex ".*not.*"
+
+  Export timings and machine information to XLSX:
+    python -m onnx_light backend --regex ".*not.*" --output backend-not.xlsx
+
+  Save one self-contained ONNX model per selected test:
+    python -m onnx_light backend --regex ".*not.*" --save-models backend-models
+
+  Compare tuning values without changing the machine cache:
+    python -m onnx_light backend --regex ".*not.*" \\
+      --kernel Not --dtype BOOL --impl portable \\
+      --parameter parallel.minimum_elements=default,16384,32768
+""",
     )
     backend_test_parser.add_argument(
         "--regex",
@@ -1582,23 +1948,86 @@ def _build_parser() -> argparse.ArgumentParser:
     backend_test_parser.add_argument(
         "--repeat",
         type=_parse_positive_int,
-        default=1,
-        help="Measured iterations per case (default: 1).",
+        default=10,
+        help="Measured iterations per case (default: 10).",
     )
     backend_test_parser.add_argument(
         "--warmup",
         type=_parse_nonnegative_int,
-        default=0,
-        help="Unmeasured warm-up iterations per case (default: 0).",
+        default=2,
+        help="Unmeasured warm-up iterations per case (default: 2).",
+    )
+    backend_test_parser.add_argument(
+        "--timeout",
+        type=_parse_positive_float,
+        default=2.0,
+        metavar="SECONDS",
+        help="Stop and mark a backend case after this many seconds (default: 2).",
+    )
+    backend_test_parser.add_argument(
+        "--parameter",
+        metavar="NAME=default,VALUE,...",
+        help=(
+            "Compare explicit integer tuning values without changing the machine cache; "
+            "requires --kernel, --dtype, and --impl."
+        ),
+    )
+    backend_test_parser.add_argument(
+        "--kernel", help="Select the kernel tuning schema used by --parameter."
+    )
+    backend_test_parser.add_argument(
+        "--dtype",
+        type=_parse_kernel_element_type,
+        metavar="DTYPE",
+        help="Select the ONNX element type of the tuning schema used by --parameter.",
+    )
+    backend_test_parser.add_argument(
+        "--impl", metavar="IMPLEMENTATION", help="Select the implementation used by --parameter."
+    )
+    backend_test_parser.add_argument(
+        "--library",
+        default="onnx_light",
+        help="Select the tuning library used by --parameter (default: onnx_light).",
     )
     backend_test_parser.add_argument(
         "--json", action="store_true", help="Print the complete machine-readable report."
+    )
+    backend_test_parser.add_argument(
+        "--output",
+        "-o",
+        metavar="PATH",
+        help="Write case timings as CSV or XLSX, selected by the file extension.",
+    )
+    backend_test_parser.add_argument(
+        "--save-models",
+        metavar="DIRECTORY",
+        help="Save each completed test as one self-contained <test-name>.onnx file.",
     )
     backend_test_parser.set_defaults(func=_cmd_backend_test)
 
     # --- kernel --------------------------------------------------------------
     kernel_parser = subparsers.add_parser(
-        "kernel", help="List registered kernels or inspect their tunable parameters."
+        "kernel",
+        help="List kernels, inspect tunable parameters, or tune one selected kernel.",
+        description=(
+            "Lists registered kernels, inspects their tunable parameters, or calibrates "
+            "and persists one selected kernel with --tune."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""examples:
+  List every registered kernel:
+    python -m onnx_light kernel --list
+
+  Inspect one kernel's tunable parameters:
+    python -m onnx_light kernel --kernel Gemm --dtype FLOAT --impl portable
+
+  Tune one kernel automatically:
+    python -m onnx_light kernel --kernel Gemm --dtype FLOAT --impl portable --tune
+
+  Compare explicit values and persist the fastest:
+    python -m onnx_light kernel --kernel Gemm --dtype FLOAT --impl portable --tune \\
+      --parameter parallel.minimum_tasks=default,2,4
+""",
     )
     kernel_mode = kernel_parser.add_mutually_exclusive_group(required=True)
     kernel_mode.add_argument(
@@ -1619,7 +2048,18 @@ def _build_parser() -> argparse.ArgumentParser:
     kernel_parser.add_argument(
         "--tune",
         action="store_true",
-        help="Calibrate and persist the parameters of exactly one selected kernel.",
+        help=(
+            "Calibrate and persist exactly one selected kernel, using the duration "
+            "and memory budgets below."
+        ),
+    )
+    kernel_parser.add_argument(
+        "--parameter",
+        metavar="NAME=default,VALUE,...",
+        help=(
+            "Benchmark explicit integer values side by side while tuning; default resolves "
+            "to the current active value and defines the speedup baseline."
+        ),
     )
     kernel_parser.add_argument(
         "--verbose", "-v", action="store_true", help="Report tuning progress to stderr."
@@ -1652,44 +2092,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     kernel_parser.add_argument(
         "--maximum-duration-ms",
-        type=int,
+        type=_parse_non_negative_int,
         default=0,
         help="Per-key calibration duration budget; 0 uses the callback default.",
     )
     kernel_parser.add_argument(
         "--maximum-memory-mb",
-        type=int,
+        type=_parse_non_negative_int,
         default=0,
         help="Calibration memory budget in MiB; 0 uses the callback default.",
     )
     kernel_parser.set_defaults(func=_cmd_kernel)
-
-    # --- kernel-baseline -------------------------------------------------------
-    baseline_parser = subparsers.add_parser(
-        "kernel-baseline",
-        help=(
-            "Produce the kernel inventory and deterministic benchmark corpus report "
-            "(read-only; does not modify the kernel tuning cache)."
-        ),
-    )
-    baseline_parser.add_argument(
-        "--output", "-o", help="Write the JSON report to this path instead of stdout."
-    )
-    baseline_parser.add_argument(
-        "--repeat", type=int, default=5, help="Measured repetitions per benchmark case."
-    )
-    baseline_parser.add_argument(
-        "--warmup", type=int, default=2, help="Warm-up repetitions before measuring."
-    )
-    baseline_parser.add_argument(
-        "--seed", type=int, default=0, help="Seed for the deterministic input generator."
-    )
-    baseline_parser.add_argument(
-        "--no-diagnostics",
-        action="store_true",
-        help="Skip the extra profiling run reporting grain size and hardware counters.",
-    )
-    baseline_parser.set_defaults(func=_cmd_kernel_baseline)
 
     return parser
 

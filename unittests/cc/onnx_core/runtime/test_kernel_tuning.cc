@@ -578,6 +578,53 @@ TEST(KernelCalibration, ValidatesCandidateOutput) {
   EXPECT_TRUE(reporter.parallel_region_report()->events().empty());
 }
 
+TEST(KernelCalibration, ComparesExplicitParameterValuesSideBySide) {
+  KernelTuningParameters defaults = MakeDefaults();
+  KernelCalibrationBenchmark benchmark;
+  benchmark.portable_parameters = defaults;
+  benchmark.parameter_name = "algorithm.tile_m";
+  benchmark.cases = MakeElementwiseCalibrationCases(DataType::FLOAT, 1, 16, 16, false);
+  benchmark.repetitions = 2;
+  benchmark.reference.configure = [](int64_t) {};
+  benchmark.reference.run = [](std::span<const Tensor>, Tensor &output) {
+    std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
+  };
+  int64_t configured_value = 0;
+  benchmark.candidate.configure = [&](int64_t value) { configured_value = value; };
+  benchmark.candidate.run = [&](std::span<const Tensor>, Tensor &output) {
+    if (configured_value == 64) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
+  };
+  CalibrationOptions options;
+  options.parameter_name = benchmark.parameter_name;
+  options.parameter_values = {64, 128};
+  CalibrationReporter reporter(options);
+  CpuExecutionDescriptor execution = MakeExecution();
+  execution.effective_threads = static_cast<uint32_t>(ParallelForThreadCount());
+
+  const KernelTuningParameters selected =
+      CalibrateKernelBenchmark(defaults.key, execution, options, reporter, benchmark);
+
+  EXPECT_EQ(selected.Get<int64_t>("algorithm.tile_m"), 128);
+  ASSERT_TRUE(reporter.comparison().has_value());
+  const KernelTuningComparison &comparison = *reporter.comparison();
+  EXPECT_EQ(comparison.parameter_name, "algorithm.tile_m");
+  EXPECT_EQ(comparison.baseline_value, 64);
+  EXPECT_EQ(comparison.selected_value, 128);
+  ASSERT_EQ(comparison.values.size(), 2u);
+  EXPECT_GT(comparison.values[0].duration_ns, comparison.values[1].duration_ns);
+  EXPECT_EQ(comparison.values[0].benchmark_cases, comparison.values[1].benchmark_cases);
+
+  options.maximum_memory_bytes = 1;
+  CalibrationReporter constrained_reporter(options);
+  const KernelTuningParameters constrained =
+      CalibrateKernelBenchmark(defaults.key, execution, options, constrained_reporter, benchmark);
+  EXPECT_EQ(constrained.Get<int64_t>("algorithm.tile_m"), 64);
+  EXPECT_FALSE(constrained_reporter.comparison().has_value());
+}
+
 TEST(KernelCalibration, ProfilesCandidatesWithoutOverridingElapsedTimeSelection) {
   KernelTuningParameters defaults = MakeDefaults();
   defaults.key.library = "calibration_profile_selection_test";

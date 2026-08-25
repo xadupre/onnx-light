@@ -393,7 +393,9 @@ nb::dict Calibrate(const std::string &kernel, const std::vector<int32_t> &elemen
                    bool save, const std::optional<std::string> &path,
                    const std::optional<rt::CpuExecutionPolicy> &cpu_execution,
                    size_t profiling_capacity, bool profiling_hardware_counters,
-                   const std::optional<int32_t> &device) {
+                   const std::optional<int32_t> &device,
+                   const std::optional<std::string> &parameter_name,
+                   const std::vector<int64_t> &parameter_values) {
   rt::KernelCalibrationSelection selection =
       MakeSelection(kernel, library, implementation, std::nullopt, device);
   selection.element_types = element_types;
@@ -403,6 +405,8 @@ nb::dict Calibrate(const std::string &kernel, const std::vector<int32_t> &elemen
   options.maximum_memory_bytes = maximum_memory_bytes;
   options.profiling_capacity = profiling_capacity;
   options.profiling_hardware_counters = profiling_hardware_counters;
+  options.parameter_name = parameter_name;
+  options.parameter_values = parameter_values;
   std::shared_ptr<rt::CpuExecutor> executor;
   if (cpu_execution.has_value()) {
     executor = rt::GlobalCpuExecutorRegistry().Acquire(*cpu_execution);
@@ -444,6 +448,33 @@ nb::dict Calibrate(const std::string &kernel, const std::vector<int32_t> &elemen
     candidate_diagnostics.append(std::move(item));
   }
   result["candidate_diagnostics"] = std::move(candidate_diagnostics);
+  nb::list comparisons;
+  for (const rt::KernelCalibrationComparison &comparison : calibration.comparisons) {
+    nb::dict item = KeyToDict(comparison.key);
+    item["parameter_name"] = comparison.comparison.parameter_name;
+    item["baseline_value"] = comparison.comparison.baseline_value;
+    item["selected_value"] = comparison.comparison.selected_value;
+    const uint64_t baseline_ns =
+        comparison.comparison.values.empty() ? 0 : comparison.comparison.values.front().duration_ns;
+    nb::list values;
+    for (const rt::KernelTuningComparisonValue &value : comparison.comparison.values) {
+      nb::dict measured;
+      measured["value"] = value.value;
+      measured["duration_ns"] = value.duration_ns;
+      measured["duration_seconds"] = static_cast<double>(value.duration_ns) / 1e9;
+      measured["benchmark_cases"] = value.benchmark_cases;
+      if (value.duration_ns == 0) {
+        measured["speedup"] = nb::none();
+      } else {
+        measured["speedup"] =
+            static_cast<double>(baseline_ns) / static_cast<double>(value.duration_ns);
+      }
+      values.append(std::move(measured));
+    }
+    item["values"] = std::move(values);
+    comparisons.append(std::move(item));
+  }
+  result["comparisons"] = std::move(comparisons);
   if (save && !calibration.calibrated.empty()) {
     rt::KernelTuningCacheOptions cache_options;
     if (path.has_value()) {
@@ -491,13 +522,14 @@ void AddOnnxPyTuning(nb::module_ &rt_mod) {
              nb::arg("implementation") = "portable", nb::arg("tuning_abi") = nb::none(),
              nb::arg("path") = nb::none(), nb::arg("num_threads") = 0, nb::arg("load") = true,
              "Validates and persists a partial parameter update for the local processor.");
-  rt_mod.def("calibrate_kernel_tuning", &Calibrate, nb::arg("kernel"),
-             nb::arg("element_types") = std::vector<int32_t>{}, nb::arg("library") = "onnx_light",
-             nb::arg("implementation") = nb::none(), nb::arg("only_missing") = false,
-             nb::arg("maximum_duration_ms") = uint64_t{0},
-             nb::arg("maximum_memory_bytes") = uint64_t{0}, nb::arg("save") = true,
-             nb::arg("path") = nb::none(), nb::arg("cpu_execution").none() = nb::none(),
-             nb::arg("profiling_capacity") = size_t{0},
-             nb::arg("profiling_hardware_counters") = false, nb::arg("device") = -1,
-             "Calibrates selected registered keys and optionally persists successful profiles.");
+  rt_mod.def(
+      "calibrate_kernel_tuning", &Calibrate, nb::arg("kernel"),
+      nb::arg("element_types") = std::vector<int32_t>{}, nb::arg("library") = "onnx_light",
+      nb::arg("implementation") = nb::none(), nb::arg("only_missing") = false,
+      nb::arg("maximum_duration_ms") = uint64_t{0}, nb::arg("maximum_memory_bytes") = uint64_t{0},
+      nb::arg("save") = true, nb::arg("path") = nb::none(),
+      nb::arg("cpu_execution").none() = nb::none(), nb::arg("profiling_capacity") = size_t{0},
+      nb::arg("profiling_hardware_counters") = false, nb::arg("device") = -1,
+      nb::arg("parameter_name") = nb::none(), nb::arg("parameter_values") = std::vector<int64_t>{},
+      "Calibrates selected registered keys and optionally persists successful profiles.");
 }

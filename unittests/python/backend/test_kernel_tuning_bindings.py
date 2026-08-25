@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
@@ -84,6 +83,32 @@ class TestKernelTuningBindings(ExtTestCase):
         self.assertEqual(len(report["candidate_diagnostics"]), 1)
         diagnostic = report["candidate_diagnostics"][0]
         self.assertEqual(diagnostic["kernel"], "Gemm")
+
+    def test_compares_explicit_tuning_values(self):
+        parameters = kernel_tuning.kernel_tuning_parameters(
+            kernel="Abs", element_type=int(TensorProto.FLOAT)
+        )["kernels"][0]
+        baseline = parameters["active_values"]["parallel.minimum_elements"]
+        candidate = baseline // 2 if baseline > 1 else 2
+        report = rt.calibrate_kernel_tuning(
+            "Abs",
+            element_types=[int(TensorProto.FLOAT)],
+            maximum_duration_ms=25,
+            save=False,
+            parameter_name="parallel.minimum_elements",
+            parameter_values=[baseline, candidate],
+        )
+
+        self.assertEqual(len(report["comparisons"]), 1)
+        comparison = report["comparisons"][0]
+        self.assertEqual(comparison["parameter_name"], "parallel.minimum_elements")
+        self.assertEqual(comparison["baseline_value"], baseline)
+        self.assertIn(comparison["selected_value"], {baseline, candidate})
+        self.assertEqual(
+            [value["value"] for value in comparison["values"]], [baseline, candidate]
+        )
+        self.assertEqual(comparison["values"][0]["speedup"], 1.0)
+        self.assertGreater(comparison["values"][0]["benchmark_cases"], 0)
 
     def test_lists_registered_parameters_and_defaults(self):
         report = kernel_tuning.kernel_tuning_parameters(
@@ -192,7 +217,7 @@ assert kernel["active_source"] == "published_profile", kernel
                 env["XDG_CACHE_HOME"] = temporary
             subprocess.run([sys.executable, "-c", code], check=True, env=env)
 
-    def test_proposes_missing_subset_and_cli_is_read_only(self):
+    def test_proposes_missing_subset_and_is_read_only(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = str(Path(temporary) / "missing.cache")
             proposal = kernel_tuning.propose_kernel_tuning_updates(
@@ -202,28 +227,6 @@ assert kernel["active_source"] == "published_profile", kernel
             self.assertEqual(proposal["covered"], 0)
             self.assertEqual(len(proposal["calibratable"]), 1)
             self.assertEqual(proposal["calibratable"][0]["kernel"], "Abs")
-
-            process = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "onnx_light",
-                    "tune-kernels",
-                    "--kernel",
-                    "Abs",
-                    "--element-type",
-                    "FLOAT",
-                    "--cache",
-                    path,
-                    "--json",
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            cli = json.loads(process.stdout)
-            self.assertEqual(cli["selected"], 1)
-            self.assertEqual(len(cli["calibratable"]), 1)
             self.assertFalse(Path(path).exists())
 
 

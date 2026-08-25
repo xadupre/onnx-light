@@ -23,7 +23,7 @@ benchmark case:
 
 .. code-block:: bash
 
-    onnx-light backend-test \
+    python -m onnx_light backend-test \
         --regex "^test_cc_(abs|gemm)" \
         --mode benchmark
 

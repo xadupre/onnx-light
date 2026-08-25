@@ -4,7 +4,6 @@ onnx_light.tools
 .. toctree::
     :maxdepth: 1
 
-    backend_test_timing
     dot
     kernel_baseline
     kernel_inventory

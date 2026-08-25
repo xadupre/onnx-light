@@ -61,5 +61,24 @@ TEST(ThreadPool, ParkImmediatelyRepeatedDispatchesStillCompleteWork) {
   EXPECT_EQ(completed.load(std::memory_order_relaxed), 2 * iterations);
 }
 
+TEST(ThreadPool, SpinningLimitedWakeupsCompleteVaryingBlockCounts) {
+  ThreadPoolOptions options;
+  options.spin_iterations = 10000;
+  options.spin_duration_ns = 0;
+  ThreadPool pool(8, options);
+
+  constexpr int iterations = 10000;
+  for (int iteration = 0; iteration < iterations; ++iteration) {
+    const int64_t num_blocks = 2 + iteration % 8;
+    std::vector<std::atomic<int>> visits(static_cast<std::size_t>(num_blocks));
+    pool.Run(num_blocks, [&visits](int64_t block) {
+      visits[static_cast<std::size_t>(block)].fetch_add(1, std::memory_order_relaxed);
+    });
+    for (const std::atomic<int> &visit : visits) {
+      EXPECT_EQ(visit.load(std::memory_order_relaxed), 1);
+    }
+  }
+}
+
 } // namespace
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

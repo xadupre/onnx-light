@@ -28,6 +28,7 @@ back into the model (value_info and node metadata); and
     raw_buffer_allocator
     execute_action
     execution_plan
+    cuda_gemm_preparation
     prepared_execution
     prepared_tensor_cache
     prepared_task

@@ -305,10 +305,9 @@ def run_kernel_baseline_report(
 ) -> dict[str, Any]:
     """Produces the combined Step D + Step E machine-readable report.
 
-    This is the single entry point behind ``python -m onnx_light
-    kernel-baseline``: it does not modify the kernel tuning cache and does not
-    invoke ``onnxruntime``, so only native ``onnx-light`` kernel execution
-    enters the report.
+    It does not modify the kernel tuning cache and does not invoke
+    ``onnxruntime``, so only native ``onnx-light`` kernel execution enters the
+    report.
 
     Args:
         cases: Benchmark cases; defaults to :data:`BENCHMARK_CORPUS`.

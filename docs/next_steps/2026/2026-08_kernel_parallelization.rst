@@ -176,7 +176,9 @@ zero values). Model construction (``startup``) and steady-state execution
 ranking -- it does not substitute for Step D's ORT attribution. Running the
 corpus never writes to the kernel tuning cache: it only reads
 ``kernel_tuning_parameters()`` and constructs ordinary ``RuntimeSession``
-instances. It is exposed as ``python -m onnx_light kernel-baseline``.
+instances. Developers can invoke
+:func:`onnx_light.tools.run_kernel_baseline_report` directly when updating a
+published machine report.
 
 Published machine reports live under
 ``docs/next_steps/2026/kernel_parallelization_reports/``. Each file records

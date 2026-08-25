@@ -567,6 +567,7 @@ def _measure_backend_test_cases_with_timeout(
     warmup: int,
     timeout_seconds: float,
     tuning: dict[str, Any] | None = None,
+    capture_models: bool = False,
 ) -> list[dict[str, Any]]:
     """Measures backend cases in a worker that is replaced after a timeout."""
     import multiprocessing
@@ -598,7 +599,8 @@ def _measure_backend_test_cases_with_timeout(
             if worker is None:
                 worker = start_worker()
             result = worker.apply_async(
-                measure_backend_test_case_by_name, (case.name, mode, include_big, repeat, warmup)
+                measure_backend_test_case_by_name,
+                (case.name, mode, include_big, repeat, warmup, capture_models),
             )
             try:
                 reports.append(result.get(timeout=timeout_seconds))
@@ -616,6 +618,7 @@ def _measure_backend_test_cases_with_timeout(
                         "error": f"exceeded {timeout_seconds:g} seconds",
                         "data_sets": None,
                         "input_shapes": None,
+                        "model_bytes": None,
                         "materialization_seconds": None,
                         "setup_seconds": None,
                         "warmup_seconds": None,
@@ -642,6 +645,7 @@ def _run_backend_test_timing(
     warmup: int = 2,
     timeout_seconds: float = 2.0,
     tuning_comparison: dict[str, Any] | None = None,
+    save_models: str | None = None,
 ) -> dict[str, Any]:
     """Measures backend test cases selected by name and generation mode."""
     import math
@@ -655,6 +659,17 @@ def _run_backend_test_timing(
         raise ValueError(f"warmup must be non-negative, got {warmup}.")
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError(f"timeout_seconds must be positive and finite, got {timeout_seconds}.")
+
+    output_directory = None
+    if save_models is not None:
+        from pathlib import Path
+
+        output_directory = Path(save_models)
+        if output_directory.exists() and not output_directory.is_dir():
+            raise SystemExit(
+                f"onnx-light backend: --save-models expects a directory, got {save_models!r}"
+            )
+        output_directory.mkdir(parents=True, exist_ok=True)
 
     from onnx_light.onnx import backend
 
@@ -675,6 +690,7 @@ def _run_backend_test_timing(
             repeat=repeat,
             warmup=warmup,
             timeout_seconds=timeout_seconds,
+            capture_models=save_models is not None,
         )
         for case in case_reports:
             case.update(
@@ -724,6 +740,7 @@ def _run_backend_test_timing(
                         repeat=repeat,
                         warmup=warmup,
                         timeout_seconds=timeout_seconds,
+                        capture_models=save_models is not None,
                         tuning={
                             "kernel": tunable["kernel"],
                             "element_type": tunable["element_type"],
@@ -789,6 +806,21 @@ def _run_backend_test_timing(
             "values": comparison_values,
         }
 
+    saved_model_paths = {}
+    for case in case_reports:
+        model_bytes = case.pop("model_bytes", None)
+        if model_bytes is None:
+            continue
+        if Path(case["name"]).name != case["name"]:
+            raise SystemExit(
+                f"onnx-light backend: test name {case['name']!r} is not a safe model filename"
+            )
+        model_path = output_directory / f"{case['name']}.onnx"
+        model_path.write_bytes(model_bytes)
+        saved_model_paths[case["name"]] = str(model_path)
+    for case in case_reports:
+        case["model_path"] = saved_model_paths.get(case["name"])
+
     return {
         "name_regex": name_regex,
         "mode": mode,
@@ -799,6 +831,7 @@ def _run_backend_test_timing(
         "selected": len(cases),
         "timed_out": sum(case["timed_out"] for case in case_reports),
         "tuning_comparison": comparison,
+        "save_models": save_models,
         "collection_seconds": collection_seconds,
         "cases": case_reports,
         "total_seconds": time.perf_counter() - total_start,
@@ -846,6 +879,7 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
         warmup=args.warmup,
         timeout_seconds=args.timeout,
         tuning_comparison=tuning_comparison,
+        save_models=args.save_models,
     )
     if args.output:
         _write_backend_test_output(report, args.output)
@@ -893,6 +927,7 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
         print(
             f"{case['name']} status=completed{comparison_text} datasets={case['data_sets']} "
             f"input_shapes={json.dumps(case['input_shapes'], separators=(',', ':'))} "
+            f"model={case['model_path'] or '-'} "
             f"materialization_ms={case['materialization_seconds'] * 1000:.3f} "
             f"setup_ms={case['setup_seconds'] * 1000:.3f} "
             f"run_ms={case['run_seconds'] * 1000:.3f} "
@@ -916,6 +951,7 @@ def _backend_test_table(report: dict[str, Any]) -> tuple[list[str], list[list[An
         "speedup",
         "data_sets",
         "input_shapes",
+        "model_path",
         "mode",
         "repeat",
         "warmup",
@@ -938,6 +974,7 @@ def _backend_test_table(report: dict[str, Any]) -> tuple[list[str], list[list[An
             "parameter_value": None,
             "baseline_value": None,
             "speedup": None,
+            "model_path": None,
             **case,
             "mode": report["mode"],
             "repeat": report["repeat"],
@@ -983,6 +1020,7 @@ def _write_backend_test_output(report: dict[str, Any], output: str) -> None:
             "repeat",
             "warmup",
             "timeout_seconds",
+            "save_models",
             "selected",
             "timed_out",
             "collection_seconds",
@@ -1882,6 +1920,9 @@ def _build_parser() -> argparse.ArgumentParser:
   Export timings and machine information to XLSX:
     python -m onnx_light backend --regex ".*not.*" --output backend-not.xlsx
 
+  Save one self-contained ONNX model per selected test:
+    python -m onnx_light backend --regex ".*not.*" --save-models backend-models
+
   Compare tuning values without changing the machine cache:
     python -m onnx_light backend --regex ".*not.*" \\
       --kernel Not --dtype BOOL --impl portable \\
@@ -1955,6 +1996,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "-o",
         metavar="PATH",
         help="Write case timings as CSV or XLSX, selected by the file extension.",
+    )
+    backend_test_parser.add_argument(
+        "--save-models",
+        metavar="DIRECTORY",
+        help="Save each completed test as one self-contained <test-name>.onnx file.",
     )
     backend_test_parser.set_defaults(func=_cmd_backend_test)
 

@@ -37,6 +37,7 @@ class TestMainBackendTest(unittest.TestCase):
         self.assertFalse(args.include_big)
         self.assertFalse(args.json)
         self.assertIsNone(args.output)
+        self.assertIsNone(args.save_models)
 
     def test_parser_rejects_invalid_counts(self):
         parser = _build_parser()
@@ -127,6 +128,7 @@ class TestMainBackendTest(unittest.TestCase):
             warmup=1,
             timeout_seconds=3.5,
             tuning_comparison=None,
+            save_models=None,
         )
 
     def test_rejects_invalid_counts(self):
@@ -183,6 +185,7 @@ class TestMainBackendTest(unittest.TestCase):
                     "speedup": None,
                     "data_sets": 1,
                     "input_shapes": [{"x": [2, 2]}],
+                    "model_path": None,
                     "materialization_seconds": 0.2,
                     "setup_seconds": 0.3,
                     "warmup_seconds": 0.4,
@@ -195,6 +198,7 @@ class TestMainBackendTest(unittest.TestCase):
             ],
             "total_seconds": 2.1,
             "tuning_comparison": None,
+            "save_models": None,
         }
         with tempfile.TemporaryDirectory() as temporary:
             for extension in (".csv", ".xlsx"):
@@ -280,6 +284,20 @@ class TestMainBackendTest(unittest.TestCase):
         self.assertEqual(comparison["parameter_name"], "parallel.minimum_elements")
         self.assertEqual(comparison["parameter_values"], [32768, 16384])
         self.assertEqual(comparison["tunable"], tunable)
+
+    def test_saves_one_self_contained_model_per_test(self):
+        from onnx_light.onnx import load
+
+        with tempfile.TemporaryDirectory() as temporary:
+            output = os.path.join(temporary, "models")
+            report = _run_backend_test_timing(
+                name_regex=r"^test_cc_not$", repeat=1, warmup=0, save_models=output
+            )
+            model_path = os.path.join(output, "test_cc_not.onnx")
+            self.assertEqual(os.listdir(output), ["test_cc_not.onnx"])
+            self.assertEqual(report["cases"][0]["model_path"], model_path)
+            model = load(model_path)
+            self.assertEqual(model.graph.name, "test_cc_not")
 
     def test_parameter_requires_tuning_schema_selectors(self):
         with self.assertRaisesRegex(

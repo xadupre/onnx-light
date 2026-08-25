@@ -46,6 +46,16 @@ one row per selected case as CSV or XLSX according to the file extension:
 XLSX output contains a ``summary`` sheet with the run configuration and CPU
 descriptor, plus a ``backend`` sheet with one row per case.
 
+``--save-models DIRECTORY`` saves every completed test as
+``DIRECTORY/<test-name>.onnx``. The test name is also stored as the ONNX graph
+name. Each model is self-contained in one file; timed-out tests do not produce
+a model:
+
+.. code-block:: bash
+
+    python -m onnx_light backend --regex ".*not.*" \
+        --save-models backend-models
+
 Use the same ``--parameter`` syntax as ``kernel --tune`` to run backend cases
 side by side with explicit tuning values. ``--kernel``, ``--dtype`` and
 ``--impl`` select the exact tuning schema:

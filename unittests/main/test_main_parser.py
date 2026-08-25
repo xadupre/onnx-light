@@ -21,6 +21,7 @@ class TestMainParser(unittest.TestCase):
         help_text = _build_parser()._subparsers._group_actions[0].choices["backend"].format_help()
         self.assertIn("examples:", help_text)
         self.assertIn("--output backend-not.xlsx", help_text)
+        self.assertIn("--save-models backend-models", help_text)
         self.assertIn("--parameter parallel.minimum_elements=default,16384,32768", help_text)
 
     def test_rejects_removed_kernel_baseline_command(self):

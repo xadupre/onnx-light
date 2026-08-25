@@ -22,7 +22,9 @@ def _backend_test_data_set_feed(data_set: Any) -> dict[str, Any]:
     return feed
 
 
-def _measure_backend_test_case(case: Any, repeat: int, warmup: int) -> dict[str, Any]:
+def _measure_backend_test_case(
+    case: Any, repeat: int, warmup: int, capture_model: bool
+) -> dict[str, Any]:
     """Measures one materialized backend test case."""
     import statistics
     import time
@@ -31,6 +33,11 @@ def _measure_backend_test_case(case: Any, repeat: int, warmup: int) -> dict[str,
 
     materialization_start = time.perf_counter()
     model = case.model
+    if capture_model:
+        model.graph.name = case.name
+        model_bytes = model.SerializeToString()
+    else:
+        model_bytes = None
     data_sets = list(case.data_sets)
     feeds = [_backend_test_data_set_feed(data_set) for data_set in data_sets]
     input_shapes = [
@@ -64,6 +71,7 @@ def _measure_backend_test_case(case: Any, repeat: int, warmup: int) -> dict[str,
         "error": None,
         "data_sets": len(data_sets),
         "input_shapes": input_shapes,
+        "model_bytes": model_bytes,
         "materialization_seconds": materialization_seconds,
         "setup_seconds": setup_seconds,
         "warmup_seconds": warmup_seconds,
@@ -99,7 +107,7 @@ def backend_test_worker_ready() -> bool:
 
 
 def measure_backend_test_case_by_name(
-    case_name: str, mode: str, include_big: bool, repeat: int, warmup: int
+    case_name: str, mode: str, include_big: bool, repeat: int, warmup: int, capture_model: bool
 ) -> dict[str, Any]:
     """Collects and measures one backend test case."""
     import re
@@ -112,4 +120,4 @@ def measure_backend_test_case_by_name(
     )
     if len(cases) != 1:
         raise RuntimeError(f"expected one backend case named {case_name!r}, got {len(cases)}")
-    return _measure_backend_test_case(cases[0], repeat, warmup)
+    return _measure_backend_test_case(cases[0], repeat, warmup, capture_model)

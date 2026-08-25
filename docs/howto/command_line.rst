@@ -98,44 +98,6 @@ the text output reports the machine tuning cache path and update status. With
 ``--json``, the ``before``, ``calibrations`` and ``after`` sections are
 machine-readable.
 
-.. _l-cli-tune:
-
-tune
-----
-
-Reports exact tuning keys that have no cache profile compatible with the local
-processor and effective thread count. The command separates missing keys with
-calibration callbacks from keys requiring manual calibration. It does not
-modify the cache by default:
-
-.. code-block:: bash
-
-    python -m onnx_light tune
-
-Restrict the proposal to a subset by repeating ``--kernel`` or
-``--element-type``. Element types accept ONNX names or integer values:
-
-.. code-block:: bash
-
-    python -m onnx_light tune \
-        --kernel Abs --kernel Add \
-        --element-type FLOAT --element-type DOUBLE
-
-Use ``--json`` for the complete machine-readable report and ``--cache`` for an
-explicit cache path. ``--apply`` is required to calibrate and persist proposed
-keys:
-
-.. code-block:: bash
-
-    python -m onnx_light tune \
-        --kernel Abs --element-type FLOAT \
-        --maximum-duration-ms 1000 \
-        --maximum-memory-mb 128 \
-        --apply
-
-Each duration budget applies independently to one exact key. Keys without a
-registered callback remain listed after ``--apply``.
-
 .. _l-cli-fillshape:
 
 fillshape

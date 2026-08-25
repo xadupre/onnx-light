@@ -104,9 +104,9 @@ a profile matching the local processor and effective thread count. It separates
 missing keys with callbacks from schema-only keys requiring manual work.
 Applying proposals is always explicit.
 
-The ``python -m onnx_light tune`` command exposes this workflow as a
-read-only report by default. Kernel names and ONNX element types select a
-subset; ``--apply`` is required to run callbacks and persist their results.
+The ``python -m onnx_light kernel --kernel NAME --tune`` command calibrates
+and persists one exact selected kernel. Bulk proposal and application remain
+available through the Python API.
 
 See :ref:`l-how-to-tune-kernel-thresholds` for usage and
 :ref:`l-example-plot-kernel-tuning` for an executable Python example. The

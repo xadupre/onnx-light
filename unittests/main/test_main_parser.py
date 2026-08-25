@@ -16,7 +16,7 @@ class TestMainParser(unittest.TestCase):
             _build_parser().parse_args(["kernel-baseline"])
 
     def test_rejects_renamed_commands(self):
-        for command in ("tune-kernels", "backend-test"):
+        for command in ("tune", "tune-kernels", "backend-test"):
             with (
                 self.subTest(command=command),
                 redirect_stderr(StringIO()),

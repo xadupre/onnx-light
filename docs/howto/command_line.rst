@@ -58,8 +58,9 @@ side by side with explicit tuning values. ``--kernel``, ``--dtype`` and
 
 ``default`` resolves to the active value and defines the speedup baseline.
 Every selected backend case runs once per distinct value. Text, JSON, CSV and
-XLSX output include the parameter value and speedup. The comparison uses
-temporary worker caches and never modifies the machine tuning cache.
+XLSX output include the input shapes, parameter value and speedup. Input shapes
+preserve their input names and dataset grouping. The comparison uses temporary
+worker caches and never modifies the machine tuning cache.
 
 .. _l-cli-kernel:
 

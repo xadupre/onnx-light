@@ -33,6 +33,9 @@ def _measure_backend_test_case(case: Any, repeat: int, warmup: int) -> dict[str,
     model = case.model
     data_sets = list(case.data_sets)
     feeds = [_backend_test_data_set_feed(data_set) for data_set in data_sets]
+    input_shapes = [
+        {tensor.name: list(tensor.shape) for tensor in data_set.inputs} for data_set in data_sets
+    ]
     materialization_seconds = time.perf_counter() - materialization_start
 
     setup_start = time.perf_counter()
@@ -60,6 +63,7 @@ def _measure_backend_test_case(case: Any, repeat: int, warmup: int) -> dict[str,
         "timed_out": False,
         "error": None,
         "data_sets": len(data_sets),
+        "input_shapes": input_shapes,
         "materialization_seconds": materialization_seconds,
         "setup_seconds": setup_seconds,
         "warmup_seconds": warmup_seconds,

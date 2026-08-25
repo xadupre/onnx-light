@@ -56,6 +56,7 @@ class TestMainBackendTest(unittest.TestCase):
         self.assertEqual(report["selected"], 1)
         self.assertEqual(report["cases"][0]["name"], "test_cc_abs")
         self.assertEqual(report["cases"][0]["data_sets"], 1)
+        self.assertEqual(report["cases"][0]["input_shapes"], [{"x": [2, 3]}])
         self.assertEqual(report["cases"][0]["status"], "completed")
         self.assertFalse(report["cases"][0]["timed_out"])
         self.assertEqual(len(report["cases"][0]["iteration_seconds"]), 1)
@@ -181,6 +182,7 @@ class TestMainBackendTest(unittest.TestCase):
                     "baseline_value": None,
                     "speedup": None,
                     "data_sets": 1,
+                    "input_shapes": [{"x": [2, 2]}],
                     "materialization_seconds": 0.2,
                     "setup_seconds": 0.3,
                     "warmup_seconds": 0.4,
@@ -211,10 +213,12 @@ class TestMainBackendTest(unittest.TestCase):
                 csv_text = csv_file.read()
             self.assertIn(
                 "name,kind,tag,status,timed_out,error,parameter_name,"
-                "parameter_value,baseline_value,speedup,data_sets",
+                "parameter_value,baseline_value,speedup,data_sets,input_shapes",
                 csv_text,
             )
-            self.assertIn("test_cc_not,node,Not,completed,False,,,,,,1", csv_text)
+            self.assertIn(
+                'test_cc_not,node,Not,completed,False,,,,,,1,"[{""x"": [2, 2]}]"', csv_text
+            )
 
             from openpyxl import load_workbook
 
@@ -313,6 +317,7 @@ class TestMainBackendTest(unittest.TestCase):
             "timed_out": True,
             "error": "exceeded 2 seconds",
             "data_sets": None,
+            "input_shapes": None,
             "materialization_seconds": None,
             "setup_seconds": None,
             "warmup_seconds": None,

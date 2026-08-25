@@ -615,6 +615,7 @@ def _measure_backend_test_cases_with_timeout(
                         "timed_out": True,
                         "error": f"exceeded {timeout_seconds:g} seconds",
                         "data_sets": None,
+                        "input_shapes": None,
                         "materialization_seconds": None,
                         "setup_seconds": None,
                         "warmup_seconds": None,
@@ -891,6 +892,7 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
         )
         print(
             f"{case['name']} status=completed{comparison_text} datasets={case['data_sets']} "
+            f"input_shapes={json.dumps(case['input_shapes'], separators=(',', ':'))} "
             f"materialization_ms={case['materialization_seconds'] * 1000:.3f} "
             f"setup_ms={case['setup_seconds'] * 1000:.3f} "
             f"run_ms={case['run_seconds'] * 1000:.3f} "
@@ -913,6 +915,7 @@ def _backend_test_table(report: dict[str, Any]) -> tuple[list[str], list[list[An
         "baseline_value",
         "speedup",
         "data_sets",
+        "input_shapes",
         "mode",
         "repeat",
         "warmup",
@@ -942,6 +945,7 @@ def _backend_test_table(report: dict[str, Any]) -> tuple[list[str], list[list[An
             "timeout_seconds": report["timeout_seconds"],
             "collection_seconds": report["collection_seconds"],
             "total_seconds": report["total_seconds"],
+            "input_shapes": json.dumps(case["input_shapes"]),
             "iteration_seconds": json.dumps(case["iteration_seconds"]),
         }
         rows.append([values[column] for column in columns])

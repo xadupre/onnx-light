@@ -72,17 +72,31 @@ def make_abs_model(elem_type: int):
     return model
 
 
-def measure(function, repeat: int, warmup: int = 3, number: int = 1) -> float:
+MAX_MEASURE_DURATION = 2.0
+
+
+def measure(
+    function,
+    repeat: int,
+    warmup: int = 3,
+    number: int = 1,
+    max_duration: float = MAX_MEASURE_DURATION,
+) -> float:
     """Measures a callable after warm-up and returns its median time per call."""
 
     for _ in range(warmup):
         function()
     timings = []
+    total_duration = 0.0
     for _ in range(repeat):
         start = time.perf_counter()
         for _ in range(number):
             function()
-        timings.append((time.perf_counter() - start) / number)
+        duration = time.perf_counter() - start
+        timings.append(duration / number)
+        total_duration += duration
+        if total_duration >= max_duration:
+            break
     return float(numpy.median(timings))
 
 
@@ -140,11 +154,6 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
             "X", int(elem_type), list(values.shape), values.view(numpy.uint8), copy=False
         )
 
-    def run_onnxruntime(values):
-        """Runs the ONNX Runtime Abs kernel."""
-
-        return ort_session.run(None, {"X": values})[0]
-
     random_generator = numpy.random.default_rng(0)
     rows_by_size = {}
     for size in size_grid:
@@ -165,42 +174,60 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
         numpy.testing.assert_array_equal(run_onnx_light_tensor(input_tensor), expected)
         rows_by_size[size] = [size, numpy_time, onnx_light_time, onnx_light_tensor_time, None]
 
-    if ort_supported:
-        ort_session = onnxruntime.InferenceSession(
-            model_bytes, providers=["CPUExecutionProvider"]
-        )
-        random_generator = numpy.random.default_rng(0)
-        for size in size_grid:
-            values = random_generator.uniform(-100.0, 100.0, size=size).astype(np_dtype)
-            expected = numpy.abs(values)
-            repeat = max(minimum_repeat, min(200, 2_000_000 // size))
-            number = max(1, min(20, 10_000_000 // size))
-            ort_time = measure(
-                lambda values=values: run_onnxruntime(values), repeat, warmup, number
-            )
-            numpy.testing.assert_array_equal(run_onnxruntime(values), expected)
-            rows_by_size[size][4] = ort_time
-
     rows = [tuple(rows_by_size[size]) for size in size_grid]
-    for size, numpy_time, onnx_light_time, onnx_light_tensor_time, ort_time in rows:
-        ort_report = "n/a" if ort_time is None else f"{ort_time * 1e6:10.2f} us"
-        ratio_report = "n/a" if ort_time is None else f"{onnx_light_time / ort_time:5.2f}x"
-        print(
-            f"[{label:>8}] size={size:>9} | numpy={numpy_time * 1e6:10.2f} us | "
-            f"onnx-light={onnx_light_time * 1e6:10.2f} us | "
-            f"onnx-light (Tensor)={onnx_light_tensor_time * 1e6:10.2f} us | "
-            f"onnxruntime={ort_report} | onnx-light / onnxruntime={ratio_report}"
-        )
-
     return {
         "label": label,
         "ort_supported": ort_supported,
+        "model_bytes": model_bytes,
         "sizes": numpy.array([row[0] for row in rows]),
         "numpy_times": numpy.array([row[1] for row in rows]),
         "onnx_light_times": numpy.array([row[2] for row in rows]),
         "onnx_light_tensor_times": numpy.array([row[3] for row in rows]),
-        "ort_times": None if not ort_supported else numpy.array([row[4] for row in rows]),
+        "ort_times": None,
     }
+
+
+def benchmark_onnxruntime(result: dict, np_dtype) -> None:
+    """Measures ONNX Runtime after every onnx-light case has completed."""
+    if not result["ort_supported"]:
+        return
+    session = onnxruntime.InferenceSession(
+        result["model_bytes"], providers=["CPUExecutionProvider"]
+    )
+    random_generator = numpy.random.default_rng(0)
+    ort_times = []
+    for size in result["sizes"]:
+        values = random_generator.uniform(-100.0, 100.0, size=int(size)).astype(np_dtype)
+        expected = numpy.abs(values)
+        repeat = max(minimum_repeat, min(200, 2_000_000 // int(size)))
+        number = max(1, min(20, 10_000_000 // int(size)))
+
+        def run(values=values):
+            return session.run(None, {"X": values})[0]
+
+        ort_times.append(measure(run, repeat, warmup, number))
+        numpy.testing.assert_array_equal(run(), expected)
+    result["ort_times"] = numpy.array(ort_times)
+
+
+def print_result(result: dict) -> None:
+    """Prints one element type after both runtime phases have completed."""
+    for size, numpy_time, onnx_light_time, tensor_time, ort_time in zip(
+        result["sizes"],
+        result["numpy_times"],
+        result["onnx_light_times"],
+        result["onnx_light_tensor_times"],
+        result["ort_times"] if result["ort_times"] is not None else [None] * len(result["sizes"]),
+        strict=True,
+    ):
+        ort_report = "n/a" if ort_time is None else f"{ort_time * 1e6:10.2f} us"
+        ratio_report = "n/a" if ort_time is None else f"{onnx_light_time / ort_time:5.2f}x"
+        print(
+            f"[{result['label']:>8}] size={size:>9} | numpy={numpy_time * 1e6:10.2f} us | "
+            f"onnx-light={onnx_light_time * 1e6:10.2f} us | "
+            f"onnx-light (Tensor)={tensor_time * 1e6:10.2f} us | "
+            f"onnxruntime={ort_report} | onnx-light / onnxruntime={ratio_report}"
+        )
 
 
 # %%
@@ -208,6 +235,9 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
 # -----------------------------------------------------
 
 results = [benchmark_dtype(*entry) for entry in DTYPES]
+for result, (_, _, np_dtype, _) in zip(results, DTYPES, strict=True):
+    benchmark_onnxruntime(result, np_dtype)
+    print_result(result)
 
 # %%
 # Plot execution time and relative speed

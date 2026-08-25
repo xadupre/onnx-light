@@ -55,22 +55,32 @@ if os.environ.get("UNITTEST_GOING") == "1":
 else:
     warmup, repeat = 3, 7
 
+MAX_MEASURE_DURATION = 2.0
 
-def measure(function, warmup: int, repeat: int) -> float:
+
+def measure(
+    function, warmup: int, repeat: int, max_duration: float = MAX_MEASURE_DURATION
+) -> float:
     """Measures a callable after warm-up and returns its median time per call.
 
     Returns:
-        The median wall-clock duration, in seconds, of ``repeat`` calls to
-        ``function`` (excluding the ``warmup`` calls).
+        The median wall-clock duration, in seconds, of at most ``repeat``
+        calls to ``function`` (excluding the ``warmup`` calls). Measurement
+        stops once their cumulative duration reaches ``max_duration``.
     """
 
     for _ in range(warmup):
         function()
     timings = []
+    total_duration = 0.0
     for _ in range(repeat):
         start = time.perf_counter()
         function()
-        timings.append(time.perf_counter() - start)
+        duration = time.perf_counter() - start
+        timings.append(duration)
+        total_duration += duration
+        if total_duration >= max_duration:
+            break
     return float(numpy.median(timings))
 
 
@@ -100,12 +110,11 @@ def tensor_to_numpy(tensor) -> numpy.ndarray:
     )
 
 
-def benchmark_case(op_name: str) -> dict:
-    """Benchmarks one backend benchmark case against onnx-light and onnxruntime.
+def prepare_case(op_name: str) -> dict:
+    """Prepares one backend benchmark case for both runtimes.
 
     Returns:
-        A mapping with the operator name, the number of elements processed
-        and the median execution time measured for each runtime.
+        The model, inputs, expected output, tolerance, and display metadata.
     """
 
     pattern = f"^test_cc_{op_name}_benchmark$"
@@ -119,46 +128,65 @@ def benchmark_case(op_name: str) -> dict:
     input_names = [vi.name for vi in model.graph.input]
     data_set = tc.data_sets[0]
     feeds = {name: tensor_to_numpy(tensor) for name, tensor in zip(input_names, data_set.inputs)}
-
-    onnx_light_session = ReferenceEvaluator(model)
-
-    def run_onnx_light():
-        return onnx_light_session.run(None, feeds)[0]
-
-    ort_session = onnxruntime.InferenceSession(
-        model.SerializeToString(), providers=["CPUExecutionProvider"]
-    )
-
-    def run_onnxruntime():
-        return ort_session.run(None, feeds)[0]
-
     expected = tensor_to_numpy(data_set.outputs[0])
-    numpy.testing.assert_allclose(run_onnx_light(), expected, rtol=tc.rtol, atol=tc.atol)
-    numpy.testing.assert_allclose(run_onnxruntime(), expected, rtol=tc.rtol, atol=tc.atol)
-
-    onnx_light_time = measure(run_onnx_light, warmup, repeat)
-    ort_time = measure(run_onnxruntime, warmup, repeat)
-
-    n_elements = int(numpy.prod(next(iter(feeds.values())).shape))
-    print(
-        f"[{tc.name:>28}] n={n_elements:>10} | "
-        f"onnx-light={onnx_light_time * 1e6:10.2f} us | "
-        f"onnxruntime={ort_time * 1e6:10.2f} us | "
-        f"onnx-light / onnxruntime={onnx_light_time / ort_time:5.2f}x"
-    )
     return {
         "op_name": op_name,
-        "n_elements": n_elements,
-        "onnx_light_time": onnx_light_time,
-        "ort_time": ort_time,
+        "test_name": tc.name,
+        "model": model,
+        "feeds": feeds,
+        "expected": expected,
+        "rtol": tc.rtol,
+        "atol": tc.atol,
+        "n_elements": int(numpy.prod(next(iter(feeds.values())).shape)),
     }
+
+
+def benchmark_case(case: dict, backend: str) -> float:
+    """Benchmarks one prepared case with one runtime."""
+    if backend == "onnx_light":
+        session = ReferenceEvaluator(case["model"])
+    elif backend == "onnxruntime":
+        session = onnxruntime.InferenceSession(
+            case["model"].SerializeToString(), providers=["CPUExecutionProvider"]
+        )
+    else:
+        raise ValueError(f"Unexpected backend {backend!r}.")
+
+    def run():
+        return session.run(None, case["feeds"])[0]
+
+    numpy.testing.assert_allclose(run(), case["expected"], rtol=case["rtol"], atol=case["atol"])
+    return measure(run, warmup, repeat)
 
 
 # %%
 # Run the benchmark for every selected operator
 # ----------------------------------------------
+#
+# Every onnx-light case is completed before any ONNX Runtime session is
+# created. Both runtimes retain their default spinning behavior, but a pool
+# from one runtime therefore cannot remain alive while the other runtime's
+# cases are measured.
 
-results = [benchmark_case(op_name) for op_name in BENCHMARK_OPS]
+cases = [prepare_case(op_name) for op_name in BENCHMARK_OPS]
+onnx_light_results = [benchmark_case(case, "onnx_light") for case in cases]
+ort_results = [benchmark_case(case, "onnxruntime") for case in cases]
+results = []
+for case, onnx_light_time, ort_time in zip(cases, onnx_light_results, ort_results, strict=True):
+    results.append(
+        {
+            "op_name": case["op_name"],
+            "n_elements": case["n_elements"],
+            "onnx_light_time": onnx_light_time,
+            "ort_time": ort_time,
+        }
+    )
+    print(
+        f"[{case['test_name']:>28}] n={case['n_elements']:>10} | "
+        f"onnx-light={onnx_light_time * 1e6:10.2f} us | "
+        f"onnxruntime={ort_time * 1e6:10.2f} us | "
+        f"onnx-light / onnxruntime={onnx_light_time / ort_time:5.2f}x"
+    )
 
 # %%
 # Plot the comparison

@@ -473,9 +473,12 @@ CPP_SAVE_METRIC_PATTERN = re.compile(
     r"^\s*(Average|Median|Min|Max|Std|Standard deviation) save \(ms\)\s*:\s*([0-9.eE+-]+)\s*$"
 )
 WINDOWS_BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
+MAX_MEASURE_DURATION = 2.0
 
 
-def measure(name: str, fn, n: int = 5, warmup: int = 1) -> dict:
+def measure(
+    name: str, fn, n: int = 5, warmup: int = 1, max_duration: float = MAX_MEASURE_DURATION
+) -> dict:
     """
     Executes *fn* with warm-up iterations and records timing statistics.
 
@@ -484,6 +487,7 @@ def measure(name: str, fn, n: int = 5, warmup: int = 1) -> dict:
         fn: Callable to execute.
         n: Number of measured iterations.
         warmup: Number of non-measured warm-up iterations.
+        max_duration: Maximum cumulative measured duration in seconds.
 
     Returns:
         A dictionary containing name, median, avg, min, max, and std.
@@ -491,10 +495,15 @@ def measure(name: str, fn, n: int = 5, warmup: int = 1) -> dict:
     for _ in range(max(0, warmup)):
         fn()
     times = []
+    total_duration = 0.0
     for _ in range(n):
         t0 = time.perf_counter()
         fn()
-        times.append(time.perf_counter() - t0)
+        duration = time.perf_counter() - t0
+        times.append(duration)
+        total_duration += duration
+        if total_duration >= max_duration:
+            break
     arr = np.array(times)
     return {
         "name": name,
@@ -1181,20 +1190,6 @@ if _run_scenario("load"):
         print("onnx_ir is not installed, skipping ir-py external-data load benchmark.")
 
     # %%
-    # Load with ``onnxruntime`` using external data (all optimizations disabled).
-    # Reload the external-data model with ``onnxruntime``, keeping
-    # ``ORT_DISABLE_ALL`` so only loading overhead is measured.
-
-    if ort is not None:
-        data.append(
-            measure(
-                "load/2filex1/ort",
-                lambda: ort.InferenceSession(ext_load_onnx, sess_options=_ort_sess_opts),
-            )
-        )
-        print_stats("load/2filex1/ort", data[-1])
-
-    # %%
     # Load with ``onnx_light.onnx.reference.ReferenceEvaluator`` using external
     # data.  The model (with its external weights) is loaded and turned into a
     # reference runtime.
@@ -1221,6 +1216,20 @@ if _run_scenario("load"):
         )
     )
     print_stats("load/2filex4/reference", data[-1])
+
+    # %%
+    # Load with ``onnxruntime`` using external data (all optimizations disabled).
+    # Reload the external-data model with ``onnxruntime``, keeping
+    # ``ORT_DISABLE_ALL`` so only loading overhead is measured.
+
+    if ort is not None:
+        data.append(
+            measure(
+                "load/2filex1/ort",
+                lambda: ort.InferenceSession(ext_load_onnx, sess_options=_ort_sess_opts),
+            )
+        )
+        print_stats("load/2filex1/ort", data[-1])
 
 # %%
 # Results

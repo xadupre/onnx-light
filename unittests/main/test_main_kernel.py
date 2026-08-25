@@ -138,15 +138,35 @@ class TestMainKernel(unittest.TestCase):
             redirect_stdout(stdout),
             redirect_stderr(stderr),
         ):
-            main(["kernel", "--kernel", "Abs", "--dtype", "FLOAT", "--tune", "--verbose"])
+            main(
+                [
+                    "kernel",
+                    "--kernel",
+                    "Abs",
+                    "--dtype",
+                    "FLOAT",
+                    "--tune",
+                    "--verbose",
+                    "--maximum-duration-ms",
+                    "125",
+                    "--maximum-memory-mb",
+                    "32",
+                ]
+            )
+        self.assertIn(
+            "tuning budgets: maximum_duration_ms=125 maximum_memory_mb=32", stdout.getvalue()
+        )
         self.assertIn("before:", stdout.getvalue())
         self.assertIn("after:", stdout.getvalue())
+        self.assertIn("budgets: maximum_duration_ms=125 maximum_memory_mb=32", stderr.getvalue())
         self.assertIn("captured parameters before tuning", stderr.getvalue())
         self.assertIn("calibrating 1/1", stderr.getvalue())
         self.assertIn("captured parameters after tuning", stderr.getvalue())
         calibrate.assert_called_once()
         self.assertEqual(calibrate.call_args.kwargs["device"], -1)
         self.assertEqual(calibrate.call_args.kwargs["element_types"], [1])
+        self.assertEqual(calibrate.call_args.kwargs["maximum_duration_ms"], 125)
+        self.assertEqual(calibrate.call_args.kwargs["maximum_memory_bytes"], 32 << 20)
 
     def test_tune_shows_cache_path_when_parameters_are_persisted(self):
         stdout = io.StringIO()
@@ -195,6 +215,9 @@ class TestMainKernel(unittest.TestCase):
         ):
             main(["kernel", "--kernel", "Abs", "--dtype", "FLOAT", "--tune", "--json"])
         report = json.loads(stdout.getvalue())
+        self.assertEqual(
+            report["tuning_options"], {"maximum_duration_ms": 0, "maximum_memory_mb": 0}
+        )
         self.assertEqual(len(report["before"]), 1)
         self.assertEqual(len(report["calibrations"]), 1)
         self.assertEqual(len(report["after"]), 1)

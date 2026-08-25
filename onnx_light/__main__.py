@@ -209,6 +209,13 @@ def _parse_positive_int(value: str) -> int:
     raise argparse.ArgumentTypeError(f"expected a positive integer, got {value!r}")
 
 
+def _parse_non_negative_int(value: str) -> int:
+    """Parses a non-negative integer."""
+    if value.isdigit():
+        return int(value)
+    raise argparse.ArgumentTypeError(f"expected a non-negative integer, got {value!r}")
+
+
 def _parse_nonnegative_int(value: str) -> int:
     """Parses a non-negative integer."""
     if value.isdigit():
@@ -365,6 +372,10 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
     if args.tune:
         import sys
 
+        tuning_options = {
+            "maximum_duration_ms": args.maximum_duration_ms,
+            "maximum_memory_mb": args.maximum_memory_mb,
+        }
         if len(report) != 1:
             raise SystemExit(
                 f"onnx-light kernel: --tune requires exactly one selected kernel; "
@@ -383,6 +394,10 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
             if args.verbose:
                 print(f"[kernel tune] {message}", file=sys.stderr, flush=True)
 
+        duration = args.maximum_duration_ms or "callback-default"
+        memory = args.maximum_memory_mb or "callback-default"
+        budget_summary = f"maximum_duration_ms={duration} maximum_memory_mb={memory}"
+        progress(f"budgets: {budget_summary}")
         progress("captured parameters before tuning")
         calibrations = []
         for index, tunable in enumerate(tunables, 1):
@@ -409,6 +424,7 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
         progress("captured parameters after tuning")
         tune_report = {
             "selection": selection,
+            "tuning_options": tuning_options,
             "before": report,
             "calibrations": calibrations,
             "after": after,
@@ -416,6 +432,7 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
         if args.json:
             print(json.dumps(tune_report, indent=2, sort_keys=True))
         else:
+            print(f"tuning budgets: {budget_summary}")
             print("before:")
             print_report(report)
             print("after:")
@@ -1585,7 +1602,10 @@ def _build_parser() -> argparse.ArgumentParser:
     kernel_parser.add_argument(
         "--tune",
         action="store_true",
-        help="Calibrate and persist the parameters of exactly one selected kernel.",
+        help=(
+            "Calibrate and persist exactly one selected kernel, using the duration "
+            "and memory budgets below."
+        ),
     )
     kernel_parser.add_argument(
         "--verbose", "-v", action="store_true", help="Report tuning progress to stderr."
@@ -1618,13 +1638,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     kernel_parser.add_argument(
         "--maximum-duration-ms",
-        type=int,
+        type=_parse_non_negative_int,
         default=0,
         help="Per-key calibration duration budget; 0 uses the callback default.",
     )
     kernel_parser.add_argument(
         "--maximum-memory-mb",
-        type=int,
+        type=_parse_non_negative_int,
         default=0,
         help="Calibration memory budget in MiB; 0 uses the callback default.",
     )

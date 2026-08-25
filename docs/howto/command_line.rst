@@ -93,9 +93,10 @@ before and after calibration:
 
 ``--verbose`` reports calibration progress on stderr. ``--cache`` selects an
 explicit cache file, while ``--maximum-duration-ms`` and
-``--maximum-memory-mb`` bound each calibration. When parameters are persisted,
-the text output reports the machine tuning cache path and update status. With
-``--json``, the ``before``, ``calibrations`` and ``after`` sections are
+``--maximum-memory-mb`` bound each calibration; zero uses the callback default.
+The text output reports the selected budgets and, when parameters are
+persisted, the machine tuning cache path and update status. With ``--json``,
+the ``tuning_options``, ``before``, ``calibrations`` and ``after`` sections are
 machine-readable.
 
 .. _l-cli-fillshape:

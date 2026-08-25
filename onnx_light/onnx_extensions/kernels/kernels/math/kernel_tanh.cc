@@ -65,8 +65,7 @@ void Tanh::RegisterTuningSchemas() {
                                         kTuningAbi);
   for (int32_t element_type : kSupportedElementTypes) {
     const KernelTuningKey key = tuning::MakePortableTuningKey("Tanh", element_type, kTuningAbi);
-    core::runtime::RegisterKernelCalibrationFunction(key, CalibrateTanh,
-                                                     {"parallel.minimum_elements"});
+    core::runtime::RegisterKernelCalibrationFunction(key, CalibrateTanh);
   }
 }
 

@@ -56,8 +56,7 @@ void Not::RegisterTuningSchemas() {
                                         kTuningAbi);
   const KernelTuningKey key =
       tuning::MakePortableTuningKey("Not", static_cast<int32_t>(DataType::BOOL), kTuningAbi);
-  core::runtime::RegisterKernelCalibrationFunction(key, CalibrateNot,
-                                                   {"parallel.minimum_elements"});
+  core::runtime::RegisterKernelCalibrationFunction(key, CalibrateNot);
 }
 
 KernelTuningKey Not::TuningKey(int32_t element_type) const {

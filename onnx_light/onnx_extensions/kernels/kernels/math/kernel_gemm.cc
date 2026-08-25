@@ -170,23 +170,10 @@ void GemmInPlace(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
 constexpr const char *kSupportedGemmTypesMsg =
     " only supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16 inputs.";
 
-/// Builds the full portable Gemm parameter set with one named value replaced.
+/// Builds the portable Gemm parameter set with the selected parallel task threshold.
 KernelTuningParameters MakeGemmParameters(const KernelTuningKey &key,
-                                          const tuning::GemmTuning &defaults,
-                                          const std::string &parameter_name, int64_t value) {
-  KernelTuningParameters parameters{
-      key,
-      {{tuning::kGemmTileM, defaults.tile_m},
-       {tuning::kGemmTileN, defaults.tile_n},
-       {tuning::kGemmTileK, defaults.tile_k},
-       {tuning::kGemmPackBMinimumElements, defaults.pack_b_minimum_elements},
-       {tuning::kGemmSkinnyMLimit, defaults.skinny_m_limit},
-       {tuning::kGemmParallelFmasPerWorkUnit, defaults.parallel_fmas_per_work_unit},
-       {tuning::kGemmParallelMinimumTasks, defaults.parallel_minimum_tasks},
-       {tuning::kGemmConversionParallelMinimumElements,
-        defaults.conversion_parallel_minimum_elements}}};
-  parameters.values[parameter_name] = value;
-  return parameters;
+                                          int64_t parallel_minimum_tasks) {
+  return {key, {{tuning::kGemmParallelMinimumTasks, parallel_minimum_tasks}}};
 }
 
 /// Builds calibration cases with a fixed N == tile_n and growing M == tile_m *
@@ -218,21 +205,20 @@ KernelTuningParameters CalibrateGemm(const KernelTuningKey &key,
   Gemm reference{context};
   Gemm candidate{context};
   KernelCalibrationBenchmark benchmark;
-  benchmark.portable_parameters = MakeGemmParameters(
-      key, defaults, tuning::kGemmParallelMinimumTasks, defaults.parallel_minimum_tasks);
+  benchmark.portable_parameters = MakeGemmParameters(key, defaults.parallel_minimum_tasks);
   benchmark.parameter_name = tuning::kGemmParallelMinimumTasks;
   benchmark.serial_parameter_value = std::numeric_limits<int64_t>::max();
   benchmark.cases =
       MakeGemmCalibrationCases(key.element_type, defaults.tile_m, defaults.tile_n, int64_t{128});
   benchmark.default_maximum_duration_ms = 1000;
   benchmark.reference.configure = [&](int64_t value) {
-    reference.Configure(MakeGemmParameters(key, defaults, benchmark.parameter_name, value));
+    reference.Configure(MakeGemmParameters(key, value));
   };
   benchmark.reference.run = [&](std::span<const Tensor> inputs, Tensor &output) {
     reference(inputs[0], inputs[1], nullptr, 1.0f, 0.0f, 0, 0, output);
   };
   benchmark.candidate.configure = [&](int64_t value) {
-    candidate.Configure(MakeGemmParameters(key, defaults, benchmark.parameter_name, value));
+    candidate.Configure(MakeGemmParameters(key, value));
   };
   benchmark.candidate.run = [&](std::span<const Tensor> inputs, Tensor &output) {
     candidate(inputs[0], inputs[1], nullptr, 1.0f, 0.0f, 0, 0, output);
@@ -264,8 +250,7 @@ void Gemm::RegisterTuningSchemas() {
   tuning::RegisterGemmTuningSchemas(kSupportedElementTypes, kTuningAbi);
   for (int32_t element_type : kSupportedElementTypes) {
     const KernelTuningKey key = tuning::MakePortableTuningKey("Gemm", element_type, kTuningAbi);
-    core::runtime::RegisterKernelCalibrationFunction(key, CalibrateGemm,
-                                                     {tuning::kGemmParallelMinimumTasks});
+    core::runtime::RegisterKernelCalibrationFunction(key, CalibrateGemm);
   }
 }
 

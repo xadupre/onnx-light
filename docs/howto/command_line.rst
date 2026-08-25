@@ -24,9 +24,7 @@ Lists every native kernel currently registered by the runtime:
 
 Select one or more kernels by operator name to display every registered
 tuning schema, including its element type, implementation, ABI, parameter
-names, portable defaults, and active values. For schemas with a calibration
-callback, ``automatically tuned by --tune`` identifies the parameters that the
-callback actually benchmarks and selects:
+names, portable defaults, and active values:
 
 .. code-block:: bash
 

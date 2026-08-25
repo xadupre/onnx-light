@@ -405,16 +405,11 @@ struct KernelTuningRegistrySnapshot::State {
 };
 
 struct KernelTuningRegistry::Impl {
-  struct RegisteredCalibration {
-    KernelCalibrationFunction function;
-    std::vector<std::string> parameter_names;
-  };
-
   mutable std::mutex mutex;
   std::unordered_map<KernelTuningKey, std::shared_ptr<const KernelTuningSchema>,
                      KernelTuningKeyHash>
       schemas;
-  std::unordered_map<KernelTuningKey, RegisteredCalibration, KernelTuningKeyHash>
+  std::unordered_map<KernelTuningKey, KernelCalibrationFunction, KernelTuningKeyHash>
       calibration_functions;
   std::shared_ptr<KernelTuningRegistrySnapshot::State::AccessCounters> access_counters;
   std::shared_ptr<const KernelTuningRegistrySnapshot::State> state;
@@ -565,32 +560,16 @@ void KernelTuningRegistry::RegisterProfiles(
 }
 
 void KernelTuningRegistry::RegisterCalibrationFunction(const KernelTuningKey &key,
-                                                       KernelCalibrationFunction function,
-                                                       std::vector<std::string> parameter_names) {
+                                                       KernelCalibrationFunction function) {
   if (!function) {
     throw std::invalid_argument("Kernel calibration function must not be empty.");
   }
   std::lock_guard lock(impl_->mutex);
-  auto schema = impl_->schemas.find(key);
-  if (schema == impl_->schemas.end()) {
+  if (!impl_->schemas.contains(key)) {
     throw std::invalid_argument("Cannot register calibration for unregistered kernel tuning key '" +
                                 KeyDescription(key) + "'.");
   }
-  std::unordered_set<std::string> unique_names;
-  for (const std::string &name : parameter_names) {
-    if (!schema->second->portable_defaults().values.contains(name)) {
-      throw std::invalid_argument("Kernel calibration parameter '" + name +
-                                  "' is not registered for '" + KeyDescription(key) + "'.");
-    }
-    if (!unique_names.insert(name).second) {
-      throw std::invalid_argument("Kernel calibration parameter '" + name +
-                                  "' is duplicated for '" + KeyDescription(key) + "'.");
-    }
-  }
-  if (!impl_->calibration_functions
-           .emplace(key,
-                    Impl::RegisteredCalibration{std::move(function), std::move(parameter_names)})
-           .second) {
+  if (!impl_->calibration_functions.emplace(key, std::move(function)).second) {
     throw std::invalid_argument("Kernel calibration function is already registered for '" +
                                 KeyDescription(key) + "'.");
   }
@@ -703,16 +682,7 @@ KernelCalibrationFunction
 KernelTuningRegistry::FindCalibrationFunction(const KernelTuningKey &key) const {
   std::lock_guard lock(impl_->mutex);
   auto found = impl_->calibration_functions.find(key);
-  return found == impl_->calibration_functions.end() ? KernelCalibrationFunction{}
-                                                     : found->second.function;
-}
-
-std::vector<std::string>
-KernelTuningRegistry::FindCalibrationParameterNames(const KernelTuningKey &key) const {
-  std::lock_guard lock(impl_->mutex);
-  auto found = impl_->calibration_functions.find(key);
-  return found == impl_->calibration_functions.end() ? std::vector<std::string>{}
-                                                     : found->second.parameter_names;
+  return found == impl_->calibration_functions.end() ? KernelCalibrationFunction{} : found->second;
 }
 
 KernelTuningRegistry &GetKernelTuningRegistry() {
@@ -731,10 +701,8 @@ void RegisterKernelTuningProfile(const KernelTuningKey &key, platform::CpuSelect
 }
 
 void RegisterKernelCalibrationFunction(const KernelTuningKey &key,
-                                       KernelCalibrationFunction function,
-                                       std::vector<std::string> parameter_names) {
-  GetKernelTuningRegistry().RegisterCalibrationFunction(key, std::move(function),
-                                                        std::move(parameter_names));
+                                       KernelCalibrationFunction function) {
+  GetKernelTuningRegistry().RegisterCalibrationFunction(key, std::move(function));
 }
 
 std::vector<KernelCalibrationCase>

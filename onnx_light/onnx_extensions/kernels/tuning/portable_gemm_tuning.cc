@@ -15,29 +15,17 @@ namespace {
 
 std::optional<std::string>
 ValidateGemmTuning(const core::runtime::KernelTuningParameters &parameters) {
-  for (const char *name : {kGemmTileM, kGemmTileN, kGemmTileK, kGemmPackBMinimumElements,
-                           kGemmSkinnyMLimit, kGemmParallelFmasPerWorkUnit,
-                           kGemmParallelMinimumTasks, kGemmConversionParallelMinimumElements}) {
-    const int64_t *value = parameters.TryGet<int64_t>(name);
-    if (value == nullptr || *value <= 0) {
-      return std::string("Gemm ") + name + " must be positive.";
-    }
+  const int64_t *value = parameters.TryGet<int64_t>(kGemmParallelMinimumTasks);
+  if (value == nullptr || *value <= 0) {
+    return std::string("Gemm ") + kGemmParallelMinimumTasks + " must be positive.";
   }
   return std::nullopt;
 }
 
 core::runtime::KernelTuningParameters MakeGemmDefaults(int32_t element_type, uint32_t tuning_abi) {
   const GemmTuning defaults;
-  return {
-      MakePortableTuningKey("Gemm", element_type, tuning_abi),
-      {{kGemmTileM, defaults.tile_m},
-       {kGemmTileN, defaults.tile_n},
-       {kGemmTileK, defaults.tile_k},
-       {kGemmPackBMinimumElements, defaults.pack_b_minimum_elements},
-       {kGemmSkinnyMLimit, defaults.skinny_m_limit},
-       {kGemmParallelFmasPerWorkUnit, defaults.parallel_fmas_per_work_unit},
-       {kGemmParallelMinimumTasks, defaults.parallel_minimum_tasks},
-       {kGemmConversionParallelMinimumElements, defaults.conversion_parallel_minimum_elements}}};
+  return {MakePortableTuningKey("Gemm", element_type, tuning_abi),
+          {{kGemmParallelMinimumTasks, defaults.parallel_minimum_tasks}}};
 }
 
 } // namespace
@@ -59,15 +47,7 @@ void ConfigureGemmTuning(const core::runtime::KernelTuningParameters &parameters
   if (std::optional<std::string> error = ValidateGemmTuning(parameters)) {
     throw std::invalid_argument(*error);
   }
-  tuning.tile_m = *parameters.TryGet<int64_t>(kGemmTileM);
-  tuning.tile_n = *parameters.TryGet<int64_t>(kGemmTileN);
-  tuning.tile_k = *parameters.TryGet<int64_t>(kGemmTileK);
-  tuning.pack_b_minimum_elements = *parameters.TryGet<int64_t>(kGemmPackBMinimumElements);
-  tuning.skinny_m_limit = *parameters.TryGet<int64_t>(kGemmSkinnyMLimit);
-  tuning.parallel_fmas_per_work_unit = *parameters.TryGet<int64_t>(kGemmParallelFmasPerWorkUnit);
   tuning.parallel_minimum_tasks = *parameters.TryGet<int64_t>(kGemmParallelMinimumTasks);
-  tuning.conversion_parallel_minimum_elements =
-      *parameters.TryGet<int64_t>(kGemmConversionParallelMinimumElements);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::tuning

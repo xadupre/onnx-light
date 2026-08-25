@@ -277,14 +277,6 @@ nb::dict ListParameters(const std::optional<std::string> &kernel,
     item["defaults"] = ValuesToDict(defaults);
     item["calibratable"] =
         static_cast<bool>(rt::GetKernelTuningRegistry().FindCalibrationFunction(key));
-    nb::list calibration_parameters;
-    std::vector<std::string> sorted_calibration_parameters =
-        rt::GetKernelTuningRegistry().FindCalibrationParameterNames(key);
-    std::sort(sorted_calibration_parameters.begin(), sorted_calibration_parameters.end());
-    for (const std::string &name : sorted_calibration_parameters) {
-      calibration_parameters.append(name);
-    }
-    item["calibration_parameters"] = std::move(calibration_parameters);
     nb::list names;
     std::vector<std::string> sorted_names;
     for (const auto &[name, value] : defaults.values) {

@@ -191,7 +191,6 @@ class _KernelTunable(TypedDict):
     device_name: str
     tuning_abi: int
     calibratable: bool
-    calibration_parameters: list[str]
     defaults: dict[str, bool | int | float | str]
     active_values: dict[str, bool | int | float | str]
     parameter_names: list[str]
@@ -406,11 +405,6 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
                     f"device={tunable['device_name']} "
                     f"implementation={tunable['implementation']} abi={tunable['tuning_abi']}"
                 )
-                if tunable["calibration_parameters"]:
-                    print(
-                        "    automatically tuned by --tune: "
-                        + ", ".join(tunable["calibration_parameters"])
-                    )
                 for name in tunable["parameter_names"]:
                     print(
                         f"    {name}: default={tunable['defaults'][name]} "

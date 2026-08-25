@@ -56,8 +56,6 @@ class TestMainKernel(unittest.TestCase):
         self.assertIn("ai.onnx:Abs", output)
         self.assertIn("ai.onnx:Gemm", output)
         self.assertIn("parallel.minimum_elements", output)
-        self.assertIn("automatically tuned by --tune: parallel.minimum_elements", output)
-        self.assertIn("automatically tuned by --tune: parallel.minimum_tasks", output)
         self.assertIn("library=onnx_light", output)
         self.assertIn("device=CPU", output)
 
@@ -86,8 +84,7 @@ class TestMainKernel(unittest.TestCase):
         self.assertEqual({item["element_type"] for item in tunables}, {1})
         self.assertEqual({item["implementation"] for item in tunables}, {"portable"})
         self.assertEqual(
-            {tuple(item["calibration_parameters"]) for item in tunables},
-            {("parallel.minimum_tasks",)},
+            {tuple(item["parameter_names"]) for item in tunables}, {("parallel.minimum_tasks",)}
         )
 
     def test_rejects_kernel_not_registered_for_device(self):

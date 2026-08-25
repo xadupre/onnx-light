@@ -2805,7 +2805,7 @@ TEST(KernelClass, GemmHalfPrecisionMatchesFloatReference) {
   EXPECT_EQ(y_h.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
 }
 
-TEST(KernelClass, GemmUsesTypedTilingPackingTaskAndConversionTuning) {
+TEST(KernelClass, GemmUsesTypedParallelTaskTuning) {
   const KernelContext ctx{DefaultOpset(13)};
   Gemm gemm_kernel{ctx};
   const auto float_key = gemm_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT));
@@ -2821,24 +2821,11 @@ TEST(KernelClass, GemmUsesTypedTilingPackingTaskAndConversionTuning) {
   const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(float_key);
   ASSERT_NE(schema, nullptr);
   const auto &defaults = schema->portable_defaults();
-  EXPECT_EQ(defaults.Get<int64_t>("algorithm.tile_m"), 64);
-  EXPECT_EQ(defaults.Get<int64_t>("algorithm.tile_n"), 256);
-  EXPECT_EQ(defaults.Get<int64_t>("algorithm.tile_k"), 256);
-  EXPECT_EQ(defaults.Get<int64_t>("algorithm.pack_b_minimum_elements"), 16384);
-  EXPECT_EQ(defaults.Get<int64_t>("algorithm.skinny_m_limit"), 8);
-  EXPECT_EQ(defaults.Get<int64_t>("parallel.fmas_per_work_unit"), 256);
+  EXPECT_EQ(defaults.values.size(), 1u);
   EXPECT_EQ(defaults.Get<int64_t>("parallel.minimum_tasks"), 2);
-  EXPECT_EQ(defaults.Get<int64_t>("conversion.parallel_minimum_elements"), 1048576);
 
   core::runtime::KernelTuningParameters tuned = defaults;
-  tuned.values["algorithm.tile_m"] = int64_t{2};
-  tuned.values["algorithm.tile_n"] = int64_t{2};
-  tuned.values["algorithm.tile_k"] = int64_t{2};
-  tuned.values["algorithm.pack_b_minimum_elements"] = int64_t{1};
-  tuned.values["algorithm.skinny_m_limit"] = int64_t{1};
-  tuned.values["parallel.fmas_per_work_unit"] = int64_t{1};
   tuned.values["parallel.minimum_tasks"] = int64_t{1};
-  tuned.values["conversion.parallel_minimum_elements"] = int64_t{1};
   gemm_kernel.Configure(tuned);
 
   const Tensor a = Tensor::FromFloat("", {3, 2}, {1, 4, 2, 5, 3, 6});
@@ -2850,10 +2837,17 @@ TEST(KernelClass, GemmUsesTypedTilingPackingTaskAndConversionTuning) {
   EXPECT_FLOAT_EQ(y.AsFloat()[2], 139.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[3], 154.0f);
 
-  EXPECT_EQ(gemm_kernel.tuning().pack_b_minimum_elements, 1);
-  tuned.values["algorithm.tile_k"] = int64_t{0};
+  EXPECT_EQ(gemm_kernel.tuning().tile_m, 64);
+  EXPECT_EQ(gemm_kernel.tuning().tile_n, 256);
+  EXPECT_EQ(gemm_kernel.tuning().tile_k, 256);
+  EXPECT_EQ(gemm_kernel.tuning().pack_b_minimum_elements, 16384);
+  EXPECT_EQ(gemm_kernel.tuning().skinny_m_limit, 8);
+  EXPECT_EQ(gemm_kernel.tuning().parallel_fmas_per_work_unit, 256);
+  EXPECT_EQ(gemm_kernel.tuning().parallel_minimum_tasks, 1);
+  EXPECT_EQ(gemm_kernel.tuning().conversion_parallel_minimum_elements, 1048576);
+  tuned.values["parallel.minimum_tasks"] = int64_t{0};
   EXPECT_THROW(gemm_kernel.Configure(tuned), std::invalid_argument);
-  tuned.values["algorithm.tile_k"] = int64_t{2};
+  tuned.values["parallel.minimum_tasks"] = int64_t{1};
   tuned.key.library = "other_library";
   EXPECT_THROW(gemm_kernel.Configure(tuned), std::invalid_argument);
 }
@@ -2867,12 +2861,6 @@ TEST(KernelClass, GemmParallelTilesPreserveSerialReductionBits) {
   ASSERT_NE(schema, nullptr);
 
   core::runtime::KernelTuningParameters serial = schema->portable_defaults();
-  serial.values["algorithm.tile_m"] = int64_t{1};
-  serial.values["algorithm.tile_n"] = int64_t{2};
-  serial.values["algorithm.tile_k"] = int64_t{2};
-  serial.values["algorithm.pack_b_minimum_elements"] = int64_t{1};
-  serial.values["algorithm.skinny_m_limit"] = int64_t{1};
-  serial.values["parallel.fmas_per_work_unit"] = int64_t{1};
   serial.values["parallel.minimum_tasks"] = std::numeric_limits<int64_t>::max();
   serial_kernel.Configure(serial);
 

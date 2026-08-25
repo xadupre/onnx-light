@@ -775,19 +775,6 @@ TEST(KernelCalibration, RejectsInvalidRegistrationAndOptions) {
                                  const CalibrationOptions &,
                                  CalibrationReporter &) { return MakeDefaults(); }),
                std::invalid_argument);
-  KernelTuningParameters defaults = MakeDefaults();
-  registry.RegisterSchema(KernelTuningSchema(defaults));
-  KernelCalibrationFunction calibration =
-      [](const KernelTuningKey &, const CpuExecutionDescriptor &, const CalibrationOptions &,
-         CalibrationReporter &) { return MakeDefaults(); };
-  EXPECT_THROW(registry.RegisterCalibrationFunction(defaults.key, calibration, {"unknown"}),
-               std::invalid_argument);
-  EXPECT_THROW(registry.RegisterCalibrationFunction(defaults.key, calibration,
-                                                    {"algorithm.tile_m", "algorithm.tile_m"}),
-               std::invalid_argument);
-  registry.RegisterCalibrationFunction(defaults.key, calibration, {"algorithm.tile_m"});
-  EXPECT_EQ(registry.FindCalibrationParameterNames(defaults.key),
-            std::vector<std::string>({"algorithm.tile_m"}));
 
   CalibrationOptions options;
   options.maximum_threads = 0;

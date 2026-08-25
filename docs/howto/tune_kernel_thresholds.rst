@@ -59,8 +59,7 @@ modified:
         "Gemm",
         int(TensorProto.FLOAT),
         {
-            "algorithm.tile_m": 96,
-            "algorithm.tile_n": 192,
+            "parallel.minimum_tasks": 4,
         },
     )
     assert update["status"] == "updated", update["diagnostics"]

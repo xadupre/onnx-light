@@ -217,10 +217,11 @@ size, tested with fixed ``tile_m``/``tile_n``/``k`` at the portable
 defaults), mirroring the unary ``CalibrateAbs`` crossover search: reference
 and candidate share the same deterministic tiled accumulation order, so their
 outputs are bit-identical regardless of the selected threshold, and the
-candidate never exceeds a bounded duration or memory budget. Calibrating
-``Gemm``'s remaining algorithm parameters
-(``algorithm.tile_m/tile_n/tile_k``, ``algorithm.pack_b_minimum_elements``,
-``parallel.fmas_per_work_unit``) and the newly registered
+candidate never exceeds a bounded duration or memory budget. The remaining
+``Gemm`` algorithm settings (``tile_m/tile_n/tile_k``,
+``pack_b_minimum_elements``, ``parallel_fmas_per_work_unit``) stay internal
+constants until dedicated calibrators make them genuine tuning parameters.
+Calibrating the newly registered
 ``parallel.minimum_elements`` schemas above where the baseline shows a
 measurable gap remain outstanding; promoting any winning candidate to a
 portable default belongs to the next issue, along with confirming the

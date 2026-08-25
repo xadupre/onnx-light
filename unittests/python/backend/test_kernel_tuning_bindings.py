@@ -106,6 +106,11 @@ class TestKernelTuningBindings(ExtTestCase):
         )
         self.assertEqual(no_library_schema["kernels"], [])
 
+        all_schemas = kernel_tuning.kernel_tuning_parameters(
+            kernel="Abs", library=None, device=None
+        )
+        self.assertGreater(len(all_schemas["kernels"]), 0)
+
         with self.assertRaisesRegex(ValueError, "Unknown kernel tuning device"):
             kernel_tuning.kernel_tuning_parameters(device=8192)
 

@@ -227,17 +227,20 @@ class TestMainBackendTest(unittest.TestCase):
             from openpyxl import load_workbook
 
             workbook = load_workbook(os.path.join(temporary, "not.xlsx"), read_only=True)
-            summary = workbook["summary"]
-            summary_values = dict(summary.iter_rows(min_row=2, values_only=True))
-            self.assertEqual(summary_values["repeat"], 2)
-            self.assertEqual(summary_values["warmup"], 1)
-            self.assertEqual(summary_values["timeout_seconds"], 2)
-            self.assertEqual(summary_values["timed_out"], 0)
-            self.assertIn("cpu.architecture", summary_values)
-            self.assertIn("cpu.logical_cores", summary_values)
-            worksheet = workbook["backend"]
-            self.assertEqual(worksheet["A1"].value, "name")
-            self.assertEqual(worksheet["A2"].value, "test_cc_not")
+            try:
+                summary = workbook["summary"]
+                summary_values = dict(summary.iter_rows(min_row=2, values_only=True))
+                self.assertEqual(summary_values["repeat"], 2)
+                self.assertEqual(summary_values["warmup"], 1)
+                self.assertEqual(summary_values["timeout_seconds"], 2)
+                self.assertEqual(summary_values["timed_out"], 0)
+                self.assertIn("cpu.architecture", summary_values)
+                self.assertIn("cpu.logical_cores", summary_values)
+                worksheet = workbook["backend"]
+                self.assertEqual(worksheet["A1"].value, "name")
+                self.assertEqual(worksheet["A2"].value, "test_cc_not")
+            finally:
+                workbook.close()
 
     def test_parameter_comparison_selects_one_tuning_schema(self):
         tunable = {

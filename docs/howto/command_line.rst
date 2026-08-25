@@ -24,7 +24,9 @@ Lists every native kernel currently registered by the runtime:
 
 Select one or more kernels by operator name to display every registered
 tuning schema, including its element type, implementation, ABI, parameter
-names, portable defaults, and active values:
+names, portable defaults, and active values. For schemas with a calibration
+callback, ``automatically tuned by --tune`` identifies the parameters that the
+callback actually benchmarks and selects:
 
 .. code-block:: bash
 
@@ -62,8 +64,10 @@ before and after calibration:
 
 ``--verbose`` reports calibration progress on stderr. ``--cache`` selects an
 explicit cache file, while ``--maximum-duration-ms`` and
-``--maximum-memory-mb`` bound each calibration. With ``--json``, the
-``before``, ``calibrations`` and ``after`` sections are machine-readable.
+``--maximum-memory-mb`` bound each calibration. When parameters are persisted,
+the text output reports the machine tuning cache path and update status. With
+``--json``, the ``before``, ``calibrations`` and ``after`` sections are
+machine-readable.
 
 .. _l-cli-tune-kernels:
 

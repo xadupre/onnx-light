@@ -65,7 +65,8 @@ void Sigmoid::RegisterTuningSchemas() {
                                         kTuningAbi);
   for (int32_t element_type : kSupportedElementTypes) {
     const KernelTuningKey key = tuning::MakePortableTuningKey("Sigmoid", element_type, kTuningAbi);
-    core::runtime::RegisterKernelCalibrationFunction(key, CalibrateSigmoid);
+    core::runtime::RegisterKernelCalibrationFunction(key, CalibrateSigmoid,
+                                                     {"parallel.minimum_elements"});
   }
 }
 

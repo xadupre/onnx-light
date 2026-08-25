@@ -99,6 +99,7 @@ class TestKernelTuningBindings(ExtTestCase):
         self.assertEqual(kernel["device_name"], "CPU")
         self.assertEqual(kernel["implementation"], "portable")
         self.assertEqual(kernel["parameter_names"], ["parallel.minimum_elements"])
+        self.assertEqual(kernel["calibration_parameters"], ["parallel.minimum_elements"])
         self.assertGreater(kernel["defaults"]["parallel.minimum_elements"], 0)
         self.assertEqual(set(kernel["active_values"]), {"parallel.minimum_elements"})
 

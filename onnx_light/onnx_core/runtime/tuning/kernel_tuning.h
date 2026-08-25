@@ -476,7 +476,8 @@ public:
    * @throws std::invalid_argument when the key has no schema, the callback is
    * empty, or another callback is already registered for the key.
    */
-  void RegisterCalibrationFunction(const KernelTuningKey &key, KernelCalibrationFunction function);
+  void RegisterCalibrationFunction(const KernelTuningKey &key, KernelCalibrationFunction function,
+                                   std::vector<std::string> parameter_names = {});
 
   /** Returns the current immutable registry generation. */
   KernelTuningRegistrySnapshot Snapshot() const noexcept;
@@ -516,6 +517,9 @@ public:
   /** Returns the callback registered for a key, or an empty function. */
   KernelCalibrationFunction FindCalibrationFunction(const KernelTuningKey &key) const;
 
+  /** Returns the parameter names automatically selected by the calibration callback. */
+  std::vector<std::string> FindCalibrationParameterNames(const KernelTuningKey &key) const;
+
 private:
   struct Impl;
   std::unique_ptr<Impl> impl_;
@@ -533,7 +537,8 @@ void RegisterKernelTuningProfile(const KernelTuningKey &key, platform::CpuSelect
 
 /** Registers a trusted calibration callback in the process-wide registry. */
 void RegisterKernelCalibrationFunction(const KernelTuningKey &key,
-                                       KernelCalibrationFunction function);
+                                       KernelCalibrationFunction function,
+                                       std::vector<std::string> parameter_names = {});
 
 /**
  * Creates elementwise benchmark cases for unary or binary kernels.

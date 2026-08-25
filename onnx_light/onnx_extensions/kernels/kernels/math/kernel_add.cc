@@ -84,7 +84,8 @@ void Add::RegisterTuningSchemas() {
                                         kTuningAbi);
   for (int32_t element_type : kSupportedElementTypes) {
     const KernelTuningKey key = tuning::MakePortableTuningKey("Add", element_type, kTuningAbi);
-    core::runtime::RegisterKernelCalibrationFunction(key, CalibrateAdd);
+    core::runtime::RegisterKernelCalibrationFunction(key, CalibrateAdd,
+                                                     {"parallel.minimum_elements"});
   }
 }
 

@@ -264,7 +264,8 @@ void Gemm::RegisterTuningSchemas() {
   tuning::RegisterGemmTuningSchemas(kSupportedElementTypes, kTuningAbi);
   for (int32_t element_type : kSupportedElementTypes) {
     const KernelTuningKey key = tuning::MakePortableTuningKey("Gemm", element_type, kTuningAbi);
-    core::runtime::RegisterKernelCalibrationFunction(key, CalibrateGemm);
+    core::runtime::RegisterKernelCalibrationFunction(key, CalibrateGemm,
+                                                     {tuning::kGemmParallelMinimumTasks});
   }
 }
 

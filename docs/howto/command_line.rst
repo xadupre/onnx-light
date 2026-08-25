@@ -31,7 +31,13 @@ The report separates lazy case materialization, evaluator setup, warm-up, and
 measured execution time for every selected case. ``--repeat`` controls measured
 iterations and ``--warmup`` controls unmeasured iterations. By default, big
 cases containing ``_big_`` are excluded; ``--include-big`` includes them.
-``--json`` returns the complete machine-readable report.
+``--json`` returns the complete machine-readable report. ``--output`` writes
+one row per selected case as CSV or XLSX according to the file extension:
+
+.. code-block:: bash
+
+    python -m onnx_light backend --regex ".*not.*" --output not.csv
+    python -m onnx_light backend --regex ".*not.*" --output not.xlsx
 
 .. _l-cli-kernel:
 

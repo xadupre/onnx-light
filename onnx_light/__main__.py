@@ -598,6 +598,10 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
         repeat=args.repeat,
         warmup=args.warmup,
     )
+    if args.output:
+        _write_backend_test_output(report, args.output)
+        print(f"backend: wrote {args.output}")
+        return
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
         return
@@ -616,6 +620,74 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
             f"mean_ms={case['mean_seconds'] * 1000:.3f}"
         )
     print(f"total_ms={report['total_seconds'] * 1000:.3f}")
+
+
+def _backend_test_table(report: dict[str, Any]) -> tuple[list[str], list[list[Any]]]:
+    """Returns the columns and rows exported by the backend command."""
+    columns = [
+        "name",
+        "kind",
+        "tag",
+        "data_sets",
+        "mode",
+        "repeat",
+        "warmup",
+        "collection_seconds",
+        "materialization_seconds",
+        "setup_seconds",
+        "warmup_seconds",
+        "run_seconds",
+        "mean_seconds",
+        "min_seconds",
+        "max_seconds",
+        "total_seconds",
+        "iteration_seconds",
+    ]
+    rows = []
+    for case in report["cases"]:
+        values = {
+            **case,
+            "mode": report["mode"],
+            "repeat": report["repeat"],
+            "warmup": report["warmup"],
+            "collection_seconds": report["collection_seconds"],
+            "total_seconds": report["total_seconds"],
+            "iteration_seconds": json.dumps(case["iteration_seconds"]),
+        }
+        rows.append([values[column] for column in columns])
+    return columns, rows
+
+
+def _write_backend_test_output(report: dict[str, Any], output: str) -> None:
+    """Writes a backend timing report selected by the output extension."""
+    from pathlib import Path
+
+    output_path = Path(output)
+    columns, rows = _backend_test_table(report)
+    suffix = output_path.suffix.lower()
+    if suffix == ".csv":
+        import csv
+
+        with output_path.open("w", encoding="utf-8", newline="") as output_file:
+            writer = csv.writer(output_file)
+            writer.writerow(columns)
+            writer.writerows(rows)
+        return
+    if suffix == ".xlsx":
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = "backend"
+        worksheet.append(columns)
+        for row in rows:
+            worksheet.append(row)
+        workbook.save(output_path)
+        return
+    raise SystemExit(
+        f"onnx-light backend: unsupported output extension {output_path.suffix!r}; "
+        "expected .csv or .xlsx"
+    )
 
 
 def _print_shape_inference_events(events: list) -> None:
@@ -1549,6 +1621,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     backend_test_parser.add_argument(
         "--json", action="store_true", help="Print the complete machine-readable report."
+    )
+    backend_test_parser.add_argument(
+        "--output",
+        "-o",
+        metavar="PATH",
+        help="Write case timings as CSV or XLSX, selected by the file extension.",
     )
     backend_test_parser.set_defaults(func=_cmd_backend_test)
 

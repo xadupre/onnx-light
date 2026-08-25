@@ -13,6 +13,7 @@ requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.2",
     "ml-dtypes>=0.5.0",
+    "openpyxl>=3.1",
 ]
 
 [project.scripts]
@@ -36,7 +37,6 @@ dev = [
 dev-no-onnx = [
     "onnx-light[style]",
     "matplotlib",
-    "openpyxl",
     "pandas",
     "pytest>=7",
     "pytest-coverage",
@@ -49,7 +49,6 @@ docs = [
     "matplotlib",
     "onnx>=1.21.0",
     "onnxruntime",
-    "openpyxl",
     "pandas",
     "pydata-sphinx-theme",
     "sphinx>=7",

@@ -39,6 +39,9 @@ one row per selected case as CSV or XLSX according to the file extension:
     python -m onnx_light backend --regex ".*not.*" --output not.csv
     python -m onnx_light backend --regex ".*not.*" --output not.xlsx
 
+XLSX output contains a ``summary`` sheet with the run configuration and CPU
+descriptor, plus a ``backend`` sheet with one row per case.
+
 .. _l-cli-kernel:
 
 kernel

@@ -676,9 +676,27 @@ def _write_backend_test_output(report: dict[str, Any], output: str) -> None:
     if suffix == ".xlsx":
         from openpyxl import Workbook
 
+        from .tools.kernel_baseline import get_cpu_descriptor
+
         workbook = Workbook()
-        worksheet = workbook.active
-        worksheet.title = "backend"
+        summary = workbook.active
+        summary.title = "summary"
+        summary.append(["property", "value"])
+        for name in (
+            "name_regex",
+            "mode",
+            "include_big",
+            "repeat",
+            "warmup",
+            "selected",
+            "collection_seconds",
+            "total_seconds",
+        ):
+            summary.append([name, report[name]])
+        for name, value in sorted(get_cpu_descriptor().items()):
+            summary.append([f"cpu.{name}", value])
+
+        worksheet = workbook.create_sheet("backend")
         worksheet.append(columns)
         for row in rows:
             worksheet.append(row)

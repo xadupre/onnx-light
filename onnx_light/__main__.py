@@ -466,22 +466,15 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
                     None,
                 )
                 if duplicate is not None:
-                    resolution = (
-                        f"{token!r} resolves to {value}"
-                        if token.lower() == "default"
-                        else f"value {value}"
-                    )
-                    previous = (
-                        f"{duplicate!r} resolves to {value}"
-                        if duplicate.lower() == "default"
-                        else f"value {duplicate}"
-                    )
-                    raise SystemExit(
-                        f"onnx-light kernel: duplicate value for tunable parameter "
-                        f"{parameter_name!r}: {resolution}, already provided by {previous}"
-                    )
+                    continue
                 resolved_tokens.append((token, value))
                 parameter_values.append(value)
+            if len(parameter_values) < 2:
+                raise SystemExit(
+                    f"onnx-light kernel: tunable parameter {parameter_name!r} needs at least "
+                    f"two distinct values after resolving default={current_value}; "
+                    f"received {', '.join(value_tokens)}"
+                )
             if len(parameter_values) > 64:
                 raise SystemExit("onnx-light kernel: at most 64 comparison values are supported")
 

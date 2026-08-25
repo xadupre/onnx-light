@@ -322,7 +322,40 @@ class TestMainKernel(unittest.TestCase):
                 ]
             )
 
-    def test_parameter_duplicate_names_parameter_and_resolved_default(self):
+    def test_parameter_deduplicates_resolved_default(self):
+        active = kernel_tuning.kernel_tuning_parameters(
+            kernel="Abs", element_type=1, implementation="portable"
+        )["kernels"][0]["active_values"]["parallel.minimum_elements"]
+        calibration = {
+            "calibrated": [],
+            "skipped": [],
+            "unsupported": [],
+            "diagnostics": [],
+            "candidate_diagnostics": [],
+            "comparisons": [],
+            "cache_update": None,
+            "published_generation": 0,
+        }
+        with mock.patch(
+            "onnx_light.kernel_tuning.calibrate_kernel_tuning", return_value=calibration
+        ) as calibrate:
+            main(
+                [
+                    "kernel",
+                    "--kernel",
+                    "Abs",
+                    "--dtype",
+                    "FLOAT",
+                    "--impl",
+                    "portable",
+                    "--tune",
+                    "--parameter",
+                    f"parallel.minimum_elements=default,{active},{active + 1}",
+                ]
+            )
+        self.assertEqual(calibrate.call_args.kwargs["parameter_values"], [active, active + 1])
+
+    def test_parameter_reports_distinct_values_after_default_resolution(self):
         active = kernel_tuning.kernel_tuning_parameters(
             kernel="Abs", element_type=1, implementation="portable"
         )["kernels"][0]["active_values"]["parallel.minimum_elements"]
@@ -342,10 +375,8 @@ class TestMainKernel(unittest.TestCase):
                 ]
             )
         message = str(captured.exception)
-        self.assertIn(
-            "duplicate value for tunable parameter 'parallel.minimum_elements'", message
-        )
-        self.assertIn(f"'default' resolves to {active}", message)
+        self.assertIn("needs at least two distinct values", message)
+        self.assertIn(f"default={active}", message)
 
     def test_selected_kernel_json_is_deterministic(self):
         arguments = ["kernel", "--kernel", "Gemm", "--kernel", "Abs", "--json"]

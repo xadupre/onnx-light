@@ -31,8 +31,19 @@ names, portable defaults, and active values:
     onnx-light kernel --kernel Gemm --kernel Softmax
 
 A domain-qualified identifier such as ``ai.onnx:Gemm`` may be used when
-operator names overlap across domains. Fixed-policy kernels are reported with
-``no tunable parameters``. Add ``--json`` to either form for deterministic
+operator names overlap across domains. ``--library`` and ``--device`` select
+the complete tuning-key identity; the defaults are ``onnx_light`` and ``CPU``:
+
+.. code-block:: bash
+
+    onnx-light kernel --kernel Gemm \
+        --library onnx_light --device CPU
+
+Devices accept ``CPU``, ``Undefined``, ``GPU0`` through ``GPU8191``, or their
+numeric value. The output includes both the library and device for every
+tuning schema, and the device also filters the native registrations considered
+by ``--list`` and ``--kernel``. Fixed-policy kernels are reported with ``no
+tunable parameters``. Add ``--json`` to either form for deterministic
 machine-readable output.
 
 .. _l-cli-tune-kernels:

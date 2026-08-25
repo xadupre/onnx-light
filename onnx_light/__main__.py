@@ -197,6 +197,41 @@ def _parse_kernel_element_type(value: str) -> int:
         return int(getattr(TensorProto, name))
 
 
+def _parse_kernel_device(value: str) -> int:
+    """Parses a CPU, GPU index, or numeric device identifier."""
+    normalized = value.upper()
+    if normalized == "CPU":
+        return -1
+    if normalized == "UNDEFINED":
+        return -2
+    if normalized.startswith("GPU") and normalized[3:].isdigit():
+        index = int(normalized[3:])
+        if index <= 8191:
+            return index
+    if re.fullmatch(r"[+-]?\d+", value):
+        device = int(value)
+        if -2 <= device <= 8191:
+            return device
+    raise argparse.ArgumentTypeError(
+        f"unknown device {value!r}; use CPU, Undefined, GPU0..GPU8191, or -2..8191"
+    )
+
+
+def _kernel_device_name(device: int) -> str:
+    """Returns the canonical name of a parsed kernel device."""
+    if device == -2:
+        return "Undefined"
+    if device == -1:
+        return "CPU"
+    return f"GPU{device}"
+
+
+def _registered_kernel_device(identifier: str) -> int:
+    """Returns the device encoded in a native kernel identifier."""
+    parts = identifier.split(":")
+    return -1 if len(parts) == 2 else int(parts[-1])
+
+
 def _cmd_tune_kernels(args: argparse.Namespace) -> None:
     """Proposes or applies local kernel tuning cache updates."""
     from . import kernel_tuning
@@ -248,7 +283,11 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
     from .onnx import TensorProto
     from .onnx_py._onnxpykernels import runtime
 
-    identifiers = runtime.registered_kernels()
+    identifiers = [
+        identifier
+        for identifier in runtime.registered_kernels()
+        if _registered_kernel_device(identifier) == args.device
+    ]
     if args.list:
         if args.json:
             print(json.dumps({"kernels": identifiers}, indent=2))
@@ -270,9 +309,14 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
         else:
             unknown.append(selector)
     if unknown:
-        raise SystemExit(f"onnx-light kernel: unknown kernel(s): {', '.join(unknown)}")
+        raise SystemExit(
+            f"onnx-light kernel: unknown kernel(s) for device "
+            f"{_kernel_device_name(args.device)}: {', '.join(unknown)}"
+        )
 
-    tuning_report = kernel_tuning.kernel_tuning_parameters()
+    tuning_report = kernel_tuning.kernel_tuning_parameters(
+        library=args.library, device=args.device
+    )
     tuning_by_kernel: dict[str, list[dict[str, Any]]] = {}
     for item in tuning_report["kernels"]:
         tuning_by_kernel.setdefault(item["kernel"], []).append(item)
@@ -284,22 +328,34 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
             tuning_by_kernel.get(op_type, []),
             key=lambda item: (item["library"], item["implementation"], item["element_type"]),
         )
-        report.append({"identifier": identifier, "tunables": tunables})
+        report.append(
+            {
+                "identifier": identifier,
+                "library": args.library,
+                "device": args.device,
+                "device_name": _kernel_device_name(args.device),
+                "tunables": tunables,
+            }
+        )
 
     if args.json:
         print(json.dumps({"kernels": report}, indent=2, sort_keys=True))
         return
 
     for kernel in report:
-        print(kernel["identifier"])
+        print(
+            f"{kernel['identifier']} library={kernel['library']} "
+            f"device={kernel['device_name']}"
+        )
         if not kernel["tunables"]:
             print("  no tunable parameters")
             continue
         for tunable in kernel["tunables"]:
             element_type = TensorProto.DataType(tunable["element_type"]).name
             print(
-                f"  {element_type} implementation={tunable['implementation']} "
-                f"abi={tunable['tuning_abi']}"
+                f"  {element_type} library={tunable['library']} "
+                f"device={tunable['device_name']} "
+                f"implementation={tunable['implementation']} abi={tunable['tuning_abi']}"
             )
             for name in tunable["parameter_names"]:
                 print(
@@ -1246,6 +1302,21 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     kernel_parser.add_argument(
         "--json", action="store_true", help="Print a machine-readable JSON report."
+    )
+    kernel_parser.add_argument(
+        "--library",
+        default="onnx_light",
+        help="Restrict tuning schemas to this library (default: onnx_light).",
+    )
+    kernel_parser.add_argument(
+        "--device",
+        default=-1,
+        type=_parse_kernel_device,
+        metavar="DEVICE",
+        help=(
+            "Restrict tuning schemas to CPU, Undefined, GPU<N>, or a numeric device "
+            "(default: CPU)."
+        ),
     )
     kernel_parser.set_defaults(func=_cmd_kernel)
 

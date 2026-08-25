@@ -89,10 +89,25 @@ class TestKernelTuningBindings(ExtTestCase):
         kernel = report["kernels"][0]
         self.assertEqual(kernel["library"], "onnx_light")
         self.assertEqual(kernel["kernel"], "Abs")
+        self.assertEqual(kernel["device"], -1)
+        self.assertEqual(kernel["device_name"], "CPU")
         self.assertEqual(kernel["implementation"], "portable")
         self.assertEqual(kernel["parameter_names"], ["parallel.minimum_elements"])
         self.assertGreater(kernel["defaults"]["parallel.minimum_elements"], 0)
         self.assertEqual(set(kernel["active_values"]), {"parallel.minimum_elements"})
+
+        no_gpu_schema = kernel_tuning.kernel_tuning_parameters(
+            kernel="Abs", element_type=int(TensorProto.FLOAT), device=0
+        )
+        self.assertEqual(no_gpu_schema["kernels"], [])
+
+        no_library_schema = kernel_tuning.kernel_tuning_parameters(
+            kernel="Abs", element_type=int(TensorProto.FLOAT), library="unknown_library"
+        )
+        self.assertEqual(no_library_schema["kernels"], [])
+
+        with self.assertRaisesRegex(ValueError, "Unknown kernel tuning device"):
+            kernel_tuning.kernel_tuning_parameters(device=8192)
 
     def test_updates_inspects_and_loads_local_profile(self):
         with tempfile.TemporaryDirectory() as temporary:

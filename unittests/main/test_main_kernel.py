@@ -12,6 +12,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
+from onnx_light import kernel_tuning
 from onnx_light.__main__ import _build_parser, _parse_kernel_device, main
 from onnx_light.ext_test_case import import_or_skip
 
@@ -303,7 +304,9 @@ class TestMainKernel(unittest.TestCase):
             )
 
     def test_parameter_rejects_non_positive_values(self):
-        with self.assertRaisesRegex(SystemExit, "must be positive integers"):
+        with self.assertRaisesRegex(
+            SystemExit, "invalid value 0 for tunable parameter 'parallel.minimum_elements'"
+        ):
             main(
                 [
                     "kernel",
@@ -318,6 +321,31 @@ class TestMainKernel(unittest.TestCase):
                     "parallel.minimum_elements=default,0",
                 ]
             )
+
+    def test_parameter_duplicate_names_parameter_and_resolved_default(self):
+        active = kernel_tuning.kernel_tuning_parameters(
+            kernel="Abs", element_type=1, implementation="portable"
+        )["kernels"][0]["active_values"]["parallel.minimum_elements"]
+        with self.assertRaises(SystemExit) as captured:
+            main(
+                [
+                    "kernel",
+                    "--kernel",
+                    "Abs",
+                    "--dtype",
+                    "FLOAT",
+                    "--impl",
+                    "portable",
+                    "--tune",
+                    "--parameter",
+                    f"parallel.minimum_elements=default,{active}",
+                ]
+            )
+        message = str(captured.exception)
+        self.assertIn(
+            "duplicate value for tunable parameter 'parallel.minimum_elements'", message
+        )
+        self.assertIn(f"'default' resolves to {active}", message)
 
     def test_selected_kernel_json_is_deterministic(self):
         arguments = ["kernel", "--kernel", "Gemm", "--kernel", "Abs", "--json"]

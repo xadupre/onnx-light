@@ -440,23 +440,48 @@ def _cmd_kernel(args: argparse.Namespace) -> None:
                     "onnx-light kernel: explicit comparisons currently support "
                     "integer tunable parameters"
                 )
+            resolved_tokens: list[tuple[str, int]] = []
             for token in value_tokens:
                 if token.lower() == "default":
-                    parameter_values.append(current_value)
-                    continue
-                try:
-                    value = int(token)
-                except ValueError:
-                    raise SystemExit(
-                        f"onnx-light kernel: invalid integer comparison value {token!r}"
-                    ) from None
-                if value <= 0:
-                    raise SystemExit(
-                        "onnx-light kernel: comparison values must be positive integers"
+                    value = current_value
+                else:
+                    try:
+                        value = int(token)
+                    except ValueError:
+                        raise SystemExit(
+                            f"onnx-light kernel: invalid value {token!r} for tunable "
+                            f"parameter {parameter_name!r}; expected a positive integer"
+                        ) from None
+                    if value <= 0:
+                        raise SystemExit(
+                            f"onnx-light kernel: invalid value {value} for tunable parameter "
+                            f"{parameter_name!r}; expected a positive integer"
+                        )
+                duplicate = next(
+                    (
+                        previous_token
+                        for previous_token, previous_value in resolved_tokens
+                        if previous_value == value
+                    ),
+                    None,
+                )
+                if duplicate is not None:
+                    resolution = (
+                        f"{token!r} resolves to {value}"
+                        if token.lower() == "default"
+                        else f"value {value}"
                     )
+                    previous = (
+                        f"{duplicate!r} resolves to {value}"
+                        if duplicate.lower() == "default"
+                        else f"value {duplicate}"
+                    )
+                    raise SystemExit(
+                        f"onnx-light kernel: duplicate value for tunable parameter "
+                        f"{parameter_name!r}: {resolution}, already provided by {previous}"
+                    )
+                resolved_tokens.append((token, value))
                 parameter_values.append(value)
-            if len(set(parameter_values)) != len(parameter_values):
-                raise SystemExit("onnx-light kernel: comparison values must be distinct")
             if len(parameter_values) > 64:
                 raise SystemExit("onnx-light kernel: at most 64 comparison values are supported")
 

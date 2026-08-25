@@ -523,9 +523,10 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
           << "Data set / graph output arity mismatch for case " << tc.name;
 
       // One allocator, one RuntimeContext, one ExecutionPlan and one
-      // RuntimeSession per data set; the same session is run twice below.
+      // RuntimeSession per data set; the same serial session is run twice below.
       // Intermediates are released as scheduled so each run allocates and frees
-      // the same buffers.
+      // the same buffers. Serial execution keeps the measured peak independent
+      // of worker scheduling.
       core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
       RuntimeContext rt(
           KernelContext(DefaultOpset(GetDefaultOpsetVersion(model))),
@@ -534,7 +535,9 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
       RegisterModelFunctions(model, rt);
 
       const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
-      RuntimeSession session(plan);
+      RuntimeSession session(plan, core::runtime::RuntimeSessionOptions{
+                                       .parameters = core::runtime::RuntimeParameters(1),
+                                   });
 
       // Seed inputs, maps and initializers once. These are the tensors that
       // must survive between the two runs; every other tensor a run produces is

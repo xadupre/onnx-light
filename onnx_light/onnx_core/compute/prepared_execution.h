@@ -100,7 +100,8 @@ public:
   /**
    * Atomically installs a complete allocation before satisfying its completion.
    */
-  void Publish(const PreparedObjectRequest &request, AllocationHandle allocation);
+  void Publish(const PreparedObjectRequest &request, AllocationHandle allocation,
+               std::shared_ptr<void> resident_owner = {});
 
   /** Fails the current generation and preserves its diagnostic exception. */
   void Fail(const PreparedObjectRequest &request, std::exception_ptr error,

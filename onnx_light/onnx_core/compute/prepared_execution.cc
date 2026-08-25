@@ -95,6 +95,7 @@ struct PreparedObjectStore::Entry {
   uint64_t generation = 0;
   std::shared_ptr<TaskCompletion> completion;
   std::shared_ptr<AllocationHandle> allocation;
+  std::shared_ptr<void> resident_owner;
   std::shared_ptr<PinCounter> pins;
   size_t resident_bytes = 0;
   uint64_t last_access = 0;
@@ -145,11 +146,12 @@ void PreparedObjectStore::MarkPreparing(const PreparedObjectRequest &request) {
   entry.state = PreparedResidencyState::kPreparing;
 }
 
-void PreparedObjectStore::Publish(const PreparedObjectRequest &request,
-                                  AllocationHandle allocation) {
+void PreparedObjectStore::Publish(const PreparedObjectRequest &request, AllocationHandle allocation,
+                                  std::shared_ptr<void> resident_owner) {
   EXT_ENFORCE(allocation, "A prepared publication must own a complete allocation.");
   const size_t allocation_bytes = allocation.buffer()->size();
   std::vector<std::shared_ptr<AllocationHandle>> evicted;
+  std::vector<std::shared_ptr<void>> evicted_owners;
   std::unique_lock<std::mutex> lock(residency_tracker_->mutex);
   Entry &entry = *entries_.at(request.key);
   ValidateGeneration(entry, request);
@@ -183,12 +185,14 @@ void PreparedObjectStore::Publish(const PreparedObjectRequest &request,
     resident_bytes_ -= candidate->resident_bytes;
     candidate->resident_bytes = 0;
     evicted.push_back(std::move(candidate->allocation));
+    evicted_owners.push_back(std::move(candidate->resident_owner));
     candidate->allocation = std::make_shared<AllocationHandle>();
     candidate->pins = std::make_shared<PinCounter>();
     candidate->state = PreparedResidencyState::kPersisted;
     ++readiness_epoch_;
   }
   *entry.allocation = std::move(allocation);
+  entry.resident_owner = std::move(resident_owner);
   entry.resident_bytes = allocation_bytes;
   entry.last_access = ++access_epoch_;
   resident_bytes_ += allocation_bytes;
@@ -197,12 +201,14 @@ void PreparedObjectStore::Publish(const PreparedObjectRequest &request,
   entry.completion->Succeed();
   lock.unlock();
   evicted.clear();
+  evicted_owners.clear();
 }
 
 void PreparedObjectStore::AdmitAllocation(size_t n_bytes) {
   EXT_ENFORCE(n_bytes <= residency_budget_,
               "Prepared allocation exceeds the prepared residency budget.");
   std::vector<std::shared_ptr<AllocationHandle>> evicted;
+  std::vector<std::shared_ptr<void>> evicted_owners;
   std::unique_lock<std::mutex> lock(residency_tracker_->mutex);
   while (resident_bytes_ > residency_budget_ - n_bytes) {
     Entry *candidate = nullptr;
@@ -223,6 +229,7 @@ void PreparedObjectStore::AdmitAllocation(size_t n_bytes) {
     resident_bytes_ -= candidate->resident_bytes;
     candidate->resident_bytes = 0;
     evicted.push_back(std::move(candidate->allocation));
+    evicted_owners.push_back(std::move(candidate->resident_owner));
     candidate->allocation = std::make_shared<AllocationHandle>();
     candidate->pins = std::make_shared<PinCounter>();
     candidate->state = PreparedResidencyState::kPersisted;
@@ -230,6 +237,7 @@ void PreparedObjectStore::AdmitAllocation(size_t n_bytes) {
   }
   lock.unlock();
   evicted.clear();
+  evicted_owners.clear();
 }
 
 void PreparedObjectStore::Fail(const PreparedObjectRequest &request, std::exception_ptr error,
@@ -254,12 +262,13 @@ std::optional<PreparedObjectView> PreparedObjectStore::Find(const PreparedKey &k
   entry.last_access = ++access_epoch_;
   ++entry.pins->active;
   struct PinLease {
-    PinLease(std::shared_ptr<const AllocationHandle> allocation_, std::shared_ptr<PinCounter> pins_,
-             std::shared_ptr<ResidencyTracker> tracker_)
-        : allocation(std::move(allocation_)), pins(std::move(pins_)), tracker(std::move(tracker_)) {
-    }
+    PinLease(std::shared_ptr<const AllocationHandle> allocation_, std::shared_ptr<void> owner_,
+             std::shared_ptr<PinCounter> pins_, std::shared_ptr<ResidencyTracker> tracker_)
+        : allocation(std::move(allocation_)), owner(std::move(owner_)), pins(std::move(pins_)),
+          tracker(std::move(tracker_)) {}
 
     std::shared_ptr<const AllocationHandle> allocation;
+    std::shared_ptr<void> owner;
     std::shared_ptr<PinCounter> pins;
     std::shared_ptr<ResidencyTracker> tracker;
 
@@ -269,7 +278,8 @@ std::optional<PreparedObjectView> PreparedObjectStore::Find(const PreparedKey &k
       tracker->changed.notify_all();
     }
   };
-  auto lease = std::make_shared<PinLease>(entry.allocation, entry.pins, residency_tracker_);
+  auto lease = std::make_shared<PinLease>(entry.allocation, entry.resident_owner, entry.pins,
+                                          residency_tracker_);
   std::shared_ptr<const AllocationHandle> pin(lease, entry.allocation.get());
   return PreparedObjectView{entry.allocation->buffer(), entry.allocation->owner(), entry.generation,
                             std::move(pin)};
@@ -277,6 +287,7 @@ std::optional<PreparedObjectView> PreparedObjectStore::Find(const PreparedKey &k
 
 bool PreparedObjectStore::Evict(const PreparedKey &key) {
   std::shared_ptr<AllocationHandle> allocation;
+  std::shared_ptr<void> resident_owner;
   auto replacement = std::make_shared<AllocationHandle>();
   {
     std::lock_guard<std::mutex> lock(residency_tracker_->mutex);
@@ -289,12 +300,14 @@ bool PreparedObjectStore::Evict(const PreparedKey &key) {
     resident_bytes_ -= entry.resident_bytes;
     entry.resident_bytes = 0;
     allocation = std::move(entry.allocation);
+    resident_owner = std::move(entry.resident_owner);
     entry.allocation = std::move(replacement);
     entry.pins = std::make_shared<PinCounter>();
     entry.state = PreparedResidencyState::kAbsent;
     ++readiness_epoch_;
   }
   allocation.reset();
+  resident_owner.reset();
   residency_tracker_->changed.notify_all();
   return true;
 }

@@ -56,12 +56,13 @@ namespace runtime {
 struct RuntimeSessionOptions {
   RuntimeParameters parameters = {};
   /// Requested CPU execution policy. When empty, the session derives its
-  /// policy from :cpp:var:`RuntimeParameters::num_threads` and leaves worker
-  /// placement to the operating system
-  /// (:cpp:enumerator:`CpuAffinityPolicy::kNone`), which preserves the
-  /// behavior of sessions built before the policy existed. A caller that wants
-  /// pinned workers, another spin policy, or nested parallelism supplies the
-  /// policy explicitly.
+  /// policy from :cpp:var:`RuntimeParameters::num_threads` and pins workers to
+  /// physical cores (:cpp:enumerator:`CpuAffinityPolicy::kPhysicalCores`),
+  /// falling back to no affinity
+  /// (:cpp:enumerator:`CpuAffinityPolicy::kNone`) when the requested
+  /// participant count exceeds the physical cores available to the process. A
+  /// caller that wants a different affinity policy, spin policy, or nested
+  /// parallelism supplies the policy explicitly.
   std::optional<CpuExecutionPolicy> cpu_execution = std::nullopt;
   /// Enables optional executor dispatch counters for inspection.
   bool cpu_execution_counters = false;

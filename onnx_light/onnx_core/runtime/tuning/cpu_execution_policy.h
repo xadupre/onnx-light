@@ -176,6 +176,18 @@ inline constexpr uint64_t kDefaultAdaptiveSpinIterations = 10000;
 std::vector<CpuLogicalProcessor> ProcessVisibleLogicalProcessors();
 
 /**
+ * Returns the detected physical core count for the process-visible topology.
+ *
+ * Falls back to the platform CPU descriptor when the topology cannot be read,
+ * matching the detection :cpp:func:`ResolveCpuExecutionPolicy` uses to bound
+ * :cpp:enumerator:`CpuAffinityPolicy::kPhysicalCores` participant counts.
+ *
+ * Returns:
+ *   The detected physical core count, or ``0`` when it cannot be determined.
+ */
+uint32_t DetectedPhysicalCoreCount() noexcept;
+
+/**
  * Resolves a requested CPU execution policy into an immutable resolution.
  *
  * Resolution validates the request deterministically and derives the effective

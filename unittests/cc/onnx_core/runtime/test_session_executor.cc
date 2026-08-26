@@ -128,7 +128,11 @@ TEST(SessionExecutor, DefaultPolicyDerivesFromParameters) {
   ExecutionPlan plan;
   RuntimeSession session(plan, RuntimeSessionOptions{.parameters = RuntimeParameters(3)});
   EXPECT_EQ(session.cpu_execution_policy().num_threads, 3);
-  EXPECT_EQ(session.cpu_execution_policy().affinity_policy, CpuAffinityPolicy::kPhysicalCores);
+  const uint32_t physical_cores = core::runtime::DetectedPhysicalCoreCount();
+  const CpuAffinityPolicy expected_affinity = (physical_cores != 0 && physical_cores < 3)
+                                                  ? CpuAffinityPolicy::kNone
+                                                  : CpuAffinityPolicy::kPhysicalCores;
+  EXPECT_EQ(session.cpu_execution_policy().affinity_policy, expected_affinity);
   EXPECT_EQ(session.cpu_executor()->effective_threads(), 3u);
 }
 

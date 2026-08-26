@@ -332,6 +332,10 @@ std::vector<CpuLogicalProcessor> ProcessVisibleLogicalProcessors() {
   return processors;
 }
 
+uint32_t DetectedPhysicalCoreCount() noexcept {
+  return DetectedPhysicalCores(ProcessVisibleLogicalProcessors());
+}
+
 ResolvedCpuExecutionPolicy ResolveCpuExecutionPolicy(const CpuExecutionPolicy &request) {
   if (request.num_threads < 0) {
     throw std::invalid_argument("CpuExecutionPolicy num_threads must not be negative.");

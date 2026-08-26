@@ -30,6 +30,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 //     ``keys_strings``/``values_tensor`` mixed attributes — mirrors the upstream
 //     ``test_ai_onnx_ml_label_encoder_tensor_mapping`` and
 //     ``test_ai_onnx_ml_label_encoder_tensor_value_only_mapping`` tests.
+//   * int64 keys → string values, including an explicit string default.
+//   * string keys → string values through tensor-typed attributes.
 // ---------------------------------------------------------------------------
 void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 4);
@@ -344,6 +346,95 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor y =
                  label_encoder.operator()<std::string, int16_t>(x, keys, values, default_value);
 
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
+  }
+
+  // int64 -> string via ``values_strings``.
+  {
+    NodeProto node;
+    node.set_op_type("LabelEncoder");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x");
+    node.add_output("y");
+
+    const std::vector<int64_t> keys{1, 2, 3};
+    const std::vector<std::string> values{"one", "two", "three"};
+    const std::string default_value = "unknown";
+
+    AttributeProto *keys_attr = node.add_attribute();
+    keys_attr->set_name("keys_int64s");
+    keys_attr->set_type(AttributeProto::AttributeType::INTS);
+    for (int64_t v : keys) {
+      keys_attr->ints().push_back(v);
+    }
+
+    AttributeProto *values_attr = node.add_attribute();
+    values_attr->set_name("values_strings");
+    values_attr->set_type(AttributeProto::AttributeType::STRINGS);
+    for (const std::string &v : values) {
+      values_attr->strings().push_back(utils::String(v));
+    }
+
+    AttributeProto *default_attr = node.add_attribute();
+    default_attr->set_name("default_string");
+    default_attr->set_type(AttributeProto::AttributeType::STRING);
+    default_attr->set_s(default_value);
+
+    Expect(registry, std::move(node), "test_cc_label_encoder_int64_to_string",
+           {default_opset, opset}, [=]() -> IoData {
+             Tensor x = Tensor::FromInt64("", {4}, {3, 1, 7, 2});
+             Tensor y =
+                 label_encoder.operator()<int64_t, std::string>(x, keys, values, default_value);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
+  }
+
+  // string -> string via ``values_tensor`` and ``default_tensor``.
+  {
+    NodeProto node;
+    node.set_op_type("LabelEncoder");
+    node.set_domain("ai.onnx.ml");
+    node.add_input("x");
+    node.add_output("y");
+
+    const std::vector<std::string> keys{"a", "b"};
+    const std::vector<std::string> values{"alpha", "beta"};
+    const std::string default_value = "missing";
+
+    AttributeProto *keys_attr = node.add_attribute();
+    keys_attr->set_name("keys_tensor");
+    keys_attr->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *kt = keys_attr->add_t();
+    kt->set_data_type(DataType::STRING);
+    kt->add_dims(static_cast<uint64_t>(keys.size()));
+    for (const std::string &v : keys) {
+      kt->string_data().push_back(utils::String(v));
+    }
+
+    AttributeProto *values_attr = node.add_attribute();
+    values_attr->set_name("values_tensor");
+    values_attr->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *vt = values_attr->add_t();
+    vt->set_data_type(DataType::STRING);
+    vt->add_dims(static_cast<uint64_t>(values.size()));
+    for (const std::string &v : values) {
+      vt->string_data().push_back(utils::String(v));
+    }
+
+    AttributeProto *default_attr = node.add_attribute();
+    default_attr->set_name("default_tensor");
+    default_attr->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *dt = default_attr->add_t();
+    dt->set_data_type(DataType::STRING);
+    dt->add_dims(1);
+    dt->string_data().push_back(utils::String(default_value));
+
+    Expect(registry, std::move(node), "test_cc_label_encoder_string_to_string_tensor_attributes",
+           {default_opset, opset}, [=]() -> IoData {
+             Tensor x = Tensor::FromStrings("", {3}, {"b", "x", "a"});
+             Tensor y =
+                 label_encoder.operator()<std::string, std::string>(x, keys, values, default_value);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }

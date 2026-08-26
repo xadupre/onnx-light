@@ -27,8 +27,9 @@ class TestMainBackendTest(unittest.TestCase):
         args = _build_parser().parse_args(["backend"])
         self.assertEqual(args.regex, "")
         self.assertEqual(args.mode, "test")
-        self.assertEqual(args.repeat, 10)
-        self.assertEqual(args.warmup, 2)
+        self.assertEqual(args.repeat, 10 * (os.cpu_count() or 1))
+        self.assertEqual(args.warmup, 2 * (os.cpu_count() or 1))
+        self.assertEqual(args.max_repeat_time, 1.0)
         self.assertEqual(args.timeout, 2.0)
         self.assertIsNone(args.parameter)
         self.assertIsNone(args.kernel)
@@ -45,6 +46,8 @@ class TestMainBackendTest(unittest.TestCase):
             parser.parse_args(["backend", "--repeat", "0"])
         with self.assertRaises(SystemExit):
             parser.parse_args(["backend", "--warmup", "-1"])
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["backend", "--max-repeat-time", "0"])
         with self.assertRaises(SystemExit):
             parser.parse_args(["backend", "--timeout", "0"])
         for value in ("nan", "inf"):
@@ -82,6 +85,13 @@ class TestMainBackendTest(unittest.TestCase):
         self.assertTrue(report["cases"][0]["timed_out"])
         self.assertIsNone(report["cases"][0]["run_seconds"])
 
+    def test_limits_each_repeat_phase_by_duration(self):
+        report = _run_backend_test_timing(
+            name_regex=r"^test_cc_abs$", repeat=10, warmup=10, max_repeat_time=0.000001
+        )
+        self.assertEqual(len(report["cases"][0]["iteration_seconds"]), 1)
+        self.assertGreater(report["cases"][0]["warmup_seconds"], 0)
+
     def test_json_output(self):
         expected = {
             "name_regex": "abs",
@@ -89,6 +99,7 @@ class TestMainBackendTest(unittest.TestCase):
             "include_big": False,
             "repeat": 2,
             "warmup": 1,
+            "max_repeat_time": 0.5,
             "timeout_seconds": 3.5,
             "selected": 0,
             "timed_out": 0,
@@ -114,6 +125,8 @@ class TestMainBackendTest(unittest.TestCase):
                     "2",
                     "--warmup",
                     "1",
+                    "--max-repeat-time",
+                    "0.5",
                     "--timeout",
                     "3.5",
                     "--json",
@@ -126,6 +139,7 @@ class TestMainBackendTest(unittest.TestCase):
             include_big=False,
             repeat=2,
             warmup=1,
+            max_repeat_time=0.5,
             timeout_seconds=3.5,
             tuning_comparison=None,
             save_models=None,
@@ -136,6 +150,8 @@ class TestMainBackendTest(unittest.TestCase):
             _run_backend_test_timing(repeat=0)
         with self.assertRaisesRegex(ValueError, "warmup must be non-negative"):
             _run_backend_test_timing(warmup=-1)
+        with self.assertRaisesRegex(ValueError, "max_repeat_time must be positive"):
+            _run_backend_test_timing(max_repeat_time=0)
         with self.assertRaisesRegex(ValueError, "timeout_seconds must be positive"):
             _run_backend_test_timing(timeout_seconds=0)
         for value in (float("nan"), float("inf")):
@@ -167,6 +183,7 @@ class TestMainBackendTest(unittest.TestCase):
             "include_big": False,
             "repeat": 2,
             "warmup": 1,
+            "max_repeat_time": 0.5,
             "timeout_seconds": 2.0,
             "selected": 1,
             "timed_out": 0,
@@ -232,6 +249,7 @@ class TestMainBackendTest(unittest.TestCase):
                 summary_values = dict(summary.iter_rows(min_row=2, values_only=True))
                 self.assertEqual(summary_values["repeat"], 2)
                 self.assertEqual(summary_values["warmup"], 1)
+                self.assertEqual(summary_values["max_repeat_time"], 0.5)
                 self.assertEqual(summary_values["timeout_seconds"], 2)
                 self.assertEqual(summary_values["timed_out"], 0)
                 self.assertIn("cpu.architecture", summary_values)

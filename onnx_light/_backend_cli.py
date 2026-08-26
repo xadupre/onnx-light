@@ -23,7 +23,7 @@ def _backend_test_data_set_feed(data_set: Any) -> dict[str, Any]:
 
 
 def _measure_backend_test_case(
-    case: Any, repeat: int, warmup: int, capture_model: bool
+    case: Any, repeat: int, warmup: int, max_repeat_time: float, capture_model: bool
 ) -> dict[str, Any]:
     """Measures one materialized backend test case."""
     import statistics
@@ -53,14 +53,19 @@ def _measure_backend_test_case(
     for _ in range(warmup):
         for feed in feeds:
             evaluator.run(None, feed)
+        if time.perf_counter() - warmup_start >= max_repeat_time:
+            break
     warmup_seconds = time.perf_counter() - warmup_start
 
     iteration_seconds = []
+    repeat_start = time.perf_counter()
     for _ in range(repeat):
         iteration_start = time.perf_counter()
         for feed in feeds:
             evaluator.run(None, feed)
         iteration_seconds.append(time.perf_counter() - iteration_start)
+        if time.perf_counter() - repeat_start >= max_repeat_time:
+            break
 
     return {
         "name": case.name,
@@ -107,7 +112,13 @@ def backend_test_worker_ready() -> bool:
 
 
 def measure_backend_test_case_by_name(
-    case_name: str, mode: str, include_big: bool, repeat: int, warmup: int, capture_model: bool
+    case_name: str,
+    mode: str,
+    include_big: bool,
+    repeat: int,
+    warmup: int,
+    max_repeat_time: float,
+    capture_model: bool,
 ) -> dict[str, Any]:
     """Collects and measures one backend test case."""
     import re
@@ -120,4 +131,4 @@ def measure_backend_test_case_by_name(
     )
     if len(cases) != 1:
         raise RuntimeError(f"expected one backend case named {case_name!r}, got {len(cases)}")
-    return _measure_backend_test_case(cases[0], repeat, warmup, capture_model)
+    return _measure_backend_test_case(cases[0], repeat, warmup, max_repeat_time, capture_model)

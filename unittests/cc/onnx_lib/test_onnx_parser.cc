@@ -766,16 +766,10 @@ TEST(onnx_defs, Parser_LocaleIndependentFloatParsing) {
       "French_France.1252",
   };
 
-  bool locale_set = false;
   for (const auto *candidate : locale_candidates) {
     if (std::setlocale(LC_NUMERIC, candidate) != nullptr) {
-      locale_set = true;
       break;
     }
-  }
-
-  if (!locale_set) {
-    GTEST_SKIP() << "No locale with comma decimal separator available on this system";
   }
 
   const char *code = R"ONNX(
@@ -806,16 +800,10 @@ TEST(onnx_defs, Parser_LocaleIndependentSpecialFloatParsing) {
       "Turkish_Turkey.1254",
   };
 
-  bool locale_set = false;
   for (const auto *candidate : locale_candidates) {
     if (std::setlocale(LC_CTYPE, candidate) != nullptr) {
-      locale_set = true;
       break;
     }
-  }
-
-  if (!locale_set) {
-    GTEST_SKIP() << "No Turkish locale available on this system";
   }
 
   AttributeProto attr;

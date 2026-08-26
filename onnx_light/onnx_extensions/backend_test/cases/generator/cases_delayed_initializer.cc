@@ -7,6 +7,7 @@
 #include "onnx_extensions/backend_test/cases/generator/include_generator_cases.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -17,11 +18,25 @@
 #include <string>
 #include <vector>
 
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 namespace {
 
 constexpr const char *kAiRtDomain = "ai.rt";
+
+uint64_t CurrentProcessId() {
+#if defined(_WIN32)
+  return static_cast<uint64_t>(_getpid());
+#else
+  return static_cast<uint64_t>(getpid());
+#endif
+}
 
 struct CleanupState {
   std::mutex mutex;
@@ -74,7 +89,12 @@ std::string WriteWeightsFile(const std::string &filename, const std::vector<uint
     throw std::runtime_error("DelayedInitializer backend-test filename must be a basename, got '" +
                              filename_path.string() + "'.");
   }
-  const fs::path path = fs::temp_directory_path() / filename_path.filename();
+  static std::atomic<uint64_t> next_file_id{0};
+  const std::string unique_filename =
+      filename_path.stem().string() + "." + std::to_string(CurrentProcessId()) + "." +
+      std::to_string(next_file_id.fetch_add(1, std::memory_order_relaxed)) +
+      filename_path.extension().string();
+  const fs::path path = fs::temp_directory_path() / unique_filename;
   std::error_code ec;
   fs::remove(path, ec);
   std::ofstream out(path, std::ios::binary | std::ios::trunc);

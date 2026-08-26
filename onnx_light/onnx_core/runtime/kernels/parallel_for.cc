@@ -172,7 +172,6 @@ void ThreadPool::RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn) {
   if (num_blocks > worker_count() + 1) {
     throw std::invalid_argument("ThreadPool num_blocks exceeds its participant capacity.");
   }
-
   std::lock_guard<std::mutex> region(region_mu_);
   {
     std::lock_guard<std::mutex> lock(mu_);

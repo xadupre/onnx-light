@@ -21,13 +21,20 @@ namespace {
 /// Derives the CPU policy a session requests when the caller supplied none.
 /// The requested participant count comes from
 /// :cpp:var:`RuntimeParameters::num_threads` (negative values mean "topology
-/// default", as documented there) and worker placement is left to the
-/// operating system so wiring the executor does not change where the workers
-/// of an existing session run.
+/// default", as documented there). The policy's topology-aware physical-core
+/// placement remains active unless the caller explicitly requests no
+/// affinity, or the requested participant count exceeds the physical cores
+/// available to the process: a session default must never fail to construct
+/// because of an unpinned degradation, so it falls back to unpinned placement
+/// in that case instead of rejecting the request.
 CpuExecutionPolicy DefaultCpuExecutionPolicy(const RuntimeParameters &parameters) {
   CpuExecutionPolicy policy;
   policy.num_threads = parameters.num_threads < 0 ? 0 : parameters.num_threads;
-  policy.affinity_policy = CpuAffinityPolicy::kNone;
+  const uint32_t physical_cores = DetectedPhysicalCoreCount();
+  if (policy.num_threads > 1 && physical_cores != 0 &&
+      static_cast<uint32_t>(policy.num_threads) > physical_cores) {
+    policy.affinity_policy = CpuAffinityPolicy::kNone;
+  }
   return policy;
 }
 

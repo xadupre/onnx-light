@@ -232,6 +232,7 @@ ResolveTopologyWorkers(const CpuExecutionPolicy &request,
 
   std::optional<std::pair<uint32_t, uint32_t>> caller_core;
   std::optional<CpuLogicalProcessor> caller_processor;
+  std::optional<uint32_t> caller_package;
 #if defined(__linux__)
   const int caller_id = sched_getcpu();
   if (caller_id >= 0) {
@@ -241,6 +242,7 @@ ResolveTopologyWorkers(const CpuExecutionPolicy &request,
                               });
     if (found != topology.end()) {
       caller_processor = found->processor;
+      caller_package = found->package_id;
       caller_core = std::pair<uint32_t, uint32_t>{found->package_id, found->core_id};
     }
   }
@@ -252,16 +254,25 @@ ResolveTopologyWorkers(const CpuExecutionPolicy &request,
   if (caller_core.has_value()) {
     selected_cores.insert(*caller_core);
   }
-  for (const LogicalProcessorTopology &entry : topology) {
-    if (caller_processor.has_value() && entry.processor == *caller_processor) {
-      continue;
+  const auto append_workers = [&](bool local_package) {
+    for (const LogicalProcessorTopology &entry : topology) {
+      if (caller_processor.has_value() && entry.processor == *caller_processor) {
+        continue;
+      }
+      if (caller_package.has_value() && (entry.package_id == *caller_package) != local_package) {
+        continue;
+      }
+      const std::pair<uint32_t, uint32_t> core{entry.package_id, entry.core_id};
+      if (selected_cores.insert(core).second) {
+        primary.push_back(entry.processor);
+      } else {
+        siblings.push_back(entry.processor);
+      }
     }
-    const std::pair<uint32_t, uint32_t> core{entry.package_id, entry.core_id};
-    if (selected_cores.insert(core).second) {
-      primary.push_back(entry.processor);
-    } else {
-      siblings.push_back(entry.processor);
-    }
+  };
+  append_workers(true);
+  if (caller_package.has_value()) {
+    append_workers(false);
   }
 
   std::vector<CpuLogicalProcessor> workers = std::move(primary);
@@ -319,6 +330,10 @@ std::vector<CpuLogicalProcessor> ProcessVisibleLogicalProcessors() {
   }
 #endif
   return processors;
+}
+
+uint32_t DetectedPhysicalCoreCount() noexcept {
+  return DetectedPhysicalCores(ProcessVisibleLogicalProcessors());
 }
 
 ResolvedCpuExecutionPolicy ResolveCpuExecutionPolicy(const CpuExecutionPolicy &request) {

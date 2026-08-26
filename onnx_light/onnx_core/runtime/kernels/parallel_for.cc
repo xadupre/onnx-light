@@ -179,7 +179,6 @@ void ThreadPool::RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn) {
     task_ctx_ = task_ctx;
     task_fn_ = task_fn;
     num_blocks_ = num_blocks;
-    next_block_.store(1, std::memory_order_relaxed);
     remaining_.store(num_blocks - 1, std::memory_order_relaxed);
     active_workers_.store(num_blocks - 1, std::memory_order_release);
     generation_.fetch_add(1, std::memory_order_release);
@@ -220,14 +219,22 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
 
   uint64_t last_generation = 0;
   for (;;) {
+    bool work_ready = false;
     if (worker_index < active_workers_.load(std::memory_order_acquire)) {
-      SpinForWork(last_generation, worker_index);
+      work_ready = SpinForWork(last_generation, worker_index);
     }
     void *ctx = nullptr;
     TaskFn fn = nullptr;
     int64_t num_blocks = 0;
-    int64_t block = 0;
-    {
+    if (stop_.load(std::memory_order_acquire)) {
+      return;
+    }
+    if (work_ready) {
+      last_generation = generation_.load(std::memory_order_acquire);
+      ctx = task_ctx_;
+      fn = task_fn_;
+      num_blocks = num_blocks_;
+    } else {
       std::unique_lock<std::mutex> lock(mu_);
       worker_work_[static_cast<size_t>(worker_index)]->wait(
           lock, [this, last_generation, worker_index]() {
@@ -242,8 +249,8 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
       ctx = task_ctx_;
       fn = task_fn_;
       num_blocks = num_blocks_;
-      block = next_block_.fetch_add(1, std::memory_order_relaxed);
     }
+    const int64_t block = worker_index + 1;
     if (block < num_blocks) {
       fn(ctx, block);
       if (remaining_.fetch_sub(1, std::memory_order_acq_rel) == 1) {

@@ -78,8 +78,8 @@ int64_t ParallelForThreadCount() noexcept;
  * participating workers spin; unused workers remain parked.
  *
  * The pool exposes a single primitive, :cpp:func:`Run`, that executes a set of
- * indexed blocks: block ``0`` runs on the calling thread and the remaining
- * blocks are claimed dynamically by workers. It
+ * indexed blocks: block ``0`` runs on the calling thread and each selected
+ * worker receives one remaining block. It
  * deliberately offers no reduction/combine step: callers write disjoint output
  * ranges, so results are independent of how blocks map to threads (bit-exact).
  * The pool handles several
@@ -120,8 +120,8 @@ public:
    * Runs ``fn(block)`` for every ``block`` in ``[0, num_blocks)``, then blocks
    * until all blocks finish.
    *
-   * Block ``0`` runs on the calling thread and workers dynamically claim the
-   * remaining blocks. Only as many parked workers as there are worker blocks
+   * Block ``0`` runs on the calling thread and selected workers receive the
+   * remaining blocks by index. Only as many parked workers as there are worker blocks
    * are notified. ``fn`` is invoked concurrently and must only touch data
    * disjoint per block; it must not throw. ``num_blocks`` must not exceed
    * ``worker_count() + 1`` when workers are used; :cpp:func:`ParallelFor`
@@ -161,7 +161,6 @@ private:
   int64_t num_blocks_ = 0;
   int64_t started_workers_ = 0;
   std::string startup_error_;
-  std::atomic<int64_t> next_block_{1};
   std::atomic<int64_t> active_workers_{0};
   std::atomic<int64_t> remaining_{0};
   std::atomic<uint64_t> generation_{0};

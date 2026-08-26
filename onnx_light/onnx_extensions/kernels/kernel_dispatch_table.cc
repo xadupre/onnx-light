@@ -316,6 +316,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::Acos::RegisterTuningSchemas();
     onnx_kernels::kernel::Acosh::RegisterTuningSchemas();
     onnx_kernels::kernel::Add::RegisterTuningSchemas();
+    onnx_kernels::kernel::AffineGrid::RegisterTuningSchemas();
     onnx_kernels::kernel::And::RegisterTuningSchemas();
     onnx_kernels::kernel::Asin::RegisterTuningSchemas();
     onnx_kernels::kernel::Asinh::RegisterTuningSchemas();

@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/tuning/parallel_region_collector.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include <gtest/gtest.h>
@@ -735,6 +736,31 @@ TEST(KernelClass, AffineGrid3DMatchesUpstreamReference) {
   EXPECT_NEAR(gac[last_idx + 0], 4.5484166f, 1e-4f);
   EXPECT_NEAR(gac[last_idx + 1], 0.41203886f, 1e-4f);
   EXPECT_NEAR(gac[last_idx + 2], 1.1f, 1e-4f);
+}
+
+TEST(KernelClass, AffineGridUsesTunableParallelRows) {
+  const KernelContext ctx{DefaultOpset(20)};
+  AffineGrid ag_kernel{ctx};
+  ag_kernel.Configure(
+      {ag_kernel.TuningKey(static_cast<int32_t>(onnx_kernels::DataType::FLOAT)),
+       {{std::string(onnx_kernels::tuning::kParallelMinimumElements), int64_t{1}}}});
+  core::runtime::ParallelRegionCollector collector(2);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+
+  Tensor theta2d = MakeUpstreamTheta2D();
+  Tensor size2d = Tensor::FromInt64("", {4}, {2, 3, 5, 6});
+  (void)ag_kernel(theta2d, size2d, AffineGrid::Attributes{});
+  Tensor theta3d = MakeUpstreamTheta3D();
+  Tensor size3d = Tensor::FromInt64("", {5}, {2, 3, 4, 5, 6});
+  (void)ag_kernel(theta3d, size3d, AffineGrid::Attributes{});
+
+  ASSERT_EQ(collector.events().size(), 2u);
+  EXPECT_EQ(collector.events()[0].label, "AffineGrid");
+  EXPECT_EQ(collector.events()[0].total_iterations, 2 * 5);
+  EXPECT_EQ(collector.events()[0].grain_size, 1);
+  EXPECT_EQ(collector.events()[1].label, "AffineGrid");
+  EXPECT_EQ(collector.events()[1].total_iterations, 2 * 4 * 5);
+  EXPECT_EQ(collector.events()[1].grain_size, 1);
 }
 
 TEST(KernelClass, AffineGridRejectsBadShapes) {

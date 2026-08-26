@@ -5,7 +5,10 @@
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -14,6 +17,16 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 1> kSupportedElementTypes = {static_cast<int32_t>(DataType::FLOAT)};
+
+int64_t RowGrainSize(int64_t minimum_elements, int64_t row_elements) {
+  const int64_t elements = std::max<int64_t>(1, row_elements);
+  return std::max<int64_t>(1, minimum_elements / elements +
+                                  static_cast<int64_t>(minimum_elements % elements != 0));
+}
 
 // Returns the per-axis normalised coordinate values for an axis of length
 // ``dim_size`` as a 1-D FLOAT Tensor. The convention matches
@@ -118,6 +131,12 @@ void ApplyAffine(const float *theta, int64_t out_dim, int64_t in_dim, const floa
 
 } // namespace
 
+AffineGrid::AffineGrid(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "AffineGrid", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(AffineGrid)
+
 Tensor AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
                               RuntimeContext *rt) const {
   ValidateInputs(theta, size);
@@ -137,7 +156,6 @@ Tensor AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Att
 
 void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
                             Tensor &output, RawBufferAllocator *allocator) const {
-  (void)ctx_;
   ValidateInputs(theta, size);
   const onnx_kernels::Shape expected_shape = ComputeOutputShape(size);
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
@@ -167,16 +185,23 @@ void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attri
     // Homogeneous coord per (y, x): [x, y, 1] (matches op_affine_grid.py
     // which prepends y for dim 0 then x for dim 1 and finally takes the
     // dot product with theta rows).
-    for (int64_t n = 0; n < N; ++n) {
-      const float *t = theta_data + n * 6; // (2 x 3) row-major
-      float *out_n = out_data + n * H * W * 2;
-      for (int64_t h = 0; h < H; ++h) {
-        for (int64_t w = 0; w < W; ++w) {
-          const float coords[3] = {x_data[w], y_data[h], 1.0f};
-          ApplyAffine(t, /*out_dim=*/2, /*in_dim=*/3, coords, out_n + (h * W + w) * 2);
-        }
-      }
-    }
+    const int64_t rows = N * H;
+    const int64_t row_elements = W * 2;
+    ParallelFor(
+        rows, RowGrainSize(tuning().parallel_minimum_elements, row_elements),
+        [=](int64_t begin, int64_t end) {
+          for (int64_t row = begin; row < end; ++row) {
+            const int64_t n = row / H;
+            const int64_t h = row % H;
+            const float *t = theta_data + n * 6; // (2 x 3) row-major
+            float *out_row = out_data + row * row_elements;
+            for (int64_t w = 0; w < W; ++w) {
+              const float coords[3] = {x_data[w], y_data[h], 1.0f};
+              ApplyAffine(t, /*out_dim=*/2, /*in_dim=*/3, coords, out_row + w * 2);
+            }
+          }
+        },
+        "AffineGrid");
   } else {
     // 3D case. Output indexed as [N, D, H, W, 3].
     const int64_t N = expected_shape[0];
@@ -189,18 +214,25 @@ void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attri
     const float *z_data = z_coords.AsFloat();
     const float *y_data = y_coords.AsFloat();
     const float *x_data = x_coords.AsFloat();
-    for (int64_t n = 0; n < N; ++n) {
-      const float *t = theta_data + n * 12; // (3 x 4) row-major
-      float *out_n = out_data + n * D * H * W * 3;
-      for (int64_t d = 0; d < D; ++d) {
-        for (int64_t h = 0; h < H; ++h) {
-          for (int64_t w = 0; w < W; ++w) {
-            const float coords[4] = {x_data[w], y_data[h], z_data[d], 1.0f};
-            ApplyAffine(t, /*out_dim=*/3, /*in_dim=*/4, coords, out_n + ((d * H + h) * W + w) * 3);
+    const int64_t rows = N * D * H;
+    const int64_t row_elements = W * 3;
+    ParallelFor(
+        rows, RowGrainSize(tuning().parallel_minimum_elements, row_elements),
+        [=](int64_t begin, int64_t end) {
+          for (int64_t row = begin; row < end; ++row) {
+            const int64_t n = row / (D * H);
+            const int64_t spatial_row = row % (D * H);
+            const int64_t d = spatial_row / H;
+            const int64_t h = spatial_row % H;
+            const float *t = theta_data + n * 12; // (3 x 4) row-major
+            float *out_row = out_data + row * row_elements;
+            for (int64_t w = 0; w < W; ++w) {
+              const float coords[4] = {x_data[w], y_data[h], z_data[d], 1.0f};
+              ApplyAffine(t, /*out_dim=*/3, /*in_dim=*/4, coords, out_row + w * 3);
+            }
           }
-        }
-      }
-    }
+        },
+        "AffineGrid");
   }
 }
 

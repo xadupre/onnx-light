@@ -139,6 +139,16 @@ CpuExecutor *&ActiveCpuExecutorRegionSlot() noexcept {
   return active;
 }
 
+struct CpuExecutorDispatchBinding {
+  CpuExecutor *executor = nullptr;
+  void *context = nullptr;
+};
+
+CpuExecutorDispatchBinding &CurrentCpuExecutorDispatchBinding() noexcept {
+  thread_local CpuExecutorDispatchBinding binding;
+  return binding;
+}
+
 class CpuExecutorRegionScope {
 public:
   explicit CpuExecutorRegionScope(CpuExecutor *executor) noexcept
@@ -162,6 +172,19 @@ CpuExecutorScope::CpuExecutorScope(CpuExecutor *executor) noexcept
 }
 
 CpuExecutorScope::~CpuExecutorScope() { CurrentCpuExecutorSlot() = previous_; }
+
+CpuExecutorDispatchScope::CpuExecutorDispatchScope(CpuExecutor *executor,
+                                                   void *dispatch_context) noexcept {
+  CpuExecutorDispatchBinding &binding = CurrentCpuExecutorDispatchBinding();
+  previous_executor_ = binding.executor;
+  previous_context_ = binding.context;
+  binding = CpuExecutorDispatchBinding{executor, dispatch_context};
+}
+
+CpuExecutorDispatchScope::~CpuExecutorDispatchScope() {
+  CurrentCpuExecutorDispatchBinding() =
+      CpuExecutorDispatchBinding{previous_executor_, previous_context_};
+}
 
 CpuExecutorKey MakeCpuExecutorKey(const ResolvedCpuExecutionPolicy &policy) {
   return CpuExecutorKey{
@@ -190,8 +213,18 @@ struct CpuExecutor::Impl {
                                         std::move(options));
   }
 
+  Impl(ResolvedCpuExecutionPolicy resolved, CpuParallelDispatchFn external_dispatch)
+      : policy(std::move(resolved)), executor_key(MakeCpuExecutorKey(policy)),
+        process_id(CurrentProcessId()), instance_id(NextCpuExecutorInstanceId()),
+        dispatch(external_dispatch) {
+    ValidateResolvedPolicy(policy);
+    if (dispatch == nullptr) {
+      throw std::invalid_argument("CpuExecutor external dispatch must not be null.");
+    }
+  }
+
   ~Impl() {
-    if (process_id != CurrentProcessId()) {
+    if (pool != nullptr && process_id != CurrentProcessId()) {
       (void)pool.release();
     }
   }
@@ -207,6 +240,7 @@ struct CpuExecutor::Impl {
   uint64_t process_id;
   uint64_t instance_id;
   std::unique_ptr<ThreadPool> pool;
+  CpuParallelDispatchFn dispatch = nullptr;
   std::mutex counters_mutex;
   std::unique_ptr<CounterState> counters_storage;
   std::atomic<CounterState *> counters{nullptr};
@@ -215,7 +249,27 @@ struct CpuExecutor::Impl {
 CpuExecutor::CpuExecutor(ResolvedCpuExecutionPolicy policy)
     : impl_(std::make_unique<Impl>(std::move(policy))) {}
 
+CpuExecutor::CpuExecutor(ResolvedCpuExecutionPolicy policy, CpuParallelDispatchFn dispatch)
+    : impl_(std::make_unique<Impl>(std::move(policy), dispatch)) {}
+
 CpuExecutor::~CpuExecutor() = default;
+
+std::unique_ptr<CpuExecutor> CpuExecutor::CreateExternal(uint32_t maximum_participants,
+                                                         CpuParallelDispatchFn dispatch) {
+  if (maximum_participants == 0) {
+    throw std::invalid_argument("CpuExecutor external maximum_participants must be positive.");
+  }
+  if (maximum_participants > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
+    throw std::invalid_argument(
+        "CpuExecutor external maximum_participants exceeds the supported limit.");
+  }
+  CpuExecutionPolicy request;
+  request.num_threads = static_cast<int32_t>(maximum_participants);
+  request.affinity_policy = CpuAffinityPolicy::kNone;
+  request.spin_policy = CpuSpinPolicy::kParkImmediately;
+  return std::unique_ptr<CpuExecutor>(
+      new CpuExecutor(ResolveCpuExecutionPolicy(request), dispatch));
+}
 
 uint32_t CpuExecutor::effective_threads() const noexcept { return impl_->policy.effective_threads; }
 
@@ -459,19 +513,41 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
       total / num_blocks,
       total % num_blocks,
   };
-  impl_->pool->Run(num_blocks, [&range, this, collector, run_id, region_id](int64_t block_index) {
-    CpuExecutorScope block_scope(this);
-    CpuExecutorRegionScope region_scope(this);
+  struct BlockContext {
+    ParallelRange *range;
+    CpuExecutor *executor;
+    ParallelRegionCollector *collector;
+    uint64_t run_id;
+    uint64_t region_id;
+  };
+  BlockContext block_context{&range, this, collector, run_id, region_id};
+  const auto run_block = [](void *opaque, int64_t block_index) {
+    auto &block = *static_cast<BlockContext *>(opaque);
+    CpuExecutorScope block_scope(block.executor);
+    CpuExecutorRegionScope region_scope(block.executor);
+    const ParallelRange &range = *block.range;
     const int64_t begin =
         block_index * range.base_block_size + std::min(block_index, range.extra_blocks);
     const int64_t end = begin + range.base_block_size + (block_index < range.extra_blocks ? 1 : 0);
-    if (collector != nullptr) {
-      ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
+    if (block.collector != nullptr) {
+      ParallelRegionCollectorScope collector_scope(block.collector, block.run_id, block.region_id);
       range.function(range.context, begin, end);
     } else {
       range.function(range.context, begin, end);
     }
-  });
+  };
+  if (impl_->dispatch != nullptr) {
+    const CpuExecutorDispatchBinding &binding = CurrentCpuExecutorDispatchBinding();
+    if (binding.executor != this) {
+      throw std::runtime_error(
+          "CpuExecutor external dispatch requires a matching CpuExecutorDispatchScope.");
+    }
+    impl_->dispatch(binding.context, num_blocks, &block_context, run_block);
+  } else {
+    impl_->pool->Run(num_blocks, [&block_context, run_block](int64_t block_index) {
+      run_block(&block_context, block_index);
+    });
+  }
   record(static_cast<uint32_t>(num_blocks), false);
 }
 

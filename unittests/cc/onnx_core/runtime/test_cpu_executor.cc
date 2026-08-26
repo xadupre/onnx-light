@@ -57,6 +57,21 @@ void ObserveRange(void *context, int64_t begin, int64_t end) {
   }
 }
 
+struct ExternalDispatchObservation {
+  int64_t dispatched_blocks = 0;
+  int64_t dispatches = 0;
+};
+
+void DispatchInline(void *context, int64_t num_blocks, void *block_context,
+                    CpuParallelBlockFn block_function) {
+  auto &observation = *static_cast<ExternalDispatchObservation *>(context);
+  observation.dispatched_blocks += num_blocks;
+  ++observation.dispatches;
+  for (int64_t block = 0; block < num_blocks; ++block) {
+    block_function(block_context, block);
+  }
+}
+
 TEST(CpuExecutorRegistry, CompatibleResolvedPoliciesShareExecutor) {
   CpuExecutorRegistry registry(2);
   ResolvedCpuExecutionPolicy first_policy = NoAffinityPolicy(2);
@@ -207,6 +222,57 @@ TEST(CpuExecutor, ParallelForCoversRangeWithAllParticipants) {
 
   EXPECT_EQ(observation.threads.size(), 4u);
   EXPECT_TRUE(std::all_of(observation.visits.begin(), observation.visits.end(),
+                          [](int visits) { return visits == 1; }));
+}
+
+TEST(CpuExecutor, ExternalDispatcherCoversRangeWithoutCreatingAPool) {
+  ExternalDispatchObservation dispatch;
+  std::unique_ptr<CpuExecutor> executor = CpuExecutor::CreateExternal(4, &DispatchInline);
+  CpuExecutorDispatchScope dispatch_scope(executor.get(), &dispatch);
+  RangeObservation observation(400);
+
+  executor->ParallelFor(400, 100, &observation, &ObserveRange);
+
+  EXPECT_EQ(dispatch.dispatches, 1);
+  EXPECT_EQ(dispatch.dispatched_blocks, 4);
+  EXPECT_TRUE(std::all_of(observation.visits.begin(), observation.visits.end(),
+                          [](int visits) { return visits == 1; }));
+}
+
+TEST(CpuExecutor, ExternalDispatcherValidatesConfiguration) {
+  EXPECT_THROW(CpuExecutor::CreateExternal(0, &DispatchInline), std::invalid_argument);
+  EXPECT_THROW(CpuExecutor::CreateExternal(1, nullptr), std::invalid_argument);
+}
+
+TEST(CpuExecutor, ExternalDispatcherRequiresInvocationScope) {
+  std::unique_ptr<CpuExecutor> executor = CpuExecutor::CreateExternal(4, &DispatchInline);
+  RangeObservation observation(400);
+
+  EXPECT_THROW(executor->ParallelFor(400, 100, &observation, &ObserveRange), std::runtime_error);
+}
+
+TEST(CpuExecutor, ExternalDispatcherUsesPerInvocationContextConcurrently) {
+  std::unique_ptr<CpuExecutor> executor = CpuExecutor::CreateExternal(4, &DispatchInline);
+  ExternalDispatchObservation first_dispatch;
+  ExternalDispatchObservation second_dispatch;
+  RangeObservation first(400);
+  RangeObservation second(400);
+  std::thread first_call([&]() {
+    CpuExecutorDispatchScope scope(executor.get(), &first_dispatch);
+    executor->ParallelFor(400, 100, &first, &ObserveRange);
+  });
+  std::thread second_call([&]() {
+    CpuExecutorDispatchScope scope(executor.get(), &second_dispatch);
+    executor->ParallelFor(400, 100, &second, &ObserveRange);
+  });
+  first_call.join();
+  second_call.join();
+
+  EXPECT_EQ(first_dispatch.dispatches, 1);
+  EXPECT_EQ(second_dispatch.dispatches, 1);
+  EXPECT_TRUE(std::all_of(first.visits.begin(), first.visits.end(),
+                          [](int visits) { return visits == 1; }));
+  EXPECT_TRUE(std::all_of(second.visits.begin(), second.visits.end(),
                           [](int visits) { return visits == 1; }));
 }
 

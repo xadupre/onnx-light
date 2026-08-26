@@ -26,6 +26,18 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 /// Type-erased range callable: ``function(context, begin, end)``.
 using ParallelRangeFn = void (*)(void *, int64_t, int64_t);
 
+/// Type-erased block callable used by an external CPU dispatcher.
+using CpuParallelBlockFn = void (*)(void *, int64_t);
+
+/**
+ * Dispatches indexed blocks through an externally owned worker pool.
+ *
+ * The callback must synchronously invoke ``block_function(block_context, i)``
+ * exactly once for every ``i`` in ``[0, num_blocks)`` before returning.
+ */
+using CpuParallelDispatchFn = void (*)(void *dispatch_context, int64_t num_blocks,
+                                       void *block_context, CpuParallelBlockFn block_function);
+
 /**
  * Identifies every resolved property that changes executor behavior.
  *
@@ -121,6 +133,21 @@ public:
   CpuExecutor &operator=(const CpuExecutor &) = delete;
   ~CpuExecutor();
 
+  /**
+   * Creates an executor that delegates parallel blocks to an external worker pool.
+   *
+   * The executor never creates worker threads. ``maximum_participants`` limits
+   * the number of blocks submitted for one region and must be positive. The
+   * dispatcher must remain valid until the returned executor is destroyed.
+   * Each invocation supplies its transient dispatcher context through
+   * :cpp:class:`CpuExecutorDispatchScope`.
+   *
+   * Returns:
+   *   An executor backed by ``dispatch``.
+   */
+  static std::unique_ptr<CpuExecutor> CreateExternal(uint32_t maximum_participants,
+                                                     CpuParallelDispatchFn dispatch);
+
   /// Returns the effective participant count, including the caller.
   uint32_t effective_threads() const noexcept;
 
@@ -197,6 +224,7 @@ private:
   struct Impl;
 
   explicit CpuExecutor(ResolvedCpuExecutionPolicy policy);
+  CpuExecutor(ResolvedCpuExecutionPolicy policy, CpuParallelDispatchFn dispatch);
 
   std::unique_ptr<Impl> impl_;
 };
@@ -232,6 +260,27 @@ public:
 
 private:
   CpuExecutor *previous_;
+};
+
+/**
+ * Installs the transient context used by an external executor dispatch.
+ *
+ * The binding is thread-local, composes across nested scopes, and does not own
+ * either pointer. It separates an invocation-specific runtime context from the
+ * persistent :cpp:class:`CpuExecutor`.
+ */
+class CpuExecutorDispatchScope {
+public:
+  CpuExecutorDispatchScope(CpuExecutor *executor, void *dispatch_context) noexcept;
+
+  CpuExecutorDispatchScope(const CpuExecutorDispatchScope &) = delete;
+  CpuExecutorDispatchScope &operator=(const CpuExecutorDispatchScope &) = delete;
+
+  ~CpuExecutorDispatchScope();
+
+private:
+  CpuExecutor *previous_executor_;
+  void *previous_context_;
 };
 
 /**

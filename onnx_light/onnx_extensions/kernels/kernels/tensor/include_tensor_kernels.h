@@ -151,6 +151,9 @@ public:
     int64_t align_corners = 0;
   };
 
+  /// Validates the inputs and returns the output shape.
+  static Shape ComputeOutputShape(const Tensor &theta, const Tensor &size);
+
   Tensor operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
                     RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs, Tensor &output,

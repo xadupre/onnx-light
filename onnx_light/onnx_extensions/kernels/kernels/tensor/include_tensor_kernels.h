@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
 #include <optional>
 #include <span>
@@ -138,16 +139,17 @@ public:
 /// Output shape: ``(N, H, W, 2)`` for 2D or ``(N, D, H, W, 3)`` for 3D.
 /// The element type follows the ``theta`` input (FLOAT in this
 /// implementation).
-class AffineGrid : public KernelBase {
+class AffineGrid : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:AffineGrid";
+  explicit AffineGrid(const KernelContext &ctx);
+  /// Registers the portable parallel tuning schema.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``AffineGrid`` operator.
   struct Attributes {
     int64_t align_corners = 0;
   };
-
-  using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
                     RuntimeContext *rt = nullptr) const;

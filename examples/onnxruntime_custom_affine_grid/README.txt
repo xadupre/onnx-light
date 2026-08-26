@@ -44,8 +44,8 @@ FindOrt module and downloads its default ONNX Runtime release.
 Run
 ---
 
-Generate the small custom-domain model (the Python ``onnx`` package is needed
-only for this step):
+Generate the small custom-domain model with the installed ``onnx_light``
+package:
 
   python examples/onnxruntime_custom_affine_grid/generate_model.py \
          build-ort-affine-grid/affine_grid_custom.onnx

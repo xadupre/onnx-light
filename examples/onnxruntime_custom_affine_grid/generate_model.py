@@ -2,8 +2,9 @@
 
 import sys
 
-import onnx
-from onnx import TensorProto, helper
+import onnx_light.onnx as onnxl
+import onnx_light.onnx.helper as helper
+from onnx_light.onnx import TensorProto
 
 
 def main() -> None:
@@ -26,7 +27,7 @@ def main() -> None:
         ir_version=10,
         opset_imports=[helper.make_opsetid("", 20), helper.make_opsetid("com.example", 1)],
     )
-    onnx.save(model, output)
+    onnxl.save(model, output)
 
 
 if __name__ == "__main__":

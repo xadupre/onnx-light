@@ -5,11 +5,12 @@ This example exposes onnx-light's FLOAT AffineGrid implementation as an ONNX
 Runtime Lite Custom Op. It does not reimplement AffineGrid and deliberately
 creates no thread pool.
 
-For each invocation, the adapter creates an external CpuExecutor whose
-dispatcher calls Ort::KernelContext::ParallelFor. The existing onnx-light
-AffineGrid kernel therefore keeps calling its normal ParallelFor helper, while
-the resulting blocks run on the intra-op workers owned by the current ONNX
-Runtime session.
+The adapter keeps one external CpuExecutor in the custom kernel. During each
+invocation, a CpuExecutorDispatchScope binds the current OrtKernelContext to
+that executor, whose dispatcher calls Ort::KernelContext::ParallelFor. The
+existing onnx-light AffineGrid kernel therefore keeps calling its normal
+ParallelFor helper, while the resulting blocks run on the intra-op workers
+owned by the current ONNX Runtime session.
 
 KernelContext::ParallelFor was added in ONNX Runtime API version 17, so ONNX
 Runtime 1.17 or newer is required.

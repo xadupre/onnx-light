@@ -53,7 +53,9 @@ uint32_t ExternalParticipantLimit() noexcept {
 class OrtAffineGridKernel {
 public:
   OrtAffineGridKernel(const OrtApi *api, const OrtKernelInfo *info)
-      : kernel_(runtime::KernelContext{runtime::DefaultOpset(20)}) {
+      : executor_(
+            runtime::CpuExecutor::CreateExternal(ExternalParticipantLimit(), &DispatchWithOrt)),
+        kernel_(runtime::KernelContext{runtime::DefaultOpset(20)}) {
     OrtStatus *status = api->KernelInfoGetAttribute_int64(info, "align_corners", &align_corners_);
     if (status != nullptr) {
       const std::string message = api->GetErrorMessage(status);
@@ -85,9 +87,8 @@ public:
                                 output_shape, reinterpret_cast<const uint8_t *>(output_data),
                                 static_cast<size_t>(output.NumberOfElement()) * sizeof(float));
 
-    std::unique_ptr<runtime::CpuExecutor> executor =
-        runtime::CpuExecutor::CreateExternal(ExternalParticipantLimit(), context, &DispatchWithOrt);
-    const runtime::CpuExecutorScope executor_scope(executor.get());
+    const runtime::CpuExecutorDispatchScope dispatch_scope(executor_.get(), context);
+    const runtime::CpuExecutorScope executor_scope(executor_.get());
     kernel_(onnx_theta, onnx_size, kernels::kernel::AffineGrid::Attributes{align_corners_},
             onnx_output);
     return Ort::Status{nullptr};
@@ -95,6 +96,7 @@ public:
 
 private:
   int64_t align_corners_ = 0;
+  std::unique_ptr<runtime::CpuExecutor> executor_;
   kernels::kernel::AffineGrid kernel_;
 };
 

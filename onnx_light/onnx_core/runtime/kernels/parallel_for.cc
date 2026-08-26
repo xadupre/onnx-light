@@ -50,6 +50,10 @@ ThreadPool::ThreadPool(int64_t num_workers, ThreadPoolOptions options)
   if (num_workers < 0) {
     num_workers = 0;
   }
+  worker_work_.reserve(static_cast<size_t>(num_workers));
+  for (int64_t i = 0; i < num_workers; ++i) {
+    worker_work_.push_back(std::make_unique<std::condition_variable>());
+  }
   workers_.reserve(static_cast<size_t>(num_workers));
   try {
     for (int64_t i = 0; i < num_workers; ++i) {
@@ -80,7 +84,9 @@ void ThreadPool::StopAndJoin() noexcept {
     stop_.store(true, std::memory_order_release);
     generation_.fetch_add(1, std::memory_order_release);
   }
-  cv_work_.notify_all();
+  for (const auto &worker : worker_work_) {
+    worker->notify_one();
+  }
   for (std::thread &worker : workers_) {
     if (worker.joinable()) {
       worker.join();
@@ -95,12 +101,20 @@ bool &ThreadPool::InPoolFlag() noexcept {
 
 bool ThreadPool::InPool() noexcept { return InPoolFlag(); }
 
-bool ThreadPool::SpinForWork(uint64_t last_generation) const noexcept {
+bool ThreadPool::SpinForWork(uint64_t last_generation, int64_t worker_index) const noexcept {
+  const auto work_available = [this, last_generation, worker_index]() {
+    if (generation_.load(std::memory_order_acquire) == last_generation) {
+      return false;
+    }
+    return worker_index < active_workers_.load(std::memory_order_acquire);
+  };
   if (options_.spin_iterations != 0) {
     for (uint64_t spin = 0; spin < options_.spin_iterations; ++spin) {
-      if (stop_.load(std::memory_order_acquire) ||
-          generation_.load(std::memory_order_acquire) != last_generation) {
+      if (stop_.load(std::memory_order_acquire) || work_available()) {
         return true;
+      }
+      if (generation_.load(std::memory_order_acquire) != last_generation) {
+        return false;
       }
       CpuRelax();
     }
@@ -111,9 +125,11 @@ bool ThreadPool::SpinForWork(uint64_t last_generation) const noexcept {
   }
   const auto deadline = std::chrono::steady_clock::now() + SpinDuration(options_.spin_duration_ns);
   while (std::chrono::steady_clock::now() < deadline) {
-    if (stop_.load(std::memory_order_acquire) ||
-        generation_.load(std::memory_order_acquire) != last_generation) {
+    if (stop_.load(std::memory_order_acquire) || work_available()) {
       return true;
+    }
+    if (generation_.load(std::memory_order_acquire) != last_generation) {
+      return false;
     }
     CpuRelax();
   }
@@ -165,10 +181,10 @@ void ThreadPool::RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn) {
     num_blocks_ = num_blocks;
     next_block_.store(1, std::memory_order_relaxed);
     remaining_.store(num_blocks - 1, std::memory_order_relaxed);
-    park_workers_after_region_.store(num_blocks < worker_count() + 1, std::memory_order_relaxed);
+    active_workers_.store(num_blocks - 1, std::memory_order_release);
     generation_.fetch_add(1, std::memory_order_release);
-    for (int64_t worker = 1; worker < num_blocks; ++worker) {
-      cv_work_.notify_one();
+    for (int64_t worker = 0; worker < num_blocks - 1; ++worker) {
+      worker_work_[static_cast<size_t>(worker)]->notify_one();
     }
   }
 
@@ -204,8 +220,8 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
 
   uint64_t last_generation = 0;
   for (;;) {
-    if (!park_workers_after_region_.load(std::memory_order_acquire)) {
-      SpinForWork(last_generation);
+    if (worker_index < active_workers_.load(std::memory_order_acquire)) {
+      SpinForWork(last_generation, worker_index);
     }
     void *ctx = nullptr;
     TaskFn fn = nullptr;
@@ -213,10 +229,12 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
     int64_t block = 0;
     {
       std::unique_lock<std::mutex> lock(mu_);
-      cv_work_.wait(lock, [this, last_generation]() {
-        return stop_.load(std::memory_order_acquire) ||
-               generation_.load(std::memory_order_acquire) != last_generation;
-      });
+      worker_work_[static_cast<size_t>(worker_index)]->wait(
+          lock, [this, last_generation, worker_index]() {
+            return stop_.load(std::memory_order_acquire) ||
+                   (generation_.load(std::memory_order_acquire) != last_generation &&
+                    worker_index < active_workers_.load(std::memory_order_acquire));
+          });
       if (stop_.load(std::memory_order_acquire)) {
         return;
       }

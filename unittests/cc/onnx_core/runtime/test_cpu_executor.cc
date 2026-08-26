@@ -222,6 +222,39 @@ TEST(CpuExecutor, MaximumParticipantsLowersSessionLimit) {
                           [](int visits) { return visits == 1; }));
 }
 
+TEST(CpuExecutor, CostModelScalesParticipantsWithWork) {
+  CpuExecutorRegistry registry(1);
+  std::shared_ptr<CpuExecutor> executor = registry.Acquire(NoAffinityPolicy(8));
+  const CpuLoopCost abs_float32{4.0, 4.0, 1.0};
+  const CpuLoopCost log_float32{4.0, 4.0, 15.0};
+
+  EXPECT_EQ(executor->PlanParallelFor(1024, abs_float32).participants, 1u);
+  EXPECT_GT(executor->PlanParallelFor(1 << 20, abs_float32).participants, 1u);
+  EXPECT_GT(executor->PlanParallelFor(1 << 18, log_float32).participants,
+            executor->PlanParallelFor(1 << 18, abs_float32).participants);
+  EXPECT_LE(executor->PlanParallelFor(1 << 20, log_float32, 3).participants, 3u);
+  EXPECT_EQ(
+      executor->PlanParallelFor(1 << 20, log_float32, CpuParallelConstraints{8, 3}).participants,
+      3u);
+  EXPECT_EQ(executor->PlanParallelFor(1024, log_float32, CpuParallelConstraints{8, 3}).participants,
+            1u);
+  EXPECT_EQ(
+      executor->PlanParallelFor(1 << 20, log_float32, CpuParallelConstraints{2, 3}).participants,
+      2u);
+}
+
+TEST(CpuExecutor, CostBasedParallelForCoversRange) {
+  CpuExecutorRegistry registry(1);
+  std::shared_ptr<CpuExecutor> executor = registry.Acquire(NoAffinityPolicy(4));
+  RangeObservation observation(200000);
+
+  executor->ParallelFor(200000, CpuLoopCost{4.0, 4.0, 15.0}, &observation, &ObserveRange);
+
+  EXPECT_GT(observation.threads.size(), 1u);
+  EXPECT_TRUE(std::all_of(observation.visits.begin(), observation.visits.end(),
+                          [](int visits) { return visits == 1; }));
+}
+
 TEST(CpuExecutor, SerialPolicyDoesNotCreateParallelParticipants) {
   CpuExecutorRegistry registry(1);
   std::shared_ptr<CpuExecutor> executor = registry.Acquire(NoAffinityPolicy(1));

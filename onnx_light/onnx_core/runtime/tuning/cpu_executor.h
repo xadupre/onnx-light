@@ -63,6 +63,41 @@ struct CpuExecutorCounters {
 };
 
 /**
+ * Describes the estimated work performed by one independent loop iteration.
+ *
+ * Byte counts are exact logical traffic. ``compute_cycles`` is a relative
+ * estimate of arithmetic work, excluding loads and stores.
+ */
+struct CpuLoopCost {
+  double bytes_read = 0.0;
+  double bytes_written = 0.0;
+  double compute_cycles = 0.0;
+
+  bool operator==(const CpuLoopCost &) const = default;
+};
+
+/** Cost-model decision consumed by :cpp:class:`CpuExecutor`. */
+struct CpuParallelPlan {
+  /// Minimum iterations needed to justify another participant.
+  int64_t grain_size = 1;
+  /// Maximum participants selected for this loop, including the caller.
+  uint32_t participants = 1;
+
+  bool operator==(const CpuParallelPlan &) const = default;
+};
+
+/** Kernel constraints applied to a cost-model decision. */
+struct CpuParallelConstraints {
+  /// Hard participant ceiling. Zero uses the session limit.
+  uint32_t maximum_participants = 0;
+  /// Exact participant target once parallel execution is worthwhile.
+  /// Zero leaves the participant count entirely to the cost model.
+  uint32_t preferred_participants = 0;
+
+  bool operator==(const CpuParallelConstraints &) const = default;
+};
+
+/**
  * Returns the immutable sharing key for a resolved policy.
  *
  * @param policy The resolved CPU policy.
@@ -114,6 +149,20 @@ public:
   CpuExecutorCounters counters() const noexcept;
 
   /**
+   * Plans a loop from its per-iteration memory and compute cost.
+   *
+   * The model amortizes executor startup and per-participant overhead, then
+   * chooses a task grain large enough to keep dispatch overhead bounded.
+   * ``maximum_participants == 0`` uses the session limit.
+   */
+  CpuParallelPlan PlanParallelFor(int64_t total, const CpuLoopCost &cost,
+                                  uint32_t maximum_participants = 0) const noexcept;
+
+  /** Plans a loop with explicit kernel participant constraints. */
+  CpuParallelPlan PlanParallelFor(int64_t total, const CpuLoopCost &cost,
+                                  const CpuParallelConstraints &constraints) const noexcept;
+
+  /**
    * Executes contiguous ranges covering ``[0, total)``.
    *
    * ``maximum_participants == 0`` uses the session limit. A positive value may
@@ -129,6 +178,18 @@ public:
   void ParallelFor(int64_t total, int64_t grain, void *context, ParallelRangeFn function,
                    uint32_t maximum_participants = 0, ParallelRegionCollector *collector = nullptr,
                    std::string_view label = {},
+                   std::source_location location = std::source_location::current());
+
+  /** Executes a loop using :cpp:func:`PlanParallelFor`. */
+  void ParallelFor(int64_t total, const CpuLoopCost &cost, void *context, ParallelRangeFn function,
+                   uint32_t maximum_participants = 0, ParallelRegionCollector *collector = nullptr,
+                   std::string_view label = {},
+                   std::source_location location = std::source_location::current());
+
+  /** Executes a cost-aware loop with explicit kernel participant constraints. */
+  void ParallelFor(int64_t total, const CpuLoopCost &cost, void *context, ParallelRangeFn function,
+                   const CpuParallelConstraints &constraints,
+                   ParallelRegionCollector *collector = nullptr, std::string_view label = {},
                    std::source_location location = std::source_location::current());
 
 private:

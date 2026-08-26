@@ -19,7 +19,7 @@ def main() -> None:
             helper.make_tensor_value_info("theta", TensorProto.FLOAT, [1, 2, 3]),
             helper.make_tensor_value_info("size", TensorProto.INT64, [4]),
         ],
-        [helper.make_tensor_value_info("grid", TensorProto.FLOAT, [1, 2, 3, 2])],
+        [helper.make_tensor_value_info("grid", TensorProto.FLOAT, [1, 256, 256, 2])],
     )
     model = helper.make_model(
         graph,

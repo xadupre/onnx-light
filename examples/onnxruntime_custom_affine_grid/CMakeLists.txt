@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
 project(onnxruntime_custom_affine_grid LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+find_package(onnx_light REQUIRED)
 
 if(NOT DEFINED ONNXRUNTIME_ROOT_DIR AND DEFINED ENV{ONNXRUNTIME_ROOT_DIR})
   set(ONNXRUNTIME_ROOT_DIR "$ENV{ONNXRUNTIME_ROOT_DIR}")
@@ -34,6 +36,7 @@ endif()
 
 add_library(ort_affine_grid_custom SHARED affine_grid_custom_op.cc)
 target_include_directories(ort_affine_grid_custom PRIVATE "${ONNXRUNTIME_INCLUDE_DIR}")
+target_link_libraries(ort_affine_grid_custom PRIVATE onnx_light::lib_onnx_kernels)
 
 add_executable(run_ort_affine_grid main.cc)
 target_include_directories(run_ort_affine_grid PRIVATE "${ONNXRUNTIME_INCLUDE_DIR}")

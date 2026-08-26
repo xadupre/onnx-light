@@ -98,7 +98,7 @@ void ValidateInputs(const Tensor &theta, const Tensor &size) {
 
 // Computes the output shape for an AffineGrid call given a fully validated
 // ``size`` input (1-D INT64 of length 4 or 5).
-onnx_kernels::Shape ComputeOutputShape(const Tensor &size) {
+onnx_kernels::Shape ComputeValidatedOutputShape(const Tensor &size) {
   const int64_t *size_data = reinterpret_cast<const int64_t *>(size.bytes());
   onnx_kernels::Shape out_shape;
   out_shape.push_back(size_data[0]); // N
@@ -139,8 +139,7 @@ ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(AffineGrid)
 
 Tensor AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
                               RuntimeContext *rt) const {
-  ValidateInputs(theta, size);
-  const onnx_kernels::Shape out_shape = ComputeOutputShape(size);
+  const onnx_kernels::Shape out_shape = ComputeOutputShape(theta, size);
   int64_t total = 1;
   for (int64_t d : out_shape) {
     total *= d;
@@ -156,8 +155,7 @@ Tensor AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Att
 
 void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
                             Tensor &output, RawBufferAllocator *allocator) const {
-  ValidateInputs(theta, size);
-  const onnx_kernels::Shape expected_shape = ComputeOutputShape(size);
+  const onnx_kernels::Shape expected_shape = ComputeOutputShape(theta, size);
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::AffineGrid: preallocated output must be FLOAT.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,
@@ -234,6 +232,11 @@ void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attri
         },
         "AffineGrid");
   }
+}
+
+onnx_kernels::Shape AffineGrid::ComputeOutputShape(const Tensor &theta, const Tensor &size) {
+  ValidateInputs(theta, size);
+  return ComputeValidatedOutputShape(size);
 }
 
 void AffineGrid::Run(RuntimeContext &rt) {

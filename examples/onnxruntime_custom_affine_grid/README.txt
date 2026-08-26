@@ -1,22 +1,40 @@
 ONNX Runtime custom AffineGrid
 ================================
 
-This example implements a FLOAT AffineGrid custom operator for 2D and 3D
-inputs. It deliberately creates no thread pool. Its Compute method calls
-Ort::KernelContext::ParallelFor, which schedules rows on the intra-op workers
-owned by the current ONNX Runtime session.
+This example exposes onnx-light's FLOAT AffineGrid implementation as an ONNX
+Runtime Lite Custom Op. It does not reimplement AffineGrid and deliberately
+creates no thread pool.
+
+For each invocation, the adapter creates an external CpuExecutor whose
+dispatcher calls Ort::KernelContext::ParallelFor. The existing onnx-light
+AffineGrid kernel therefore keeps calling its normal ParallelFor helper, while
+the resulting blocks run on the intra-op workers owned by the current ONNX
+Runtime session.
 
 KernelContext::ParallelFor was added in ONNX Runtime API version 17, so ONNX
 Runtime 1.17 or newer is required.
 
-Build
------
+Install onnx-light
+------------------
+
+The custom-op library links to onnx_light::lib_onnx_kernels:
+
+  cmake -S . -B build-install \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DONNX_LIGHT_BUILD_PYTHON=OFF \
+        -DCMAKE_INSTALL_PREFIX=/path/to/onnx-light-install
+  cmake --build build-install
+  cmake --install build-install
+
+Build the custom op
+-------------------
 
 Point CMake at an extracted ONNX Runtime CPU release:
 
   cmake -S examples/onnxruntime_custom_affine_grid \
         -B build-ort-affine-grid \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_PREFIX_PATH=/path/to/onnx-light-install \
         -DONNXRUNTIME_ROOT_DIR=/path/to/onnxruntime
   cmake --build build-ort-affine-grid
 
@@ -41,7 +59,7 @@ Linux:
 macOS uses libort_affine_grid_custom.dylib and Windows uses
 ort_affine_grid_custom.dll.
 
-The runner configures four intra-op threads. ParallelFor receives the
-OrtKernelContext for this invocation, so ONNX Runtime selects and reuses those
-session workers. Setting SetIntraOpNumThreads(1) makes the same kernel execute
-serially without changing the custom operator.
+The runner configures four intra-op threads. The external CpuExecutor receives
+the OrtKernelContext for the invocation, so ONNX Runtime selects and reuses
+those session workers. Setting SetIntraOpNumThreads(1) makes the same
+onnx-light kernel execute serially without changing the custom operator.

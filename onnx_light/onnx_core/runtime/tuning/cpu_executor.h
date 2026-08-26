@@ -26,6 +26,18 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 /// Type-erased range callable: ``function(context, begin, end)``.
 using ParallelRangeFn = void (*)(void *, int64_t, int64_t);
 
+/// Type-erased block callable used by an external CPU dispatcher.
+using CpuParallelBlockFn = void (*)(void *, int64_t);
+
+/**
+ * Dispatches indexed blocks through an externally owned worker pool.
+ *
+ * The callback must synchronously invoke ``block_function(block_context, i)``
+ * exactly once for every ``i`` in ``[0, num_blocks)`` before returning.
+ */
+using CpuParallelDispatchFn = void (*)(void *dispatch_context, int64_t num_blocks,
+                                       void *block_context, CpuParallelBlockFn block_function);
+
 /**
  * Identifies every resolved property that changes executor behavior.
  *
@@ -121,6 +133,21 @@ public:
   CpuExecutor &operator=(const CpuExecutor &) = delete;
   ~CpuExecutor();
 
+  /**
+   * Creates an executor that delegates parallel blocks to an external worker pool.
+   *
+   * The executor never creates worker threads and does not own
+   * ``dispatch_context``. ``maximum_participants`` limits the number of blocks
+   * submitted for one region and must be positive. The dispatcher and its
+   * context must remain valid until the returned executor is destroyed.
+   *
+   * Returns:
+   *   An executor backed by ``dispatch``.
+   */
+  static std::unique_ptr<CpuExecutor> CreateExternal(uint32_t maximum_participants,
+                                                     void *dispatch_context,
+                                                     CpuParallelDispatchFn dispatch);
+
   /// Returns the effective participant count, including the caller.
   uint32_t effective_threads() const noexcept;
 
@@ -197,6 +224,8 @@ private:
   struct Impl;
 
   explicit CpuExecutor(ResolvedCpuExecutionPolicy policy);
+  CpuExecutor(ResolvedCpuExecutionPolicy policy, void *dispatch_context,
+              CpuParallelDispatchFn dispatch);
 
   std::unique_ptr<Impl> impl_;
 };

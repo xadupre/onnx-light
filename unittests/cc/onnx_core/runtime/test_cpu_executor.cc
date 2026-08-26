@@ -57,6 +57,21 @@ void ObserveRange(void *context, int64_t begin, int64_t end) {
   }
 }
 
+struct ExternalDispatchObservation {
+  int64_t dispatched_blocks = 0;
+  int64_t dispatches = 0;
+};
+
+void DispatchInline(void *context, int64_t num_blocks, void *block_context,
+                    CpuParallelBlockFn block_function) {
+  auto &observation = *static_cast<ExternalDispatchObservation *>(context);
+  observation.dispatched_blocks += num_blocks;
+  ++observation.dispatches;
+  for (int64_t block = 0; block < num_blocks; ++block) {
+    block_function(block_context, block);
+  }
+}
+
 TEST(CpuExecutorRegistry, CompatibleResolvedPoliciesShareExecutor) {
   CpuExecutorRegistry registry(2);
   ResolvedCpuExecutionPolicy first_policy = NoAffinityPolicy(2);
@@ -208,6 +223,26 @@ TEST(CpuExecutor, ParallelForCoversRangeWithAllParticipants) {
   EXPECT_EQ(observation.threads.size(), 4u);
   EXPECT_TRUE(std::all_of(observation.visits.begin(), observation.visits.end(),
                           [](int visits) { return visits == 1; }));
+}
+
+TEST(CpuExecutor, ExternalDispatcherCoversRangeWithoutCreatingAPool) {
+  ExternalDispatchObservation dispatch;
+  std::unique_ptr<CpuExecutor> executor =
+      CpuExecutor::CreateExternal(4, &dispatch, &DispatchInline);
+  RangeObservation observation(400);
+
+  executor->ParallelFor(400, 100, &observation, &ObserveRange);
+
+  EXPECT_EQ(dispatch.dispatches, 1);
+  EXPECT_EQ(dispatch.dispatched_blocks, 4);
+  EXPECT_TRUE(std::all_of(observation.visits.begin(), observation.visits.end(),
+                          [](int visits) { return visits == 1; }));
+}
+
+TEST(CpuExecutor, ExternalDispatcherValidatesConfiguration) {
+  ExternalDispatchObservation dispatch;
+  EXPECT_THROW(CpuExecutor::CreateExternal(0, &dispatch, &DispatchInline), std::invalid_argument);
+  EXPECT_THROW(CpuExecutor::CreateExternal(1, &dispatch, nullptr), std::invalid_argument);
 }
 
 TEST(CpuExecutor, MaximumParticipantsLowersSessionLimit) {

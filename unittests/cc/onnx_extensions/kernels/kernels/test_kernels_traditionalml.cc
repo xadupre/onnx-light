@@ -146,6 +146,51 @@ TEST(KernelClass, LabelEncoderStringRejectsNonStringInput) {
                std::invalid_argument);
 }
 
+TEST(KernelClass, LabelEncoderInt64ToStringWithDefault) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
+  const std::vector<int64_t> keys{1, 2, 3};
+  const std::vector<std::string> values{"one", "two", "three"};
+  Tensor x = Tensor::FromInt64("", {4}, {3, 1, 7, 2});
+  Tensor y =
+      label_encoder.operator()<int64_t, std::string>(x, keys, values, std::string("unknown"));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::STRING));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{4}));
+  EXPECT_EQ(y.AsStrings(), (std::vector<std::string>{"three", "one", "unknown", "two"}));
+}
+
+TEST(KernelClass, LabelEncoderStringToStringWritesToPreallocatedOutput) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
+  const std::vector<std::string> keys{"a", "b"};
+  const std::vector<std::string> values{"alpha", "beta"};
+  Tensor x = Tensor::FromStrings("", {3}, {"b", "x", "a"});
+  Tensor y = Tensor::MakeString("", {3}, std::vector<std::string>(3));
+  label_encoder.operator()<std::string, std::string>(x, keys, values, std::string("missing"), y);
+  EXPECT_EQ(y.AsStrings(), (std::vector<std::string>{"beta", "missing", "alpha"}));
+}
+
+TEST(KernelClass, LabelEncoderStringOutputUsesLastDuplicateKey) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
+  const std::vector<int64_t> keys{1, 1};
+  const std::vector<std::string> values{"first", "last"};
+  Tensor x = Tensor::FromInt64("", {1}, {1});
+  Tensor y = label_encoder.operator()<int64_t, std::string>(x, keys, values, std::string{});
+  EXPECT_EQ(y.AsStrings(), (std::vector<std::string>{"last"}));
+}
+
+TEST(KernelClass, LabelEncoderFloatToStringMatchesNanKey) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const std::vector<float> keys{nan};
+  const std::vector<std::string> values{"nan"};
+  Tensor x = Tensor::FromFloat("", {2}, {nan, 1.0f});
+  Tensor y = label_encoder.operator()<float, std::string>(x, keys, values, std::string("missing"));
+  EXPECT_EQ(y.AsStrings(), (std::vector<std::string>{"nan", "missing"}));
+}
+
 TEST(KernelClass, BinarizerFloatThresholdElementwise) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
   Binarizer binarizer{ctx};

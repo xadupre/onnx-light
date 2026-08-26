@@ -192,7 +192,7 @@ public:
 /// ``LabelEncoder`` operator (since opset 4 in the ``ai.onnx.ml`` domain).
 ///
 /// For every input element ``x[i]``, the output element ``y[i]`` is
-/// ``values[k]`` where ``k`` is the index of the first ``keys[k]`` that
+/// ``values[k]`` where ``k`` is the index of the last ``keys[k]`` that
 /// matches ``x[i]``; if no key matches, ``y[i]`` is ``default_value``.
 ///
 /// The output tensor has the same shape as the input tensor. The kernel
@@ -205,6 +205,9 @@ public:
 ///   * ``(float,   float)``
 ///   * ``(std::string, int64_t)``
 ///   * ``(std::string, int16_t)``
+///   * ``(int64_t, std::string)``
+///   * ``(float, std::string)``
+///   * ``(std::string, std::string)``
 ///
 /// ``keys.size()`` must match ``values.size()``. The kernel throws
 /// ``std::invalid_argument`` if the input element type does not match

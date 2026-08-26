@@ -14,9 +14,9 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * The rewrite applies to FLOAT ensembles already imported with ai.onnx.ml
  * opset 5, using SUM aggregation and no post-transform. Classifier labels are
- * restricted to integers and reconstructed with ArgMax and Gather. Base values
- * are preserved with Add when the default-domain opset supports
- * multidirectional broadcasting.
+ * reconstructed with ArgMax followed by Gather for integer labels or by
+ * LabelEncoder for string labels. Base values are preserved with Add when the
+ * default-domain opset supports multidirectional broadcasting.
  */
 class TreeEnsemblePattern final : public core::builder::PatternOptimization {
 public:

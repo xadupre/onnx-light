@@ -142,6 +142,16 @@ std::vector<int64_t> AttributeInts(const NodeProto &node, const char *name) {
              : std::vector<int64_t>(attribute->ints().begin(), attribute->ints().end());
 }
 
+std::vector<std::string> AttributeStrings(const NodeProto &node, const char *name) {
+  const AttributeProto *attribute = FindAttribute(node, name);
+  EXPECT_NE(attribute, nullptr);
+  std::vector<std::string> values;
+  if (attribute != nullptr) {
+    values.assign(attribute->strings().begin(), attribute->strings().end());
+  }
+  return values;
+}
+
 std::vector<double> AttributeTensorFloats(const NodeProto &node, const char *name) {
   const AttributeProto *attribute = FindAttribute(node, name);
   EXPECT_NE(attribute, nullptr);
@@ -235,7 +245,7 @@ TEST(TreeEnsemblePattern, ConvertsClassifierWithIntLabels) {
             std::vector<int64_t>({10, 20}));
 }
 
-TEST(TreeEnsemblePattern, LeavesStringLabelClassifierUnchanged) {
+TEST(TreeEnsemblePattern, ConvertsClassifierWithStringLabels) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.SetOpsetVersion("", 13);
   builder.SetOpsetVersion("ai.onnx.ml", 5);
@@ -246,9 +256,20 @@ TEST(TreeEnsemblePattern, LeavesStringLabelClassifierUnchanged) {
 
   Optimize(builder);
 
-  ASSERT_EQ(builder.Nodes().size(), 1u);
-  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "TreeEnsembleClassifier");
-  EXPECT_EQ(FindInitializer(builder, TensorProto::DataType::STRING), nullptr);
+  ASSERT_EQ(builder.Nodes().size(), 3u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "TreeEnsemble");
+  EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "Z");
+  EXPECT_EQ(builder.Nodes()[1].op_type().value(), "ArgMax");
+  EXPECT_EQ(builder.Nodes()[1].input()[0].value(), "Z");
+  const NodeProto &encoder = builder.Nodes()[2];
+  EXPECT_EQ(encoder.op_type().value(), "LabelEncoder");
+  EXPECT_EQ(encoder.domain().value(), "ai.onnx.ml");
+  EXPECT_EQ(encoder.input()[0].value(), builder.Nodes()[1].output()[0].value());
+  EXPECT_EQ(encoder.output()[0].value(), "Y");
+  EXPECT_EQ(AttributeInts(encoder, "keys_int64s"), std::vector<int64_t>({0, 1}));
+  EXPECT_EQ(AttributeStrings(encoder, "values_strings"),
+            std::vector<std::string>({"left", "right"}));
+  EXPECT_EQ(FindInitializer(builder, TensorProto::DataType::INT64), nullptr);
 }
 
 TEST(TreeEnsemblePattern, InsertsBaseValuesAdd) {

@@ -45,6 +45,7 @@ struct ParsedEnsemble {
   std::map<std::pair<std::pair<int64_t, int64_t>, int64_t>, float> weights;
   std::vector<float> base_values;
   std::vector<int64_t> labels_int64;
+  std::vector<std::string> labels_strings;
   bool has_missing_tracks_true = false;
 };
 
@@ -378,15 +379,25 @@ bool ParseLegacyEnsemble(core::builder::GraphGraph &graph, const NodeProto &node
         UniqueAttribute(node, "classlabels_int64s", int_labels_valid);
     const AttributeProto *string_labels =
         UniqueAttribute(node, "classlabels_strings", string_labels_valid);
-    if (!int_labels_valid || !string_labels_valid || int_labels == nullptr ||
-        string_labels != nullptr) {
+    if (!int_labels_valid || !string_labels_valid ||
+        (int_labels == nullptr) == (string_labels == nullptr)) {
       return false;
     }
-    if (int_labels->type() != AttributeProto::AttributeType::INTS || int_labels->ints().empty()) {
-      return false;
+    if (int_labels != nullptr) {
+      if (int_labels->type() != AttributeProto::AttributeType::INTS || int_labels->ints().empty()) {
+        return false;
+      }
+      parsed.labels_int64.assign(int_labels->ints().begin(), int_labels->ints().end());
+      parsed.n_targets = static_cast<int64_t>(parsed.labels_int64.size());
+    } else {
+      if (string_labels->type() != AttributeProto::AttributeType::STRINGS ||
+          string_labels->strings().empty()) {
+        return false;
+      }
+      parsed.labels_strings.assign(string_labels->strings().begin(),
+                                   string_labels->strings().end());
+      parsed.n_targets = static_cast<int64_t>(parsed.labels_strings.size());
     }
-    parsed.labels_int64.assign(int_labels->ints().begin(), int_labels->ints().end());
-    parsed.n_targets = static_cast<int64_t>(parsed.labels_int64.size());
     if (parsed.n_targets < 2) {
       return false;
     }
@@ -618,13 +629,25 @@ TreeEnsemblePattern::Apply(core::builder::GraphGraph &graph,
     AddAttribute(argmax, "keepdims", static_cast<int64_t>(0));
     replacements.push_back(std::move(argmax));
 
-    const std::string labels_name = InitializerName(builder, source.name().value() + "_labels");
-    builder.MakeInitializer(
-        MakeInitializer<int64_t>(labels_name.c_str(), {parsed.n_targets}, parsed.labels_int64));
-    NodeProto gather = MakeNode("Gather", {labels_name, indices}, {source.output()[0].value()}, "",
-                                (source.name().value() + "_labels").c_str());
-    AddAttribute(gather, "axis", static_cast<int64_t>(0));
-    replacements.push_back(std::move(gather));
+    if (parsed.labels_strings.empty()) {
+      const std::string labels_name = InitializerName(builder, source.name().value() + "_labels");
+      builder.MakeInitializer(
+          MakeInitializer<int64_t>(labels_name.c_str(), {parsed.n_targets}, parsed.labels_int64));
+      NodeProto gather = MakeNode("Gather", {labels_name, indices}, {source.output()[0].value()},
+                                  "", (source.name().value() + "_labels").c_str());
+      AddAttribute(gather, "axis", static_cast<int64_t>(0));
+      replacements.push_back(std::move(gather));
+    } else {
+      std::vector<int64_t> keys(static_cast<std::size_t>(parsed.n_targets));
+      for (std::size_t i = 0; i < keys.size(); ++i) {
+        keys[i] = static_cast<int64_t>(i);
+      }
+      NodeProto encoder = MakeNode("LabelEncoder", {indices}, {source.output()[0].value()},
+                                   kMlDomain, (source.name().value() + "_labels").c_str());
+      AddAttribute(encoder, "keys_int64s", keys);
+      AddAttribute(encoder, "values_strings", parsed.labels_strings);
+      replacements.push_back(std::move(encoder));
+    }
   }
   return replacements;
 }

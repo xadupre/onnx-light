@@ -233,6 +233,14 @@ TEST(CpuExecutor, CostModelScalesParticipantsWithWork) {
   EXPECT_GT(executor->PlanParallelFor(1 << 18, log_float32).participants,
             executor->PlanParallelFor(1 << 18, abs_float32).participants);
   EXPECT_LE(executor->PlanParallelFor(1 << 20, log_float32, 3).participants, 3u);
+  EXPECT_EQ(
+      executor->PlanParallelFor(1 << 20, log_float32, CpuParallelConstraints{8, 3}).participants,
+      3u);
+  EXPECT_EQ(executor->PlanParallelFor(1024, log_float32, CpuParallelConstraints{8, 3}).participants,
+            1u);
+  EXPECT_EQ(
+      executor->PlanParallelFor(1 << 20, log_float32, CpuParallelConstraints{2, 3}).participants,
+      2u);
 }
 
 TEST(CpuExecutor, CostBasedParallelForCoversRange) {

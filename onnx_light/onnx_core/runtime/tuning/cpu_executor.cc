@@ -254,14 +254,21 @@ CpuExecutorCounters CpuExecutor::counters() const noexcept {
 
 CpuParallelPlan CpuExecutor::PlanParallelFor(int64_t total, const CpuLoopCost &cost,
                                              uint32_t maximum_participants) const noexcept {
+  return PlanParallelFor(total, cost, CpuParallelConstraints{maximum_participants, 0});
+}
+
+CpuParallelPlan
+CpuExecutor::PlanParallelFor(int64_t total, const CpuLoopCost &cost,
+                             const CpuParallelConstraints &constraints) const noexcept {
   constexpr double kMemoryCyclesPerByte = 11.0 / 64.0;
   constexpr double kStartupCycles = 1500000.0;
   constexpr double kPerParticipantCycles = 50000.0;
   constexpr double kTaskCycles = 40000.0;
 
   const uint32_t participant_limit =
-      maximum_participants == 0 ? impl_->policy.effective_threads
-                                : std::min(maximum_participants, impl_->policy.effective_threads);
+      constraints.maximum_participants == 0
+          ? impl_->policy.effective_threads
+          : std::min(constraints.maximum_participants, impl_->policy.effective_threads);
   if (total <= 0 || participant_limit <= 1 || ActiveCpuExecutorRegionSlot() == this) {
     return {};
   }
@@ -279,12 +286,15 @@ CpuParallelPlan CpuExecutor::PlanParallelFor(int64_t total, const CpuLoopCost &c
   const double total_cycles = static_cast<double>(total) * iteration_cycles;
   const double estimated =
       std::floor((total_cycles - kStartupCycles) / kPerParticipantCycles + 0.9);
-  const uint32_t participants =
+  uint32_t participants =
       estimated > 1.0
           ? std::min<uint32_t>(
                 participant_limit,
                 static_cast<uint32_t>(std::min(estimated, static_cast<double>(participant_limit))))
           : 1;
+  if (participants > 1 && constraints.preferred_participants != 0) {
+    participants = std::min(constraints.preferred_participants, participant_limit);
+  }
   const double grain = std::ceil(kTaskCycles / iteration_cycles);
   const int64_t grain_size = grain >= static_cast<double>(std::numeric_limits<int64_t>::max())
                                  ? std::numeric_limits<int64_t>::max()
@@ -296,7 +306,15 @@ void CpuExecutor::ParallelFor(int64_t total, const CpuLoopCost &cost, void *cont
                               ParallelRangeFn function, uint32_t maximum_participants,
                               ParallelRegionCollector *collector, std::string_view label,
                               std::source_location location) {
-  const CpuParallelPlan plan = PlanParallelFor(total, cost, maximum_participants);
+  ParallelFor(total, cost, context, function, CpuParallelConstraints{maximum_participants, 0},
+              collector, label, location);
+}
+
+void CpuExecutor::ParallelFor(int64_t total, const CpuLoopCost &cost, void *context,
+                              ParallelRangeFn function, const CpuParallelConstraints &constraints,
+                              ParallelRegionCollector *collector, std::string_view label,
+                              std::source_location location) {
+  const CpuParallelPlan plan = PlanParallelFor(total, cost, constraints);
   ParallelFor(total, plan.grain_size, context, function, plan.participants, collector, label,
               location);
 }

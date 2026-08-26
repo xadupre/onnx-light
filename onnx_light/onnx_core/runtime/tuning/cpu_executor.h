@@ -86,6 +86,17 @@ struct CpuParallelPlan {
   bool operator==(const CpuParallelPlan &) const = default;
 };
 
+/** Kernel constraints applied to a cost-model decision. */
+struct CpuParallelConstraints {
+  /// Hard participant ceiling. Zero uses the session limit.
+  uint32_t maximum_participants = 0;
+  /// Exact participant target once parallel execution is worthwhile.
+  /// Zero leaves the participant count entirely to the cost model.
+  uint32_t preferred_participants = 0;
+
+  bool operator==(const CpuParallelConstraints &) const = default;
+};
+
 /**
  * Returns the immutable sharing key for a resolved policy.
  *
@@ -147,6 +158,10 @@ public:
   CpuParallelPlan PlanParallelFor(int64_t total, const CpuLoopCost &cost,
                                   uint32_t maximum_participants = 0) const noexcept;
 
+  /** Plans a loop with explicit kernel participant constraints. */
+  CpuParallelPlan PlanParallelFor(int64_t total, const CpuLoopCost &cost,
+                                  const CpuParallelConstraints &constraints) const noexcept;
+
   /**
    * Executes contiguous ranges covering ``[0, total)``.
    *
@@ -169,6 +184,12 @@ public:
   void ParallelFor(int64_t total, const CpuLoopCost &cost, void *context, ParallelRangeFn function,
                    uint32_t maximum_participants = 0, ParallelRegionCollector *collector = nullptr,
                    std::string_view label = {},
+                   std::source_location location = std::source_location::current());
+
+  /** Executes a cost-aware loop with explicit kernel participant constraints. */
+  void ParallelFor(int64_t total, const CpuLoopCost &cost, void *context, ParallelRangeFn function,
+                   const CpuParallelConstraints &constraints,
+                   ParallelRegionCollector *collector = nullptr, std::string_view label = {},
                    std::source_location location = std::source_location::current());
 
 private:

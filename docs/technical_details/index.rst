@@ -11,3 +11,4 @@ implementations...
 
     thread_pools
     loading_and_prepacking
+    optimal_transport_binary_operator

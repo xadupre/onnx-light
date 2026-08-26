@@ -85,9 +85,7 @@ def make_abs_model(elem_type: int):
     return model
 
 
-def measure(
-    function, repeat: int, warmup: int, number: int = 1, max_duration: float = 1.0
-) -> float:
+def measure(function, repeat: int, warmup: int, number: int, max_duration: float) -> float:
     """Measures a callable after warm-up and returns its median time per call."""
 
     warmup_duration = 0.0

@@ -565,6 +565,7 @@ def _measure_backend_test_cases_with_timeout(
     include_big: bool,
     repeat: int,
     warmup: int,
+    max_repeat_time: float,
     timeout_seconds: float,
     tuning: dict[str, Any] | None = None,
     capture_models: bool = False,
@@ -600,7 +601,7 @@ def _measure_backend_test_cases_with_timeout(
                 worker = start_worker()
             result = worker.apply_async(
                 measure_backend_test_case_by_name,
-                (case.name, mode, include_big, repeat, warmup, capture_models),
+                (case.name, mode, include_big, repeat, warmup, max_repeat_time, capture_models),
             )
             try:
                 reports.append(result.get(timeout=timeout_seconds))
@@ -641,8 +642,9 @@ def _run_backend_test_timing(
     name_regex: str = "",
     mode: str = "test",
     include_big: bool = False,
-    repeat: int = 10,
-    warmup: int = 2,
+    repeat: int = 10 * (os.cpu_count() or 1),
+    warmup: int = 2 * (os.cpu_count() or 1),
+    max_repeat_time: float = 1.0,
     timeout_seconds: float = 2.0,
     tuning_comparison: dict[str, Any] | None = None,
     save_models: str | None = None,
@@ -658,6 +660,8 @@ def _run_backend_test_timing(
         raise ValueError(f"repeat must be positive, got {repeat}.")
     if warmup < 0:
         raise ValueError(f"warmup must be non-negative, got {warmup}.")
+    if not math.isfinite(max_repeat_time) or max_repeat_time <= 0:
+        raise ValueError(f"max_repeat_time must be positive and finite, got {max_repeat_time}.")
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError(f"timeout_seconds must be positive and finite, got {timeout_seconds}.")
 
@@ -688,6 +692,7 @@ def _run_backend_test_timing(
             include_big=include_big,
             repeat=repeat,
             warmup=warmup,
+            max_repeat_time=max_repeat_time,
             timeout_seconds=timeout_seconds,
             capture_models=save_models is not None,
         )
@@ -737,6 +742,7 @@ def _run_backend_test_timing(
                         include_big=include_big,
                         repeat=repeat,
                         warmup=warmup,
+                        max_repeat_time=max_repeat_time,
                         timeout_seconds=timeout_seconds,
                         capture_models=save_models is not None,
                         tuning={
@@ -827,6 +833,7 @@ def _run_backend_test_timing(
         "include_big": include_big,
         "repeat": repeat,
         "warmup": warmup,
+        "max_repeat_time": max_repeat_time,
         "timeout_seconds": timeout_seconds,
         "selected": len(cases),
         "timed_out": sum(case["timed_out"] for case in case_reports),
@@ -877,6 +884,7 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
         include_big=args.include_big,
         repeat=args.repeat,
         warmup=args.warmup,
+        max_repeat_time=args.max_repeat_time,
         timeout_seconds=args.timeout,
         tuning_comparison=tuning_comparison,
         save_models=args.save_models,
@@ -892,6 +900,7 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
     print(
         f"mode={report['mode']} selected={report['selected']} "
         f"repeat={report['repeat']} warmup={report['warmup']} "
+        f"max_repeat_time={report['max_repeat_time']:g}s "
         f"timeout={report['timeout_seconds']:g}s timed_out={report['timed_out']} "
         f"collection_ms={report['collection_seconds'] * 1000:.3f}"
     )
@@ -955,6 +964,7 @@ def _backend_test_table(report: dict[str, Any]) -> tuple[list[str], list[list[An
         "mode",
         "repeat",
         "warmup",
+        "max_repeat_time",
         "timeout_seconds",
         "collection_seconds",
         "materialization_seconds",
@@ -979,6 +989,7 @@ def _backend_test_table(report: dict[str, Any]) -> tuple[list[str], list[list[An
             "mode": report["mode"],
             "repeat": report["repeat"],
             "warmup": report["warmup"],
+            "max_repeat_time": report["max_repeat_time"],
             "timeout_seconds": report["timeout_seconds"],
             "collection_seconds": report["collection_seconds"],
             "total_seconds": report["total_seconds"],
@@ -1020,6 +1031,7 @@ def _write_backend_test_output(report: dict[str, Any], output: str) -> None:
             "include_big",
             "repeat",
             "warmup",
+            "max_repeat_time",
             "timeout_seconds",
             "save_models",
             "selected",
@@ -1948,14 +1960,21 @@ def _build_parser() -> argparse.ArgumentParser:
     backend_test_parser.add_argument(
         "--repeat",
         type=_parse_positive_int,
-        default=10,
-        help="Measured iterations per case (default: 10).",
+        default=10 * (os.cpu_count() or 1),
+        help="Maximum measured iterations per case (default: 10 per CPU).",
     )
     backend_test_parser.add_argument(
         "--warmup",
         type=_parse_nonnegative_int,
-        default=2,
-        help="Unmeasured warm-up iterations per case (default: 2).",
+        default=2 * (os.cpu_count() or 1),
+        help="Maximum unmeasured warm-up iterations per case (default: 2 per CPU).",
+    )
+    backend_test_parser.add_argument(
+        "--max-repeat-time",
+        type=_parse_positive_float,
+        default=1.0,
+        metavar="SECONDS",
+        help="Maximum cumulative time for each warm-up and measured phase (default: 1).",
     )
     backend_test_parser.add_argument(
         "--timeout",

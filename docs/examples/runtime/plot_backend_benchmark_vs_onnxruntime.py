@@ -21,6 +21,7 @@ compares the median execution time of ``onnx-light``'s
 
 from __future__ import annotations
 
+import argparse
 import os
 import time
 
@@ -42,25 +43,29 @@ from onnx_light.onnx.reference import ReferenceEvaluator
 
 BENCHMARK_OPS = ["abs", "relu", "sigmoid", "sqrt", "exp", "erf", "add", "mul", "div"]
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("-r", "--repeat", type=int, default=10 * (os.cpu_count() or 1))
+parser.add_argument("-w", "--warmup", type=int, default=2 * (os.cpu_count() or 1))
+parser.add_argument("-t", "--max-repeat-time", type=float, default=1.0)
+args, _ = parser.parse_known_args()
+if args.repeat <= 0:
+    parser.error("--repeat must be greater than 0")
+if args.warmup < 0:
+    parser.error("--warmup must be greater than or equal to 0")
+if args.max_repeat_time <= 0:
+    parser.error("--max-repeat-time must be greater than 0")
+
 
 # %%
 # Measurement grid
 # ----------------
 #
-# Documentation builds use a single warm-up and repeat to keep the gallery
-# fast; a normal run measures a more statistically stable median.
-
-if os.environ.get("UNITTEST_GOING") == "1":
-    warmup, repeat = 1, 2
-else:
-    warmup, repeat = 3, 7
-
-MAX_MEASURE_DURATION = 2.0
+# Each runtime gets up to ``--warmup`` untimed calls, then up to ``--repeat``
+# measured calls. Both phases stop after ``--max-repeat-time`` cumulative
+# seconds.
 
 
-def measure(
-    function, warmup: int, repeat: int, max_duration: float = MAX_MEASURE_DURATION
-) -> float:
+def measure(function, warmup: int, repeat: int, max_duration: float) -> float:
     """Measures a callable after warm-up and returns its median time per call.
 
     Returns:
@@ -69,8 +74,13 @@ def measure(
         stops once their cumulative duration reaches ``max_duration``.
     """
 
+    warmup_duration = 0.0
     for _ in range(warmup):
+        start = time.perf_counter()
         function()
+        warmup_duration += time.perf_counter() - start
+        if warmup_duration >= max_duration:
+            break
     timings = []
     total_duration = 0.0
     for _ in range(repeat):
@@ -156,7 +166,7 @@ def benchmark_case(case: dict, backend: str) -> float:
         return session.run(None, case["feeds"])[0]
 
     numpy.testing.assert_allclose(run(), case["expected"], rtol=case["rtol"], atol=case["atol"])
-    return measure(run, warmup, repeat)
+    return measure(run, args.warmup, args.repeat, args.max_repeat_time)
 
 
 # %%

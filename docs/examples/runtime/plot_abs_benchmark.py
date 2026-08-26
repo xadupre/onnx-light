@@ -25,6 +25,7 @@ NumPy array or a pre-built runtime ``Tensor`` as input.
 
 from __future__ import annotations
 
+import argparse
 import os
 import time
 
@@ -39,6 +40,18 @@ from onnx_light.onnx_py import _onnxpykernels
 
 runtime = _onnxpykernels.runtime
 ORT_MAX_IR_VERSION = 13
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("-r", "--repeat", type=int, default=10 * (os.cpu_count() or 1))
+parser.add_argument("-w", "--warmup", type=int, default=2 * (os.cpu_count() or 1))
+parser.add_argument("-t", "--max-repeat-time", type=float, default=1.0)
+args, _ = parser.parse_known_args()
+if args.repeat <= 0:
+    parser.error("--repeat must be greater than 0")
+if args.warmup < 0:
+    parser.error("--warmup must be greater than or equal to 0")
+if args.max_repeat_time <= 0:
+    parser.error("--max-repeat-time must be greater than 0")
 
 # %%
 # Element types under test
@@ -72,20 +85,16 @@ def make_abs_model(elem_type: int):
     return model
 
 
-MAX_MEASURE_DURATION = 2.0
-
-
-def measure(
-    function,
-    repeat: int,
-    warmup: int = 3,
-    number: int = 1,
-    max_duration: float = MAX_MEASURE_DURATION,
-) -> float:
+def measure(function, repeat: int, warmup: int, number: int, max_duration: float) -> float:
     """Measures a callable after warm-up and returns its median time per call."""
 
+    warmup_duration = 0.0
     for _ in range(warmup):
+        start = time.perf_counter()
         function()
+        warmup_duration += time.perf_counter() - start
+        if warmup_duration >= max_duration:
+            break
     timings = []
     total_duration = 0.0
     for _ in range(repeat):
@@ -109,12 +118,8 @@ def measure(
 
 if os.environ.get("UNITTEST_GOING") == "1":
     size_grid = [100, 1_000]
-    minimum_repeat = 3
-    warmup = 1
 else:
     size_grid = [10**power for power in range(2, 9)]
-    minimum_repeat = 7
-    warmup = 3
 
 
 def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -> dict:
@@ -159,16 +164,29 @@ def benchmark_dtype(label: str, elem_type: int, np_dtype, ort_supported: bool) -
     for size in size_grid:
         values = random_generator.uniform(-100.0, 100.0, size=size).astype(np_dtype)
         expected = numpy.abs(values)
-        repeat = max(minimum_repeat, min(200, 2_000_000 // size))
         number = max(1, min(20, 10_000_000 // size))
 
-        numpy_time = measure(lambda values=values: numpy.abs(values), repeat, warmup, number)
+        numpy_time = measure(
+            lambda values=values: numpy.abs(values),
+            args.repeat,
+            args.warmup,
+            number,
+            args.max_repeat_time,
+        )
         onnx_light_time = measure(
-            lambda values=values: run_onnx_light(values), repeat, warmup, number
+            lambda values=values: run_onnx_light(values),
+            args.repeat,
+            args.warmup,
+            number,
+            args.max_repeat_time,
         )
         input_tensor = make_input_tensor(values)
         onnx_light_tensor_time = measure(
-            lambda tensor=input_tensor: run_onnx_light_tensor(tensor), repeat, warmup, number
+            lambda tensor=input_tensor: run_onnx_light_tensor(tensor),
+            args.repeat,
+            args.warmup,
+            number,
+            args.max_repeat_time,
         )
         numpy.testing.assert_array_equal(run_onnx_light(values), expected)
         numpy.testing.assert_array_equal(run_onnx_light_tensor(input_tensor), expected)
@@ -199,13 +217,12 @@ def benchmark_onnxruntime(result: dict, np_dtype) -> None:
     for size in result["sizes"]:
         values = random_generator.uniform(-100.0, 100.0, size=int(size)).astype(np_dtype)
         expected = numpy.abs(values)
-        repeat = max(minimum_repeat, min(200, 2_000_000 // int(size)))
         number = max(1, min(20, 10_000_000 // int(size)))
 
         def run(values=values):
             return session.run(None, {"X": values})[0]
 
-        ort_times.append(measure(run, repeat, warmup, number))
+        ort_times.append(measure(run, args.repeat, args.warmup, number, args.max_repeat_time))
         numpy.testing.assert_array_equal(run(), expected)
     result["ort_times"] = numpy.array(ort_times)
 

@@ -12,11 +12,69 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Replaces classic TreeEnsembleRegressor and TreeEnsembleClassifier nodes with
  * the unified ai.onnx.ml TreeEnsemble operator from opset 5.
  *
+ * @code
+ * Before (regressor):
+ *          +-----------------------+
+ *   x ---> | TreeEnsembleRegressor | ---> y
+ *          +-----------------------+
+ *
+ * After (regressor):
+ *          +--------------+
+ *   x ---> | TreeEnsemble | ---> y
+ *          +--------------+
+ *
+ * After (regressor with base values):
+ *          +--------------+
+ *   x ---> | TreeEnsemble | ---> tree scores
+ *          +--------------+
+ *
+ *                              +-----+
+ *   tree scores, base values -> | Add | ---> y
+ *                              +-----+
+ *
+ * Before (classifier):
+ *          +------------------------+
+ *   x ---> | TreeEnsembleClassifier | ---> labels, scores
+ *          +------------------------+
+ *
+ * After (classifier with integer labels):
+ *          +--------------+
+ *   x ---> | TreeEnsemble | ---> scores
+ *          +--------------+
+ *                    |
+ *                    v
+ *               +--------+
+ *               | ArgMax | ---> indices
+ *               +--------+
+ *                    |
+ *                    v
+ *               +--------+
+ *   labels ---> | Gather | ---> labels output
+ *               +--------+
+ *
+ * After (classifier with string labels):
+ *          +--------------+
+ *   x ---> | TreeEnsemble | ---> scores
+ *          +--------------+
+ *                    |
+ *                    v
+ *               +--------+
+ *               | ArgMax | ---> indices
+ *               +--------+
+ *                    |
+ *                    v
+ *             +--------------+
+ *             | LabelEncoder | ---> labels output
+ *             +--------------+
+ *
+ * @endcode
+ *
  * The rewrite applies to FLOAT ensembles already imported with ai.onnx.ml
  * opset 5, using SUM aggregation and no post-transform. Classifier labels are
  * reconstructed with ArgMax followed by Gather for integer labels or by
- * LabelEncoder for string labels. Base values are preserved with Add when the
- * default-domain opset supports multidirectional broadcasting.
+ * LabelEncoder for string labels. Base values insert Add between TreeEnsemble
+ * and its final numeric output when the default-domain opset supports
+ * multidirectional broadcasting.
  */
 class TreeEnsemblePattern final : public core::builder::PatternOptimization {
 public:

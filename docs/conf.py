@@ -54,7 +54,6 @@ sphinx_gallery_conf = {
     "examples_dirs": [
         os.path.join(os.path.dirname(__file__), "examples", "runtime"),
         os.path.join(os.path.dirname(__file__), "examples", "proto"),
-        os.path.join(os.path.dirname(__file__), "examples", "core"),
         os.path.join(os.path.dirname(__file__), "examples", "patterns"),
         os.path.join(os.path.dirname(__file__), "examples", "gradient"),
         os.path.join(os.path.dirname(__file__), "examples", "compute"),
@@ -63,7 +62,6 @@ sphinx_gallery_conf = {
     "gallery_dirs": [
         "auto_examples_runtime",
         "auto_examples_proto",
-        "auto_examples_core",
         "auto_examples_patterns",
         "auto_examples_gradient",
         "auto_examples_compute",

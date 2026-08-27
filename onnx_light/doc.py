@@ -374,6 +374,45 @@ def render_rst_pattern_catalog(patterns_root: str | pathlib.Path | None = None) 
     return "\n".join(lines) + "\n"
 
 
+def render_rst_peak_memory_catalog(keys: Iterable[str] | None = None) -> str:
+    """Renders the registered peak-memory functions as a reST catalogue.
+
+    Args:
+        keys: Optional dispatch-table keys to render. It defaults to the keys
+            registered by the installed ``onnx_light`` package.
+
+    Returns:
+        A reST ``list-table`` containing one row per registered function.
+    """
+    if keys is None:
+        from .onnx_core.shape_inference import peak_memory_dispatch_table_keys
+
+        keys = peak_memory_dispatch_table_keys()
+
+    rows: list[tuple[str, str, str]] = []
+    for key in keys:
+        parts = key.split(":")
+        if len(parts) not in (2, 3):
+            raise ValueError(f"Unexpected peak-memory dispatch key {key!r}.")
+        domain, op_type = parts[:2]
+        device = "CPU / default" if len(parts) == 2 else f"GPU{int(parts[2])}"
+        rows.append((domain, op_type, device))
+
+    lines = [
+        ".. list-table::",
+        "    :header-rows: 1",
+        "    :widths: 30 45 25",
+        "    :class: sphinx-datatable",
+        "",
+        "    * - Operator",
+        "      - Domain",
+        "      - Device",
+    ]
+    for domain, op_type, device in sorted(rows):
+        lines.extend([f"    * - **{op_type}**", f"      - ``{domain}``", f"      - {device}"])
+    return "\n".join(lines) + "\n"
+
+
 # ---------------------------------------------------------------------------
 # Operator documentation generation
 # ---------------------------------------------------------------------------
@@ -1367,8 +1406,11 @@ def _index_page_rst(domains: list[str]) -> str:
     lines: list[str] = []
     lines.append(".. _l-onnx-operators:")
     lines.append("")
+    lines.append("ByOp")
+    lines.append("====")
+    lines.append("")
     lines.append("Ops")
-    lines.append("===")
+    lines.append("---")
     lines.append("")
     lines.append(
         "This section lists all ONNX operators grouped by domain.  "
@@ -1382,6 +1424,31 @@ def _index_page_rst(domains: list[str]) -> str:
     for domain in sorted(domains):
         stem = _domain_file_stem(domain)
         lines.append(f"   {stem}")
+    lines.append("")
+    lines.append(".. _l-api-pattern-catalog:")
+    lines.append("")
+    lines.append("Patterns")
+    lines.append("--------")
+    lines.append("")
+    lines.append(
+        "This table is generated from the patterns registered by the installed "
+        "``onnx_light`` package. Summaries and rewrite graphs come directly from "
+        "the C++ Doxygen comments."
+    )
+    lines.append("")
+    lines.append(render_rst_pattern_catalog().rstrip())
+    lines.append("")
+    lines.append(".. _l-api-memory-peak-catalog:")
+    lines.append("")
+    lines.append("MemoryPeak")
+    lines.append("----------")
+    lines.append("")
+    lines.append(
+        "This table lists the peak-memory functions registered by the installed "
+        "``onnx_light`` package."
+    )
+    lines.append("")
+    lines.append(render_rst_peak_memory_catalog().rstrip())
     lines.append("")
 
     return "\n".join(lines)
@@ -1570,11 +1637,15 @@ def generate_operators_doc(
     # Write the top-level index
     _report("Writing operators index page.")
     index_path = os.path.join(output_dir, "index.rst")
-
-    def _make_index_page() -> str:
-        return _index_page_rst(list(by_domain.keys()))
-
-    _write_if_missing(index_path, _make_index_page)
+    index_content = _index_page_rst(list(by_domain.keys()))
+    if (
+        os.path.exists(index_path)
+        and pathlib.Path(index_path).read_text(encoding="utf-8") == index_content
+    ):
+        skipped += 1
+    else:
+        pathlib.Path(index_path).write_text(index_content, encoding="utf-8")
+        written += 1
     _report(
         f"Finished generating operator pages "
         f"({written} written, {skipped} skipped because already present)."

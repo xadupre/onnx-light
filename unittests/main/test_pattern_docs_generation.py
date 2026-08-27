@@ -2,7 +2,7 @@
 
 import pathlib
 
-from onnx_light.doc import render_rst_pattern_catalog
+from onnx_light.doc import render_rst_pattern_catalog, render_rst_peak_memory_catalog
 from onnx_light.onnx_core.optimization import TreeEnsemblePattern, standard_patterns
 
 
@@ -27,3 +27,12 @@ def test_render_rst_pattern_catalog_lists_registered_patterns():
 def test_tree_ensemble_python_default_priority():
     """Checks that the Python constructor preserves the C++ default priority."""
     assert TreeEnsemblePattern().priority == 1
+
+
+def test_render_rst_peak_memory_catalog_lists_registered_functions():
+    """Checks that the catalogue contains every registered peak-memory function."""
+    catalogue = render_rst_peak_memory_catalog()
+
+    assert "**Attention**" in catalogue
+    assert "``ai.onnx``" in catalogue
+    assert "CPU / default" in catalogue

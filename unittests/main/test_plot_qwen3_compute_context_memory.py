@@ -9,7 +9,7 @@ from onnx_light.ext_test_case import import_or_skip
 def _load_example_module():
     import_or_skip("onnx_light.onnx.backend")
     root = pathlib.Path(__file__).resolve().parents[2]
-    source_path = root / "docs" / "examples" / "core" / "plot_qwen3_compute_context_memory.py"
+    source_path = root / "docs" / "examples" / "compute" / "plot_qwen3_compute_context_memory.py"
     module_spec = importlib.util.spec_from_file_location(source_path.stem, source_path)
     if module_spec is None or module_spec.loader is None:
         raise FileNotFoundError(source_path)

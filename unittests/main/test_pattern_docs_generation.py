@@ -7,7 +7,7 @@ from onnx_light.onnx_core.optimization import TreeEnsemblePattern, standard_patt
 
 
 def test_render_rst_pattern_catalog_lists_registered_patterns():
-    """Checks that the catalogue contains every registered pattern and its graph."""
+    """Checks that the catalogue links both classes for every registered pattern."""
     patterns_root = (
         pathlib.Path(__file__).parents[2] / "onnx_light" / "onnx_extensions" / "patterns"
     )
@@ -20,8 +20,10 @@ def test_render_rst_pattern_catalog_lists_registered_patterns():
         assert f"**{pattern.name}**" in catalogue
         assert f"onnx_light::onnx_patterns::{class_name}" in catalogue
         assert f"onnx_light.onnx_core.optimization.{class_name}" in catalogue
-    assert "Before:" in catalogue
-    assert "After:" in catalogue
+    assert "C++ class" in catalogue
+    assert "Python class" in catalogue
+    assert "Before:" not in catalogue
+    assert "After:" not in catalogue
 
 
 def test_tree_ensemble_python_default_priority():

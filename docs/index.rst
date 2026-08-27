@@ -164,7 +164,8 @@ A model is optimized by repeatedly matching small
 replacing them with a simplified equivalent. Patterns are implemented in C++,
 registered into a shared dispatch table (a downstream project can add its own)
 and every applied rewrite is recorded and can be replayed. See
-:ref:`l-example-plot-pattern-optimization` for the workflow.
+:ref:`l-example-plot-pattern-optimization` for optimization and
+:ref:`l-example-plot-pattern-replay` for replay.
 
 Gradients
 +++++++++

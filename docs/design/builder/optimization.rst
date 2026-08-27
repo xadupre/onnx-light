@@ -74,8 +74,8 @@ API reference
 Examples
 --------
 
-* :ref:`l-example-plot-pattern-optimization` is a runnable example
-  covering statistics and replay of the pattern optimizer.
+* :ref:`l-example-plot-pattern-optimization` covers optimization statistics.
+* :ref:`l-example-plot-pattern-replay` demonstrates deterministic replay from
+  captured rewrites.
 * :ref:`l-howto-add-custom-pattern` is a Python/C++ how-to on writing a
   custom pattern and choosing its priority.
-

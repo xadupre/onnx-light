@@ -31,6 +31,13 @@ div.pst-scrollable-table-container:has(> table.howto-side-by-side) {
     overflow-x: visible;
 }
 
+/* Quick-tour diagrams should keep their natural size and never dominate the page. */
+img.quick-tour-graph {
+    width: auto;
+    max-width: min(100%, 420px);
+    max-height: 520px;
+}
+
 /* Runtime test-coverage page: pass / fail colored cells. */
 .green {
     color: #1a7f37;

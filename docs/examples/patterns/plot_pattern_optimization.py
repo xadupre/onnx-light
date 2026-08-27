@@ -13,16 +13,14 @@ whole workflow on a tiny model:
    consecutive ``Neg``).
 2. Run the standard patterns and inspect the optimization *statistics*
    (:class:`~onnx_light.onnx_core.optimization.OptimizationReport`).
-3. List every applied modification
-   (:class:`~onnx_light.onnx_core.optimization.LocalRewriting`) and *replay*
-   them from the original model to reproduce the optimized graph.
-4. Write a custom pattern.
-5. Inspect a candidate rejected by that pattern and the recorded failure reason.
-6. Apply the custom pattern together with the standard ones.
+3. Write a custom pattern.
+4. Inspect a candidate rejected by that pattern and the recorded failure reason.
+5. Apply the custom pattern together with the standard ones.
 
 See :ref:`l-howto-add-custom-pattern` for a companion how-to that focuses on
 writing and registering a pattern (including how priorities order patterns),
-in both Python and C++.
+in both Python and C++. :ref:`l-example-plot-pattern-replay` demonstrates how
+to capture and replay the applied modifications separately.
 """
 
 from __future__ import annotations
@@ -33,7 +31,6 @@ from onnx_light.onnx_core.optimization import (
     GraphBuilder,
     GraphGraph,
     PatternOptimization,
-    replay,
     standard_patterns,
 )
 from onnx_light.tools import pretty_onnx
@@ -70,7 +67,6 @@ print(pretty_onnx(model))
 builder = GraphBuilder(model)
 graph = GraphGraph(builder, standard_patterns(["Cast"]))
 rewrites, report = graph.optimize(report=True)
-optimized_graph = builder.build_graph()
 
 print(pretty_onnx(builder.to_onnx("model")))
 print(report)
@@ -80,23 +76,6 @@ for pattern_stats in report.patterns:
         f"{pattern_stats.pattern_name}: {pattern_stats.matches} match(es) over "
         f"{pattern_stats.attempts} attempt(s)"
     )
-
-#####################################
-# List the modifications and replay them
-# ++++++++++++++++++++++++++++++++++++++
-#
-# Each :class:`~onnx_light.onnx_core.optimization.LocalRewriting` records which
-# pattern fired, the positions of the matched nodes, and the nodes it added.
-# :func:`~onnx_light.onnx_core.optimization.replay` reconstructs the optimized
-# graph by reapplying that captured sequence to a **fresh copy** of the
-# original model, without running the pattern matcher again.
-
-for rewrite in rewrites:
-    print(rewrite)
-
-replayed_graph = replay(model, rewrites)
-assert replayed_graph.SerializeToString() == optimized_graph.SerializeToString()
-print("replay reproduced the optimized graph")
 
 #####################################
 # Add a custom pattern

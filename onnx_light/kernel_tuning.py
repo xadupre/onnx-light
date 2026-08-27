@@ -14,6 +14,7 @@ from onnx_light.onnx_py._onnxpykernels.runtime import (  # type: ignore[import]
     inspect_kernel_tuning_cache,
     kernel_tuning_parameters,
     load_kernel_tuning_cache,
+    remove_kernel_tuning_cache,
     set_kernel_tuning_parameters,
 )
 
@@ -117,5 +118,6 @@ __all__ = [
     "kernel_tuning_parameters",
     "load_kernel_tuning_cache",
     "propose_kernel_tuning_updates",
+    "remove_kernel_tuning_cache",
     "set_kernel_tuning_parameters",
 ]

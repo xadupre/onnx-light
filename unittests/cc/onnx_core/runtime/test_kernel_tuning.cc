@@ -970,6 +970,26 @@ TEST(KernelTuningCache, InspectsProfilesWithoutPublishing) {
   EXPECT_EQ(GetKernelTuningRegistry().Snapshot().generation(), before.generation());
 }
 
+TEST(KernelTuningCache, RemovesExistingCacheAndAcceptsMissingCache) {
+  TemporaryCache cache("removal");
+  {
+    std::ofstream stream(cache.path());
+    stream << "onnx_light_kernel_tuning_cache 1\n";
+  }
+
+  const KernelTuningCacheRemovalReport removed =
+      RemoveKernelTuningCache({cache.path(), std::nullopt});
+  EXPECT_TRUE(removed.removed);
+  EXPECT_EQ(removed.path, cache.path());
+  EXPECT_TRUE(removed.diagnostics.empty());
+  EXPECT_FALSE(std::filesystem::exists(cache.path()));
+
+  const KernelTuningCacheRemovalReport missing =
+      RemoveKernelTuningCache({cache.path(), std::nullopt});
+  EXPECT_FALSE(missing.removed);
+  EXPECT_TRUE(missing.diagnostics.empty());
+}
+
 TEST(KernelTuningCache, RejectsMalformedFileWithoutPublishing) {
   KernelTuningParameters defaults = MakeDefaults();
   defaults.key.library = "cache_malformed_test";

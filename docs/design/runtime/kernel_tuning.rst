@@ -94,6 +94,7 @@ profiles from the default cache when imported. Explicit cache paths require
 * ``kernel_tuning_parameters`` for schemas, defaults, matching cache values,
   and active values;
 * ``inspect_kernel_tuning_cache`` for non-mutating cache inspection;
+* ``remove_kernel_tuning_cache`` for race-safe removal of the persisted cache;
 * ``set_kernel_tuning_parameters`` for validated partial updates;
 * ``calibrate_kernel_tuning`` for one selected kernel;
 * ``propose_kernel_tuning_updates`` and ``apply_kernel_tuning_updates`` for
@@ -149,6 +150,20 @@ the command line through
 :func:`onnx_light.kernel_tuning.analyze_kernel_tuning_latencies`. Python owns
 backend case discovery, process isolation, temporary-cache lifecycle, and
 progress display.
+
+The comparison result exists only in the command report: standard output by
+default, JSON with ``--json``, or the file selected by ``--output``. The
+selected set is advisory and is not published to the tuning registry, persisted
+to the machine cache, or used by later kernel sessions. Persisting it requires
+an explicit ``set_kernel_tuning_parameters`` call.
+
+Persisted calibration and manual-update profiles follow a different lifecycle.
+They are stored at :cpp:func:`DefaultKernelTuningCachePath` (or an explicit
+path), published into the process tuning registry when loaded, and copied into
+new kernel instances as their sessions initialize. Removing the file through
+:cpp:func:`RemoveKernelTuningCache` prevents later processes from loading it,
+but deliberately does not mutate existing sessions or profiles already
+published in the current process.
 
 See :ref:`l-how-to-tune-kernel-thresholds` for usage and
 :ref:`l-example-plot-kernel-tuning` for an executable Python example. The

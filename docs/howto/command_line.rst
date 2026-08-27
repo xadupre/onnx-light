@@ -78,8 +78,9 @@ maximum speedup for every set. A progress bar is written to standard error.
 Text, JSON, CSV and XLSX output include the input shapes, parameter values and
 speedups. Input shapes preserve their input names and dataset grouping. The
 comparison uses temporary worker caches and never modifies the machine tuning
-cache. See :ref:`l-how-to-tune-kernel-thresholds` for criteria, timeout
-handling, and the Python analysis API.
+cache. The selected set is reported but not used by later kernels. See
+:ref:`l-how-to-tune-kernel-thresholds` for criteria, timeout handling, result
+locations, cache removal, and the Python analysis API.
 
 .. _l-cli-kernel:
 

@@ -213,6 +213,24 @@ class TestKernelTuningBindings(ExtTestCase):
             self.assertEqual(report["status"], "not_found")
             self.assertEqual(report["path"], path)
 
+    def test_removes_tuning_cache(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = str(Path(temporary) / "kernel_tuning.cache")
+            kernel_tuning.set_kernel_tuning_parameters(
+                "Abs",
+                int(TensorProto.FLOAT),
+                {"parallel.minimum_elements": 12345},
+                path=path,
+                load=False,
+            )
+
+            removed = kernel_tuning.remove_kernel_tuning_cache(path)
+            self.assertTrue(removed["removed"])
+            self.assertEqual(removed["path"], path)
+            self.assertEqual(removed["diagnostics"], [])
+            self.assertFalse(Path(path).exists())
+            self.assertFalse(kernel_tuning.remove_kernel_tuning_cache(path)["removed"])
+
     def test_default_cache_is_loaded_on_import(self):
         with tempfile.TemporaryDirectory() as temporary:
             cache = Path(temporary) / "onnx-light" / "kernel_tuning.cache"

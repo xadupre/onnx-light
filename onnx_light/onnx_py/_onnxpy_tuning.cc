@@ -275,6 +275,19 @@ nb::dict InspectCache(const std::optional<std::string> &path, int32_t num_thread
   return result;
 }
 
+nb::dict RemoveCache(const std::optional<std::string> &path) {
+  rt::KernelTuningCacheOptions options;
+  if (path.has_value()) {
+    options.path = *path;
+  }
+  const rt::KernelTuningCacheRemovalReport removal = rt::RemoveKernelTuningCache(options);
+  nb::dict result;
+  result["path"] = removal.path.string();
+  result["removed"] = removal.removed;
+  result["diagnostics"] = removal.diagnostics;
+  return result;
+}
+
 nb::dict ListParameters(const std::optional<std::string> &kernel,
                         const std::optional<std::string> &library,
                         const std::optional<std::string> &implementation,
@@ -537,6 +550,8 @@ void AddOnnxPyTuning(nb::module_ &rt_mod) {
   rt_mod.def("inspect_kernel_tuning_cache", &InspectCache, nb::arg("path") = nb::none(),
              nb::arg("num_threads") = 0,
              "Returns every persisted tuning profile without activating the cache.");
+  rt_mod.def("remove_kernel_tuning_cache", &RemoveCache, nb::arg("path") = nb::none(),
+             "Removes a tuning cache without changing profiles active in this process.");
   rt_mod.def("kernel_tuning_parameters", &ListParameters, nb::arg("kernel") = nb::none(),
              nb::arg("library") = "onnx_light", nb::arg("implementation") = nb::none(),
              nb::arg("element_type") = nb::none(), nb::arg("path") = nb::none(),

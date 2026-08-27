@@ -150,8 +150,11 @@ standard error, so ``--json`` on standard output remains machine-readable:
     [backend tune] [####################] 4/4
 
 The comparison uses temporary cache files and does not modify the machine
-tuning cache. Use ``set_kernel_tuning_parameters`` separately to persist a
-selected set.
+tuning cache. Its result is printed to standard output, returned as JSON with
+``--json``, or written as CSV/XLSX with ``--output``. The selected set is
+advisory: kernels do not use it after the command ends. Use
+``set_kernel_tuning_parameters`` separately to persist and publish a selected
+set.
 
 Analyze measurements from Python
 ++++++++++++++++++++++++++++++++
@@ -278,6 +281,32 @@ The cache is a versioned text file beginning with
 be modified through ``UpdateKernelTuningCache`` so validation, locking, merging,
 and atomic replacement remain effective. Set ``KernelTuningCacheOptions::path``
 to use an explicit location.
+
+Remove cached results
++++++++++++++++++++++
+
+Remove the default cache, or the explicit cache passed to tuning operations,
+through the Python API:
+
+.. code-block:: python
+
+    removal = kernel_tuning.remove_kernel_tuning_cache()
+    print(removal["path"], removal["removed"], removal["diagnostics"])
+
+    # Removes an explicitly selected cache instead.
+    removal = kernel_tuning.remove_kernel_tuning_cache("/path/to/kernel_tuning.cache")
+
+The function takes the cache's inter-process lock before deleting the file.
+``removed`` is ``False`` without diagnostics when the file was already absent.
+After removal, a new process falls back to registered processor profiles or
+portable defaults.
+
+Removing a cache does not reconfigure kernels already initialized in the
+current process. It also does not retract profiles already published into that
+process's immutable tuning-registry generations. Restart the process after
+removal when subsequent sessions must stop using a profile that was previously
+loaded. The equivalent native operation is
+:cpp:func:`RemoveKernelTuningCache`.
 
 Load and use cached values
 ++++++++++++++++++++++++++

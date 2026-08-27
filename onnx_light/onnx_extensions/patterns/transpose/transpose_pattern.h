@@ -12,15 +12,25 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Merges two consecutive ``Transpose`` nodes into a single one.
  *
  * @code
- * Before:                 After:
+ * Before:
+ *          +-------------------+
+ *   x ---> | Transpose [1,0,2] | ---> t
+ *          +-------------------+
+ *                     |
+ *                     v
+ *              +-------------------+
+ *              | Transpose [0,2,1] | ---> y
+ *              +-------------------+
  *
- *   x                       x
- *   |                       |
- *   Transpose(perm=p0)    Transpose(perm=p1 o p0)
- *   |                       |
- *   Transpose(perm=p1)      y
- *   |
- *   y
+ * After:
+ *          +-------------------+
+ *   x ---> | Transpose [1,2,0] | ---> y
+ *          +-------------------+
+ *
+ * After (identity composed permutation):
+ *          +----------+
+ *   x ---> | Identity | ---> y
+ *          +----------+
  * @endcode
  *
  * When the composed permutation is the identity the pair is replaced by an
@@ -51,21 +61,40 @@ public:
  * Removes an unnecessary ``Transpose`` feeding a ``Gather`` with a scalar index.
  *
  * @code
- * Before:                 After (permutation keeps order):
+ * Before:
+ *          +-------------------+
+ *   x ---> | Transpose [2,0,1] | ---> t
+ *          +-------------------+
+ *                     |
+ *                     v
+ *              +--------------+
+ *              | Gather axis0 | <--- scalar k
+ *              +--------------+
+ *                     |
+ *                     v
+ *                     y
  *
- *   x                       x
- *   |                       |
- *   Transpose(perm)         Gather(axis=perm[axis])
- *   |                       |
- *   Gather(axis)            y
- *   |
- *   y
+ * After (remaining permutation is sorted):
+ *                    +--------------+
+ *   x, scalar k ---> | Gather axis2 | ---> y
+ *                    +--------------+
+ *
+ * After (remaining permutation is not sorted):
+ *                    +--------------+
+ *   x, scalar k ---> | Gather axis2 | ---> g
+ *                    +--------------+
+ *                           |
+ *                           v
+ *                  +-----------------+
+ *                  | Transpose [1,0] | ---> y
+ *                  +-----------------+
  * @endcode
  *
  * When the remaining permutation is no longer sorted the rewrite gathers on the
- * original tensor first and transposes the smaller result, so the ``Transpose``
- * runs on fewer elements. The original ``Transpose`` is preserved when its
- * output is consumed elsewhere.
+ * original tensor first and transposes the smaller result. For example,
+ * ``Transpose(x,[1,2,0])`` followed by scalar ``Gather(axis=1)`` becomes
+ * ``Gather(x,axis=2)`` followed by ``Transpose([1,0])``. The original
+ * ``Transpose`` is preserved when its output is consumed elsewhere.
  */
 class TransposeGatherPattern final : public core::builder::PatternOptimization {
 public:

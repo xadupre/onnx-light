@@ -8,6 +8,36 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
+/**
+ * Recognizes an Add fed by two Shape nodes but performs no rewrite.
+ *
+ * @code
+ * Before:
+ *          +-------+
+ *   x ---> | Shape | -----------+
+ *          +-------+            |
+ *                               |
+ *                               v
+ *          +-------+        +-----+
+ *   z ---> | Shape | -----> | Add | ---> y
+ *          +-------+        +-----+
+ *
+ * After:
+ *          +-------+
+ *   x ---> | Shape | -----------+
+ *          +-------+            |
+ *                               |
+ *                               v
+ *          +-------+        +-----+
+ *   z ---> | Shape | -----> | Add | ---> y
+ *          +-------+        +-----+
+ *
+ * The graph is unchanged because this pattern deliberately reports no match.
+ * @endcode
+ *
+ * Match deliberately returns no match and Apply throws because the intended
+ * Shape-plus-Shape replacement is not implemented.
+ */
 class ShapeBasedShapeShapeAddPattern final : public core::builder::PatternOptimization {
 public:
   explicit ShapeBasedShapeShapeAddPattern(int priority = 0)

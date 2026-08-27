@@ -13,13 +13,15 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Canonicalizes a Cast to Identity when its input already has the target type.
  *
  * @code
- * Before:             After:
+ * Before:
+ *            +-----------+
+ *   x:T ---> | Cast to T | ---> y:T
+ *            +-----------+
  *
- *   x:T                 x:T
- *    |                   |
- * Cast(to=T)          Identity
- *    |                   |
- *   y:T                 y:T
+ * After:
+ *            +----------+
+ *   x:T ---> | Identity | ---> y:T
+ *            +----------+
  * @endcode
  */
 class CastPattern final : public core::builder::PatternOptimization {
@@ -44,21 +46,35 @@ public:
  * Canonicalizes consecutive Cast nodes when a single conversion is equivalent.
  *
  * @code
- * Before:             After:
+ * Before:
+ *            +-----------+               +-----------+
+ *   x:A ---> | Cast to B | ---> m:B ---> | Cast to C | ---> y:C
+ *            +-----------+               +-----------+
  *
- *   x:A                 x:A
- *    |                   |
- * Cast(to=B)       Cast(to=C*) or
- *    |                Identity
- *   m:B                  |
- *    |                  y:C
- * Cast(to=C)
- *    |
- *   y:C
+ * After:
+ *            +------------+
+ *   x:A ---> | Cast to C* | ---> y:C
+ *            +------------+
+ *
+ * After (no conversion is needed):
+ *            +----------+
+ *   x:A ---> | Identity | ---> y:C
+ *            +----------+
+ *
+ * After (the intermediate m:B is shared):
+ *            +-----------+
+ *   x:A ---> | Cast to B | ---> m:B ---> other consumer
+ *            +-----------+
+ *
+ *            +------------+
+ *   x:A ---> | Cast to C* | ---> y:C
+ *            +------------+
  * @endcode
  *
  * ``C*`` denotes the single safe replacement type selected from the input,
- * intermediate, and final types.
+ * intermediate, and final types. If ``m`` has another consumer, the first Cast
+ * is retained for that consumer while ``y`` is still produced directly from
+ * ``x``.
  */
 class CastCastPattern final : public core::builder::PatternOptimization {
 public:
@@ -87,17 +103,28 @@ private:
  * Moves matching floating-point Cast nodes after a binary arithmetic operation.
  *
  * @code
- * Before:             After:
+ * Before:
+ *            +-----------+
+ *   x:A ---> | Cast to B | ---> xb:B
+ *            +-----------+
  *
- * x:A       y:A       x:A       y:A
- *  |         |         |         |
- * Cast(B)  Cast(B)     +----+----+
- *  |         |              |
- *  +----+----+           Binary:A
- *       |                   |
- *    Binary:B             Cast(B)
- *       |                   |
- *      z:B                 z:B
+ *            +-----------+
+ *   y:A ---> | Cast to B | ---> yb:B
+ *            +-----------+
+ *
+ *                 +--------+
+ *   xb:B, yb:B -> | Binary | ---> z:B
+ *                 +--------+
+ *
+ * After:
+ *                +--------+
+ *   x:A, y:A --> | Binary | ---> t:A
+ *                +--------+
+ *                     |
+ *                     v
+ *                +-----------+
+ *                | Cast to B | ---> z:B
+ *                +-----------+
  * @endcode
  */
 class CastCastBinaryPattern final : public core::builder::PatternOptimization {
@@ -123,23 +150,41 @@ public:
  * Moves an operation from a temporary floating-point type to its result type.
  *
  * @code
- * Before:             After:
+ * Before:
+ *            +-----------+
+ *   y:R ---> | Cast to C | ---> yc:C
+ *            +-----------+
  *
- * x:C       y:R       x:C       y:R
- *  |         |         |         |
- *  |       Cast(C)   Cast(R)     |
- *  |         |         |         |
- *  +----+----+         +----+----+
- *       |                   |
- *      Op:C                Op:R
- *       |                   |
- *    Cast(R)               z:R
- *       |
- *      z:R
+ *                 +----+
+ *   x:C, yc:C --> | Op | ---> t:C
+ *                 +----+
+ *                   |
+ *                   v
+ *              +-----------+
+ *              | Cast to R | ---> z:R
+ *              +-----------+
+ *
+ * After:
+ *            +-----------+
+ *   x:C ---> | Cast to R | ---> xr:R
+ *            +-----------+
+ *
+ *                +----+
+ *   xr:R, y:R -> | Op | ---> z:R
+ *                +----+
+ *
+ * After (the original Op output t:C is shared):
+ *            +-----------+
+ *   z:R ---> | Cast to C | ---> t:C
+ *            +-----------+
+ *
+ * The unary form uses the same rewrite with one input.
  * @endcode
  *
  * Inputs already produced in ``R`` lose their Cast; other inputs gain one.
- * The unary case follows the same transformation with a single input.
+ * The unary case follows the same transformation with a single input. If the
+ * original ``Op:C`` output is retained elsewhere, a Cast from ``z:R`` back to
+ * that output in ``C`` is also emitted.
  */
 class CastOpCastPattern final : public core::builder::PatternOptimization {
 public:

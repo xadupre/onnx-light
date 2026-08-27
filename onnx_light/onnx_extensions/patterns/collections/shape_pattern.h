@@ -17,6 +17,43 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * node are folded into the new bounds. A scalar index yields a
  * ``Shape`` followed by a ``Squeeze`` of the leading axis to recover the 0-D
  * result.
+ *
+ * @code
+ * Before:
+ *          +---------------------+
+ *   x ---> | Shape start=1 end=5 | ---> s
+ *          +---------------------+
+ *                     |
+ *                     v
+ *              +--------------+
+ *              | Gather axis0 | <--- indices=[1,2]
+ *              +--------------+
+ *                     |
+ *                     v
+ *                     y
+ *
+ * After:
+ *          +---------------------+
+ *   x ---> | Shape start=2 end=4 | ---> y
+ *          +---------------------+
+ *
+ * After (scalar index):
+ *          +---------------------+
+ *   x ---> | Shape start=2 end=3 | ---> s
+ *          +---------------------+
+ *                    |
+ *                    v
+ *               +---------+
+ *               | Squeeze | <--- axes=[0]
+ *               +---------+
+ *                    |
+ *                    v
+ *                    y
+ * @endcode
+ *
+ * For scalar index ``1``, the result is
+ * ``Squeeze(Shape(x,start=2,end=3),axes=[0])``. If ``s`` has another consumer,
+ * the original ``Shape`` is retained.
  */
 class GatherShapePattern final : public core::builder::PatternOptimization {
 public:
@@ -41,15 +78,28 @@ public:
  * expensive ``Transpose`` on the full data tensor is avoided.
  *
  * @code
- * Before:                       After:
+ * Before:
+ *          +------------------------+
+ *   x ---> | Transpose perm=[2,0,1] | ---> t
+ *          +------------------------+
+ *                     |
+ *                     v
+ *              +---------------------+
+ *              | Shape start=1 end=3 | ---> y
+ *              +---------------------+
  *
- *   X                             X
- *   |                             |
- *   Transpose(perm)               Shape
- *   |                             |
- *   Shape                         Gather(perm[start:end], axis=0)
- *   |                             |
- *   Y                             Y
+ * After:
+ *          +-------+
+ *   x ---> | Shape | ---> sx
+ *          +-------+
+ *              |
+ *              v
+ *        +--------------+
+ *        | Gather axis0 | <--- indices=[0,1]
+ *        +--------------+
+ *              |
+ *              v
+ *              y
  * @endcode
  *
  * The permutation is a compile-time attribute of the ``Transpose`` node, so the
@@ -82,15 +132,34 @@ public:
  * interleaved with constant ``[1]`` tensors at the inserted axis positions.
  *
  * @code
- * Before:                       After (X of rank 3, axes=[1]):
+ * Before:
+ *   x, axes=[1]
+ *        |
+ *        v
+ *   +-----------+
+ *   | Unsqueeze | ---> u
+ *   +-----------+
+ *        |
+ *        v
+ *   +-------+
+ *   | Shape | ---> y
+ *   +-------+
  *
- *   X                             X          X
- *   |                             |          |
- *   Unsqueeze(axes)               Shape(0,1) Shape(1,3)
- *   |                              \    |    /
- *   Shape                           Concat([s0, [1], s1], axis=0)
- *   |                               |
- *   Y                               Y
+ * After:
+ *          +---------------------+
+ *   x ---> | Shape start=0 end=1 | ---> s0
+ *          +---------------------+
+ *
+ *          +---------------------+
+ *   x ---> | Shape start=1 end=3 | ---> s1
+ *          +---------------------+
+ *
+ *   s0, [1], s1
+ *        |
+ *        v
+ *   +--------+
+ *   | Concat | ---> y
+ *   +--------+
  * @endcode
  *
  * ``Shape(Unsqueeze(X, axes))`` equals ``Shape(X)`` with ``1`` entries inserted

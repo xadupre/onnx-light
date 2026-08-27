@@ -13,20 +13,29 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * the maximum.
  *
  * @code
- * Before:                       After:
+ * Before:
+ *               +------+
+ *   x, min ---> | Clip | ---> t
+ *               +------+
+ *                  |
+ *                  v
+ *               +------+
+ *               | Clip | <--- max
+ *               +------+
+ *                  |
+ *                  v
+ *                  y
  *
- *   x     min                     x   min   max
- *    \    /                        \   |   /
- *   Clip(x, min)                  Clip(x, min, max)
- *      |          max                  |
- *   Clip(x1, , max)                    y
- *      |
- *      y
+ * After:
+ *                    +------+
+ *   x, min, max ---> | Clip | ---> y
+ *                    +------+
  * @endcode
  *
  * The rewrite requires exactly one of the two Clip nodes to supply the minimum
  * bound and exactly one to supply the maximum bound, so the merged Clip carries
- * both bounds without changing the result.
+ * both bounds and retains the second Clip output. The first Clip output must
+ * not have another consumer.
  */
 class ClipClipPattern final : public core::builder::PatternOptimization {
 public:

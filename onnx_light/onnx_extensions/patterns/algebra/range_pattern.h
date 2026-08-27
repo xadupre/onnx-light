@@ -8,6 +8,63 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
+/**
+ * Moves a shape-[1] second Add input from after Range into its start and limit inputs.
+ *
+ * @code
+ * Before:
+ *   start, limit, delta
+ *           |
+ *           v
+ *       +-------+
+ *       | Range | ---> r
+ *       +-------+
+ *           |
+ *           v
+ *        +-----+
+ *        | Add | <--- offset
+ *        +-----+
+ *           |
+ *           v
+ *           y
+ *
+ * After:
+ *                                +-----+
+ *   start ----------------------> | Add | ---> start2 ----------------+
+ *                                +-----+                              |
+ *                                   ^                                 |
+ *                                   |                                 |
+ *               +---------+         |                                 |
+ *   offset ---> | Squeeze | ---> s -+                                 |
+ *               +---------+         |                                 |
+ *                                   v                                 |
+ *                                +-----+                              |
+ *   limit ----------------------> | Add | ---> limit2 ----------------+--+
+ *                                +-----+                                 |
+ *                                                                        v
+ *                                                                    +-------+
+ *   delta ---------------------------------------------------------> | Range | ---> y
+ *                                                                    +-------+
+ *
+ * After (start is constant zero):
+ *               +---------+
+ *   offset ---> | Squeeze | ---> s -----------------------------------+
+ *               +---------+
+ *                                  |                                  |
+ *                                  v                                  |
+ *                               +-----+                               |
+ *   limit ---------------------> | Add | ---> limit2 -----------------+--+
+ *                               +-----+                                  |
+ *                                                                         v
+ *                                                                     +-------+
+ *   delta ----------------------------------------------------------> | Range | ---> y
+ *                                                                     +-------+
+ * @endcode
+ *
+ * When ``start`` is the constant zero, ``start2`` is ``s`` and its Add is
+ * omitted. The Range and Add are replaced while the Add output ``y``, the
+ * offset, and any Range step input are retained.
+ */
 class SwapRangeAddScalarPattern final : public core::builder::PatternOptimization {
 public:
   explicit SwapRangeAddScalarPattern(int priority = 0)

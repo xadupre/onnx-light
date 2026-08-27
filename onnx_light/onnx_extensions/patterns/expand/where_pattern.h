@@ -11,8 +11,24 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 /**
  * Rewrites ``Where(Not(c), x, y)`` into ``Where(c, y, x)``.
  *
- * The rewrite removes the local ``Not`` when its output is only consumed by the
- * matched ``Where``.
+ * @code
+ * Before:
+ *          +-----+
+ *   c ---> | Not | ---> condition
+ *          +-----+
+ *
+ *                       +-------+
+ *   condition, x, y --> | Where | ---> z
+ *                       +-------+
+ *
+ * After:
+ *              +-------+
+ *   c, y, x -> | Where | ---> z
+ *              +-------+
+ * @endcode
+ *
+ * The two branches are swapped. A shared ``Not`` is preserved for its other
+ * consumers while the replacement ``Where`` bypasses it.
  */
 class NotWherePattern final : public core::builder::PatternOptimization {
 public:
@@ -36,10 +52,57 @@ public:
  * Moves ``Equal(x, c)`` after a compatible sibling ``Unsqueeze(x, a)`` and
  * preserves the rank of ``Equal(Unsqueeze(x, a), Unsqueeze(y, a))``.
  *
- * The local rewrite emits ``Unsqueeze(Equal(x, y), a)`` rather than dropping
- * the inserted dimensions. The upstream rewrite requires a rank-zero constant,
- * unless inferred shapes prove that ``Equal(x, c)`` preserves the rank of
- * ``x``.
+ * @code
+ * Before (upstream form):
+ *                    +-----------+
+ *   x, axes=a -----> | Unsqueeze | ---> ux
+ *                    +-----------+
+ *
+ *             +-------+
+ *   x, c ---> | Equal | ---> q
+ *             +-------+
+ *                  |
+ *                  v
+ *             +-----------+
+ *   axes=a -> | Unsqueeze | ---> z
+ *             +-----------+
+ *
+ * After (upstream form):
+ *                    +-----------+
+ *   x, axes=a -----> | Unsqueeze | ---> ux
+ *                    +-----------+
+ *
+ *             +-------+
+ *   ux, c --> | Equal | ---> z
+ *             +-------+
+ *
+ * Before (local form):
+ *                    +-----------+
+ *   x, axes=a -----> | Unsqueeze | ---> ux
+ *                    +-----------+
+ *
+ *                    +-----------+
+ *   y, axes=a -----> | Unsqueeze | ---> uy
+ *                    +-----------+
+ *
+ *              +-------+
+ *   ux, uy --> | Equal | ---> z
+ *              +-------+
+ *
+ * After (local form):
+ *             +-------+
+ *   x, y ---> | Equal | ---> q
+ *             +-------+
+ *
+ *                  +-----------+
+ *   q, axes=a ---> | Unsqueeze | ---> z
+ *                  +-----------+
+ * @endcode
+ *
+ * All axes are equal constant tensors. The upstream form requires a rank-zero
+ * ``c`` unless inferred shapes prove that ``Equal(x,c)`` preserves ``x``'s
+ * rank. The local form requires equal pre-``Unsqueeze`` ranks and unshared
+ * expanded inputs.
  */
 class UnsqueezeEqualPattern final : public core::builder::PatternOptimization {
 public:
@@ -63,10 +126,47 @@ public:
 /**
  * Rewrites an additive mask or factors a common term from ``Where`` branches.
  *
- * It turns ``Add(Where(c, 0, -inf), x)`` into ``Where(c, x, -inf)`` when ``x``
- * is a provably finite scalar constant, and keeps the local
- * ``Where(c, Add(a, z), Add(b, z))`` to
- * ``Add(Where(c, a, b), z)`` rewrite.
+ * @code
+ * Before (mask form):
+ *                  +-------+
+ *   c, 0, -inf --> | Where | ---> w
+ *                  +-------+
+ *
+ *             +-----+
+ *   w, k ---> | Add | ---> y
+ *             +-----+
+ *
+ * After (mask form):
+ *                   +-------+
+ *   c, k, -inf ---> | Where | ---> y
+ *                   +-------+
+ *
+ * Before (factoring form):
+ *             +-----+
+ *   a, z ---> | Add | ---> then
+ *             +-----+
+ *
+ *             +-----+
+ *   b, z ---> | Add | ---> else
+ *             +-----+
+ *
+ *                     +-------+
+ *   c, then, else --> | Where | ---> y
+ *                     +-------+
+ *
+ * After (factoring form):
+ *                +-------+
+ *   c, a, b ---> | Where | ---> w
+ *                +-------+
+ *
+ *             +-----+
+ *   w, z ---> | Add | ---> y
+ *             +-----+
+ * @endcode
+ *
+ * The mask form requires an unshared ``Where`` output and accepts either
+ * operand order for ``Add``. The factoring form requires both branch ``Add``
+ * outputs to be unshared and recognizes the common input in either position.
  */
 class WhereAddPattern final : public core::builder::PatternOptimization {
 public:

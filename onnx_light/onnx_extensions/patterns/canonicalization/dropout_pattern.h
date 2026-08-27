@@ -9,20 +9,23 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
 /**
- * Replaces an inference Dropout by an Identity node.
+ * Replaces an eligible Dropout by an Identity node.
  *
  * @code
- * Before:             After:
+ * Before:
+ *          +---------+
+ *   x ---> | Dropout | ---> y
+ *          +---------+
  *
- *   x                   x
- *    |                   |
- *  Dropout            Identity
- *    |                   |
- *   y                   y
+ * After:
+ *          +----------+
+ *   x ---> | Identity | ---> y
+ *          +----------+
  * @endcode
  *
  * The rewrite applies only when the optional mask output is unused and the
- * ``training_mode`` input, when present, is a constant equal to ``0``.
+ * ``training_mode`` input is not a materialized nonzero scalar. The data input
+ * and first Dropout output name are retained; unused mask outputs are removed.
  */
 class DropoutPattern final : public core::builder::PatternOptimization {
 public:
@@ -32,7 +35,7 @@ public:
   /// Returns ``Dropout`` as the only possible root operator.
   std::set<std::string> FastOpType() const override;
 
-  /// Finds an inference Dropout rooted at ``candidate``.
+  /// Finds an eligible Dropout rooted at ``candidate``.
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;
 

@@ -12,20 +12,27 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Replaces no-op operations by an Identity node.
  *
  * The pattern recognises redundant arithmetic and layout operations such as
- * ``Add(x, 0)``, ``Mul(x, 1)``, ``Sub(x, 0)``, ``Div(x, 1)``,
+ * ``Add(x, 0)``, ``Mul(x, 1)``, ``Sub(x, 0)``, ``Div(x, 1)``, ``Or(x, false)``,
+ * ``And(x, true)``,
  * ``Transpose(x, perm=[0, 1, 2, ...])``, ``Reshape(x, [0, 0, ...])``,
- * a full-range ``Slice``, an ``Expand`` to the input rank with all-ones,
- * and an inference ``BatchNormalization`` with unit scale and zero bias.
+ * a full-range ``Slice``, an ``Expand`` with an all-one target shape of the
+ * input rank, and a half-precision inference ``BatchNormalization`` with
+ * scale/bias/mean/variance constants ``1/0/0/1``.
  *
  * @code
- * Before:             After:
+ * Before:
+ *               +-----+
+ *   x, zero --> | Add | ---> y
+ *               +-----+
  *
- *   x                   x
- *    |                   |
- *   Op(no-op)         Identity
- *    |                   |
- *   y                   y
+ * After:
+ *          +----------+
+ *   x ---> | Identity | ---> y
+ *          +----------+
  * @endcode
+ *
+ * The no-op node is replaced while its selected data input and first output
+ * name are retained; neutral constants no longer feed that output.
  */
 class IdentityPattern final : public core::builder::PatternOptimization {
 public:

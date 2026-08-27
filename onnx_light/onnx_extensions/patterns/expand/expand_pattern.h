@@ -11,6 +11,18 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 /**
  * Removes an ``Expand`` that does not change the shape of its input.
  *
+ * @code
+ * Before:
+ *                             +--------+
+ *   x, shape=[D0,...,Dn] ---> | Expand | ---> y
+ *                             +--------+
+ *
+ * After:
+ *                            +----------+
+ *   x ---------------------> | Identity | ---> y
+ *                            +----------+
+ * @endcode
+ *
  * The rewrite replaces ``Expand(x, shape)`` with ``Identity(x)`` when the shape
  * of ``x`` is fully known and equals the constant ``shape`` fed to ``Expand``.
  */
@@ -35,10 +47,25 @@ public:
 /**
  * Drops an ``Expand`` feeding an element-wise binary operator.
  *
- * ``Expand(x, shape)`` followed by ``Op(expanded, other)`` becomes
- * ``Op(x, other)`` when ``other`` already has the target ``shape`` and the two
- * operands broadcast together. The rewrite removes one allocation by letting the
- * binary operator broadcast ``x`` directly.
+ * @code
+ * Before:
+ *             +--------+
+ *   x, S ---> | Expand | ---> e
+ *             +--------+
+ *
+ *            +--------+
+ *   e, z --> | Binary | ---> y
+ *            +--------+
+ *
+ * After:
+ *            +--------+
+ *   x, z --> | Binary | ---> y
+ *            +--------+
+ * @endcode
+ *
+ * ``S`` is constant, ``x`` and ``z`` have the same rank, and every aligned
+ * dimension is equal or one. The unshared ``Expand`` is removed because
+ * ``Op`` can broadcast ``x`` directly; operand order is preserved.
  */
 class ExpandBroadcastPattern final : public core::builder::PatternOptimization {
 public:
@@ -62,25 +89,37 @@ public:
 /**
  * Simplifies a dynamic ``Concat`` used as an ``Expand`` target shape.
  *
- * When the input and output shapes differ in exactly one dimension, every
- * other ``Concat`` input can be replaced by ``[1]``:
+ * @code
+ * Before:
+ *                         +--------+
+ *   p0,...,pk,...,pn ---> | Concat | ---> s
+ *                         +--------+
+ *                             |
+ *                             v
+ *                        +--------+
+ *                        | Expand | <--- x
+ *                        +--------+
+ *                             |
+ *                             v
+ *                             y
  *
- *      Shape(x)[0]   two
- *           \        /
- *            Concat
- *               |
- *        x --> Expand
+ * After:
+ *                         +--------+
+ *   [1],...,pk,...,[1] -> | Concat | ---> s2
+ *                         +--------+
+ *                             |
+ *                             v
+ *                        +--------+
+ *                        | Expand | <--- x
+ *                        +--------+
+ *                             |
+ *                             v
+ *                             y
+ * @endcode
  *
- * becomes:
- *
- *          [1]      two
- *           \        /
- *            Concat
- *               |
- *        x --> Expand
- *
- * This keeps the expanded dimension while avoiding unnecessary dynamic shape
- * computations for dimensions preserved by broadcasting.
+ * Every ``pi`` is a one-element vector. The known input and output shapes have
+ * equal rank and differ only at dimension ``k``; ``pk`` is retained while all
+ * unchanged dimensions become ``1`` so broadcasting preserves them.
  */
 class ShapeBasedConcatExpandPattern final : public core::builder::PatternOptimization {
 public:
@@ -104,10 +143,32 @@ public:
 /**
  * Removes dynamic ``Expand`` nodes before a broadcasting binary operator.
  *
- * The input, pre-expansion, and output symbolic shapes are used to prove that
- * the binary operator itself performs the same broadcast. Shared ``Expand``
- * nodes are preserved for their other consumers while the binary operator
- * bypasses them.
+ * @code
+ * Before:
+ *              +--------+
+ *   a, sa ---> | Expand | ---> ea
+ *              +--------+
+ *
+ *              +--------+
+ *   b, sb ---> | Expand | ---> eb
+ *              +--------+
+ *
+ *              +--------+
+ *   ea, eb --> | Binary | ---> y
+ *              +--------+
+ *
+ * After:
+ *            +--------+
+ *   a, b --> | Binary | ---> y
+ *            +--------+
+ *
+ * Either input may already be unexpanded.
+ * @endcode
+ *
+ * The input, pre-expansion, and output symbolic shapes must prove that
+ * broadcasting ``a`` and ``b`` produces the shape of ``y``. Either input may
+ * already be unexpanded. Shared ``Expand`` nodes are preserved for other
+ * consumers, but the rebuilt binary operator bypasses them.
  */
 class ShapeBasedExpandBroadcastPattern final : public core::builder::PatternOptimization {
 public:
@@ -131,8 +192,31 @@ public:
 /**
  * Removes dynamic ``Expand`` nodes before ``MatMul``.
  *
- * Only the batch dimensions are checked for broadcast compatibility; the two
- * matrix dimensions retain the standard ``MatMul`` semantics.
+ * @code
+ * Before:
+ *              +--------+
+ *   a, sa ---> | Expand | ---> ea
+ *              +--------+
+ *
+ *              +--------+
+ *   b, sb ---> | Expand | ---> eb
+ *              +--------+
+ *
+ *              +--------+
+ *   ea, eb --> | MatMul | ---> y
+ *              +--------+
+ *
+ * After:
+ *            +--------+
+ *   a, b --> | MatMul | ---> y
+ *            +--------+
+ *
+ * Either input may already be unexpanded.
+ * @endcode
+ *
+ * Either input may already be unexpanded. Only the leading batch dimensions
+ * must broadcast to the output batch shape; the trailing two dimensions retain
+ * standard ``MatMul`` semantics. Shared ``Expand`` nodes remain for other uses.
  */
 class ShapeBasedExpandBroadcastMatMulPattern final : public core::builder::PatternOptimization {
 public:
@@ -156,8 +240,21 @@ public:
 /**
  * Replaces a dynamic ``Expand`` target with an equivalent constant target.
  *
+ * @code
+ * Before:
+ *                               +--------+
+ *   x, dynamic shape graph ---> | Expand | ---> y
+ *                               +--------+
+ *
+ * After:
+ *                               +--------+
+ *   x, constant [1,M,1] ------> | Expand | ---> y
+ *                               +--------+
+ * @endcode
+ *
  * Dimensions that are unchanged become ``1``; changed dimensions must be
- * statically known and become their output size.
+ * statically known in both input and output and become their output size. The
+ * ``Expand`` remains, but its dynamic shape computation is replaced.
  */
 class ShapeBasedStaticExpandPattern final : public core::builder::PatternOptimization {
 public:
@@ -181,8 +278,36 @@ public:
 /**
  * Moves input ``Expand`` nodes after a broadcasting binary operator.
  *
- * The binary operator runs on the smaller pre-expansion inputs and one trailing
- * ``Expand`` restores its original output shape.
+ * @code
+ * Before:
+ *             +--------+
+ *   a, S ---> | Expand | ---> ea
+ *             +--------+
+ *
+ *             +--------+
+ *   b, S ---> | Expand | ---> eb
+ *             +--------+
+ *
+ *              +--------+
+ *   ea, eb --> | Binary | ---> y
+ *              +--------+
+ *
+ * After:
+ *             +--------+
+ *   a, b ---> | Binary | ---> t
+ *             +--------+
+ *
+ *            +--------+
+ *   t, S --> | Expand | ---> y
+ *            +--------+
+ *
+ * Either input may already be unexpanded.
+ * @endcode
+ *
+ * One input may already be unexpanded. Symbolic shapes must prove that the
+ * smaller inputs broadcast safely and that the trailing ``Expand`` restores
+ * the original output shape. Shared input ``Expand`` nodes remain for other
+ * consumers.
  */
 class ShapeBasedExpandSwapPattern final : public core::builder::PatternOptimization {
 public:
@@ -206,9 +331,45 @@ public:
 /**
  * Moves an ``Expand`` after ``Cast`` and ``Where``.
  *
- * ``Where(Cast(Expand(x)), Expand(x), other)`` becomes
- * ``Expand(Where(Cast(x), x, other))`` when symbolic shapes prove that the
- * smaller Where broadcasts to the same output.
+ * @code
+ * Before:
+ *             +--------+                  +------+
+ *   x, S ---> | Expand | ---> e ---+----> | Cast | ---> condition
+ *             +--------+           |      +------+
+ *                                  |
+ *                                  +--------------------+
+ *                                                       |
+ *                                                       v
+ *                                                    +-------+
+ *   z ---------------------------------------------> | Where | ---> y
+ *                                                    +-------+
+ *
+ * After:
+ *          +------+
+ *   x ---> | Cast | ---> condition
+ *          +------+
+ *              |
+ *              +--------------------------+
+ *                                         |
+ *                                         v
+ *                                     +-------+
+ *   z ------------------------------> | Where | ---> w
+ *                                     +-------+
+ *                                         |
+ *                                         v
+ *                                    +--------+
+ *                                    | Expand | <--- S
+ *                                    +--------+
+ *                                         |
+ *                                         v
+ *                                         y
+ *
+ * The expanded value may occupy either Where branch.
+ * @endcode
+ *
+ * The expanded value may instead be the false branch. ``Cast(e)`` must be the
+ * unshared condition, and symbolic shapes must prove that the smaller
+ * ``Where`` broadcasts to the original output shape.
  */
 class ShapeBasedExpandCastWhereSwapPattern final : public core::builder::PatternOptimization {
 public:
@@ -232,9 +393,37 @@ public:
 /**
  * Moves an ``Expand`` past a following unary-like operator.
  *
- * ``Expand(x, shape)`` followed by a shape-preserving unary operator ``Op``
- * becomes ``Op(x)`` followed by ``Expand(..., shape)``. The unary operator then
- * runs on the smaller, pre-expansion tensor.
+ * @code
+ * Before:
+ *             +--------+
+ *   x, S ---> | Expand | ---> e
+ *             +--------+
+ *                  |
+ *                  v
+ *             +----------+
+ *             | UnaryOp  | <--- optional inputs
+ *             +----------+
+ *                  |
+ *                  v
+ *                  y
+ *
+ * After:
+ *          +----------+
+ *   x ---> | UnaryOp  | <--- optional inputs
+ *          +----------+
+ *               |
+ *               v
+ *          +--------+
+ *          | Expand | <--- S
+ *          +--------+
+ *               |
+ *               v
+ *               y
+ * @endcode
+ *
+ * The ``Expand`` output must be unshared and ``Op`` must preserve the shape of
+ * its first input. Attributes and any additional inputs of ``Op`` are retained,
+ * so the operator runs on the smaller tensor.
  */
 class ExpandSwapPattern final : public core::builder::PatternOptimization {
 public:
@@ -257,10 +446,37 @@ public:
 /**
  * Swaps an ``Expand`` and a following ``Unsqueeze``.
  *
- * ``Expand(x, shape)`` followed by ``Unsqueeze(expanded, axes)`` becomes
- * ``Unsqueeze(x, axes)`` followed by ``Expand(..., new_shape)`` where
- * ``new_shape`` inserts a ``1`` at every ``axes`` position of the original
- * ``shape``. The ``Unsqueeze`` then runs on the smaller, pre-expansion tensor.
+ * @code
+ * Before:
+ *                 +--------+
+ *   x, [A,B] ---> | Expand | ---> e
+ *                 +--------+
+ *                     |
+ *                     v
+ *               +-----------+
+ *               | Unsqueeze | <--- axes=[1]
+ *               +-----------+
+ *                     |
+ *                     v
+ *                     y
+ *
+ * After:
+ *                    +-----------+
+ *   x, axes=[1] ---> | Unsqueeze | ---> u
+ *                    +-----------+
+ *                          |
+ *                          v
+ *                     +--------+
+ *                     | Expand | <--- [A,1,B]
+ *                     +--------+
+ *                          |
+ *                          v
+ *                          y
+ * @endcode
+ *
+ * The axes are constant (opset 13 or later), the ``Expand`` output is
+ * unshared, and its target or output shape is known. The new target inserts a
+ * ``1`` at every normalized axis, letting ``Unsqueeze`` run before expansion.
  */
 class SwapExpandUnsqueezePattern final : public core::builder::PatternOptimization {
 public:
@@ -285,11 +501,42 @@ public:
  * Fuses ``Expand``, ``Unsqueeze`` and ``Expand`` into ``Unsqueeze`` then
  * ``Expand``.
  *
- * ``Expand`` does not change the rank of a tensor, so the ``Unsqueeze`` axes are
- * also valid for the original tensor. The first expansion and the new dimension
- * are absorbed by a single trailing ``Expand`` whose target shape is the
- * element-wise maximum of the first (unsqueezed) target shape and the second
- * target shape.
+ * @code
+ * Before:
+ *                 +--------+
+ *   x, [2,3] ---> | Expand | ---> e1
+ *                 +--------+
+ *                     |
+ *                     v
+ *               +-----------+
+ *               | Unsqueeze | <--- axes=[1]
+ *               +-----------+
+ *                     |
+ *                     v
+ *                 +--------+
+ *                 | Expand | <--- [1,4,3]
+ *                 +--------+
+ *                     |
+ *                     v
+ *                     y
+ *
+ * After:
+ *                    +-----------+
+ *   x, axes=[1] ---> | Unsqueeze | ---> u2
+ *                    +-----------+
+ *                          |
+ *                          v
+ *                     +--------+
+ *                     | Expand | <--- [2,4,3]
+ *                     +--------+
+ *                          |
+ *                          v
+ *                          y
+ * @endcode
+ *
+ * Both targets and the axes are constant (opset 13 or later), intermediate
+ * outputs are unshared, and the ranks agree. The new target is
+ * ``max(insert_ones(first_target, axes), second_target)`` element by element.
  */
 class ExpandUnsqueezeExpandPattern final : public core::builder::PatternOptimization {
 public:
@@ -313,9 +560,37 @@ public:
 /**
  * Swaps an ``Expand`` with a following constant-shape ``Reshape``.
  *
- * The specialized rank-three form ``Reshape(Expand(x, s), [0, 1, -1])`` becomes
- * ``Expand(Reshape(x, [0, 1, -1]), s)`` when the trailing dimensions of ``s``
- * are both one.
+ * @code
+ * Before:
+ *                     +--------+
+ *   x, S=[D,1,1] ---> | Expand | ---> e
+ *                     +--------+
+ *                         |
+ *                         v
+ *                    +---------+
+ *                    | Reshape | <--- [0,1,-1]
+ *                    +---------+
+ *                         |
+ *                         v
+ *                         y
+ *
+ * After:
+ *                    +---------+
+ *   x, [0,1,-1] ---> | Reshape | ---> r
+ *                    +---------+
+ *                         |
+ *                         v
+ *                    +--------+
+ *                    | Expand | <--- S=[D,1,1]
+ *                    +--------+
+ *                         |
+ *                         v
+ *                         y
+ * @endcode
+ *
+ * ``x`` must have rank three, the ``Expand`` output must be unshared, and its
+ * inferred target value must end in ``[1,1]``. This specialized form moves the
+ * fixed ``Reshape`` before expansion.
  */
 class SwapExpandReshapePattern final : public core::builder::PatternOptimization {
 public:

@@ -13,15 +13,19 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * of its outputs, in order and on the same axis, with a single ``Identity``.
  *
  * @code
- * Before:                     After:
+ * Before:
+ *          +-------+
+ *   x ---> | Split | ---> s0, s1
+ *          +-------+
  *
- *   x                           x
- *   |                           |
- *  Split(axis=a)              Identity
- *   |     |                     |
- *  Concat(axis=a)               y
- *   |
- *   y
+ *              +--------+
+ *   s0, s1 --> | Concat | ---> y
+ *              +--------+
+ *
+ * After:
+ *          +----------+
+ *   x ---> | Identity | ---> y
+ *          +----------+
  * @endcode
  *
  * The rewrite only fires when every ``Split`` output feeds the same ``Concat``
@@ -53,6 +57,42 @@ public:
  *
  * The axis dimension of the shared input must be statically equal to the number
  * of gathers, so the ``Split`` reproduces every original slice.
+ *
+ * @code
+ * Before:
+ *                   +--------------+
+ *   x, index=0 ---> | Gather axis1 | ---> y0
+ *                   +--------------+
+ *                   +--------------+
+ *   x, index=1 ---> | Gather axis1 | ---> y1
+ *                   +--------------+
+ *                   +--------------+
+ *   x, index=2 ---> | Gather axis1 | ---> y2
+ *                   +--------------+
+ *
+ * After:
+ *          +-------+
+ *   x ---> | Split | ---> t0, t1, t2
+ *          +-------+
+ *
+ *                     +---------+
+ *   t0, axes=[1] ---> | Squeeze | ---> y0
+ *                     +---------+
+ *                     +---------+
+ *   t1, axes=[1] ---> | Squeeze | ---> y1
+ *                     +---------+
+ *                     +---------+
+ *   t2, axes=[1] ---> | Squeeze | ---> y2
+ *                     +---------+
+ *
+ * After (single-element vector indices):
+ *          +-------+
+ *   x ---> | Split | ---> y0, y1, y2
+ *          +-------+
+ * @endcode
+ *
+ * Single-element vector indices ``[i]`` retain the axis, so the ``Split``
+ * writes ``yi`` directly without ``Squeeze`` nodes.
  */
 class GathersSplitPattern final : public core::builder::PatternOptimization {
 public:
@@ -79,6 +119,24 @@ public:
  * Each slice must use a unit step, share the same axis, start where the
  * previous one ends, begin at zero and end at the axis dimension (or the
  * ``INT64_MAX`` sentinel used to denote "until the end").
+ *
+ * @code
+ * Before:
+ *                               +-------+
+ *   x, [0], [2], [0] ---------> | Slice | ---> y0
+ *                               +-------+
+ *                               +-------+
+ *   x, [2], [5], [0] ---------> | Slice | ---> y1
+ *                               +-------+
+ *                               +-------+
+ *   x, [5], [INT64_MAX], [0] -> | Slice | ---> y2
+ *                               +-------+
+ *
+ * After:
+ *   x, splits=[2,3,1] ---> +-------+ ---> y0
+ *                          | Split | ---> y1
+ *                          +-------+ ---> y2
+ * @endcode
  */
 class SlicesSplitPattern final : public core::builder::PatternOptimization {
 public:

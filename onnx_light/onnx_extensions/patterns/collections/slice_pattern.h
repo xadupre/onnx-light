@@ -16,6 +16,45 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * The intermediate result must be consumed by the second ``Slice`` alone and
  * both nodes must provide a constant ``axes`` input; a missing ``steps`` input
  * on either side is materialised as a vector of ones.
+ *
+ * @code
+ * Before:
+ *   x, s0, e0, a0, st0
+ *            |
+ *            v
+ *       +-------+
+ *       | Slice | ---> t
+ *       +-------+
+ *                                |
+ *                                v
+ *                          +-------+
+ *                          | Slice | <--- s1, e1, a1, st1
+ *                          +-------+
+ *                                |
+ *                                v
+ *                                y
+ *
+ * After:
+ *               +--------+
+ *   s0, s1 ---> | Concat | ---> s
+ *               +--------+
+ *               +--------+
+ *   e0, e1 ---> | Concat | ---> e
+ *               +--------+
+ *               +--------+
+ *   a0, a1 ---> | Concat | ---> a
+ *               +--------+
+ *               +--------+
+ *   st0,st1 --> | Concat | ---> st
+ *               +--------+
+ *
+ *   x, s, e, a, st
+ *          |
+ *          v
+ *     +-------+
+ *     | Slice | ---> y
+ *     +-------+
+ * @endcode
  */
 class SliceSlicePattern final : public core::builder::PatternOptimization {
 public:

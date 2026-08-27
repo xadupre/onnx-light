@@ -12,14 +12,19 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Removes a null (all-zero) bias input from a Conv node.
  *
  * @code
- * Before:                     After:
+ * Before:
+ *                  +------+
+ *   X, W, B=0 ---> | Conv | ---> Y
+ *                  +------+
  *
- *  X   W   B(=0)               X   W
- *   \  |  /                     \  |
- *    Conv                        Conv
- *     |                           |
- *     Y                           Y
+ * After:
+ *                +------+
+ *   X, W ------> | Conv | ---> Y
+ *                +------+
  * @endcode
+ *
+ * The Conv node is rebuilt without its known all-zero constant bias while all
+ * attributes and output names are retained.
  */
 class ConvBiasNullPattern final : public core::builder::PatternOptimization {
 public:
@@ -44,20 +49,29 @@ public:
  * ``pads`` attribute absorbs the spatial padding.
  *
  * @code
- * Before:                     After:
+ * Before:
+ *                         +-----+
+ *   X, pads, value=0 ---> | Pad | ---> p
+ *                         +-----+
+ *                            |
+ *                            v
+ *                     +------+
+ *                     | Conv | <--- W, B
+ *                     +------+
+ *                            |
+ *                            v
+ *                            Y
  *
- *  X   pads                    X   W
- *   \  /                        \  |
- *   Pad     W                    Conv(pads=...)
- *     \    /                       |
- *      Conv                        Y
- *       |
- *       Y
+ * After:
+ *                +--------------------+
+ *   X, W, B ---> | Conv with new pads | ---> Y
+ *                +--------------------+
  * @endcode
  *
  * The fusion applies when the Pad uses the default ``constant`` mode with a
  * zero constant value, pads only the spatial dimensions, and the Conv does not
- * use ``auto_pad``.
+ * use ``auto_pad``. The optional Conv bias, other attributes, and every Conv
+ * output name are retained.
  */
 class PadConvPattern final : public core::builder::PatternOptimization {
 public:

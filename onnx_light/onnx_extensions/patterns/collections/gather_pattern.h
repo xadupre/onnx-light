@@ -15,6 +15,28 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * requested index falls inside ``X``'s slice of the concatenation.
  *
  * ``offset`` is the total size of the constant inputs preceding ``X``.
+ *
+ * @code
+ * Before:
+ *                  +--------------+
+ *   c0, X, c1 ---> | Concat axis0 | ---> t
+ *                  +--------------+
+ *                         |
+ *                         v
+ *                    +--------------+
+ *                    | Gather axis0 | <--- indices=[2,4]
+ *                    +--------------+
+ *                         |
+ *                         v
+ *                         y
+ *
+ * After:
+ *                         +--------------+
+ *   X, indices=[0,2] ---> | Gather axis0 | ---> y
+ *                         +--------------+
+ * @endcode
+ *
+ * If ``t`` has another consumer, the original ``Concat`` is retained.
  */
 class GatherConcatPattern final : public core::builder::PatternOptimization {
 public:
@@ -39,7 +61,37 @@ public:
  * into a single ``Gather``.
  *
  * The inner indices ``cst1`` must be a 1-D constant array and the outer indices
- * ``cst2`` a constant of any shape; the fused indices are ``cst1[cst2]``.
+ * ``cst2`` a constant integer tensor; the fused indices are ``cst1[cst2]``.
+ * Scalar outer indices remain scalar, while non-scalar fused indices are
+ * materialised as a vector.
+ *
+ * @code
+ * Before:
+ *   x, [4,1,7]
+ *         |
+ *         v
+ *   +--------------+
+ *   | Gather axis0 | ---> t
+ *   +--------------+
+ *                           |
+ *                           v
+ *                      +--------------+
+ *                      | Gather axis0 | <--- [2,0]
+ *                      +--------------+
+ *                           |
+ *                           v
+ *                           y
+ *
+ * After:
+ *   x, [7,4]
+ *       |
+ *       v
+ *   +--------------+
+ *   | Gather axis0 | ---> y
+ *   +--------------+
+ * @endcode
+ *
+ * If ``t`` has another consumer, the inner ``Gather`` is retained.
  */
 class GatherGatherPattern final : public core::builder::PatternOptimization {
 public:

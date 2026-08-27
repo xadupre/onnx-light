@@ -49,6 +49,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   execution, kernel tuning, compute analyses, and ONNX Runtime benchmark comparisons.
 - Documented CPU thread-pool dispatch, split the fast-loading work into ordered roadmaps,
   and clarified the next-step objectives and dependencies.
+- Reorganized the generated API catalogues under a `ByOp` page, including pattern rewrites
+  and registered peak-memory functions.
 - Isolated and bounded benchmark gallery measurements.
 - Fixed macOS GoogleTest discovery by deferring it to `PRE_TEST` mode.
 

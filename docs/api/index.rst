@@ -5,6 +5,7 @@ API
     :maxdepth: 1
 
     protos/index
+    patterns
     python/index
     cpp/index
 

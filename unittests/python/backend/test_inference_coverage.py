@@ -4,6 +4,7 @@ import unittest
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
+import_or_skip("onnx_light.onnx_lib.backend.test.case")
 doc = import_or_skip("onnx_light.doc")
 InferenceCaseReport = doc.InferenceCaseReport
 InferenceCoverageReport = doc.InferenceCoverageReport

@@ -9,7 +9,10 @@ import subprocess
 import textwrap
 from dataclasses import dataclass, field
 from types import SimpleNamespace
-from typing import Any, Callable, Iterable
+from typing import TYPE_CHECKING, Any, Callable, Iterable
+
+if TYPE_CHECKING:
+    from .onnx_lib.backend.test.case.base import TestCase
 
 
 def find_standalone_executable(
@@ -242,6 +245,133 @@ def measure_cpp_with_example(
         "max": values["max"],
         "std": values.get("std", float("nan")),
     }
+
+
+# ---------------------------------------------------------------------------
+# Pattern documentation generation
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _PatternDocumentation:
+    """Stores documentation extracted from one C++ pattern class."""
+
+    class_name: str
+    family: str
+    summary: str
+    graph: str
+
+
+def _clean_doxygen_comment(comment: str) -> str:
+    """Removes Doxygen line markers while preserving diagram indentation."""
+    lines = []
+    for line in comment.splitlines():
+        cleaned = re.sub(r"^\s*\* ?", "", line)
+        lines.append(cleaned.rstrip())
+    return "\n".join(lines).strip()
+
+
+def _load_pattern_documentation(patterns_root: pathlib.Path) -> dict[str, _PatternDocumentation]:
+    """Loads pattern summaries and rewrite graphs from C++ headers."""
+    documentation: dict[str, _PatternDocumentation] = {}
+    declaration = re.compile(r"/\*\*(.*?)\*/\s*class\s+(\w+Pattern)\b", re.DOTALL)
+    for header in sorted(patterns_root.rglob("*.h")):
+        relative = header.relative_to(patterns_root)
+        family = relative.parent.as_posix()
+        if family == ".":
+            family = "core"
+        source = header.read_text(encoding="utf-8")
+        for match in declaration.finditer(source):
+            class_name = match.group(2)
+            if class_name in documentation:
+                raise RuntimeError(f"Duplicate C++ documentation for pattern {class_name!r}.")
+            comment = _clean_doxygen_comment(match.group(1))
+            before_code, marker, code_and_after = comment.partition("@code")
+            code, end_marker, _ = code_and_after.partition("@endcode")
+            if not marker or not end_marker or "Before" not in code or "After" not in code:
+                raise RuntimeError(
+                    f"Pattern {class_name!r} must document a Before/After @code graph."
+                )
+            paragraphs = [part.strip() for part in before_code.split("\n\n") if part.strip()]
+            if not paragraphs:
+                raise RuntimeError(f"Pattern {class_name!r} has no summary.")
+            summary = " ".join(paragraphs[0].split())
+            documentation[class_name] = _PatternDocumentation(
+                class_name=class_name,
+                family=family,
+                summary=summary,
+                graph=textwrap.dedent(code).strip(),
+            )
+    return documentation
+
+
+def render_rst_pattern_catalog(patterns_root: str | pathlib.Path | None = None) -> str:
+    """Renders the registered C++ patterns as a reST catalogue.
+
+    The live Python registry determines which patterns appear. Summaries and
+    ASCII rewrite graphs are extracted from the corresponding C++ Doxygen
+    comments, so the catalogue has no separately maintained pattern list.
+
+    Args:
+        patterns_root: Optional path to the C++ pattern headers. It defaults to
+            the headers located beside the installed ``onnx_light`` package.
+
+    Returns:
+        A reST ``list-table`` linking each pattern's C++ and Python API
+        documentation and displaying its summary and rewrite graph.
+    """
+    from .onnx_core import optimization
+
+    root = (
+        pathlib.Path(patterns_root)
+        if patterns_root is not None
+        else pathlib.Path(__file__).resolve().parent / "onnx_extensions" / "patterns"
+    )
+    if not root.is_dir():
+        raise FileNotFoundError(f"C++ pattern headers were not found in {root}.")
+    documentation = _load_pattern_documentation(root)
+    rows = []
+    for pattern in optimization.standard_patterns():
+        class_name = type(pattern).__name__
+        if class_name not in documentation:
+            raise RuntimeError(
+                f"Registered pattern {pattern.name!r} has no C++ documentation for {class_name}."
+            )
+        if not hasattr(optimization, class_name):
+            raise RuntimeError(
+                f"Registered pattern {pattern.name!r} is not exposed by the public Python API."
+            )
+        rows.append((documentation[class_name].family, str(pattern.name), class_name))
+
+    lines = [
+        ".. list-table::",
+        "    :header-rows: 1",
+        "    :widths: 14 20 38 14 14",
+        "    :class: pattern-catalog",
+        "",
+        "    * - Pattern",
+        "      - Summary",
+        "      - Rewrite",
+        "      - C++",
+        "      - Python",
+    ]
+    for family, name, class_name in sorted(rows):
+        item = documentation[class_name]
+        lines.extend(
+            [
+                f"    * - **{name}** (``{family}``)",
+                f"      - {item.summary}",
+                "      - .. code-block:: text",
+                "",
+                *[
+                    f"            {line}" if line else "            "
+                    for line in item.graph.splitlines()
+                ],
+                f"      - :cpp:class:`~onnx_light::onnx_patterns::{class_name}`",
+                f"      - :class:`~onnx_light.onnx_core.optimization.{class_name}`",
+            ]
+        )
+    return "\n".join(lines) + "\n"
 
 
 # ---------------------------------------------------------------------------
@@ -1461,8 +1591,6 @@ def generate_operators_doc(
 from . import onnx as onnxl  # noqa: E402
 from .onnx_core.shape_inference import infer_shapes_model  # noqa: E402
 from .tools import pretty_onnx  # noqa: E402
-from .onnx_lib.backend.test.case import collect_test_case  # noqa: E402
-from .onnx_lib.backend.test.case.base import TestCase  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -1632,6 +1760,8 @@ def _strip_value_info(model: onnxl.ModelProto) -> None:
 
 
 def _iter_inference_cases() -> Iterable[TestCase]:
+    from .onnx_lib.backend.test.case import collect_test_case
+
     cases = collect_test_case()
     for name in sorted(cases):
         tc = cases[name]

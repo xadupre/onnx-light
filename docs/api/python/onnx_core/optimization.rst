@@ -64,6 +64,8 @@ currently available patterns.
     print(render_rst_standard_patterns_table())
 
 The runtime list is available through :func:`standard_pattern_names`.
+The :ref:`complete pattern catalogue <l-api-pattern-catalog>` adds the C++
+documentation link and the Before/After rewrite graph for every entry.
 
 See :ref:`l-howto-add-custom-pattern` for a Python/C++ how-to on writing a
 custom pattern and choosing its priority, and

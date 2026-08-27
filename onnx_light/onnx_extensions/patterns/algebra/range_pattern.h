@@ -42,9 +42,9 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *   limit ----------------------> | Add | ---> limit2 ----------------+--+
  *                                +-----+                                 |
  *                                                                        v
- *                                                                   +-------+
+ *                                                                    +-------+
  *   delta ---------------------------------------------------------> | Range | ---> y
- *                                                                   +-------+
+ *                                                                    +-------+
  *
  * After (start is constant zero):
  *               +---------+
@@ -56,9 +56,9 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *   limit ---------------------> | Add | ---> limit2 -----------------+--+
  *                               +-----+                                  |
  *                                                                         v
- *                                                                    +-------+
+ *                                                                     +-------+
  *   delta ----------------------------------------------------------> | Range | ---> y
- *                                                                    +-------+
+ *                                                                     +-------+
  * @endcode
  *
  * When ``start`` is the constant zero, ``start2`` is ``s`` and its Add is

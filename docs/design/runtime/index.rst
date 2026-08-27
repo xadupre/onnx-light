@@ -31,6 +31,7 @@ native callers.
     :maxdepth: 1
 
     kernel_tuning
+    calibration_profile_store
     arenas
     test_coverage
     runtime_coverage

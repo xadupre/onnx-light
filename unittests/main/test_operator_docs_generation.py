@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
+import_or_skip("onnx_light.onnx_lib.backend.test.case")
 doc_module = import_or_skip("onnx_light.doc")
 
 

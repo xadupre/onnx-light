@@ -12,9 +12,11 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <limits>
 #include <mutex>
+#include <numeric>
 #include <stdexcept>
 #include <tuple>
 #include <unordered_set>
@@ -22,6 +24,51 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
+
+double Median(std::vector<double> values) {
+  std::sort(values.begin(), values.end());
+  const size_t middle = values.size() / 2;
+  return values.size() % 2 == 0 ? (values[middle - 1] + values[middle]) / 2 : values[middle];
+}
+
+double CriterionValue(const KernelTuningLatencyMetrics &metrics, KernelTuningCriterion criterion) {
+  switch (criterion) {
+  case KernelTuningCriterion::kAverage:
+    return metrics.average;
+  case KernelTuningCriterion::kSum:
+    return metrics.sum;
+  case KernelTuningCriterion::kMedian:
+    return metrics.median;
+  case KernelTuningCriterion::kAverageSpeedup:
+    return metrics.average_speedup.value();
+  case KernelTuningCriterion::kMedianSpeedup:
+    return metrics.median_speedup.value();
+  case KernelTuningCriterion::kMaxSpeedup:
+    return metrics.max_speedup.value();
+  case KernelTuningCriterion::kMaxLatency:
+    return metrics.max_latency;
+  }
+  throw std::invalid_argument("Unknown kernel tuning criterion.");
+}
+
+bool Maximizes(KernelTuningCriterion criterion) {
+  return criterion == KernelTuningCriterion::kAverageSpeedup ||
+         criterion == KernelTuningCriterion::kMedianSpeedup ||
+         criterion == KernelTuningCriterion::kMaxSpeedup;
+}
+
+bool HasCriterion(const KernelTuningLatencyMetrics &metrics, KernelTuningCriterion criterion) {
+  switch (criterion) {
+  case KernelTuningCriterion::kAverageSpeedup:
+    return metrics.average_speedup.has_value();
+  case KernelTuningCriterion::kMedianSpeedup:
+    return metrics.median_speedup.has_value();
+  case KernelTuningCriterion::kMaxSpeedup:
+    return metrics.max_speedup.has_value();
+  default:
+    return true;
+  }
+}
 
 template <typename T> bool Contains(const std::vector<T> &values, const T &value) {
   return values.empty() || std::find(values.begin(), values.end(), value) != values.end();
@@ -225,6 +272,118 @@ size_t KernelTuningKeyHash::operator()(const KernelTuningKey &key) const noexcep
   HashCombine(hash, std::hash<int32_t>{}(static_cast<int32_t>(key.device)));
   HashCombine(hash, std::hash<uint32_t>{}(key.tuning_abi));
   return hash;
+}
+
+KernelTuningCriterion ParseKernelTuningCriterion(std::string_view criterion) {
+  if (criterion == "average")
+    return KernelTuningCriterion::kAverage;
+  if (criterion == "sum")
+    return KernelTuningCriterion::kSum;
+  if (criterion == "median")
+    return KernelTuningCriterion::kMedian;
+  if (criterion == "average-speedup")
+    return KernelTuningCriterion::kAverageSpeedup;
+  if (criterion == "median-speedup")
+    return KernelTuningCriterion::kMedianSpeedup;
+  if (criterion == "max-speedup")
+    return KernelTuningCriterion::kMaxSpeedup;
+  if (criterion == "max-latency")
+    return KernelTuningCriterion::kMaxLatency;
+  throw std::invalid_argument("Unknown kernel tuning criterion '" + std::string(criterion) + "'.");
+}
+
+std::string_view KernelTuningCriterionName(KernelTuningCriterion criterion) {
+  switch (criterion) {
+  case KernelTuningCriterion::kAverage:
+    return "average";
+  case KernelTuningCriterion::kSum:
+    return "sum";
+  case KernelTuningCriterion::kMedian:
+    return "median";
+  case KernelTuningCriterion::kAverageSpeedup:
+    return "average-speedup";
+  case KernelTuningCriterion::kMedianSpeedup:
+    return "median-speedup";
+  case KernelTuningCriterion::kMaxSpeedup:
+    return "max-speedup";
+  case KernelTuningCriterion::kMaxLatency:
+    return "max-latency";
+  }
+  throw std::invalid_argument("Unknown kernel tuning criterion.");
+}
+
+KernelTuningLatencyReport
+AnalyzeKernelTuningLatencies(const std::vector<std::vector<std::optional<double>>> &latencies,
+                             KernelTuningCriterion criterion) {
+  if (latencies.empty() || latencies.front().empty()) {
+    throw std::invalid_argument("Kernel tuning latency measurements must not be empty.");
+  }
+  const size_t case_count = latencies.front().size();
+  for (const auto &row : latencies) {
+    if (row.size() != case_count) {
+      throw std::invalid_argument("Kernel tuning latency rows must have the same number of cases.");
+    }
+    for (const std::optional<double> &latency : row) {
+      if (latency.has_value() && (!std::isfinite(*latency) || *latency <= 0)) {
+        throw std::invalid_argument("Kernel tuning latencies must be positive and finite.");
+      }
+    }
+  }
+
+  KernelTuningLatencyReport report;
+  report.criterion = criterion;
+  report.values.reserve(latencies.size());
+  const bool has_baseline =
+      std::all_of(latencies.front().begin(), latencies.front().end(),
+                  [](const std::optional<double> &value) { return value.has_value(); });
+  for (const auto &row : latencies) {
+    if (std::any_of(row.begin(), row.end(),
+                    [](const std::optional<double> &value) { return !value.has_value(); })) {
+      report.values.emplace_back(std::nullopt);
+      continue;
+    }
+    std::vector<double> values;
+    std::vector<double> speedups;
+    values.reserve(case_count);
+    speedups.reserve(case_count);
+    double sum = 0;
+    for (size_t index = 0; index < case_count; ++index) {
+      const double value = *row[index];
+      values.push_back(value);
+      if (has_baseline) {
+        speedups.push_back(*latencies.front()[index] / value);
+      }
+      sum += value;
+    }
+    KernelTuningLatencyMetrics metrics;
+    metrics.average = sum / static_cast<double>(case_count);
+    metrics.sum = sum;
+    metrics.median = Median(values);
+    metrics.max_latency = *std::max_element(values.begin(), values.end());
+    if (has_baseline) {
+      metrics.average_speedup =
+          std::accumulate(speedups.begin(), speedups.end(), 0.0) / static_cast<double>(case_count);
+      metrics.median_speedup = Median(speedups);
+      metrics.max_speedup = *std::max_element(speedups.begin(), speedups.end());
+    }
+    report.values.push_back(std::move(metrics));
+  }
+
+  std::optional<size_t> selected;
+  for (size_t index = 0; index < report.values.size(); ++index) {
+    if (!report.values[index].has_value() || !HasCriterion(*report.values[index], criterion)) {
+      continue;
+    }
+    if (!selected.has_value() ||
+        (Maximizes(criterion) ? CriterionValue(*report.values[index], criterion) >
+                                    CriterionValue(*report.values[*selected], criterion)
+                              : CriterionValue(*report.values[index], criterion) <
+                                    CriterionValue(*report.values[*selected], criterion))) {
+      selected = index;
+    }
+  }
+  report.selected_index = selected;
+  return report;
 }
 
 std::string_view TuningValueTypeName(const TuningValue &value) noexcept {

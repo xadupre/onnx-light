@@ -26,14 +26,12 @@ nanobind = ">=3.0.0"
 [feature.dev-no-onnx.dependencies]
 black = "==26.5.1"
 clang-format = "==22.1.8"
+coverage = "*"
 matplotlib-base = "*"
 mypy = "==2.3.0"
 openpyxl = "*"
 pandas = "*"
 pyrefly = "==1.2.0"
-pytest = ">=7"
-pytest-cov = "*"
-pytest-subtests = "*"
 ruff = "==0.16.2"
 
 [feature.dev-onnx.dependencies]

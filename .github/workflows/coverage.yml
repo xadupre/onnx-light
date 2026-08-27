@@ -89,7 +89,8 @@ jobs:
 
       - name: Run tests
         run: |
-          UNITTEST_GOING=1 pytest --cov=onnx_light --cov-report=xml --durations=10 unittests
+          UNITTEST_GOING=1 coverage run --source=onnx_light -m unittests --durations 10
+          coverage xml
 
       - name: Export C++ coverage
         env:

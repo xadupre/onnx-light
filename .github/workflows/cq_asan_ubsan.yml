@@ -75,4 +75,4 @@ jobs:
           echo "ASAN_LIB=${ASAN_LIB}"
           echo "UBSAN_LIB=${UBSAN_LIB}"
           export LD_PRELOAD="${ASAN_LIB}:${UBSAN_LIB}"
-          UNITTEST_GOING=1 pytest --durations=10 unittests -v
+          UNITTEST_GOING=1 python -m unittests --durations 10 -v

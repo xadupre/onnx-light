@@ -36,11 +36,9 @@ dev = [
 ]
 dev-no-onnx = [
     "onnx-light[style]",
+    "coverage",
     "matplotlib",
     "pandas",
-    "pytest>=7",
-    "pytest-coverage",
-    "pytest-subtests",
 ]
 docs = [
     "onnx-light[style]",
@@ -99,9 +97,6 @@ cmake.define.ONNX_LIGHT_INSTALL = "OFF"
 [[tool.scikit-build.overrides]]
 if.env.ONNX_LIGHT_REDUCED = "1"
 wheel.build-tag = "0reduced"
-
-[tool.pytest.ini_options]
-testpaths = ["unittests"]
 
 [tool.black]
 line-length = 98

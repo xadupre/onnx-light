@@ -146,8 +146,9 @@ import argparse
 import json
 import os
 import re
+import sys
 import warnings
-from typing import TYPE_CHECKING, Any, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Callable, TypedDict, cast
 
 if TYPE_CHECKING:
     from .onnx_proto._helper import TypeProto as _TypeProto
@@ -648,6 +649,7 @@ def _run_backend_test_timing(
     timeout_seconds: float = 2.0,
     tuning_comparison: dict[str, Any] | None = None,
     save_models: str | None = None,
+    progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
     """Measures backend test cases selected by name and generation mode."""
     import math
@@ -683,6 +685,10 @@ def _run_backend_test_timing(
         name_regex, include_big=include_big, mode=test_mode
     )
     collection_seconds = time.perf_counter() - collection_start
+    if tuning_comparison is not None and not cases:
+        raise SystemExit(
+            f"onnx-light backend: regular expression {name_regex!r} selected no backend cases"
+        )
 
     comparison = None
     if tuning_comparison is None:
@@ -708,17 +714,25 @@ def _run_backend_test_timing(
     else:
         import tempfile
 
+        from . import kernel_tuning
+
         tunable = cast(_KernelTunable, tuning_comparison["tunable"])
-        parameter_name = cast(str, tuning_comparison["parameter_name"])
-        parameter_values = cast(list[int], tuning_comparison["parameter_values"])
+        criterion = cast(str, tuning_comparison.get("criterion", "sum"))
+        if "parameter_sets" in tuning_comparison:
+            parameter_sets = cast(list[dict[str, int]], tuning_comparison["parameter_sets"])
+        else:
+            parameter_name = cast(str, tuning_comparison["parameter_name"])
+            parameter_sets = [
+                {parameter_name: value}
+                for value in cast(list[int], tuning_comparison["parameter_values"])
+            ]
+        parameter_names = list(parameter_sets[0])
         reports_by_value = []
         with tempfile.TemporaryDirectory(prefix="onnx-light-backend-tuning-") as temporary:
-            for value in parameter_values:
-                from . import kernel_tuning
-
+            for set_index, parameter_set in enumerate(parameter_sets):
                 values = dict(tunable["active_values"])
-                values[parameter_name] = value
-                cache_path = str(Path(temporary) / f"value-{value}.cache")
+                values.update(parameter_set)
+                cache_path = str(Path(temporary) / f"values-{set_index}.cache")
                 try:
                     kernel_tuning.set_kernel_tuning_parameters(
                         tunable["kernel"],
@@ -732,8 +746,7 @@ def _run_backend_test_timing(
                     )
                 except ValueError as exc:
                     raise SystemExit(
-                        f"onnx-light backend: invalid value {value} for tunable parameter "
-                        f"{parameter_name!r}: {exc}"
+                        f"onnx-light backend: invalid tuning parameter set {parameter_set}: {exc}"
                     ) from exc
                 reports_by_value.append(
                     _measure_backend_test_cases_with_timeout(
@@ -756,31 +769,53 @@ def _run_backend_test_timing(
                         },
                     )
                 )
+                if progress is not None:
+                    progress(set_index + 1, len(parameter_sets))
 
-        baseline_value = parameter_values[0]
+        baseline_parameters = parameter_sets[0]
         baseline_cases = {case["name"]: case for case in reports_by_value[0]}
         case_reports = []
         comparison_values = []
-        baseline_run_seconds = sum(
-            case["run_seconds"] for case in reports_by_value[0] if case["run_seconds"] is not None
+        latency_report = kernel_tuning.analyze_kernel_tuning_latencies(
+            [[case["run_seconds"] for case in reports] for reports in reports_by_value], criterion
         )
-        baseline_timed_out = sum(case["timed_out"] for case in reports_by_value[0])
-        for value, value_reports in zip(parameter_values, reports_by_value):
+        selected_index = latency_report["selected_index"]
+        baseline_metrics = latency_report["values"][0]
+        for set_index, (parameter_set, value_reports) in enumerate(
+            zip(parameter_sets, reports_by_value)
+        ):
             run_seconds = sum(
                 case["run_seconds"] for case in value_reports if case["run_seconds"] is not None
             )
             timed_out = sum(case["timed_out"] for case in value_reports)
-            aggregate_speedup = (
-                baseline_run_seconds / run_seconds
-                if run_seconds > 0 and baseline_timed_out == 0 and timed_out == 0
-                else None
-            )
+            metrics = latency_report["values"][set_index]
             comparison_values.append(
                 {
-                    "value": value,
+                    "parameters": parameter_set,
+                    "value": (
+                        next(iter(parameter_set.values())) if len(parameter_set) == 1 else None
+                    ),
                     "run_seconds": run_seconds,
-                    "speedup": aggregate_speedup,
+                    "speedup": (
+                        None
+                        if metrics is None or baseline_metrics is None
+                        else baseline_metrics["sum"] / metrics["sum"]
+                    ),
                     "timed_out": timed_out,
+                    "selected": selected_index is not None and set_index == selected_index,
+                    **(
+                        metrics
+                        if metrics is not None
+                        else {
+                            "average": None,
+                            "sum": None,
+                            "median": None,
+                            "average_speedup": None,
+                            "median_speedup": None,
+                            "max_speedup": None,
+                            "max_latency": None,
+                        }
+                    ),
                 }
             )
             for case in value_reports:
@@ -794,9 +829,13 @@ def _run_backend_test_timing(
                 )
                 case.update(
                     {
-                        "parameter_name": parameter_name,
-                        "parameter_value": value,
-                        "baseline_value": baseline_value,
+                        "parameter_name": ",".join(parameter_names),
+                        "parameter_value": ",".join(
+                            str(parameter_set[name]) for name in parameter_names
+                        ),
+                        "baseline_value": ",".join(
+                            str(baseline_parameters[name]) for name in parameter_names
+                        ),
                         "speedup": case_speedup,
                     }
                 )
@@ -805,8 +844,16 @@ def _run_backend_test_timing(
             "kernel": tunable["kernel"],
             "element_type": tunable["element_type"],
             "implementation": tunable["implementation"],
-            "parameter_name": parameter_name,
-            "baseline_value": baseline_value,
+            "criterion": criterion,
+            "parameter_names": parameter_names,
+            "parameter_name": ",".join(parameter_names),
+            "baseline_parameters": baseline_parameters,
+            "baseline_value": ",".join(
+                str(baseline_parameters[name]) for name in parameter_names
+            ),
+            "selected_parameters": (
+                None if selected_index is None else parameter_sets[selected_index]
+            ),
             "values": comparison_values,
         }
 
@@ -850,12 +897,17 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
 
     tuning_comparison = None
     if args.parameter:
+        if not args.regex:
+            raise SystemExit("onnx-light backend: --parameter requires --regex")
         if not args.kernel or args.dtype is None or not args.impl:
             raise SystemExit(
                 "onnx-light backend: --parameter requires --kernel, --dtype, and --impl "
                 "to select exactly one tuning schema"
             )
+        if args.criterion is None:
+            raise SystemExit("onnx-light backend: --parameter requires --criterion")
         from . import kernel_tuning
+        from itertools import product
 
         tuning_report = kernel_tuning.kernel_tuning_parameters(
             kernel=args.kernel,
@@ -869,14 +921,40 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
                 f"onnx-light backend: tuning selectors matched {len(tunables)} schemas; "
                 "expected exactly one"
             )
-        parameter_name, parameter_values = _resolve_integer_tuning_parameter(
-            "backend", args.parameter, tunables[0]
-        )
+        parameter_options = [
+            _resolve_integer_tuning_parameter("backend", specification, tunables[0])
+            for specification in args.parameter
+        ]
+        parameter_names = [name for name, _ in parameter_options]
+        if len(set(parameter_names)) != len(parameter_names):
+            raise SystemExit("onnx-light backend: every --parameter name must be unique")
+        parameter_set_count = 1
+        for _, values in parameter_options:
+            parameter_set_count *= len(values)
+            if parameter_set_count > 256:
+                raise SystemExit("onnx-light backend: at most 256 parameter sets are supported")
+        parameter_sets = [
+            dict(zip(parameter_names, values))
+            for values in product(*(values for _, values in parameter_options))
+        ]
         tuning_comparison = {
             "tunable": tunables[0],
-            "parameter_name": parameter_name,
-            "parameter_values": parameter_values,
+            "parameter_sets": parameter_sets,
+            "criterion": args.criterion,
         }
+    elif args.criterion is not None:
+        raise SystemExit("onnx-light backend: --criterion requires --parameter")
+
+    def progress(completed: int, total: int) -> None:
+        width = 20
+        filled = width * completed // total
+        ending = "\n" if completed == total else "\r"
+        print(
+            f"[backend tune] [{'#' * filled}{'-' * (width - filled)}] {completed}/{total}",
+            file=sys.stderr,
+            end=ending,
+            flush=True,
+        )
 
     report = _run_backend_test_timing(
         name_regex=args.regex,
@@ -888,6 +966,7 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
         timeout_seconds=args.timeout,
         tuning_comparison=tuning_comparison,
         save_models=args.save_models,
+        progress=progress if tuning_comparison is not None else None,
     )
     if args.output:
         _write_backend_test_output(report, args.output)
@@ -907,16 +986,26 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
     if report["tuning_comparison"] is not None:
         comparison = report["tuning_comparison"]
         print(
-            f"side by side: {comparison['kernel']} {comparison['parameter_name']} "
-            f"baseline={comparison['baseline_value']}"
+            f"side by side: {comparison['kernel']} criterion={comparison['criterion']} "
+            f"selected={comparison['selected_parameters']}"
         )
         for value in comparison["values"]:
-            speedup = (
-                f"{value['speedup']:.3f}x" if value["speedup"] is not None else "unavailable"
+            metric_text = " ".join(
+                f"{name}={value[name]:.6g}" if value[name] is not None else f"{name}=unavailable"
+                for name in (
+                    "average",
+                    "sum",
+                    "median",
+                    "average_speedup",
+                    "median_speedup",
+                    "max_speedup",
+                    "max_latency",
+                )
             )
+            selected = " selected" if value["selected"] else ""
             print(
-                f"  value={value['value']} run_ms={value['run_seconds'] * 1000:.3f} "
-                f"speedup={speedup} timed_out={value['timed_out']}"
+                f"  parameters={value['parameters']} {metric_text} "
+                f"timed_out={value['timed_out']}{selected}"
             )
     for case in report["cases"]:
         if case["timed_out"]:
@@ -1939,7 +2028,8 @@ def _build_parser() -> argparse.ArgumentParser:
   Compare tuning values without changing the machine cache:
     python -m onnx_light backend --regex ".*not.*" \\
       --kernel Not --dtype BOOL --impl portable \\
-      --parameter parallel.minimum_elements=default,16384,32768
+      --parameter parallel.minimum_elements=default,16384,32768 \\
+      --criterion average-speedup
 """,
     )
     backend_test_parser.add_argument(
@@ -1985,11 +2075,26 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     backend_test_parser.add_argument(
         "--parameter",
+        action="append",
         metavar="NAME=default,VALUE,...",
         help=(
-            "Compare explicit integer tuning values without changing the machine cache; "
+            "Compare explicit integer tuning values without changing the machine cache; repeat "
+            "the option to evaluate the Cartesian product of multiple parameters; "
             "requires --kernel, --dtype, and --impl."
         ),
+    )
+    backend_test_parser.add_argument(
+        "--criterion",
+        choices=(
+            "average",
+            "sum",
+            "median",
+            "average-speedup",
+            "median-speedup",
+            "max-speedup",
+            "max-latency",
+        ),
+        help="Metric used to select the best parameter set; required with --parameter.",
     )
     backend_test_parser.add_argument(
         "--kernel", help="Select the kernel tuning schema used by --parameter."

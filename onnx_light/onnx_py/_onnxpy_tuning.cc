@@ -118,6 +118,33 @@ nb::dict KeyToDict(const rt::KernelTuningKey &key) {
   return result;
 }
 
+nb::dict AnalyzeLatencies(const std::vector<std::vector<std::optional<double>>> &latencies,
+                          const std::string &criterion_name) {
+  const rt::KernelTuningLatencyReport report =
+      rt::AnalyzeKernelTuningLatencies(latencies, rt::ParseKernelTuningCriterion(criterion_name));
+  nb::dict result;
+  result["criterion"] = std::string(rt::KernelTuningCriterionName(report.criterion));
+  result["selected_index"] = report.selected_index;
+  nb::list values;
+  for (const std::optional<rt::KernelTuningLatencyMetrics> &metrics : report.values) {
+    if (!metrics.has_value()) {
+      values.append(nb::none());
+      continue;
+    }
+    nb::dict value;
+    value["average"] = metrics->average;
+    value["sum"] = metrics->sum;
+    value["median"] = metrics->median;
+    value["average_speedup"] = metrics->average_speedup;
+    value["median_speedup"] = metrics->median_speedup;
+    value["max_speedup"] = metrics->max_speedup;
+    value["max_latency"] = metrics->max_latency;
+    values.append(std::move(value));
+  }
+  result["values"] = std::move(values);
+  return result;
+}
+
 nb::dict ParallelRegionToDict(const rt::ParallelRegionReportEvent &event) {
   std::ostringstream calling_thread_id;
   calling_thread_id << event.calling_thread_id;
@@ -245,6 +272,19 @@ nb::dict InspectCache(const std::optional<std::string> &path, int32_t num_thread
     profiles.append(std::move(item));
   }
   result["profiles"] = std::move(profiles);
+  return result;
+}
+
+nb::dict RemoveCache(const std::optional<std::string> &path) {
+  rt::KernelTuningCacheOptions options;
+  if (path.has_value()) {
+    options.path = *path;
+  }
+  const rt::KernelTuningCacheRemovalReport removal = rt::RemoveKernelTuningCache(options);
+  nb::dict result;
+  result["path"] = removal.path.string();
+  result["removed"] = removal.removed;
+  result["diagnostics"] = removal.diagnostics;
   return result;
 }
 
@@ -499,6 +539,10 @@ nb::dict Calibrate(const std::string &kernel, const std::vector<int32_t> &elemen
 } // namespace
 
 void AddOnnxPyTuning(nb::module_ &rt_mod) {
+  rt_mod.def("analyze_kernel_tuning_latencies", &AnalyzeLatencies, nb::arg("latencies"),
+             nb::arg("criterion"),
+             "Reports every latency and speedup metric for each parameter set and selects one "
+             "set using the requested criterion.");
   rt_mod.def(
       "default_kernel_tuning_cache_path",
       []() { return rt::DefaultKernelTuningCachePath().string(); },
@@ -506,6 +550,8 @@ void AddOnnxPyTuning(nb::module_ &rt_mod) {
   rt_mod.def("inspect_kernel_tuning_cache", &InspectCache, nb::arg("path") = nb::none(),
              nb::arg("num_threads") = 0,
              "Returns every persisted tuning profile without activating the cache.");
+  rt_mod.def("remove_kernel_tuning_cache", &RemoveCache, nb::arg("path") = nb::none(),
+             "Removes a tuning cache without changing profiles active in this process.");
   rt_mod.def("kernel_tuning_parameters", &ListParameters, nb::arg("kernel") = nb::none(),
              nb::arg("library") = "onnx_light", nb::arg("implementation") = nb::none(),
              nb::arg("element_type") = nb::none(), nb::arg("path") = nb::none(),

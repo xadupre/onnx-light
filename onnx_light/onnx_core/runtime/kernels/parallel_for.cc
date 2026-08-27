@@ -225,18 +225,24 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
     void *ctx = nullptr;
     TaskFn fn = nullptr;
     int64_t num_blocks = 0;
-    std::unique_lock<std::mutex> lock(mu_, std::defer_lock);
+    if (stop_.load(std::memory_order_acquire)) {
+      return;
+    }
     if (work_ready) {
-      if (stop_.load(std::memory_order_acquire)) {
-        return;
-      }
-      lock.lock();
-      if (generation_.load(std::memory_order_relaxed) == last_generation ||
-          worker_index >= active_workers_.load(std::memory_order_relaxed)) {
+      std::lock_guard<std::mutex> lock(mu_);
+      const uint64_t generation = generation_.load(std::memory_order_relaxed);
+      if (generation == last_generation) {
         continue;
       }
+      last_generation = generation;
+      if (worker_index >= active_workers_.load(std::memory_order_acquire)) {
+        continue;
+      }
+      ctx = task_ctx_;
+      fn = task_fn_;
+      num_blocks = num_blocks_;
     } else {
-      lock.lock();
+      std::unique_lock<std::mutex> lock(mu_);
       worker_work_[static_cast<size_t>(worker_index)]->wait(
           lock, [this, last_generation, worker_index]() {
             return stop_.load(std::memory_order_acquire) ||
@@ -246,15 +252,11 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
       if (stop_.load(std::memory_order_acquire)) {
         return;
       }
+      last_generation = generation_.load(std::memory_order_acquire);
+      ctx = task_ctx_;
+      fn = task_fn_;
+      num_blocks = num_blocks_;
     }
-    if (stop_.load(std::memory_order_acquire)) {
-      return;
-    }
-    last_generation = generation_.load(std::memory_order_acquire);
-    ctx = task_ctx_;
-    fn = task_fn_;
-    num_blocks = num_blocks_;
-    lock.unlock();
     const int64_t block = worker_index + 1;
     if (block < num_blocks) {
       fn(ctx, block);

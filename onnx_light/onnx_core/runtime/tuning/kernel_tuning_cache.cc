@@ -545,6 +545,47 @@ InspectKernelTuningCache(const KernelTuningCacheOptions &options) {
   return report;
 }
 
+KernelTuningCacheRemovalReport RemoveKernelTuningCache(const KernelTuningCacheOptions &options) {
+  KernelTuningCacheRemovalReport report;
+  report.path = CachePath(options);
+  std::error_code error;
+  const std::filesystem::path directory =
+      report.path.parent_path().empty() ? "." : report.path.parent_path();
+  const bool directory_exists = std::filesystem::exists(directory, error);
+  if (error) {
+    report.diagnostics.push_back("Unable to inspect cache directory '" + directory.string() +
+                                 "': " + error.message());
+    return report;
+  }
+  if (!directory_exists) {
+    return report;
+  }
+
+  std::filesystem::path lock_path = report.path;
+  lock_path += ".lock";
+  InterprocessCacheLock lock;
+  std::string lock_error;
+  if (!lock.Acquire(lock_path, lock_error)) {
+    report.diagnostics.push_back(lock_error);
+    return report;
+  }
+  const bool exists = std::filesystem::exists(report.path, error);
+  if (error) {
+    report.diagnostics.push_back("Unable to inspect cache '" + report.path.string() +
+                                 "': " + error.message());
+    return report;
+  }
+  if (!exists) {
+    return report;
+  }
+  report.removed = std::filesystem::remove(report.path, error);
+  if (error) {
+    report.diagnostics.push_back("Unable to remove cache '" + report.path.string() +
+                                 "': " + error.message());
+  }
+  return report;
+}
+
 KernelTuningCacheUpdateReport
 UpdateKernelTuningCache(std::span<const CalibratedKernelProfile> profiles,
                         const KernelTuningCacheOptions &options) {

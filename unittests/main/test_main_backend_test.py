@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 from onnx_light.__main__ import _build_parser, _run_backend_test_timing, main
@@ -32,6 +32,7 @@ class TestMainBackendTest(unittest.TestCase):
         self.assertEqual(args.max_repeat_time, 1.0)
         self.assertEqual(args.timeout, 2.0)
         self.assertIsNone(args.parameter)
+        self.assertIsNone(args.criterion)
         self.assertIsNone(args.kernel)
         self.assertIsNone(args.dtype)
         self.assertIsNone(args.impl)
@@ -143,6 +144,7 @@ class TestMainBackendTest(unittest.TestCase):
             timeout_seconds=3.5,
             tuning_comparison=None,
             save_models=None,
+            progress=None,
         )
 
     def test_rejects_invalid_counts(self):
@@ -298,13 +300,77 @@ class TestMainBackendTest(unittest.TestCase):
                     "portable",
                     "--parameter",
                     "parallel.minimum_elements=default,16384",
+                    "--criterion",
+                    "average",
                     "--json",
                 ]
             )
         comparison = run_timing.call_args.kwargs["tuning_comparison"]
-        self.assertEqual(comparison["parameter_name"], "parallel.minimum_elements")
-        self.assertEqual(comparison["parameter_values"], [32768, 16384])
+        self.assertEqual(
+            comparison["parameter_sets"],
+            [{"parallel.minimum_elements": 32768}, {"parallel.minimum_elements": 16384}],
+        )
+        self.assertEqual(comparison["criterion"], "average")
         self.assertEqual(comparison["tunable"], tunable)
+
+    def test_parameter_comparison_builds_cartesian_product(self):
+        tunable = {
+            "library": "onnx_light",
+            "kernel": "Gemm",
+            "implementation": "portable",
+            "element_type": 1,
+            "device": -1,
+            "device_name": "CPU",
+            "tuning_abi": 1,
+            "calibratable": True,
+            "defaults": {"algorithm.tile": 8, "parallel.minimum_tasks": 2},
+            "active_values": {"algorithm.tile": 8, "parallel.minimum_tasks": 2},
+            "parameter_names": ["algorithm.tile", "parallel.minimum_tasks"],
+        }
+        expected = {"cases": [], "tuning_comparison": None}
+        progress_output = io.StringIO()
+
+        def run_timing(**kwargs):
+            kwargs["progress"](1, 4)
+            kwargs["progress"](4, 4)
+            return expected
+
+        with (
+            mock.patch(
+                "onnx_light.kernel_tuning.kernel_tuning_parameters",
+                return_value={"kernels": [tunable]},
+            ),
+            mock.patch(
+                "onnx_light.__main__._run_backend_test_timing", side_effect=run_timing
+            ) as mocked,
+            redirect_stdout(io.StringIO()),
+            redirect_stderr(progress_output),
+        ):
+            main(
+                [
+                    "backend",
+                    "--regex",
+                    "gemm",
+                    "--kernel",
+                    "Gemm",
+                    "--dtype",
+                    "FLOAT",
+                    "--impl",
+                    "portable",
+                    "--parameter",
+                    "algorithm.tile=default,16",
+                    "--parameter",
+                    "parallel.minimum_tasks=default,4",
+                    "--criterion",
+                    "median-speedup",
+                    "--json",
+                ]
+            )
+
+        comparison = mocked.call_args.kwargs["tuning_comparison"]
+        self.assertEqual(len(comparison["parameter_sets"]), 4)
+        self.assertEqual(comparison["criterion"], "median-speedup")
+        self.assertIn("[####################] 4/4", progress_output.getvalue())
 
     def test_saves_one_self_contained_model_per_test(self):
         from onnx_light.onnx import load
@@ -329,6 +395,26 @@ class TestMainBackendTest(unittest.TestCase):
                     "backend",
                     "--regex",
                     "not",
+                    "--parameter",
+                    "parallel.minimum_elements=default,16384",
+                    "--criterion",
+                    "sum",
+                ]
+            )
+
+    def test_parameter_requires_criterion(self):
+        with self.assertRaisesRegex(SystemExit, "--parameter requires --criterion"):
+            main(
+                [
+                    "backend",
+                    "--regex",
+                    "not",
+                    "--kernel",
+                    "Not",
+                    "--dtype",
+                    "BOOL",
+                    "--impl",
+                    "portable",
                     "--parameter",
                     "parallel.minimum_elements=default,16384",
                 ]
@@ -401,6 +487,32 @@ class TestMainBackendTest(unittest.TestCase):
             )
         self.assertIsNone(report["tuning_comparison"]["values"][0]["speedup"])
         self.assertIsNone(report["tuning_comparison"]["values"][1]["speedup"])
+        self.assertEqual(report["tuning_comparison"]["values"][1]["average"], 0.1)
+        self.assertEqual(
+            {
+                "average",
+                "sum",
+                "median",
+                "average_speedup",
+                "median_speedup",
+                "max_speedup",
+                "max_latency",
+            },
+            {
+                name
+                for name in report["tuning_comparison"]["values"][1]
+                if name
+                in {
+                    "average",
+                    "sum",
+                    "median",
+                    "average_speedup",
+                    "median_speedup",
+                    "max_speedup",
+                    "max_latency",
+                }
+            },
+        )
 
     def test_rejects_unknown_output_extension(self):
         with (

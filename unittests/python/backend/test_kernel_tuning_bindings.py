@@ -110,6 +110,29 @@ class TestKernelTuningBindings(ExtTestCase):
         self.assertEqual(comparison["values"][0]["speedup"], 1.0)
         self.assertGreater(comparison["values"][0]["benchmark_cases"], 0)
 
+    def test_analyzes_latency_metrics_and_selects_criterion(self):
+        report = kernel_tuning.analyze_kernel_tuning_latencies(
+            [[2.0, 8.0, 10.0], [1.0, 4.0, 20.0], [4.0, 4.0, 5.0]], "average-speedup"
+        )
+
+        self.assertEqual(report["criterion"], "average-speedup")
+        self.assertEqual(report["selected_index"], 1)
+        self.assertEqual(
+            set(report["values"][1]),
+            {
+                "average",
+                "sum",
+                "median",
+                "average_speedup",
+                "median_speedup",
+                "max_speedup",
+                "max_latency",
+            },
+        )
+        self.assertEqual(report["values"][1]["sum"], 25.0)
+        self.assertEqual(report["values"][1]["median"], 4.0)
+        self.assertEqual(report["values"][1]["average_speedup"], 1.5)
+
     def test_lists_registered_parameters_and_defaults(self):
         report = kernel_tuning.kernel_tuning_parameters(
             kernel="Abs", element_type=int(TensorProto.FLOAT)
@@ -189,6 +212,24 @@ class TestKernelTuningBindings(ExtTestCase):
             report = rt.load_kernel_tuning_cache(path=path)
             self.assertEqual(report["status"], "not_found")
             self.assertEqual(report["path"], path)
+
+    def test_removes_tuning_cache(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = str(Path(temporary) / "kernel_tuning.cache")
+            kernel_tuning.set_kernel_tuning_parameters(
+                "Abs",
+                int(TensorProto.FLOAT),
+                {"parallel.minimum_elements": 12345},
+                path=path,
+                load=False,
+            )
+
+            removed = kernel_tuning.remove_kernel_tuning_cache(path)
+            self.assertTrue(removed["removed"])
+            self.assertEqual(removed["path"], path)
+            self.assertEqual(removed["diagnostics"], [])
+            self.assertFalse(Path(path).exists())
+            self.assertFalse(kernel_tuning.remove_kernel_tuning_cache(path)["removed"])
 
     def test_default_cache_is_loaded_on_import(self):
         with tempfile.TemporaryDirectory() as temporary:

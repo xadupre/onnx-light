@@ -104,7 +104,7 @@ jobs:
 
       - name: Run tests (kernel/backend tests skip themselves)
         run: |
-          UNITTEST_GOING=1 python -m unittests --durations 10 --exclude unittests/onnxl_vs_onnx --exclude unittests/onnxl_vs_ort
+          UNITTEST_GOING=1 pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx --ignore=unittests/onnxl_vs_ort
 
   no_onnx_tests_ubuntu:
     # Fast preflight: must pass before the heavier compilation jobs start.
@@ -154,7 +154,7 @@ jobs:
 
       - name: Run tests (excluding onnxl_vs_onnx and onnxl_vs_ort)
         run: |
-          UNITTEST_GOING=1 python -m unittests --durations 10 --exclude unittests/onnxl_vs_onnx --exclude unittests/onnxl_vs_ort
+          UNITTEST_GOING=1 pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx --ignore=unittests/onnxl_vs_ort
 
   core_tests_ubuntu:
     name: core (ubuntu-latest, py3.13)
@@ -210,7 +210,7 @@ jobs:
 
       - name: Run tests
         run: |
-          UNITTEST_GOING=1 python -m unittests --durations 10
+          UNITTEST_GOING=1 pytest --durations=10 unittests
 
   core_tests:
     name: core (${{ matrix.os }}, py${{ matrix.python-version }})
@@ -322,7 +322,7 @@ jobs:
         env:
           UNITTEST_GOING: "1"
         run: |
-          python -m unittests --durations 10
+          pytest --durations=10 unittests
 
   windows_x86_build:
     name: core (windows-latest, x86 build)

@@ -230,7 +230,7 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
     }
     if (work_ready) {
       std::lock_guard<std::mutex> lock(mu_);
-      const uint64_t generation = generation_.load(std::memory_order_acquire);
+      const uint64_t generation = generation_.load(std::memory_order_relaxed);
       if (generation == last_generation ||
           worker_index >= active_workers_.load(std::memory_order_acquire)) {
         continue;

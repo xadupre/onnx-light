@@ -13,31 +13,43 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *                       +---------------+
- *   x, axes=[axis] ---> | ReduceMax/Min | ---> values
- *                       +---------------+
- *
- *                       +------------+
- *   x ----------------> | ArgMax/Min | ---> indices
- *                       +------------+
+ *                    +---------------+
+ *            +-----> | ReduceMax/Min | ---> values
+ *            |       +---------------+
+ *            |
+ *   x -------+
+ *            |
+ *            |       +------------+
+ *            +-----> | ArgMax/Min | ---> indices
+ *                    +------------+
  *
  * After:
  *                 +------+
- *   x, K=[1] ---> | TopK | ---> values, indices
+ *   x, K=[1] ---> | TopK |
  *                 +------+
+ *                    |
+ *              +-----+-----+
+ *              |           |
+ *              v           v
+ *           values      indices
  *
  * After (keepdims=0):
  *                 +------+
- *   x, K=[1] ---> | TopK | ---> temporary values, temporary indices
+ *   x, K=[1] ---> | TopK |
  *                 +------+
- *
- *                               +---------+
- *   temporary values, axes ---> | Squeeze | ---> values
- *                               +---------+
- *
- *                               +---------+
- *   temporary indices, axes --> | Squeeze | ---> indices
- *                               +---------+
+ *                    |
+ *              +-----+-----+
+ *              |           |
+ *              v           v
+ *      temporary values  temporary indices
+ *              |           |
+ *              v           v
+ *          +---------+  +---------+
+ *   axes -> | Squeeze |  | Squeeze | <- axes
+ *          +---------+  +---------+
+ *              |           |
+ *              v           v
+ *           values      indices
  * @endcode
  *
  * The Min variant sets ``largest=0``. When ``keepdims=0``, TopK produces

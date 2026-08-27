@@ -15,9 +15,9 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Before:
  *          +-------+
  *   x ---> | Shape | -----------+
- *          +-------+
- *                              |
- *                              v
+ *          +-------+            |
+ *                               |
+ *                               v
  *          +-------+        +-----+
  *   z ---> | Shape | -----> | Add | ---> y
  *          +-------+        +-----+
@@ -25,9 +25,9 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * After:
  *          +-------+
  *   x ---> | Shape | -----------+
- *          +-------+
- *                              |
- *                              v
+ *          +-------+            |
+ *                               |
+ *                               v
  *          +-------+        +-----+
  *   z ---> | Shape | -----> | Add | ---> y
  *          +-------+        +-----+

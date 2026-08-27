@@ -7,7 +7,7 @@ NONZERO_CHAIN_TEST_CASE_NAME = "test_cc_shape_inference_nonzero_chain_named"
 
 def _example_has_nonzero_chain_event_logging() -> bool:
     root = pathlib.Path(__file__).resolve().parents[2]
-    source_path = root / "docs" / "examples" / "core" / "plot_shape_inference.py"
+    source_path = root / "docs" / "examples" / "compute" / "plot_shape_inference.py"
     tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
 
     has_case_name = False

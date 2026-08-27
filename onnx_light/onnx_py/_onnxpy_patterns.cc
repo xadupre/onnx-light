@@ -32,6 +32,7 @@
 #include "onnx_extensions/patterns/normalization/activation_pattern.h"
 #include "onnx_extensions/patterns/normalization/normalization_pattern.h"
 #include "onnx_extensions/patterns/reshape/reshape_pattern.h"
+#include "onnx_extensions/patterns/traditionalml/tree_ensemble_pattern.h"
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 #include "onnx_extensions/patterns/unsqueeze/unsqueeze_pattern.h"
 
@@ -377,6 +378,10 @@ NB_MODULE(_onnxpypatterns, m) {
   BindPattern<onnx_patterns::SwapExpandReshapePattern>(
       m, "SwapExpandReshapePattern",
       "Swaps a supported ``Expand`` and constant-shape ``Reshape`` pair.");
+  nb::class_<onnx_patterns::TreeEnsemblePattern, core::builder::PatternOptimization>(
+      m, "TreeEnsemblePattern",
+      "Replaces a classic tree ensemble with the unified ``TreeEnsemble`` operator.")
+      .def(nb::init<int>(), nb::arg("priority") = 1);
   nb::class_<onnx_patterns::TransposeTransposePattern, core::builder::PatternOptimization>(
       m, "TransposeTransposePattern",
       "Merges two consecutive ``Transpose`` nodes into a single ``Transpose`` "

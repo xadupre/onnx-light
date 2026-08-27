@@ -41,6 +41,20 @@ SplitToSequenceSequenceAtPattern: TypeAlias = _patterns.SplitToSequenceSequenceA
 NotWherePattern: TypeAlias = _patterns.NotWherePattern
 UnsqueezeEqualPattern: TypeAlias = _patterns.UnsqueezeEqualPattern
 WhereAddPattern: TypeAlias = _patterns.WhereAddPattern
+ExpandPattern: TypeAlias = _patterns.ExpandPattern
+ExpandBroadcastPattern: TypeAlias = _patterns.ExpandBroadcastPattern
+ShapeBasedConcatExpandPattern: TypeAlias = _patterns.ShapeBasedConcatExpandPattern
+ShapeBasedExpandBroadcastPattern: TypeAlias = _patterns.ShapeBasedExpandBroadcastPattern
+ShapeBasedExpandBroadcastMatMulPattern: TypeAlias = (
+    _patterns.ShapeBasedExpandBroadcastMatMulPattern
+)
+ShapeBasedStaticExpandPattern: TypeAlias = _patterns.ShapeBasedStaticExpandPattern
+ShapeBasedExpandSwapPattern: TypeAlias = _patterns.ShapeBasedExpandSwapPattern
+ShapeBasedExpandCastWhereSwapPattern: TypeAlias = _patterns.ShapeBasedExpandCastWhereSwapPattern
+ExpandSwapPattern: TypeAlias = _patterns.ExpandSwapPattern
+SwapExpandUnsqueezePattern: TypeAlias = _patterns.SwapExpandUnsqueezePattern
+ExpandUnsqueezeExpandPattern: TypeAlias = _patterns.ExpandUnsqueezeExpandPattern
+SwapExpandReshapePattern: TypeAlias = _patterns.SwapExpandReshapePattern
 ConcatReshapePattern: TypeAlias = _patterns.ConcatReshapePattern
 ReshapePattern: TypeAlias = _patterns.ReshapePattern
 ReduceReshapePattern: TypeAlias = _patterns.ReduceReshapePattern
@@ -101,6 +115,13 @@ GeluPattern: TypeAlias = _patterns.GeluPattern
 LeakyReluPattern: TypeAlias = _patterns.LeakyReluPattern
 MaxReluPattern: TypeAlias = _patterns.MaxReluPattern
 SoftmaxCrossEntropyLossCastPattern: TypeAlias = _patterns.SoftmaxCrossEntropyLossCastPattern
+TreeEnsemblePattern: TypeAlias = _patterns.TreeEnsemblePattern
+TransposeTransposePattern: TypeAlias = _patterns.TransposeTransposePattern
+TransposeGatherPattern: TypeAlias = _patterns.TransposeGatherPattern
+UnsqueezeUnsqueezePattern: TypeAlias = _patterns.UnsqueezeUnsqueezePattern
+SqueezeUnsqueezePattern: TypeAlias = _patterns.SqueezeUnsqueezePattern
+ShapeTransposePattern: TypeAlias = _patterns.ShapeTransposePattern
+UnsqueezeShapePattern: TypeAlias = _patterns.UnsqueezeShapePattern
 
 
 def standard_pattern_names() -> list[str]:
@@ -247,6 +268,10 @@ __all__ = [
     "ConstantToInitializerPattern",
     "ConvBiasNullPattern",
     "DropoutPattern",
+    "ExpandBroadcastPattern",
+    "ExpandPattern",
+    "ExpandSwapPattern",
+    "ExpandUnsqueezeExpandPattern",
     "FunctionAttentionGQAPattern",
     "FunctionAttentionPattern",
     "FunctionCausalMaskMulAddPattern",
@@ -294,12 +319,19 @@ __all__ = [
     "SameChildrenFromInputPattern",
     "SameChildrenPattern",
     "SequenceConstructAtPattern",
+    "ShapeBasedConcatExpandPattern",
     "ShapeBasedEditDistanceReshapePattern",
+    "ShapeBasedExpandBroadcastMatMulPattern",
+    "ShapeBasedExpandBroadcastPattern",
+    "ShapeBasedExpandCastWhereSwapPattern",
+    "ShapeBasedExpandSwapPattern",
     "ShapeBasedIdentityPattern",
     "ShapeBasedMatMulToMulPattern",
     "ShapeBasedReshapeIsSqueezePattern",
     "ShapeBasedSameChildrenPattern",
     "ShapeBasedShapeShapeAddPattern",
+    "ShapeBasedStaticExpandPattern",
+    "ShapeTransposePattern",
     "ShapedBasedReshapePattern",
     "SliceSlicePattern",
     "SlicesSplitPattern",
@@ -308,20 +340,28 @@ __all__ = [
     "SplitToSequenceSequenceAtPattern",
     "SqueezeAddPattern",
     "SqueezeBinaryUnsqueezePattern",
+    "SqueezeUnsqueezePattern",
     "StaticConcatReshapePattern",
     "Sub1MulPattern",
+    "SwapExpandReshapePattern",
+    "SwapExpandUnsqueezePattern",
     "SwapRangeAddScalarPattern",
     "SwapUnaryPattern",
     "SwapUnsqueezeTransposePattern",
     "SwitchOrderBinaryPattern",
     "SwitchReshapeActivationPattern",
     "TransposeEqualReshapePattern",
+    "TransposeGatherPattern",
     "TransposeMatMulPattern",
     "TransposeReshapeMatMulPattern",
     "TransposeReshapeTransposePattern",
+    "TransposeTransposePattern",
+    "TreeEnsemblePattern",
     "UnsqueezeEqualPattern",
     "UnsqueezeOrSqueezeReshapePattern",
     "UnsqueezeReshapePattern",
+    "UnsqueezeShapePattern",
+    "UnsqueezeUnsqueezePattern",
     "WhereAddPattern",
     "clear_registered_patterns",
     "register_pattern",

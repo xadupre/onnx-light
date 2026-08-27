@@ -60,19 +60,26 @@ a model:
 
 Use the same ``--parameter`` syntax as ``kernel --tune`` to run backend cases
 side by side with explicit tuning values. ``--kernel``, ``--dtype`` and
-``--impl`` select the exact tuning schema:
+``--impl`` select the exact tuning schema, and ``--criterion`` selects the
+metric to optimize:
 
 .. code-block:: bash
 
     python -m onnx_light backend --regex ".*not.*" \
         --kernel Not --dtype BOOL --impl portable \
-        --parameter parallel.minimum_elements=default,16384,32768
+        --parameter parallel.minimum_elements=default,16384,32768 \
+        --criterion median-speedup
 
 ``default`` resolves to the active value and defines the speedup baseline.
-Every selected backend case runs once per distinct value. Text, JSON, CSV and
-XLSX output include the input shapes, parameter value and speedup. Input shapes
-preserve their input names and dataset grouping. The comparison uses temporary
-worker caches and never modifies the machine tuning cache.
+Repeat ``--parameter`` to evaluate the Cartesian product of several parameters.
+Every selected backend case runs once per parameter set. The report includes
+average, sum, median, and maximum latency together with average, median, and
+maximum speedup for every set. A progress bar is written to standard error.
+Text, JSON, CSV and XLSX output include the input shapes, parameter values and
+speedups. Input shapes preserve their input names and dataset grouping. The
+comparison uses temporary worker caches and never modifies the machine tuning
+cache. See :ref:`l-how-to-tune-kernel-thresholds` for criteria, timeout
+handling, and the Python analysis API.
 
 .. _l-cli-kernel:
 

@@ -110,6 +110,75 @@ The existing calibration cases measure every value side by side. The fastest
 validated value is persisted, while text and JSON output report elapsed times,
 speedups, the baseline, and the selected value.
 
+Optimize over backend cases
++++++++++++++++++++++++++++
+
+Use ``onnx-light backend`` when the objective is latency over a list of
+backend cases rather than a kernel's synthetic calibration workload. A regular
+expression is required so the corpus is explicit:
+
+.. code-block:: bash
+
+    python -m onnx_light backend \
+        --regex "^test_cc_not.*benchmark" --mode benchmark \
+        --kernel Not --dtype BOOL --impl portable \
+        --parameter parallel.minimum_elements=default,16384,32768,65536 \
+        --criterion median-speedup --json
+
+Repeat ``--parameter`` when a schema exposes interacting parameters. The command
+evaluates their Cartesian product, with a limit of 256 sets. Each specification
+starts with ``default``; the resulting all-default set is the baseline.
+Parameter names must be unique, integer values must be positive, and
+``--kernel``, ``--dtype``, and ``--impl`` must identify exactly one schema.
+
+``--criterion`` is required and accepts:
+
+* ``average``, ``sum``, ``median``, or ``max-latency``, which minimize the
+  corresponding latency across selected cases;
+* ``average-speedup``, ``median-speedup``, or ``max-speedup``, which maximize
+  per-case speedup relative to the all-default baseline.
+
+Every parameter set reports all seven metrics, its timeout count, and whether
+it was selected. A timed-out set has unavailable metrics. When the baseline
+times out, latency criteria can still select a complete candidate, but speedup
+metrics and speedup-based selection are unavailable. Progress is written to
+standard error, so ``--json`` on standard output remains machine-readable:
+
+.. code-block:: text
+
+    [backend tune] [##########----------] 2/4
+    [backend tune] [####################] 4/4
+
+The comparison uses temporary cache files and does not modify the machine
+tuning cache. Use ``set_kernel_tuning_parameters`` separately to persist a
+selected set.
+
+Analyze measurements from Python
+++++++++++++++++++++++++++++++++
+
+The same native C++ metric analyzer is exposed in Python for measurements
+collected by another harness. Rows represent parameter sets, columns represent
+the same ordered cases, and the first row is the speedup baseline:
+
+.. code-block:: python
+
+    report = kernel_tuning.analyze_kernel_tuning_latencies(
+        [
+            [0.002, 0.008, 0.010],
+            [0.001, 0.004, 0.020],
+            [0.004, 0.004, 0.005],
+        ],
+        "average-speedup",
+    )
+    print(report["selected_index"])
+    for metrics in report["values"]:
+        print(metrics)
+
+Use ``None`` for a missing case measurement. The corresponding row is
+incomplete. The return value contains ``criterion``, ``selected_index``, and
+``values``. Every complete value contains ``average``, ``sum``, ``median``,
+``average_speedup``, ``median_speedup``, ``max_speedup``, and ``max_latency``.
+
 Calibrate one kernel from Python
 ++++++++++++++++++++++++++++++++
 

@@ -113,6 +113,43 @@ kernel-specific callback workload. Every value runs on the same bounded cases;
 the current active value is the first baseline, and the fastest validated value
 is published and persisted.
 
+Backend-case parameter search
++++++++++++++++++++++++++++++
+
+Kernel calibration answers where a kernel-specific synthetic workload crosses
+a threshold. Backend-case tuning answers a different question: which parameter
+set minimizes latency over a user-selected application corpus. The
+``onnx-light backend`` command selects that corpus by regular expression and
+evaluates the Cartesian product of the values supplied for one or more
+parameters.
+
+The search keeps measurement and analysis separate:
+
+1. Python resolves one exact tuning schema and expands the parameter product.
+2. Each parameter set is written to a temporary cache and measured in a fresh
+   backend worker, so a previously initialized session cannot retain another
+   set's values.
+3. Case names define stable columns across every parameter set. The first set,
+   composed of the active ``default`` values, is the speedup baseline.
+4. :cpp:func:`AnalyzeKernelTuningLatencies` computes all aggregate metrics and
+   selects the best complete set according to the requested criterion.
+5. Temporary profiles are deleted after the comparison. The machine tuning
+   cache is not changed.
+
+The native analyzer reports latency sum, average, median, and maximum, plus
+average, median, and maximum per-case speedup against the baseline. Latency
+criteria are minimized and speedup criteria are maximized. A timeout makes that
+parameter set incomplete; its metrics are reported as unavailable. If the
+baseline is incomplete, complete candidates still receive latency metrics and
+can be selected by a latency criterion, while speedup metrics remain
+unavailable.
+
+This boundary makes the C++ statistics and selection reusable independently of
+the command line through
+:func:`onnx_light.kernel_tuning.analyze_kernel_tuning_latencies`. Python owns
+backend case discovery, process isolation, temporary-cache lifecycle, and
+progress display.
+
 See :ref:`l-how-to-tune-kernel-thresholds` for usage and
 :ref:`l-example-plot-kernel-tuning` for an executable Python example. The
 completed implementation history remains in

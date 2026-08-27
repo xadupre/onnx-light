@@ -14,29 +14,23 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *          +-------+
- *   x ---> | Shape | ---> s1
+ *   x ---> | Shape | -----------+
  *          +-------+
- *
- *          +-------+
- *   z ---> | Shape | ---> s2
- *          +-------+
- *
- *              +-----+
- *   s1, s2 --> | Add | ---> y
- *              +-----+
+ *                              |
+ *                              v
+ *          +-------+        +-----+
+ *   z ---> | Shape | -----> | Add | ---> y
+ *          +-------+        +-----+
  *
  * After:
  *          +-------+
- *   x ---> | Shape | ---> s1
+ *   x ---> | Shape | -----------+
  *          +-------+
- *
- *          +-------+
- *   z ---> | Shape | ---> s2
- *          +-------+
- *
- *              +-----+
- *   s1, s2 --> | Add | ---> y
- *              +-----+
+ *                              |
+ *                              v
+ *          +-------+        +-----+
+ *   z ---> | Shape | -----> | Add | ---> y
+ *          +-------+        +-----+
  *
  * The graph is unchanged because this pattern deliberately reports no match.
  * @endcode

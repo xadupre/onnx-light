@@ -9,7 +9,10 @@ import subprocess
 import textwrap
 from dataclasses import dataclass, field
 from types import SimpleNamespace
-from typing import Any, Callable, Iterable
+from typing import TYPE_CHECKING, Any, Callable, Iterable
+
+if TYPE_CHECKING:
+    from .onnx_lib.backend.test.case.base import TestCase
 
 
 def find_standalone_executable(
@@ -1588,8 +1591,6 @@ def generate_operators_doc(
 from . import onnx as onnxl  # noqa: E402
 from .onnx_core.shape_inference import infer_shapes_model  # noqa: E402
 from .tools import pretty_onnx  # noqa: E402
-from .onnx_lib.backend.test.case import collect_test_case  # noqa: E402
-from .onnx_lib.backend.test.case.base import TestCase  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -1759,6 +1760,8 @@ def _strip_value_info(model: onnxl.ModelProto) -> None:
 
 
 def _iter_inference_cases() -> Iterable[TestCase]:
+    from .onnx_lib.backend.test.case import collect_test_case
+
     cases = collect_test_case()
     for name in sorted(cases):
         tc = cases[name]

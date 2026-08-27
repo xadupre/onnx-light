@@ -12,17 +12,22 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Replaces a Constant node by an initializer and an Identity node.
  *
  * @code
- * Before:             After:
+ * Before:
+ *                     +----------+
+ *   value=tensor ---> | Constant | ---> cst
+ *                     +----------+
  *
- *  Constant           init (initializer)
- *    |                   |
- *   cst              Identity
- *                        |
- *                       cst
+ * After:
+ *   tensor initializer
+ *           |
+ *           v
+ *      +----------+
+ *      | Identity | ---> cst
+ *      +----------+
  * @endcode
  *
  * The rewrite applies only when the Constant value can be materialised as a
- * :cpp:class:`TensorProto` (for example a ``value`` attribute).
+ * :cpp:class:`TensorProto` and retains the original Constant output name.
  */
 class ConstantToInitializerPattern final : public core::builder::PatternOptimization {
 public:

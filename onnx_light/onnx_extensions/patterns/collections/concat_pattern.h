@@ -15,6 +15,25 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * it contributes nothing to the output. When a single input remains the
  * ``Concat`` becomes an ``Identity``; otherwise a narrower ``Concat`` is
  * emitted with the same ``axis``.
+ *
+ * @code
+ * Before:
+ *              +--------------+
+ *   x, e, z -> | Concat axis0 | ---> y
+ *              +--------------+
+ *
+ * After:
+ *           +--------------+
+ *   x, z -> | Concat axis0 | ---> y
+ *           +--------------+
+ *
+ * After (one non-empty input remains):
+ *          +----------+
+ *   x ---> | Identity | ---> y
+ *          +----------+
+ * @endcode
+ *
+ * The inferred size of ``e`` along axis 0 is zero.
  */
 class ConcatEmptyPattern final : public core::builder::PatternOptimization {
 public:
@@ -43,6 +62,39 @@ public:
  * replaces the ``Gather`` with an ``Identity`` (single-element input), a
  * narrower ``Shape`` (input produced by a ranged ``Shape``), or a ``Gather``
  * with a locally adjusted index.
+ *
+ * @code
+ * Before:
+ *                +--------------+
+ *   a, b, c ---> | Concat axis0 | ---> t
+ *                +--------------+
+ *                       |
+ *                       v
+ *                  +--------------+
+ *                  | Gather axis0 | <--- index=[3]
+ *                  +--------------+
+ *                       |
+ *                       v
+ *                       y
+ *
+ * After:
+ *                     +--------------+
+ *   b, index=[1] ---> | Gather axis0 | ---> y
+ *                     +--------------+
+ *
+ * After (the selected input has one element):
+ *          +----------+
+ *   b ---> | Identity | ---> y
+ *          +----------+
+ *
+ * After (the selected input is produced by Shape):
+ *          +-------------------------+
+ *   x ---> | Shape adjusted interval | ---> y
+ *          +-------------------------+
+ * @endcode
+ *
+ * If ``t`` has another consumer, the original ``Concat`` is retained for that
+ * consumer.
  */
 class ConcatGatherPattern final : public core::builder::PatternOptimization {
 public:
@@ -67,10 +119,32 @@ public:
  * ``Unary(Concat(x, x))`` becomes ``Concat(Unary(x), Unary(x))``, exposing the
  * shared ``Unary(x)`` for common-subexpression elimination.
  *
- * The rewrite requires opset ≥ 18, a two-input ``Concat`` whose inputs are the
+ * The rewrite requires opset >= 18, a two-input ``Concat`` whose inputs are the
  * same value, and a consumer that is a shape-preserving unary op (or a
  * broadcasting ``Mul`` / ``Add`` / ``Div`` / ``Sub`` / ``Unsqueeze`` with a
  * constant scalar second input).
+ *
+ * @code
+ * Before:
+ *           +--------+
+ *   x, x -> | Concat | ---> t
+ *           +--------+
+ *
+ *          +-------+
+ *   t ---> | Unary | ---> y
+ *          +-------+
+ *
+ * After:
+ *          +-------+
+ *   x ---> | Unary | ---> u
+ *          +-------+
+ *
+ *           +--------+
+ *   u, u -> | Concat | ---> y
+ *           +--------+
+ * @endcode
+ *
+ * If ``t`` has another consumer, ``Concat(x, x)`` is retained for it.
  */
 class ConcatTwiceUnaryPattern final : public core::builder::PatternOptimization {
 public:

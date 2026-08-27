@@ -12,18 +12,28 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Fuses two consecutive Not nodes into an Identity.
  *
  * @code
- * Before:             After:
+ * Before:
+ *          +-----+             +-----+
+ *   x ---> | Not | ---> m ---> | Not | ---> y
+ *          +-----+             +-----+
+ *                 |
+ *                              +-------+
+ *                 +----------> | Other | ---> u
+ *                              +-------+
  *
- *   x:bool              x:bool
- *    |                   |
- *   Not                Identity
- *    |                   |
- *   Not                 y:bool
- *    |
- *   y:bool
+ * After:
+ *                             +----------+
+ *   x ----------------------> | Identity | ---> y
+ *                             +----------+
+ *
+ * When m is shared:
+ *          +-----+             +-------+
+ *   x ---> | Not | ---> m ---> | Other | ---> u
+ *          +-----+             +-------+
  * @endcode
  *
- * The first Not node is kept when its output is consumed elsewhere.
+ * The two Not nodes become an Identity retaining ``y``. The first Not and its
+ * output ``m`` are also retained when ``m`` is consumed elsewhere.
  */
 class NotNotPattern final : public core::builder::PatternOptimization {
 public:

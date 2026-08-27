@@ -8,6 +8,38 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
+/**
+ * Rewrites multiplication by ``1 - x`` into a product followed by subtraction.
+ *
+ * @code
+ * Before:
+ *               +-----+
+ *   one, x ---> | Sub | ---> d
+ *               +-----+
+ *                  |
+ *                  v
+ *               +-----+
+ *               | Mul | <--- z
+ *               +-----+
+ *                  |
+ *                  v
+ *                  y
+ *
+ * After:
+ *             +-----+
+ *   x, z ---> | Mul | ---> p
+ *             +-----+
+ *                |
+ *                v
+ *             +-----+
+ *   z ------> | Sub | ---> y
+ *             +-----+
+ * @endcode
+ *
+ * The symmetric Mul input order is supported. ``one`` may come from an
+ * all-one ConstantOfShape when output-shape preservation is proven; ``z`` and
+ * the final output ``y`` are retained.
+ */
 class Sub1MulPattern final : public core::builder::PatternOptimization {
 public:
   explicit Sub1MulPattern(int priority = 0) : PatternOptimization(priority, "Sub1Mul") {}

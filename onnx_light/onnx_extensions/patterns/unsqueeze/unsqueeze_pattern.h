@@ -12,21 +12,29 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Merges two consecutive ``Unsqueeze`` nodes into a single one.
  *
  * @code
- * Before:                 After:
+ * Before:
+ *                    +-----------+
+ *   x, axes=[1] ---> | Unsqueeze | ---> t
+ *                    +-----------+
+ *                          |
+ *                          v
+ *                   +-----------+
+ *                   | Unsqueeze | <--- axes=[0]
+ *                   +-----------+
+ *                          |
+ *                          v
+ *                          y
  *
- *   x                       x
- *   |                       |
- *   Unsqueeze(axes=a0)      Unsqueeze(axes=a0 U a1)
- *   |                       |
- *   Unsqueeze(axes=a1)      y
- *   |
- *   y
+ * After:
+ *                      +-----------+
+ *   x, axes=[0,2] ---> | Unsqueeze | ---> y
+ *                      +-----------+
  * @endcode
  *
- * Both ``axes`` inputs must be one-dimensional non-negative constants. When one
- * of the two nodes inserts more than one axis the rank of the source tensor
- * must be known so the combined axes can be computed. The first ``Unsqueeze`` is
- * preserved when its output is consumed elsewhere.
+ * Both ``axes`` inputs must be scalar or one-dimensional non-negative
+ * constants. When one of the two nodes inserts more than one axis the rank of
+ * the source tensor must be known so the combined axes can be computed. The
+ * first ``Unsqueeze`` is preserved when its output is consumed elsewhere.
  */
 class UnsqueezeUnsqueezePattern final : public core::builder::PatternOptimization {
 public:
@@ -51,22 +59,39 @@ public:
  * Simplifies a ``Squeeze``/``Unsqueeze`` pair into ``Identity`` or ``Squeeze``.
  *
  * @code
- * Before:                     After (matching axes):
+ * Before:
+ *                    +-----------+
+ *   x, axes=[1] ---> | Unsqueeze | ---> t
+ *                    +-----------+
+ *                          |
+ *                          v
+ *                     +---------+
+ *                     | Squeeze | <--- axes=[1]
+ *                     +---------+
+ *                          |
+ *                          v
+ *                          y
  *
- *   x                           x
- *   |                           |
- *   Unsqueeze(axes)             Identity
- *   |                           |
- *   Squeeze(axes)               y
- *   |
- *   y
+ * After (matching axes):
+ *          +----------+
+ *   x ---> | Identity | ---> y
+ *          +----------+
+ *
+ * After (the following Squeeze removes additional axes):
+ *                         +---------+
+ *   x, adjusted axes ---> | Squeeze | ---> y
+ *                         +---------+
+ *
+ * The inverse Squeeze-then-Unsqueeze order is also matched.
  * @endcode
  *
- * The two nodes must be a ``Squeeze`` and an ``Unsqueeze`` (in either order). If
- * the axes are equal the pair collapses to ``Identity``; if the first node is an
- * ``Unsqueeze`` whose axes are a strict subset of the following ``Squeeze`` the
- * pair collapses to a single ``Squeeze`` on the remaining axes. The first node
- * is preserved when its output is consumed elsewhere.
+ * The two nodes must be a ``Squeeze`` and an ``Unsqueeze`` (in either order).
+ * Equal axes collapse to ``Identity`` (multiple axes must be contiguous). If
+ * the first node is an ``Unsqueeze`` whose axes are a strict subset of the
+ * following ``Squeeze``, the pair collapses to a single ``Squeeze`` on the
+ * adjusted remaining axes; for example, ``Unsqueeze(x,[1])`` then
+ * ``Squeeze([1,3])`` becomes ``Squeeze(x,[2])``. The first node is preserved
+ * when its output is consumed elsewhere.
  */
 class SqueezeUnsqueezePattern final : public core::builder::PatternOptimization {
 public:

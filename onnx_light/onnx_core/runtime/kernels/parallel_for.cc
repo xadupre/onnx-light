@@ -231,8 +231,8 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
         return;
       }
       lock.lock();
-      if (generation_.load(std::memory_order_acquire) == last_generation ||
-          worker_index >= active_workers_.load(std::memory_order_acquire)) {
+      if (generation_.load(std::memory_order_relaxed) == last_generation ||
+          worker_index >= active_workers_.load(std::memory_order_relaxed)) {
         continue;
       }
     } else {

@@ -79,7 +79,7 @@ Shapes use real symbolic values instead of placeholders such as ``unk__0``,
 ``unk__1``, ...
 
 .. image:: images/what_is_onnx_light/symbolic_shapes.png
-    :width: 600
+    :class: quick-tour-graph
     :alt: Symbolic shapes instead of unk__0, unk__1
 
 Core pieces: take what you need
@@ -88,13 +88,17 @@ Core pieces: take what you need
 The C++ code ships as small libraries so downstream projects link only what
 they need:
 
-- parse and serialize, no schema needed (1.5 Mb),
-- existing C++ ONNX library, no change (5 Mb),
-- light schema (2 Mb, not loaded as a static variable),
-- graph manipulations (0.6 Mb),
-- new shape inference (1.5 Mb),
-- C++ kernels (4.8 Mb),
-- 2000+ C++ backend tests (7 Mb).
+The approximate sizes below are the allocated ELF section sizes measured from
+the current Linux Release shared libraries; exact sizes vary by platform and
+compiler:
+
+- parse and serialize, no schema needed (``lib_onnx_proto``, 1.0 MiB),
+- existing C++ ONNX library, no change (``lib_onnx_lib``, 4.4 MiB),
+- light schema, not loaded as a static variable (``lib_onnx_op``, 2.2 MiB),
+- graph manipulations (``lib_onnx_manipulations``, 0.5 MiB),
+- new shape inference (``lib_onnx_shape``, 1.7 MiB),
+- C++ kernels (``lib_onnx_kernels``, 6.1 MiB),
+- 2000+ C++ backend tests (``lib_onnx_backend_test``, 11.0 MiB).
 
 Parsing and serializing options
 +++++++++++++++++++++++++++++++
@@ -107,15 +111,15 @@ Parsing and serializing options
   on GPU or any other memory.
 
 .. image:: images/what_is_onnx_light/parsing_1.png
-    :width: 600
+    :class: quick-tour-graph
     :alt: Parsing options
 
 .. image:: images/what_is_onnx_light/parsing_2.png
-    :width: 600
+    :class: quick-tour-graph
     :alt: Parsing options
 
 .. image:: images/what_is_onnx_light/parsing_3.png
-    :width: 600
+    :class: quick-tour-graph
     :alt: Parsing options
 
 Kernels
@@ -124,11 +128,11 @@ Kernels
 Kernels are kept simple, with a dispatch mechanism to support all types.
 
 .. image:: images/what_is_onnx_light/kernel_1.png
-    :width: 600
+    :class: quick-tour-graph
     :alt: A simple kernel
 
 .. image:: images/what_is_onnx_light/kernel_2.png
-    :width: 600
+    :class: quick-tour-graph
     :alt: Dispatch mechanism to support all types
 
 Backend tests
@@ -138,7 +142,7 @@ They are very similar to the existing ones, except they do not write any
 file.
 
 .. image:: images/what_is_onnx_light/backend_test.png
-    :width: 600
+    :class: quick-tour-graph
     :alt: A backend test
 
 Running models
@@ -163,7 +167,8 @@ replacing them with a simplified equivalent (removing useless ``Cast`` nodes,
 consecutive ``Neg``, ...). Patterns are implemented in C++ and registered into a
 shared dispatch table so a downstream project can add its own. Every applied
 rewrite is recorded and can be replayed from the original model. See
-:ref:`l-example-plot-pattern-optimization` for the workflow and
+:ref:`l-example-plot-pattern-optimization` for the optimization workflow,
+:ref:`l-example-plot-pattern-replay` for replay, and
 :ref:`l-howto-add-custom-pattern` for writing a custom pattern.
 
 Gradients
@@ -187,15 +192,15 @@ New tests are dedicated to shape inference: ``value_info`` is filled with the
 expected values.
 
 .. image:: images/what_is_onnx_light/shape_test_1.png
-    :width: 600
+    :class: quick-tour-graph
     :alt: Shape inference test
 
 .. image:: images/what_is_onnx_light/shape_test_2.png
-    :width: 600
+    :class: quick-tour-graph
     :alt: Shape inference test
 
 .. image:: images/what_is_onnx_light/shape_test_3.png
-    :width: 600
+    :class: quick-tour-graph
     :alt: Shape inference test
 
 Symbolic expressions
@@ -212,11 +217,11 @@ For example, ``Reshape(x[N], [-1, 2])`` tells us ``N`` is even, so we write
 may differ.
 
 .. image:: images/what_is_onnx_light/expr_1.png
-    :width: 600
+    :class: quick-tour-graph
     :alt: Symbolic expressions
 
 .. image:: images/what_is_onnx_light/expr_2.png
-    :width: 600
+    :class: quick-tour-graph
     :alt: Symbolic expressions
 
 Next steps

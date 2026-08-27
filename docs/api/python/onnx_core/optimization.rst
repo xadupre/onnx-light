@@ -71,7 +71,8 @@ the Before/After rewrite graph for every entry.
 See :ref:`l-howto-add-custom-pattern` for a Python/C++ how-to on writing a
 custom pattern and choosing its priority, and
 :ref:`l-example-plot-pattern-optimization` for a runnable example covering
-statistics and replay.
+optimization statistics. Replay is demonstrated separately in
+:ref:`l-example-plot-pattern-replay`.
 
 Custom Python pattern
 +++++++++++++++++++++

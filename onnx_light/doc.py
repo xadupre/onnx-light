@@ -254,16 +254,15 @@ def measure_cpp_with_example(
 
 @dataclass(frozen=True)
 class _PatternDocumentation:
-    """Stores documentation extracted from one C++ pattern class."""
+    """Stores the summary extracted from one C++ pattern class."""
 
     class_name: str
     family: str
     summary: str
-    graph: str
 
 
 def _clean_doxygen_comment(comment: str) -> str:
-    """Removes Doxygen line markers while preserving diagram indentation."""
+    """Removes Doxygen line markers."""
     lines = []
     for line in comment.splitlines():
         cleaned = re.sub(r"^\s*\* ?", "", line)
@@ -297,10 +296,7 @@ def _load_pattern_documentation(patterns_root: pathlib.Path) -> dict[str, _Patte
                 raise RuntimeError(f"Pattern {class_name!r} has no summary.")
             summary = " ".join(paragraphs[0].split())
             documentation[class_name] = _PatternDocumentation(
-                class_name=class_name,
-                family=family,
-                summary=summary,
-                graph=textwrap.dedent(code).strip(),
+                class_name=class_name, family=family, summary=summary
             )
     return documentation
 
@@ -308,17 +304,18 @@ def _load_pattern_documentation(patterns_root: pathlib.Path) -> dict[str, _Patte
 def render_rst_pattern_catalog(patterns_root: str | pathlib.Path | None = None) -> str:
     """Renders the registered C++ patterns as a reST catalogue.
 
-    The live Python registry determines which patterns appear. Summaries and
-    ASCII rewrite graphs are extracted from the corresponding C++ Doxygen
-    comments, so the catalogue has no separately maintained pattern list.
+    The live Python registry determines which patterns appear. Summaries are
+    extracted from the corresponding C++ Doxygen comments, so the catalogue
+    has no separately maintained pattern list. Rewrite graphs remain in the
+    linked C++ class documentation.
 
     Args:
         patterns_root: Optional path to the C++ pattern headers. It defaults to
             the headers located beside the installed ``onnx_light`` package.
 
     Returns:
-        A reST ``list-table`` linking each pattern's C++ and Python API
-        documentation and displaying its summary and rewrite graph.
+        A reST ``list-table`` linking each pattern's C++ and Python classes
+        and displaying its summary.
     """
     from .onnx_core import optimization
 
@@ -346,14 +343,13 @@ def render_rst_pattern_catalog(patterns_root: str | pathlib.Path | None = None) 
     lines = [
         ".. list-table::",
         "    :header-rows: 1",
-        "    :widths: 14 20 38 14 14",
+        "    :widths: 20 50 15 15",
         "    :class: pattern-catalog",
         "",
         "    * - Pattern",
         "      - Summary",
-        "      - Rewrite",
-        "      - C++",
-        "      - Python",
+        "      - C++ class",
+        "      - Python class",
     ]
     for family, name, class_name in sorted(rows):
         item = documentation[class_name]
@@ -361,14 +357,14 @@ def render_rst_pattern_catalog(patterns_root: str | pathlib.Path | None = None) 
             [
                 f"    * - **{name}** (``{family}``)",
                 f"      - {item.summary}",
-                "      - .. code-block:: text",
-                "",
-                *[
-                    f"            {line}" if line else "            "
-                    for line in item.graph.splitlines()
-                ],
-                f"      - :cpp:class:`~onnx_light::onnx_patterns::{class_name}`",
-                f"      - :class:`~onnx_light.onnx_core.optimization.{class_name}`",
+                (
+                    f"      - :cpp:class:`{class_name} "
+                    f"<onnx_light::onnx_patterns::{class_name}>`"
+                ),
+                (
+                    f"      - :class:`{class_name} "
+                    f"<onnx_light.onnx_core.optimization.{class_name}>`"
+                ),
             ]
         )
     return "\n".join(lines) + "\n"
@@ -1432,8 +1428,8 @@ def _index_page_rst(domains: list[str]) -> str:
     lines.append("")
     lines.append(
         "This table is generated from the patterns registered by the installed "
-        "``onnx_light`` package. Summaries and rewrite graphs come directly from "
-        "the C++ Doxygen comments."
+        "``onnx_light`` package. Summaries come from the C++ Doxygen comments; "
+        "follow the C++ class links to see the rewrite graphs."
     )
     lines.append("")
     lines.append(render_rst_pattern_catalog().rstrip())

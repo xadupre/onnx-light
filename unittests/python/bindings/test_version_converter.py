@@ -155,6 +155,29 @@ class TestVersionConverter(ExtTestCase):
 
         self.assertRaises(version_converter.ConvertError, test)
 
+    def test_rejects_captured_node_without_output(self) -> None:
+        """Rejects a malformed Captured node instead of crashing."""
+        nested_graph = oh.make_graph(
+            [oh.make_node("Captured", ["X"], [], domain="custom")], "nested", [], []
+        )
+        carrier = oh.make_node("NestedCarrier", ["X"], [], domain="custom", payload=nested_graph)
+        graph = oh.make_graph(
+            [oh.make_node("Flatten", ["X"], ["Y"]), carrier],
+            "test",
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.INT32, (2, 2))],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.INT32, (2, 2))],
+        )
+        model = oh.make_model(
+            graph,
+            opset_imports=[oh.make_operatorsetid("", 9), oh.make_operatorsetid("custom", 1)],
+        )
+        checker.check_model(model)
+
+        with self.assertRaisesRegex(
+            version_converter.ConvertError, "Captured node must have exactly one output"
+        ):
+            version_converter.convert_version(model, 8)
+
     # A nested (subgraph) output that resolves to a value captured from the
     # enclosing scope is handled via a dummy node, not a crash. Exercises the
     # captured-value path of graphProtoToGraph (nested=True).

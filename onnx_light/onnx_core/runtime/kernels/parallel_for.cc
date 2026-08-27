@@ -225,13 +225,18 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
     void *ctx = nullptr;
     TaskFn fn = nullptr;
     int64_t num_blocks = 0;
-    std::unique_lock<std::mutex> lock(mu_);
+    std::unique_lock<std::mutex> lock(mu_, std::defer_lock);
     if (work_ready) {
+      if (stop_.load(std::memory_order_acquire)) {
+        return;
+      }
+      lock.lock();
       if (generation_.load(std::memory_order_acquire) == last_generation ||
           worker_index >= active_workers_.load(std::memory_order_acquire)) {
         continue;
       }
     } else {
+      lock.lock();
       worker_work_[static_cast<size_t>(worker_index)]->wait(
           lock, [this, last_generation, worker_index]() {
             return stop_.load(std::memory_order_acquire) ||

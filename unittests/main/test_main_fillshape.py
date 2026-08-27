@@ -84,7 +84,7 @@ class TestMainFillshape(ExtTestCase):
             orig_dims = list(original.graph.output[0].type.tensor_type.shape.dim)
             self.assertEqual(len(orig_dims), 0)
 
-    def test_fillshape_show_option(self, capsys=None):
+    def test_fillshape_show_option(self):
         """fillshape --show prints shapes and does not save the model."""
         import io
         from contextlib import redirect_stdout

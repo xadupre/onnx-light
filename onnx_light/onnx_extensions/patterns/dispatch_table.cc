@@ -34,6 +34,7 @@
 #include "onnx_extensions/patterns/normalization/activation_pattern.h"
 #include "onnx_extensions/patterns/normalization/normalization_pattern.h"
 #include "onnx_extensions/patterns/reshape/reshape_pattern.h"
+#include "onnx_extensions/patterns/traditionalml/tree_ensemble_pattern.h"
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 #include "onnx_extensions/patterns/unsqueeze/unsqueeze_pattern.h"
 
@@ -342,6 +343,10 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("ShapeTranspose",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ShapeTransposePattern>();
+                                   });
+    core::builder::RegisterPattern("TreeEnsemble",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<TreeEnsemblePattern>();
                                    });
     core::builder::RegisterPattern("UnsqueezeShape",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {

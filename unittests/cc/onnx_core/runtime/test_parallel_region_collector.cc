@@ -264,7 +264,7 @@ TEST(ParallelRegionCollector, DerivesMetricsOnlyFromValidCounterSamples) {
 }
 
 #if defined(__linux__)
-TEST(ParallelRegionCollector, LinuxHardwareCountersAreValidOrSkipWithExplicitStatus) {
+TEST(ParallelRegionCollector, LinuxHardwareCountersAreValidOrHaveExplicitStatus) {
   CpuExecutorRegistry registry(1);
   const auto executor = MakeExecutor(registry, 1);
   ParallelRegionCollector collector(1, true);
@@ -284,17 +284,21 @@ TEST(ParallelRegionCollector, LinuxHardwareCountersAreValidOrSkipWithExplicitSta
   const ParallelRegionReport report = collector.Report();
   ASSERT_EQ(report.events().size(), 1u);
   const ParallelRegionReportEvent &event = report.events()[0];
-  if (event.counter_status == HardwareCounterStatus::kPermissionDenied ||
-      event.counter_status == HardwareCounterStatus::kUnsupported) {
-    GTEST_SKIP() << "Linux perf counters are " << HardwareCounterStatusName(event.counter_status)
-                 << " in this environment.";
+  if (event.counter_status == HardwareCounterStatus::kValid) {
+    ASSERT_TRUE(event.cpu_cycles.has_value());
+    ASSERT_TRUE(event.retired_instructions.has_value());
+    EXPECT_GT(*event.cpu_cycles, 0u);
+    EXPECT_GT(*event.retired_instructions, 0u);
+    EXPECT_EQ(event.counter_time_enabled, event.counter_time_running);
+  } else {
+    EXPECT_TRUE(event.counter_status == HardwareCounterStatus::kPermissionDenied ||
+                event.counter_status == HardwareCounterStatus::kUnsupported ||
+                event.counter_status == HardwareCounterStatus::kMultiplexed ||
+                event.counter_status == HardwareCounterStatus::kOverflowed)
+        << HardwareCounterStatusName(event.counter_status);
+    EXPECT_FALSE(event.cpu_cycles.has_value());
+    EXPECT_FALSE(event.retired_instructions.has_value());
   }
-  ASSERT_EQ(event.counter_status, HardwareCounterStatus::kValid);
-  ASSERT_TRUE(event.cpu_cycles.has_value());
-  ASSERT_TRUE(event.retired_instructions.has_value());
-  EXPECT_GT(*event.cpu_cycles, 0u);
-  EXPECT_GT(*event.retired_instructions, 0u);
-  EXPECT_EQ(event.counter_time_enabled, event.counter_time_running);
   EXPECT_NE(checksum.load(std::memory_order_relaxed), 0u);
 }
 #endif

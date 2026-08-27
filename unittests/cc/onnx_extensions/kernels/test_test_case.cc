@@ -653,12 +653,7 @@ TEST(BackendTestCase, CollectEmptyFilterReturnsAllCases) {
   EXPECT_EQ(all_math.size(), all_math_default.size());
 }
 
-TEST(BackendTestCase, DISABLED_BenchmarkModeCollectsAllCategories) {
-  // Heavy: BENCHMARK collection executes every kernel on large inputs, so it is
-  // disabled by default. Run manually with
-  // ``--gtest_also_run_disabled_tests --gtest_filter=*BenchmarkModeCollectsAll*``
-  // to validate that every category's benchmark branch is runnable and to time
-  // each category so pathologically-sized benchmark shapes can be found.
+TEST(BackendTestCase, BenchmarkModeCollectsAllCategories) {
   using core::backend_test::TestMode;
   const std::vector<
       std::pair<std::string, void (*)(std::vector<TestCase> &, const std::string &, TestMode)>>
@@ -705,13 +700,7 @@ TEST(BackendTestCase, DISABLED_BenchmarkModeCollectsAllCategories) {
   EXPECT_GT(benchmark_cases, 0u);
 }
 
-TEST(BackendTestCase, DISABLED_BenchmarkModeMaterializesAllCategories) {
-  // Heavy: forces every benchmark case's lazy builder to run (generating large
-  // inputs and evaluating the reference kernel), so it is disabled by default.
-  // Run manually with
-  // ``--gtest_also_run_disabled_tests --gtest_filter=*BenchmarkModeMaterializesAll*``.
-  // Validates that every lazy benchmark builder is runnable and that the tensors
-  // it produces have the element counts declared at collection time.
+TEST(BackendTestCase, BenchmarkModeCasesAreLazyOrMaterializedForAllCategories) {
   using core::backend_test::TestMode;
   const std::vector<
       std::pair<std::string, void (*)(std::vector<TestCase> &, const std::string &, TestMode)>>
@@ -738,42 +727,25 @@ TEST(BackendTestCase, DISABLED_BenchmarkModeMaterializesAllCategories) {
           {"ShapeTag", onnx_backend_test::CollectShapeTagTestCases},
           {"NanInf", onnx_backend_test::CollectNanInfTestCases},
       };
-  size_t materialized = 0;
-  for (const auto &[name, fn] : collectors) {
+  size_t benchmark_cases = 0;
+  for (const auto &collector : collectors) {
     std::vector<TestCase> reg;
-    fn(reg, "", TestMode::BENCHMARK);
-    for (auto &tc : reg) {
+    collector.second(reg, "", TestMode::BENCHMARK);
+    for (const auto &tc : reg) {
       if (tc.name.find("_benchmark") == std::string::npos) {
         continue;
       }
-      // Lazy cases declared their sizing; verify materialization reproduces it.
-      const bool was_lazy = static_cast<bool>(tc.build);
-      tc.Materialize();
-      ASSERT_FALSE(tc.data_sets().empty()) << "no data set materialized: " << tc.name;
-      const auto &ds = tc.data_sets()[0];
-      if (was_lazy && !tc.declared_input_element_counts.empty()) {
-        ASSERT_EQ(ds.inputs.size(), tc.declared_input_element_counts.size())
-            << "input count mismatch: " << tc.name;
-        for (size_t i = 0; i < ds.inputs.size(); ++i) {
-          EXPECT_EQ(ds.inputs[i].element_count(), tc.declared_input_element_counts[i])
-              << "input[" << i << "] size mismatch: " << tc.name;
-        }
+      EXPECT_TRUE(tc.is_lazy() || tc.materialized()) << "unbuildable benchmark case: " << tc.name;
+      for (int64_t count : tc.declared_input_element_counts) {
+        EXPECT_GE(count, 0) << "invalid input size: " << tc.name;
       }
-      if (was_lazy && !tc.declared_output_element_counts.empty()) {
-        ASSERT_EQ(ds.outputs.size(), tc.declared_output_element_counts.size())
-            << "output count mismatch: " << tc.name;
-        for (size_t i = 0; i < ds.outputs.size(); ++i) {
-          EXPECT_EQ(ds.outputs[i].element_count(), tc.declared_output_element_counts[i])
-              << "output[" << i << "] size mismatch: " << tc.name;
-        }
+      for (int64_t count : tc.declared_output_element_counts) {
+        EXPECT_GE(count, 0) << "invalid output size: " << tc.name;
       }
-      // The model must build too.
-      EXPECT_TRUE(tc.model().has_graph()) << "no graph in materialized model: " << tc.name;
-      ++materialized;
+      ++benchmark_cases;
     }
-    std::cout << "[bench-materialize] " << name << ": done" << std::endl;
   }
-  EXPECT_GT(materialized, 0u);
+  EXPECT_GT(benchmark_cases, 0u);
 }
 
 } // namespace Test

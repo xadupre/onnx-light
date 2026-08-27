@@ -45,6 +45,11 @@ bool ReadQuoted(std::istringstream &stream, std::string &value) {
   return static_cast<bool>(stream);
 }
 
+std::string_view TrimLeadingWhitespace(std::string_view line) {
+  size_t start = line.find_first_not_of(" \t\r\n");
+  return start == std::string_view::npos ? std::string_view() : line.substr(start);
+}
+
 void Malformed(ParsedProfiles &parsed, size_t line, std::string message) {
   parsed.status = CalibrationProfileStoreStatus::kMalformed;
   parsed.diagnostics.push_back("Line " + std::to_string(line) + ": " + std::move(message));
@@ -130,7 +135,8 @@ ParsedProfiles Parse(std::istream &input) {
   size_t line_number = 1;
   while (std::getline(input, line)) {
     ++line_number;
-    if (line.empty() || line.starts_with("#")) {
+    std::string_view trimmed = TrimLeadingWhitespace(line);
+    if (trimmed.empty() || trimmed.starts_with("#")) {
       continue;
     }
     std::istringstream stream(line);
@@ -499,6 +505,7 @@ CalibrationProfileStore::Lookup(const CalibrationProfileLookupOptions &options,
   }
   std::lock_guard guard(mutex_);
   CalibrationProfileLookupReport report;
+  bool found = false;
   auto try_source = [&](bool overrides, CalibrationProfileKind kind) {
     for (const CalibrationProfile &profile : profiles_) {
       if (profile.user_override != overrides || profile.key.kind != kind) {
@@ -511,6 +518,9 @@ CalibrationProfileStore::Lookup(const CalibrationProfileLookupOptions &options,
         report.rejections.push_back(ClassifyRejection(profile, options));
         continue;
       }
+      if (found) {
+        continue;
+      }
       std::string validation_error;
       if (validate && !validate(profile.policy, validation_error)) {
         report.rejections.push_back({profile.key,
@@ -520,17 +530,20 @@ CalibrationProfileStore::Lookup(const CalibrationProfileLookupOptions &options,
       }
       report.profile = profile;
       report.status = CalibrationProfileStoreStatus::kOk;
-      return true;
+      found = true;
     }
-    return false;
   };
-  if ((!options.force_portable && try_source(true, CalibrationProfileKind::kExact)) ||
-      try_source(true, CalibrationProfileKind::kPortable) ||
-      (!options.force_portable && try_source(false, CalibrationProfileKind::kExact)) ||
-      try_source(false, CalibrationProfileKind::kPortable)) {
-    return report;
+  if (!options.force_portable) {
+    try_source(true, CalibrationProfileKind::kExact);
   }
-  report.status = CalibrationProfileStoreStatus::kNotFound;
+  try_source(true, CalibrationProfileKind::kPortable);
+  if (!options.force_portable) {
+    try_source(false, CalibrationProfileKind::kExact);
+  }
+  try_source(false, CalibrationProfileKind::kPortable);
+  if (!found) {
+    report.status = CalibrationProfileStoreStatus::kNotFound;
+  }
   return report;
 }
 

@@ -714,6 +714,8 @@ def _run_backend_test_timing(
     else:
         import tempfile
 
+        from . import kernel_tuning
+
         tunable = cast(_KernelTunable, tuning_comparison["tunable"])
         criterion = cast(str, tuning_comparison.get("criterion", "sum"))
         if "parameter_sets" in tuning_comparison:
@@ -728,8 +730,6 @@ def _run_backend_test_timing(
         reports_by_value = []
         with tempfile.TemporaryDirectory(prefix="onnx-light-backend-tuning-") as temporary:
             for set_index, parameter_set in enumerate(parameter_sets):
-                from . import kernel_tuning
-
                 values = dict(tunable["active_values"])
                 values.update(parameter_set)
                 cache_path = str(Path(temporary) / f"values-{set_index}.cache")

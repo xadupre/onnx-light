@@ -328,7 +328,11 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
 
   for (int i = 0; i < static_cast<int>(gp.node().size()); i++) {
     const auto &np = gp.node()[i];
-    auto *n = g->create(Symbol(np.op_type()), /* num_outputs = */ np.output().size());
+    const auto kind = Symbol(np.op_type());
+    if (kind == kCaptured && np.output().size() != 1) {
+      fail_convert("Captured node must have exactly one output.");
+    }
+    auto *n = g->create(kind, /* num_outputs = */ np.output().size());
     g->appendNode(n);
     for (int j = 0; j < static_cast<int>(np.output().size()); j++) {
       auto *out = n->outputs()[j];
@@ -484,6 +488,7 @@ static void encodeTensor(TensorProto &p, const Tensor &tensor) {
   case TensorProto::DataType::FLOAT8E4M3FNUZ:
   case TensorProto::DataType::FLOAT8E5M2:
   case TensorProto::DataType::FLOAT8E5M2FNUZ:
+  case TensorProto::DataType::FLOAT8E8M0:
   case TensorProto::DataType::FLOAT4E2M1:
   case TensorProto::DataType::BOOL:
   case TensorProto::DataType::UINT2:

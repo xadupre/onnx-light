@@ -1393,6 +1393,24 @@ TEST(KernelClass, TensorScatterCircularWrapsWriteIndex) {
   }
 }
 
+TEST(KernelClass, TensorScatterCircularPreservesPrefixCoordinates) {
+  const KernelContext ctx{DefaultOpset(24)};
+  onnx_kernels::kernel::TensorScatter ts{ctx};
+  Tensor past = Tensor::FromFloat("", {5, 4, 1}, std::vector<float>(20, -1.0f));
+  Tensor update = Tensor::FromFloat("", {5, 1, 1}, {1, 2, 3, 4, 5});
+  Tensor write = Tensor::FromInt64("", {5}, {0, 0, 0, 0, 0});
+  onnx_kernels::kernel::TensorScatter::Attributes attrs;
+  attrs.axis = 1;
+  attrs.mode = "circular";
+
+  Tensor y = ts(past, update, &write, attrs);
+
+  const float *py = y.AsFloat();
+  for (int64_t batch = 0; batch < 5; ++batch) {
+    EXPECT_FLOAT_EQ(py[batch * 4], static_cast<float>(batch + 1));
+  }
+}
+
 TEST(KernelClass, TensorScatterDefaultsWriteIndicesToZero) {
   const KernelContext ctx{DefaultOpset(24)};
   onnx_kernels::kernel::TensorScatter ts{ctx};

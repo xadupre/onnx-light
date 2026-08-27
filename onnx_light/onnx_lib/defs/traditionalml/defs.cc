@@ -1075,6 +1075,9 @@ ONNX_ML_OPERATOR_SET_SCHEMA(
           auto leaf_targetids = ctx.getAttribute("leaf_targetids");
           auto leaf_weights = ctx.getAttribute("leaf_weights");
           if (nullptr != leaf_targetids && nullptr != leaf_weights) {
+            if (leaf_weights->t().dims_size() != 1) {
+              fail_shape_inference("Attribute 'leaf_weights' must be 1D.");
+            }
             if (leaf_targetids->ints_size() != static_cast<int64_t>(leaf_weights->t().dims(0))) {
               fail_shape_inference("Attribute 'leaf_targetids' must have same length as attribute "
                                    "'leaf_weights'. 'leaf_targetids' "

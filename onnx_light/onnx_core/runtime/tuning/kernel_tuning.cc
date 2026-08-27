@@ -40,11 +40,11 @@ double CriterionValue(const KernelTuningLatencyMetrics &metrics, KernelTuningCri
   case KernelTuningCriterion::kMedian:
     return metrics.median;
   case KernelTuningCriterion::kAverageSpeedup:
-    return *metrics.average_speedup;
+    return metrics.average_speedup.value();
   case KernelTuningCriterion::kMedianSpeedup:
-    return *metrics.median_speedup;
+    return metrics.median_speedup.value();
   case KernelTuningCriterion::kMaxSpeedup:
-    return *metrics.max_speedup;
+    return metrics.max_speedup.value();
   case KernelTuningCriterion::kMaxLatency:
     return metrics.max_latency;
   }

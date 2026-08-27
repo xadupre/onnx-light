@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 from onnx_light.onnx_py._onnxpykernels.runtime import (  # type: ignore[import]
+    analyze_kernel_tuning_latencies,
     calibrate_kernel_tuning,
     default_kernel_tuning_cache_path,
     inspect_kernel_tuning_cache,
@@ -108,6 +109,7 @@ def apply_kernel_tuning_updates(
 
 
 __all__ = [
+    "analyze_kernel_tuning_latencies",
     "apply_kernel_tuning_updates",
     "calibrate_kernel_tuning",
     "default_kernel_tuning_cache_path",

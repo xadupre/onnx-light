@@ -199,6 +199,55 @@ TEST(KernelTuningParameters, ProvidesStrictTypedAccess) {
   EXPECT_THROW(parameters.Get<int64_t>("missing"), std::invalid_argument);
 }
 
+TEST(KernelTuningLatency, ReportsEveryMetricAndSelectsCriterion) {
+  const std::vector<std::vector<std::optional<double>>> latencies = {
+      {2.0, 8.0, 10.0}, {1.0, 4.0, 20.0}, {4.0, 4.0, 5.0}};
+
+  const KernelTuningLatencyReport average =
+      AnalyzeKernelTuningLatencies(latencies, KernelTuningCriterion::kAverage);
+  ASSERT_EQ(average.values.size(), 3u);
+  ASSERT_TRUE(average.values[1].has_value());
+  EXPECT_DOUBLE_EQ(average.values[1]->sum, 25.0);
+  EXPECT_DOUBLE_EQ(average.values[1]->average, 25.0 / 3.0);
+  EXPECT_DOUBLE_EQ(average.values[1]->median, 4.0);
+  EXPECT_DOUBLE_EQ(*average.values[1]->average_speedup, 1.5);
+  EXPECT_DOUBLE_EQ(*average.values[1]->median_speedup, 2.0);
+  EXPECT_DOUBLE_EQ(*average.values[1]->max_speedup, 2.0);
+  EXPECT_DOUBLE_EQ(average.values[1]->max_latency, 20.0);
+  EXPECT_EQ(average.selected_index, 2u);
+
+  const KernelTuningLatencyReport speedup =
+      AnalyzeKernelTuningLatencies(latencies, KernelTuningCriterion::kAverageSpeedup);
+  EXPECT_EQ(speedup.selected_index, 1u);
+}
+
+TEST(KernelTuningLatency, RejectsInvalidRowsAndReportsMissingRows) {
+  EXPECT_THROW(AnalyzeKernelTuningLatencies({}, KernelTuningCriterion::kAverage),
+               std::invalid_argument);
+  EXPECT_THROW(AnalyzeKernelTuningLatencies({{1.0}, {1.0, 2.0}}, KernelTuningCriterion::kAverage),
+               std::invalid_argument);
+  EXPECT_THROW(AnalyzeKernelTuningLatencies({{1.0}, {0.0}}, KernelTuningCriterion::kAverage),
+               std::invalid_argument);
+
+  const KernelTuningLatencyReport report = AnalyzeKernelTuningLatencies(
+      {{1.0, 2.0}, {std::nullopt, 1.0}}, KernelTuningCriterion::kMedian);
+  ASSERT_EQ(report.values.size(), 2u);
+  EXPECT_TRUE(report.values[0].has_value());
+  EXPECT_FALSE(report.values[1].has_value());
+  EXPECT_EQ(report.selected_index, 0u);
+
+  const KernelTuningLatencyReport unavailable =
+      AnalyzeKernelTuningLatencies({{std::nullopt}, {1.0}}, KernelTuningCriterion::kAverage);
+  ASSERT_TRUE(unavailable.values[1].has_value());
+  EXPECT_DOUBLE_EQ(unavailable.values[1]->average, 1.0);
+  EXPECT_FALSE(unavailable.values[1]->average_speedup.has_value());
+  EXPECT_EQ(unavailable.selected_index, 1u);
+
+  const KernelTuningLatencyReport unavailable_speedup =
+      AnalyzeKernelTuningLatencies({{std::nullopt}, {1.0}}, KernelTuningCriterion::kAverageSpeedup);
+  EXPECT_FALSE(unavailable_speedup.selected_index.has_value());
+}
+
 TEST(KernelTuningSchema, AcceptsCompleteParametersAndRunsValidationHook) {
   KernelTuningSchema schema(KernelTuningSchema::WithQueryValidation(
       MakeDefaults(), [](const KernelTuningParameters &parameters) -> std::optional<std::string> {

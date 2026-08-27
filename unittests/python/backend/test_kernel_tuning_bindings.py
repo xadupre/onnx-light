@@ -110,6 +110,29 @@ class TestKernelTuningBindings(ExtTestCase):
         self.assertEqual(comparison["values"][0]["speedup"], 1.0)
         self.assertGreater(comparison["values"][0]["benchmark_cases"], 0)
 
+    def test_analyzes_latency_metrics_and_selects_criterion(self):
+        report = kernel_tuning.analyze_kernel_tuning_latencies(
+            [[2.0, 8.0, 10.0], [1.0, 4.0, 20.0], [4.0, 4.0, 5.0]], "average-speedup"
+        )
+
+        self.assertEqual(report["criterion"], "average-speedup")
+        self.assertEqual(report["selected_index"], 1)
+        self.assertEqual(
+            set(report["values"][1]),
+            {
+                "average",
+                "sum",
+                "median",
+                "average_speedup",
+                "median_speedup",
+                "max_speedup",
+                "max_latency",
+            },
+        )
+        self.assertEqual(report["values"][1]["sum"], 25.0)
+        self.assertEqual(report["values"][1]["median"], 4.0)
+        self.assertEqual(report["values"][1]["average_speedup"], 1.5)
+
     def test_lists_registered_parameters_and_defaults(self):
         report = kernel_tuning.kernel_tuning_parameters(
             kernel="Abs", element_type=int(TensorProto.FLOAT)

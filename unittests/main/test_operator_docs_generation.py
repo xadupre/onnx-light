@@ -38,10 +38,14 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("ai_onnx_preview", index)
         self.assertIn("ai_rt", index)
 
-    def test_index_title_is_ops(self):
+    def test_index_contains_by_op_catalogues(self):
         self._init()
         index = Path(self.tmp_dir, "index.rst").read_text(encoding="utf-8")
-        self.assertIn("Ops\n===\n", index)
+        self.assertIn("ByOp\n====\n", index)
+        self.assertIn("Ops\n---\n", index)
+        self.assertIn("Patterns\n--------\n", index)
+        self.assertIn("MemoryPeak\n----------\n", index)
+        self.assertIn("**Attention**", index)
 
     def test_ml_domain_page_contains_operators(self):
         self._init()
@@ -248,6 +252,19 @@ class TestGenOperators(ExtTestCase):
         self.assertEqual(op_path.read_text(encoding="utf-8"), sentinel)
         # The final progress message reports how many pages were skipped.
         self.assertIn("skipped", messages[-1])
+
+    def test_generate_refreshes_existing_index(self):
+        folder = self.get_dump_folder("test_gen_operators_refresh_index", clean=True)
+        index_path = Path(folder, "index.rst")
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_text("Ops\n===\n", encoding="utf-8")
+
+        doc_module.generate_operators_doc(folder)
+
+        content = index_path.read_text(encoding="utf-8")
+        self.assertIn("ByOp\n====\n", content)
+        self.assertIn("Patterns\n--------\n", content)
+        self.assertIn("MemoryPeak\n----------\n", content)
 
     def test_latest_page_contains_diff_with_previous_version(self):
         self._init()

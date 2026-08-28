@@ -14,14 +14,18 @@ def test_render_rst_pattern_catalog_lists_registered_patterns():
     catalogue = render_rst_pattern_catalog(patterns_root)
     patterns = standard_patterns()
 
-    assert catalogue.count("    * - **") == len(patterns)
+    assert catalogue.count("    * - ") == len(patterns) + 1
+    positions = [catalogue.index(f"**{name}**") for name in sorted(p.name for p in patterns)]
+    assert positions == sorted(positions)
     for pattern in patterns:
         class_name = type(pattern).__name__
         assert f"**{pattern.name}**" in catalogue
         assert f"onnx_light::onnx_patterns::{class_name}" in catalogue
         assert f"onnx_light.onnx_core.optimization.{class_name}" in catalogue
-    assert "C++ class" in catalogue
-    assert "Python class" in catalogue
+    assert "    * - #" in catalogue
+    assert ":class: sphinx-datatable pattern-catalog" in catalogue
+    assert ":cpp:class:`C++" in catalogue
+    assert ":class:`Python" in catalogue
     assert "Before:" not in catalogue
     assert "After:" not in catalogue
 
@@ -38,3 +42,5 @@ def test_render_rst_peak_memory_catalog_lists_registered_functions():
     assert "**Attention**" in catalogue
     assert "``ai.onnx``" in catalogue
     assert "CPU / default" in catalogue
+    assert "onnx_light::core::shapes::ComputePeakMemory" in catalogue
+    assert "onnx_light.onnx_core.shape_inference.compute_peak_memory" in catalogue

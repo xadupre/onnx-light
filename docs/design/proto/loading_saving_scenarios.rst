@@ -111,25 +111,3 @@ Key properties:
 
 Recipe and step-by-step explanation:
 :ref:`l-howto-save-model-with-shared-external-data`.
-
-Why these scenarios are first-class in *onnx-light*
----------------------------------------------------
-
-Both scenarios rely on two capabilities that are awkward to express with
-the standard protobuf-based ``onnx`` package and that *onnx-light*
-exposes by design:
-
-* **Skip raw data on parse.** ``ParseOptions::skip_raw_data`` (and the
-  Python equivalent) lets a caller read only the proto metadata — even
-  for multi-GB models — so the metadata-driven re-alignment of scenario 1
-  is possible without ever touching the weights bytes.
-* **Honour pre-existing ``external_data`` entries on serialize.**
-  ``SerializeOptions::use_external_data_location`` controls whether the
-  serializer respects per-tensor ``external_data.location`` entries that
-  are already set on initializers.  Scenario 2 builds on that to keep
-  reused initializers pointing at the first model's weights file while
-  the freshly added initializers are routed to a new file.
-
-The two helpers documented here package those primitives into ready-made
-recipes for the two most common "complex" scenarios encountered when
-shipping large ONNX models.

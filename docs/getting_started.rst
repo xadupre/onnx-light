@@ -170,9 +170,10 @@ them:
           -DONNX_LIGHT_BUILD_KERNELS=OFF
     cmake --build build-install
 
-``ONNX_LIGHT_BUILD_KERNELS=OFF`` is incompatible with
-``ONNX_LIGHT_BUILD_PYTHON=ON`` and ``ONNX_LIGHT_BUILD_TESTS=ON``, so it is meant
-for pure C++ builds.  See :ref:`l-design-cpp-linking-no-kernels` for the
-matching CMake workflow and the list of targets that remain available.
+``ONNX_LIGHT_BUILD_KERNELS=OFF`` also supports Python and C++ test builds: the
+kernel, backend-test, and gradient modules/tests are omitted while the reduced
+proto, schema, shape, and optimization subset remains available. See
+:ref:`l-design-cpp-linking-no-kernels` for the matching CMake workflow and
+exported targets.
 
 Source code: `https://github.com/xadupre/onnx-light <https://github.com/xadupre/onnx-light>`_

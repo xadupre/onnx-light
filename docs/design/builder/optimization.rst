@@ -21,12 +21,27 @@ type and constant queries) and drives a match/apply loop:
 
 .. code-block:: python
 
-    from onnx_light.onnx_core.optimization import GraphBuilder, GraphGraph
+    from onnx_light.onnx import TensorProto
+    from onnx_light.onnx_core.graph_builder import GraphBuilder
+    from onnx_light.onnx_core.optimization import GraphGraph, standard_patterns
 
-    builder = GraphBuilder(model)
-    graph = GraphGraph(builder)
+    builder = GraphBuilder("optimization")
+    builder.set_opset_version("", 18)
+    x = builder.inp("X", TensorProto.FLOAT, [4])
+    y = builder.op.Cast(x, outputs="Y", to=TensorProto.FLOAT)
+    builder.out(y, TensorProto.FLOAT, [4])
+
+    graph = GraphGraph(
+        builder,
+        standard_patterns(["Cast"]),
+        use_global_patterns=False,
+    )
     rewrites, report = graph.optimize(report=True)
     optimized_model = builder.to_onnx("model")
+
+    assert len(rewrites) == 1
+    assert report.rewrites == 1
+    assert optimized_model.graph.node[0].op_type == "Identity"
 
 Because the optimizer reuses the builder, it inherits the builder's shape
 and type inference, its constant knowledge and its cleanup passes

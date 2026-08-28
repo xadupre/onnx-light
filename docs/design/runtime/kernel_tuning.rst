@@ -76,9 +76,9 @@ keys. The shared unary/binary crossover search:
 * keeps the portable value when no stable crossover is found.
 
 Schemas without callbacks remain manually tunable but cannot be calibrated
-automatically. ``Abs``, ``Add``, and ``Not`` currently provide callbacks.
-Multi-parameter kernels such as ``Gemm`` require a kernel-specific search
-before they can participate safely.
+automatically. ``Abs``, ``Add``, ``Gemm``, ``Log``, ``Not``, ``Sigmoid``, and
+``Tanh`` provide callbacks. ``Gemm`` uses its own bounded task-grid search;
+the elementwise kernels use the shared crossover search.
 
 Cache and Python lifecycle
 ++++++++++++++++++++++++++

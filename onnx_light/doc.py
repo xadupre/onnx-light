@@ -338,33 +338,30 @@ def render_rst_pattern_catalog(patterns_root: str | pathlib.Path | None = None) 
             raise RuntimeError(
                 f"Registered pattern {pattern.name!r} is not exposed by the public Python API."
             )
-        rows.append((documentation[class_name].family, str(pattern.name), class_name))
+        rows.append((str(pattern.name), documentation[class_name].family, class_name))
 
     lines = [
         ".. list-table::",
         "    :header-rows: 1",
-        "    :widths: 20 50 15 15",
-        "    :class: pattern-catalog",
+        "    :widths: 5 30 65",
+        "    :class: sphinx-datatable pattern-catalog",
         "",
-        "    * - Pattern",
+        "    * - #",
+        "      - Pattern",
         "      - Summary",
-        "      - C++ class",
-        "      - Python class",
     ]
-    for family, name, class_name in sorted(rows):
+    for index, (name, family, class_name) in enumerate(sorted(rows), 1):
         item = documentation[class_name]
         lines.extend(
             [
-                f"    * - **{name}** (``{family}``)",
+                f"    * - {index}",
+                f"      - **{name}** (``{family}``)",
+                (
+                    f"        :cpp:class:`C++ <onnx_light::onnx_patterns::{class_name}>`"
+                    " / "
+                    f":class:`Python <onnx_light.onnx_core.optimization.{class_name}>`"
+                ),
                 f"      - {item.summary}",
-                (
-                    f"      - :cpp:class:`{class_name} "
-                    f"<onnx_light::onnx_patterns::{class_name}>`"
-                ),
-                (
-                    f"      - :class:`{class_name} "
-                    f"<onnx_light.onnx_core.optimization.{class_name}>`"
-                ),
             ]
         )
     return "\n".join(lines) + "\n"
@@ -397,15 +394,27 @@ def render_rst_peak_memory_catalog(keys: Iterable[str] | None = None) -> str:
     lines = [
         ".. list-table::",
         "    :header-rows: 1",
-        "    :widths: 30 45 25",
-        "    :class: sphinx-datatable",
+        "    :widths: 25 30 20 25",
+        "    :class: sphinx-datatable memory-peak-catalog",
         "",
         "    * - Operator",
         "      - Domain",
         "      - Device",
+        "      - APIs",
     ]
     for domain, op_type, device in sorted(rows):
-        lines.extend([f"    * - **{op_type}**", f"      - ``{domain}``", f"      - {device}"])
+        lines.extend(
+            [
+                f"    * - **{op_type}**",
+                f"      - ``{domain}``",
+                f"      - {device}",
+                (
+                    "      - :cpp:func:`C++ <onnx_light::core::shapes::ComputePeakMemory>`"
+                    " / "
+                    ":func:`Python <onnx_light.onnx_core.shape_inference.compute_peak_memory>`"
+                ),
+            ]
+        )
     return "\n".join(lines) + "\n"
 
 

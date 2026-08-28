@@ -482,7 +482,7 @@ def _cpp_attribute_statements(node: Any, index: int) -> tuple[list[str], str]:
                 f"  {attr_variable}.set_name({_cpp_string(_s(getattr(attr, 'name', '')))});",
                 (
                     f"  {attr_variable}.set_type(onnx_light::AttributeProto::AttributeType::"
-                    f"{_CPP_ATTRIBUTE_TYPES.get(attr_type, 'UNDEFINED')});"
+                    f"{_CPP_ATTRIBUTE_TYPES[attr_type]});"
                 ),
             ]
         )

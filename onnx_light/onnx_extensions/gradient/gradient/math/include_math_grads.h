@@ -39,7 +39,7 @@ bool GradAdd(const NodeProto &node, const std::string &output_grad,
  * B --'
  *
  * dC, B ------> Div --> dA
- * dC, A, B^2 --> Div --> Neg --> dB
+ * dC, A --> Mul --> Div(B^2) --> Neg --> dB
  * @endcode
  */
 bool GradDiv(const NodeProto &node, const std::string &output_grad,

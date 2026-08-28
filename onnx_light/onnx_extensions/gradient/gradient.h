@@ -19,14 +19,15 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_gradient {
  * respect to each variable in @p xs.
  *
  * @code
- * X -----> Mul -----> Y
- *            ^
- *            |
- * W --------'
+ * X ---.
+ *      +--> Mul --> Y
+ * W ---'
  *
- * X --.
- * W --+--> GradientOfNodes(xs=["X", "W"], y="Y", dy) --> grad_X, grad_W
- * dy -'
+ * X ---.
+ *      |
+ * W ---+--> GradientOfNodes(xs=["X", "W"], y="Y", dy) --> grad_X, grad_W
+ *      |
+ * dy --'
  * @endcode
  *
  * The returned FunctionProto has:
@@ -67,12 +68,15 @@ FunctionProto GradientOfNodes(std::span<const NodeProto> nodes, std::span<const 
  * is expressed as a pure function for training purposes.
  *
  * @code
- * X --.
- * W --+--> FunctionProto --> Y
+ * X ---.
+ *      +--> FunctionProto --> Y
+ * W ---'
  *
- * X --.
- * W --+--> GradientOfFunction(xs=["X", "W"], y="Y", dy) --> grad_X, grad_W
- * dy -'
+ * X ---.
+ *      |
+ * W ---+--> GradientOfFunction(xs=["X", "W"], y="Y", dy) --> grad_X, grad_W
+ *      |
+ * dy --'
  * @endcode
  *
  * @param function  The forward computation as a FunctionProto.

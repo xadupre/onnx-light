@@ -16,9 +16,12 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_gradient {
  * C = A + B  →  dA = dC,  dB = dC.
  *
  * @code
- * A --.             dC --> dA
+ * A --.
  *     +--> Add --> C
- * B --'             dC --> dB
+ * B --'
+ *
+ * dC --> dA
+ * dC --> dB
  * @endcode
  */
 bool GradAdd(const NodeProto &node, const std::string &output_grad,
@@ -31,9 +34,12 @@ bool GradAdd(const NodeProto &node, const std::string &output_grad,
  * C = A / B  →  dA = dC / B,  dB = -dC * A / B^2.
  *
  * @code
- * A --.             dC, B ------> Div --> dA
+ * A --.
  *     +--> Div --> C
- * B --'             dC, A, B^2 --> Div --> Neg --> dB
+ * B --'
+ *
+ * dC, B ------> Div --> dA
+ * dC, A, B^2 --> Div --> Neg --> dB
  * @endcode
  */
 bool GradDiv(const NodeProto &node, const std::string &output_grad,
@@ -66,9 +72,12 @@ bool GradGemm(const NodeProto &node, const std::string &output_grad,
  * C = A @ B  →  dA = dC @ B^T,  dB = A^T @ dC.
  *
  * @code
- * A --.             dC, B^T --> MatMul --> dA
+ * A --.
  *     +--> MatMul --> C
- * B --'             A^T, dC --> MatMul --> dB
+ * B --'
+ *
+ * dC, B^T --> MatMul --> dA
+ * A^T, dC --> MatMul --> dB
  * @endcode
  */
 bool GradMatMul(const NodeProto &node, const std::string &output_grad,
@@ -81,9 +90,12 @@ bool GradMatMul(const NodeProto &node, const std::string &output_grad,
  * C = A * B  →  dA = dC * B,  dB = dC * A.
  *
  * @code
- * A --.             dC, B --> Mul --> dA
+ * A --.
  *     +--> Mul --> C
- * B --'             dC, A --> Mul --> dB
+ * B --'
+ *
+ * dC, B --> Mul --> dA
+ * dC, A --> Mul --> dB
  * @endcode
  */
 bool GradMul(const NodeProto &node, const std::string &output_grad,
@@ -111,9 +123,12 @@ bool GradNeg(const NodeProto &node, const std::string &output_grad,
  * C = A - B  →  dA = dC,  dB = -dC.
  *
  * @code
- * A --.             dC ---------> dA
+ * A --.
  *     +--> Sub --> C
- * B --'             dC --> Neg --> dB
+ * B --'
+ *
+ * dC ---------> dA
+ * dC --> Neg --> dB
  * @endcode
  */
 bool GradSub(const NodeProto &node, const std::string &output_grad,

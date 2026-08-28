@@ -96,6 +96,9 @@ bool GradTanh(const NodeProto &node, const std::string &output_grad,
  *                                                        |
  *                                                        '--> dmean, dvariance
  * @endcode
+ *
+ * The dmean and dvariance outputs are emitted only when the corresponding
+ * forward inputs are non-empty.
  */
 bool GradBatchNormalization(const NodeProto &node, const std::string &output_grad,
                             std::unordered_map<std::string, std::string> &grad_accum, int &counter,

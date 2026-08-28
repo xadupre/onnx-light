@@ -90,7 +90,7 @@ bool GradTanh(const NodeProto &node, const std::string &output_grad,
  * @code
  * X, scale, bias, mean, variance --> BatchNormalization --> Y
  *
- * dY --> GradBatchNormalization --> dX, dscale, dbias, dmean, dvariance
+ * X, scale, mean, variance, dY --> GradBatchNormalization --> dX, dscale, dbias, dmean, dvariance
  * @endcode
  */
 bool GradBatchNormalization(const NodeProto &node, const std::string &output_grad,

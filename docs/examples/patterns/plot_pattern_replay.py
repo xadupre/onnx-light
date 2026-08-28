@@ -46,11 +46,13 @@ print(pretty_onnx(builder.to_onnx("model")))
 # Inspect the captured modifications
 # ++++++++++++++++++++++++++++++++++
 #
-# Each record identifies the pattern, matched nodes, inserted nodes, and
-# optimization iteration needed to reproduce one modification.
+# Each record has a concise one-line display. Use ``to_detailed_string`` to
+# inspect the pattern, matched nodes, inserted nodes, and optimization iteration
+# needed to reproduce one modification.
 
 for rewrite in rewrites:
     print(rewrite)
+    print(rewrite.to_detailed_string())
 
 #####################################
 # Replay without matching patterns

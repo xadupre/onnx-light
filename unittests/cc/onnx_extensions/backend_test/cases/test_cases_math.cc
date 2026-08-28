@@ -106,6 +106,17 @@ const TestCase *FindCase(const std::vector<TestCase> &cases, const std::string &
 
 } // namespace
 
+TEST(BackendTestCase, AbsCaseNamesContainTensorType) {
+  const auto cases = CollectTestCases("Abs");
+  const std::vector<std::string> expected_names = {
+      "test_cc_abs_float16", "test_cc_abs_bfloat16", "test_cc_abs_int8",   "test_cc_abs_int16",
+      "test_cc_abs_int32",   "test_cc_abs_int64",    "test_cc_abs_double",
+  };
+  for (const std::string &name : expected_names) {
+    EXPECT_NE(FindCase(cases, name), nullptr) << "missing typed case: " << name;
+  }
+}
+
 TEST(BackendTestCase, SubCaseOutputsAreElementwiseDifference) {
   auto cases = CollectTestCases("Sub");
   const TestCase *tc = FindCase(cases, "test_cc_sub");

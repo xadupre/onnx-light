@@ -110,40 +110,31 @@ Parsing and serializing options
 - other scenarios can be implemented, such as a callback to allocate directly
   on GPU or any other memory.
 
-.. image:: images/what_is_onnx_light/parsing_1.png
-    :class: quick-tour-graph
-    :alt: Parsing options
+See the current
+`parsing options <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_proto/serialize_options.h>`_.
 
 .. image:: images/what_is_onnx_light/parsing_2.png
     :class: quick-tour-graph
     :alt: Parsing options
 
-.. image:: images/what_is_onnx_light/parsing_3.png
-    :class: quick-tour-graph
-    :alt: Parsing options
+See the current
+`serialization options <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_proto/serialize_options.h>`_.
 
 Kernels
 +++++++
 
 Kernels are kept simple, with a dispatch mechanism to support all types.
-
-.. image:: images/what_is_onnx_light/kernel_1.png
-    :class: quick-tour-graph
-    :alt: A simple kernel
-
-.. image:: images/what_is_onnx_light/kernel_2.png
-    :class: quick-tour-graph
-    :alt: Dispatch mechanism to support all types
+See the current implementation of a
+`simple kernel <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_extensions/kernels/kernels/logical/kernel_not.cc>`_
+and a
+`type-dispatching kernel <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_extensions/kernels/kernels/math/kernel_elu.cc>`_.
 
 Backend tests
 +++++++++++++
 
 They are very similar to the existing ones, except they do not write any
-file.
-
-.. image:: images/what_is_onnx_light/backend_test.png
-    :class: quick-tour-graph
-    :alt: A backend test
+file. See the current
+`Where backend tests <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_extensions/backend_test/cases/logical/cases_where.cc>`_.
 
 Running models
 ++++++++++++++
@@ -220,9 +211,8 @@ may differ.
     :class: quick-tour-graph
     :alt: Symbolic expressions
 
-.. image:: images/what_is_onnx_light/expr_2.png
-    :class: quick-tour-graph
-    :alt: Symbolic expressions
+See the current
+`symbolic-expression tests <https://github.com/xadupre/onnx-light/blob/main/unittests/cc/onnx_extensions/shapes/test_expressions.cc>`_.
 
 Next steps
 ++++++++++

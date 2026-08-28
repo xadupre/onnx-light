@@ -88,11 +88,11 @@ bool GradTanh(const NodeProto &node, const std::string &output_grad,
  * Computes the backward rule for the BatchNormalization operator.
  *
  * @code
- * X, scale, bias, mean, variance --> BatchNormalization --> Y
+ * X, scale, bias, [mean], [variance] --> BatchNormalization --> Y
  *                                                |
  *                                                '--> running_mean, running_var
  *
- * X, scale, bias, mean, variance, dY --> GradBatchNormalization --> dX, dscale, dbias
+ * X, scale, bias, [mean], [variance], dY --> GradBatchNormalization --> dX, dscale, dbias
  *                                                        |
  *                                                        '--> dmean, dvariance
  * @endcode

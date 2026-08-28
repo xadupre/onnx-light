@@ -12,6 +12,7 @@ round-trip tests instead build real protos with
 
 from __future__ import annotations
 
+import math
 import unittest
 from types import SimpleNamespace
 
@@ -208,6 +209,28 @@ class TestTranslateText(unittest.TestCase):
         self.assertIn(
             'g.MakeNode("CustomOp", {"X"}, {"Y"}, "com.example", "custom", attributes_0);', code
         )
+
+    def test_cpp_formats_non_finite_float_attributes(self) -> None:
+        graph = _graph(
+            nodes=[
+                _node(
+                    "CustomOp",
+                    ["X"],
+                    ["Y"],
+                    attributes=[
+                        _attr("nan", type=1, f=math.nan),
+                        _attr("inf", type=1, f=math.inf),
+                    ],
+                )
+            ],
+            inputs=[_vi("X", dims=(1,))],
+            outputs=[_vi("Y", dims=(1,))],
+        )
+        code = translate(
+            _model(graph, opsets=[SimpleNamespace(domain="custom", version=1)]), api="cpp"
+        )
+        self.assertIn("std::numeric_limits<float>::quiet_NaN()", code)
+        self.assertIn("std::numeric_limits<float>::infinity()", code)
 
     def test_builder_skips_initializer_input(self) -> None:
         # ``shape`` is declared both as an initializer and as a graph input.

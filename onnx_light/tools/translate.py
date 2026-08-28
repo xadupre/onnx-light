@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import keyword
+import math
 import textwrap
 from typing import Any
 
@@ -246,6 +247,7 @@ def translate_header(api: str = "onnx-compact") -> str:
             #include "onnx_core/builder/graph_builder.h"
             #include "onnx_op/operator_sets.h"
 
+            #include <limits>
             #include <string>
             #include <vector>
 
@@ -427,6 +429,19 @@ def _cpp_string(value: str) -> str:
     return json.dumps(value)
 
 
+def _cpp_float(value: float) -> str:
+    """Returns a C++ expression for a float value."""
+    if math.isnan(value):
+        return "std::numeric_limits<float>::quiet_NaN()"
+    if math.isinf(value):
+        return (
+            "std::numeric_limits<float>::infinity()"
+            if value > 0
+            else "-std::numeric_limits<float>::infinity()"
+        )
+    return f"{value:.9g}f"
+
+
 def _cpp_tensor_statements(tensor: Any, variable: str) -> list[str]:
     """Returns C++ statements that construct a tensor from its raw bytes."""
     array = _tensor_to_numpy(tensor)
@@ -464,14 +479,16 @@ def _cpp_attribute_statements(node: Any, index: int) -> tuple[list[str], str]:
             ]
         )
         if attr_type == _ATTR_FLOAT:
-            lines.append(f"  {attr_variable}.set_f({float(getattr(attr, 'f', 0.0) or 0.0)!r}f);")
+            lines.append(
+                f"  {attr_variable}.set_f({_cpp_float(float(getattr(attr, 'f', 0.0) or 0.0))});"
+            )
         elif attr_type == _ATTR_INT:
             lines.append(f"  {attr_variable}.set_i({int(getattr(attr, 'i', 0) or 0)});")
         elif attr_type == _ATTR_STRING:
             lines.append(f"  {attr_variable}.set_s({_cpp_string(_s(getattr(attr, 's', b'')))});")
         elif attr_type == _ATTR_FLOATS:
             for value in _iter(getattr(attr, "floats", None)):
-                lines.append(f"  {attr_variable}.add_floats({float(value)!r}f);")
+                lines.append(f"  {attr_variable}.add_floats({_cpp_float(float(value))});")
         elif attr_type == _ATTR_INTS:
             for value in _iter(getattr(attr, "ints", None)):
                 lines.append(f"  {attr_variable}.add_ints({int(value)});")

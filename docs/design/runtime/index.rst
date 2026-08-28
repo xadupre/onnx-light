@@ -55,6 +55,8 @@ nested oversubscription. See :ref:`l-next-steps-prepared-execution`,
 
     library_split
     cplusplus_linking
+    thread_pools
+    loading_and_prepacking
     kernel_tuning
     calibration_profile_store
     arenas

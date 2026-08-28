@@ -180,7 +180,6 @@ Gradients of an ONNX graph can be computed and used to train a model. See
     quick_tour
     getting_started
     design/index
-    technical_details/index
     api/index
     operators/index
     examples

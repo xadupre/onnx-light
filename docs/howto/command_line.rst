@@ -2,14 +2,64 @@
 
 :html_theme.sidebar_secondary.remove:
 
-Command-line interface
-======================
+Command lines
+=============
 
-``onnx-light`` ships a small command-line interface::
+Installing the Python package exposes the ``onnx-light`` executable::
 
     onnx-light <subcommand> [options]
 
-The equivalent ``python -m onnx_light`` invocation remains available.
+The equivalent ``python -m onnx_light`` invocation is useful from an editable
+checkout or when the executable is not on ``PATH``. Both forms call the same
+entry point and accept the same arguments.
+
+Use ``--help`` before or after a subcommand to inspect the installed version:
+
+.. code-block:: bash
+
+    onnx-light --help
+    onnx-light show --help
+    python -m onnx_light kernel --help
+
+Command overview
+----------------
+
+.. list-table::
+    :header-rows: 1
+    :widths: 18 42 40
+
+    * - Command
+      - Purpose
+      - Typical use
+    * - :ref:`fillshape <l-cli-fillshape>`
+      - Infers shapes and optionally writes memory, lifetime, and semantic
+        metadata.
+      - Prepare or inspect a model before optimization or execution.
+    * - :ref:`show <l-cli-show>`
+      - Renders a model as text, a diagram, Python code, or C++ code.
+      - Review a model or generate code that rebuilds it.
+    * - :ref:`run <l-cli-run>`
+      - Generates deterministic inputs and executes a model.
+      - Smoke-test a model with the reference runtime.
+    * - :ref:`backend <l-cli-backend>`
+      - Runs and benchmarks selected C++ backend-test cases.
+      - Measure kernels or compare explicit tuning parameters.
+    * - :ref:`kernel <l-cli-kernel>`
+      - Lists kernels and inspects or calibrates their tuning schemas.
+      - Discover runtime coverage or persist a machine profile.
+
+Output and automation
+---------------------
+
+``show`` writes its rendering to stdout unless ``--output`` is specified.
+``backend`` can write CSV or XLSX reports and both ``backend`` and ``kernel``
+support ``--json`` for machine-readable output. Progress requested with
+``--verbose`` is written separately from structured output where applicable.
+
+Shell scripts should select an explicit output format rather than parse the
+human-readable tables. Run ``onnx-light COMMAND --help`` in the target
+environment because optional runtime components and newly added options may
+differ between installed versions.
 
 .. _l-cli-backend:
 
@@ -170,7 +220,7 @@ Synopsis::
 
     python -m onnx_light fillshape MODEL [--output OUTPUT] [--keep]
                                          [--inplace-info] [--release-info]
-                                         [--shape-tag] [--show]
+                                         [--peak-memory] [--shape-tag] [--show]
                                          [--token NAME=LOW:HIGH ...]
                                          [--verbose [LEVEL]]
 
@@ -205,8 +255,14 @@ Options
 
 ``--release-info``
     After shape inference, compute last-use release hints and record them
-    in each eligible node's ``metadata_props`` under the key
-    ``onnx_light.release_after``.
+    in each eligible node's ``metadata_props`` under the keys
+    ``onnx_light.release_after`` and ``onnx_light.not_used_after``.
+
+``--peak-memory``
+    Compute estimated peak scratch memory for nodes with a registered
+    peak-memory function and concrete input shapes. The estimate is stored in
+    ``metadata_props`` under ``onnx_light.peak_memory``. Unsupported or dynamic
+    nodes are left unchanged.
 
 ``--shape-tag``
     After shape inference, infer semantic ``shape``/``axes``/``weight``/``ambiguous``
@@ -281,6 +337,12 @@ Annotate nodes with release hints:
 
     python -m onnx_light fillshape model.onnx --release-info
 
+Annotate supported nodes with estimated peak scratch memory:
+
+.. code-block:: bash
+
+    python -m onnx_light fillshape model.onnx --peak-memory
+
 Annotate values and nodes with semantic shape/axes/weight/ambiguous tags:
 
 .. code-block:: bash
@@ -333,8 +395,9 @@ See also
 show
 ----
 
-Loads an ONNX model and renders it as plain text, a Mermaid flowchart, an
-SVG image or Graphviz DOT source.  The result is written to stdout by default.
+Loads an ONNX model and renders it as plain text, a Mermaid flowchart, an SVG
+image, Graphviz DOT source, Python code, or C++ code. The result is written to
+stdout by default.
 
 .. code-block:: bash
 
@@ -342,15 +405,18 @@ SVG image or Graphviz DOT source.  The result is written to stdout by default.
 
 Synopsis::
 
-    python -m onnx_light show MODEL [--format {pretty,mermaid,svg,dot}]
+    python -m onnx_light show MODEL
+        [--format {pretty,mermaid,svg,dot,onnx-compact,builder,cpp}]
                                     [--output OUTPUT]
                                     [--shape-inference]
                                     [--no-shapes]
                                     [--include-attributes]
                                     [--include-inplace]
+                                    [--include-release]
                                     [--include-node-tags]
                                     [--no-initializers]
                                     [--direction DIRECTION]
+                                    [--layout {layered,umap}]
                                     [--graphviz GRAPHVIZ_FORMAT]
 
 Positional argument
@@ -362,7 +428,7 @@ Positional argument
 Options
 ^^^^^^^
 
-``--format {pretty,mermaid,svg,dot}`` / ``-f {pretty,mermaid,svg,dot}``
+``--format FORMAT`` / ``-f FORMAT``
     Output format (default: ``pretty``).
 
     * ``pretty`` — compact text listing produced by
@@ -373,6 +439,10 @@ Options
       ``--output``).
     * ``dot`` — Graphviz DOT source produced by
       :func:`~onnx_light.tools.dot.to_dot`.
+    * ``onnx-compact`` — Python code using the compact ONNX-compatible API.
+    * ``builder`` — Python code using
+      :class:`~onnx_light.onnx_core.graph_builder.GraphBuilder`.
+    * ``cpp`` — C++ code that rebuilds the model.
 
 ``--output OUTPUT`` / ``-o OUTPUT``
     Write the rendered output to *OUTPUT* instead of printing to stdout.
@@ -391,6 +461,10 @@ Options
     Show in-place buffer-reuse annotations (``onnx_light.inplace_reuse``
     metadata).
 
+``--include-release``
+    Show ``onnx_light.release_after`` and ``onnx_light.not_used_after``
+    lifetime annotations. Only used by the ``pretty`` format.
+
 ``--include-node-tags``
     Show semantic shape/axes/weight/ambiguous node-tag annotations
     (``onnx_light.node_tag`` metadata).  Only used by the ``pretty`` format.
@@ -402,6 +476,10 @@ Options
 ``--direction DIRECTION``
     Flowchart direction for ``mermaid``, ``svg`` and ``dot`` formats.
     One of ``TB`` (default), ``LR``, ``TD`` or ``BT`` (Mermaid only).
+
+``--layout {layered,umap}``
+    Selects box positioning for SVG output. ``layered`` is the default;
+    ``umap`` requires the optional ``umap-learn`` package.
 
 ``--graphviz GRAPHVIZ_FORMAT``
     Invoke the Graphviz ``dot`` executable on the generated DOT source and
@@ -453,6 +531,14 @@ Render a PNG image via Graphviz (requires ``dot`` on PATH):
 .. code-block:: bash
 
     python -m onnx_light show model.onnx --format dot --graphviz png -o model.png
+
+Generate Python or C++ code that rebuilds the model:
+
+.. code-block:: bash
+
+    onnx-light show model.onnx --format onnx-compact -o model_compact.py
+    onnx-light show model.onnx --format builder -o model_builder.py
+    onnx-light show model.onnx --format cpp -o model.cc
 
 See also
 ^^^^^^^^

@@ -14,6 +14,7 @@ examples and links to its Python and C++ APIs.
     patterns/index
     gradient/index
     runtime/index
+    tuning/index
     compute/index
     expressions/index
     technical/index

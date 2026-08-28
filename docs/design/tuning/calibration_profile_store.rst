@@ -1,3 +1,5 @@
+.. _l-design-calibration-profile-store:
+
 Backend calibration profile storage
 ===================================
 

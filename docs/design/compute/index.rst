@@ -1,19 +1,19 @@
+.. _l-design-compute:
 .. _l-design-shape-inference:
 
-Shape inference
-===============
+Compute
+========
 
-This section gathers the design documentation of the ``onnx_shapes``
-shape-inference engine: the overall algorithm, the symbolic
-dimension-expression library it relies on, the constraint mechanism that
-reconciles inferred and user-declared dimensions, and the coverage report
-that tracks how well the inferred shapes match the backend test
-expectations.
+This section gathers the design documentation for analyses consumed by the
+runtime and optimizer. It currently focuses on the ``onnx_shapes``
+shape-inference engine: the overall algorithm, value-as-shape propagation, the
+constraint mechanism that reconciles inferred and user-declared dimensions,
+and the coverage report that tracks how well inferred shapes match backend
+test expectations.
 
 .. toctree::
     :maxdepth: 1
 
-    expressions
     value_as_shape
     constraints
     sequences_and_subgraphs

@@ -1,7 +1,7 @@
 .. _l-design-runtime:
 
-Runtime Design
-==============
+Runtime
+========
 
 Execution flow
 --------------
@@ -53,6 +53,8 @@ nested oversubscription. See :ref:`l-next-steps-prepared-execution`,
 .. toctree::
     :maxdepth: 1
 
+    library_split
+    cplusplus_linking
     kernel_tuning
     calibration_profile_store
     arenas

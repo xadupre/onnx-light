@@ -1,11 +1,11 @@
 .. _l-design-expressions:
 
-Symbolic expression library (``onnx_light.onnx_core.expressions``)
-====================================================================
+Expressions
+===========
 
-This page describes the design of the symbolic dimension-expression library
-implemented in ``onnx_light/onnx_core/expressions/`` and exposed as the
-Python module :mod:`onnx_light.onnx_core.expressions`.
+The symbolic dimension-expression library is implemented in
+``onnx_light/onnx_core/expressions/`` and exposed as the Python module
+:mod:`onnx_light.onnx_core.expressions`.
 
 The library was ported from
 `yobx/xexpressions <https://github.com/xadupre/yet-another-onnx-builder/tree/main/yobx/xexpressions>`_

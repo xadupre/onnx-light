@@ -340,7 +340,7 @@ def _translate_builder(model: Any, graph: Any) -> str:
         args = [*[repr(value) for value in inputs], f"outputs={outputs!r}"]
         if domain:
             args.append(f"domain={domain!r}")
-        attributes = list(_iter(getattr(node, "attribute", None)))
+        attributes = _node_attributes(node)
         direct_attributes = []
         indirect_attributes = []
         for name, value in attributes:
@@ -462,7 +462,7 @@ def _cpp_tensor_statements(tensor: Any, variable: str) -> list[str]:
 
 def _cpp_attribute_statements(node: Any, index: int) -> tuple[list[str], str]:
     """Returns C++ statements and the attribute argument for ``node``."""
-    attributes = _node_attributes(node)
+    attributes = list(_iter(getattr(node, "attribute", None)))
     if not attributes:
         return [], ""
     variable = f"attributes_{index}"

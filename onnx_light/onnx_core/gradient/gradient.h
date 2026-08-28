@@ -71,6 +71,15 @@ FunctionProto GradientOfNodes(std::span<const NodeProto> nodes, std::span<const 
  * embedding them as graph initializers). This is a common pattern when a model
  * is expressed as a pure function for training purposes.
  *
+ * @code
+ * X --.
+ * W --+--> FunctionProto --> Y
+ *
+ * X --.
+ * W --+--> GradientOfFunction(xs=["X", "W"], y="Y", dy) --> grad_X, grad_W
+ * dy -'
+ * @endcode
+ *
  * @param function  The forward computation as a FunctionProto.
  * @param xs        Variable names (among @p function inputs) to differentiate
  *                  with respect to.

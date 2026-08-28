@@ -18,6 +18,17 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_gradient {
  * returns a FunctionProto that computes the partial derivatives of @p y with
  * respect to each variable in @p xs.
  *
+ * @code
+ * X -----> Mul -----> Y
+ *            ^
+ *            |
+ * W --------'
+ *
+ * X --.
+ * W --+--> GradientOfNodes(xs=["X", "W"], y="Y", dy) --> grad_X, grad_W
+ * dy -'
+ * @endcode
+ *
  * The returned FunctionProto has:
  *   - inputs : xs values followed by zs values, then "dy" (the incoming
  *              gradient of y, typically ones_like(y) for a scalar loss).
@@ -54,6 +65,15 @@ FunctionProto GradientOfNodes(std::span<const NodeProto> nodes, std::span<const 
  * the caller bakes model parameters into the function's input list rather than
  * embedding them as graph initializers). This is a common pattern when a model
  * is expressed as a pure function for training purposes.
+ *
+ * @code
+ * X --.
+ * W --+--> FunctionProto --> Y
+ *
+ * X --.
+ * W --+--> GradientOfFunction(xs=["X", "W"], y="Y", dy) --> grad_X, grad_W
+ * dy -'
+ * @endcode
  *
  * @param function  The forward computation as a FunctionProto.
  * @param xs        Variable names (among @p function inputs) to differentiate

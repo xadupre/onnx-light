@@ -445,7 +445,9 @@ def _cpp_float(value: float) -> str:
 def _cpp_tensor_statements(tensor: Any, variable: str) -> list[str]:
     """Returns C++ statements that construct a tensor from its raw bytes."""
     array = _tensor_to_numpy(tensor)
-    raw_data = ", ".join(f"static_cast<char>({value})" for value in array.tobytes())
+    raw_data = ", ".join(
+        f"static_cast<char>(static_cast<unsigned char>({value}))" for value in array.tobytes()
+    )
     lines = [f"  onnx_light::TensorProto {variable};"]
     lines.append(f"  {variable}.set_name({_cpp_string(_s(getattr(tensor, 'name', '')))});")
     lines.append(
@@ -496,8 +498,10 @@ def _cpp_attribute_statements(node: Any, index: int) -> tuple[list[str], str]:
             for value in _iter(getattr(attr, "strings", None)):
                 lines.append(f"  {attr_variable}.add_strings({_cpp_string(_s(value))});")
         else:
+            attr_name = _s(getattr(attr, "name", ""))
             raise NotImplementedError(
-                f"C++ translation of attribute type {attr_type} is not implemented."
+                f"C++ translation of attribute {attr_name!r} with type {attr_type} "
+                "is not implemented."
             )
     return lines, variable
 

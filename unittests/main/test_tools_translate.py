@@ -182,6 +182,7 @@ class TestTranslateText(unittest.TestCase):
         self.assertIn('g.SetOpsetVersion("", 17);', code)
         self.assertIn('g.MakeInput("X", onnx_light::core::symbolic::TensorType::kFloat', code)
         self.assertIn('initializer_0.set_name("shape");', code)
+        self.assertIn("static_cast<char>(static_cast<unsigned char>(255))", code)
         self.assertIn('g.MakeNode("Reshape", {"X", "shape"}, {"reshaped"});', code)
         self.assertIn("attribute_1_0.add_ints(1);", code)
         self.assertIn("attribute_1_0.add_ints(0);", code)

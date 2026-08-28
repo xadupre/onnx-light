@@ -45,14 +45,17 @@ Started
     :class: sphinx-datatable
 
     * - Plan
-      - Contribution
+      - Remaining work
     * - :ref:`l-next-steps-kernel-parallelization`
-      - Inventories kernel parallel coverage, publishes cross-machine
-        baselines, then migrates measured kernel families through the tuning
-        and calibration APIs.
+      - Publish the ARM64 baseline and calibration reports, compare them with
+        the x86-64 results, calibrate the remaining ``Gemm`` parameters, decide
+        which values are safe portable defaults, and complete cross-platform
+        acceptance and ORT attribution.
     * - :ref:`l-next-steps-model-loading`
-      - Integrates the completed native startup path with ONNX Runtime; native
-        issues #4618--#4623 are closed and issue #4612 remains open.
+      - Implement issue #4612 in an ONNX Runtime fork: retain mapped-payload
+        owners in ``SessionState``, use direct reads for ineligible tensors,
+        run the four-configuration benchmark, and submit the upstream PR. All
+        native dependencies through #4623 are complete.
 
 Completed
 ---------

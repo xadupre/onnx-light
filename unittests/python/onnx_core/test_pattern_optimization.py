@@ -64,7 +64,8 @@ class TestPatternOptimization(ExtTestCase):
             "LocalRewriting("
             "pattern=NegNeg, graph_path=<root>, matched_nodes=2, added_nodes=1)",
         )
-        details = str(rewrites[0])
+        self.assertEqual(str(rewrites[0]), repr(rewrites[0]))
+        details = rewrites[0].to_detailed_string()
         self.assertIn("  graph_path: <root>\n", details)
         self.assertIn("  matched_nodes:\n    positions: [0, 1]\n", details)
         self.assertIn(
@@ -298,7 +299,7 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(len(rewrites), 1)
         self.assertEqual(rewrites[0].graph_path, ["then_branch"])
         self.assertIn("graph_path=then_branch", repr(rewrites[0]))
-        self.assertIn("  graph_path: then_branch\n", str(rewrites[0]))
+        self.assertIn("  graph_path: then_branch\n", rewrites[0].to_detailed_string())
         self.assertTrue(any(item.graph_path == ["then_branch"] for item in report.subgraphs))
 
     def test_render_rst_standard_patterns_table_lists_every_pattern(self):

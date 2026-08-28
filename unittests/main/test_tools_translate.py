@@ -163,14 +163,11 @@ class TestTranslateText(unittest.TestCase):
         code = translate(self._simple_model(), api="builder")
         self.assertIn("g = GraphBuilder('simple')", code)
         self.assertIn("g.set_opset_version('', 17)", code)
-        self.assertIn("g.make_input(oh.make_tensor_value_info('X', onnx.TensorProto.FLOAT", code)
-        self.assertIn(
-            "g.make_initializer(onh.from_array(np.array([-1, 1], dtype=np.int64), name='shape'))",
-            code,
-        )
-        self.assertIn("g.make_node('Reshape', ['X', 'shape'], outputs=['reshaped'])", code)
-        self.assertIn("attributes={'perm': [1, 0]}", code)
-        self.assertIn("g.make_output(oh.make_tensor_value_info('Y', onnx.TensorProto.FLOAT", code)
+        self.assertIn("g.inp('X', onnx.TensorProto.FLOAT, (None, None))", code)
+        self.assertIn("g.init(np.array([-1, 1], dtype=np.int64), name='shape')", code)
+        self.assertIn("g.op.Reshape('X', 'shape', outputs=['reshaped'])", code)
+        self.assertIn("perm=[1, 0]", code)
+        self.assertIn("g.out('Y', onnx.TensorProto.FLOAT, (None, None))", code)
         self.assertIn("model = g.to_onnx('model', ir_version=8)", code)
 
     def test_builder_skips_initializer_input(self) -> None:
@@ -183,8 +180,23 @@ class TestTranslateText(unittest.TestCase):
             name="g",
         )
         code = translate(_model(graph), api="builder")
-        self.assertNotIn("g.make_input(oh.make_tensor_value_info('shape'", code)
-        self.assertIn("g.make_initializer(", code)
+        self.assertNotIn("g.inp('shape'", code)
+        self.assertIn("g.init(", code)
+
+    def test_builder_preserves_non_identifier_attribute_names(self) -> None:
+        graph = _graph(
+            nodes=[
+                _node(
+                    "CustomOp", ["X"], ["Y"], attributes=[_attr("not-an-identifier", type=2, i=1)]
+                )
+            ],
+            inputs=[_vi("X", dims=(1,))],
+            outputs=[_vi("Y", dims=(1,))],
+        )
+        code = translate(
+            _model(graph, opsets=[SimpleNamespace(domain="custom", version=1)]), api="builder"
+        )
+        self.assertIn("g.op.CustomOp('X', outputs=['Y'], **{'not-an-identifier': 1})", code)
 
     def test_graph_input(self) -> None:
         # A bare GraphProto is accepted (no model wrapper).

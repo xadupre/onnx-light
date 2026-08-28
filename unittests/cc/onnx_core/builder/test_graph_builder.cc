@@ -177,6 +177,41 @@ TEST(GraphBuilder, ToModelProducesGraphWithOpset) {
   ASSERT_GT(model.opset_import().size(), 0);
 }
 
+TEST(GraphBuilder, BuildsTranslatedLinearModel) {
+  core::builder::GraphBuilder builder("linear", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  TensorProto weight;
+  weight.set_name("W");
+  weight.set_data_type(TensorProto::DataType::FLOAT);
+  weight.add_dims(3);
+  weight.add_float_data(1.0f);
+  weight.add_float_data(2.0f);
+  weight.add_float_data(3.0f);
+  builder.MakeInitializer(weight);
+
+  TensorProto bias;
+  bias.set_name("B");
+  bias.set_data_type(TensorProto::DataType::FLOAT);
+  bias.add_dims(3);
+  bias.add_float_data(0.5f);
+  bias.add_float_data(0.5f);
+  bias.add_float_data(0.5f);
+  builder.MakeInitializer(bias);
+
+  const std::vector<std::string> multiplied = builder.MakeNode("Mul", {"X", "W"}, {"XW"});
+  const std::vector<std::string> added = builder.MakeNode("Add", {multiplied[0], "B"}, {"Y"});
+  builder.MakeOutput(added[0], core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  const ModelProto model = builder.ToModel();
+  ASSERT_EQ(model.graph().node().size(), 2);
+  EXPECT_EQ(model.graph().node()[0].op_type().value(), "Mul");
+  EXPECT_EQ(model.graph().node()[1].op_type().value(), "Add");
+  EXPECT_EQ(model.graph().initializer().size(), 2);
+  EXPECT_EQ(model.graph().output()[0].name().value(), "Y");
+}
+
 TEST(GraphBuilder, ToFunctionRejectsInitializers) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeExternalInitializer("w", core::symbolic::TensorType::kFloat, {2, 2}, "w.bin", 0, 16);

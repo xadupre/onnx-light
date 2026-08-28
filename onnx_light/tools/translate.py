@@ -8,8 +8,8 @@ Two output *flavours* (``api``) are supported:
   `yet-another-onnx-builder <https://github.com/xadupre/yet-another-onnx-builder>`_.
 * ``"builder"`` -- a plain Python script that rebuilds the same model with the
   incremental :class:`onnx_light.onnx_core.graph_builder.GraphBuilder`
-  (``g.make_input(...)``, ``g.make_node(...)``, ``g.make_output(...)``,
-  ``g.to_onnx(...)``).
+  (``g.inp(...)``, ``g.init(...)``, ``g.op.<operator>(...)``,
+  ``g.out(...)``, ``g.to_onnx(...)``).
 
 Both flavours are pure Python and only rely on the attributes of the standard
 ONNX message types (``ModelProto``, ``GraphProto``, ``NodeProto``,
@@ -27,6 +27,7 @@ Example::
 
 from __future__ import annotations
 
+import keyword
 import textwrap
 from typing import Any
 
@@ -158,6 +159,15 @@ def _node_expr(node: Any) -> str:
     for name, value in _node_attributes(node):
         args.append(f"{name}={value}")
     return f"oh.make_node({', '.join(args)})"
+
+
+def _builder_value_info_args(value_info: Any) -> list[str]:
+    """Returns compact builder arguments for a value info."""
+    return [
+        repr(_s(getattr(value_info, "name", ""))),
+        f"onnx.TensorProto.{_dtype_enum_name(_elem_type(value_info))}",
+        repr(_shape_tuple(value_info)),
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -299,30 +309,46 @@ def _translate_builder(model: Any, graph: Any) -> str:
             # An initializer that is also listed as a graph input; the builder
             # declares it once as an initializer below.
             continue
-        expr = _value_info_expr(input_name, _elem_type(inp), _shape_tuple(inp))
-        lines.append(f"g.make_input({expr})")
+        args = _builder_value_info_args(inp)
+        lines.append(f"g.inp({', '.join(args)})")
 
     for init in _iter(getattr(graph, "initializer", None)):
-        expr = _from_array_expr(init, _s(getattr(init, "name", "")))
-        lines.append(f"g.make_initializer({expr})")
+        array = _tensor_to_numpy(init)
+        name = _s(getattr(init, "name", ""))
+        lines.append(f"g.init({_array_expr(array)}, name={name!r})")
 
     for node in _iter(getattr(graph, "node", None)):
         op_type = _s(getattr(node, "op_type", ""))
         inputs = [_s(i) for i in _iter(getattr(node, "input", None))]
         outputs = [_s(o) for o in _iter(getattr(node, "output", None))]
         domain = _s(getattr(node, "domain", "") or "")
-        args = [f"{op_type!r}", repr(inputs), f"outputs={outputs!r}"]
+        args = [*[repr(value) for value in inputs], f"outputs={outputs!r}"]
         if domain:
             args.append(f"domain={domain!r}")
         attributes = _node_attributes(node)
-        if attributes:
-            attrs = ", ".join(f"{k!r}: {v}" for k, v in attributes)
-            args.append(f"attributes={{{attrs}}}")
-        lines.append(f"g.make_node({', '.join(args)})")
+        direct_attributes = []
+        indirect_attributes = []
+        for name, value in attributes:
+            if (
+                name.isidentifier()
+                and not keyword.iskeyword(name)
+                and name not in {"domain", "name", "outputs"}
+            ):
+                direct_attributes.append((name, value))
+            else:
+                indirect_attributes.append((name, value))
+        args.extend(f"{name}={value}" for name, value in direct_attributes)
+        if indirect_attributes:
+            attrs = ", ".join(f"{name!r}: {value}" for name, value in indirect_attributes)
+            args.append(f"**{{{attrs}}}")
+        lines.append(f"g.op.{op_type}({', '.join(args)})")
 
     for out in _iter(getattr(graph, "output", None)):
-        expr = _value_info_expr(_s(getattr(out, "name", "")), _elem_type(out), _shape_tuple(out))
-        lines.append(f"g.make_output({expr})")
+        elem_type = _elem_type(out)
+        if elem_type:
+            lines.append(f"g.out({', '.join(_builder_value_info_args(out))})")
+        else:
+            lines.append(f"g.out({_s(getattr(out, 'name', ''))!r})")
 
     if ir_version:
         lines.append(f"model = g.to_onnx('model', ir_version={ir_version})")

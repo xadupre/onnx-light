@@ -140,6 +140,11 @@ class TestTranslateText(unittest.TestCase):
         header = translate_header("builder")
         self.assertIn("from onnx_light.onnx_core.graph_builder import GraphBuilder", header)
 
+    def test_header_cpp(self) -> None:
+        header = translate_header("cpp")
+        self.assertIn('#include "onnx_core/builder/graph_builder.h"', header)
+        self.assertIn('#include "onnx_op/operator_sets.h"', header)
+
     def test_header_unknown(self) -> None:
         with self.assertRaises(ValueError):
             translate_header("does-not-exist")
@@ -169,6 +174,18 @@ class TestTranslateText(unittest.TestCase):
         self.assertIn("perm=[1, 0]", code)
         self.assertIn("g.out('Y', onnx.TensorProto.FLOAT, (None, None))", code)
         self.assertIn("model = g.to_onnx('model', ir_version=8)", code)
+
+    def test_cpp_structure(self) -> None:
+        code = translate(self._simple_model(), api="cpp")
+        self.assertIn("onnx_light::ModelProto BuildModel()", code)
+        self.assertIn('g.SetOpsetVersion("", 17);', code)
+        self.assertIn('g.MakeInput("X", onnx_light::core::symbolic::TensorType::kFloat', code)
+        self.assertIn('initializer_0.set_name("shape");', code)
+        self.assertIn('g.MakeNode("Reshape", {"X", "shape"}, {"reshaped"});', code)
+        self.assertIn("attribute_1_0.add_ints(1);", code)
+        self.assertIn("attribute_1_0.add_ints(0);", code)
+        self.assertIn('g.MakeOutput("Y", onnx_light::core::symbolic::TensorType::kFloat', code)
+        self.assertIn("return g.ToModel(8);", code)
 
     def test_builder_skips_initializer_input(self) -> None:
         # ``shape`` is declared both as an initializer and as a graph input.

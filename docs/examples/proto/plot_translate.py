@@ -15,6 +15,8 @@ Two *flavours* are available:
   :class:`~onnx_light.onnx_core.graph_builder.GraphBuilder`
   (``g.inp(...)``, ``g.init(...)``, ``g.op.<operator>(...)``,
   ``g.out(...)``, ``g.to_onnx(...)``).
+* ``api="cpp"`` — a C++ function that rebuilds the model with
+  :cpp:class:`~onnx_light::core::builder::GraphBuilder`.
 
 :func:`~onnx_light.tools.translate_header` returns the matching import
 header, so ``translate_header(api) + translate(model, api)`` is a fully
@@ -83,6 +85,18 @@ print(compact_code)
 builder_code = translate_header("builder") + translate(model, api="builder")
 print("\n=== builder ===")
 print(builder_code)
+
+
+#####################################
+# C++ flavour
+# +++++++++++
+#
+# The ``cpp`` flavour emits a standalone ``BuildModel`` function using the
+# native :cpp:class:`~onnx_light::core::builder::GraphBuilder`.
+
+cpp_code = translate_header("cpp") + translate(model, api="cpp")
+print("\n=== cpp ===")
+print(cpp_code)
 
 
 #####################################

@@ -19,9 +19,9 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_gradient {
  * respect to each variable in @p xs.
  *
  * @code
- * X ---.
- *      +--> Mul --> Y
- * W ---'
+ * X --.
+ *     +--> [nodes] --> Y
+ * W --'
  *
  * X ---.
  *      |

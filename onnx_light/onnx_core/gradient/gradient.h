@@ -21,10 +21,9 @@ namespace ONNX_LIGHT_NAMESPACE::core::gradient {
  * For example, the forward graph:
  *
  * @code
- * X -----> Mul -----> Y
- *            ^
- *            |
- * W --------'
+ * X --.
+ *     +--> [nodes] --> Y
+ * W --'
  * @endcode
  *
  * produces a backward function with the following interface:

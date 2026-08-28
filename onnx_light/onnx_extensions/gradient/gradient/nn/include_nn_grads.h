@@ -41,9 +41,9 @@ bool GradConv(const NodeProto &node, const std::string &output_grad,
  * @code
  * A --> Relu --> C
  *
- * A --> Sign --> Relu (mask) --.
- *                              +--> Mul --> dA
- * dC -------------------------'
+ * A --> Sign --> Relu --> mask --.
+ *                                 +--> Mul --> dA
+ * dC ----------------------------'
  * @endcode
  */
 bool GradRelu(const NodeProto &node, const std::string &output_grad,

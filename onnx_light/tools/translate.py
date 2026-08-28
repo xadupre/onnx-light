@@ -29,8 +29,8 @@ Example::
 
 from __future__ import annotations
 
-import keyword
 import json
+import keyword
 import textwrap
 from typing import Any
 
@@ -499,7 +499,7 @@ def _translate_cpp(model: Any, graph: Any) -> str:
         "      });",
     ]
     for domain, version in _opsets(model):
-        lines.append(f"  g.SetOpsetVersion({domain!r}, {version});")
+        lines.append(f"  g.SetOpsetVersion({_cpp_string(domain)}, {version});")
     for inp in _iter(getattr(graph, "input", None)):
         input_name = _s(getattr(inp, "name", ""))
         if input_name not in initializer_names:
@@ -556,7 +556,7 @@ def translate(proto: Any, api: str = "onnx-compact") -> str:
         api: target flavour, ``"onnx-compact"`` (default), ``"builder"`` or ``"cpp"``.
 
     Returns:
-        The generated Python code as a string (without the import header, see
+        The generated Python or C++ code as a string (without the matching header, see
         :func:`translate_header`).
     """
     if isinstance(proto, str):

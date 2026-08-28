@@ -1833,7 +1833,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Print a human-readable, Mermaid, SVG or Python-code rendering of a model.",
         description=(
             "Loads an ONNX model and renders it as plain text (pretty), a Mermaid "
-            "flowchart, an SVG image, Graphviz DOT source or Python code that "
+            "flowchart, an SVG image, Graphviz DOT source or code that "
             "rebuilds the model (onnx-compact/builder/cpp). The result is written to "
             "stdout by default."
         ),
@@ -1849,7 +1849,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "Output format: 'pretty' (default) for a compact text listing, "
             "'mermaid' for a Mermaid flowchart, 'svg' for an SVG image, "
             "'dot' for Graphviz DOT source, or 'onnx-compact'/'builder'/'cpp' for "
-            "Python code that rebuilds the model (see onnx_light.tools.translate)."
+            "code that rebuilds the model (Python for onnx-compact/builder, C++ for cpp; "
+            "see onnx_light.tools.translate)."
         ),
     )
     show_parser.add_argument(

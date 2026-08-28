@@ -187,6 +187,27 @@ class TestTranslateText(unittest.TestCase):
         self.assertIn('g.MakeOutput("Y", onnx_light::core::symbolic::TensorType::kFloat', code)
         self.assertIn("return g.ToModel(8);", code)
 
+    def test_cpp_preserves_custom_domain_attributes(self) -> None:
+        graph = _graph(
+            nodes=[
+                _node(
+                    "CustomOp",
+                    ["X"],
+                    ["Y"],
+                    attributes=[_attr("alpha", type=1, f=0.5)],
+                    domain="com.example",
+                )
+            ],
+            inputs=[_vi("X", dims=(1,))],
+            outputs=[_vi("Y", dims=(1,))],
+        )
+        code = translate(
+            _model(graph, opsets=[SimpleNamespace(domain="com.example", version=1)]), api="cpp"
+        )
+        self.assertIn(
+            'g.MakeNode("CustomOp", {"X"}, {"Y"}, "com.example", "", attributes_0);', code
+        )
+
     def test_builder_skips_initializer_input(self) -> None:
         # ``shape`` is declared both as an initializer and as a graph input.
         graph = _graph(

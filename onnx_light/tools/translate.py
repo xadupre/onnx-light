@@ -13,8 +13,8 @@ Two output *flavours* (``api``) are supported:
 * ``"cpp"`` -- a C++ function that rebuilds the model with
   :cpp:class:`core::builder::GraphBuilder`.
 
-Both flavours are pure Python and only rely on the attributes of the standard
-ONNX message types (``ModelProto``, ``GraphProto``, ``NodeProto``,
+All flavours only rely on the attributes of the standard ONNX message types
+(``ModelProto``, ``GraphProto``, ``NodeProto``,
 ``ValueInfoProto``, ``TensorProto``, ``AttributeProto`` and
 ``TensorShapeProto``); they therefore work both with messages built by
 :mod:`onnx_light` and with messages built by the upstream :mod:`onnx` package.
@@ -529,7 +529,9 @@ def _translate_cpp(model: Any, graph: Any) -> str:
         if domain:
             args.append(_cpp_string(domain))
         if attributes:
-            args.extend(['""', attributes])
+            if not domain:
+                args.append('""')
+            args.append(attributes)
         lines.append(f"  g.MakeNode({', '.join(args)});")
     for out in _iter(getattr(graph, "output", None)):
         cpp_type = _CPP_TENSOR_TYPES.get(_elem_type(out))

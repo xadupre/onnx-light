@@ -18,6 +18,23 @@ namespace ONNX_LIGHT_NAMESPACE::core::gradient {
  * returns a FunctionProto that computes the partial derivatives of @p y with
  * respect to each variable in @p xs.
  *
+ * For example, the forward graph:
+ *
+ * @code
+ * X -----> Mul -----> Y
+ *            ^
+ *            |
+ * W --------'
+ * @endcode
+ *
+ * produces a backward function with the following interface:
+ *
+ * @code
+ * X --.
+ * W --+--> GradientOfNodes(xs=["X", "W"], y="Y", dy) --> grad_X, grad_W
+ * dy -'
+ * @endcode
+ *
  * The returned FunctionProto has:
  *   - inputs : xs values followed by zs values, then "dy" (the incoming
  *              gradient of y, typically ones_like(y) for a scalar loss).

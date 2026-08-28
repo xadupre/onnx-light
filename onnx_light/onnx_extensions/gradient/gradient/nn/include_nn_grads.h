@@ -41,9 +41,9 @@ bool GradConv(const NodeProto &node, const std::string &output_grad,
  * @code
  * A --> Relu --> C
  *
- * A --> Sign --> Relu --.
- *                       +--> Mul --> dA
- * dC ------------------'
+ * A --> Sign --> Relu (mask) --.
+ *                              +--> Mul --> dA
+ * dC -------------------------'
  * @endcode
  */
 bool GradRelu(const NodeProto &node, const std::string &output_grad,
@@ -89,9 +89,12 @@ bool GradTanh(const NodeProto &node, const std::string &output_grad,
  *
  * @code
  * X, scale, bias, mean, variance --> BatchNormalization --> Y
+ *                                                |
+ *                                                '--> running_mean, running_var
  *
- * X, scale, bias, mean, variance, dY --> GradBatchNormalization --> dX, dscale, dbias, dmean,
- * dvariance
+ * X, scale, bias, mean, variance, dY --> GradBatchNormalization --> dX, dscale, dbias
+ *                                                        |
+ *                                                        '--> dmean, dvariance
  * @endcode
  */
 bool GradBatchNormalization(const NodeProto &node, const std::string &output_grad,

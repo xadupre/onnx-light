@@ -58,7 +58,7 @@ bool GradRelu(const NodeProto &node, const std::string &output_grad,
  * @code
  * A --> Sigmoid --> C
  *
- * C --> Sub(1, C) --> one_minus_C
+ * 1, C --> Sub --> one_minus_C
  * C, one_minus_C --> Mul --> local_grad
  * dC, local_grad --> Mul --> dA
  * @endcode
@@ -75,8 +75,9 @@ bool GradSigmoid(const NodeProto &node, const std::string &output_grad,
  * @code
  * A --> Tanh --> C
  *
- * C --> Mul --> 1 - C^2 --.
- * dC ---------------------+--> Mul --> dA
+ * C, C --> Mul --> C^2
+ * 1, C^2 --> Sub --> local_grad
+ * dC, local_grad --> Mul --> dA
  * @endcode
  */
 bool GradTanh(const NodeProto &node, const std::string &output_grad,

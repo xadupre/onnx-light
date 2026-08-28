@@ -309,6 +309,28 @@ TEST(CpuExecutor, CostModelScalesParticipantsWithWork) {
       2u);
 }
 
+TEST(CpuExecutor, CostModelAmortizesRecurringDispatch) {
+  CpuExecutorRegistry registry(1);
+  std::shared_ptr<CpuExecutor> executor = registry.Acquire(NoAffinityPolicy(4));
+  const CpuLoopCost exp_float32_avx2{4.0, 4.0, 1.5};
+
+  EXPECT_EQ(executor->PlanParallelFor(32768, exp_float32_avx2).participants, 1u);
+  EXPECT_GT(executor->PlanParallelFor(65536, exp_float32_avx2).participants, 1u);
+  EXPECT_EQ(executor->PlanParallelFor(131072, exp_float32_avx2).participants, 4u);
+}
+
+TEST(CpuExecutor, CostModelDoesNotFillHighCoreExecutorForModestWork) {
+  std::unique_ptr<CpuExecutor> four_threads = CpuExecutor::CreateExternal(4, &DispatchInline);
+  std::unique_ptr<CpuExecutor> high_core = CpuExecutor::CreateExternal(64, &DispatchInline);
+  const CpuLoopCost exp_float32_avx2{4.0, 4.0, 1.5};
+  const CpuParallelPlan four_thread_plan = four_threads->PlanParallelFor(131072, exp_float32_avx2);
+  const CpuParallelPlan high_core_plan = high_core->PlanParallelFor(131072, exp_float32_avx2);
+
+  EXPECT_EQ(high_core_plan.participants, four_thread_plan.participants);
+  EXPECT_EQ(high_core_plan.participants, 4u);
+  EXPECT_LT(high_core_plan.participants, high_core->effective_threads());
+}
+
 TEST(CpuExecutor, CostBasedParallelForCoversRange) {
   CpuExecutorRegistry registry(1);
   std::shared_ptr<CpuExecutor> executor = registry.Acquire(NoAffinityPolicy(4));

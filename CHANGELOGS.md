@@ -33,6 +33,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixes
 
+- Based cost-aware CPU loop planning on recurring warm-pool dispatch and
+  participant coordination instead of one-time executor startup.
 - Prevented a lost thread-pool completion notification from blocking parallel regions,
   especially during repeated small GEMM executions on Windows.
 - Fixed the Linux release build when the CPU helper is conditionally unused.

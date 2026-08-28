@@ -315,8 +315,11 @@ CpuParallelPlan
 CpuExecutor::PlanParallelFor(int64_t total, const CpuLoopCost &cost,
                              const CpuParallelConstraints &constraints) const noexcept {
   constexpr double kMemoryCyclesPerByte = 11.0 / 64.0;
-  constexpr double kStartupCycles = 1500000.0;
-  constexpr double kPerParticipantCycles = 50000.0;
+  // Workers are persistent, so each operation pays warm dispatch and
+  // completion costs rather than thread creation.
+  constexpr double kDispatchCycles = 50000.0;
+  // Additional participants add serialized wake and coordination work.
+  constexpr double kPerAdditionalParticipantCycles = 20000.0;
   constexpr double kTaskCycles = 40000.0;
 
   const uint32_t participant_limit =
@@ -337,22 +340,39 @@ CpuExecutor::PlanParallelFor(int64_t total, const CpuLoopCost &cost,
     return {};
   }
 
-  const double total_cycles = static_cast<double>(total) * iteration_cycles;
-  const double estimated =
-      std::floor((total_cycles - kStartupCycles) / kPerParticipantCycles + 0.9);
-  uint32_t participants =
-      estimated > 1.0
-          ? std::min<uint32_t>(
-                participant_limit,
-                static_cast<uint32_t>(std::min(estimated, static_cast<double>(participant_limit))))
-          : 1;
-  if (participants > 1 && constraints.preferred_participants != 0) {
-    participants = std::min(constraints.preferred_participants, participant_limit);
-  }
+  const double total_cycles =
+      static_cast<double>(total) > std::numeric_limits<double>::max() / iteration_cycles
+          ? std::numeric_limits<double>::max()
+          : static_cast<double>(total) * iteration_cycles;
   const double grain = std::ceil(kTaskCycles / iteration_cycles);
   const int64_t grain_size = grain >= static_cast<double>(std::numeric_limits<int64_t>::max())
                                  ? std::numeric_limits<int64_t>::max()
                                  : std::max<int64_t>(static_cast<int64_t>(grain), 1);
+  const int64_t useful_blocks = total / grain_size;
+  if (useful_blocks <= 1) {
+    return CpuParallelPlan{grain_size, 1};
+  }
+  const uint32_t candidate_limit = useful_blocks >= static_cast<int64_t>(participant_limit)
+                                       ? participant_limit
+                                       : static_cast<uint32_t>(useful_blocks);
+  const double ideal = std::sqrt(total_cycles / kPerAdditionalParticipantCycles);
+  const uint32_t lower =
+      std::isfinite(ideal)
+          ? std::clamp(static_cast<uint32_t>(
+                           std::min(std::floor(ideal), static_cast<double>(candidate_limit))),
+                       2u, candidate_limit)
+          : candidate_limit;
+  const uint32_t upper = std::min(lower + 1, candidate_limit);
+  const auto elapsed_cycles = [total_cycles](uint32_t candidate) {
+    return kDispatchCycles + total_cycles / static_cast<double>(candidate) +
+           kPerAdditionalParticipantCycles * static_cast<double>(candidate - 1);
+  };
+  uint32_t participants = elapsed_cycles(upper) < elapsed_cycles(lower) ? upper : lower;
+  if (!(elapsed_cycles(participants) < total_cycles)) {
+    participants = 1;
+  } else if (constraints.preferred_participants != 0) {
+    participants = std::min(constraints.preferred_participants, participant_limit);
+  }
   return CpuParallelPlan{grain_size, participants};
 }
 

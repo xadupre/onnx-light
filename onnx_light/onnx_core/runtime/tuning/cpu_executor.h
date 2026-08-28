@@ -178,8 +178,9 @@ public:
   /**
    * Plans a loop from its per-iteration memory and compute cost.
    *
-   * The model amortizes executor startup and per-participant overhead, then
-   * chooses a task grain large enough to keep dispatch overhead bounded.
+   * The model compares serial execution with warm-pool dispatch, divided loop
+   * work, and coordination for each additional participant. It also chooses a
+   * task grain large enough to keep dispatch overhead bounded.
    * ``maximum_participants == 0`` uses the session limit.
    */
   CpuParallelPlan PlanParallelFor(int64_t total, const CpuLoopCost &cost,

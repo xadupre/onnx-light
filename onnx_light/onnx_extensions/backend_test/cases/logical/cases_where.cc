@@ -7,7 +7,41 @@
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
+#include <type_traits>
+#include <vector>
+
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
+
+namespace {
+
+template <typename T>
+Tensor MakeWhereTensor(const std::string &name, const std::vector<int64_t> &shape,
+                       const std::vector<T> &values) {
+  if constexpr (std::is_same_v<T, float>) {
+    return Tensor::FromFloat(name, shape, values);
+  } else {
+    return Tensor::FromDouble(name, shape, values);
+  }
+}
+
+template <typename T>
+void RegisterWhereSignedZeroCase(
+    std::vector<TestCase> &registry, const onnx_kernels::kernel::Where &where_kernel,
+    const OpsetId &opset, const std::string &name, const std::vector<uint8_t> &condition_values,
+    const std::vector<int64_t> &x_shape, const std::vector<T> &x_values,
+    const std::vector<int64_t> &y_shape, const std::vector<T> &y_values) {
+  NodeProto node = MakeNode("Where", {"condition", "x", "y"}, {"output"});
+  Expect(registry, std::move(node), name, {opset},
+         [where_kernel, condition_values, x_shape, x_values, y_shape, y_values]() -> IoData {
+           Tensor condition = Tensor::FromBool("condition", {1}, condition_values);
+           Tensor x = MakeWhereTensor<T>("x", x_shape, x_values);
+           Tensor y = MakeWhereTensor<T>("y", y_shape, y_values);
+           Tensor output = where_kernel(condition, x, y);
+           return IoData{{std::move(condition), std::move(x), std::move(y)}, {std::move(output)}};
+         });
+}
+
+} // namespace
 
 void RegisterWhereCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
@@ -68,6 +102,34 @@ void RegisterWhereCases(std::vector<TestCase> &registry, TestMode mode) {
              return IoData{{std::move(condition), std::move(x), std::move(y)}, {std::move(output)}};
            });
   }
+
+  // Mirrors ONNX Runtime's signed-zero regression coverage from
+  // microsoft/onnxruntime#32192. Where must preserve the sign of a selected
+  // negative zero for equal-shaped and broadcast inputs.
+  RegisterWhereSignedZeroCase<float>(registry, where_kernel, opset,
+                                     "test_cc_where_signed_zero_selected_from_x_float", {1}, {1},
+                                     {-0.0F}, {1}, {0.0F});
+  RegisterWhereSignedZeroCase<float>(registry, where_kernel, opset,
+                                     "test_cc_where_signed_zero_selected_from_y_float", {0}, {1},
+                                     {1.0F}, {1}, {-0.0F});
+  RegisterWhereSignedZeroCase<float>(registry, where_kernel, opset,
+                                     "test_cc_where_signed_zero_selected_from_broadcast_y_float",
+                                     {0}, {4}, {1.0F, 2.0F, 3.0F, 4.0F}, {1}, {-0.0F});
+  RegisterWhereSignedZeroCase<float>(registry, where_kernel, opset,
+                                     "test_cc_where_signed_zero_selected_from_broadcast_x_float",
+                                     {1}, {1}, {-0.0F}, {4}, {1.0F, 2.0F, 3.0F, 4.0F});
+  RegisterWhereSignedZeroCase<double>(registry, where_kernel, opset,
+                                      "test_cc_where_signed_zero_selected_from_x_double", {1}, {1},
+                                      {-0.0}, {1}, {0.0});
+  RegisterWhereSignedZeroCase<double>(registry, where_kernel, opset,
+                                      "test_cc_where_signed_zero_selected_from_y_double", {0}, {1},
+                                      {1.0}, {1}, {-0.0});
+  RegisterWhereSignedZeroCase<double>(registry, where_kernel, opset,
+                                      "test_cc_where_signed_zero_selected_from_broadcast_y_double",
+                                      {0}, {4}, {1.0, 2.0, 3.0, 4.0}, {1}, {-0.0});
+  RegisterWhereSignedZeroCase<double>(registry, where_kernel, opset,
+                                      "test_cc_where_signed_zero_selected_from_broadcast_x_double",
+                                      {1}, {1}, {-0.0}, {4}, {1.0, 2.0, 3.0, 4.0});
 
   // Additional cases covering the remaining x/y dtypes supported by the Where
   // kernel. ``condition`` is always BOOL; ``x`` and ``y`` share the dtype.

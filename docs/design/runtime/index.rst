@@ -55,8 +55,6 @@ nested oversubscription. See :ref:`l-next-steps-prepared-execution`,
 
     library_split
     cplusplus_linking
-    kernel_tuning
-    calibration_profile_store
     arenas
     test_coverage
     runtime_coverage

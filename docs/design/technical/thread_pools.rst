@@ -1,3 +1,4 @@
+.. _l-design-runtime-thread-pools:
 .. _l-technical-details-thread-pools:
 
 Thread-pool dispatch in onnx-light, OpenMP, and ONNX Runtime

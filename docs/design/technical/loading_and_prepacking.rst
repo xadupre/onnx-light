@@ -1,3 +1,4 @@
+.. _l-design-runtime-loading-prepacking:
 .. _l-technical-details-loading-prepacking:
 
 Overlapping ONNX loading and prepacking

@@ -53,6 +53,7 @@ sphinx_gallery_conf = {
     # path to your examples scripts
     "examples_dirs": [
         os.path.join(os.path.dirname(__file__), "examples", "runtime"),
+        os.path.join(os.path.dirname(__file__), "examples", "tuning"),
         os.path.join(os.path.dirname(__file__), "examples", "proto"),
         os.path.join(os.path.dirname(__file__), "examples", "patterns"),
         os.path.join(os.path.dirname(__file__), "examples", "gradient"),
@@ -62,6 +63,7 @@ sphinx_gallery_conf = {
     # path where to save gallery generated examples
     "gallery_dirs": [
         "auto_examples_runtime",
+        "auto_examples_tuning",
         "auto_examples_proto",
         "auto_examples_patterns",
         "auto_examples_gradient",

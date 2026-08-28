@@ -233,6 +233,17 @@ class TestTranslateText(unittest.TestCase):
         self.assertIn("std::numeric_limits<float>::quiet_NaN()", code)
         self.assertIn("std::numeric_limits<float>::infinity()", code)
 
+    def test_cpp_rejects_unsupported_attribute_type(self) -> None:
+        graph = _graph(
+            nodes=[_node("CustomOp", ["X"], ["Y"], attributes=[_attr("value", type=4)])],
+            inputs=[_vi("X", dims=(1,))],
+            outputs=[_vi("Y", dims=(1,))],
+        )
+        with self.assertRaisesRegex(NotImplementedError, "attribute 'value' with type 4"):
+            translate(
+                _model(graph, opsets=[SimpleNamespace(domain="custom", version=1)]), api="cpp"
+            )
+
     def test_builder_skips_initializer_input(self) -> None:
         # ``shape`` is declared both as an initializer and as a graph input.
         graph = _graph(

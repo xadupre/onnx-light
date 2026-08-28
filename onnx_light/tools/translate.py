@@ -340,7 +340,7 @@ def _translate_builder(model: Any, graph: Any) -> str:
         args = [*[repr(value) for value in inputs], f"outputs={outputs!r}"]
         if domain:
             args.append(f"domain={domain!r}")
-        attributes = _node_attributes(node)
+        attributes = list(_iter(getattr(node, "attribute", None)))
         direct_attributes = []
         indirect_attributes = []
         for name, value in attributes:
@@ -470,6 +470,12 @@ def _cpp_attribute_statements(node: Any, index: int) -> tuple[list[str], str]:
     for attr_index, attr in enumerate(_iter(getattr(node, "attribute", None))):
         attr_variable = f"attribute_{index}_{attr_index}"
         attr_type = int(getattr(attr, "type", 0) or 0)
+        if attr_type not in _CPP_ATTRIBUTE_TYPES:
+            attr_name = _s(getattr(attr, "name", ""))
+            raise NotImplementedError(
+                f"C++ translation of attribute {attr_name!r} with type {attr_type} "
+                "is not implemented."
+            )
         lines.extend(
             [
                 f"  onnx_light::AttributeProto &{attr_variable} = {variable}.add();",
@@ -497,12 +503,6 @@ def _cpp_attribute_statements(node: Any, index: int) -> tuple[list[str], str]:
         elif attr_type == _ATTR_STRINGS:
             for value in _iter(getattr(attr, "strings", None)):
                 lines.append(f"  {attr_variable}.add_strings({_cpp_string(_s(value))});")
-        else:
-            attr_name = _s(getattr(attr, "name", ""))
-            raise NotImplementedError(
-                f"C++ translation of attribute {attr_name!r} with type {attr_type} "
-                "is not implemented."
-            )
     return lines, variable
 
 

@@ -36,6 +36,17 @@ Run a quick check:
 
     python -c "import onnx_light; print(onnx_light.__version__)"
 
+The installation also exposes commands for inspecting, annotating, running,
+benchmarking, and tuning models:
+
+.. code-block:: bash
+
+    onnx-light --help
+    onnx-light show model.onnx
+
+See :ref:`l-howto-command-line` for the five subcommands and their output
+formats.
+
 Build and run the C++ unit tests from the editable build:
 
 With ``pip install``:

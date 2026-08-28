@@ -16,3 +16,4 @@ examples and links to its Python and C++ APIs.
     runtime/index
     compute/index
     expressions/index
+    technical/index

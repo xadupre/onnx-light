@@ -198,6 +198,17 @@ class TestTranslateText(unittest.TestCase):
         )
         self.assertIn("g.op.CustomOp('X', outputs=['Y'], **{'not-an-identifier': 1})", code)
 
+    def test_builder_preserves_non_identifier_operator_names(self) -> None:
+        graph = _graph(
+            nodes=[_node("Custom-Op", ["X"], ["Y"])],
+            inputs=[_vi("X", dims=(1,))],
+            outputs=[_vi("Y", dims=(1,))],
+        )
+        code = translate(
+            _model(graph, opsets=[SimpleNamespace(domain="custom", version=1)]), api="builder"
+        )
+        self.assertIn("getattr(g.op, 'Custom-Op')('X', outputs=['Y'])", code)
+
     def test_graph_input(self) -> None:
         # A bare GraphProto is accepted (no model wrapper).
         graph = _graph(

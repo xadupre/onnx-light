@@ -314,8 +314,8 @@ def _translate_builder(model: Any, graph: Any) -> str:
 
     for init in _iter(getattr(graph, "initializer", None)):
         array = _tensor_to_numpy(init)
-        name = _s(getattr(init, "name", ""))
-        lines.append(f"g.init({_array_expr(array)}, name={name!r})")
+        init_name = _s(getattr(init, "name", ""))
+        lines.append(f"g.init({_array_expr(array)}, name={init_name!r})")
 
     for node in _iter(getattr(graph, "node", None)):
         op_type = _s(getattr(node, "op_type", ""))
@@ -341,7 +341,8 @@ def _translate_builder(model: Any, graph: Any) -> str:
         if indirect_attributes:
             attrs = ", ".join(f"{name!r}: {value}" for name, value in indirect_attributes)
             args.append(f"**{{{attrs}}}")
-        lines.append(f"g.op.{op_type}({', '.join(args)})")
+        operator = f"g.op.{op_type}" if op_type.isidentifier() else f"getattr(g.op, {op_type!r})"
+        lines.append(f"{operator}({', '.join(args)})")
 
     for out in _iter(getattr(graph, "output", None)):
         elem_type = _elem_type(out)

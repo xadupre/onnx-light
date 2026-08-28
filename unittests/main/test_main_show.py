@@ -538,7 +538,7 @@ class TestMainShow(ExtTestCase):
             output = buf.getvalue()
             self.assertIn("from onnx_light.onnx_core.graph_builder import GraphBuilder", output)
             self.assertIn("GraphBuilder(", output)
-            self.assertIn("g.make_node('Abs'", output)
+            self.assertIn("g.op.Abs('X', outputs=['Y'])", output)
 
     def test_show_onnx_compact_output_file(self):
         """show --format onnx-compact -o writes the generated code to a file."""

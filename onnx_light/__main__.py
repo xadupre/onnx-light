@@ -60,7 +60,7 @@ show
 
     ``--format FORMAT`` / ``-f FORMAT``
         Output format: ``pretty`` (default), ``mermaid``, ``svg``, ``dot``,
-        ``onnx-compact`` or ``builder``.  The last two emit Python code that
+        ``onnx-compact``, ``builder`` or ``cpp``.  The last three emit code that
         rebuilds the model (see :mod:`onnx_light.tools.translate`).
     ``--output OUTPUT`` / ``-o OUTPUT``
         Write the rendered text to *OUTPUT* instead of printing to stdout.
@@ -1520,7 +1520,7 @@ def _cmd_show(args: argparse.Namespace) -> None:
             return
 
         text = dot_text
-    elif fmt in ("onnx-compact", "builder"):
+    elif fmt in ("onnx-compact", "builder", "cpp"):
         from .tools.translate import translate, translate_header
 
         text = translate_header(fmt) + translate(model, api=fmt)
@@ -1530,7 +1530,7 @@ def _cmd_show(args: argparse.Namespace) -> None:
         # bypass the argument parser.
         raise ValueError(
             f"Unknown format {fmt!r}; expected one of 'pretty', 'mermaid', "
-            "'svg', 'dot', 'onnx-compact' or 'builder'."
+            "'svg', 'dot', 'onnx-compact', 'builder' or 'cpp'."
         )
 
     if output_path is not None:
@@ -1833,8 +1833,8 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Print a human-readable, Mermaid, SVG or Python-code rendering of a model.",
         description=(
             "Loads an ONNX model and renders it as plain text (pretty), a Mermaid "
-            "flowchart, an SVG image, Graphviz DOT source or Python code that "
-            "rebuilds the model (onnx-compact/builder). The result is written to "
+            "flowchart, an SVG image, Graphviz DOT source or code that "
+            "rebuilds the model (onnx-compact/builder/cpp). The result is written to "
             "stdout by default."
         ),
     )
@@ -1843,13 +1843,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--format",
         "-f",
         default="pretty",
-        choices=["pretty", "mermaid", "svg", "dot", "onnx-compact", "builder"],
+        choices=["pretty", "mermaid", "svg", "dot", "onnx-compact", "builder", "cpp"],
         dest="format",
         help=(
             "Output format: 'pretty' (default) for a compact text listing, "
             "'mermaid' for a Mermaid flowchart, 'svg' for an SVG image, "
-            "'dot' for Graphviz DOT source, or 'onnx-compact'/'builder' for "
-            "Python code that rebuilds the model (see onnx_light.tools.translate)."
+            "'dot' for Graphviz DOT source, or 'onnx-compact'/'builder'/'cpp' for "
+            "code that rebuilds the model (Python for onnx-compact/builder, C++ for cpp; "
+            "see onnx_light.tools.translate)."
         ),
     )
     show_parser.add_argument(

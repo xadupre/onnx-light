@@ -25,7 +25,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_gradient {
  *
  * X ---.
  *      |
- * W ---+--> GradientOfNodes(xs=["X", "W"], y="Y", dy) --> grad_X, grad_W
+ * W ---+--> [GradientOfNodes(xs=["X", "W"], y="Y", dy)] --> grad_X, grad_W
  *      |
  * dy --'
  * @endcode
@@ -69,12 +69,12 @@ FunctionProto GradientOfNodes(std::span<const NodeProto> nodes, std::span<const 
  *
  * @code
  * X ---.
- *      +--> FunctionProto --> Y
+ *      +--> [FunctionProto] --> Y
  * W ---'
  *
  * X ---.
  *      |
- * W ---+--> GradientOfFunction(xs=["X", "W"], y="Y", dy) --> grad_X, grad_W
+ * W ---+--> [GradientOfFunction(xs=["X", "W"], y="Y", dy)] --> grad_X, grad_W
  *      |
  * dy --'
  * @endcode

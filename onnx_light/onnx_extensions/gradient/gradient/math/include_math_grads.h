@@ -17,7 +17,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_gradient {
  *
  * @code
  * A --.
- *     +--> Add --> C
+ *     +--> [Add] --> C
  * B --'
  *
  * dC --> dA
@@ -35,11 +35,11 @@ bool GradAdd(const NodeProto &node, const std::string &output_grad,
  *
  * @code
  * A --.
- *     +--> Div --> C
+ *     +--> [Div] --> C
  * B --'
  *
- * dC, B ------> Div --> dA
- * dC, A --> Mul --> Div(B^2) --> Neg --> dB
+ * dC, B ------> [Div] --> dA
+ * dC, A --> [Mul] --> [Div(B^2)] --> [Neg] --> dB
  * @endcode
  */
 bool GradDiv(const NodeProto &node, const std::string &output_grad,
@@ -54,12 +54,12 @@ bool GradDiv(const NodeProto &node, const std::string &output_grad,
  *
  * @code
  * A ----.
- * B ----+--> Gemm --> C
+ * B ----+--> [Gemm] --> C
  * bias -'
  *
- * dC, B^T --> MatMul ------> dA
- * A^T, dC --> MatMul ------> dB
- * dC ------> ReduceSum -----> dbias
+ * dC, B^T --> [MatMul] ------> dA
+ * A^T, dC --> [MatMul] ------> dB
+ * dC ------> [ReduceSum] -----> dbias
  * @endcode
  */
 bool GradGemm(const NodeProto &node, const std::string &output_grad,
@@ -73,11 +73,11 @@ bool GradGemm(const NodeProto &node, const std::string &output_grad,
  *
  * @code
  * A --.
- *     +--> MatMul --> C
+ *     +--> [MatMul] --> C
  * B --'
  *
- * dC, B^T --> MatMul --> dA
- * A^T, dC --> MatMul --> dB
+ * dC, B^T --> [MatMul] --> dA
+ * A^T, dC --> [MatMul] --> dB
  * @endcode
  */
 bool GradMatMul(const NodeProto &node, const std::string &output_grad,
@@ -91,11 +91,11 @@ bool GradMatMul(const NodeProto &node, const std::string &output_grad,
  *
  * @code
  * A --.
- *     +--> Mul --> C
+ *     +--> [Mul] --> C
  * B --'
  *
- * dC, B --> Mul --> dA
- * dC, A --> Mul --> dB
+ * dC, B --> [Mul] --> dA
+ * dC, A --> [Mul] --> dB
  * @endcode
  */
 bool GradMul(const NodeProto &node, const std::string &output_grad,
@@ -108,9 +108,9 @@ bool GradMul(const NodeProto &node, const std::string &output_grad,
  * C = -A  →  dA = -dC.
  *
  * @code
- * A --> Neg --> C
+ * A --> [Neg] --> C
  *
- * dC --> Neg --> dA
+ * dC --> [Neg] --> dA
  * @endcode
  */
 bool GradNeg(const NodeProto &node, const std::string &output_grad,
@@ -124,11 +124,11 @@ bool GradNeg(const NodeProto &node, const std::string &output_grad,
  *
  * @code
  * A --.
- *     +--> Sub --> C
+ *     +--> [Sub] --> C
  * B --'
  *
  * dC ---------> dA
- * dC --> Neg --> dB
+ * dC --> [Neg] --> dB
  * @endcode
  */
 bool GradSub(const NodeProto &node, const std::string &output_grad,

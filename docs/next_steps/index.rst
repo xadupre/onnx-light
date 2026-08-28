@@ -17,23 +17,24 @@ The roadmap has four objectives:
    the best parameters for their machine. See
    :ref:`l-next-steps-kernel-parallelization` and
    :ref:`l-next-steps-processor-aware-kernel-tuning`.
-2. **Parallelize model startup.** Read and transform the model concurrently,
-   then create kernels and prepack their weights through one memory-bounded
-   execution plan. See :ref:`l-next-steps-fast-loading-sequence` and
+2. **Parallelize model startup (completed).** Read and transform the model
+   concurrently, then create kernels and prepack their weights through one
+   memory-bounded execution plan. See
+   :ref:`l-next-steps-fast-loading-sequence` and
    :ref:`l-next-steps-prepared-execution`.
 3. **Manage persistent state.** Use ownership-aware arenas for KV caches and
    other state that survives one graph invocation, without copying or
    accidentally recycling live storage. See :ref:`l-next-steps-mutable-cache`
    and :ref:`l-next-steps-buffer-reuse-arena`.
-4. **Integrate the completed startup path with ONNX Runtime.** Only after the
-   native loader is complete, let ORT consume ``onnx-light`` payload ownership,
-   prepared data, and direct-read contracts. See
+4. **Integrate the completed startup path with ONNX Runtime (ready).** The
+   native loader is complete; ORT can now consume ``onnx-light`` payload
+   ownership, prepared data, and direct-read contracts. See
    :ref:`l-next-steps-model-loading`.
 
-The execution order is **1 -> 2 -> native loading completion -> 4**. Objective
-3 branches from objective 2 because persistent state reuses its arena and
-lifetime rules; it does not depend on the final ORT integration. Objective
-numbers identify themes, not permission to start cross-repository work early.
+Objectives 2 and native loading are complete. Objective 4 is now unblocked and
+tracked by open issue #4612. Objective 3 branches from objective 2 because
+persistent state reuses its arena and lifetime rules; it does not depend on the
+final ORT integration.
 
 All Next Steps
 --------------
@@ -81,7 +82,7 @@ these four objectives.
       - Objective
       - Plan
       - Contribution
-    * - Started
+    * - Completed
       - 2
       - :ref:`l-next-steps-fast-loading-sequence`
       - Orders the four startup plans: bug fixes, prepared execution, native
@@ -96,16 +97,16 @@ these four objectives.
       - :ref:`l-next-steps-prepared-execution`
       - Provides the dependency graph, bounded scheduling, kernel creation, and
         prepacking needed by parallel startup.
-    * - Planned
+    * - Completed
       - 2
       - :ref:`l-next-steps-native-fast-loading-completion`
       - Connects adaptive I/O, model resolution, prepared tensors, and
         first-token overlap before any new work in onnxruntime.
-    * - Blocked
+    * - Ready
       - 4
       - :ref:`l-next-steps-model-loading`
-      - Final cross-repository integration; blocked until every native loading
-        issue through #4623 is closed.
+      - Final cross-repository integration; native issues #4618--#4623 are
+        closed and issue #4612 remains open.
     * - Completed
       - 1
       - :ref:`l-next-steps-parallel-for-profiling`
@@ -136,7 +137,7 @@ these four objectives.
       - :ref:`l-next-steps-graph-builder-quantized-tensor`
       - Preserves quantized initializers until preparation or persistent-state
         allocation.
-    * - Discussed
+    * - Completed
       - Foundation
       - :ref:`l-next-steps-graph-builder-authoring`
       - Supplies reproducible models and workflows used to exercise the four

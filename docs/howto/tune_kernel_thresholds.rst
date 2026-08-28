@@ -185,9 +185,9 @@ incomplete. The return value contains ``criterion``, ``selected_index``, and
 Calibrate one kernel from Python
 ++++++++++++++++++++++++++++++++
 
-The built-in calibration callbacks currently cover ``Abs``, ``Add``, and
-``Not``. The Python extension registers them when imported. Select a kernel and
-optionally one or more ONNX element types:
+The built-in calibration callbacks cover ``Abs``, ``Add``, ``Gemm``, ``Log``,
+``Not``, ``Sigmoid``, and ``Tanh``. The Python extension registers them when
+imported. Select a kernel and optionally one or more ONNX element types:
 
 .. code-block:: python
 

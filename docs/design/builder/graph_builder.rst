@@ -36,15 +36,24 @@ Typical usage
 
 .. code-block:: python
 
-    from onnx_light.onnx_core.graph_builder import GraphBuilder
-    from onnx_light.onnx_proto import TensorProto
+    import numpy as np
 
-    builder = GraphBuilder("g")
-    builder.make_input("x", TensorProto.FLOAT, [2, 3])
-    builder.make_input("y", TensorProto.FLOAT, [2, 3])
-    (z,) = builder.make_node("Add", ["x", "y"])
-    builder.make_output(z)
-    model = builder.to_onnx("model")
+    from onnx_light.onnx import TensorProto
+    from onnx_light.onnx_core.graph_builder import GraphBuilder
+
+    g = GraphBuilder("g")
+    g.set_opset_version("", 18)
+    x = g.inp("X", TensorProto.FLOAT, [2, 3])
+    bias = g.init(np.ones((2, 3), dtype=np.float32), name="bias")
+    y = g.op.Add(x, bias, outputs="Y")
+    g.out(y, TensorProto.FLOAT, [2, 3])
+    model = g.to_onnx("model")
+
+``g.inp`` declares an input, ``g.init`` adds an initializer,
+``g.op.<Operator>`` adds an ONNX node, and ``g.out`` declares a graph output.
+Their explicit counterparts (``make_input``, ``make_initializer``,
+``make_node``, and ``make_output``) remain available for generated code and
+advanced authoring.
 
 The same builder can be constructed from an existing ``ModelProto`` to
 optimize or extend a model that was produced elsewhere.

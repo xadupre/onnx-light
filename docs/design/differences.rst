@@ -189,14 +189,14 @@ defined in ``stream_class.h``:
 * ``FIELD(type, name, order, doc)`` — declare a scalar field with typed
   accessors ``ref_<name>()``, ``has_<name>()``, ``set_<name>()``.
 * ``FIELD_STR(name, order, doc)`` — shorthand for
-  :cpp:class:`~onnx_light::utils::OptionalString` fields (a nullable string that
-  distinguishes "unset" from "empty"); also accepts ``std::string``,
-  ``const char *``, and :cpp:class:`~onnx_light::utils::RefString`. The
-  ``str_<name>()`` accessor returns a ``const std::string &`` (a shared empty
-  string when unset, never throwing).
+  :cpp:class:`~onnx_light::utils::OptionalString`, an
+  ``std::optional<std::string>``-compatible field that distinguishes "unset"
+  from "empty". It accepts ``std::string``, ``const char *``, and
+  :cpp:class:`~onnx_light::utils::RefString`; the ``str_<name>()`` accessor
+  always returns a ``const std::string &``.
 * ``FIELD_REPEATED_STR(type, name, order, doc)`` — declare a repeated string
   field backed by :cpp:class:`~onnx_light::utils::RepeatedStringField`
-  (a list of :cpp:class:`~onnx_light::utils::String` values).
+  (a list of owning ``std::string`` values).
 * ``FIELD_REPEATED(type, name, order, doc)`` — declare a repeated (list)
   field.
 * ``SERIALIZATION_METHOD()`` — inject :meth:`ParseFromString`,
@@ -212,8 +212,7 @@ minimal changes.
 String types in proto messages
 ---------------------------------
 
-Proto string fields in ``onnx_light`` use one of three C++ types, each with a
-distinct role:
+Proto string fields expose standard C++ string semantics:
 
 :cpp:class:`~onnx_light::utils::RefString`
     A **non-owning view** into existing bytes (a pointer + length pair).  The
@@ -223,19 +222,18 @@ distinct role:
     populate an owning field.
 
 :cpp:class:`~onnx_light::utils::String`
-    A thin ``std::string`` subclass used for **repeated string fields** (for
-    example ``NodeProto::input``, ``NodeProto::output``).  It behaves like
-    ``std::string`` in all respects and is always either empty or non-empty —
-    there is no additional "null" state.
+    An owning ``std::string`` used for **repeated string fields** (for example
+    ``NodeProto::input`` and ``NodeProto::output``). The compatibility name is
+    a public ``std::string`` subclass that only adds protobuf-style helpers;
+    callers can otherwise treat values as ordinary ``std::string`` objects.
 
 :cpp:class:`~onnx_light::utils::OptionalString`
-    A thin ``std::optional<std::string>`` subclass used for **singular
-    (optional) string fields** (for example ``NodeProto::name``,
-    ``NodeProto::doc_string``).  It adds a ``null()`` predicate that returns
-    ``true`` when the field is absent (``std::nullopt``), which is distinct
-    from the field being present but empty.  The serializer emits a string
-    field only when ``!field.null()``, reproducing the proto3 rule that
-    default-valued fields are omitted from the wire format.
+    An owning ``std::optional<std::string>``-compatible value used for
+    **singular optional string fields** (for example ``NodeProto::name`` and
+    ``NodeProto::doc_string``). ``null()`` tests field presence, while
+    ``value()``, conversion to ``const std::string &``, and ``c_str()`` return
+    an empty string when the field is absent. ``mutable_ref()`` creates the
+    value on demand.
 
 The mapping between C++ types and proto field categories is:
 
@@ -247,12 +245,12 @@ The mapping between C++ types and proto field categories is:
      - C++ type
      - Notes
    * - Singular ``string`` (``FIELD_STR``)
-     - ``OptionalString``
+     - ``std::optional<std::string>`` (``OptionalString``)
      - Absent (null) vs. present-but-empty are distinguished; absent
        fields are not written to the wire.
    * - Repeated ``string`` (``FIELD_REPEATED_STR``)
-     - ``RepeatedStringField`` of ``String``
-     - Ordinary list; each element is always a valid, owned string.
+     - ``RepeatedStringField`` of ``std::string``
+     - ``String`` is the protobuf-compatible owning ``std::string`` type.
    * - Parser temporary / zero-copy view
      - ``RefString``
      - Points into the parse buffer; ownership does not transfer.

@@ -196,6 +196,7 @@ class TestTranslateText(unittest.TestCase):
                     ["Y"],
                     attributes=[_attr("alpha", type=1, f=0.5)],
                     domain="com.example",
+                    name="custom",
                 )
             ],
             inputs=[_vi("X", dims=(1,))],
@@ -205,7 +206,7 @@ class TestTranslateText(unittest.TestCase):
             _model(graph, opsets=[SimpleNamespace(domain="com.example", version=1)]), api="cpp"
         )
         self.assertIn(
-            'g.MakeNode("CustomOp", {"X"}, {"Y"}, "com.example", "", attributes_0);', code
+            'g.MakeNode("CustomOp", {"X"}, {"Y"}, "com.example", "custom", attributes_0);', code
         )
 
     def test_builder_skips_initializer_input(self) -> None:

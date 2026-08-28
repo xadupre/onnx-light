@@ -525,12 +525,13 @@ def _translate_cpp(model: Any, graph: Any) -> str:
             _cpp_string(_s(value)) for value in _iter(getattr(node, "output", None))
         )
         domain = _s(getattr(node, "domain", "") or "")
+        node_name = _s(getattr(node, "name", "") or "")
         args = [_cpp_string(_s(getattr(node, "op_type", ""))), f"{{{inputs}}}", f"{{{outputs}}}"]
-        if domain:
+        if domain or node_name or attributes:
             args.append(_cpp_string(domain))
+        if node_name or attributes:
+            args.append(_cpp_string(node_name))
         if attributes:
-            if not domain:
-                args.append('""')
             args.append(attributes)
         lines.append(f"  g.MakeNode({', '.join(args)});")
     for out in _iter(getattr(graph, "output", None)):

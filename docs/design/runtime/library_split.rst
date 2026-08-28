@@ -8,10 +8,10 @@ features they use. Parsing a model does not require schemas, shape inference,
 kernels, or backend tests.
 
 The dependency graph below points from each library to its dependencies. It is
-generated from :download:`library_split.dot <_static/library_split.dot>` with
+generated from :download:`library_split.dot <../_static/library_split.dot>` with
 ``dot -Tsvg``.
 
-.. image:: _static/library_split.svg
+.. image:: ../_static/library_split.svg
    :alt: Dependency graph between the onnx-light C++ libraries
    :align: center
 

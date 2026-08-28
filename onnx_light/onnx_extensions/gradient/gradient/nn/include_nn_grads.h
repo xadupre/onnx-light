@@ -90,7 +90,8 @@ bool GradTanh(const NodeProto &node, const std::string &output_grad,
  * @code
  * X, scale, bias, mean, variance --> BatchNormalization --> Y
  *
- * X, scale, mean, variance, dY --> GradBatchNormalization --> dX, dscale, dbias, dmean, dvariance
+ * X, scale, bias, mean, variance, dY --> GradBatchNormalization --> dX, dscale, dbias, dmean,
+ * dvariance
  * @endcode
  */
 bool GradBatchNormalization(const NodeProto &node, const std::string &output_grad,
@@ -103,7 +104,7 @@ bool GradBatchNormalization(const NodeProto &node, const std::string &output_gra
  * @code
  * X, scale, bias --> GroupNormalization --> Y
  *
- * dY --> GradGroupNormalization --> dX, dscale, dbias
+ * X, scale, bias, dY --> GradGroupNormalization --> dX, dscale, dbias
  * @endcode
  */
 bool GradGroupNormalization(const NodeProto &node, const std::string &output_grad,
@@ -116,7 +117,7 @@ bool GradGroupNormalization(const NodeProto &node, const std::string &output_gra
  * @code
  * X, scale, bias --> InstanceNormalization --> Y
  *
- * dY --> GradInstanceNormalization --> dX, dscale, dbias
+ * X, scale, bias, dY --> GradInstanceNormalization --> dX, dscale, dbias
  * @endcode
  */
 bool GradInstanceNormalization(const NodeProto &node, const std::string &output_grad,
@@ -129,7 +130,7 @@ bool GradInstanceNormalization(const NodeProto &node, const std::string &output_
  * @code
  * X, scale, bias --> LayerNormalization --> Y
  *
- * dY --> GradLayerNormalization --> dX, dscale, dbias
+ * X, scale, bias, dY --> GradLayerNormalization --> dX, dscale, dbias
  * @endcode
  */
 bool GradLayerNormalization(const NodeProto &node, const std::string &output_grad,
@@ -142,7 +143,7 @@ bool GradLayerNormalization(const NodeProto &node, const std::string &output_gra
  * @code
  * X --> LpNormalization --> Y
  *
- * dY --> GradLpNormalization --> dX
+ * X, dY --> GradLpNormalization --> dX
  * @endcode
  */
 bool GradLpNormalization(const NodeProto &node, const std::string &output_grad,
@@ -155,7 +156,7 @@ bool GradLpNormalization(const NodeProto &node, const std::string &output_grad,
  * @code
  * X --> MeanVarianceNormalization --> Y
  *
- * dY --> GradMeanVarianceNormalization --> dX
+ * X, dY --> GradMeanVarianceNormalization --> dX
  * @endcode
  */
 bool GradMeanVarianceNormalization(const NodeProto &node, const std::string &output_grad,
@@ -168,7 +169,7 @@ bool GradMeanVarianceNormalization(const NodeProto &node, const std::string &out
  * @code
  * X, scale --> RMSNormalization --> Y
  *
- * dY --> GradRMSNormalization --> dX, dscale
+ * X, scale, dY --> GradRMSNormalization --> dX, dscale
  * @endcode
  */
 bool GradRMSNormalization(const NodeProto &node, const std::string &output_grad,

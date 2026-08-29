@@ -534,10 +534,18 @@ def _cc_payload_to_python(
 
 
 def _unload_test_case(test_case: Any, unload: bool) -> None:
-    """Unloads a native-backed test case when requested."""
+    """Unloads a native-backed test case when requested.
+
+    Cases without a native payload (Python-defined cases, or lightweight
+    stand-ins used by callers that only need ``model``) hold nothing to
+    release and are left untouched.
+    """
     if not unload:
         return
-    if isinstance(test_case, TestCase) and test_case._native_case is None:
+    if isinstance(test_case, TestCase):
+        if test_case._native_case is None:
+            return
+    elif not callable(getattr(test_case, "unload", None)):
         return
     test_case.unload()
 

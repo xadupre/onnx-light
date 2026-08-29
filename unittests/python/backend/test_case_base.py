@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
@@ -219,6 +220,12 @@ class TestBackendFunction(ExtTestCase):
         tc = ALL_TESTS["test_python_unload"]
         tc.unload()
         self.assertTrue(tc.materialized)
+
+    def test_unload_test_case_ignores_objects_without_unload(self):
+        """Lightweight stand-ins holding no native payload are left untouched."""
+        stand_in = SimpleNamespace(model=None)
+        _case_base._unload_test_case(stand_in, True)
+        self.assertFalse(hasattr(stand_in, "unload"))
 
     def test_assert_allclose_unloads_after_failure(self):
         """Runtime failures still release native-backed Python payloads."""

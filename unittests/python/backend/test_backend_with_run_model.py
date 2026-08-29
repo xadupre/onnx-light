@@ -197,7 +197,6 @@ class TestBackendTestOracle(unittest.TestCase):
 
         if case is None:
             self.fail("Missing test_cc_abs backend test case.")
-        self.assertEqual(case.expected_output_oracle, "onnx-light::ai.onnx::Abs")
         np.testing.assert_array_equal(
             case.data_sets[0][1][0],
             np.array([[1.0, 0.0, 1.5], [2.25, 3.5, 4.75]], dtype=np.float32),

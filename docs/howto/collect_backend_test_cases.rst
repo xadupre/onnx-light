@@ -25,7 +25,7 @@ List every test case
           cases = bt.collect_test_cases()
           print(len(cases), "cases")
           for tc in cases[:5]:
-              print(tc.name, tc.kind, tc.tag, tc.expected_output_oracle)
+              print(tc.name, tc.kind, tc.tag)
 
    .. tab-item:: C++
       :sync: cpp
@@ -36,8 +36,7 @@ List every test case
 
           auto cases = core::backend_test::CollectTestCases();
           for (const auto &tc : cases) {
-              std::cout << tc.name << " " << tc.kind << " " << tc.tag << " "
-                        << tc.expected_output_oracle << "\n";
+              std::cout << tc.name << " " << tc.kind << " " << tc.tag << "\n";
           }
 
 Filter by operator type or category
@@ -132,17 +131,15 @@ Notes
   :cpp:func:`onnx_light::core::backend_test::CollectTestCases` with no
   arguments.
 * :class:`TestCase` exposes ``name``, ``kind``, ``tag``, ``rtol``, ``atol``,
-  ``expected_output_oracle``, ``data_sets``, and a lazily resolved ``model``
+  ``data_sets``, and a lazily resolved ``model``
   (:class:`onnx_light.onnx.ModelProto`), so a case retrieved by name can
   be fed directly to a :class:`~onnx_light.onnx.reference.ReferenceEvaluator`
   or to any other backend runner.
 * Correctness cases registered with :cpp:func:`Expect` produce their expected
   outputs by directly calling the named built-in *onnx-light* kernel. They do
   not resolve a process-wide dispatch-table entry or a session/custom kernel,
-  so an external override cannot become the oracle. The
-  ``expected_output_oracle`` value records that kernel identity. Benchmark
-  case generation is separate: its ``expected_output_oracle`` is empty and it
-  is not covered by this oracle guarantee.
+  so an external override cannot become the oracle. Benchmark case generation
+  is separate and is not covered by this oracle guarantee.
 
 See also
 --------

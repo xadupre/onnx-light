@@ -176,7 +176,6 @@ TEST(BackendTestCase, ExpectedOutputsIgnoreKernelOverrides) {
 
   ASSERT_FALSE(registry.empty());
   const TestCase &tc = registry.front();
-  EXPECT_EQ(tc.expected_output_oracle, "onnx-light::ai.onnx::Abs");
   const Tensor &expected = tc.data_sets().front().outputs.front();
   EXPECT_FLOAT_EQ(expected.AsFloat()[0], 1.0f);
 }

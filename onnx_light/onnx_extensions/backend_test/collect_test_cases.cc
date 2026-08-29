@@ -136,13 +136,6 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type, bool include_
   for (const auto &fn : GetRegisteredCollectors()) {
     fn(registry, op_type, include_big, mode);
   }
-  if (mode == TestMode::BENCHMARK) {
-    // Benchmark cases have independent generation and timing requirements;
-    // they are deliberately outside the backend correctness-oracle contract.
-    for (auto &tc : registry) {
-      tc.expected_output_oracle.clear();
-    }
-  }
   if (include_big) {
     return registry;
   }

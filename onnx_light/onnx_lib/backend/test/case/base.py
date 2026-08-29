@@ -79,14 +79,12 @@ class TestCase(_backend_test_cc.TestCase):
         atol: float,
         rtol: float,
         tag: str = "",
-        expected_output_oracle: str = "",
     ) -> None:
         super().__init__(
             name=name, model_name=model_name, kind=kind, tag=tag, atol=atol, rtol=rtol
         )
         self.url = url
         self.model_dir = model_dir
-        self.expected_output_oracle = expected_output_oracle
         # The C++ ``model`` / ``data_sets`` members hold C++-side proto / Tensor
         # instances. Python callers populate them with the Python ``ModelProto``
         # and lists of numpy arrays, so we shadow them with Python-side storage
@@ -465,7 +463,6 @@ def _cc_to_python_test_case(cc_tc: Any) -> TestCase:
         atol=cc_tc.atol,
         rtol=cc_tc.rtol,
         tag=cc_tc.tag,
-        expected_output_oracle=cc_tc.expected_output_oracle,
     )
 
 

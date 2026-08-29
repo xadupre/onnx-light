@@ -5,7 +5,6 @@
 #include "onnx_core/backend_test/expect.h"
 #include "onnx_core/backend_test/io_data.h"
 #include "onnx_core/backend_test/test_case.h"
-#include "onnx_proto/onnx_helper.h"
 
 #include <functional>
 #include <memory>
@@ -146,11 +145,6 @@ std::string ResolveTag(const NodeProto &node, const std::string &tag) {
   return "";
 }
 
-std::string BuiltinOracle(const NodeProto &node) {
-  const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
-  return "onnx-light::" + domain + "::" + node.op_type().value();
-}
-
 } // namespace
 
 void Expect(const NodeProto &node, const Tensors &inputs, const Tensors &outputs,
@@ -174,7 +168,6 @@ void Expect(const NodeProto &node, const Tensors &inputs, const Tensors &outputs
   TestCase tc(name, name, "node", resolved_tag);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
-  tc.expected_output_oracle = BuiltinOracle(node);
   for (const auto &t : inputs) {
     tc.declared_input_element_counts.push_back(t.element_count());
   }
@@ -212,7 +205,6 @@ void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
   TestCase tc(name, name, "node", resolved_tag);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
-  tc.expected_output_oracle = BuiltinOracle(state->node);
   tc.declared_input_element_counts = std::move(in_counts);
   tc.declared_output_element_counts = std::move(out_counts);
   tc.build = MakeLazyBuild(std::move(state));

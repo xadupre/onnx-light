@@ -186,6 +186,30 @@ TEST(BackendTestCase, LazyCaseCanUnloadAndRematerialize) {
   EXPECT_FALSE(tc.materialized());
 }
 
+TEST(BackendTestCase, CollectedCaseUnloadReleasesBuildState) {
+  auto build_state = std::make_shared<int>(1);
+  std::weak_ptr<int> weak_build_state = build_state;
+
+  TestCase tc("collected_case");
+  tc.build = [state = build_state](bool) {
+    BuiltCase built;
+    built.model.set_ir_version(*state);
+    return built;
+  };
+  tc.set_rebuild([](bool) {
+    BuiltCase built;
+    built.model.set_ir_version(2);
+    return built;
+  });
+  build_state.reset();
+
+  EXPECT_FALSE(weak_build_state.expired());
+  tc.unload();
+  EXPECT_TRUE(weak_build_state.expired());
+  EXPECT_FALSE(tc.materialized());
+  EXPECT_EQ(tc.model().ir_version(), 2);
+}
+
 TEST(BackendTestCase, EagerCaseCannotUnload) {
   TestCase tc("eager_case");
   tc.emplace_model().set_ir_version(9);

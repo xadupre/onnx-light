@@ -143,15 +143,7 @@ struct TestCase {
   // non-const object, so casting away the member-level ``const`` to invoke
   // ``std::string``'s move constructor on the moved-from source does not
   // modify an actually-const object.
-  TestCase(TestCase &&other) noexcept
-      : name(std::move(const_cast<std::string &>(other.name))),
-        model_name(std::move(const_cast<std::string &>(other.model_name))),
-        kind(std::move(const_cast<std::string &>(other.kind))),
-        tag(std::move(const_cast<std::string &>(other.tag))), rtol(other.rtol), atol(other.atol),
-        build(std::move(other.build)), expected_outputs_generated(other.expected_outputs_generated),
-        declared_input_element_counts(std::move(other.declared_input_element_counts)),
-        declared_output_element_counts(std::move(other.declared_output_element_counts)),
-        data_sets_(std::move(other.data_sets_)), model_(std::move(other.model_)) {}
+  TestCase(TestCase &&other) noexcept;
 
   TestCase(const TestCase &) = delete;
   TestCase &operator=(const TestCase &) = delete;
@@ -160,151 +152,79 @@ struct TestCase {
   /// Creates (if needed) and returns the mutable model cache. Used by eager
   /// case builders that populate the ``ModelProto`` in place. Clears any
   /// previously-built cache.
-  ModelProto &emplace_model() {
-    model_ = std::make_shared<ModelProto>();
-    return *model_;
-  }
+  ModelProto &emplace_model();
 
   /// Stores an already-built model into the cache.
-  void set_model(ModelProto model) { model_ = std::make_shared<ModelProto>(std::move(model)); }
+  void set_model(ModelProto model);
 
   /// Returns whether the case has already been materialized (its model cache
   /// exists). Introspection helper that does *not* trigger materialization.
   bool materialized() const { return model_ != nullptr; }
 
-  /// Returns whether the case is lazy (carries a ``build`` closure). Does not
-  /// trigger materialization.
-  bool is_lazy() const { return static_cast<bool>(build); }
+  /// Returns whether the case can be materialized or rebuilt on demand.
+  /// Does not trigger materialization.
+  bool is_lazy() const { return static_cast<bool>(build) || static_cast<bool>(rebuild_); }
 
   /// Returns whether the case has generated expected outputs.
   bool has_expected_outputs() const { return expected_outputs_generated; }
 
+  /// Installs a lightweight fallback that recreates the case after unloading.
+  void set_rebuild(std::function<BuiltCase(bool)> rebuild);
+
   /// Configures whether the case retains expected outputs.
-  void set_expected_outputs_generated(bool value) {
-    expected_outputs_generated = value;
-    if (!value && materialized() && data_sets_) {
-      for (DataSet &data_set : *data_sets_) {
-        data_set.expected_outputs_generated = false;
-        data_set.outputs.clear();
-      }
-    }
-  }
+  void set_expected_outputs_generated(bool value);
 
   /// Runs the ``build`` closure once (if the case is lazy and not yet built),
   /// materializing the model cache and ``data_sets``. No-op for eager cases and
   /// for already-materialized cases.
-  void Materialize() {
-    if (model_ || !build) {
-      return;
-    }
-    BuiltCase built = build(expected_outputs_generated);
-    model_ = std::make_shared<ModelProto>(std::move(built.model));
-    if (!data_sets_) {
-      data_sets_ = std::make_shared<std::vector<DataSet>>(std::move(built.data_sets));
-    }
-  }
+  void Materialize();
 
-  /// Releases the cached payload of a lazy case so it can be materialized again.
-  /// Existing Python references retain their shared ownership of the released
-  /// model or data sets. Eager cases cannot be rebuilt and therefore reject
-  /// unloading.
-  void unload() {
-    if (!build) {
-      throw std::runtime_error("Cannot unload an eager backend test case.");
-    }
-    model_.reset();
-    data_sets_.reset();
-  }
+  /// Releases the cached payload and, for collected cases, the primary build
+  /// closure together with resources such as captured kernel instances.
+  /// Existing Python references retain shared ownership of released models or
+  /// data sets. Eager cases without a rebuild fallback reject unloading.
+  void unload();
 
   /// Moves the cached model and data sets out of a materialized case.
   /// Used by collector-backed rebuild closures after recreating a formerly
   /// eager case. The case is left unmaterialized.
-  BuiltCase take_materialized() {
-    if (!model_) {
-      throw std::runtime_error("Cannot take an unmaterialized backend test case.");
-    }
-    BuiltCase built;
-    built.model = std::move(*model_);
-    if (data_sets_) {
-      built.data_sets = std::move(*data_sets_);
-    }
-    model_.reset();
-    data_sets_.reset();
-    return built;
-  }
+  BuiltCase take_materialized();
 
   /// Returns a shared model handle for bindings that must preserve its lifetime.
-  std::shared_ptr<ModelProto> model_handle() {
-    model();
-    return model_;
-  }
+  std::shared_ptr<ModelProto> model_handle();
 
   /// Returns shared data set handles for bindings that must preserve their lifetimes.
-  std::vector<std::shared_ptr<DataSet>> data_set_handles() {
-    std::shared_ptr<std::vector<DataSet>> data_sets = data_sets_handle();
-    std::vector<std::shared_ptr<DataSet>> handles;
-    handles.reserve(data_sets->size());
-    for (DataSet &data_set : *data_sets) {
-      handles.emplace_back(data_sets, &data_set);
-    }
-    return handles;
-  }
+  std::vector<std::shared_ptr<DataSet>> data_set_handles();
 
   /// Lazily builds (once) and returns the model.
-  ModelProto &model() {
-    EnsureMaterialized();
-    if (!model_) {
-      model_ = std::make_shared<ModelProto>();
-    }
-    return *model_;
-  }
+  ModelProto &model();
 
   /// Const overload. Materializes the case (model *and* data sets) on first
   /// access via the same builder, so ``data_sets`` is consistent in const
   /// contexts as well.
-  const ModelProto &model() const {
-    EnsureMaterialized();
-    if (!model_) {
-      model_ = std::make_shared<ModelProto>();
-    }
-    return *model_;
-  }
+  const ModelProto &model() const;
 
   /// Lazily builds (once) and returns the mutable data sets. Eager producers
   /// also use this to append their data sets (``build`` is unset, so
   /// materialization is a no-op).
-  std::vector<DataSet> &data_sets() {
-    EnsureMaterialized();
-    if (!data_sets_) {
-      data_sets_ = std::make_shared<std::vector<DataSet>>();
-    }
-    return *data_sets_;
-  }
+  std::vector<DataSet> &data_sets();
 
   /// Const overload. Materializes the case on first access.
-  const std::vector<DataSet> &data_sets() const {
-    EnsureMaterialized();
-    if (!data_sets_) {
-      data_sets_ = std::make_shared<std::vector<DataSet>>();
-    }
-    return *data_sets_;
-  }
+  const std::vector<DataSet> &data_sets() const;
 
 private:
-  std::shared_ptr<std::vector<DataSet>> data_sets_handle() {
-    data_sets();
-    return data_sets_;
-  }
+  std::shared_ptr<std::vector<DataSet>> data_sets_handle();
 
   /// Data sets. Empty until the ``build`` closure has run (for lazy cases) or
   /// until an eager producer appends them directly via :func:`data_sets`.
   mutable std::shared_ptr<std::vector<DataSet>> data_sets_;
   mutable std::shared_ptr<ModelProto> model_;
+  std::function<BuiltCase(bool)> rebuild_;
 
   // Materializes through a const accessor. The object is never truly const
   // (every ``TestCase`` is allocated non-const), so casting away ``const`` to
   // run the builder and populate the caches is well-defined.
-  void EnsureMaterialized() const { const_cast<TestCase *>(this)->Materialize(); }
+  void EnsureMaterialized() const;
 };
 
 /**

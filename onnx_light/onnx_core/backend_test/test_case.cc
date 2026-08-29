@@ -41,6 +41,134 @@ void BuildTypeProto(const TypeSpec &spec, TypeProto &tp) {
 
 } // namespace
 
+TestCase::TestCase(TestCase &&other) noexcept
+    : name(std::move(const_cast<std::string &>(other.name))),
+      model_name(std::move(const_cast<std::string &>(other.model_name))),
+      kind(std::move(const_cast<std::string &>(other.kind))),
+      tag(std::move(const_cast<std::string &>(other.tag))), rtol(other.rtol), atol(other.atol),
+      build(std::move(other.build)), expected_outputs_generated(other.expected_outputs_generated),
+      declared_input_element_counts(std::move(other.declared_input_element_counts)),
+      declared_output_element_counts(std::move(other.declared_output_element_counts)),
+      data_sets_(std::move(other.data_sets_)), model_(std::move(other.model_)),
+      rebuild_(std::move(other.rebuild_)) {}
+
+ModelProto &TestCase::emplace_model() {
+  model_ = std::make_shared<ModelProto>();
+  return *model_;
+}
+
+void TestCase::set_model(ModelProto model) {
+  model_ = std::make_shared<ModelProto>(std::move(model));
+}
+
+void TestCase::set_expected_outputs_generated(bool value) {
+  expected_outputs_generated = value;
+  if (!value && materialized() && data_sets_) {
+    for (DataSet &data_set : *data_sets_) {
+      data_set.expected_outputs_generated = false;
+      data_set.outputs.clear();
+    }
+  }
+}
+
+void TestCase::set_rebuild(std::function<BuiltCase(bool)> rebuild) {
+  rebuild_ = std::move(rebuild);
+}
+
+void TestCase::Materialize() {
+  if (model_) {
+    return;
+  }
+  if (!build && !rebuild_) {
+    return;
+  }
+  BuiltCase built =
+      build ? build(expected_outputs_generated) : rebuild_(expected_outputs_generated);
+  model_ = std::make_shared<ModelProto>(std::move(built.model));
+  if (!data_sets_) {
+    data_sets_ = std::make_shared<std::vector<DataSet>>(std::move(built.data_sets));
+  }
+}
+
+void TestCase::unload() {
+  if (!build && !rebuild_) {
+    throw std::runtime_error("Cannot unload an eager backend test case.");
+  }
+  model_.reset();
+  data_sets_.reset();
+  if (rebuild_) {
+    build = nullptr;
+  }
+}
+
+BuiltCase TestCase::take_materialized() {
+  if (!model_) {
+    throw std::runtime_error("Cannot take an unmaterialized backend test case.");
+  }
+  BuiltCase built;
+  built.model = std::move(*model_);
+  if (data_sets_) {
+    built.data_sets = std::move(*data_sets_);
+  }
+  model_.reset();
+  data_sets_.reset();
+  return built;
+}
+
+std::shared_ptr<ModelProto> TestCase::model_handle() {
+  model();
+  return model_;
+}
+
+std::vector<std::shared_ptr<DataSet>> TestCase::data_set_handles() {
+  std::shared_ptr<std::vector<DataSet>> data_sets = data_sets_handle();
+  std::vector<std::shared_ptr<DataSet>> handles;
+  handles.reserve(data_sets->size());
+  for (DataSet &data_set : *data_sets) {
+    handles.emplace_back(data_sets, &data_set);
+  }
+  return handles;
+}
+
+ModelProto &TestCase::model() {
+  EnsureMaterialized();
+  if (!model_) {
+    model_ = std::make_shared<ModelProto>();
+  }
+  return *model_;
+}
+
+const ModelProto &TestCase::model() const {
+  EnsureMaterialized();
+  if (!model_) {
+    model_ = std::make_shared<ModelProto>();
+  }
+  return *model_;
+}
+
+std::vector<DataSet> &TestCase::data_sets() {
+  EnsureMaterialized();
+  if (!data_sets_) {
+    data_sets_ = std::make_shared<std::vector<DataSet>>();
+  }
+  return *data_sets_;
+}
+
+const std::vector<DataSet> &TestCase::data_sets() const {
+  EnsureMaterialized();
+  if (!data_sets_) {
+    data_sets_ = std::make_shared<std::vector<DataSet>>();
+  }
+  return *data_sets_;
+}
+
+std::shared_ptr<std::vector<DataSet>> TestCase::data_sets_handle() {
+  data_sets();
+  return data_sets_;
+}
+
+void TestCase::EnsureMaterialized() const { const_cast<TestCase *>(this)->Materialize(); }
+
 TypeSpec TensorTypeSpec(int32_t elem_type) {
   TypeSpec spec;
   spec.kind = TypeSpec::Kind::kTensor;

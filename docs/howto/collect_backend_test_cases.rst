@@ -124,7 +124,8 @@ Every case returned by the C++ collectors is initially unmaterialized,
 including manually assembled control-flow, sequence, and shape-analysis
 cases. Accessing ``model`` or ``data_sets`` builds and caches both values.
 Use ``materialized`` to inspect that state without triggering the build and
-``unload()`` to release the cached payload:
+``unload()`` to release the cached payload and build-time resources, including
+kernel instances captured by the initial generator:
 
 .. tab-set::
 
@@ -168,7 +169,10 @@ objects and C++ handles returned by ``model_handle()`` or
 ``data_set_handles()`` use shared ownership and therefore keep their
 referenced payload alive until those handles are also discarded. Plain C++
 references returned by ``model()`` or ``data_sets()`` become invalid when
-the payload is unloaded. A later access rematerializes a fresh payload.
+the payload is unloaded. The lightweight collector fallback retained by the
+case stores only the information needed to find and rebuild it; it does not
+retain the original kernel instance. A later access rematerializes a fresh
+payload and creates a temporary kernel for that build.
 
 Notes
 -----

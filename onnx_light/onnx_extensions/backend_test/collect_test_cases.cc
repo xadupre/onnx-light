@@ -48,12 +48,8 @@ void MakeCollectorCasesUnloadable(std::vector<TestCase> &registry, std::size_t b
                                   bool include_big, TestMode mode) {
   for (std::size_t index = begin; index < registry.size(); ++index) {
     TestCase &test_case = registry[index];
-    if (test_case.is_lazy() && !test_case.materialized()) {
-      continue;
-    }
-
     const std::string name = test_case.name;
-    test_case.build = [collector, name, op_type, include_big, mode](bool generate_outputs) {
+    test_case.set_rebuild([collector, name, op_type, include_big, mode](bool generate_outputs) {
       std::vector<TestCase> rebuilt_cases;
       collector(rebuilt_cases, op_type, include_big, mode);
       for (TestCase &rebuilt : rebuilt_cases) {
@@ -67,8 +63,10 @@ void MakeCollectorCasesUnloadable(std::vector<TestCase> &registry, std::size_t b
         return rebuilt.take_materialized();
       }
       throw std::runtime_error("Backend test collector did not rebuild case '" + name + "'.");
-    };
-    test_case.unload();
+    });
+    if (!test_case.build || test_case.materialized()) {
+      test_case.unload();
+    }
   }
 }
 

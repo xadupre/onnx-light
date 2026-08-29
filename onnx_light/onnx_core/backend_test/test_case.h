@@ -161,10 +161,6 @@ struct TestCase {
   /// exists). Introspection helper that does *not* trigger materialization.
   bool materialized() const { return model_ != nullptr; }
 
-  /// Returns whether the case can be materialized or rebuilt on demand.
-  /// Does not trigger materialization.
-  bool is_lazy() const { return static_cast<bool>(build) || static_cast<bool>(rebuild_); }
-
   /// Returns whether the case has generated expected outputs.
   bool has_expected_outputs() const { return expected_outputs_generated; }
 

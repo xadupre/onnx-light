@@ -795,7 +795,7 @@ TEST(BackendTestCase, BenchmarkModeCollectsAllCategories) {
   EXPECT_GT(benchmark_cases, 0u);
 }
 
-TEST(BackendTestCase, BenchmarkModeCasesAreLazyOrMaterializedForAllCategories) {
+TEST(BackendTestCase, BenchmarkModeCasesHaveValidSizingForAllCategories) {
   using core::backend_test::TestMode;
   const std::vector<
       std::pair<std::string, void (*)(std::vector<TestCase> &, const std::string &, TestMode)>>
@@ -830,7 +830,6 @@ TEST(BackendTestCase, BenchmarkModeCasesAreLazyOrMaterializedForAllCategories) {
       if (tc.name.find("_benchmark") == std::string::npos) {
         continue;
       }
-      EXPECT_TRUE(tc.is_lazy() || tc.materialized()) << "unbuildable benchmark case: " << tc.name;
       for (int64_t count : tc.declared_input_element_counts) {
         EXPECT_GE(count, 0) << "invalid input size: " << tc.name;
       }

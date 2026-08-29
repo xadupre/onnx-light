@@ -57,9 +57,7 @@ void MakeCollectorCasesUnloadable(std::vector<TestCase> &registry, std::size_t b
           continue;
         }
         rebuilt.set_expected_outputs_generated(generate_outputs);
-        if (rebuilt.is_lazy()) {
-          rebuilt.Materialize();
-        }
+        rebuilt.Materialize();
         return rebuilt.take_materialized();
       }
       throw std::runtime_error("Backend test collector did not rebuild case '" + name + "'.");

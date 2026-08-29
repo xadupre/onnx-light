@@ -12,6 +12,7 @@
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
+#include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <regex>
@@ -249,17 +250,18 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       .def_rw("atol", &TestCase::atol)
       .def_prop_ro("has_expected_outputs", &TestCase::has_expected_outputs,
                    "Returns whether this case has generated expected outputs.")
-      .def_prop_ro(
-          "data_sets", [](TestCase &tc) -> std::vector<DataSet> & { return tc.data_sets(); },
-          nb::rv_policy::reference_internal,
-          "Returns the input/output data sets of this test case, materializing "
-          "them first for lazily-built cases.")
-      .def_prop_ro(
-          "model", [](TestCase &tc) -> ModelProto & { return tc.model(); },
-          nb::rv_policy::reference_internal,
-          "Returns the ``ModelProto`` of this test case, resolved against the "
-          "binding registered by ``_onnxpyprotoop``. Built on demand for "
-          "lazily-built (benchmark) cases.")
+      .def_prop_ro("data_sets", &TestCase::data_set_handles,
+                   "Returns the input/output data sets of this test case, materializing "
+                   "them first for lazily-built cases.")
+      .def_prop_ro("model", &TestCase::model_handle,
+                   "Returns the ``ModelProto`` of this test case, resolved against the "
+                   "binding registered by ``_onnxpyprotoop``. Built on demand for "
+                   "lazily-built (benchmark) cases.")
+      .def_prop_ro("materialized", &TestCase::materialized,
+                   "Returns whether this case currently retains a materialized payload.")
+      .def("unload", &TestCase::Unload,
+           "Releases a lazy case's cached model and data sets. Existing Python references "
+           "remain valid. Raises RuntimeError for eager cases, which cannot be rebuilt.")
       .def("__repr__", [](const TestCase &tc) {
         return "TestCase(name='" + tc.name + "', kind='" + tc.kind + "')";
       });

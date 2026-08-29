@@ -40,8 +40,10 @@
 #include <utility>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::BuiltCase;
 using core::backend_test::CollectTestCases;
 using core::backend_test::CollectTestCasesByName;
+using core::backend_test::DataSet;
 using core::backend_test::DefaultOpset;
 using core::backend_test::Expect;
 using core::backend_test::IoData;
@@ -152,6 +154,43 @@ TEST(BackendTestCase, ExpectBuildsSingleNodeModel) {
             "Add");
   ASSERT_EQ(tc.model().ref_opset_import().size(), 1u);
   EXPECT_EQ(tc.model().ref_opset_import()[0].version(), 14);
+}
+
+TEST(BackendTestCase, LazyCaseCanUnloadAndRematerialize) {
+  int builds = 0;
+  TestCase tc("lazy_case");
+  tc.build = [&builds](bool) {
+    ++builds;
+    BuiltCase built;
+    built.model.set_ir_version(9);
+    DataSet data_set;
+    data_set.inputs.push_back(Tensor::FromFloat("x", {1}, {1.0f}));
+    built.data_sets.push_back(std::move(data_set));
+    return built;
+  };
+
+  EXPECT_FALSE(tc.materialized());
+  EXPECT_EQ(tc.model().ir_version(), 9);
+  EXPECT_EQ(tc.data_sets()[0].inputs[0].AsFloat()[0], 1.0f);
+  EXPECT_TRUE(tc.materialized());
+  EXPECT_EQ(builds, 1);
+
+  tc.Unload();
+  EXPECT_FALSE(tc.materialized());
+  EXPECT_EQ(tc.name, "lazy_case");
+  EXPECT_EQ(tc.model().ir_version(), 9);
+  EXPECT_EQ(tc.data_sets()[0].inputs[0].AsFloat()[0], 1.0f);
+  EXPECT_EQ(builds, 2);
+
+  tc.Unload();
+  EXPECT_FALSE(tc.materialized());
+}
+
+TEST(BackendTestCase, EagerCaseCannotUnload) {
+  TestCase tc("eager_case");
+  tc.emplace_model().set_ir_version(9);
+  EXPECT_THROW(tc.Unload(), std::logic_error);
+  EXPECT_TRUE(tc.materialized());
 }
 
 TEST(BackendTestCase, DefaultOpsetUsesEmptyDomain) {

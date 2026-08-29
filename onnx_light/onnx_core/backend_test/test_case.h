@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -160,12 +161,12 @@ struct TestCase {
   /// case builders that populate the ``ModelProto`` in place. Clears any
   /// previously-built cache.
   ModelProto &emplace_model() {
-    model_ = std::make_unique<ModelProto>();
+    model_ = std::make_shared<ModelProto>();
     return *model_;
   }
 
   /// Stores an already-built model into the cache.
-  void set_model(ModelProto model) { model_ = std::make_unique<ModelProto>(std::move(model)); }
+  void set_model(ModelProto model) { model_ = std::make_shared<ModelProto>(std::move(model)); }
 
   /// Returns whether the case has already been materialized (its model cache
   /// exists). Introspection helper that does *not* trigger materialization.
@@ -181,8 +182,8 @@ struct TestCase {
   /// Configures whether the case retains expected outputs.
   void set_expected_outputs_generated(bool value) {
     expected_outputs_generated = value;
-    if (!value && materialized()) {
-      for (DataSet &data_set : data_sets_) {
+    if (!value && materialized() && data_sets_) {
+      for (DataSet &data_set : *data_sets_) {
         data_set.expected_outputs_generated = false;
         data_set.outputs.clear();
       }
@@ -197,17 +198,46 @@ struct TestCase {
       return;
     }
     BuiltCase built = build(expected_outputs_generated);
-    model_ = std::make_unique<ModelProto>(std::move(built.model));
-    if (data_sets_.empty()) {
-      data_sets_ = std::move(built.data_sets);
+    model_ = std::make_shared<ModelProto>(std::move(built.model));
+    if (!data_sets_) {
+      data_sets_ = std::make_shared<std::vector<DataSet>>(std::move(built.data_sets));
     }
+  }
+
+  /// Releases the cached payload of a lazy case so it can be materialized again.
+  /// Existing Python references retain their shared ownership of the released
+  /// model or data sets. Eager cases cannot be rebuilt and therefore reject
+  /// unloading.
+  void Unload() {
+    if (!build) {
+      throw std::logic_error("Cannot unload an eager backend test case.");
+    }
+    model_.reset();
+    data_sets_.reset();
+  }
+
+  /// Returns a shared model handle for bindings that must preserve its lifetime.
+  std::shared_ptr<ModelProto> model_handle() {
+    model();
+    return model_;
+  }
+
+  /// Returns shared data set handles for bindings that must preserve their lifetimes.
+  std::vector<std::shared_ptr<DataSet>> data_set_handles() {
+    std::shared_ptr<std::vector<DataSet>> data_sets = data_sets_handle();
+    std::vector<std::shared_ptr<DataSet>> handles;
+    handles.reserve(data_sets->size());
+    for (DataSet &data_set : *data_sets) {
+      handles.emplace_back(data_sets, &data_set);
+    }
+    return handles;
   }
 
   /// Lazily builds (once) and returns the model.
   ModelProto &model() {
     EnsureMaterialized();
     if (!model_) {
-      model_ = std::make_unique<ModelProto>();
+      model_ = std::make_shared<ModelProto>();
     }
     return *model_;
   }
@@ -218,7 +248,7 @@ struct TestCase {
   const ModelProto &model() const {
     EnsureMaterialized();
     if (!model_) {
-      model_ = std::make_unique<ModelProto>();
+      model_ = std::make_shared<ModelProto>();
     }
     return *model_;
   }
@@ -228,20 +258,31 @@ struct TestCase {
   /// materialization is a no-op).
   std::vector<DataSet> &data_sets() {
     EnsureMaterialized();
-    return data_sets_;
+    if (!data_sets_) {
+      data_sets_ = std::make_shared<std::vector<DataSet>>();
+    }
+    return *data_sets_;
   }
 
   /// Const overload. Materializes the case on first access.
   const std::vector<DataSet> &data_sets() const {
     EnsureMaterialized();
-    return data_sets_;
+    if (!data_sets_) {
+      data_sets_ = std::make_shared<std::vector<DataSet>>();
+    }
+    return *data_sets_;
   }
 
 private:
+  std::shared_ptr<std::vector<DataSet>> data_sets_handle() {
+    data_sets();
+    return data_sets_;
+  }
+
   /// Data sets. Empty until the ``build`` closure has run (for lazy cases) or
   /// until an eager producer appends them directly via :func:`data_sets`.
-  mutable std::vector<DataSet> data_sets_;
-  mutable std::unique_ptr<ModelProto> model_;
+  mutable std::shared_ptr<std::vector<DataSet>> data_sets_;
+  mutable std::shared_ptr<ModelProto> model_;
 
   // Materializes through a const accessor. The object is never truly const
   // (every ``TestCase`` is allocated non-const), so casting away ``const`` to

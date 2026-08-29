@@ -4,6 +4,7 @@
  *
  * Usage:
  *   ./load_onnx_light_time <model.onnx> [iterations] [num_threads] [copy_mode]
+ *       [external_data_file]
  *
  * See CMakeLists.txt for build instructions.
  */
@@ -109,8 +110,9 @@ void TuneAllocatorForBenchmark() {
 
 int main(int argc, char *argv[]) {
   TuneAllocatorForBenchmark();
-  if (argc < 2 || argc > 5) {
-    std::cerr << "Usage: " << argv[0] << " <model.onnx> [iterations] [num_threads] [copy_mode]\n"
+  if (argc < 2 || argc > 6) {
+    std::cerr << "Usage: " << argv[0]
+              << " <model.onnx> [iterations] [num_threads] [copy_mode] [external_data_file]\n"
               << "  copy_mode: default | nocopy | nocopy_touch\n";
     return 1;
   }
@@ -120,6 +122,7 @@ int main(int argc, char *argv[]) {
   int num_threads = 1;
   bool no_copy = false;
   bool touch_raw_data_pages = false;
+  std::string external_data_file;
   if (argc >= 3) {
     if (!ParsePositiveInt(argv[2], iterations)) {
       std::cerr << "Invalid iterations value: " << argv[2] << "\n";
@@ -132,12 +135,14 @@ int main(int argc, char *argv[]) {
       return 1;
     }
   }
-  if (argc == 5) {
+  if (argc >= 5) {
     if (!ParseLoadMode(argv[4], no_copy, touch_raw_data_pages)) {
       std::cerr << "Invalid copy_mode value: " << argv[4]
                 << " (expected default, nocopy, or nocopy_touch)\n";
       return 1;
     }
+    if (argc == 6)
+      external_data_file = argv[5];
   }
 
   ONNX_LIGHT_NAMESPACE::ModelProto model;
@@ -152,17 +157,14 @@ int main(int argc, char *argv[]) {
   const int total_iterations = iterations + 1;
   for (int i = 0; i < total_iterations; ++i) {
     try {
-      // For default loads (no_copy=false), use the mmap-backed stream so the
-      // benchmark exercises the same fast path as onnx_light.onnx.load().
-      // FileStream is kept for the no_copy=true case because its CanNoCopy()
-      // is false and the surrounding code relies on that fallback semantics.
-      std::unique_ptr<ONNX_LIGHT_NAMESPACE::utils::BinaryStream> stream;
-      if (no_copy) {
-        stream = std::make_unique<ONNX_LIGHT_NAMESPACE::utils::FileStream>(file_path);
-      } else {
-        stream = std::make_unique<ONNX_LIGHT_NAMESPACE::utils::MmapFileStream>(file_path);
-      }
       const auto begin = std::chrono::steady_clock::now();
+      std::unique_ptr<ONNX_LIGHT_NAMESPACE::utils::BinaryStream> stream;
+      if (!external_data_file.empty()) {
+        stream = std::make_unique<ONNX_LIGHT_NAMESPACE::utils::TwoFilesStream>(file_path,
+                                                                               external_data_file);
+      } else {
+        stream = std::make_unique<ONNX_LIGHT_NAMESPACE::utils::FileStream>(file_path);
+      }
       ONNX_LIGHT_NAMESPACE::ParseOptions opts;
       ONNX_LIGHT_NAMESPACE::ModelProto parsed_model;
       opts.num_threads = num_threads;
@@ -202,6 +204,8 @@ int main(int argc, char *argv[]) {
   std::cout << "  Num threads      : " << num_threads << "\n";
   std::cout << "  Copy mode        : " << (no_copy ? "nocopy" : "default") << "\n";
   std::cout << "  Touch pages      : " << (touch_raw_data_pages ? "true" : "false") << "\n";
+  std::cout << "  External data    : " << (external_data_file.empty() ? "none" : external_data_file)
+            << "\n";
   std::cout << "  Total load (ms)  : " << total_ms << "\n";
   std::cout << "  Average load (ms): " << avg_ms << "\n";
   std::cout << "  Median load (ms) : " << median_ms << "\n";

@@ -2,6 +2,7 @@ import ast
 import os
 import pathlib
 import tempfile
+import time
 import unittest
 
 import numpy as np
@@ -31,17 +32,43 @@ def _load_example_helpers():
         ``_model_has_external_data``.
     """
     tree = ast.parse(_EXAMPLE_PATH.read_text(encoding="utf-8"), filename=str(_EXAMPLE_PATH))
-    wanted = {"make_model", "_save_default_model", "_model_has_external_data"}
+    wanted = {"make_model", "_save_default_model", "_model_has_external_data", "measure"}
     selected = [
         node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in wanted
     ]
     module = ast.Module(body=selected, type_ignores=[])
-    namespace = {"onnxl": onnxl, "oh": oh, "onh": onh, "np": np, "os": os, "N_INIT": 2, "DIM": 4}
+    namespace = {
+        "onnxl": onnxl,
+        "oh": oh,
+        "onh": onh,
+        "np": np,
+        "os": os,
+        "N_INIT": 2,
+        "DIM": 4,
+        "MAX_MEASURE_DURATION": 2.0,
+        "MIN_MEASURE_ITERATIONS": 3,
+        "time": time,
+    }
     exec(compile(module, filename=str(_EXAMPLE_PATH), mode="exec"), namespace)
     return namespace
 
 
 class TestPlotOnnxTime(unittest.TestCase):
+    def test_measure_collects_minimum_iterations(self):
+        """Verifies the duration bound does not produce single-sample results."""
+        helpers = _load_example_helpers()
+        calls = 0
+
+        def increment():
+            nonlocal calls
+            calls += 1
+
+        stats = helpers["measure"](
+            "increment", increment, n=5, warmup=0, max_duration=0, min_iterations=3
+        )
+        self.assertEqual(calls, 3)
+        self.assertEqual(stats["name"], "increment")
+
     def test_save_default_model_external(self):
         """Verifies the default synthetic model can be saved with external weights."""
         helpers = _load_example_helpers()

@@ -245,6 +245,9 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       .def_ro("tag", &TestCase::tag)
       .def_rw("rtol", &TestCase::rtol)
       .def_rw("atol", &TestCase::atol)
+      .def_rw("expected_output_oracle", &TestCase::expected_output_oracle,
+              "Identifies the built-in onnx-light kernel that produced the expected outputs. "
+              "Empty for manually assembled cases.")
       .def_prop_ro(
           "data_sets", [](TestCase &tc) -> std::vector<DataSet> & { return tc.data_sets(); },
           nb::rv_policy::reference_internal,

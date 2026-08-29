@@ -105,6 +105,11 @@ struct TestCase {
   const std::string tag;
   double rtol = 1e-3;
   double atol = 1e-7;
+  /// Identifies the implementation that produced the expected outputs.
+  ///
+  /// ``Expect`` assigns this to the built-in onnx-light kernel identified by
+  /// the case node. It is intentionally empty for manually assembled cases.
+  std::string expected_output_oracle;
 
   /// Optional builder producing the model + data sets on demand. When set the
   /// case is *lazy*: ``data_sets`` starts empty and the model is unbuilt until
@@ -139,6 +144,7 @@ struct TestCase {
         model_name(std::move(const_cast<std::string &>(other.model_name))),
         kind(std::move(const_cast<std::string &>(other.kind))),
         tag(std::move(const_cast<std::string &>(other.tag))), rtol(other.rtol), atol(other.atol),
+        expected_output_oracle(std::move(other.expected_output_oracle)),
         build(std::move(other.build)),
         declared_input_element_counts(std::move(other.declared_input_element_counts)),
         declared_output_element_counts(std::move(other.declared_output_element_counts)),

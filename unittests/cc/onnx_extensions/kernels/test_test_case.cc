@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/backend_test/cases/controlflow/include_controlflow_cases.h"
 #include "onnx_extensions/backend_test/cases/generator/include_generator_cases.h"
 #include "onnx_extensions/backend_test/cases/image/include_image_cases.h"
@@ -37,6 +38,7 @@
 
 #include <chrono>
 #include <iostream>
+#include <memory>
 #include <utility>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -150,6 +152,33 @@ TEST(BackendTestCase, ExpectBuildsSingleNodeModel) {
             "Add");
   ASSERT_EQ(tc.model().ref_opset_import().size(), 1u);
   EXPECT_EQ(tc.model().ref_opset_import()[0].version(), 14);
+}
+
+TEST(BackendTestCase, ExpectedOutputsIgnoreKernelOverrides) {
+  const auto builtin_abs = core::runtime::KernelDispatchTable().at("ai.onnx:Abs");
+  core::runtime::RegisterKernelFn(
+      "", "Abs", core::symbolic::Device::kCPU,
+      [](const NodeProto &, core::runtime::RuntimeContext &)
+          -> std::unique_ptr<core::runtime::KernelBase> { return nullptr; });
+  core::runtime::RegisterGlobalCustomKernel(
+      "", "Abs", [](const NodeProto &node, core::runtime::RuntimeContext &ctx) {
+        const Tensor &x = ctx.Get(node.input(0));
+        ctx.Put(
+            node.output(0),
+            Tensor::FromFloat(node.output(0), x.shape,
+                              std::vector<float>(static_cast<size_t>(x.element_count()), 42.0f)));
+      });
+
+  std::vector<TestCase> registry;
+  onnx_backend_test::CollectMathTestCases(registry, "Abs", core::backend_test::TestMode::TEST);
+  core::runtime::UnregisterGlobalCustomKernel("", "Abs");
+  core::runtime::RegisterKernelFn("", "Abs", core::symbolic::Device::kCPU, builtin_abs);
+
+  ASSERT_FALSE(registry.empty());
+  const TestCase &tc = registry.front();
+  EXPECT_EQ(tc.expected_output_oracle, "onnx-light::ai.onnx::Abs");
+  const Tensor &expected = tc.data_sets().front().outputs.front();
+  EXPECT_FLOAT_EQ(expected.AsFloat()[0], 1.0f);
 }
 
 TEST(BackendTestCase, DefaultOpsetUsesEmptyDomain) {

@@ -138,6 +138,7 @@ class TestMainBackendTest(unittest.TestCase):
             name_regex="abs",
             mode="benchmark",
             include_big=False,
+            generate_benchmark_expected_outputs=False,
             repeat=2,
             warmup=1,
             max_repeat_time=0.5,

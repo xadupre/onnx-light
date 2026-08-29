@@ -43,7 +43,9 @@ using namespace ::onnx_light::core::runtime;
  *   this mode existed.
  * - ``BENCHMARK`` produces cases whose inputs are enlarged so a single kernel
  *   evaluation processes enough elements to run long enough (~0.1 s) to be
- *   timed reliably. The exact sizes are hand-tuned per operator.
+ *   timed reliably. By default these are input-only performance cases; callers
+ *   may explicitly request reference outputs when validating correctness. The
+ *   exact sizes are hand-tuned per operator.
  */
 enum class TestMode { TEST, BENCHMARK };
 
@@ -51,6 +53,9 @@ enum class TestMode { TEST, BENCHMARK };
 struct DataSet {
   Tensors inputs;
   Tensors outputs;
+  /// Whether ``outputs`` contains generated reference values. False explicitly
+  /// marks an input-only performance data set.
+  bool expected_outputs_generated = true;
   /// Map-typed inputs keyed by the graph input name.
   std::vector<Map> maps;
 };
@@ -109,7 +114,11 @@ struct TestCase {
   /// case is *lazy*: ``data_sets`` starts empty and the model is unbuilt until
   /// :func:`Materialize` / :func:`model` / :func:`data_sets` runs the builder
   /// once.
-  std::function<BuiltCase()> build;
+  std::function<BuiltCase(bool)> build;
+
+  /// Whether this case retains generated reference outputs. Benchmark
+  /// collection may disable these to build input-only performance cases.
+  bool expected_outputs_generated = true;
 
   /// Declared element count of each input/output, recorded without
   /// materializing tensor data. Used to validate the sizing of a case (in
@@ -138,7 +147,7 @@ struct TestCase {
         model_name(std::move(const_cast<std::string &>(other.model_name))),
         kind(std::move(const_cast<std::string &>(other.kind))),
         tag(std::move(const_cast<std::string &>(other.tag))), rtol(other.rtol), atol(other.atol),
-        build(std::move(other.build)),
+        build(std::move(other.build)), expected_outputs_generated(other.expected_outputs_generated),
         declared_input_element_counts(std::move(other.declared_input_element_counts)),
         declared_output_element_counts(std::move(other.declared_output_element_counts)),
         data_sets_(std::move(other.data_sets_)), model_(std::move(other.model_)) {}
@@ -166,6 +175,20 @@ struct TestCase {
   /// trigger materialization.
   bool is_lazy() const { return static_cast<bool>(build); }
 
+  /// Returns whether the case has generated expected outputs.
+  bool has_expected_outputs() const { return expected_outputs_generated; }
+
+  /// Configures whether the case retains expected outputs.
+  void set_expected_outputs_generated(bool value) {
+    expected_outputs_generated = value;
+    if (!value && materialized()) {
+      for (DataSet &data_set : data_sets_) {
+        data_set.expected_outputs_generated = false;
+        data_set.outputs.clear();
+      }
+    }
+  }
+
   /// Runs the ``build`` closure once (if the case is lazy and not yet built),
   /// materializing the model cache and ``data_sets``. No-op for eager cases and
   /// for already-materialized cases.
@@ -173,7 +196,7 @@ struct TestCase {
     if (model_ || !build) {
       return;
     }
-    BuiltCase built = build();
+    BuiltCase built = build(expected_outputs_generated);
     model_ = std::make_unique<ModelProto>(std::move(built.model));
     if (data_sets_.empty()) {
       data_sets_ = std::move(built.data_sets);
@@ -391,14 +414,19 @@ void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string
  *                   tensors that make exhaustive test loops slow.
  * @param mode       When :cpp:enumerator:`TestMode::BENCHMARK`, categories that
  *                   support it emit benchmark-sized cases (large inputs) instead
- *                   of the standard correctness cases. Defaults to
- *                   :cpp:enumerator:`TestMode::TEST`.
+ *                   of the standard correctness cases. Benchmark cases are
+ *                   input-only unless ``generate_benchmark_expected_outputs``
+ *                   is true. Defaults to :cpp:enumerator:`TestMode::TEST`.
+ * @param generate_benchmark_expected_outputs Generate reference outputs for
+ *                   benchmark cases. Ignored for ``TEST``, whose outputs are
+ *                   always generated.
  *
  * @return A fresh registry of test cases (Abs, Add equal-shape, Add scalar
  *         broadcast).
  */
 std::vector<TestCase> CollectTestCases(const std::string &op_type = "", bool include_big = false,
-                                       TestMode mode = TestMode::TEST);
+                                       TestMode mode = TestMode::TEST,
+                                       bool generate_benchmark_expected_outputs = false);
 
 /**
  * Collects C++-implemented backend test node cases whose
@@ -423,7 +451,8 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type = "", bool inc
  */
 std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex,
                                              bool include_big = false,
-                                             TestMode mode = TestMode::TEST);
+                                             TestMode mode = TestMode::TEST,
+                                             bool generate_benchmark_expected_outputs = false);
 
 /**
  * Returns the single C++-implemented backend test case whose
@@ -446,6 +475,7 @@ std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex,
  *         signals that no case with the requested name was found.
  */
 std::vector<TestCase> GetTestCaseByName(const std::string &name, bool include_big = false,
-                                        TestMode mode = TestMode::TEST);
+                                        TestMode mode = TestMode::TEST,
+                                        bool generate_benchmark_expected_outputs = false);
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::backend_test

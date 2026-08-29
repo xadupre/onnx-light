@@ -115,6 +115,7 @@ def measure_backend_test_case_by_name(
     case_name: str,
     mode: str,
     include_big: bool,
+    generate_benchmark_expected_outputs: bool,
     repeat: int,
     warmup: int,
     max_repeat_time: float,
@@ -127,7 +128,10 @@ def measure_backend_test_case_by_name(
 
     test_mode = backend.TestMode.TEST if mode == "test" else backend.TestMode.BENCHMARK
     cases = backend.collect_test_cases_by_name(
-        f"^{re.escape(case_name)}$", include_big=include_big, mode=test_mode
+        f"^{re.escape(case_name)}$",
+        include_big=include_big,
+        mode=test_mode,
+        generate_benchmark_expected_outputs=generate_benchmark_expected_outputs,
     )
     if len(cases) != 1:
         raise RuntimeError(f"expected one backend case named {case_name!r}, got {len(cases)}")

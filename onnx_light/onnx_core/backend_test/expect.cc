@@ -46,11 +46,13 @@ BuiltCase BuildSingleNodeCase(const NodeProto &node, Tensors inputs, Tensors out
       present_inputs.size() == inputs.size() + maps.size(),
       "BuildSingleNodeCase: number of input tensors does not match the non-empty inputs.");
   EXT_ENFORCE_INVALID(
-      present_outputs.size() == outputs.size(),
+      present_outputs.size() == outputs.size() || outputs.empty(),
       "BuildSingleNodeCase: number of output tensors does not match the non-empty outputs.");
   EXT_ENFORCE_INVALID(
-      output_types.empty() || output_types.size() == outputs.size(),
-      "BuildSingleNodeCase: output_types, when provided, must have one entry per output tensor.");
+      output_types.empty() || output_types.size() == present_outputs.size(),
+      "BuildSingleNodeCase: output_types, when provided, must have one entry per output.");
+  EXT_ENFORCE_INVALID(!outputs.empty() || present_outputs.empty() || !output_types.empty(),
+                      "BuildSingleNodeCase: input-only cases require output_types.");
 
   // Build a lookup table from map name to its index in ``maps`` so the input
   // loop below can decide whether each present_input is a Map or a Tensor.
@@ -84,9 +86,9 @@ BuiltCase BuildSingleNodeCase(const NodeProto &node, Tensors inputs, Tensors out
       ++tensor_idx;
     }
   }
-  for (size_t i = 0; i < outputs.size(); ++i) {
-    outputs[i].name = present_outputs[i];
+  for (size_t i = 0; i < present_outputs.size(); ++i) {
     if (output_types.empty()) {
+      outputs[i].name = present_outputs[i];
       FillValueInfo(outputs[i], *graph->add_output());
     } else {
       AppendValueInfo(*graph->add_output(), present_outputs[i], output_types[i]);
@@ -96,6 +98,7 @@ BuiltCase BuildSingleNodeCase(const NodeProto &node, Tensors inputs, Tensors out
   DataSet ds;
   ds.inputs = std::move(inputs);
   ds.outputs = std::move(outputs);
+  ds.expected_outputs_generated = !ds.outputs.empty() || present_outputs.empty();
   ds.maps = std::move(maps);
   built.data_sets.emplace_back(std::move(ds));
   return built;
@@ -114,19 +117,28 @@ struct LazyCaseState {
   std::vector<OpsetId> opset_imports;
   std::string producer_name;
   std::vector<TypeSpec> output_types;
-  std::function<IoData()> make_io;
+  std::function<IoData(bool)> make_io;
   Tensors inputs;
   Tensors outputs;
 };
 
 // Builds the ``TestCase::build`` closure for a lazy case backed by ``state``.
-std::function<BuiltCase()> MakeLazyBuild(std::shared_ptr<LazyCaseState> state) {
-  return [state]() -> BuiltCase {
+std::function<BuiltCase(bool)> MakeLazyBuild(std::shared_ptr<LazyCaseState> state) {
+  return [state](bool generate_outputs) -> BuiltCase {
     if (state->make_io) {
-      IoData io = state->make_io();
-      return BuildSingleNodeCase(state->node, std::move(io.inputs), std::move(io.outputs),
-                                 state->name, state->opset_imports, state->producer_name,
-                                 state->output_types, std::move(io.maps));
+      IoData io = state->make_io(generate_outputs);
+      EXT_ENFORCE_INVALID(!generate_outputs || io.expected_outputs_generated,
+                          "Expect: callback did not generate requested expected outputs.");
+      BuiltCase built = BuildSingleNodeCase(
+          state->node, std::move(io.inputs), std::move(io.outputs), state->name,
+          state->opset_imports, state->producer_name, state->output_types, std::move(io.maps));
+      for (DataSet &ds : built.data_sets) {
+        ds.expected_outputs_generated = io.expected_outputs_generated;
+        if (!io.expected_outputs_generated) {
+          ds.outputs.clear();
+        }
+      }
+      return built;
     }
     return BuildSingleNodeCase(state->node, state->inputs, state->outputs, state->name,
                                state->opset_imports, state->producer_name, state->output_types);
@@ -191,6 +203,30 @@ void Expect(const NodeProto &node, const Tensors &inputs, const Tensors &outputs
 void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
             std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
             std::vector<int64_t> out_counts, std::function<IoData()> make_io,
+            std::string producer_name, std::string tag, std::vector<TypeSpec> output_types) {
+  const std::string resolved_tag = ResolveTag(node, tag);
+
+  auto state = std::make_shared<LazyCaseState>();
+  state->node = std::move(node);
+  state->name = name;
+  state->opset_imports = std::move(opset_imports);
+  state->producer_name = std::move(producer_name);
+  state->output_types = std::move(output_types);
+  state->make_io = [make_io = std::move(make_io)](bool) mutable { return make_io(); };
+
+  TestCase tc(name, name, "node", resolved_tag);
+  tc.rtol = 1e-3;
+  tc.atol = 1e-7;
+  tc.declared_input_element_counts = std::move(in_counts);
+  tc.declared_output_element_counts = std::move(out_counts);
+  tc.build = MakeLazyBuild(std::move(state));
+
+  registry.emplace_back(std::move(tc));
+}
+
+void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
+            std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
+            std::vector<int64_t> out_counts, std::function<IoData(bool)> make_io,
             std::string producer_name, std::string tag, std::vector<TypeSpec> output_types) {
   const std::string resolved_tag = ResolveTag(node, tag);
 

@@ -25,8 +25,10 @@ using TestCasesCollectorFn =
 
 /**
  * Registers a collector function into the global per-category registry.
- * Called once per category at static-initialization time (typically via a
- * ``static int kRegXxx = RegisterTestCasesCollector(...)`` variable in each
+ * The registered wrapper automatically attaches a reconstruction fallback to
+ * every produced case before appending it to the destination registry. Called
+ * once per category at static-initialization time (typically via a ``static
+ * int kRegXxx = RegisterTestCasesCollector(...)`` variable in each
  * ``collect_*_cases.cc`` translation unit).
  *
  * @return 0; the return value exists solely to allow the static-initializer

@@ -43,31 +43,6 @@ namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
 
 namespace {
 
-void AttachCollectorRebuildFallbacks(std::vector<TestCase> &registry, std::size_t begin,
-                                     const TestCasesCollectorFn &collector,
-                                     const std::string &op_type, bool include_big, TestMode mode) {
-  for (std::size_t index = begin; index < registry.size(); ++index) {
-    TestCase &test_case = registry[index];
-    const std::string name = test_case.name;
-    test_case.set_rebuild([collector, name, op_type, include_big, mode](bool generate_outputs) {
-      std::vector<TestCase> rebuilt_cases;
-      collector(rebuilt_cases, op_type, include_big, mode);
-      for (TestCase &rebuilt : rebuilt_cases) {
-        if (rebuilt.name != name) {
-          continue;
-        }
-        rebuilt.set_expected_outputs_generated(generate_outputs);
-        rebuilt.Materialize();
-        return rebuilt.take_materialized();
-      }
-      throw std::runtime_error("Backend test collector did not rebuild case '" + name + "'.");
-    });
-    if (!test_case.build || test_case.materialized()) {
-      test_case.unload();
-    }
-  }
-}
-
 // All 22 per-category collector functions are registered here in a single
 // static initializer.  Because this variable is in the same translation unit
 // as CollectTestCases / CollectTestCasesByName, C++ guarantees that it is
@@ -159,9 +134,7 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type, bool include_
                                        bool generate_benchmark_expected_outputs) {
   std::vector<TestCase> registry;
   for (const auto &fn : GetRegisteredCollectors()) {
-    const std::size_t begin = registry.size();
     fn(registry, op_type, include_big, mode);
-    AttachCollectorRebuildFallbacks(registry, begin, fn, op_type, include_big, mode);
   }
   if (mode == TestMode::BENCHMARK && !generate_benchmark_expected_outputs) {
     for (TestCase &tc : registry) {

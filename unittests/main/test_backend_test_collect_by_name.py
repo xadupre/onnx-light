@@ -97,6 +97,35 @@ class TestCollectTestCasesByName(ExtTestCase):
         self.assertTrue(checked[0].data_sets[0].expected_outputs_generated)
         self.assertEqual(len(checked[0].data_sets[0].outputs), 1)
 
+    def test_lazy_case_unloads_and_rematerializes_with_references(self):
+        cases = bt.collect_test_cases_by_name(r"^test_cc_abs$")
+        self.assertEqual(len(cases), 1)
+        case = cases[0]
+        self.assertFalse(case.materialized)
+
+        model = case.model
+        data_set = case.data_sets[0]
+        tensor = data_set.inputs[0]
+        self.assertTrue(case.materialized)
+
+        case.unload()
+        self.assertFalse(case.materialized)
+        self.assertEqual(model.graph.node[0].op_type, "Abs")
+        self.assertEqual(tensor.shape, [2, 3])
+        self.assertEqual(len(data_set.inputs), 1)
+
+        self.assertEqual(case.model.graph.node[0].op_type, "Abs")
+        self.assertEqual(case.data_sets[0].inputs[0].shape, [2, 3])
+        self.assertTrue(case.materialized)
+        case.unload()
+        self.assertFalse(case.materialized)
+
+    def test_eager_case_rejects_unload(self):
+        cases = bt.collect_test_cases_by_name(r"^test_cc_if_seq$")
+        self.assertEqual(len(cases), 1)
+        with self.assertRaisesRegex(RuntimeError, "eager"):
+            cases[0].unload()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -210,7 +210,7 @@ struct TestCase {
   /// unloading.
   void unload() {
     if (!build) {
-      throw std::logic_error("Cannot unload an eager backend test case.");
+      throw std::runtime_error("Cannot unload an eager backend test case.");
     }
     model_.reset();
     data_sets_.reset();

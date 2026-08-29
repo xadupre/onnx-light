@@ -189,7 +189,7 @@ TEST(BackendTestCase, LazyCaseCanUnloadAndRematerialize) {
 TEST(BackendTestCase, EagerCaseCannotUnload) {
   TestCase tc("eager_case");
   tc.emplace_model().set_ir_version(9);
-  EXPECT_THROW(tc.unload(), std::logic_error);
+  EXPECT_THROW(tc.unload(), std::runtime_error);
   EXPECT_TRUE(tc.materialized());
 }
 

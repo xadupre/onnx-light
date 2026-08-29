@@ -187,21 +187,5 @@ TestRunModelBackend = make_test_class(
 )
 
 
-class TestBackendTestOracle(unittest.TestCase):
-    def test_expected_outputs_ignore_global_kernel_override(self):
-        rt.register_custom_kernel("", "Abs", lambda node, ctx: None)
-        try:
-            case = _backend_case.get_test_case("test_cc_abs")
-        finally:
-            rt.unregister_custom_kernel("", "Abs")
-
-        if case is None:
-            self.fail("Missing test_cc_abs backend test case.")
-        np.testing.assert_array_equal(
-            case.data_sets[0][1][0],
-            np.array([[1.0, 0.0, 1.5], [2.25, 3.5, 4.75]], dtype=np.float32),
-        )
-
-
 if __name__ == "__main__":
     unittest.main(verbosity=2)

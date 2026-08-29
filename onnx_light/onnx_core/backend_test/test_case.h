@@ -75,6 +75,14 @@ struct TestCase;
 struct BuiltCase {
   ModelProto model;
   std::vector<DataSet> data_sets;
+  /// Optional owner of the resources the payload borrows from. Kernels such as
+  /// ``Constant`` return tensors that are non-owning views over the builder's
+  /// captured tensors, so the data sets stay valid only while the producing
+  /// builder lives. A builder that outlives its own scope (for example the
+  /// collector-backed rebuild fallback, which discards the temporary
+  /// ``TestCase`` it rebuilt) stores it here so the borrowed bytes remain
+  /// alive for as long as the payload does.
+  std::shared_ptr<void> retained;
 };
 
 /**
@@ -215,6 +223,9 @@ private:
   /// until an eager producer appends them directly via :func:`data_sets`.
   mutable std::shared_ptr<std::vector<DataSet>> data_sets_;
   mutable std::shared_ptr<ModelProto> model_;
+  /// Keeps alive whatever the materialized payload borrows from (see
+  /// ``BuiltCase::retained``). Released together with the payload.
+  mutable std::shared_ptr<void> retained_;
   std::function<BuiltCase(bool)> rebuild_;
 
   // Materializes through a const accessor. The object is never truly const

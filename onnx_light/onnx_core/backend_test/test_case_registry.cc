@@ -4,7 +4,9 @@
 
 #include "onnx_core/backend_test/test_case_registry.h"
 
+#include <memory>
 #include <stdexcept>
+#include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
 
@@ -27,7 +29,13 @@ TestCasesCollectorFn WithRebuildFallbacks(TestCasesCollectorFn collector) {
           }
           rebuilt.set_expected_outputs_generated(generate_outputs);
           rebuilt.Materialize();
-          return rebuilt.take_materialized();
+          BuiltCase built = rebuilt.take_materialized();
+          // Data sets may hold tensors borrowing bytes owned by the rebuilt
+          // case's builder closure (``Constant`` and friends return non-owning
+          // views over their captured value). Keep that case alive alongside
+          // the payload so those views stay valid.
+          built.retained = std::make_shared<TestCase>(std::move(rebuilt));
+          return built;
         }
         throw std::runtime_error("Backend test collector did not rebuild case '" + name + "'.");
       });

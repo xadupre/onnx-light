@@ -50,7 +50,7 @@ TestCase::TestCase(TestCase &&other) noexcept
       declared_input_element_counts(std::move(other.declared_input_element_counts)),
       declared_output_element_counts(std::move(other.declared_output_element_counts)),
       data_sets_(std::move(other.data_sets_)), model_(std::move(other.model_)),
-      rebuild_(std::move(other.rebuild_)) {}
+      retained_(std::move(other.retained_)), rebuild_(std::move(other.rebuild_)) {}
 
 ModelProto &TestCase::emplace_model() {
   model_ = std::make_shared<ModelProto>();
@@ -88,6 +88,7 @@ void TestCase::Materialize() {
   if (!data_sets_) {
     data_sets_ = std::make_shared<std::vector<DataSet>>(std::move(built.data_sets));
   }
+  retained_ = std::move(built.retained);
 }
 
 void TestCase::unload() {
@@ -96,6 +97,7 @@ void TestCase::unload() {
   }
   model_.reset();
   data_sets_.reset();
+  retained_.reset();
   if (rebuild_) {
     build = nullptr;
   }
@@ -110,8 +112,10 @@ BuiltCase TestCase::take_materialized() {
   if (data_sets_) {
     built.data_sets = std::move(*data_sets_);
   }
+  built.retained = std::move(retained_);
   model_.reset();
   data_sets_.reset();
+  retained_.reset();
   return built;
 }
 

@@ -208,7 +208,7 @@ struct TestCase {
   /// Existing Python references retain their shared ownership of the released
   /// model or data sets. Eager cases cannot be rebuilt and therefore reject
   /// unloading.
-  void Unload() {
+  void unload() {
     if (!build) {
       throw std::logic_error("Cannot unload an eager backend test case.");
     }

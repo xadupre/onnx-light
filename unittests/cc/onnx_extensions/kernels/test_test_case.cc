@@ -175,21 +175,21 @@ TEST(BackendTestCase, LazyCaseCanUnloadAndRematerialize) {
   EXPECT_TRUE(tc.materialized());
   EXPECT_EQ(builds, 1);
 
-  tc.Unload();
+  tc.unload();
   EXPECT_FALSE(tc.materialized());
   EXPECT_EQ(tc.name, "lazy_case");
   EXPECT_EQ(tc.model().ir_version(), 9);
   EXPECT_EQ(tc.data_sets()[0].inputs[0].AsFloat()[0], 1.0f);
   EXPECT_EQ(builds, 2);
 
-  tc.Unload();
+  tc.unload();
   EXPECT_FALSE(tc.materialized());
 }
 
 TEST(BackendTestCase, EagerCaseCannotUnload) {
   TestCase tc("eager_case");
   tc.emplace_model().set_ir_version(9);
-  EXPECT_THROW(tc.Unload(), std::logic_error);
+  EXPECT_THROW(tc.unload(), std::logic_error);
   EXPECT_TRUE(tc.materialized());
 }
 

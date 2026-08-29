@@ -44,7 +44,9 @@ using core::backend_test::CollectTestCases;
 using core::backend_test::CollectTestCasesByName;
 using core::backend_test::DefaultOpset;
 using core::backend_test::Expect;
+using core::backend_test::IoData;
 using core::backend_test::OpsetId;
+using core::backend_test::TensorTypeSpec;
 using core::backend_test::TestCase;
 using core::runtime::Tensor;
 
@@ -275,6 +277,36 @@ TEST(BackendTestCase, TagStaysEmptyForDefaultDomainNode) {
 
   ASSERT_EQ(registry.size(), 1u);
   EXPECT_EQ(registry[0].tag, "");
+}
+
+TEST(BackendTestCase, InputOnlyLazyCaseSkipsExpectedOutputOracle) {
+  NodeProto node;
+  node.set_op_type("Abs");
+  node.add_input("x");
+  node.add_output("y");
+
+  bool oracle_called = false;
+  std::vector<TestCase> registry;
+  Expect(registry, std::move(node), "input_only", {DefaultOpset(14)}, {2}, {2},
+         [&oracle_called](bool generate_outputs) {
+           IoData io{{Tensor::FromFloat("", {2}, {-1.0f, 2.0f})}, {}};
+           io.expected_outputs_generated = generate_outputs;
+           if (generate_outputs) {
+             oracle_called = true;
+             io.outputs.emplace_back(Tensor::FromFloat("", {2}, {1.0f, 2.0f}));
+           }
+           return io;
+         },
+         "backend-test", "", {TensorTypeSpec(TensorProto::FLOAT, {2})});
+
+  ASSERT_EQ(registry.size(), 1u);
+  registry[0].set_expected_outputs_generated(false);
+  EXPECT_FALSE(registry[0].has_expected_outputs());
+  const auto &data_sets = registry[0].data_sets();
+  ASSERT_EQ(data_sets.size(), 1u);
+  EXPECT_FALSE(data_sets[0].expected_outputs_generated);
+  EXPECT_TRUE(data_sets[0].outputs.empty());
+  EXPECT_FALSE(oracle_called);
 }
 
 TEST(BackendTestCase, ExplicitTagOverridesDomainDefault) {

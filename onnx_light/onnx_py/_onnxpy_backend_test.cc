@@ -218,6 +218,8 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
           "outputs", [](DataSet &ds) -> std::vector<Tensor> & { return ds.outputs; },
           [](DataSet &ds, std::vector<Tensor> v) { ds.outputs = std::move(v); },
           nb::rv_policy::reference_internal)
+      .def_ro("expected_outputs_generated", &DataSet::expected_outputs_generated,
+              "Whether expected outputs were generated for this data set.")
       .def_rw("maps", &DataSet::maps)
       .def("__repr__", [](const DataSet &ds) {
         return "DataSet(inputs=" + std::to_string(ds.inputs.size()) +
@@ -245,6 +247,8 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       .def_ro("tag", &TestCase::tag)
       .def_rw("rtol", &TestCase::rtol)
       .def_rw("atol", &TestCase::atol)
+      .def_prop_ro("has_expected_outputs", &TestCase::has_expected_outputs,
+                   "Returns whether this case has generated expected outputs.")
       .def_prop_ro(
           "data_sets", [](TestCase &tc) -> std::vector<DataSet> & { return tc.data_sets(); },
           nb::rv_policy::reference_internal,
@@ -271,11 +275,13 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
 
   bt_mod.def(
       "collect_test_cases",
-      [](const std::string &op_type_or_cat, bool include_big, TestMode mode) {
-        return core::backend_test::CollectTestCases(op_type_or_cat, include_big, mode);
+      [](const std::string &op_type_or_cat, bool include_big, TestMode mode,
+         bool generate_benchmark_expected_outputs) {
+        return core::backend_test::CollectTestCases(op_type_or_cat, include_big, mode,
+                                                    generate_benchmark_expected_outputs);
       },
       nb::arg("op_type_or_cat") = std::string(), nb::arg("include_big") = false,
-      nb::arg("mode") = TestMode::TEST,
+      nb::arg("mode") = TestMode::TEST, nb::arg("generate_benchmark_expected_outputs") = false,
       "Returns the list of C++-implemented backend test node cases. When "
       "``op_type_or_cat`` is non-empty, only cases whose top-level graph "
       "contains a node with that operator type are returned. It can also "
@@ -288,15 +294,17 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
 
   bt_mod.def(
       "collect_test_cases_by_name",
-      [](const std::string &name_regex, bool include_big, TestMode mode) {
+      [](const std::string &name_regex, bool include_big, TestMode mode,
+         bool generate_benchmark_expected_outputs) {
         try {
-          return core::backend_test::CollectTestCasesByName(name_regex, include_big, mode);
+          return core::backend_test::CollectTestCasesByName(name_regex, include_big, mode,
+                                                            generate_benchmark_expected_outputs);
         } catch (const std::regex_error &e) {
           throw nb::value_error(e.what());
         }
       },
       nb::arg("name_regex") = std::string(), nb::arg("include_big") = false,
-      nb::arg("mode") = TestMode::TEST,
+      nb::arg("mode") = TestMode::TEST, nb::arg("generate_benchmark_expected_outputs") = false,
       "Returns the C++-implemented backend test node cases whose ``name`` matches "
       "the ECMAScript regular expression ``name_regex`` (``std::regex_search`` "
       "semantics: substring match by default; anchor with ``^...$`` to require a "
@@ -309,10 +317,13 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
 
   bt_mod.def(
       "get_test_case_by_name",
-      [](const std::string &name, bool include_big, TestMode mode) {
-        return core::backend_test::GetTestCaseByName(name, include_big, mode);
+      [](const std::string &name, bool include_big, TestMode mode,
+         bool generate_benchmark_expected_outputs) {
+        return core::backend_test::GetTestCaseByName(name, include_big, mode,
+                                                     generate_benchmark_expected_outputs);
       },
       nb::arg("name"), nb::arg("include_big") = false, nb::arg("mode") = TestMode::TEST,
+      nb::arg("generate_benchmark_expected_outputs") = false,
       "Returns the single C++-implemented backend test case whose ``name`` "
       "matches exactly, as a list of at most one element. An empty list signals "
       "that no case with the requested name was found. More efficient than "

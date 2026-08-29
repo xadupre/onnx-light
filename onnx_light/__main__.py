@@ -564,6 +564,7 @@ def _measure_backend_test_cases_with_timeout(
     *,
     mode: str,
     include_big: bool,
+    generate_benchmark_expected_outputs: bool,
     repeat: int,
     warmup: int,
     max_repeat_time: float,
@@ -602,7 +603,16 @@ def _measure_backend_test_cases_with_timeout(
                 worker = start_worker()
             result = worker.apply_async(
                 measure_backend_test_case_by_name,
-                (case.name, mode, include_big, repeat, warmup, max_repeat_time, capture_models),
+                (
+                    case.name,
+                    mode,
+                    include_big,
+                    generate_benchmark_expected_outputs,
+                    repeat,
+                    warmup,
+                    max_repeat_time,
+                    capture_models,
+                ),
             )
             try:
                 reports.append(result.get(timeout=timeout_seconds))
@@ -643,6 +653,7 @@ def _run_backend_test_timing(
     name_regex: str = "",
     mode: str = "test",
     include_big: bool = False,
+    generate_benchmark_expected_outputs: bool = False,
     repeat: int = 10 * (os.cpu_count() or 1),
     warmup: int = 2 * (os.cpu_count() or 1),
     max_repeat_time: float = 1.0,
@@ -682,7 +693,10 @@ def _run_backend_test_timing(
     total_start = time.perf_counter()
     collection_start = time.perf_counter()
     cases = backend.collect_test_cases_by_name(
-        name_regex, include_big=include_big, mode=test_mode
+        name_regex,
+        include_big=include_big,
+        mode=test_mode,
+        generate_benchmark_expected_outputs=generate_benchmark_expected_outputs,
     )
     collection_seconds = time.perf_counter() - collection_start
     if tuning_comparison is not None and not cases:
@@ -696,6 +710,7 @@ def _run_backend_test_timing(
             cases,
             mode=mode,
             include_big=include_big,
+            generate_benchmark_expected_outputs=generate_benchmark_expected_outputs,
             repeat=repeat,
             warmup=warmup,
             max_repeat_time=max_repeat_time,
@@ -753,6 +768,7 @@ def _run_backend_test_timing(
                         cases,
                         mode=mode,
                         include_big=include_big,
+                        generate_benchmark_expected_outputs=generate_benchmark_expected_outputs,
                         repeat=repeat,
                         warmup=warmup,
                         max_repeat_time=max_repeat_time,
@@ -878,6 +894,7 @@ def _run_backend_test_timing(
         "name_regex": name_regex,
         "mode": mode,
         "include_big": include_big,
+        "generate_benchmark_expected_outputs": generate_benchmark_expected_outputs,
         "repeat": repeat,
         "warmup": warmup,
         "max_repeat_time": max_repeat_time,
@@ -960,6 +977,7 @@ def _cmd_backend_test(args: argparse.Namespace) -> None:
         name_regex=args.regex,
         mode=args.mode,
         include_big=args.include_big,
+        generate_benchmark_expected_outputs=args.generate_benchmark_expected_outputs,
         repeat=args.repeat,
         warmup=args.warmup,
         max_repeat_time=args.max_repeat_time,
@@ -2044,6 +2062,15 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=("test", "benchmark"),
         default="test",
         help="Generate correctness or benchmark-sized cases (default: test).",
+    )
+    backend_test_parser.add_argument(
+        "--generate-benchmark-expected-outputs",
+        action="store_true",
+        help=(
+            "Generate reference outputs for benchmark cases, enabling correctness "
+            "validation at the cost of the output oracle. Benchmark cases are "
+            "input-only by default."
+        ),
     )
     backend_test_parser.add_argument(
         "--include-big", action="store_true", help="Include cases whose name contains '_big_'."

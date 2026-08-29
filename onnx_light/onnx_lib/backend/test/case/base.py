@@ -119,6 +119,10 @@ class TestCase(_backend_test_cc.TestCase):
         """
         if not self.data_sets:
             return
+        if not self.has_expected_outputs:
+            raise RuntimeError(
+                f"Expected outputs were not generated for benchmark case {self.name!r}."
+            )
         use_atol = atol if atol is not None else self.atol
         use_rtol = rtol if rtol is not None else self.rtol
         for i, (inputs, expected) in enumerate(self.data_sets):
@@ -446,6 +450,11 @@ def _cc_to_python_test_case(cc_tc: Any) -> TestCase:
     Wraps the C++-side model and data sets into the Python ``TestCase``
     subclass with numpy arrays (instead of raw-byte ``Tensor`` instances).
     """
+    if not cc_tc.has_expected_outputs:
+        raise RuntimeError(
+            f"Expected outputs were not generated for benchmark case {cc_tc.name!r}; "
+            "request generate_benchmark_expected_outputs=True."
+        )
     sequence_outputs = {o.name for o in cc_tc.model.graph.output if o.type.has_sequence_type()}
     py_inputs = _ds_inputs_to_python(cc_tc)
     data_sets = [

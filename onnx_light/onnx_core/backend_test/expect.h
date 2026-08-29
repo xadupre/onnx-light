@@ -115,6 +115,15 @@ void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
             std::string producer_name = "backend-test", std::string tag = "",
             std::vector<TypeSpec> output_types = {});
 
+/// Variant of the lazy :func:`Expect` callback which receives whether expected
+/// outputs were requested. It lets benchmark collectors generate inputs without
+/// invoking their output-producing oracle.
+void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
+            std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
+            std::vector<int64_t> out_counts, std::function<IoData(bool)> make_io,
+            std::string producer_name = "backend-test", std::string tag = "",
+            std::vector<TypeSpec> output_types = {});
+
 /**
  * Convenience overload of the lazy :func:`Expect` that omits the element-count
  * vectors. Equivalent to calling the six-parameter lazy overload with empty
@@ -164,11 +173,17 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
   node.add_input(input_name);
   node.add_output(output_name);
   Kernel k = kernel;
-  Expect(registry, std::move(node), name, {opset}, {size}, {size}, [k, size, seed]() -> IoData {
-    Tensor x = Tensor::FromFloat("", {size}, Randn<float>({size}, seed));
-    Tensor y = k(x);
-    return IoData{{std::move(x)}, {std::move(y)}};
-  });
+  Expect(registry, std::move(node), name, {opset}, {size}, {size},
+         [k, size, seed](bool generate_outputs) -> IoData {
+           Tensor x = Tensor::FromFloat("", {size}, Randn<float>({size}, seed));
+           IoData io{{std::move(x)}, {}};
+           io.expected_outputs_generated = generate_outputs;
+           if (generate_outputs) {
+             io.outputs.emplace_back(k(io.inputs[0]));
+           }
+           return io;
+         },
+         "backend-test", "", {TensorTypeSpec(TensorProto::FLOAT, {size})});
   if (with_float16) {
     NodeProto node16;
     node16.set_op_type(op_type);
@@ -176,11 +191,16 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
     node16.add_output(output_name);
     Kernel k16 = kernel;
     Expect(registry, std::move(node16), name + "_float16", {opset}, {size}, {size},
-           [k16, size, seed]() -> IoData {
+           [k16, size, seed](bool generate_outputs) -> IoData {
              Tensor x = MakeFloat16Tensor("", {size}, Randn<float>({size}, seed));
-             Tensor y = k16(x);
-             return IoData{{std::move(x)}, {std::move(y)}};
-           });
+             IoData io{{std::move(x)}, {}};
+             io.expected_outputs_generated = generate_outputs;
+             if (generate_outputs) {
+               io.outputs.emplace_back(k16(io.inputs[0]));
+             }
+             return io;
+           },
+           "backend-test", "", {TensorTypeSpec(TensorProto::FLOAT16, {size})});
   }
   if (with_bfloat16) {
     NodeProto nodebf16;
@@ -189,11 +209,16 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
     nodebf16.add_output(output_name);
     Kernel kbf16 = kernel;
     Expect(registry, std::move(nodebf16), name + "_bfloat16", {opset}, {size}, {size},
-           [kbf16, size, seed]() -> IoData {
+           [kbf16, size, seed](bool generate_outputs) -> IoData {
              Tensor x = MakeBfloat16Tensor("", {size}, Randn<float>({size}, seed));
-             Tensor y = kbf16(x);
-             return IoData{{std::move(x)}, {std::move(y)}};
-           });
+             IoData io{{std::move(x)}, {}};
+             io.expected_outputs_generated = generate_outputs;
+             if (generate_outputs) {
+               io.outputs.emplace_back(kbf16(io.inputs[0]));
+             }
+             return io;
+           },
+           "backend-test", "", {TensorTypeSpec(TensorProto::BFLOAT16, {size})});
   }
 }
 
@@ -226,12 +251,17 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel
   node.add_output("z");
   Kernel k = kernel;
   Expect(registry, std::move(node), name, {opset}, {size, size}, {size},
-         [k, size, seed]() -> IoData {
+         [k, size, seed](bool generate_outputs) -> IoData {
            Tensor x = Tensor::FromFloat("", {size}, Randn<float>({size}, seed));
            Tensor y = Tensor::FromFloat("", {size}, Randn<float>({size}, seed + 1));
-           Tensor z = k(x, y);
-           return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-         });
+           IoData io{{std::move(x), std::move(y)}, {}};
+           io.expected_outputs_generated = generate_outputs;
+           if (generate_outputs) {
+             io.outputs.emplace_back(k(io.inputs[0], io.inputs[1]));
+           }
+           return io;
+         },
+         "backend-test", "", {TensorTypeSpec(TensorProto::FLOAT, {size})});
   if (with_float16) {
     NodeProto node16;
     node16.set_op_type(op_type);
@@ -240,12 +270,17 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel
     node16.add_output("z");
     Kernel k16 = kernel;
     Expect(registry, std::move(node16), name + "_float16", {opset}, {size, size}, {size},
-           [k16, size, seed]() -> IoData {
+           [k16, size, seed](bool generate_outputs) -> IoData {
              Tensor x = MakeFloat16Tensor("", {size}, Randn<float>({size}, seed));
              Tensor y = MakeFloat16Tensor("", {size}, Randn<float>({size}, seed + 1));
-             Tensor z = k16(x, y);
-             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-           });
+             IoData io{{std::move(x), std::move(y)}, {}};
+             io.expected_outputs_generated = generate_outputs;
+             if (generate_outputs) {
+               io.outputs.emplace_back(k16(io.inputs[0], io.inputs[1]));
+             }
+             return io;
+           },
+           "backend-test", "", {TensorTypeSpec(TensorProto::FLOAT16, {size})});
   }
   if (with_bfloat16) {
     NodeProto nodebf16;
@@ -255,12 +290,17 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel
     nodebf16.add_output("z");
     Kernel kbf16 = kernel;
     Expect(registry, std::move(nodebf16), name + "_bfloat16", {opset}, {size, size}, {size},
-           [kbf16, size, seed]() -> IoData {
+           [kbf16, size, seed](bool generate_outputs) -> IoData {
              Tensor x = MakeBfloat16Tensor("", {size}, Randn<float>({size}, seed));
              Tensor y = MakeBfloat16Tensor("", {size}, Randn<float>({size}, seed + 1));
-             Tensor z = kbf16(x, y);
-             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-           });
+             IoData io{{std::move(x), std::move(y)}, {}};
+             io.expected_outputs_generated = generate_outputs;
+             if (generate_outputs) {
+               io.outputs.emplace_back(kbf16(io.inputs[0], io.inputs[1]));
+             }
+             return io;
+           },
+           "backend-test", "", {TensorTypeSpec(TensorProto::BFLOAT16, {size})});
   }
 }
 

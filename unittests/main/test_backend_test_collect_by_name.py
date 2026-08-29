@@ -80,6 +80,23 @@ class TestCollectTestCasesByName(ExtTestCase):
         # generator and changes its output.
         self.assertTrue(any(name.endswith("_benchmark") for name in benchmark_names))
 
+    def test_benchmark_expected_outputs_are_opt_in(self):
+        pattern = r"^test_cc_abs_benchmark$"
+        input_only = bt.collect_test_cases_by_name(pattern, mode=bt.TestMode.BENCHMARK)
+        self.assertEqual(len(input_only), 1)
+        self.assertFalse(input_only[0].has_expected_outputs)
+        self.assertEqual(len(input_only[0].data_sets), 1)
+        self.assertFalse(input_only[0].data_sets[0].expected_outputs_generated)
+        self.assertEqual(input_only[0].data_sets[0].outputs, [])
+
+        checked = bt.collect_test_cases_by_name(
+            pattern, mode=bt.TestMode.BENCHMARK, generate_benchmark_expected_outputs=True
+        )
+        self.assertEqual(len(checked), 1)
+        self.assertTrue(checked[0].has_expected_outputs)
+        self.assertTrue(checked[0].data_sets[0].expected_outputs_generated)
+        self.assertEqual(len(checked[0].data_sets[0].outputs), 1)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

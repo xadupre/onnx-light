@@ -43,9 +43,9 @@ namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
 
 namespace {
 
-void MakeCollectorCasesUnloadable(std::vector<TestCase> &registry, std::size_t begin,
-                                  const TestCasesCollectorFn &collector, const std::string &op_type,
-                                  bool include_big, TestMode mode) {
+void AttachCollectorRebuildFallbacks(std::vector<TestCase> &registry, std::size_t begin,
+                                     const TestCasesCollectorFn &collector,
+                                     const std::string &op_type, bool include_big, TestMode mode) {
   for (std::size_t index = begin; index < registry.size(); ++index) {
     TestCase &test_case = registry[index];
     const std::string name = test_case.name;
@@ -161,7 +161,7 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type, bool include_
   for (const auto &fn : GetRegisteredCollectors()) {
     const std::size_t begin = registry.size();
     fn(registry, op_type, include_big, mode);
-    MakeCollectorCasesUnloadable(registry, begin, fn, op_type, include_big, mode);
+    AttachCollectorRebuildFallbacks(registry, begin, fn, op_type, include_big, mode);
   }
   if (mode == TestMode::BENCHMARK && !generate_benchmark_expected_outputs) {
     for (TestCase &tc : registry) {

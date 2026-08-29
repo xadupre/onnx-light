@@ -474,10 +474,16 @@ CPP_SAVE_METRIC_PATTERN = re.compile(
 )
 WINDOWS_BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 MAX_MEASURE_DURATION = 2.0
+MIN_MEASURE_ITERATIONS = 3
 
 
 def measure(
-    name: str, fn, n: int = 5, warmup: int = 1, max_duration: float = MAX_MEASURE_DURATION
+    name: str,
+    fn,
+    n: int = 5,
+    warmup: int = 1,
+    max_duration: float = MAX_MEASURE_DURATION,
+    min_iterations: int = MIN_MEASURE_ITERATIONS,
 ) -> dict:
     """
     Executes *fn* with warm-up iterations and records timing statistics.
@@ -488,6 +494,8 @@ def measure(
         n: Number of measured iterations.
         warmup: Number of non-measured warm-up iterations.
         max_duration: Maximum cumulative measured duration in seconds.
+        min_iterations: Minimum number of measured iterations collected before
+            ``max_duration`` can stop the benchmark.
 
     Returns:
         A dictionary containing name, median, avg, min, max, and std.
@@ -502,7 +510,7 @@ def measure(
         duration = time.perf_counter() - t0
         times.append(duration)
         total_duration += duration
-        if total_duration >= max_duration:
+        if len(times) >= min(n, min_iterations) and total_duration >= max_duration:
             break
     arr = np.array(times)
     return {
@@ -586,6 +594,7 @@ def _measure_cpp_load_with_example(
     file_count: int = 1,
     no_copy: bool = False,
     touch_raw_data_pages: bool = False,
+    external_data_file: str | None = None,
     reasons: list[str] | None = None,
 ) -> dict | None:
     """Measures C++ loading performance through a standalone executable.
@@ -600,6 +609,8 @@ def _measure_cpp_load_with_example(
         no_copy: Whether to request ``no_copy`` mode from ``load_onnx_light_time``.
         touch_raw_data_pages: Whether to request page touching during no-copy loading
             from ``load_onnx_light_time``.
+        external_data_file: Optional external weights file passed to
+            ``load_onnx_light_time``.
         reasons: Optional list that receives a human-readable description of why the
             standalone executable could not be located when ``None`` is returned.
 
@@ -624,8 +635,12 @@ def _measure_cpp_load_with_example(
             f"'load_onnx_light_time', got {executable_name!r}"
         )
     args = [onnx_file, str(n), str(num_threads)]
-    if no_copy:
-        args.append("nocopy_touch" if touch_raw_data_pages else "nocopy")
+    if no_copy or external_data_file is not None:
+        args.append(
+            "nocopy_touch" if touch_raw_data_pages else ("nocopy" if no_copy else "default")
+        )
+    if external_data_file is not None:
+        args.append(external_data_file)
     return measure_cpp_with_example(
         executable=executable,
         args=args,
@@ -659,7 +674,11 @@ def _find_save_onnx_light_time_executable(reasons: list[str] | None = None) -> s
 
 
 def _measure_cpp_save_with_example(
-    onnx_file: str, n: int = 20, num_threads: int = 1, reasons: list[str] | None = None
+    onnx_file: str,
+    n: int = 20,
+    num_threads: int = 1,
+    file_count: int = 1,
+    reasons: list[str] | None = None,
 ) -> dict | None:
     """Measures C++ one-file save performance through ``save_onnx_light_time``.
 
@@ -667,6 +686,7 @@ def _measure_cpp_save_with_example(
         onnx_file: Model path to pass to the standalone executable.
         n: Number of iterations to pass to the standalone executable.
         num_threads: Number of saving threads to pass to the standalone executable.
+        file_count: Number of files involved in the benchmark key.
         reasons: Optional list that receives a human-readable description of why the
             standalone executable could not be located when ``None`` is returned.
 
@@ -674,15 +694,23 @@ def _measure_cpp_save_with_example(
         A benchmark dictionary matching :func:`measure` output keys if successful,
         otherwise ``None``.
     """
+    if file_count not in {1, 2}:
+        raise ValueError(f"file_count must be 1 or 2, got {file_count!r}")
     executable = _find_save_onnx_light_time_executable(reasons=reasons)
     if executable is None:
         return None
     with tempfile.TemporaryDirectory() as tmp_save_dir:
         return measure_cpp_with_example(
             executable=executable,
-            args=[onnx_file, tmp_save_dir, str(n), str(num_threads), "onefile"],
+            args=[
+                onnx_file,
+                tmp_save_dir,
+                str(n),
+                str(num_threads),
+                "external" if file_count == 2 else "onefile",
+            ],
             metric_pattern=CPP_SAVE_METRIC_PATTERN,
-            result_name=f"save/1filex{num_threads}/onnxlight-cpp",
+            result_name=f"save/{file_count}filex{num_threads}/onnxlight-cpp",
             executable_name="save_onnx_light_time",
         )
 
@@ -1074,11 +1102,23 @@ if _run_scenario("cpp"):
     # using ``no_copy`` shared external buffers.
 
     cpp_load_ext_nc = _measure_cpp_load_with_example(
-        ext_load_onnx, num_threads=1, file_count=2, no_copy=True, touch_raw_data_pages=True
+        ext_load_onnx,
+        num_threads=1,
+        file_count=2,
+        no_copy=True,
+        touch_raw_data_pages=True,
+        external_data_file=ext_load_data,
     )
     if cpp_load_ext_nc is not None:
         data.append(cpp_load_ext_nc)
         print_stats(cpp_load_ext_nc["name"], cpp_load_ext_nc)
+
+    cpp_load_ext = _measure_cpp_load_with_example(
+        ext_load_onnx, num_threads=1, file_count=2, external_data_file=ext_load_data
+    )
+    if cpp_load_ext is not None:
+        data.append(cpp_load_ext)
+        print_stats(cpp_load_ext["name"], cpp_load_ext)
 
     # %%
     # Load with standalone C++ ``load_onnx_time`` example when available.
@@ -1125,6 +1165,16 @@ if _run_scenario("cpp"):
         data.append(cpp_save_x4)
         print_stats(cpp_save_x4["name"], cpp_save_x4)
 
+    cpp_save_ext_x1 = _measure_cpp_save_with_example(onnx_path, num_threads=1, file_count=2)
+    if cpp_save_ext_x1 is not None:
+        data.append(cpp_save_ext_x1)
+        print_stats(cpp_save_ext_x1["name"], cpp_save_ext_x1)
+
+    cpp_save_ext_x4 = _measure_cpp_save_with_example(onnx_path, num_threads=4, file_count=2)
+    if cpp_save_ext_x4 is not None:
+        data.append(cpp_save_ext_x4)
+        print_stats(cpp_save_ext_x4["name"], cpp_save_ext_x4)
+
 # %%
 # Load with ``onnx`` using external data
 # --------------------------------------
@@ -1132,9 +1182,7 @@ if _run_scenario("cpp"):
 # Reload the model previously saved with external data using ``onnx.load``.
 
 if _run_scenario("load"):
-    data.append(
-        measure("load/2filex1/onnx", lambda: onnxl.load(ext_load_onnx, load_external_data=True))
-    )
+    data.append(measure("load/2filex1/onnx", lambda: onnx_load(ext_load_onnx)))
     print_stats("load/2filex1/onnx", data[-1])
 
     # %%
@@ -1184,7 +1232,12 @@ if _run_scenario("load"):
     # Load with ``ir-py`` using external data.
 
     if onnx_ir_module is not None:
-        data.append(measure("load/2filex1/ir-py", lambda: onnx_ir_module.load(ext_load_onnx)))
+        onnx_ir_external_data = importlib.import_module("onnx_ir.external_data")
+
+        def _load_onnx_ir_external_data():
+            return onnx_ir_external_data.load_to_model(onnx_ir_module.load(ext_load_onnx))
+
+        data.append(measure("load/2filex1/ir-py", _load_onnx_ir_external_data))
         print_stats("load/2filex1/ir-py", data[-1])
     else:
         print("onnx_ir is not installed, skipping ir-py external-data load benchmark.")

@@ -28,7 +28,6 @@ companion external-data file.
 import argparse
 import json
 import os
-import pathlib
 import subprocess
 import sys
 import tempfile
@@ -153,7 +152,7 @@ def _run_sample(implementation: str, model_path: str) -> dict:
     """Runs one implementation in a fresh process and returns its measurements."""
     command = [
         sys.executable,
-        str(pathlib.Path(__file__).resolve()),
+        os.path.abspath(sys.argv[0]),
         "--worker",
         implementation,
         model_path,

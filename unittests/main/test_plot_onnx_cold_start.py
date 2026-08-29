@@ -2,6 +2,7 @@ import importlib.util
 import pathlib
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -41,7 +42,8 @@ class TestPlotOnnxColdStart(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             model_path = pathlib.Path(directory) / "model.onnx"
             onnxl.save(oh.make_model(graph), model_path)
-            result = _load_example_helpers()._run_sample("onnx_light", str(model_path))
+            with patch("sys.argv", [str(_EXAMPLE_PATH)]):
+                result = _load_example_helpers()._run_sample("onnx_light", str(model_path))
 
         self.assertEqual(result["implementation"], "onnx_light")
         self.assertGreater(result["end_to_end_ms"], 0)

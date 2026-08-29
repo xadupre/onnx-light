@@ -195,8 +195,8 @@ class TestBackendTestOracle(unittest.TestCase):
         finally:
             rt.unregister_custom_kernel("", "Abs")
 
-        self.assertIsNotNone(case)
-        assert case is not None
+        if case is None:
+            self.fail("Missing test_cc_abs backend test case.")
         self.assertEqual(case.expected_output_oracle, "onnx-light::ai.onnx::Abs")
         np.testing.assert_array_equal(
             case.data_sets[0][1][0],

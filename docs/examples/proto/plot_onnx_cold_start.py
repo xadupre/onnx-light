@@ -153,7 +153,7 @@ def _run_sample(implementation: str, model_path: str) -> dict:
     """Runs one implementation in a fresh process and returns its measurements."""
     command = [
         sys.executable,
-        str(pathlib.Path(__file__).resolve()),
+        str(pathlib.Path(_run_sample.__code__.co_filename).resolve()),
         "--worker",
         implementation,
         model_path,

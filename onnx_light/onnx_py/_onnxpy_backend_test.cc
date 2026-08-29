@@ -260,8 +260,9 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       .def_prop_ro("materialized", &TestCase::materialized,
                    "Returns whether this case currently retains a materialized payload.")
       .def("unload", &TestCase::unload,
-           "Releases a lazy case's cached model and data sets. Existing Python references "
-           "remain valid. Raises RuntimeError for eager cases, which cannot be rebuilt.")
+           "Releases this collected case's cached model and data sets. The payload is "
+           "rebuilt on the next ``model`` or ``data_sets`` access, while existing Python "
+           "references remain valid.")
       .def("__repr__", [](const TestCase &tc) {
         return "TestCase(name='" + tc.name + "', kind='" + tc.kind + "')";
       });

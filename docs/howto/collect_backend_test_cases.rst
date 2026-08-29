@@ -117,6 +117,59 @@ substring match; anchor it with ``^...$`` for a full match.
               std::cout << tc.name << "\n";
           }
 
+Release materialized cases
+--------------------------
+
+Every case returned by the C++ collectors is initially unmaterialized,
+including manually assembled control-flow, sequence, and shape-analysis
+cases. Accessing ``model`` or ``data_sets`` builds and caches both values.
+Use ``materialized`` to inspect that state without triggering the build and
+``unload()`` to release the cached payload:
+
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
+
+          import onnx_light.onnx.backend as bt
+
+          case = bt.collect_test_cases_by_name(r"^test_cc_if_seq$")[0]
+          assert not case.materialized
+
+          model = case.model
+          assert case.materialized
+
+          case.unload()
+          assert not case.materialized
+
+          # Existing handles remain valid. A new access rebuilds the cache.
+          assert model.graph.node[0].op_type == "If"
+          assert case.model.graph.node[0].op_type == "If"
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
+
+          #include "onnx_core/backend_test/test_case.h"
+
+          auto cases = core::backend_test::CollectTestCasesByName(
+              "^test_cc_if_seq$");
+          auto &test_case = cases.front();
+          auto model = test_case.model_handle();
+          test_case.unload();
+          assert(!test_case.materialized());
+          assert(model->ref_graph().ref_node()[0].ref_op_type() == "If");
+
+``unload()`` only releases ownership held by the case. Existing Python
+objects and C++ handles returned by ``model_handle()`` or
+``data_set_handles()`` use shared ownership and therefore keep their
+referenced payload alive until those handles are also discarded. Plain C++
+references returned by ``model()`` or ``data_sets()`` become invalid when
+the payload is unloaded. A later access rematerializes a fresh payload.
+
 Notes
 -----
 
@@ -131,7 +184,7 @@ Notes
   :cpp:func:`onnx_light::core::backend_test::CollectTestCases` with no
   arguments.
 * :class:`TestCase` exposes ``name``, ``kind``, ``tag``, ``rtol``, ``atol``,
-  ``data_sets``, and a lazily resolved ``model``
+  ``materialized``, ``unload()``, ``data_sets``, and a lazily resolved ``model``
   (:class:`onnx_light.onnx.ModelProto`), so a case retrieved by name can
   be fed directly to a :class:`~onnx_light.onnx.reference.ReferenceEvaluator`
   or to any other backend runner.

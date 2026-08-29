@@ -22,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Improvements
 
+- Made every collected C++ backend test case lazily materialized and unloadable,
+  including manually assembled control-flow, sequence, and shape-analysis cases.
 - Removed compatibility-parser input staging and the external-data pre-scan, resolving
   descriptors in a single pass while freezing live payload manifests before materialization.
 - Cached runtime initializer tensors per session and reused compatible CPU executor pools.

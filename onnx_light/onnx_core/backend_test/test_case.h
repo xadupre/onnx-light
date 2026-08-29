@@ -86,11 +86,11 @@ struct BuiltCase {
  * (both the correctness ``TEST`` cases and the ``BENCHMARK`` cases) is *lazy*:
  * it carries a ``build`` closure that produces the :ref:`BuiltCase` — the
  * ``ModelProto`` and its ``data_sets`` — on first access via :func:`model` /
- * :func:`data_sets` / :func:`Materialize`. A handful of manually-assembled
- * cases (control-flow, sequence, ...) are instead *eager*: they populate the
- * model cache with :func:`emplace_model` / :func:`set_model` and append their
- * data sets directly, so ``build`` is left unset and :func:`Materialize` is a
- * no-op. Every case records ``declared_input_element_counts`` /
+ * :func:`data_sets` / :func:`Materialize`. Manually-assembled cases
+ * (control-flow, sequence, ...) initially populate the model and data-set
+ * caches directly; the top-level collector replaces those caches with a
+ * rebuilding closure before returning them to consumers. Every case records
+ * ``declared_input_element_counts`` /
  * ``declared_output_element_counts`` so its sizing can be checked without
  * running the (potentially expensive) builder.
  *
@@ -214,6 +214,23 @@ struct TestCase {
     }
     model_.reset();
     data_sets_.reset();
+  }
+
+  /// Moves the cached model and data sets out of a materialized case.
+  /// Used by collector-backed rebuild closures after recreating a formerly
+  /// eager case. The case is left unmaterialized.
+  BuiltCase take_materialized() {
+    if (!model_) {
+      throw std::runtime_error("Cannot take an unmaterialized backend test case.");
+    }
+    BuiltCase built;
+    built.model = std::move(*model_);
+    if (data_sets_) {
+      built.data_sets = std::move(*data_sets_);
+    }
+    model_.reset();
+    data_sets_.reset();
+    return built;
   }
 
   /// Returns a shared model handle for bindings that must preserve its lifetime.

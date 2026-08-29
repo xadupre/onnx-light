@@ -179,6 +179,58 @@ class TestBackendFunction(ExtTestCase):
         self.assertEqual(tc.name, "test_cc_abs")
         self.assertEqual(tc.kind, "node")
 
+    def test_collect_test_case_is_unloaded_by_default(self):
+        """Native-backed Python cases materialize on demand and can be reused."""
+        tc = collect_test_case()["test_cc_abs"]
+        self.assertFalse(tc.materialized)
+        self.assertEqual(tc.model.graph.node[0].op_type, "Abs")
+        self.assertTrue(tc.materialized)
+        tc.unload()
+        self.assertFalse(tc.materialized)
+        self.assertEqual(tc.model.graph.node[0].op_type, "Abs")
+
+    def test_collect_test_case_can_keep_payloads(self):
+        """unload=False preserves eager conversion for callers that need it."""
+        tc = collect_test_case(unload=False)["test_cc_abs"]
+        self.assertTrue(tc.materialized)
+        self.assertIsNotNone(tc.data_sets)
+
+    def test_partial_native_overlay_is_completed_without_overwrite(self):
+        """A custom model or data-set overlay preserves the other native payload."""
+        tc = collect_test_case()["test_cc_abs"]
+        model = tc.model
+        data_sets = tc.data_sets
+
+        tc.unload()
+        tc.model = model
+        self.assertIs(tc.model, model)
+        self.assertIsNotNone(tc.data_sets)
+
+        tc.unload()
+        tc.data_sets = data_sets
+        self.assertIs(tc.data_sets, data_sets)
+        self.assertIsNotNone(tc.model)
+
+    def test_python_defined_case_unload_is_safe(self):
+        """Python-defined eager cases ignore unload because they cannot rebuild."""
+        node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
+        x = np.array([1.0], dtype=np.float32)
+        expect(node, inputs=[x], outputs=[np.abs(x)], name="test_python_unload")
+        tc = ALL_TESTS["test_python_unload"]
+        tc.unload()
+        self.assertTrue(tc.materialized)
+
+    def test_assert_allclose_unloads_after_failure(self):
+        """Runtime failures still release native-backed Python payloads."""
+        tc = collect_test_case()["test_cc_abs"]
+
+        def fail_runtime(model, *inputs):
+            raise RuntimeError("expected failure")
+
+        with self.assertRaisesRegex(RuntimeError, "expected failure"):
+            tc.assert_allclose(fail_runtime)
+        self.assertFalse(tc.materialized)
+
     def test_collect_test_case_finds_blackmanwindow_tests(self):
         """Tests that collect_test_case finds BlackmanWindow test cases (from C++)."""
         result = collect_test_case()

@@ -110,6 +110,17 @@ class TestCoverage(ExtTestCase):
         self.assertNotIn("tensor(float)", abs_entry.missing_types)
         self.assertNotIn(("ai.onnx", "Abs"), report.uncovered_operators)
 
+    def test_native_case_unload_parameter(self):
+        """Coverage unloads by default and honors explicit retention."""
+        from onnx_light.onnx_lib.backend.test.case.base import collect_test_case
+
+        tc = collect_test_case()["test_cc_abs"]
+        compute_test_case_coverage([tc])
+        self.assertFalse(tc.materialized)
+
+        compute_test_case_coverage([tc], unload=False)
+        self.assertTrue(tc.materialized)
+
     def test_empty_test_cases(self):
         """With no test cases nothing is covered but the baseline stays."""
         report = compute_test_case_coverage({})

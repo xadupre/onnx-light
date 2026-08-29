@@ -86,6 +86,17 @@ class TestRuntimeCoverage(ExtTestCase):
         self.assertAlmostEqual(s.percent("onnxruntime_ok"), 50.0)
         self.assertAlmostEqual(DomainSummary(domain="").percent("onnxruntime_ok"), 0.0)
 
+    def test_unload_parameter(self):
+        """Runtime coverage unloads by default and honors explicit retention."""
+        from onnx_light.onnx_lib.backend.test.case.base import collect_test_case
+
+        tc = collect_test_case()["test_cc_abs"]
+        compute_runtime_coverage([tc])
+        self.assertFalse(tc.materialized)
+
+        compute_runtime_coverage([tc], unload=False)
+        self.assertTrue(tc.materialized)
+
     def test_render_rst_summary(self):
         text = render_rst_summary(self.report)
         self.assertIn(".. list-table::", text)

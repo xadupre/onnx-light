@@ -1078,7 +1078,7 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
     ``.. code-block:: text`` block.  When no backend test exists for the
     operator/opset, an empty list is returned and no section is emitted.
     """
-    from .onnx_lib.backend.test.case.base import get_test_cases_for_op
+    from .onnx_lib.backend.test.case.base import _unload_test_case, get_test_cases_for_op
 
     all_tests = _load_backend_test_cases()
     if not all_tests:
@@ -1101,13 +1101,18 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
     lines: list[str] = ["Examples", "--------", ""]
     for name in sorted(matches):
         tc = matches[name]
+        try:
+            model = tc.model
+            data_sets = tc.data_sets or []
+        finally:
+            _unload_test_case(tc, True)
         lines.append(f"**{name}**")
         lines.append("")
 
         # Find the (first) node in the model that matches this operator.
         target_node = None
-        if tc.model is not None:
-            for node in tc.model.graph.node:
+        if model is not None:
+            for node in model.graph.node:
                 if node.op_type == schema.name and node.domain == lookup_domain:
                     target_node = node
                     break
@@ -1133,8 +1138,8 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
                     lines.append(f"        {_format_example_attribute(attr)}")
             lines.append("")
 
-        for ds_index, (inputs, outputs) in enumerate(tc.data_sets or []):
-            if len(tc.data_sets or []) > 1:
+        for ds_index, (inputs, outputs) in enumerate(data_sets):
+            if len(data_sets) > 1:
                 lines.append(".. code-block:: text")
                 lines.append("")
                 lines.append(f"    Data set {ds_index}:")
@@ -1845,83 +1850,93 @@ def _iter_inference_cases() -> Iterable[TestCase]:
             yield tc
 
 
-def compute_inference_coverage() -> InferenceCoverageReport:
+def compute_inference_coverage(unload: bool = True) -> InferenceCoverageReport:
     """Computes the shape-inference report for every ``"inference"`` case.
 
     For every case, the model is deep-cloned, its ``graph.value_info`` is
     cleared, and :func:`infer_shapes_model` (from ``onnx_shapes``) is run on
     the clone. The report contrasts the *expected* shapes from the original
     model with the *computed* shapes from the inferred clone.
+
+    :param unload: Releases each native-backed case after processing it.
+        Defaults to ``True``.
     """
+    from .onnx_lib.backend.test.case.base import _unload_test_case
+
     report = InferenceCoverageReport()
 
     for tc in _iter_inference_cases():
-        original = tc.model
-        if original is None:  # pragma: no cover - defensive
-            continue
         try:
-            model_str = pretty_onnx(original)
-        except Exception as exc:  # pragma: no cover - defensive only
-            model_str = f"pretty_onnx failed: {exc}"
+            original = tc.model
+            if original is None:  # pragma: no cover - defensive
+                continue
+            try:
+                model_str = pretty_onnx(original)
+            except Exception as exc:  # pragma: no cover - defensive only
+                model_str = f"pretty_onnx failed: {exc}"
 
-        # Snapshot expected shapes from the original (untouched) model so
-        # that we can compare them against the shapes produced by shape
-        # inference on the stripped clone.
-        expected_inputs = {vi.name: _extract_value_shape(vi) for vi in original.graph.input}
-        expected_value_info = {
-            vi.name: _extract_value_shape(vi) for vi in original.graph.value_info
-        }
-        expected_outputs = {vi.name: _extract_value_shape(vi) for vi in original.graph.output}
-
-        clone = _clone_model(original)
-        _strip_value_info(clone)
-        error: str | None = None
-        try:
-            infer_shapes_model(clone)
-        except Exception as exc:  # capture shape-inference failures
-            error = str(exc)
-
-        comparisons: list[ValueComparison] = []
-        if error is None:
-            computed_inputs = {vi.name: _extract_value_shape(vi) for vi in clone.graph.input}
-            computed_value_info = {
-                vi.name: _extract_value_shape(vi) for vi in clone.graph.value_info
+            # Snapshot expected shapes from the original (untouched) model so
+            # that we can compare them against the shapes produced by shape
+            # inference on the stripped clone.
+            expected_inputs = {vi.name: _extract_value_shape(vi) for vi in original.graph.input}
+            expected_value_info = {
+                vi.name: _extract_value_shape(vi) for vi in original.graph.value_info
             }
-            computed_outputs = {vi.name: _extract_value_shape(vi) for vi in clone.graph.output}
+            expected_outputs = {vi.name: _extract_value_shape(vi) for vi in original.graph.output}
 
-            for name, expected in expected_inputs.items():
-                comparisons.append(
-                    ValueComparison(
-                        name=name,
-                        role="input",
-                        expected=expected,
-                        computed=computed_inputs.get(name),
-                    )
-                )
-            for name, expected in expected_value_info.items():
-                comparisons.append(
-                    ValueComparison(
-                        name=name,
-                        role="value_info",
-                        expected=expected,
-                        computed=computed_value_info.get(name),
-                    )
-                )
-            for name, expected in expected_outputs.items():
-                comparisons.append(
-                    ValueComparison(
-                        name=name,
-                        role="output",
-                        expected=expected,
-                        computed=computed_outputs.get(name),
-                    )
-                )
+            clone = _clone_model(original)
+            _strip_value_info(clone)
+            error: str | None = None
+            try:
+                infer_shapes_model(clone)
+            except Exception as exc:  # capture shape-inference failures
+                error = str(exc)
 
-        report.cases.append(
-            InferenceCaseReport(
-                name=tc.name, model_str=model_str, error=error, comparisons=comparisons
+            comparisons: list[ValueComparison] = []
+            if error is None:
+                computed_inputs = {vi.name: _extract_value_shape(vi) for vi in clone.graph.input}
+                computed_value_info = {
+                    vi.name: _extract_value_shape(vi) for vi in clone.graph.value_info
+                }
+                computed_outputs = {
+                    vi.name: _extract_value_shape(vi) for vi in clone.graph.output
+                }
+
+                for name, expected in expected_inputs.items():
+                    comparisons.append(
+                        ValueComparison(
+                            name=name,
+                            role="input",
+                            expected=expected,
+                            computed=computed_inputs.get(name),
+                        )
+                    )
+                for name, expected in expected_value_info.items():
+                    comparisons.append(
+                        ValueComparison(
+                            name=name,
+                            role="value_info",
+                            expected=expected,
+                            computed=computed_value_info.get(name),
+                        )
+                    )
+                for name, expected in expected_outputs.items():
+                    comparisons.append(
+                        ValueComparison(
+                            name=name,
+                            role="output",
+                            expected=expected,
+                            computed=computed_outputs.get(name),
+                        )
+                    )
+
+            report.cases.append(
+                InferenceCaseReport(
+                    name=tc.name, model_str=model_str, error=error, comparisons=comparisons
+                )
             )
-        )
+        finally:
+            _unload_test_case(tc, unload)
 
     return report
 

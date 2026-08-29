@@ -61,7 +61,8 @@ class TestCase(_backend_test_cc.TestCase):
     ``model``/``data_sets`` overlay (which store an :class:`onnx.ModelProto`
     and Python sequences of numpy arrays, distinct from the C++
     ``vector<DataSet>`` of raw-byte ``Tensor`` instances) are added by this
-    subclass.
+    subclass. Native-backed overlays are converted only when first accessed
+    and can be reconstructed after :meth:`unload`.
     """
 
     # Tell PyTest this isn't a real test.
@@ -79,6 +80,7 @@ class TestCase(_backend_test_cc.TestCase):
         atol: float,
         rtol: float,
         tag: str = "",
+        _native_case: Any | None = None,
     ) -> None:
         super().__init__(
             name=name, model_name=model_name, kind=kind, tag=tag, atol=atol, rtol=rtol
@@ -91,32 +93,105 @@ class TestCase(_backend_test_cc.TestCase):
         # accessed through the ``model`` / ``data_sets`` properties below.
         self._py_model = model
         self._py_data_sets = data_sets
+        self._native_case = _native_case
+        self._native_materialized = (
+            _native_case is not None and model is not None and data_sets is not None
+        )
+        self._model_metadata_cache: (
+            tuple[frozenset[tuple[str, str]], frozenset[tuple[str, int]]] | None
+        ) = None
+
+    def _ensure_native_materialized(self) -> None:
+        if self._native_case is None or self._native_materialized:
+            return
+        model, data_sets = _cc_payload_to_python(self._native_case)
+        if self._py_model is None:
+            self._py_model = model
+        if self._py_data_sets is None:
+            self._py_data_sets = data_sets
+        self._native_materialized = True
+
+    def _model_metadata(self) -> tuple[frozenset[tuple[str, str]], frozenset[tuple[str, int]]]:
+        """Returns cached operator and opset metadata for filtering."""
+        if self._model_metadata_cache is None or self.materialized:
+            model = self.model
+            if model is None:
+                return frozenset(), frozenset()
+            self._model_metadata_cache = (
+                frozenset((node.domain, node.op_type) for node in model.graph.node),
+                frozenset((opset.domain, opset.version) for opset in model.opset_import),
+            )
+        return self._model_metadata_cache
 
     @property
     def model(self) -> onnx.ModelProto | None:
+        self._ensure_native_materialized()
         return self._py_model
 
     @model.setter
     def model(self, value: onnx.ModelProto | None) -> None:
         self._py_model = value
+        self._model_metadata_cache = None
+        if self._native_case is not None:
+            self._native_materialized = value is not None and self._py_data_sets is not None
 
     @property
     def data_sets(self) -> BackendTestDataSets | None:
+        self._ensure_native_materialized()
         return self._py_data_sets
 
     @data_sets.setter
     def data_sets(self, value: BackendTestDataSets | None) -> None:
         self._py_data_sets = value
+        if self._native_case is not None:
+            self._native_materialized = self._py_model is not None and value is not None
 
     def __repr__(self) -> str:
         "usual"
         return f"{self.__class__.__name__}(name={self.name!r}, kind={self.kind!r})"
 
-    def assert_allclose(self, rt: Callable, atol: float | None = None, rtol: float | None = None):
+    @property
+    def materialized(self) -> bool:
+        """Returns whether the Python model and data sets are materialized."""
+        if self._native_case is None:
+            return self._py_model is not None
+        return self._native_materialized
+
+    def unload(self) -> None:
+        """Releases a native-backed case's Python and C++ payloads."""
+        if self._native_case is None:
+            return
+        self._py_model = None
+        self._py_data_sets = None
+        self._native_materialized = False
+        self._native_case.unload()
+
+    def assert_allclose(
+        self,
+        rt: Callable,
+        atol: float | None = None,
+        rtol: float | None = None,
+        unload: bool = True,
+    ) -> None:
         """
         Checks that the outputs match the expected outputs.
         Uses atol, rtol from the class or overwritten values.
+
+        Args:
+            rt: Runtime callable receiving the model and positional inputs.
+            atol: Optional absolute tolerance override.
+            rtol: Optional relative tolerance override.
+            unload: Releases native-backed model and data-set payloads after
+                the comparison. Defaults to ``True``.
         """
+        try:
+            self._assert_allclose(rt, atol=atol, rtol=rtol)
+        finally:
+            _unload_test_case(self, unload)
+
+    def _assert_allclose(
+        self, rt: Callable, atol: float | None = None, rtol: float | None = None
+    ) -> None:
         if not self.data_sets:
             return
         if not self.has_expected_outputs:
@@ -444,39 +519,65 @@ def _expected_output_to_python(t, sequence_outputs):
     return arr
 
 
-def _cc_to_python_test_case(cc_tc: Any) -> TestCase:
+def _cc_payload_to_python(
+    cc_tc: Any,
+) -> tuple[onnx.ModelProto, list[tuple[list[BackendTestValue], list[BackendTestValue]]]]:
+    """Materializes and converts a native backend test payload."""
+    model = cc_tc.model
+    sequence_outputs = {o.name for o in model.graph.output if o.type.has_sequence_type()}
+    py_inputs = _ds_inputs_to_python(cc_tc)
+    data_sets = [
+        (py_inputs[i], [_expected_output_to_python(y, sequence_outputs) for y in ds.outputs])
+        for i, ds in enumerate(cc_tc.data_sets)
+    ]
+    return model, data_sets
+
+
+def _unload_test_case(test_case: Any, unload: bool) -> None:
+    """Unloads a native-backed test case when requested."""
+    if not unload:
+        return
+    if isinstance(test_case, TestCase) and test_case._native_case is None:
+        return
+    test_case.unload()
+
+
+def _cc_to_python_test_case(cc_tc: Any, unload: bool = True) -> TestCase:
     """Converts a single C++ ``TestCase`` to the Python :class:`TestCase`.
 
-    Wraps the C++-side model and data sets into the Python ``TestCase``
-    subclass with numpy arrays (instead of raw-byte ``Tensor`` instances).
+    Retains the native case for on-demand conversion into a Python model and
+    numpy arrays (instead of raw-byte ``Tensor`` instances).
     """
     if not cc_tc.has_expected_outputs:
         raise RuntimeError(
             f"Expected outputs were not generated for benchmark case {cc_tc.name!r}; "
             "request generate_benchmark_expected_outputs=True."
         )
-    sequence_outputs = {o.name for o in cc_tc.model.graph.output if o.type.has_sequence_type()}
-    py_inputs = _ds_inputs_to_python(cc_tc)
-    data_sets = [
-        (py_inputs[i], [_expected_output_to_python(y, sequence_outputs) for y in ds.outputs])
-        for i, ds in enumerate(cc_tc.data_sets)
-    ]
+    if unload:
+        model = None
+        data_sets = None
+        cc_tc.unload()
+    else:
+        model, data_sets = _cc_payload_to_python(cc_tc)
     return TestCase(
         name=cc_tc.name,
         model_name=cc_tc.model_name,
         url=None,
         model_dir=None,
-        model=cc_tc.model,
+        model=model,
         data_sets=data_sets,
         kind=cc_tc.kind,
         atol=cc_tc.atol,
         rtol=cc_tc.rtol,
         tag=cc_tc.tag,
+        _native_case=cc_tc,
     )
 
 
 def _collect_cc_test_cases(
-    include_big: bool = False, mode: "_backend_test_cc.TestMode | None" = None
+    include_big: bool = False,
+    mode: "_backend_test_cc.TestMode | None" = None,
+    unload: bool = True,
 ) -> dict[str, TestCase]:
     """Collects backend test cases produced by the C++ ``lib_onnx_backend_test``.
 
@@ -495,6 +596,8 @@ def _collect_cc_test_cases(
             (default), defaults to ``TestMode.TEST`` which yields the standard
             correctness cases. ``TestMode.BENCHMARK`` yields large benchmark-sized
             cases where supported.
+        unload: Keeps returned native-backed cases unmaterialized until first
+            use. Defaults to ``True``.
 
     Returns:
         A dictionary mapping test case names to TestCase instances.
@@ -506,13 +609,17 @@ def _collect_cc_test_cases(
         mode = _backend_test_cc.TestMode.TEST
     for tc in _backend_test_cc.collect_test_cases(include_big=include_big, mode=mode):
         if tc.name.startswith("test_cc_zipmap_"):
+            if unload:
+                tc.unload()
             continue
-        result[tc.name] = _cc_to_python_test_case(tc)
+        result[tc.name] = _cc_to_python_test_case(tc, unload=unload)
     return result
 
 
 def collect_test_case(
-    include_big: bool = False, mode: "_backend_test_cc.TestMode | None" = None
+    include_big: bool = False,
+    mode: "_backend_test_cc.TestMode | None" = None,
+    unload: bool = True,
 ) -> dict[str, TestCase]:
     """
     Collects all backend test cases.
@@ -533,6 +640,8 @@ def collect_test_case(
             (default), defaults to ``TestMode.TEST`` which yields the standard
             correctness cases. ``TestMode.BENCHMARK`` yields large benchmark-sized
             cases where supported.
+        unload: Keeps native-backed cases unmaterialized until first use.
+            Defaults to ``True``.
 
     Returns:
         A dictionary mapping test case names to TestCase instances.
@@ -553,7 +662,7 @@ def collect_test_case(
 
     # merge in C++-generated backend test node cases (Python-defined cases win
     # on name collision to preserve backwards compatibility)
-    cc_cases = _collect_cc_test_cases(include_big=include_big, mode=mode)
+    cc_cases = _collect_cc_test_cases(include_big=include_big, mode=mode, unload=unload)
     for name, tc in cc_cases.items():
         ALL_TESTS.setdefault(name, tc)
 
@@ -563,7 +672,9 @@ def collect_test_case(
     return result
 
 
-def get_test_case(name: str, mode: "_backend_test_cc.TestMode | None" = None) -> TestCase | None:
+def get_test_case(
+    name: str, mode: "_backend_test_cc.TestMode | None" = None, unload: bool = True
+) -> TestCase | None:
     """Returns a single backend test case by exact name, or ``None``.
 
     Unlike :func:`collect_test_case`, which collects *all* C++ test cases
@@ -577,6 +688,8 @@ def get_test_case(name: str, mode: "_backend_test_cc.TestMode | None" = None) ->
             ``"test_cc_loop_zero_trip_count"``).
         mode: The generation mode (a ``TestMode`` value). When ``None``
             (default), defaults to ``TestMode.TEST``.
+        unload: Keeps the returned native-backed case unmaterialized until
+            first use. Defaults to ``True``.
 
     Returns:
         The :class:`TestCase` instance, or ``None`` if no case with that
@@ -589,7 +702,7 @@ def get_test_case(name: str, mode: "_backend_test_cc.TestMode | None" = None) ->
     cases = _bt.get_test_case_by_name(name, include_big=True, mode=mode)
     if not cases:
         return None
-    return _cc_to_python_test_case(cases[0])
+    return _cc_to_python_test_case(cases[0], unload=unload)
 
 
 def get_test_cases_for_op(
@@ -597,6 +710,7 @@ def get_test_cases_for_op(
     opset_version: int | None = None,
     domain: str = "",
     test_cases: dict[str, TestCase] | None = None,
+    unload: bool = True,
 ) -> dict[str, TestCase]:
     """
     Retrieves backend test cases involving a specific operator and opset.
@@ -616,6 +730,9 @@ def get_test_cases_for_op(
         test_cases: Optional precomputed mapping returned by
             :func:`collect_test_case`. When ``None``, :func:`collect_test_case`
             is called.
+        unload: Releases each native-backed case after inspecting it. Matching
+            cases remain available for lazy rematerialization. Defaults to
+            ``True``.
 
     Returns:
         A new ``dict`` mapping test case names to :class:`TestCase` instances
@@ -626,22 +743,22 @@ def get_test_cases_for_op(
 
     result: dict[str, TestCase] = {}
     for name, tc in test_cases.items():
-        if tc.model is None:
-            continue
-        # Look for at least one node matching (op_type, domain).
-        has_node = any(
-            node.op_type == op_type and node.domain == domain for node in tc.model.graph.node
-        )
-        if not has_node:
-            continue
-        if opset_version is not None:
-            matches_opset = any(
-                opset.domain == domain and opset.version == opset_version
-                for opset in tc.model.opset_import
-            )
-            if not matches_opset:
+        try:
+            if isinstance(tc, TestCase):
+                operators, opsets = tc._model_metadata()
+            else:
+                model = tc.model
+                if model is None:
+                    continue
+                operators = frozenset((node.domain, node.op_type) for node in model.graph.node)
+                opsets = frozenset((opset.domain, opset.version) for opset in model.opset_import)
+            if (domain, op_type) not in operators:
                 continue
-        result[name] = tc
+            if opset_version is not None and (domain, opset_version) not in opsets:
+                continue
+            result[name] = tc
+        finally:
+            _unload_test_case(tc, unload)
     return result
 
 
@@ -652,6 +769,7 @@ def make_test_class(
     atols: dict[str, float] | None = None,
     rtols: dict[str, float] | None = None,
     include_big: bool = False,
+    unload: bool = True,
 ):
     """
     Collects all test cases with collect_test_case.
@@ -704,7 +822,7 @@ def make_test_class(
 
         # Create test method using default arguments to capture loop variables
         def test_func(self, tc=test_case, custom_atol=atol, custom_rtol=rtol):
-            tc.assert_allclose(rt, atol=custom_atol, rtol=custom_rtol)
+            tc.assert_allclose(rt, atol=custom_atol, rtol=custom_rtol, unload=unload)
 
         # Add the test method to the class
         test_func.__name__ = f"test_{name}"

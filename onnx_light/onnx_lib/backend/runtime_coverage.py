@@ -35,7 +35,7 @@ from ...onnx_proto import _helper as onnxl_helper
 from ..defs import onnx_ir_version, onnx_opset_version
 from ...onnx_lib.shape_inference import infer_shapes
 from .test.case import collect_test_case
-from .test.case.base import TestCase
+from .test.case.base import TestCase, _unload_test_case
 
 
 @dataclass
@@ -475,13 +475,15 @@ class RuntimeCoverageReport:
 
 
 def compute_runtime_coverage(
-    test_cases: Iterable[TestCase] | None = None,
+    test_cases: Iterable[TestCase] | None = None, unload: bool = True
 ) -> RuntimeCoverageReport:
     """Builds the runtime coverage report for every backend test case.
 
     :param test_cases: Optional iterable of :class:`TestCase` to evaluate. When
         ``None``, :func:`collect_test_case` is invoked to gather every
         available test case.
+    :param unload: Releases each native-backed test case after processing it.
+        Defaults to ``True``.
     :returns: A populated :class:`RuntimeCoverageReport`.
     """
     if test_cases is None:
@@ -491,40 +493,43 @@ def compute_runtime_coverage(
 
     report = RuntimeCoverageReport()
     for tc in cases:
-        if tc.model is None:
-            continue
-        op_type, domain = _principal_op(tc)
-        ort_diff, ort_ok, ort_err = _run_onnxruntime(tc)
-        static_ok, static_err = _run_static_shape(tc)
-        dynamic_ok, dynamic_err = _run_dynamic_shapes(tc)
-        status = TestCaseStatus(
-            name=tc.name,
-            op_type=op_type,
-            domain=domain,
-            tag=getattr(tc, "tag", ""),
-            onnxruntime_cpu=ort_diff,
-            onnxruntime_ok=ort_ok,
-            onnxruntime_error=ort_err,
-            static_shape=static_ok,
-            static_shape_error=static_err,
-            dynamic_shapes=dynamic_ok,
-            dynamic_shapes_error=dynamic_err,
-        )
-        report.statuses.append(status)
+        try:
+            if tc.model is None:
+                continue
+            op_type, domain = _principal_op(tc)
+            ort_diff, ort_ok, ort_err = _run_onnxruntime(tc)
+            static_ok, static_err = _run_static_shape(tc)
+            dynamic_ok, dynamic_err = _run_dynamic_shapes(tc)
+            status = TestCaseStatus(
+                name=tc.name,
+                op_type=op_type,
+                domain=domain,
+                tag=getattr(tc, "tag", ""),
+                onnxruntime_cpu=ort_diff,
+                onnxruntime_ok=ort_ok,
+                onnxruntime_error=ort_err,
+                static_shape=static_ok,
+                static_shape_error=static_err,
+                dynamic_shapes=dynamic_ok,
+                dynamic_shapes_error=dynamic_err,
+            )
+            report.statuses.append(status)
 
-        group = status.group
-        summary = report.summaries.setdefault(group, DomainSummary(domain=group))
-        summary.total += 1
-        report.overall.total += 1
-        if status.onnxruntime_ok:
-            summary.onnxruntime_ok += 1
-            report.overall.onnxruntime_ok += 1
-        if status.static_shape:
-            summary.static_shape_ok += 1
-            report.overall.static_shape_ok += 1
-        if status.dynamic_shapes:
-            summary.dynamic_shapes_ok += 1
-            report.overall.dynamic_shapes_ok += 1
+            group = status.group
+            summary = report.summaries.setdefault(group, DomainSummary(domain=group))
+            summary.total += 1
+            report.overall.total += 1
+            if status.onnxruntime_ok:
+                summary.onnxruntime_ok += 1
+                report.overall.onnxruntime_ok += 1
+            if status.static_shape:
+                summary.static_shape_ok += 1
+                report.overall.static_shape_ok += 1
+            if status.dynamic_shapes:
+                summary.dynamic_shapes_ok += 1
+                report.overall.dynamic_shapes_ok += 1
+        finally:
+            _unload_test_case(tc, unload)
 
     # Sort statuses by (group, op_type, name) so the rendered table is stable.
     report.statuses.sort(key=lambda s: (s.group, s.op_type, s.name))

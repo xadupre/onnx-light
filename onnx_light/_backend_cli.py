@@ -135,4 +135,8 @@ def measure_backend_test_case_by_name(
     )
     if len(cases) != 1:
         raise RuntimeError(f"expected one backend case named {case_name!r}, got {len(cases)}")
-    return _measure_backend_test_case(cases[0], repeat, warmup, max_repeat_time, capture_model)
+    case = cases[0]
+    try:
+        return _measure_backend_test_case(case, repeat, warmup, max_repeat_time, capture_model)
+    finally:
+        case.unload()

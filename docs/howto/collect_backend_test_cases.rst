@@ -164,6 +164,15 @@ kernel instances captured by the initial generator:
           assert(!test_case.materialized());
           assert(model->ref_graph().ref_node()[0].ref_op_type() == "If");
 
+Python collection and report APIs use ``unload=True`` by default. Native-backed
+Python cases retain only their lightweight C++ reconstruction recipe until
+``model`` or ``data_sets`` is accessed. Processing helpers unload each case in
+a ``finally`` block, so exceptional paths do not retain its payload. Pass
+``unload=False`` to ``collect_test_case``, ``get_test_case``,
+``get_test_cases_for_op``, ``make_test_class``,
+``compute_test_case_coverage``, or ``compute_runtime_coverage`` when deliberate
+retention is more useful than bounded peak memory.
+
 ``unload()`` only releases ownership held by the case. Existing Python
 objects and C++ handles returned by ``model_handle()`` or
 ``data_set_handles()`` use shared ownership and therefore keep their

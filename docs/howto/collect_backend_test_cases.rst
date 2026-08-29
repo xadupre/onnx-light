@@ -130,11 +130,16 @@ Notes
   calling :func:`~onnx_light.onnx.backend.collect_test_cases` /
   :cpp:func:`onnx_light::core::backend_test::CollectTestCases` with no
   arguments.
-* :class:`TestCase` exposes ``name``, ``kind``, ``tag``, ``rtol``,
-  ``atol``, ``data_sets``, and a lazily resolved ``model``
+* :class:`TestCase` exposes ``name``, ``kind``, ``tag``, ``rtol``, ``atol``,
+  ``data_sets``, and a lazily resolved ``model``
   (:class:`onnx_light.onnx.ModelProto`), so a case retrieved by name can
   be fed directly to a :class:`~onnx_light.onnx.reference.ReferenceEvaluator`
   or to any other backend runner.
+* Correctness cases registered with :cpp:func:`Expect` produce their expected
+  outputs by directly calling the named built-in *onnx-light* kernel. They do
+  not resolve a process-wide dispatch-table entry or a session/custom kernel,
+  so an external override cannot become the oracle. Benchmark case generation
+  is separate and is not covered by this oracle guarantee.
 
 See also
 --------

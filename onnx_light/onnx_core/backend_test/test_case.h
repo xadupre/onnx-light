@@ -105,7 +105,6 @@ struct TestCase {
   const std::string tag;
   double rtol = 1e-3;
   double atol = 1e-7;
-
   /// Optional builder producing the model + data sets on demand. When set the
   /// case is *lazy*: ``data_sets`` starts empty and the model is unbuilt until
   /// :func:`Materialize` / :func:`model` / :func:`data_sets` runs the builder

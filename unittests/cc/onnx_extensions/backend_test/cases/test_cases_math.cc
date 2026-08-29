@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/backend_test/cases/math/include_math_cases.h"
 
 #include <gtest/gtest.h>
@@ -10,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <initializer_list>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -22,6 +24,30 @@ std::vector<core::backend_test::TestCase> CollectTestCases(const std::string &op
   CollectMathTestCases(registry, op_type);
   return registry;
 }
+
+class RestoreAbsKernelOverrides {
+public:
+  RestoreAbsKernelOverrides() : dispatch_(core::runtime::KernelDispatchTable().at("ai.onnx:Abs")) {
+    const auto &custom_kernels = core::runtime::GlobalCustomKernels();
+    auto it = custom_kernels.find("ai.onnx:Abs");
+    if (it != custom_kernels.end()) {
+      global_custom_ = it->second;
+    }
+  }
+
+  ~RestoreAbsKernelOverrides() {
+    core::runtime::RegisterKernelFn("", "Abs", core::symbolic::Device::kCPU, std::move(dispatch_));
+    if (global_custom_) {
+      core::runtime::RegisterGlobalCustomKernel("", "Abs", std::move(global_custom_));
+    } else {
+      core::runtime::UnregisterGlobalCustomKernel("", "Abs");
+    }
+  }
+
+private:
+  core::runtime::NodeKernelFn dispatch_;
+  core::runtime::CustomKernelFn global_custom_;
+};
 } // namespace
 using core::backend_test::TestCase;
 
@@ -115,6 +141,28 @@ TEST(BackendTestCase, AbsCaseNamesContainTensorType) {
   for (const std::string &name : expected_names) {
     EXPECT_NE(FindCase(cases, name), nullptr) << "missing typed case: " << name;
   }
+}
+
+TEST(BackendTestCase, AbsExpectedOutputsIgnoreExternalKernelOverrides) {
+  RestoreAbsKernelOverrides restore;
+  core::runtime::RegisterKernelFn(
+      "", "Abs", core::symbolic::Device::kCPU,
+      [](const NodeProto &, core::runtime::RuntimeContext &)
+          -> std::unique_ptr<core::runtime::KernelBase> { return nullptr; });
+  core::runtime::RegisterGlobalCustomKernel(
+      "", "Abs", [](const NodeProto &node, core::runtime::RuntimeContext &ctx) {
+        const auto &x = ctx.Get(node.input(0));
+        ctx.Put(node.output(0),
+                core::runtime::Tensor::FromFloat(
+                    node.output(0), x.shape,
+                    std::vector<float>(static_cast<size_t>(x.element_count()), 42.0f)));
+      });
+
+  const auto cases = CollectTestCases("Abs");
+  const TestCase *tc = FindCase(cases, "test_cc_abs");
+  ASSERT_NE(tc, nullptr);
+  const auto &expected = tc->data_sets().front().outputs.front();
+  EXPECT_FLOAT_EQ(expected.AsFloat()[0], 1.0f);
 }
 
 TEST(BackendTestCase, SubCaseOutputsAreElementwiseDifference) {

@@ -28,8 +28,8 @@ model = oh.make_model(
     oh.make_graph(
         [
             oh.make_node("Add", ["x", "weight"], ["summed"]),
-            oh.make_node("Add", ["summed", "duplicate_weight"], ["total"]),
-            oh.make_node("Identity", ["total"], ["y"]),
+            oh.make_node("Identity", ["summed"], ["forwarded"]),
+            oh.make_node("Add", ["forwarded", "duplicate_weight"], ["y"]),
             oh.make_node("Neg", ["x"], ["dead_end"]),
         ],
         "cleanup",

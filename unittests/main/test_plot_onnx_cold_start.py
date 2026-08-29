@@ -1,8 +1,5 @@
-import ast
-import json
+import importlib.util
 import pathlib
-import subprocess
-import sys
 import tempfile
 import unittest
 
@@ -22,26 +19,13 @@ _EXAMPLE_PATH = (
 
 
 def _load_example_helpers():
-    """Loads selected helper functions without executing the gallery example."""
-    tree = ast.parse(_EXAMPLE_PATH.read_text(encoding="utf-8"), filename=str(_EXAMPLE_PATH))
-    wanted = {"_run_sample"}
-    module = ast.Module(
-        body=[
-            node
-            for node in tree.body
-            if isinstance(node, ast.FunctionDef) and node.name in wanted
-        ],
-        type_ignores=[],
-    )
-    namespace = {
-        "__file__": str(_EXAMPLE_PATH),
-        "json": json,
-        "pathlib": pathlib,
-        "subprocess": subprocess,
-        "sys": sys,
-    }
-    exec(compile(module, filename=str(_EXAMPLE_PATH), mode="exec"), namespace)
-    return namespace
+    """Loads the gallery example without invoking its main entry point."""
+    spec = importlib.util.spec_from_file_location("plot_onnx_cold_start", _EXAMPLE_PATH)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class TestPlotOnnxColdStart(unittest.TestCase):
@@ -57,7 +41,7 @@ class TestPlotOnnxColdStart(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             model_path = pathlib.Path(directory) / "model.onnx"
             onnxl.save(oh.make_model(graph), model_path)
-            result = _load_example_helpers()["_run_sample"]("onnx_light", str(model_path))
+            result = _load_example_helpers()._run_sample("onnx_light", str(model_path))
 
         self.assertEqual(result["implementation"], "onnx_light")
         self.assertGreater(result["end_to_end_ms"], 0)

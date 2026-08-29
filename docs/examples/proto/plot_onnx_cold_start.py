@@ -84,7 +84,11 @@ def _save_default_model(model, directory: str, external: bool) -> str:
 
 
 def _load_once(implementation: str, model_path: str) -> None:
-    """Loads a model once using the requested implementation."""
+    """Loads a model once using the requested implementation.
+
+    Constructs and discards an ``onnxruntime.InferenceSession`` for the
+    ``onnxruntime`` implementation.
+    """
     if implementation == "onnx":
         import onnx
 
@@ -163,11 +167,13 @@ def _run_sample(implementation: str, model_path: str) -> dict:
     assert process.stderr is not None
     ready = process.stdout.readline().strip()
     if ready != "READY":
+        process.stdin.close()
         _, stderr = process.communicate()
         raise RuntimeError(f"{implementation} did not initialize: {stderr.strip()}")
     process.stdin.write("\n")
     process.stdin.flush()
     payload = process.stdout.readline()
+    process.stdin.close()
     _, stderr = process.communicate()
     if process.returncode:
         raise RuntimeError(f"{implementation} failed: {stderr.strip()}")

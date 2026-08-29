@@ -468,7 +468,7 @@ def _tensor_to_np(t):
     return arr.reshape(tuple(int(d) for d in t.shape))
 
 
-def _ds_inputs_to_python(tc: Any) -> list[list[np.ndarray | dict[Any, Any] | None]]:
+def _ds_inputs_to_python(tc: Any) -> list[list[BackendTestValue]]:
     """Returns per-DataSet positional inputs for ``tc``.
 
     For graph inputs declared with ``map(K, V)`` type (used by
@@ -479,11 +479,11 @@ def _ds_inputs_to_python(tc: Any) -> list[list[np.ndarray | dict[Any, Any] | Non
     map under its original graph-input name.
     """
     graph_inputs = list(tc.model.graph.input)
-    data_sets: list[list[np.ndarray | dict[Any, Any] | None]] = []
+    data_sets: list[list[BackendTestValue]] = []
     for ds in tc.data_sets:
         by_name = {t.name: _tensor_to_np(t) for t in ds.inputs}
         maps_by_name = {m.name: m for m in ds.maps} if ds.maps else {}
-        inputs: list[np.ndarray | dict[Any, Any] | None] = []
+        inputs: list[BackendTestValue] = []
         for gi in graph_inputs:
             if gi.type.has_map_type():
                 m = maps_by_name.get(gi.name)

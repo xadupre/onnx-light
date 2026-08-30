@@ -71,6 +71,7 @@ class TestCase(_backend_test_cc.TestCase):
     # Tell PyTest this isn't a real test.
     __test__ = False
 
+    # Nanobind enums have no Python stubs, so static checkers resolve them as Any.
     def __init__(
         self,
         name: str,

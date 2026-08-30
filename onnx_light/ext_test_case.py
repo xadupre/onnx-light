@@ -238,7 +238,7 @@ class ExtTestCase(unittest.TestCase):
         else:
             np.testing.assert_allclose(expected, value, atol=atol, rtol=rtol)
 
-    def assertAlmostEqual(
+    def assertAlmostEqual(  # pyrefly: ignore[bad-override]
         self,
         expected: Any,
         value: Any,
@@ -265,7 +265,7 @@ class ExtTestCase(unittest.TestCase):
             atol = 0 if rtol else 0.5 * 10 ** (-(7 if places is None else places))
         self.assertEqualArray(expected, value, atol=atol, rtol=rtol, msg=msg)
 
-    def assertNotAlmostEqual(
+    def assertNotAlmostEqual(  # pyrefly: ignore[bad-override]
         self,
         expected: Any,
         value: Any,

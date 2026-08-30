@@ -242,13 +242,13 @@ class ExtTestCase(unittest.TestCase):
         self,
         expected: Any,
         value: Any,
-        places: int = 7,
-        msg: Optional[str] = None,
-        delta: Optional[float] = None,
+        places: Optional[int] = 7,
+        msg: Any = None,
+        delta: Any = None,
         *,
         atol: Optional[float] = None,
         rtol: float = 0,
-    ):
+    ) -> None:
         """Compares scalars with unittest semantics and arrays with NumPy tolerances."""
         if not isinstance(expected, np.ndarray) and not isinstance(value, np.ndarray):
             if atol is None and rtol == 0:
@@ -262,20 +262,20 @@ class ExtTestCase(unittest.TestCase):
                 raise TypeError("specify delta or atol, not both")
             atol = delta
         if atol is None:
-            atol = 0 if rtol else 0.5 * 10 ** (-places)
+            atol = 0 if rtol else 0.5 * 10 ** (-(7 if places is None else places))
         self.assertEqualArray(expected, value, atol=atol, rtol=rtol, msg=msg)
 
     def assertNotAlmostEqual(
         self,
         expected: Any,
         value: Any,
-        places: int = 7,
-        msg: Optional[str] = None,
-        delta: Optional[float] = None,
+        places: Optional[int] = 7,
+        msg: Any = None,
+        delta: Any = None,
         *,
         atol: Optional[float] = None,
         rtol: float = 0,
-    ):
+    ) -> None:
         """Verifies scalars or arrays differ according to the requested tolerances."""
         if not isinstance(expected, np.ndarray) and not isinstance(value, np.ndarray):
             if atol is None and rtol == 0:
@@ -291,7 +291,7 @@ class ExtTestCase(unittest.TestCase):
                 raise TypeError("specify delta or atol, not both")
             atol = delta
         if atol is None:
-            atol = 0 if rtol else 0.5 * 10 ** (-places)
+            atol = 0 if rtol else 0.5 * 10 ** (-(7 if places is None else places))
         if not np.allclose(expected, value, atol=atol, rtol=rtol, equal_nan=True):
             return
         self.fail(msg or f"{expected!r} and {value!r} are unexpectedly almost equal.")

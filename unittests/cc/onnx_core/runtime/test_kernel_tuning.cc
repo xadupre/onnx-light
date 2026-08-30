@@ -254,7 +254,7 @@ TEST(KernelTuningCriterion, ReportsUnknownCriterionValue) {
     KernelTuningCriterionName(unknown);
     FAIL() << "Expected an invalid criterion to throw.";
   } catch (const std::invalid_argument &error) {
-    EXPECT_STREQ(error.what(), "Unknown kernel tuning criterion -1.");
+    ASSERT_STREQ(error.what(), "Unknown kernel tuning criterion -1.");
   }
 }
 

@@ -17,14 +17,14 @@ TEST(TestCaseNames, ReportsUnknownEnumValues) {
     TestCaseKindName(unknown_kind);
     FAIL() << "Expected an invalid test case kind to throw.";
   } catch (const std::invalid_argument &error) {
-    EXPECT_STREQ(error.what(), "Unknown TestCaseKind value -1.");
+    ASSERT_STREQ(error.what(), "Unknown TestCaseKind value -1.");
   }
 
   try {
     TestCaseTagName(unknown_tag);
     FAIL() << "Expected an invalid test case tag to throw.";
   } catch (const std::invalid_argument &error) {
-    EXPECT_STREQ(error.what(), "Unknown TestCaseTag value -1.");
+    ASSERT_STREQ(error.what(), "Unknown TestCaseTag value -1.");
   }
 }
 

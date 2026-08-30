@@ -48,7 +48,7 @@ void RegisterConstantInfoCases(std::vector<TestCase> &registry, TestMode /*mode*
   {
     const std::string name = "test_cc_constant_add_chain";
 
-    TestCase tc(name, name, "model", "constant");
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::CONSTANT);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
 
@@ -89,7 +89,7 @@ void RegisterConstantInfoCases(std::vector<TestCase> &registry, TestMode /*mode*
   {
     const std::string name = "test_cc_constant_node_source";
 
-    TestCase tc(name, name, "model", "constant");
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::CONSTANT);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
 

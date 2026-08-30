@@ -95,7 +95,7 @@ void RegisterScanRunningSumShapeInferenceCases(std::vector<TestCase> &registry, 
 
   const std::string name = "test_cc_shape_inference_scan_running_sum";
 
-  TestCase tc(name, name, "model", "inference");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

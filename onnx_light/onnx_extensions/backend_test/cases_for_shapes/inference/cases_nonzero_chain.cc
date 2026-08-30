@@ -71,7 +71,7 @@ void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &re
   Tensor nz_float = onnx_kernels::kernel::Abs(ctx)(nz_float_pre_abs);
   nz_float.name = "nz_float";
 
-  TestCase tc(name, name, "model", "inference");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -143,7 +143,7 @@ void RegisterNonZeroChainNamedShapeInferenceCases(std::vector<TestCase> &registr
 
 void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry) {
   const std::string name("test_cc_shape_inference_nonzero_plus_expression");
-  TestCase tc(name, name, "model", "inference", 1e-7, 1e-3);
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
   ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion, {DefaultOpset(18)});
   GraphProto *graph = model.add_graph();

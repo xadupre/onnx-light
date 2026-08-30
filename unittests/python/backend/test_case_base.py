@@ -12,6 +12,7 @@ import onnx_light.onnx.defs as defs
 _case_base = import_or_skip("onnx_light.onnx_lib.backend.test.case.base")
 ALL_TESTS = _case_base.ALL_TESTS
 TestCase = _case_base.TestCase
+_TestCaseKind = _case_base.TestCaseKind
 collect_test_case = _case_base.collect_test_case
 expect = _case_base.expect
 get_test_cases_for_op = _case_base.get_test_cases_for_op
@@ -53,7 +54,7 @@ class TestBackendFunction(ExtTestCase):
         tc = ALL_TESTS["test_abs_basic"]
         self.assertIsInstance(tc, TestCase)
         self.assertEqual(tc.name, "test_abs_basic")
-        self.assertEqual(tc.kind, "node")
+        self.assertEqual(tc.kind, _TestCaseKind.NODE)
 
     def test_expect_model_has_correct_opset(self):
         """Tests that the model has the correct opset version from schema."""
@@ -158,12 +159,12 @@ class TestBackendFunction(ExtTestCase):
         x = np.array([1.0], dtype=np.float32)
         expect(node, inputs=[x], outputs=[np.abs(x)], name="test_abs_repr")
         tc = ALL_TESTS["test_abs_repr"]
-        self.assertEqual(repr(tc), "TestCase(name='test_abs_repr', kind='node')")
+        self.assertEqual(repr(tc), "TestCase(name='test_abs_repr', kind=TestCaseKind.NODE)")
 
         # C++-bound instance returned by collect_test_case.
         result = collect_test_case()
         cc = result["test_cc_abs"]
-        self.assertEqual(repr(cc), "TestCase(name='test_cc_abs', kind='node')")
+        self.assertEqual(repr(cc), "TestCase(name='test_cc_abs', kind=TestCaseKind.NODE)")
 
     def test_collect_test_case_returns_dict(self):
         """Tests that collect_test_case returns a dictionary."""
@@ -178,7 +179,7 @@ class TestBackendFunction(ExtTestCase):
         tc = result["test_cc_abs"]
         self.assertIsInstance(tc, TestCase)
         self.assertEqual(tc.name, "test_cc_abs")
-        self.assertEqual(tc.kind, "node")
+        self.assertEqual(tc.kind, _TestCaseKind.NODE)
 
     def test_collect_test_case_is_unloaded_by_default(self):
         """Native-backed Python cases materialize on demand and can be reused."""
@@ -281,7 +282,7 @@ class TestBackendFunction(ExtTestCase):
             self.assertEqual(tc.name, name)
             self.assertIsNotNone(tc.model)
             self.assertIsNotNone(tc.data_sets)
-            self.assertIn(tc.kind, ("node", "model"))
+            self.assertIn(tc.kind, (_TestCaseKind.NODE, _TestCaseKind.MODEL))
             self.assertIsInstance(tc.rtol, float)
             self.assertIsInstance(tc.atol, float)
 

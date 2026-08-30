@@ -15,6 +15,9 @@ except ImportError as exc:  # pragma: no cover - exercised only in reduced build
 from .....onnx_py._onnxpyprotoop import onnx_op as _onnx_op  # type: ignore
 from .....ext_test_case import ExtTestCase
 
+TestCaseKind = _backend_test_cc.TestCaseKind
+TestCaseTag = _backend_test_cc.TestCaseTag
+
 _LIGHT_SINCE_VERSION_CACHE: dict[tuple[str, str], int] = {}
 # Backend test inputs/outputs are usually ndarrays, but ONNX sequence cases use
 # recursively nested Python lists of ndarrays, and map-typed inputs are Python dicts.
@@ -76,10 +79,10 @@ class TestCase(_backend_test_cc.TestCase):
         model_dir: str | None,
         model: onnx.ModelProto | None,
         data_sets: BackendTestDataSets | None,
-        kind: str,
+        kind: TestCaseKind,
         atol: float,
         rtol: float,
-        tag: str = "",
+        tag: TestCaseTag = TestCaseTag.NONE,
         _native_case: Any | None = None,
     ) -> None:
         super().__init__(
@@ -148,7 +151,7 @@ class TestCase(_backend_test_cc.TestCase):
 
     def __repr__(self) -> str:
         "usual"
-        return f"{self.__class__.__name__}(name={self.name!r}, kind={self.kind!r})"
+        return f"{self.__class__.__name__}(name={self.name!r}, kind={self.kind})"
 
     @property
     def materialized(self) -> bool:
@@ -357,7 +360,7 @@ def expect(
         model_dir=None,
         model=model,
         data_sets=[(list(inputs_dict.values()), list(outputs_dict.values()))],
-        kind="node",
+        kind=TestCaseKind.NODE,
         atol=1e-7,
         rtol=1e-3,
     )

@@ -52,7 +52,7 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mo
              Tensor output = onnx_kernels::kernel::SequenceConstruct(ctx)(tensors);
              return IoData{std::move(tensors), {std::move(output)}};
            },
-           "", "",
+           "", TestCaseTag::NONE,
            {SequenceTypeSpec(TensorTypeSpec(static_cast<int32_t>(DataType::FLOAT), elem_shape))});
     return;
   }
@@ -78,7 +78,7 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mo
 
              return IoData{{std::move(a), std::move(b), std::move(c)}, {std::move(output)}};
            },
-           "", "",
+           "", TestCaseTag::NONE,
            {SequenceTypeSpec(TensorTypeSpec(static_cast<int32_t>(DataType::FLOAT), elem_shape))});
   }
 
@@ -97,7 +97,7 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mo
 
              return IoData{{std::move(a)}, {std::move(output)}};
            },
-           "", "",
+           "", TestCaseTag::NONE,
            {SequenceTypeSpec(TensorTypeSpec(static_cast<int32_t>(DataType::INT64), elem_shape))});
   }
 }

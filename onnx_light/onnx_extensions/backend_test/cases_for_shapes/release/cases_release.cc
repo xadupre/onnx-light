@@ -60,7 +60,7 @@ void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   {
     const std::string name = "test_cc_release_shape_reshape";
 
-    TestCase tc(name, name, "model", "release");
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
 
@@ -104,7 +104,7 @@ void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   {
     const std::string name = "test_cc_release_initializer_add";
 
-    TestCase tc(name, name, "model", "release");
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
 

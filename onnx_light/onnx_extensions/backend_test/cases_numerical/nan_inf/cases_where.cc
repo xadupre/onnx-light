@@ -34,7 +34,7 @@ void RegisterWhereNanInfCases(std::vector<TestCase> &registry, TestMode /*mode*/
     Tensor output = where_kernel(condition, x, y);
 
     Expect(node, {condition, x, y}, {output}, "test_cc_where_nan_inf", {opset}, "backend-test",
-           registry, "nan_inf");
+           registry, TestCaseTag::NAN_INF);
   }
 
   // Broadcast case: the condition broadcasts a single column across all
@@ -49,7 +49,7 @@ void RegisterWhereNanInfCases(std::vector<TestCase> &registry, TestMode /*mode*/
     Tensor output = where_kernel(condition, x, y);
 
     Expect(node, {condition, x, y}, {output}, "test_cc_where_nan_inf_bcast", {opset},
-           "backend-test", registry, "nan_inf");
+           "backend-test", registry, TestCaseTag::NAN_INF);
   }
 }
 

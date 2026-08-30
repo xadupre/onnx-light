@@ -59,7 +59,7 @@ void RegisterFunctionCallsFunctionAcrossDomainsCase(std::vector<TestCase> &regis
                                                     TestMode /*mode*/) {
   const std::string name = "test_cc_local_function_calls_function_across_domains";
 
-  TestCase tc(name, name, "node", "local_function");
+  TestCase tc(name, name, TestCaseKind::NODE, TestCaseTag::LOCAL_FUNCTION);
   ModelProto &model = tc.emplace_model();
   model.set_ir_version(kIrVersion);
   model.set_producer_name("backend-test");
@@ -124,7 +124,7 @@ void RegisterFunctionCallsFunctionAcrossDomainsCase(std::vector<TestCase> &regis
 void RegisterFunctionThreeLevelNestedCallsCase(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const std::string name = "test_cc_local_function_three_level_nested_calls";
 
-  TestCase tc(name, name, "node", "local_function");
+  TestCase tc(name, name, TestCaseKind::NODE, TestCaseTag::LOCAL_FUNCTION);
   ModelProto &model = tc.emplace_model();
   model.set_ir_version(kIrVersion);
   model.set_producer_name("backend-test");
@@ -194,7 +194,7 @@ void RegisterFunctionThreeLevelNestedCallsCase(std::vector<TestCase> &registry, 
 void RegisterFunctionLinkedAttributeCase(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const std::string name = "test_cc_local_function_linked_attribute";
 
-  TestCase tc(name, name, "node", "local_function");
+  TestCase tc(name, name, TestCaseKind::NODE, TestCaseTag::LOCAL_FUNCTION);
   ModelProto &model = tc.emplace_model();
   model.set_ir_version(kIrVersion);
   model.set_producer_name("backend-test");

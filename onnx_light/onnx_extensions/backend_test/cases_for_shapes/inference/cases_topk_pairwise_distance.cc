@@ -191,7 +191,7 @@ void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
 
   const std::string name = "test_cc_shape_inference_topk_pairwise_distance";
 
-  TestCase tc(name, name, "model", "inference");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -309,7 +309,7 @@ void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
 
   const std::string name = "test_cc_shape_inference_scan_topk_pairwise_distance";
 
-  TestCase tc(name, name, "model", "inference");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -421,7 +421,7 @@ void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
 
   const std::string name = "test_cc_shape_inference_loop_topk_pairwise_distance";
 
-  TestCase tc(name, name, "model", "inference");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -537,7 +537,7 @@ void RegisterTwoTopKSameKShapeInferenceCases(std::vector<TestCase> &registry, Te
 
   const std::string name = "test_cc_shape_inference_two_topk_same_k";
 
-  TestCase tc(name, name, "model", "inference");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -631,7 +631,7 @@ void RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registr
 
   const std::string name = "test_cc_shape_inference_two_topk_different_k";
 
-  TestCase tc(name, name, "model", "inference");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

@@ -29,7 +29,7 @@ void RegisterInPlaceReuseCases(std::vector<TestCase> &registry, TestMode /*mode*
 
   const std::string name = "test_cc_shape_inference_inplace_reuse";
 
-  TestCase tc(name, name, "model", "inplace");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INPLACE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

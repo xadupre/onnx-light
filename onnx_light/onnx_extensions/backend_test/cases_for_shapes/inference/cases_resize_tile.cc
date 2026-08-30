@@ -65,7 +65,7 @@ void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry, Test
 
   const std::string name = "test_cc_shape_inference_resize_tile";
 
-  TestCase tc(name, name, "model", "inference", 1e-7, 1e-3);
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
 
   ModelProto &model = tc.emplace_model();
   InitModel(model, kDefaultIrVersion, {opset});

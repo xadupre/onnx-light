@@ -1846,7 +1846,7 @@ def _iter_inference_cases() -> Iterable[TestCase]:
     cases = collect_test_case()
     for name in sorted(cases):
         tc = cases[name]
-        if tc.tag == "inference":
+        if tc.tag.name == "INFERENCE":
             yield tc
 
 

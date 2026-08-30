@@ -66,7 +66,7 @@ void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &re
 
   const std::string name = "test_cc_shape_inference_shape_identity_unsqueeze";
 
-  TestCase tc(name, name, "model", "inference");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

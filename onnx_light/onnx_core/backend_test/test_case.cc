@@ -41,12 +41,55 @@ void BuildTypeProto(const TypeSpec &spec, TypeProto &tp) {
 
 } // namespace
 
+std::string_view TestCaseKindName(TestCaseKind kind) {
+  switch (kind) {
+  case TestCaseKind::NODE:
+    return "node";
+  case TestCaseKind::MODEL:
+    return "model";
+  }
+  throw std::invalid_argument("Unknown TestCaseKind value.");
+}
+
+std::string_view TestCaseTagName(TestCaseTag tag) {
+  switch (tag) {
+  case TestCaseTag::NONE:
+    return "";
+  case TestCaseTag::AI_ONNX_ML:
+    return "ai.onnx.ml";
+  case TestCaseTag::AI_ONNX_PREVIEW:
+    return "ai.onnx.preview";
+  case TestCaseTag::AI_ONNX_PREVIEW_TRAINING:
+    return "ai.onnx.preview.training";
+  case TestCaseTag::AI_RT:
+    return "ai.rt";
+  case TestCaseTag::CONSTANT:
+    return "constant";
+  case TestCaseTag::EMPTY_SHAPE:
+    return "empty_shape";
+  case TestCaseTag::INFERENCE:
+    return "inference";
+  case TestCaseTag::INPLACE:
+    return "inplace";
+  case TestCaseTag::LOCAL_FUNCTION:
+    return "local_function";
+  case TestCaseTag::NAN_INF:
+    return "nan_inf";
+  case TestCaseTag::PEAK_MEMORY:
+    return "peak_memory";
+  case TestCaseTag::RELEASE:
+    return "release";
+  case TestCaseTag::SHAPE_TAG:
+    return "shape_tag";
+  }
+  throw std::invalid_argument("Unknown TestCaseTag value.");
+}
+
 TestCase::TestCase(TestCase &&other) noexcept
     : name(std::move(const_cast<std::string &>(other.name))),
-      model_name(std::move(const_cast<std::string &>(other.model_name))),
-      kind(std::move(const_cast<std::string &>(other.kind))),
-      tag(std::move(const_cast<std::string &>(other.tag))), rtol(other.rtol), atol(other.atol),
-      build(std::move(other.build)), expected_outputs_generated(other.expected_outputs_generated),
+      model_name(std::move(const_cast<std::string &>(other.model_name))), kind(other.kind),
+      tag(other.tag), rtol(other.rtol), atol(other.atol), build(std::move(other.build)),
+      expected_outputs_generated(other.expected_outputs_generated),
       declared_input_element_counts(std::move(other.declared_input_element_counts)),
       declared_output_element_counts(std::move(other.declared_output_element_counts)),
       data_sets_(std::move(other.data_sets_)), model_(std::move(other.model_)),

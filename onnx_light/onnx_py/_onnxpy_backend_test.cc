@@ -23,6 +23,10 @@ namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DataSet;
 using core::backend_test::TestCase;
+using core::backend_test::TestCaseKind;
+using core::backend_test::TestCaseKindName;
+using core::backend_test::TestCaseTag;
+using core::backend_test::TestCaseTagName;
 using core::backend_test::TestMode;
 using core::runtime::Map;
 using core::runtime::Tensor;
@@ -235,12 +239,38 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
   // automatically. Callers must therefore have imported ``_onnxpyprotoop``
   // before accessing ``TestCase.model``; the package ``_onnxpy.py`` shim
   // guarantees that ordering.
+  nb::enum_<TestCaseKind>(bt_mod, "TestCaseKind", "Identifies the scope of a backend test case.")
+      .value("NODE", TestCaseKind::NODE)
+      .value("MODEL", TestCaseKind::MODEL);
+
+  nb::enum_<TestCaseTag>(bt_mod, "TestCaseTag",
+                         "Identifies a backend test family or operator domain.")
+      .value("NONE", TestCaseTag::NONE)
+      .value("AI_ONNX_ML", TestCaseTag::AI_ONNX_ML)
+      .value("AI_ONNX_PREVIEW", TestCaseTag::AI_ONNX_PREVIEW)
+      .value("AI_ONNX_PREVIEW_TRAINING", TestCaseTag::AI_ONNX_PREVIEW_TRAINING)
+      .value("AI_RT", TestCaseTag::AI_RT)
+      .value("CONSTANT", TestCaseTag::CONSTANT)
+      .value("EMPTY_SHAPE", TestCaseTag::EMPTY_SHAPE)
+      .value("INFERENCE", TestCaseTag::INFERENCE)
+      .value("INPLACE", TestCaseTag::INPLACE)
+      .value("LOCAL_FUNCTION", TestCaseTag::LOCAL_FUNCTION)
+      .value("NAN_INF", TestCaseTag::NAN_INF)
+      .value("PEAK_MEMORY", TestCaseTag::PEAK_MEMORY)
+      .value("RELEASE", TestCaseTag::RELEASE)
+      .value("SHAPE_TAG", TestCaseTag::SHAPE_TAG);
+
+  bt_mod.def("test_case_kind_name",
+             [](TestCaseKind kind) { return std::string(TestCaseKindName(kind)); });
+  bt_mod.def("test_case_tag_name",
+             [](TestCaseTag tag) { return std::string(TestCaseTagName(tag)); });
+
   nb::class_<TestCase>(bt_mod, "TestCase",
                        "A single C++-generated backend test case (mirrors "
                        "onnx_light.backend.test.case.base.TestCase).")
-      .def(nb::init<std::string, std::string, std::string, std::string, double, double>(),
+      .def(nb::init<std::string, std::string, TestCaseKind, TestCaseTag, double, double>(),
            nb::arg("name"), nb::arg("model_name") = std::string(),
-           nb::arg("kind") = std::string("node"), nb::arg("tag") = std::string(),
+           nb::arg("kind") = TestCaseKind::NODE, nb::arg("tag") = TestCaseTag::NONE,
            nb::arg("atol") = 1e-7, nb::arg("rtol") = 1e-3)
       .def_ro("name", &TestCase::name)
       .def_ro("model_name", &TestCase::model_name)
@@ -264,7 +294,8 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
            "resources such as captured kernel instances. The case is rebuilt on the next "
            "``model`` or ``data_sets`` access, while existing Python references remain valid.")
       .def("__repr__", [](const TestCase &tc) {
-        return "TestCase(name='" + tc.name + "', kind='" + tc.kind + "')";
+        return "TestCase(name='" + tc.name + "', kind=TestCaseKind." +
+               std::string(tc.kind == TestCaseKind::NODE ? "NODE" : "MODEL") + ")";
       });
 
   nb::enum_<TestMode>(bt_mod, "TestMode",

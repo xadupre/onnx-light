@@ -50,6 +50,33 @@ using namespace ::onnx_light::core::runtime;
  */
 enum class TestMode { TEST, BENCHMARK };
 
+/// Identifies whether a backend test exercises one node or a complete model.
+enum class TestCaseKind { NODE, MODEL };
+
+/// Identifies the family or operator domain associated with a backend test.
+enum class TestCaseTag {
+  NONE,
+  AI_ONNX_ML,
+  AI_ONNX_PREVIEW,
+  AI_ONNX_PREVIEW_TRAINING,
+  AI_RT,
+  CONSTANT,
+  EMPTY_SHAPE,
+  INFERENCE,
+  INPLACE,
+  LOCAL_FUNCTION,
+  NAN_INF,
+  PEAK_MEMORY,
+  RELEASE,
+  SHAPE_TAG,
+};
+
+/// Returns the stable string representation of a test-case kind.
+std::string_view TestCaseKindName(TestCaseKind kind);
+
+/// Returns the stable string representation of a test-case tag.
+std::string_view TestCaseTagName(TestCaseTag tag);
+
 /// A single (inputs, expected outputs) data set associated with a TestCase.
 struct DataSet {
   Tensors inputs;
@@ -102,9 +129,9 @@ struct BuiltCase {
  * ``declared_output_element_counts`` so its sizing can be checked without
  * running the (potentially expensive) builder.
  *
- * The string-typed fields (``name``, ``model_name``, ``kind``, ``tag``) are
+ * The metadata fields (``name``, ``model_name``, ``kind``, ``tag``) are
  * declared ``const`` and must therefore be supplied at construction time.
- * ``tag`` is an optional, free-form label used to group families of cases
+ * ``tag`` is an optional label used to group families of cases
  * (e.g. ``"empty_shape"``, ``"nan_inf"``, ``"inference"``); it defaults to
  * the empty string for the ordinary node cases in the default ``ai.onnx``
  * domain. For test cases whose underlying node belongs to a non-default
@@ -115,8 +142,8 @@ struct BuiltCase {
 struct TestCase {
   const std::string name;
   const std::string model_name;
-  const std::string kind;
-  const std::string tag;
+  const TestCaseKind kind;
+  const TestCaseTag tag;
   double rtol = 1e-3;
   double atol = 1e-7;
   /// Optional builder producing the model + data sets on demand. When set the
@@ -135,14 +162,14 @@ struct TestCase {
   std::vector<int64_t> declared_input_element_counts;
   std::vector<int64_t> declared_output_element_counts;
 
-  TestCase() : kind("node"), tag() {}
-  explicit TestCase(std::string name_, std::string model_name_ = "", std::string kind_ = "node",
-                    std::string tag_ = "", double atol_ = 1e-7, double rtol_ = 1e-3)
-      : name(std::move(name_)), model_name(std::move(model_name_)), kind(std::move(kind_)),
-        tag(std::move(tag_)), rtol(rtol_), atol(atol_) {}
-
+  TestCase() : kind(TestCaseKind::NODE), tag(TestCaseTag::NONE) {}
+  explicit TestCase(std::string name_, std::string model_name_ = "",
+                    TestCaseKind kind_ = TestCaseKind::NODE, TestCaseTag tag_ = TestCaseTag::NONE,
+                    double atol_ = 1e-7, double rtol_ = 1e-3)
+      : name(std::move(name_)), model_name(std::move(model_name_)), kind(kind_), tag(tag_),
+        rtol(rtol_), atol(atol_) {}
   // Explicit move constructor. Required because the ``const std::string``
-  // members would otherwise cause the implicit move constructor to fall
+  // name members would otherwise cause the implicit move constructor to fall
   // back to ``std::string`` copy construction (and therefore not be
   // ``noexcept``), which in turn forces ``std::vector<TestCase>`` to
   // copy-construct existing elements on reallocation — impossible because the

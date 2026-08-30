@@ -67,7 +67,7 @@ void RegisterTopKNanInfCases(std::vector<TestCase> &registry, TestMode /*mode*/)
     Tensor values = Tensor::FromFloat("values", {1, 3}, {kPosInf, kPosInf, 3.0f});
     Tensor indices = Tensor::FromInt64("indices", {1, 3}, {1, 3, 2});
     Expect(node, {x, k}, {std::move(values), std::move(indices)}, "test_cc_top_k_pos_inf", {opset},
-           "backend-test", registry, "nan_inf");
+           "backend-test", registry, TestCaseTag::NAN_INF);
   }
 
   // test_cc_top_k_neg_inf — largest=0 (smallest) with ``-Inf`` mixed in
@@ -80,7 +80,7 @@ void RegisterTopKNanInfCases(std::vector<TestCase> &registry, TestMode /*mode*/)
     Tensor values = Tensor::FromFloat("values", {1, 3}, {kNegInf, kNegInf, -3.0f});
     Tensor indices = Tensor::FromInt64("indices", {1, 3}, {1, 3, 2});
     Expect(node, {x, k}, {std::move(values), std::move(indices)}, "test_cc_top_k_neg_inf", {opset},
-           "backend-test", registry, "nan_inf");
+           "backend-test", registry, TestCaseTag::NAN_INF);
   }
 
   // test_cc_top_k_pos_neg_inf — both ``+Inf`` and ``-Inf`` present along
@@ -93,7 +93,7 @@ void RegisterTopKNanInfCases(std::vector<TestCase> &registry, TestMode /*mode*/)
     Tensor values = Tensor::FromFloat("values", {3}, {kPosInf, 2.0f, 0.0f});
     Tensor indices = Tensor::FromInt64("indices", {3}, {0, 3, 4});
     Expect(node, {x, k}, {std::move(values), std::move(indices)}, "test_cc_top_k_pos_neg_inf",
-           {opset}, "backend-test", registry, "nan_inf");
+           {opset}, "backend-test", registry, TestCaseTag::NAN_INF);
   }
 
   // NaN is intentionally not exercised in a value-comparison case: NaN

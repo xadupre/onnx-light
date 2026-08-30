@@ -59,7 +59,7 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
     const std::string name = fused ? "test_cc_shape_inference_big_qwen3_4_layers_like_fused"
                                    : "test_cc_shape_inference_big_qwen3_4_layers_like";
 
-    TestCase tc(name, name, "model", "inference");
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
     tc.rtol = 1e-3f;
     tc.atol = 1e-5f;
 

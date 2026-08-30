@@ -326,7 +326,7 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
     ModelProto *model_ptr = &tc.model();
     ModelProto model_copy;
     std::vector<ExpectedOutput> expected_value_info;
-    if (tc.kind == "model") {
+    if (tc.kind == core::backend_test::TestCaseKind::MODEL) {
       std::string serialized;
       tc.model().SerializeToString(serialized);
       model_copy.ParseFromString(serialized);
@@ -361,7 +361,7 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
       }
     }
 
-    if (tc.kind == "model") {
+    if (tc.kind == core::backend_test::TestCaseKind::MODEL) {
       CheckValueInfoMatchesExpected(model_ptr->ref_graph(), expected_value_info);
     }
 
@@ -2399,7 +2399,7 @@ TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
     // recorded in ``value_info`` so we can verify inference recovers them.
     const auto expected = SnapshotAndStripOutputs(model_copy);
     std::vector<ExpectedOutput> expected_value_info;
-    if (tc.kind == "model") {
+    if (tc.kind == core::backend_test::TestCaseKind::MODEL) {
       expected_value_info = SnapshotAndStripValueInfo(model_copy);
     }
     model_copy.mutable_graph()->mutable_value_info()->clear();
@@ -2429,7 +2429,7 @@ TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
       }
     }
 
-    if (tc.kind == "model") {
+    if (tc.kind == core::backend_test::TestCaseKind::MODEL) {
       CheckValueInfoMatchesExpected(model_copy.ref_graph(), expected_value_info);
     }
   }

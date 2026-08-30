@@ -4,6 +4,8 @@ from typing import Pattern, Union
 try:
     from ..onnx_py._onnxpybackend.backend_test import (  # type: ignore # noqa: F401
         TestCase,
+        TestCaseKind,
+        TestCaseTag,
         TestMode,
         collect_test_cases,
     )

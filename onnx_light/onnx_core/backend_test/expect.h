@@ -59,7 +59,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
 void Expect(const NodeProto &node, const Tensors &inputs, const Tensors &outputs,
             const std::string &name, const std::vector<OpsetId> &opset_imports,
             const std::string &producer_name, std::vector<TestCase> &registry,
-            const std::string &tag = "", const std::vector<TypeSpec> &output_types = {});
+            TestCaseTag tag = TestCaseTag::NONE, const std::vector<TypeSpec> &output_types = {});
 
 /**
  * Builds a single-node ``ModelProto`` and its one data set from ``node`` and
@@ -112,7 +112,7 @@ BuiltCase BuildSingleNodeCase(const NodeProto &node, Tensors inputs, Tensors out
 void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
             std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
             std::vector<int64_t> out_counts, std::function<IoData()> make_io,
-            std::string producer_name = "backend-test", std::string tag = "",
+            std::string producer_name = "backend-test", TestCaseTag tag = TestCaseTag::NONE,
             std::vector<TypeSpec> output_types = {});
 
 /// Variant of the lazy :func:`Expect` callback which receives whether expected
@@ -121,7 +121,7 @@ void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
 void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
             std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
             std::vector<int64_t> out_counts, std::function<IoData(bool)> make_io,
-            std::string producer_name = "backend-test", std::string tag = "",
+            std::string producer_name = "backend-test", TestCaseTag tag = TestCaseTag::NONE,
             std::vector<TypeSpec> output_types = {});
 
 /**
@@ -132,7 +132,7 @@ void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
  */
 inline void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
                    std::vector<OpsetId> opset_imports, std::function<IoData()> make_io,
-                   std::string producer_name = "backend-test", std::string tag = "",
+                   std::string producer_name = "backend-test", TestCaseTag tag = TestCaseTag::NONE,
                    std::vector<TypeSpec> output_types = {}) {
   Expect(registry, std::move(node), std::move(name), std::move(opset_imports), {}, {},
          std::move(make_io), std::move(producer_name), std::move(tag), std::move(output_types));
@@ -183,7 +183,7 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
            }
            return io;
          },
-         "backend-test", "", {TensorTypeSpec(TensorProto::FLOAT, {size})});
+         "backend-test", TestCaseTag::NONE, {TensorTypeSpec(TensorProto::FLOAT, {size})});
   if (with_float16) {
     NodeProto node16;
     node16.set_op_type(op_type);
@@ -200,7 +200,7 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
              }
              return io;
            },
-           "backend-test", "", {TensorTypeSpec(TensorProto::FLOAT16, {size})});
+           "backend-test", TestCaseTag::NONE, {TensorTypeSpec(TensorProto::FLOAT16, {size})});
   }
   if (with_bfloat16) {
     NodeProto nodebf16;
@@ -218,7 +218,7 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const Kernel &kernel,
              }
              return io;
            },
-           "backend-test", "", {TensorTypeSpec(TensorProto::BFLOAT16, {size})});
+           "backend-test", TestCaseTag::NONE, {TensorTypeSpec(TensorProto::BFLOAT16, {size})});
   }
 }
 
@@ -261,7 +261,7 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel
            }
            return io;
          },
-         "backend-test", "", {TensorTypeSpec(TensorProto::FLOAT, {size})});
+         "backend-test", TestCaseTag::NONE, {TensorTypeSpec(TensorProto::FLOAT, {size})});
   if (with_float16) {
     NodeProto node16;
     node16.set_op_type(op_type);
@@ -280,7 +280,7 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel
              }
              return io;
            },
-           "backend-test", "", {TensorTypeSpec(TensorProto::FLOAT16, {size})});
+           "backend-test", TestCaseTag::NONE, {TensorTypeSpec(TensorProto::FLOAT16, {size})});
   }
   if (with_bfloat16) {
     NodeProto nodebf16;
@@ -300,7 +300,7 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const Kernel &kernel
              }
              return io;
            },
-           "backend-test", "", {TensorTypeSpec(TensorProto::BFLOAT16, {size})});
+           "backend-test", TestCaseTag::NONE, {TensorTypeSpec(TensorProto::BFLOAT16, {size})});
   }
 }
 

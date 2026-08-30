@@ -9,7 +9,7 @@ import unittest
 
 import numpy as np
 
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 # The kernels runtime and backend test registries are only available in the
 # full build; skip this module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
@@ -17,7 +17,7 @@ collect_test_case = import_or_skip("onnx_light.onnx_lib.backend.test.case", "col
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 
-class TestReferenceEvaluatorTinyLlm(unittest.TestCase):
+class TestReferenceEvaluatorTinyLlm(ExtTestCase):
     """Exercises the ``tiny_llm`` decoder through :class:`ReferenceEvaluator`.
 
     The ``test_cc_shape_inference_tiny_llm`` backend test case ships no
@@ -59,7 +59,7 @@ class TestReferenceEvaluatorTinyLlm(unittest.TestCase):
         first = [np.array(out, copy=True) for out in sess.run(None, inputs)]
         second = sess.run(None, inputs)
         for expected, actual in zip(first, second):
-            np.testing.assert_array_equal(expected, actual)
+            self.assertEqualArray(expected, actual)
 
 
 if __name__ == "__main__":

@@ -46,25 +46,6 @@ def reference_evaluator_backend(model: onnxl.ModelProto, *inputs: np.ndarray) ->
     return sess.run(None, feed)
 
 
-def _iter_ops(graph) -> list[str]:
-    """Returns every ``op_type`` referenced (recursively) by ``graph``.
-
-    Subgraphs nested inside attributes (``If``/``Loop``/``Scan`` bodies)
-    are walked as well so the include filter rejects models whose
-    control-flow bodies use unimplemented ops.
-    """
-    ops: list[str] = []
-    for node in graph.node:
-        ops.append(node.op_type)
-        for attr in node.attribute:
-            if attr.type == onnxl.AttributeProto.GRAPH:
-                ops.extend(_iter_ops(attr.g))
-            elif attr.type == onnxl.AttributeProto.GRAPHS:
-                for g in attr.graphs:
-                    ops.extend(_iter_ops(g))
-    return ops
-
-
 TestReferenceEvaluatorBackend = make_test_class(
     reference_evaluator_backend,
     exclude_regex=[

@@ -106,6 +106,8 @@ class TestHideStdout(ExtTestCase):
     def test_assert_not_almost_equal_fails_for_equal_arrays(self):
         with self.assertRaises(AssertionError):
             self.assertNotAlmostEqual(np.array([1.0]), np.array([1.0]))
+        with self.assertRaises(AssertionError):
+            self.assertNotAlmostEqual(np.array([1.0]), np.array([[1.0]]))
 
 
 if __name__ == "__main__":

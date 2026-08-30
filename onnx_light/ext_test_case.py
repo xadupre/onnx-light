@@ -280,6 +280,12 @@ class ExtTestCase(unittest.TestCase):
         if not isinstance(expected, np.ndarray) and not isinstance(value, np.ndarray):
             if atol is None and rtol == 0:
                 return super().assertNotAlmostEqual(expected, value, places, msg, delta)
+        if not isinstance(expected, np.ndarray):
+            expected = np.array(expected)
+        if not isinstance(value, np.ndarray):
+            value = np.array(value).astype(expected.dtype)
+        self.assertEqual(expected.dtype, value.dtype)
+        self.assertEqual(expected.shape, value.shape)
         try:
             self.assertAlmostEqual(expected, value, places, delta=delta, atol=atol, rtol=rtol)
         except AssertionError:

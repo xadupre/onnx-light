@@ -30,7 +30,7 @@ def _measure_backend_test_case(
     import time
 
     from onnx_light.onnx.reference import ReferenceEvaluator
-    from onnx_light.onnx_py._onnxpybackend import backend_test
+    from onnx_light.onnx_py._onnxpybackend import backend_test  # type: ignore
 
     materialization_start = time.perf_counter()
     model = case.model

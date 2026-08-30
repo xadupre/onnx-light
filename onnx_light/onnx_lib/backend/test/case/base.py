@@ -79,10 +79,10 @@ class TestCase(_backend_test_cc.TestCase):
         model_dir: str | None,
         model: onnx.ModelProto | None,
         data_sets: BackendTestDataSets | None,
-        kind: TestCaseKind,
+        kind: Any,
         atol: float,
         rtol: float,
-        tag: TestCaseTag = TestCaseTag.NONE,
+        tag: Any = TestCaseTag.NONE,
         _native_case: Any | None = None,
     ) -> None:
         super().__init__(

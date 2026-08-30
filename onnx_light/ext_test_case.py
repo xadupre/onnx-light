@@ -284,9 +284,9 @@ class ExtTestCase(unittest.TestCase):
             expected = np.array(expected)
         if not isinstance(value, np.ndarray):
             value = np.array(value).astype(expected.dtype)
-        self.assertEqual(expected.dtype, value.dtype)
-        self.assertEqual(expected.shape, value.shape)
         try:
+            self.assertEqual(expected.dtype, value.dtype)
+            self.assertEqual(expected.shape, value.shape)
             self.assertAlmostEqual(expected, value, places, delta=delta, atol=atol, rtol=rtol)
         except AssertionError:
             return

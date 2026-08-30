@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestCMakePythonCrossCompile(unittest.TestCase):
+class TestCMakePythonCrossCompile(ExtTestCase):
     def test_cross_compile_python_package_ordering(self):
         root = Path(__file__).resolve().parents[2]
         content = (root / "CMakeLists.txt").read_text(encoding="utf-8")

@@ -12,7 +12,7 @@ import numpy as np
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx import TensorProto
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 from onnx_light.onnx_core import optimization
 
@@ -63,7 +63,7 @@ def _optimize(model, pattern_name: str, *, report: bool = False):
     return builder.to_onnx("model"), result
 
 
-class TestPatternsAlgebra(unittest.TestCase):
+class TestPatternsAlgebra(ExtTestCase):
     def assert_equivalent(self, original, optimized, feeds, *, atol=1e-6):
         expected = _run(original, feeds)
         got = _run(optimized, feeds)

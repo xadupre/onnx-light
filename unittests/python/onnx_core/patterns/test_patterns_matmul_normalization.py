@@ -12,14 +12,14 @@ import numpy as np
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx import TensorProto, checker
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 from onnx_light.onnx_core import optimization
 
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 
-class TestPatternsMatmulNormalization(unittest.TestCase):
+class TestPatternsMatmulNormalization(ExtTestCase):
     @staticmethod
     def _range(*shape: int, bias: float | None = None, dtype=np.float32) -> np.ndarray:
         """Returns deterministic data with the requested shape and type."""

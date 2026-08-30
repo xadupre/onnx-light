@@ -24,7 +24,7 @@ import unittest
 
 import numpy as np
 
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 import onnx_light.onnx as onnxl
 
@@ -78,7 +78,7 @@ TestReferenceEvaluatorBackend = make_test_class(
 )
 
 
-class TestReferenceEvaluatorTinyLlm(unittest.TestCase):
+class TestReferenceEvaluatorTinyLlm(ExtTestCase):
     """Exercises the ``tiny_llm`` decoder through :class:`ReferenceEvaluator`.
 
     The ``test_cc_shape_inference_tiny_llm`` backend test case ships no

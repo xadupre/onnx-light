@@ -5,6 +5,8 @@ import tempfile
 import time
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
+
 import numpy as np
 
 import onnx_light.onnx as onnxl
@@ -53,7 +55,7 @@ def _load_example_helpers():
     return namespace
 
 
-class TestPlotOnnxTime(unittest.TestCase):
+class TestPlotOnnxTime(ExtTestCase):
     def test_measure_collects_minimum_iterations(self):
         """Verifies the duration bound does not produce single-sample results."""
         helpers = _load_example_helpers()

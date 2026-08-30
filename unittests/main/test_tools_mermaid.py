@@ -14,7 +14,7 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
-from onnx_light.ext_test_case import HAS_OPTIM_EXT
+from onnx_light.ext_test_case import ExtTestCase, HAS_OPTIM_EXT
 from onnx_light.tools import to_mermaid, to_mermaid_graph
 from onnx_light.tools.mermaid import _escape_label, _format_shape
 
@@ -85,7 +85,7 @@ def _model(graph: SimpleNamespace) -> SimpleNamespace:
     return SimpleNamespace(graph=graph)
 
 
-class TestMermaid(unittest.TestCase):
+class TestMermaid(ExtTestCase):
     def test_simple_model(self) -> None:
         g = _graph(
             nodes=[

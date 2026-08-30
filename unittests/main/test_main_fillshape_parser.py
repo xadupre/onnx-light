@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
+
 from onnx_light.__main__ import _build_parser
 
 
-class TestMainFillshapeParser(unittest.TestCase):
+class TestMainFillshapeParser(ExtTestCase):
     def test_fillshape_release_info_option(self):
         """Parses ``--release-info`` on the ``fillshape`` subcommand."""
         parser = _build_parser()

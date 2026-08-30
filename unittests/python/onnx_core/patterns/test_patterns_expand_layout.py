@@ -13,7 +13,7 @@ import numpy as np
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx import TensorProto, shape_inference
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 from onnx_light.onnx_core import optimization
 
@@ -100,7 +100,7 @@ def _attribute_int(node, name):
     raise AssertionError(f"Attribute {name!r} was not found.")
 
 
-class TestExpandLayoutPatterns(unittest.TestCase):
+class TestExpandLayoutPatterns(ExtTestCase):
     def assertPatternRewritten(self, rewrites, pattern):
         """Checks that the requested isolated pattern rewrote the graph."""
         self.assertIn(pattern, [rewrite.pattern_name for rewrite in rewrites])

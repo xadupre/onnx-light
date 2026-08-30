@@ -2,6 +2,8 @@ import base64
 import json
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
+
 FLOAT = 1
 UINT8 = 2
 INT32 = 6
@@ -355,7 +357,7 @@ def _serialized_field_numbers(serialized):
     return field_numbers
 
 
-class TestQuantizationCustomTypesSerialization(unittest.TestCase):
+class TestQuantizationCustomTypesSerialization(ExtTestCase):
     def test_linear_uniform_with_and_without_custom_types(self):
         specialized = _round_trip(_make_specialized_linear())
         custom = _round_trip(_make_custom_linear())

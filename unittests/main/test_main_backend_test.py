@@ -16,13 +16,13 @@ from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 from onnx_light.__main__ import _build_parser, _run_backend_test_timing, main
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 import_or_skip("onnx_light.onnx_py._onnxpybackend", "backend_test")
 import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 
 
-class TestMainBackendTest(unittest.TestCase):
+class TestMainBackendTest(ExtTestCase):
     def test_parser_defaults(self):
         args = _build_parser().parse_args(["backend"])
         self.assertEqual(args.regex, "")

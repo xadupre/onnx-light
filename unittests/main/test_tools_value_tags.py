@@ -6,7 +6,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from onnx_light.ext_test_case import HAS_OPTIM_EXT
+from onnx_light.ext_test_case import ExtTestCase, HAS_OPTIM_EXT
 from onnx_light.tools import (
     compute_value_and_node_tags,
     infer_value_and_node_tags,
@@ -34,7 +34,7 @@ def _value_tags(graph: object) -> dict[str, str]:
     return tags
 
 
-class TestValueTagsErrors(unittest.TestCase):
+class TestValueTagsErrors(ExtTestCase):
     def test_requires_cpp_bindings(self):
         from onnx_light.tools import _proto_utils
 
@@ -48,7 +48,7 @@ class TestValueTagsErrors(unittest.TestCase):
 
 
 @unittest.skipUnless(HAS_OPTIM_EXT, "requires onnx_light C++ shape_inference bindings")
-class TestValueTags(unittest.TestCase):
+class TestValueTags(ExtTestCase):
     def test_tags_graph_and_nodes(self):
         import onnx_light.onnx.helper as oh
         from onnx_light.onnx import TensorProto

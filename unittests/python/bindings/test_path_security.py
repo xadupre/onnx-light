@@ -12,6 +12,8 @@ import sys
 import tempfile
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
+
 # Import _path_security directly to avoid pulling in compiled C++ extensions.
 _spec = importlib.util.spec_from_file_location(
     "onnx_light.onnx_lib._path_security",
@@ -31,7 +33,7 @@ _is_relative_and_contained = _mod._is_relative_and_contained
 validate_external_data_path = _mod.validate_external_data_path
 
 
-class TestIsRelativeAndContained(unittest.TestCase):
+class TestIsRelativeAndContained(ExtTestCase):
     """Tests for _is_relative_and_contained."""
 
     def test_simple_relative(self):
@@ -65,7 +67,7 @@ class TestIsRelativeAndContained(unittest.TestCase):
         self.assertTrue(_is_relative_and_contained("./weights.bin"))
 
 
-class TestValidateExternalDataPath(unittest.TestCase):
+class TestValidateExternalDataPath(ExtTestCase):
     """Tests for validate_external_data_path."""
 
     def setUp(self):

@@ -12,7 +12,7 @@ import numpy
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx import TensorProto
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 from onnx_light.onnx_core import optimization
 
@@ -52,7 +52,7 @@ def initializer_values(model):
     }
 
 
-class TestCollectionPatterns(unittest.TestCase):
+class TestCollectionPatterns(ExtTestCase):
     """Tests collection, slicing, gathering, splitting, and sequence patterns."""
 
     def optimize(self, model, pattern_name):

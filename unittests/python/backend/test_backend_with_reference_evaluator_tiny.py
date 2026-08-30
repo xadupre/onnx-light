@@ -59,7 +59,7 @@ class TestReferenceEvaluatorTinyLlm(ExtTestCase):
         first = [np.array(out, copy=True) for out in sess.run(None, inputs)]
         second = sess.run(None, inputs)
         for expected, actual in zip(first, second):
-            self.assertEqualArray(expected, actual)
+            np.testing.assert_array_equal(expected, actual)
 
 
 if __name__ == "__main__":

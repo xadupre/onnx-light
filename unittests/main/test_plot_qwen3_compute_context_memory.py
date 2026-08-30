@@ -3,7 +3,7 @@ import pathlib
 import types
 import unittest
 
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 
 def _load_example_module():
@@ -18,7 +18,7 @@ def _load_example_module():
     return module
 
 
-class TestPlotQwen3ComputeContextMemory(unittest.TestCase):
+class TestPlotQwen3ComputeContextMemory(ExtTestCase):
     def test_make_plot_assignments(self):
         module = _load_example_module()
         args = types.SimpleNamespace(batch=3, sequence_length=16, past_sequence_length=8)

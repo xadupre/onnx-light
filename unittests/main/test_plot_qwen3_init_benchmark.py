@@ -2,7 +2,7 @@ import importlib.util
 import pathlib
 import unittest
 
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 
 def _load_example_module():
@@ -18,7 +18,7 @@ def _load_example_module():
     return module
 
 
-class TestPlotQwen3InitBenchmark(unittest.TestCase):
+class TestPlotQwen3InitBenchmark(ExtTestCase):
     def test_measure_reports_expected_statistics(self):
         module = _load_example_module()
         counter = {"calls": 0}

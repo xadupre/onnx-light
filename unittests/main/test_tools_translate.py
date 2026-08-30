@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import math
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from types import SimpleNamespace
 
 import numpy as np
@@ -110,7 +112,7 @@ def _model(graph: SimpleNamespace, opsets: list | None = None, ir_version: int =
     )
 
 
-class TestTranslateText(unittest.TestCase):
+class TestTranslateText(ExtTestCase):
     """Textual (duck-typed) checks that do not require the C++ extension."""
 
     def _simple_model(self):
@@ -296,7 +298,7 @@ class TestTranslateText(unittest.TestCase):
         self.assertIn("'idg'", code)
 
 
-class TestTranslateRoundTrip(unittest.TestCase):
+class TestTranslateRoundTrip(ExtTestCase):
     """Round-trip tests: execute the generated code and compare the models."""
 
     def _build_reference(self):

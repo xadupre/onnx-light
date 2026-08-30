@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestOnnxOptimDependency(unittest.TestCase):
+class TestOnnxOptimDependency(ExtTestCase):
     """Verifies that lib_onnx_shape depends on lib_onnx_core, not lib_onnx_op."""
 
     def setUp(self):

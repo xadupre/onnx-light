@@ -3,6 +3,8 @@ import pathlib
 import tempfile
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
+
 import numpy as np
 
 import onnx_light.onnx as onnxl
@@ -28,7 +30,7 @@ def _load_example_helpers():
     return module
 
 
-class TestPlotOnnxColdStart(unittest.TestCase):
+class TestPlotOnnxColdStart(ExtTestCase):
     def test_onnx_light_sample_uses_fresh_process_protocol(self):
         """Verifies a sample reports separate startup and post-import load timing."""
         graph = oh.make_graph(

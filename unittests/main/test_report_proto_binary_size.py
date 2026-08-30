@@ -1,5 +1,7 @@
 import importlib.util
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
@@ -18,7 +20,7 @@ def _load_reporter():
     return module
 
 
-class TestReportProtoBinarySize(unittest.TestCase):
+class TestReportProtoBinarySize(ExtTestCase):
     @classmethod
     def setUpClass(cls):
         cls.reporter = _load_reporter()

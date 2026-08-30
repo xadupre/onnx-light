@@ -27,8 +27,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterMaxUnpoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::MaxUnpool maxunpool_kernel{ctx};
+  const auto maxunpool_kernel = MakeReferenceKernel<onnx_kernels::kernel::MaxUnpool>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     // Two-input form: kernel 2x2, stride 2 unpools a [1, 1, 512, 512] map into
@@ -55,7 +54,9 @@ void RegisterMaxUnpoolCases(std::vector<TestCase> &registry, TestMode mode) {
                }
              }
              Tensor indices = Tensor::FromInt64("", {1, 1, pooled, pooled}, idx);
-             Tensor y = maxunpool_kernel(x, indices, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2});
+             Tensor y = maxunpool_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, indices, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2});
+             });
              return IoData{{std::move(x), std::move(indices)}, {std::move(y)}};
            });
     return;
@@ -78,8 +79,10 @@ void RegisterMaxUnpoolCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
              Tensor indices = Tensor::FromInt64("", {1, 1, 2, 2}, {5, 7, 13, 15});
              Tensor output_shape = Tensor::FromInt64("", {4}, {1, 1, 5, 5});
-             Tensor y = maxunpool_kernel(x, indices, output_shape, /*kernel_shape=*/{2, 2},
-                                         /*strides=*/{2, 2});
+             Tensor y = maxunpool_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, indices, output_shape, /*kernel_shape=*/{2, 2},
+                             /*strides=*/{2, 2});
+             });
 
              return IoData{{std::move(x), std::move(indices), std::move(output_shape)},
                            {std::move(y)}};
@@ -100,7 +103,9 @@ void RegisterMaxUnpoolCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              Tensor indices = Tensor::FromInt64("", {1, 1, 2, 2}, {5, 7, 13, 15});
-             Tensor y = maxunpool_kernel(x, indices, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2});
+             Tensor y = maxunpool_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, indices, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2});
+             });
 
              return IoData{{std::move(x), std::move(indices)}, {std::move(y)}};
            });

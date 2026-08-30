@@ -13,11 +13,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(6);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Elu elu_kernel{ctx};
+  const auto elu_kernel = MakeReferenceKernel<onnx_kernels::kernel::Elu>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Elu", elu_kernel, "test_cc_elu_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Elu>("Elu", "test_cc_elu_benchmark", opset,
+                                                         registry);
     return;
   }
 
@@ -34,7 +34,7 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
       alpha->set_f(2.0f);
 
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-      Tensor y = elu_kernel(x, 2.0f);
+      Tensor y = elu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 2.0f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -52,7 +52,7 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
       alpha->set_f(2.0f);
 
       Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
-      Tensor y = elu_kernel(x, 2.0f);
+      Tensor y = elu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 2.0f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -65,7 +65,7 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_elu_default", {opset}, [=]() -> IoData {
       // No alpha attribute: defaults to 1.0.
       Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
-      Tensor y = elu_kernel(x);
+      Tensor y = elu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -84,7 +84,7 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
       alpha->set_f(2.0f);
 
       Tensor x = MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
-      Tensor y = elu_kernel(x, 2.0f);
+      Tensor y = elu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 2.0f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -109,7 +109,7 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
         dst[i] = FloatToBfloat16Bits(vals[i]);
       }
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-      Tensor y = elu_kernel(x, 1.0f);
+      Tensor y = elu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 1.0f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

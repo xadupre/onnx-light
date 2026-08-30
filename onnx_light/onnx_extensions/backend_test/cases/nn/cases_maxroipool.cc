@@ -47,8 +47,7 @@ Tensor MakeFeatureMap() {
 // ---------------------------------------------------------------------------
 void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::MaxRoiPool maxroipool_kernel{ctx};
+  const auto maxroipool_kernel = MakeReferenceKernel<onnx_kernels::kernel::MaxRoiPool>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -76,7 +75,8 @@ void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::MaxRoiPool::Attributes attrs;
              attrs.pooled_shape = {2, 2};
              attrs.spatial_scale = 1.0f;
-             Tensor y = maxroipool_kernel(x, rois, attrs);
+             Tensor y = maxroipool_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, rois, attrs); });
              return IoData{{std::move(x), std::move(rois)}, {std::move(y)}};
            });
     return;
@@ -102,7 +102,8 @@ void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
       onnx_kernels::kernel::MaxRoiPool::Attributes attrs;
       attrs.pooled_shape = {2, 2};
       attrs.spatial_scale = 1.0f;
-      Tensor y = maxroipool_kernel(x, rois, attrs);
+      Tensor y =
+          maxroipool_kernel.Invoke([&](const auto &kernel) { return kernel(x, rois, attrs); });
 
       return IoData{{std::move(x), std::move(rois)}, {std::move(y)}};
     });
@@ -127,7 +128,8 @@ void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
       onnx_kernels::kernel::MaxRoiPool::Attributes attrs;
       attrs.pooled_shape = {3, 3};
       attrs.spatial_scale = 0.5f;
-      Tensor y = maxroipool_kernel(x, rois, attrs);
+      Tensor y =
+          maxroipool_kernel.Invoke([&](const auto &kernel) { return kernel(x, rois, attrs); });
 
       return IoData{{std::move(x), std::move(rois)}, {std::move(y)}};
     });

@@ -13,11 +13,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterReluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Relu relu_kernel{ctx};
+  const auto relu_kernel = MakeReferenceKernel<onnx_kernels::kernel::Relu>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Relu", relu_kernel, "test_cc_relu_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Relu>("Relu", "test_cc_relu_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -28,7 +28,7 @@ void RegisterReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y");
     Expect(registry, std::move(node), "test_cc_relu_example", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {3, 4, 5}, std::vector<float>(60, -1.0f));
-      Tensor y = relu_kernel(x);
+      Tensor y = relu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -40,7 +40,7 @@ void RegisterReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y");
     Expect(registry, std::move(node), "test_cc_relu", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-      Tensor y = relu_kernel(x);
+      Tensor y = relu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -53,7 +53,7 @@ void RegisterReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y");
     Expect(registry, std::move(node), "test_cc_relu_float16", {opset}, [=]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-      Tensor y = relu_kernel(x);
+      Tensor y = relu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -73,7 +73,7 @@ void RegisterReluCases(std::vector<TestCase> &registry, TestMode mode) {
         dst[i] = FloatToBfloat16Bits(vals[i]);
       }
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-      Tensor y = relu_kernel(x);
+      Tensor y = relu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -86,7 +86,7 @@ void RegisterReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_relu_double", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromDouble("", {2, 3}, {-2.0, -0.5, 0.0, 0.5, 1.5, 3.0});
-      Tensor y = relu_kernel(x);
+      Tensor y = relu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -99,7 +99,7 @@ void RegisterReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_relu_int8", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt8("", {2, 3}, {-5, -1, 0, 1, 3, 127});
-      Tensor y = relu_kernel(x);
+      Tensor y = relu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -112,7 +112,7 @@ void RegisterReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_relu_int16", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt16("", {2, 3}, {-500, -1, 0, 1, 300, 1000});
-      Tensor y = relu_kernel(x);
+      Tensor y = relu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -125,7 +125,7 @@ void RegisterReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_relu_int32", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt32("", {2, 3}, {-100000, -1, 0, 1, 42, 100000});
-      Tensor y = relu_kernel(x);
+      Tensor y = relu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -138,7 +138,7 @@ void RegisterReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_relu_int64", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt64("", {2, 3}, {-1000000000000LL, -1, 0, 1, 42, 1000000000000LL});
-      Tensor y = relu_kernel(x);
+      Tensor y = relu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

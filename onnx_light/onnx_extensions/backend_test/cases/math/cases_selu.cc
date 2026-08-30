@@ -12,11 +12,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterSeluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(6);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Selu selu_kernel{ctx};
+  const auto selu_kernel = MakeReferenceKernel<onnx_kernels::kernel::Selu>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Selu", selu_kernel, "test_cc_selu_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Selu>("Selu", "test_cc_selu_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -38,7 +38,7 @@ void RegisterSeluCases(std::vector<TestCase> &registry, TestMode mode) {
       gamma->set_f(3.0f);
 
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-      Tensor y = selu_kernel(x, 2.0f, 3.0f);
+      Tensor y = selu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 2.0f, 3.0f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -61,7 +61,7 @@ void RegisterSeluCases(std::vector<TestCase> &registry, TestMode mode) {
       gamma->set_f(3.0f);
 
       Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
-      Tensor y = selu_kernel(x, 2.0f, 3.0f);
+      Tensor y = selu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 2.0f, 3.0f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -75,7 +75,7 @@ void RegisterSeluCases(std::vector<TestCase> &registry, TestMode mode) {
       // No attributes: defaults to ONNX schema defaults
       // (alpha=1.67326319217681884765625, gamma=1.05070102214813232421875).
       Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
-      Tensor y = selu_kernel(x);
+      Tensor y = selu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

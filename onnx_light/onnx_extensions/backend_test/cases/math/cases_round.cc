@@ -18,11 +18,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterRoundCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Round round_kernel{ctx};
+  const auto round_kernel = MakeReferenceKernel<onnx_kernels::kernel::Round>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Round", round_kernel, "test_cc_round_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Round>("Round", "test_cc_round_benchmark",
+                                                           opset, registry);
     return;
   }
 
@@ -34,7 +34,7 @@ void RegisterRoundCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_round", {opset}, [=]() -> IoData {
       // Includes halves to exercise the round-half-to-even rule used by ONNX.
       Tensor x = Tensor::FromFloat("", {2, 3}, {0.9f, 2.5f, 2.3f, 1.5f, -4.5f, -2.5f});
-      Tensor y = round_kernel(x);
+      Tensor y = round_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });

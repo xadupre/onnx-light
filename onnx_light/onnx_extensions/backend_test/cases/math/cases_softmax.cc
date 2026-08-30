@@ -30,8 +30,7 @@ NodeProto MakeSoftmaxNode(int64_t axis, bool include_axis = true) {
 
 void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Softmax softmax_kernel{ctx};
+  const auto softmax_kernel = MakeReferenceKernel<onnx_kernels::kernel::Softmax>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeSoftmaxNode(/*axis=*/1);
@@ -40,7 +39,7 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_softmax_benchmark", {opset}, {count}, {count},
            [softmax_kernel, shape]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, shape, 431);
-             Tensor y = softmax_kernel(x, 1);
+             Tensor y = softmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, 1); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -51,7 +50,7 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeSoftmaxNode(/*axis=*/1);
     Expect(registry, std::move(node), "test_cc_softmax", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 1.0f, 2.0f, 3.0f});
-      Tensor y = softmax_kernel(x, 1);
+      Tensor y = softmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, 1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -61,7 +60,7 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeSoftmaxNode(/*axis=*/0, /*include_axis=*/false);
     Expect(registry, std::move(node), "test_cc_softmax_example", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {1, 3}, {-1.0f, 0.0f, 1.0f});
-      Tensor y = softmax_kernel(x, -1);
+      Tensor y = softmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, -1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -72,7 +71,7 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_softmax_large_number", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat(
           "", {2, 4}, {0.0f, 1.0f, 2.0f, 3.0f, 10000.0f, 10001.0f, 10002.0f, 10003.0f});
-      Tensor y = softmax_kernel(x, -1);
+      Tensor y = softmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, -1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -84,7 +83,7 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_softmax_axis_0", {opset}, [=]() -> IoData {
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = RandnTensor(DataType::FLOAT, shape, 431);
-      Tensor y = softmax_kernel(x, 0);
+      Tensor y = softmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, 0); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -94,7 +93,7 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_softmax_axis_1", {opset}, [=]() -> IoData {
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = RandnTensor(DataType::FLOAT, shape, 432);
-      Tensor y = softmax_kernel(x, 1);
+      Tensor y = softmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, 1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -104,7 +103,7 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_softmax_axis_2", {opset}, [=]() -> IoData {
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = RandnTensor(DataType::FLOAT, shape, 433);
-      Tensor y = softmax_kernel(x, 2);
+      Tensor y = softmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, 2); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -114,7 +113,7 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_softmax_negative_axis", {opset}, [=]() -> IoData {
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = RandnTensor(DataType::FLOAT, shape, 434);
-      Tensor y = softmax_kernel(x, -1);
+      Tensor y = softmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, -1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -124,7 +123,7 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeSoftmaxNode(/*axis=*/0, /*include_axis=*/false);
     Expect(registry, std::move(node), "test_cc_softmax_default_axis", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, -1.0f});
-      Tensor y = softmax_kernel(x, -1);
+      Tensor y = softmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, -1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

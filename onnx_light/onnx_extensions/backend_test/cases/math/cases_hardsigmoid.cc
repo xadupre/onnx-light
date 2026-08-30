@@ -12,8 +12,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::HardSigmoid hard_sigmoid_kernel{ctx};
+  const auto hard_sigmoid_kernel = MakeReferenceKernel<onnx_kernels::kernel::HardSigmoid>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -32,7 +31,8 @@ void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_hardsigmoid_benchmark", {opset}, {n}, {n},
            [hard_sigmoid_kernel, n]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {n}, 987654321ULL);
-             Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
+             Tensor y = hard_sigmoid_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, 0.5f, 0.6f); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -56,7 +56,8 @@ void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
       beta->set_f(0.6f);
 
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-      Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
+      Tensor y =
+          hard_sigmoid_kernel.Invoke([&](const auto &kernel) { return kernel(x, 0.5f, 0.6f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -79,7 +80,8 @@ void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
       beta->set_f(0.6f);
 
       Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, -0.5f, 0.5f, 1.0f, 3.0f});
-      Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
+      Tensor y =
+          hard_sigmoid_kernel.Invoke([&](const auto &kernel) { return kernel(x, 0.5f, 0.6f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -92,7 +94,8 @@ void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_hardsigmoid_default", {opset}, [=]() -> IoData {
       // No alpha/beta attributes: defaults to 0.2 and 0.5.
       Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, -0.5f, 0.5f, 1.0f, 3.0f});
-      Tensor y = hard_sigmoid_kernel(x, 0.2f, 0.5f);
+      Tensor y =
+          hard_sigmoid_kernel.Invoke([&](const auto &kernel) { return kernel(x, 0.2f, 0.5f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

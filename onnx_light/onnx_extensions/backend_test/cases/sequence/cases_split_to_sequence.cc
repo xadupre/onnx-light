@@ -29,71 +29,82 @@ void RegisterSplitToSequenceCase(const std::string &name, const Tensor &input, c
                                  int64_t axis, int64_t keepdims,
                                  const std::vector<int64_t> &elem_shape, const OpsetId &opset,
                                  std::vector<TestCase> &registry) {
-  const KernelContext ctx{opset};
+  const bool has_split = split != nullptr;
+  const Tensor split_value = has_split ? *split : Tensor{};
+  TestCase lazy_case(name, name);
+  lazy_case.rtol = 1e-3;
+  lazy_case.atol = 1e-7;
+  lazy_case.build = [=](bool) -> BuiltCase {
+    const Tensor *split = has_split ? &split_value : nullptr;
 
-  // Compute the expected output sequence with the reference kernel.
-  const Sequence out_seq = onnx_kernels::kernel::SplitToSequence(ctx)(input, split, axis, keepdims);
+    // Compute the expected output sequence with the reference kernel.
+    const Sequence out_seq =
+        MakeReferenceKernel<onnx_kernels::kernel::SplitToSequence>(opset).Invoke(
+            [&](const auto &kernel) { return kernel(input, split, axis, keepdims); });
 
-  // Materialise the output sequence as a single stacked tensor.
-  std::vector<Tensor> chunks(out_seq.values.begin(), out_seq.values.end());
-  Tensor stacked = onnx_kernels::kernel::SequenceConstruct(ctx)(chunks);
-  stacked.name = "output_sequence";
+    // Materialise the output sequence as a single stacked tensor.
+    std::vector<Tensor> chunks(out_seq.values.begin(), out_seq.values.end());
+    Tensor stacked = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(chunks); });
+    stacked.name = "output_sequence";
 
-  TestCase tc(name, name);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+    TestCase tc(name, name);
+    tc.rtol = 1e-3;
+    tc.atol = 1e-7;
 
-  ModelProto &model = tc.emplace_model();
-  model.set_ir_version(kDefaultIrVersion);
-  model.set_producer_name("backend-test");
-  OperatorSetIdProto proto;
-  proto.set_domain(opset.domain);
-  proto.set_version(opset.version);
-  model.add_opset_import(proto);
+    ModelProto &model = tc.emplace_model();
+    model.set_ir_version(kDefaultIrVersion);
+    model.set_producer_name("backend-test");
+    OperatorSetIdProto proto;
+    proto.set_domain(opset.domain);
+    proto.set_version(opset.version);
+    model.add_opset_import(proto);
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  // Single SplitToSequence node.
-  NodeProto *node = graph->add_node();
-  node->set_op_type("SplitToSequence");
-  node->add_input(input.name);
-  if (split != nullptr) {
-    node->add_input(split->name);
-  }
-  node->add_output("output_sequence");
-  AttributeProto *axis_attr = node->add_attribute();
-  axis_attr->set_name("axis");
-  axis_attr->set_type(AttributeProto::INT);
-  axis_attr->set_i(axis);
-  if (split == nullptr) {
-    AttributeProto *kd_attr = node->add_attribute();
-    kd_attr->set_name("keepdims");
-    kd_attr->set_type(AttributeProto::INT);
-    kd_attr->set_i(keepdims);
-  }
+    // Single SplitToSequence node.
+    NodeProto *node = graph->add_node();
+    node->set_op_type("SplitToSequence");
+    node->add_input(input.name);
+    if (split != nullptr) {
+      node->add_input(split->name);
+    }
+    node->add_output("output_sequence");
+    AttributeProto *axis_attr = node->add_attribute();
+    axis_attr->set_name("axis");
+    axis_attr->set_type(AttributeProto::INT);
+    axis_attr->set_i(axis);
+    if (split == nullptr) {
+      AttributeProto *kd_attr = node->add_attribute();
+      kd_attr->set_name("keepdims");
+      kd_attr->set_type(AttributeProto::INT);
+      kd_attr->set_i(keepdims);
+    }
 
-  // Graph inputs: data tensor (and split when present).
-  FillValueInfo(input, *graph->add_input());
-  if (split != nullptr) {
-    FillValueInfo(*split, *graph->add_input());
-  }
+    // Graph inputs: data tensor (and split when present).
+    FillValueInfo(input, *graph->add_input());
+    if (split != nullptr) {
+      FillValueInfo(*split, *graph->add_input());
+    }
 
-  // Graph output: ``output_sequence`` declared as a SequenceType.
-  AppendValueInfo(
-      *graph->add_output(), stacked.name,
-      SequenceTypeSpec(TensorTypeSpec(static_cast<int32_t>(out_seq.elem_type), elem_shape)));
+    // Graph output: ``output_sequence`` declared as a SequenceType.
+    AppendValueInfo(
+        *graph->add_output(), stacked.name,
+        SequenceTypeSpec(TensorTypeSpec(static_cast<int32_t>(out_seq.elem_type), elem_shape)));
 
-  // DataSet: feed the data tensor (and split if provided).
-  DataSet ds;
-  ds.inputs.push_back(input);
-  if (split != nullptr) {
-    ds.inputs.push_back(*split);
-  }
-  ds.outputs.push_back(stacked);
-  tc.data_sets().emplace_back(std::move(ds));
+    // DataSet: feed the data tensor (and split if provided).
+    DataSet ds;
+    ds.inputs.push_back(input);
+    if (split != nullptr) {
+      ds.inputs.push_back(*split);
+    }
+    ds.outputs.push_back(stacked);
+    tc.data_sets().emplace_back(std::move(ds));
 
-  registry.emplace_back(std::move(tc));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace

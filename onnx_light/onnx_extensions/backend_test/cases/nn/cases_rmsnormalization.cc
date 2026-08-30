@@ -43,8 +43,7 @@ Tensor MakeFloatTensor(const std::string &name, const std::vector<int64_t> &shap
 }
 
 // Registers a single RMSNormalization case named ``test_cc_<base>``.
-void RegisterCase(std::vector<TestCase> &registry,
-                  const onnx_kernels::kernel::RMSNormalization &kernel, const OpsetId &opset,
+void RegisterCase(std::vector<TestCase> &registry, const auto &kernel, const OpsetId &opset,
                   const std::string &base, const std::vector<int64_t> &x_shape,
                   const std::vector<int64_t> &scale_shape, int64_t axis, bool include_axis_attr,
                   float epsilon, bool include_epsilon_attr) {
@@ -71,8 +70,7 @@ void RegisterCase(std::vector<TestCase> &registry,
 
 void RegisterRMSNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(23);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::RMSNormalization rmsnorm_kernel{ctx};
+  const auto rmsnorm_kernel = MakeReferenceKernel<onnx_kernels::kernel::RMSNormalization>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     constexpr float kDefaultEpsilon = 1e-5f;
@@ -91,7 +89,8 @@ void RegisterRMSNormalizationCases(std::vector<TestCase> &registry, TestMode mod
            [rmsnorm_kernel, x_shape, scale_shape, kDefaultEpsilon]() -> IoData {
              Tensor x = MakeFloatTensor("", x_shape, 0.05f, -0.5f);
              Tensor scale = MakeFloatTensor("", scale_shape, 0.02f, 0.5f);
-             Tensor y = rmsnorm_kernel(x, scale, /*axis=*/0, kDefaultEpsilon);
+             Tensor y = rmsnorm_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, scale, /*axis=*/0, kDefaultEpsilon); });
              return IoData{{std::move(x), std::move(scale)}, {std::move(y)}};
            });
     return;

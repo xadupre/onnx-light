@@ -80,8 +80,7 @@ Tensor MakeUpstreamFeatureMap() {
 // ---------------------------------------------------------------------------
 void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::RoiAlign roialign_kernel{ctx};
+  const auto roialign_kernel = MakeReferenceKernel<onnx_kernels::kernel::RoiAlign>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -139,7 +138,8 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
              attrs.sampling_ratio = 2;
              attrs.spatial_scale = 1.0f;
              attrs.coordinate_transformation_mode = "half_pixel";
-             Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
+             Tensor y = roialign_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, rois, batch_indices, attrs); });
              return IoData{{std::move(x), std::move(rois), std::move(batch_indices)},
                            {std::move(y)}};
            });
@@ -200,7 +200,8 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
       attrs.sampling_ratio = 2;
       attrs.spatial_scale = 1.0f;
       attrs.coordinate_transformation_mode = "half_pixel";
-      Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
+      Tensor y = roialign_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, rois, batch_indices, attrs); });
 
       return IoData{{std::move(x), std::move(rois), std::move(batch_indices)}, {std::move(y)}};
     });
@@ -257,7 +258,8 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
       attrs.sampling_ratio = 2;
       attrs.spatial_scale = 1.0f;
       attrs.coordinate_transformation_mode = "output_half_pixel";
-      Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
+      Tensor y = roialign_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, rois, batch_indices, attrs); });
 
       return IoData{{std::move(x), std::move(rois), std::move(batch_indices)}, {std::move(y)}};
     });
@@ -307,7 +309,8 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
       attrs.sampling_ratio = 2;
       attrs.spatial_scale = 1.0f;
       attrs.coordinate_transformation_mode = coordinate_transformation_mode;
-      Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
+      Tensor y = roialign_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, rois, batch_indices, attrs); });
 
       return IoData{{std::move(x), std::move(rois), std::move(batch_indices)}, {std::move(y)}};
     });

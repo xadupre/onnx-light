@@ -19,11 +19,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterSinCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Sin sin_kernel{ctx};
+  const auto sin_kernel = MakeReferenceKernel<onnx_kernels::kernel::Sin>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Sin", sin_kernel, "test_cc_sin_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Sin>("Sin", "test_cc_sin_benchmark", opset,
+                                                         registry);
     return;
   }
 
@@ -35,7 +35,7 @@ void RegisterSinCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_sin", {opset}, [=]() -> IoData {
       Tensor x =
           Tensor::FromFloat("", {2, 3}, {-3.14159f, -1.5708f, 0.0f, 1.0472f, 1.5708f, 3.14159f});
-      Tensor y = sin_kernel(x);
+      Tensor y = sin_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -52,7 +52,7 @@ void RegisterSinCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_sin_example", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-      Tensor y = sin_kernel(x);
+      Tensor y = sin_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -65,7 +65,7 @@ void RegisterSinCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_sin", {opset}, [=]() -> IoData {
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = Tensor::FromFloat("", shape, Rand<float>(shape, /*seed=*/1));
-      Tensor y = sin_kernel(x);
+      Tensor y = sin_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

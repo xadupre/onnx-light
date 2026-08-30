@@ -46,14 +46,10 @@ NodeProto MakeCausalConvNode(const std::vector<std::string> &inputs,
 // Convenience: registers one case from the provided inputs / kernel attrs.
 // The node template carries the activation attribute when it is non-default.
 void RegisterCase(std::vector<TestCase> &registry, const std::string &name, const OpsetId &opset,
-                  const onnx_kernels::kernel::CausalConvWithState &kernel, const Tensor &input,
-                  const Tensor &weight, const Tensor *bias, const Tensor *past_state,
-                  const std::string &activation) {
+                  const auto &kernel, const Tensor &input, const Tensor &weight, const Tensor *bias,
+                  const Tensor *past_state, const std::string &activation) {
   onnx_kernels::kernel::CausalConvWithState::Attributes attrs;
   attrs.activation = activation;
-  auto [output, present_state] = kernel(input, weight, bias != nullptr ? *bias : Tensor{},
-                                        past_state != nullptr ? *past_state : Tensor{}, attrs);
-
   std::vector<std::string> input_names = {"input", "weight"};
   std::vector<Tensor> inputs = {input, weight};
   if (bias != nullptr) {
@@ -72,7 +68,12 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &name, cons
   if (activation != "none") {
     AddAttribute<std::string>(node, "activation", activation);
   }
+  const Tensor bias_value = bias != nullptr ? *bias : Tensor{};
+  const Tensor past_state_value = past_state != nullptr ? *past_state : Tensor{};
   Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
+    auto [output, present_state] = kernel.Invoke([&](const auto &reference_kernel) {
+      return reference_kernel(input, weight, bias_value, past_state_value, attrs);
+    });
     return IoData{std::move(inputs), {std::move(output), std::move(present_state)}};
   });
 }
@@ -81,8 +82,7 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &name, cons
 
 void RegisterCausalConvWithStateCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(27);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::CausalConvWithState kernel{ctx};
+  const auto kernel = MakeReferenceKernel<onnx_kernels::kernel::CausalConvWithState>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeCausalConvNode({"input", "weight"}, {"output", "present_state"});
@@ -96,7 +96,8 @@ void RegisterCausalConvWithStateCases(std::vector<TestCase> &registry, TestMode 
              Tensor bias;
              Tensor past_state;
              onnx_kernels::kernel::CausalConvWithState::Attributes attrs;
-             auto [output, present_state] = kernel(X, W, bias, past_state, attrs);
+             auto [output, present_state] = kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(X, W, bias, past_state, attrs); });
              return IoData{{std::move(X), std::move(W)},
                            {std::move(output), std::move(present_state)}};
            });

@@ -32,8 +32,7 @@ NodeProto MakeGatherNDNode(int64_t batch_dims, bool include_batch_dims) {
 
 void RegisterGatherNDCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::GatherND gnd_kernel{ctx};
+  const auto gnd_kernel = MakeReferenceKernel<onnx_kernels::kernel::GatherND>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeGatherNDNode(0, true);
@@ -51,7 +50,8 @@ void RegisterGatherNDCases(std::vector<TestCase> &registry, TestMode mode) {
                index_values[static_cast<std::size_t>(2 * i + 1)] = i % 1024;
              }
              Tensor indices = Tensor::FromInt64("", {kBenchmarkElementwiseSize, 2}, index_values);
-             Tensor output = gnd_kernel(data, indices, 0);
+             Tensor output =
+                 gnd_kernel.Invoke([&](const auto &kernel) { return kernel(data, indices, 0); });
              return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
            });
     return;
@@ -64,7 +64,8 @@ void RegisterGatherNDCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              Tensor data = Tensor::FromInt32("", {2, 2}, {0, 1, 2, 3});
              Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 1});
-             Tensor output = gnd_kernel(data, indices, 0);
+             Tensor output =
+                 gnd_kernel.Invoke([&](const auto &kernel) { return kernel(data, indices, 0); });
              return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
            });
   }
@@ -76,7 +77,8 @@ void RegisterGatherNDCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              Tensor data = Tensor::FromFloat("", {2, 2}, {0.0f, 1.0f, 2.0f, 3.0f});
              Tensor indices = Tensor::FromInt64("", {2, 1}, {1, 0});
-             Tensor output = gnd_kernel(data, indices, 0);
+             Tensor output =
+                 gnd_kernel.Invoke([&](const auto &kernel) { return kernel(data, indices, 0); });
              return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
            });
   }
@@ -88,7 +90,8 @@ void RegisterGatherNDCases(std::vector<TestCase> &registry, TestMode mode) {
            {opset}, [=]() -> IoData {
              Tensor data = Tensor::FromInt32("", {2, 2, 2}, {0, 1, 2, 3, 4, 5, 6, 7});
              Tensor indices = Tensor::FromInt64("", {2, 1}, {1, 0});
-             Tensor output = gnd_kernel(data, indices, 1);
+             Tensor output =
+                 gnd_kernel.Invoke([&](const auto &kernel) { return kernel(data, indices, 1); });
              return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
            });
   }

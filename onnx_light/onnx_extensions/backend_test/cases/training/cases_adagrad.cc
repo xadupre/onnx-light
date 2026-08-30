@@ -41,9 +41,8 @@ OpsetId TrainingOpset(int64_t version) { return OpsetId(kOnnxPreviewTrainingDoma
 // ---------------------------------------------------------------------------
 void RegisterAdagradCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = TrainingOpset(1);
-  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const onnx_kernels::kernel::Adagrad adagrad{ctx};
+  const auto adagrad = MakeReferenceKernel<onnx_kernels::kernel::Adagrad>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -68,8 +67,9 @@ void RegisterAdagradCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor X = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654321ULL);
              Tensor G = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654322ULL);
              Tensor H = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654323ULL);
-             std::vector<Tensor> outs =
-                 adagrad(R, T, {X}, {G}, {H}, epsilon, decay_factor, norm_coefficient);
+             std::vector<Tensor> outs = adagrad.Invoke([&](const auto &kernel) {
+               return kernel(R, T, {X}, {G}, {H}, epsilon, decay_factor, norm_coefficient);
+             });
              return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(H)},
                            {std::move(outs[0]), std::move(outs[1])}};
            });
@@ -97,8 +97,9 @@ void RegisterAdagradCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor G = Tensor::FromFloat("", {1}, {-1.0f});
       Tensor H = Tensor::FromFloat("", {1}, {2.0f});
 
-      std::vector<Tensor> outs =
-          adagrad(R, T, {X}, {G}, {H}, epsilon, decay_factor, norm_coefficient);
+      std::vector<Tensor> outs = adagrad.Invoke([&](const auto &kernel) {
+        return kernel(R, T, {X}, {G}, {H}, epsilon, decay_factor, norm_coefficient);
+      });
       return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(H)},
                     {std::move(outs[0]), std::move(outs[1])}};
     });
@@ -129,8 +130,10 @@ void RegisterAdagradCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor H1 = Tensor::FromFloat("", {1}, {2.0f});
              Tensor H2 = Tensor::FromFloat("", {2}, {4.0f, 1.0f});
 
-             std::vector<Tensor> outs = adagrad(R, T, {X1, X2}, {G1, G2}, {H1, H2}, epsilon,
-                                                decay_factor, norm_coefficient);
+             std::vector<Tensor> outs = adagrad.Invoke([&](const auto &kernel) {
+               return kernel(R, T, {X1, X2}, {G1, G2}, {H1, H2}, epsilon, decay_factor,
+                             norm_coefficient);
+             });
              return IoData{
                  {std::move(R), std::move(T), std::move(X1), std::move(X2), std::move(G1),
                   std::move(G2), std::move(H1), std::move(H2)},

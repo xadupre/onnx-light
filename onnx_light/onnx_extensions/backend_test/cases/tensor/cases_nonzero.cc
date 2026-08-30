@@ -26,8 +26,7 @@ NodeProto MakeNonZeroNode() {
 
 void RegisterNonZeroCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::NonZero nonzero_kernel{ctx};
+  const auto nonzero_kernel = MakeReferenceKernel<onnx_kernels::kernel::NonZero>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNonZeroNode();
@@ -35,7 +34,7 @@ void RegisterNonZeroCases(std::vector<TestCase> &registry, TestMode mode) {
            {kBenchmarkElementwiseSize}, {2 * kBenchmarkElementwiseSize},
            [nonzero_kernel]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {2048, 2048}, 2001);
-             Tensor y = nonzero_kernel(x);
+             Tensor y = nonzero_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -45,7 +44,7 @@ void RegisterNonZeroCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeNonZeroNode(), "test_cc_nonzero_2d", {opset}, [=]() -> IoData {
       const Tensor x = Tensor::FromFloat("X", {2, 2}, {1.0f, 0.0f, 1.0f, 1.0f});
-      const Tensor y = nonzero_kernel(x);
+      const Tensor y = nonzero_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -54,7 +53,7 @@ void RegisterNonZeroCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeNonZeroNode(), "test_cc_nonzero_1d", {opset}, [=]() -> IoData {
       const Tensor x = Tensor::FromFloat("X", {5}, {0.0f, 1.0f, 0.0f, -1.0f, 2.0f});
-      const Tensor y = nonzero_kernel(x);
+      const Tensor y = nonzero_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -63,7 +62,7 @@ void RegisterNonZeroCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeNonZeroNode(), "test_cc_nonzero_bool", {opset}, [=]() -> IoData {
       const Tensor x = Tensor::FromBool("X", {2, 3}, {1, 0, 1, 0, 1, 0});
-      const Tensor y = nonzero_kernel(x);
+      const Tensor y = nonzero_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -72,7 +71,7 @@ void RegisterNonZeroCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeNonZeroNode(), "test_cc_nonzero_int64", {opset}, [=]() -> IoData {
       const Tensor x = Tensor::FromInt64("X", {2, 3}, {0, 1, 2, 0, 0, 3});
-      const Tensor y = nonzero_kernel(x);
+      const Tensor y = nonzero_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -83,14 +82,15 @@ void RegisterNonZeroCases(std::vector<TestCase> &registry, TestMode mode) {
   //   result    = [[0, 1, 1], [0, 0, 1]] (np.nonzero stacked, int64)
   {
     const Tensor condition = Tensor::FromBool("condition", {2, 2}, {1, 0, 1, 1});
-    Tensor result = nonzero_kernel(condition);
-    result.name = "result";
     NodeProto node;
     node.set_op_type("NonZero");
     node.add_input("condition");
     node.add_output("result");
-    Expect(registry, std::move(node), "test_cc_nonzero_example", {opset},
-           [=]() -> IoData { return IoData{{std::move(condition)}, {std::move(result)}}; });
+    Expect(registry, std::move(node), "test_cc_nonzero_example", {opset}, [=]() -> IoData {
+      Tensor result = nonzero_kernel.Invoke([&](const auto &kernel) { return kernel(condition); });
+      result.name = "result";
+      return IoData{{std::move(condition)}, {std::move(result)}};
+    });
   }
 }
 

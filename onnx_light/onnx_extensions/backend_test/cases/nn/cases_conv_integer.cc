@@ -32,8 +32,7 @@ NodeProto MakeConvIntegerNode(const std::vector<std::string> &inputs,
 
 void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::ConvInteger ci{ctx};
+  const auto ci = MakeReferenceKernel<onnx_kernels::kernel::ConvInteger>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeConvIntegerNode({"X", "W", "x_zero_point"}, {"Y"});
@@ -51,7 +50,8 @@ void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor wzp;
              onnx_kernels::kernel::ConvInteger::Attributes attrs;
              attrs.kernel_shape = {2, 2};
-             Tensor Y = ci(X, W, xzp, wzp, attrs);
+             Tensor Y =
+                 ci.Invoke([&](const auto &kernel) { return kernel(X, W, xzp, wzp, attrs); });
              Y.name = "Y";
              return IoData{{std::move(X), std::move(W), std::move(xzp)}, {std::move(Y)}};
            });
@@ -67,11 +67,11 @@ void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor wzp;
     onnx_kernels::kernel::ConvInteger::Attributes attrs;
     attrs.kernel_shape = {2, 2};
-    Tensor Y = ci(X, W, xzp, wzp, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvIntegerNode({"X", "W", "x_zero_point"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     Expect(registry, std::move(node), "test_cc_basic_convinteger", {opset}, [=]() -> IoData {
+      Tensor Y = ci.Invoke([&](const auto &kernel) { return kernel(X, W, xzp, wzp, attrs); });
+      Y.name = "Y";
       return IoData{{std::move(X), std::move(W), std::move(xzp)}, {std::move(Y)}};
     });
   }
@@ -86,12 +86,12 @@ void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::ConvInteger::Attributes attrs;
     attrs.kernel_shape = {2, 2};
     attrs.pads = {1, 1, 1, 1};
-    Tensor Y = ci(X, W, xzp, wzp, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvIntegerNode({"X", "W", "x_zero_point"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
     Expect(registry, std::move(node), "test_cc_convinteger_with_padding", {opset}, [=]() -> IoData {
+      Tensor Y = ci.Invoke([&](const auto &kernel) { return kernel(X, W, xzp, wzp, attrs); });
+      Y.name = "Y";
       return IoData{{std::move(X), std::move(W), std::move(xzp)}, {std::move(Y)}};
     });
   }
@@ -105,13 +105,13 @@ void RegisterConvIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor xzp = Tensor::FromUint8("x_zero_point", {}, {1});
     Tensor wzp;
     onnx_kernels::kernel::ConvInteger::Attributes attrs;
-    Tensor Y = ci(X, W, xzp, wzp, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvIntegerNode({"X", "W", "x_zero_point"}, {"Y"});
-    Expect(registry, std::move(node), "test_cc_convinteger_without_padding", {opset},
-           [=]() -> IoData {
-             return IoData{{std::move(X), std::move(W), std::move(xzp)}, {std::move(Y)}};
-           });
+    Expect(
+        registry, std::move(node), "test_cc_convinteger_without_padding", {opset}, [=]() -> IoData {
+          Tensor Y = ci.Invoke([&](const auto &kernel) { return kernel(X, W, xzp, wzp, attrs); });
+          Y.name = "Y";
+          return IoData{{std::move(X), std::move(W), std::move(xzp)}, {std::move(Y)}};
+        });
   }
 }
 

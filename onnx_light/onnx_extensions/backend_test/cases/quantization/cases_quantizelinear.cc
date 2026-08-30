@@ -70,8 +70,7 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
   const OpsetId opset_v21 = DefaultOpset(25); // For FLOAT8, INT4, UINT4
   const OpsetId opset_v23 = DefaultOpset(25); // For FLOAT4E2M1
   const OpsetId opset_v25 = DefaultOpset(25); // For INT2, UINT2
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::QuantizeLinear quantize_kernel{ctx};
+  const auto quantize_kernel = MakeReferenceKernel<onnx_kernels::kernel::QuantizeLinear>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -85,7 +84,8 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
            {count}, [quantize_kernel]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 2501);
              Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
-             Tensor y = quantize_kernel(x, y_scale);
+             Tensor y =
+                 quantize_kernel.Invoke([&](const auto &kernel) { return kernel(x, y_scale); });
              return IoData{{std::move(x), std::move(y_scale)}, {std::move(y)}};
            });
     return;
@@ -101,7 +101,7 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
     Expect(registry, std::move(node), "test_cc_quantizelinear", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {6}, {0.0f, 2.0f, 3.0f, 1000.0f, -254.0f, -1000.0f});
       Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
-      Tensor y = quantize_kernel(x, y_scale);
+      Tensor y = quantize_kernel.Invoke([&](const auto &kernel) { return kernel(x, y_scale); });
 
       return IoData{{std::move(x), std::move(y_scale)}, {std::move(y)}};
     });
@@ -121,7 +121,8 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
       const Tensor y_zero_point(
           "", static_cast<int32_t>(DataType::INT8), {},
           std::vector<uint8_t>(1, static_cast<uint8_t>(static_cast<int8_t>(-10))));
-      Tensor y = quantize_kernel(x, y_scale, y_zero_point);
+      Tensor y = quantize_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, y_scale, y_zero_point); });
 
       return IoData{{std::move(x), std::move(y_scale), std::move(y_zero_point)}, {std::move(y)}};
     });
@@ -143,7 +144,8 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
       Tensor x = Tensor::FromFloat("", {4}, {0.0f, 2.0f, 3.0f, 200000.0f});
       Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
       const Tensor y_zero_point = Uint16ZeroPoint(32767);
-      Tensor y = quantize_kernel(x, y_scale, y_zero_point);
+      Tensor y = quantize_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, y_scale, y_zero_point); });
       return IoData{{std::move(x), std::move(y_scale), std::move(y_zero_point)}, {std::move(y)}};
     });
   }
@@ -154,7 +156,8 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
       Tensor x = Tensor::FromFloat("", {4}, {0.0f, 2.0f, 3.0f, -100000.0f});
       Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
       const Tensor y_zero_point = Int16ZeroPoint(-1024);
-      Tensor y = quantize_kernel(x, y_scale, y_zero_point);
+      Tensor y = quantize_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, y_scale, y_zero_point); });
       return IoData{{std::move(x), std::move(y_scale), std::move(y_zero_point)}, {std::move(y)}};
     });
   }
@@ -169,7 +172,8 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
       Tensor y_scale = Tensor::FromFloat("", {}, {2.0f});
       const Tensor y_zero_point("", static_cast<int32_t>(DataType::UINT8), {},
                                 std::vector<uint8_t>(1, static_cast<uint8_t>(128)));
-      Tensor y = quantize_kernel(x, y_scale, y_zero_point);
+      Tensor y = quantize_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, y_scale, y_zero_point); });
       return IoData{{std::move(x), std::move(y_scale), std::move(y_zero_point)}, {std::move(y)}};
     });
   }

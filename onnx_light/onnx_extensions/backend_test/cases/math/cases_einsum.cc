@@ -37,8 +37,7 @@ NodeProto MakeEinsumNode(int n_inputs, const std::string &equation) {
 // ---------------------------------------------------------------------------
 void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Einsum einsum_kernel{ctx};
+  const auto einsum_kernel = MakeReferenceKernel<onnx_kernels::kernel::Einsum>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     const std::string eq = "ij,jk->ik";
@@ -49,7 +48,8 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
            [einsum_kernel, eq, shape]() -> IoData {
              Tensor a = RandnTensor(DataType::FLOAT, shape, 440);
              Tensor b = RandnTensor(DataType::FLOAT, shape, 441);
-             Tensor z = einsum_kernel({a, b}, eq);
+             Tensor z =
+                 einsum_kernel.Invoke([&](const auto &kernel) { return kernel({a, b}, eq); });
              return IoData{{std::move(a), std::move(b)}, {std::move(z)}};
            });
     return;
@@ -61,7 +61,7 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeEinsumNode(1, eq);
     Expect(registry, std::move(node), "test_cc_einsum_transpose", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-      Tensor z = einsum_kernel({x}, eq);
+      Tensor z = einsum_kernel.Invoke([&](const auto &kernel) { return kernel({x}, eq); });
       return IoData{{std::move(x)}, {std::move(z)}};
     });
   }
@@ -73,7 +73,7 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_einsum_trace", {opset}, [=]() -> IoData {
       Tensor x =
           Tensor::FromFloat("", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
-      Tensor z = einsum_kernel({x}, eq);
+      Tensor z = einsum_kernel.Invoke([&](const auto &kernel) { return kernel({x}, eq); });
       return IoData{{std::move(x)}, {std::move(z)}};
     });
   }
@@ -84,7 +84,7 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeEinsumNode(1, eq);
     Expect(registry, std::move(node), "test_cc_einsum_sum_axis", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-      Tensor z = einsum_kernel({x}, eq);
+      Tensor z = einsum_kernel.Invoke([&](const auto &kernel) { return kernel({x}, eq); });
       return IoData{{std::move(x)}, {std::move(z)}};
     });
   }
@@ -96,7 +96,7 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_einsum_matmul_2d", {opset}, [=]() -> IoData {
       Tensor a = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       Tensor b = Tensor::FromFloat("", {3, 2}, {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
-      Tensor z = einsum_kernel({a, b}, eq);
+      Tensor z = einsum_kernel.Invoke([&](const auto &kernel) { return kernel({a, b}, eq); });
       return IoData{{std::move(a), std::move(b)}, {std::move(z)}};
     });
   }
@@ -109,7 +109,7 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor a = Tensor::FromFloat("", {2, 2, 3}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
       Tensor b = Tensor::FromFloat(
           "", {2, 3, 2}, {1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 2.0f, 0.0f, 0.0f, 2.0f, 1.0f, 1.0f});
-      Tensor z = einsum_kernel({a, b}, eq);
+      Tensor z = einsum_kernel.Invoke([&](const auto &kernel) { return kernel({a, b}, eq); });
       return IoData{{std::move(a), std::move(b)}, {std::move(z)}};
     });
   }
@@ -121,7 +121,7 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_einsum_inner", {opset}, [=]() -> IoData {
       Tensor a = Tensor::FromFloat("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor b = Tensor::FromFloat("", {4}, {5.0f, 6.0f, 7.0f, 8.0f});
-      Tensor z = einsum_kernel({a, b}, eq);
+      Tensor z = einsum_kernel.Invoke([&](const auto &kernel) { return kernel({a, b}, eq); });
       return IoData{{std::move(a), std::move(b)}, {std::move(z)}};
     });
   }
@@ -133,7 +133,7 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_einsum_outer", {opset}, [=]() -> IoData {
       Tensor a = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
       Tensor b = Tensor::FromFloat("", {2}, {4.0f, 5.0f});
-      Tensor z = einsum_kernel({a, b}, eq);
+      Tensor z = einsum_kernel.Invoke([&](const auto &kernel) { return kernel({a, b}, eq); });
       return IoData{{std::move(a), std::move(b)}, {std::move(z)}};
     });
   }
@@ -144,7 +144,7 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeEinsumNode(1, eq);
     Expect(registry, std::move(node), "test_cc_einsum_implicit_identity", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-      Tensor z = einsum_kernel({x}, eq);
+      Tensor z = einsum_kernel.Invoke([&](const auto &kernel) { return kernel({x}, eq); });
       return IoData{{std::move(x)}, {std::move(z)}};
     });
   }
@@ -157,7 +157,7 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor a = Tensor::FromFloat("", {2, 2, 3}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
       Tensor b = Tensor::FromFloat(
           "", {2, 3, 2}, {1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 2.0f, 0.0f, 0.0f, 2.0f, 1.0f, 1.0f});
-      Tensor z = einsum_kernel({a, b}, eq);
+      Tensor z = einsum_kernel.Invoke([&](const auto &kernel) { return kernel({a, b}, eq); });
       return IoData{{std::move(a), std::move(b)}, {std::move(z)}};
     });
   }
@@ -170,7 +170,7 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor x = Tensor::FromFloat("", {2, 3, 3},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
                                     11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f});
-      Tensor z = einsum_kernel({x}, eq);
+      Tensor z = einsum_kernel.Invoke([&](const auto &kernel) { return kernel({x}, eq); });
       return IoData{{std::move(x)}, {std::move(z)}};
     });
   }
@@ -183,7 +183,7 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_einsum_inner_prod", {opset}, [=]() -> IoData {
       Tensor a = Tensor::FromFloat("", {5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
       Tensor b = Tensor::FromFloat("", {5}, {6.0f, 7.0f, 8.0f, 9.0f, 10.0f});
-      Tensor z = einsum_kernel({a, b}, eq);
+      Tensor z = einsum_kernel.Invoke([&](const auto &kernel) { return kernel({a, b}, eq); });
       return IoData{{std::move(a), std::move(b)}, {std::move(z)}};
     });
   }
@@ -195,7 +195,7 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeEinsumNode(1, eq);
     Expect(registry, std::move(node), "test_cc_einsum_scalar", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {}, {5.0f});
-      Tensor z = einsum_kernel({x}, eq);
+      Tensor z = einsum_kernel.Invoke([&](const auto &kernel) { return kernel({x}, eq); });
       return IoData{{std::move(x)}, {std::move(z)}};
     });
   }

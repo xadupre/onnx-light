@@ -44,8 +44,7 @@ NodeProto MakeTfIdfNode(int64_t min_gram_length, int64_t max_gram_length, int64_
 // ---------------------------------------------------------------------------
 void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(9);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::TfIdfVectorizer tf_idf{ctx};
+  const auto tf_idf = MakeReferenceKernel<onnx_kernels::kernel::TfIdfVectorizer>(opset);
 
   using Mode = onnx_kernels::kernel::TfIdfVectorizer::Mode;
 
@@ -67,9 +66,11 @@ void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode
                values[i] = base[i % base.size()];
              }
              Tensor x = Tensor::FromInt32("X", {input_count}, values);
-             Tensor y = tf_idf(x, Mode::kTF, /*min_gram_length=*/2, /*max_gram_length=*/2,
-                               /*max_skip_count=*/0, default_ngram_counts, default_ngram_indexes,
-                               default_pool, {}, {});
+             Tensor y = tf_idf.Invoke([&](const auto &kernel) {
+               return kernel(x, Mode::kTF, /*min_gram_length=*/2, /*max_gram_length=*/2,
+                             /*max_skip_count=*/0, default_ngram_counts, default_ngram_indexes,
+                             default_pool, {}, {});
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -88,9 +89,11 @@ void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode
     Expect(registry, std::move(node), "test_cc_tfidfvectorizer_tf_only_bigrams_skip0", {opset},
            [=]() -> IoData {
              Tensor x = Tensor::FromInt32("X", {12}, {1, 1, 3, 3, 3, 7, 8, 6, 7, 5, 6, 8});
-             Tensor y = tf_idf(x, Mode::kTF, /*min_gram_length=*/2, /*max_gram_length=*/2,
-                               /*max_skip_count=*/0, default_ngram_counts, default_ngram_indexes,
-                               default_pool, {}, {});
+             Tensor y = tf_idf.Invoke([&](const auto &kernel) {
+               return kernel(x, Mode::kTF, /*min_gram_length=*/2, /*max_gram_length=*/2,
+                             /*max_skip_count=*/0, default_ngram_counts, default_ngram_indexes,
+                             default_pool, {}, {});
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -106,8 +109,10 @@ void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode
     Expect(registry, std::move(node), "test_cc_tfidfvectorizer_tf_onlybigrams_levelempty", {opset},
            [=]() -> IoData {
              Tensor x = Tensor::FromInt32("X", {12}, {1, 1, 3, 3, 3, 7, 8, 6, 7, 5, 6, 8});
-             Tensor y = tf_idf(x, Mode::kTF, /*min_gram_length=*/2, /*max_gram_length=*/2,
-                               /*max_skip_count=*/0, ngram_counts, ngram_indexes, pool, {}, {});
+             Tensor y = tf_idf.Invoke([&](const auto &kernel) {
+               return kernel(x, Mode::kTF, /*min_gram_length=*/2, /*max_gram_length=*/2,
+                             /*max_skip_count=*/0, ngram_counts, ngram_indexes, pool, {}, {});
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -120,9 +125,11 @@ void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode
     Expect(registry, std::move(node), "test_cc_tfidfvectorizer_tf_onlybigrams_skip5", {opset},
            [=]() -> IoData {
              Tensor x = Tensor::FromInt32("X", {12}, {1, 1, 3, 3, 3, 7, 8, 6, 7, 5, 6, 8});
-             Tensor y = tf_idf(x, Mode::kTF, /*min_gram_length=*/2, /*max_gram_length=*/2,
-                               /*max_skip_count=*/5, default_ngram_counts, default_ngram_indexes,
-                               default_pool, {}, {});
+             Tensor y = tf_idf.Invoke([&](const auto &kernel) {
+               return kernel(x, Mode::kTF, /*min_gram_length=*/2, /*max_gram_length=*/2,
+                             /*max_skip_count=*/5, default_ngram_counts, default_ngram_indexes,
+                             default_pool, {}, {});
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -135,9 +142,11 @@ void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode
     Expect(registry, std::move(node), "test_cc_tfidfvectorizer_tf_uniandbigrams_skip5", {opset},
            [=]() -> IoData {
              Tensor x = Tensor::FromInt32("X", {12}, {1, 1, 3, 3, 3, 7, 8, 6, 7, 5, 6, 8});
-             Tensor y = tf_idf(x, Mode::kTF, /*min_gram_length=*/1, /*max_gram_length=*/2,
-                               /*max_skip_count=*/5, default_ngram_counts, default_ngram_indexes,
-                               default_pool, {}, {});
+             Tensor y = tf_idf.Invoke([&](const auto &kernel) {
+               return kernel(x, Mode::kTF, /*min_gram_length=*/1, /*max_gram_length=*/2,
+                             /*max_skip_count=*/5, default_ngram_counts, default_ngram_indexes,
+                             default_pool, {}, {});
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -150,9 +159,11 @@ void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode
     Expect(registry, std::move(node), "test_cc_tfidfvectorizer_tf_batch_onlybigrams_skip0", {opset},
            [=]() -> IoData {
              Tensor x = Tensor::FromInt32("X", {2, 6}, {1, 1, 3, 3, 3, 7, 8, 6, 7, 5, 6, 8});
-             Tensor y = tf_idf(x, Mode::kTF, /*min_gram_length=*/2, /*max_gram_length=*/2,
-                               /*max_skip_count=*/0, default_ngram_counts, default_ngram_indexes,
-                               default_pool, {}, {});
+             Tensor y = tf_idf.Invoke([&](const auto &kernel) {
+               return kernel(x, Mode::kTF, /*min_gram_length=*/2, /*max_gram_length=*/2,
+                             /*max_skip_count=*/0, default_ngram_counts, default_ngram_indexes,
+                             default_pool, {}, {});
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -165,9 +176,11 @@ void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode
     Expect(registry, std::move(node), "test_cc_tfidfvectorizer_tf_batch_onlybigrams_skip5", {opset},
            [=]() -> IoData {
              Tensor x = Tensor::FromInt32("X", {2, 6}, {1, 1, 3, 3, 3, 7, 8, 6, 7, 5, 6, 8});
-             Tensor y = tf_idf(x, Mode::kTF, /*min_gram_length=*/2, /*max_gram_length=*/2,
-                               /*max_skip_count=*/5, default_ngram_counts, default_ngram_indexes,
-                               default_pool, {}, {});
+             Tensor y = tf_idf.Invoke([&](const auto &kernel) {
+               return kernel(x, Mode::kTF, /*min_gram_length=*/2, /*max_gram_length=*/2,
+                             /*max_skip_count=*/5, default_ngram_counts, default_ngram_indexes,
+                             default_pool, {}, {});
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -180,9 +193,11 @@ void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry, TestMode mode
     Expect(registry, std::move(node), "test_cc_tfidfvectorizer_tf_batch_uniandbigrams_skip5",
            {opset}, [=]() -> IoData {
              Tensor x = Tensor::FromInt32("X", {2, 6}, {1, 1, 3, 3, 3, 7, 8, 6, 7, 5, 6, 8});
-             Tensor y = tf_idf(x, Mode::kTF, /*min_gram_length=*/1, /*max_gram_length=*/2,
-                               /*max_skip_count=*/5, default_ngram_counts, default_ngram_indexes,
-                               default_pool, {}, {});
+             Tensor y = tf_idf.Invoke([&](const auto &kernel) {
+               return kernel(x, Mode::kTF, /*min_gram_length=*/1, /*max_gram_length=*/2,
+                             /*max_skip_count=*/5, default_ngram_counts, default_ngram_indexes,
+                             default_pool, {}, {});
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }

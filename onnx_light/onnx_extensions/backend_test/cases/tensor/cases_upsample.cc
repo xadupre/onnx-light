@@ -44,8 +44,7 @@ Tensor MakeScalesTensor(const std::vector<float> &scales) {
 
 void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(9);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Upsample upsample_kernel{ctx};
+  const auto upsample_kernel = MakeReferenceKernel<onnx_kernels::kernel::Upsample>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeUpsampleNode("nearest");
@@ -55,7 +54,8 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
              onnx_kernels::kernel::Upsample::Attributes attrs;
              attrs.mode = "nearest";
-             Tensor Y = upsample_kernel(X, scales, attrs);
+             Tensor Y = upsample_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(X, scales, attrs); });
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
            });
     return;
@@ -71,7 +71,8 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
              onnx_kernels::kernel::Upsample::Attributes attrs;
              attrs.mode = "nearest";
-             const Tensor Y = upsample_kernel(X, scales, attrs);
+             const Tensor Y = upsample_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(X, scales, attrs); });
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
            });
   }
@@ -85,7 +86,8 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 2.0f});
              onnx_kernels::kernel::Upsample::Attributes attrs;
              attrs.mode = "nearest";
-             const Tensor Y = upsample_kernel(X, scales, attrs);
+             const Tensor Y = upsample_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(X, scales, attrs); });
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
            });
   }
@@ -99,7 +101,8 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor scales = MakeScalesTensor({2.0f});
              onnx_kernels::kernel::Upsample::Attributes attrs;
              attrs.mode = "nearest";
-             const Tensor Y = upsample_kernel(X, scales, attrs);
+             const Tensor Y = upsample_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(X, scales, attrs); });
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
            });
   }
@@ -109,15 +112,16 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
   // so the test exercises kernel determinism rather than numerical parity
   // with another implementation.
   {
-    Expect(registry, MakeUpsampleNode("linear"), "test_cc_upsample_linear", {opset},
-           [=]() -> IoData {
-             const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-             const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 2.0f});
-             onnx_kernels::kernel::Upsample::Attributes attrs;
-             attrs.mode = "linear";
-             const Tensor Y = upsample_kernel(X, scales, attrs);
-             return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
-           });
+    Expect(
+        registry, MakeUpsampleNode("linear"), "test_cc_upsample_linear", {opset}, [=]() -> IoData {
+          const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+          const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 2.0f});
+          onnx_kernels::kernel::Upsample::Attributes attrs;
+          attrs.mode = "linear";
+          const Tensor Y =
+              upsample_kernel.Invoke([&](const auto &kernel) { return kernel(X, scales, attrs); });
+          return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
+        });
   }
 }
 

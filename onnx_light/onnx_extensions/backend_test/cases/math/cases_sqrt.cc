@@ -35,11 +35,11 @@ Tensor NonNegativeRandFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterSqrtCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Sqrt sqrt_kernel{ctx};
+  const auto sqrt_kernel = MakeReferenceKernel<onnx_kernels::kernel::Sqrt>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Sqrt", sqrt_kernel, "test_cc_sqrt_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Sqrt>("Sqrt", "test_cc_sqrt_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -50,7 +50,7 @@ void RegisterSqrtCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_sqrt", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 0.25f, 1.0f, 2.0f, 4.0f, 9.0f});
-      Tensor y = sqrt_kernel(x);
+      Tensor y = sqrt_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -63,7 +63,7 @@ void RegisterSqrtCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_sqrt_example", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {3}, {1.0f, 4.0f, 9.0f});
-      Tensor y = sqrt_kernel(x);
+      Tensor y = sqrt_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -76,7 +76,7 @@ void RegisterSqrtCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_sqrt", {opset}, [=]() -> IoData {
       Tensor x = NonNegativeRandFloat({3, 4, 5}, /*seed=*/1);
-      Tensor y = sqrt_kernel(x);
+      Tensor y = sqrt_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -88,7 +88,7 @@ void RegisterSqrtCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_sqrt_float16", {opset}, [=]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {2, 3}, {0.0f, 0.25f, 1.0f, 2.25f, 4.0f, 9.0f});
-      Tensor y = sqrt_kernel(x);
+      Tensor y = sqrt_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -106,7 +106,7 @@ void RegisterSqrtCases(std::vector<TestCase> &registry, TestMode mode) {
       for (size_t i = 0; i < vals.size(); ++i)
         dst[i] = FloatToBfloat16Bits(vals[i]);
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-      Tensor y = sqrt_kernel(x);
+      Tensor y = sqrt_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

@@ -25,8 +25,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::IsNaN isnan_kernel{ctx};
+  const auto isnan_kernel = MakeReferenceKernel<onnx_kernels::kernel::IsNaN>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("IsNaN", {"x"}, {"y"});
@@ -34,7 +33,7 @@ void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_isnan_benchmark", {opset}, {count}, {count},
            [isnan_kernel, count]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {count}, /*seed=*/9301);
-             Tensor y = isnan_kernel(x);
+             Tensor y = isnan_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -46,7 +45,7 @@ void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeNode("IsNaN", {"x"}, {"y"});
     Expect(registry, std::move(node), "test_cc_isnan", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {3}, {1.0f, nan_v, 2.0f});
-      Tensor y = isnan_kernel(x);
+      Tensor y = isnan_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -58,7 +57,7 @@ void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeNode("IsNaN", {"x"}, {"y"});
     Expect(registry, std::move(node), "test_isnan", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
-      Tensor y = isnan_kernel(x);
+      Tensor y = isnan_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -70,7 +69,7 @@ void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeNode("IsNaN", {"x"}, {"y"});
     Expect(registry, std::move(node), "test_isnan_float16", {opset}, [=]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
-      Tensor y = isnan_kernel(x);
+      Tensor y = isnan_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -86,7 +85,7 @@ void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
       for (size_t i = 0; i < vals.size(); ++i)
         dst[i] = FloatToBfloat16Bits(vals[i]);
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {6}, std::move(raw));
-      Tensor y = isnan_kernel(x);
+      Tensor y = isnan_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -98,7 +97,7 @@ void RegisterIsNaNCases(std::vector<TestCase> &registry, TestMode mode) {
       const double nan_d = std::numeric_limits<double>::quiet_NaN();
       const double inf_d = std::numeric_limits<double>::infinity();
       Tensor x = Tensor::FromDouble("", {6}, {-1.2, nan_d, inf_d, 2.8, -inf_d, nan_d});
-      Tensor y = isnan_kernel(x);
+      Tensor y = isnan_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

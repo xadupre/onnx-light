@@ -37,11 +37,11 @@ Tensor RandFloatInRange(const std::vector<int64_t> &shape, float low, float high
 // ---------------------------------------------------------------------------
 void RegisterAcoshCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Acosh acosh_kernel{ctx};
+  const auto acosh_kernel = MakeReferenceKernel<onnx_kernels::kernel::Acosh>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Acosh", acosh_kernel, "test_cc_acosh_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Acosh>("Acosh", "test_cc_acosh_benchmark",
+                                                           opset, registry);
     return;
   }
 
@@ -52,7 +52,7 @@ void RegisterAcoshCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_acosh", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 1.25f, 1.5f, 2.0f, 3.5f, 10.0f});
-      Tensor y = acosh_kernel(x);
+      Tensor y = acosh_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -69,7 +69,7 @@ void RegisterAcoshCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_acosh_example", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {3}, {10.0f, static_cast<float>(std::exp(1.0)), 1.0f});
-      Tensor y = acosh_kernel(x);
+      Tensor y = acosh_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -81,7 +81,7 @@ void RegisterAcoshCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_acosh", {opset}, [=]() -> IoData {
       Tensor x = RandFloatInRange({3, 4, 5}, /*low=*/1.0f, /*high=*/10.0f, /*seed=*/1);
-      Tensor y = acosh_kernel(x);
+      Tensor y = acosh_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

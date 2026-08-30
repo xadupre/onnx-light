@@ -32,8 +32,7 @@ NodeProto MakeSpaceToDepthNode(int64_t blocksize) {
 // ---------------------------------------------------------------------------
 void RegisterSpaceToDepthCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::SpaceToDepth s2d{ctx};
+  const auto s2d = MakeReferenceKernel<onnx_kernels::kernel::SpaceToDepth>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeSpaceToDepthNode(2);
@@ -42,7 +41,7 @@ void RegisterSpaceToDepthCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor input = RandnTensor(DataType::FLOAT, {1, 2, 1024, 2048}, 2001);
              onnx_kernels::kernel::SpaceToDepth::Attributes attrs;
              attrs.blocksize = 2;
-             Tensor output = s2d(input, attrs);
+             Tensor output = s2d.Invoke([&](const auto &kernel) { return kernel(input, attrs); });
              return IoData{{std::move(input)}, {std::move(output)}};
            });
     return;
@@ -61,7 +60,8 @@ void RegisterSpaceToDepthCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor input = Tensor::FromFloat("", {1, 2, 2, 4}, values);
              onnx_kernels::kernel::SpaceToDepth::Attributes attrs;
              attrs.blocksize = 2;
-             const Tensor output = s2d(input, attrs);
+             const Tensor output =
+                 s2d.Invoke([&](const auto &kernel) { return kernel(input, attrs); });
              return IoData{{std::move(input)}, {std::move(output)}};
            });
   }
@@ -77,7 +77,7 @@ void RegisterSpaceToDepthCases(std::vector<TestCase> &registry, TestMode mode) {
       const Tensor input = Tensor::FromFloat("", {2, 3, 4, 6}, values);
       onnx_kernels::kernel::SpaceToDepth::Attributes attrs;
       attrs.blocksize = 2;
-      const Tensor output = s2d(input, attrs);
+      const Tensor output = s2d.Invoke([&](const auto &kernel) { return kernel(input, attrs); });
       return IoData{{std::move(input)}, {std::move(output)}};
     });
   }

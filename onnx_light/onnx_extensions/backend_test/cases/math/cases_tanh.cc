@@ -21,11 +21,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterTanhCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Tanh tanh_kernel{ctx};
+  const auto tanh_kernel = MakeReferenceKernel<onnx_kernels::kernel::Tanh>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Tanh", tanh_kernel, "test_cc_tanh_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Tanh>("Tanh", "test_cc_tanh_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -36,7 +36,7 @@ void RegisterTanhCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("output");
     Expect(registry, std::move(node), "test_cc_tanh", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {-4.0f, -1.0f, 0.0f, 1.0f, 2.0f, 4.0f});
-      Tensor y = tanh_kernel(x);
+      Tensor y = tanh_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -53,7 +53,7 @@ void RegisterTanhCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_tanh_example", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-      Tensor y = tanh_kernel(x);
+      Tensor y = tanh_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -66,7 +66,7 @@ void RegisterTanhCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_tanh", {opset}, [=]() -> IoData {
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/1);
-      Tensor y = tanh_kernel(x);
+      Tensor y = tanh_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -78,7 +78,7 @@ void RegisterTanhCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_tanh_float16", {opset}, [=]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f});
-      Tensor y = tanh_kernel(x);
+      Tensor y = tanh_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -96,7 +96,7 @@ void RegisterTanhCases(std::vector<TestCase> &registry, TestMode mode) {
       for (size_t i = 0; i < vals.size(); ++i)
         dst[i] = FloatToBfloat16Bits(vals[i]);
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-      Tensor y = tanh_kernel(x);
+      Tensor y = tanh_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -109,7 +109,7 @@ void RegisterTanhCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_tanh_double", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromDouble("", {2, 3}, {-2.0, -1.0, 0.0, 0.5, 1.0, 2.0});
-      Tensor y = tanh_kernel(x);
+      Tensor y = tanh_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

@@ -30,8 +30,7 @@ NodeProto MakeHardmaxNode(int64_t axis, bool include_axis = true) {
 
 void RegisterHardmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Hardmax hardmax_kernel{ctx};
+  const auto hardmax_kernel = MakeReferenceKernel<onnx_kernels::kernel::Hardmax>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeHardmaxNode(/*axis=*/1);
@@ -40,7 +39,7 @@ void RegisterHardmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_hardmax_benchmark", {opset}, {count}, {count},
            [hardmax_kernel, shape]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, shape, 429);
-             Tensor y = hardmax_kernel(x, 1);
+             Tensor y = hardmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, 1); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -51,7 +50,7 @@ void RegisterHardmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeHardmaxNode(/*axis=*/1);
     Expect(registry, std::move(node), "test_cc_hardmax_example", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, -1.0f});
-      Tensor y = hardmax_kernel(x, 1);
+      Tensor y = hardmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, 1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -61,7 +60,7 @@ void RegisterHardmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeHardmaxNode(/*axis=*/0, /*include_axis=*/false);
     Expect(registry, std::move(node), "test_cc_hardmax_default_axis", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, -1.0f});
-      Tensor y = hardmax_kernel(x, -1);
+      Tensor y = hardmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, -1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -71,7 +70,7 @@ void RegisterHardmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeHardmaxNode(/*axis=*/-2);
     Expect(registry, std::move(node), "test_cc_hardmax_negative_axis", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 2, 2}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f});
-      Tensor y = hardmax_kernel(x, -2);
+      Tensor y = hardmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, -2); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -96,7 +95,7 @@ void RegisterHardmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeHardmaxNode(/*axis=*/0);
     Expect(registry, std::move(node), "test_cc_hardmax_axis_0", {opset}, [=]() -> IoData {
-      Tensor y = hardmax_kernel(x_axis, 0);
+      Tensor y = hardmax_kernel.Invoke([&](const auto &kernel) { return kernel(x_axis, 0); });
       return IoData{{std::move(x_axis)}, {std::move(y)}};
     });
   }
@@ -105,7 +104,7 @@ void RegisterHardmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeHardmaxNode(/*axis=*/1);
     Expect(registry, std::move(node), "test_cc_hardmax_axis_1", {opset}, [=]() -> IoData {
-      Tensor y = hardmax_kernel(x_axis, 1);
+      Tensor y = hardmax_kernel.Invoke([&](const auto &kernel) { return kernel(x_axis, 1); });
       return IoData{{std::move(x_axis)}, {std::move(y)}};
     });
   }
@@ -114,7 +113,7 @@ void RegisterHardmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeHardmaxNode(/*axis=*/2);
     Expect(registry, std::move(node), "test_cc_hardmax_axis_2", {opset}, [=]() -> IoData {
-      Tensor y = hardmax_kernel(x_axis, 2);
+      Tensor y = hardmax_kernel.Invoke([&](const auto &kernel) { return kernel(x_axis, 2); });
       return IoData{{std::move(x_axis)}, {std::move(y)}};
     });
   }
@@ -126,7 +125,7 @@ void RegisterHardmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeHardmaxNode(/*axis=*/0, /*include_axis=*/false);
     Expect(registry, std::move(node), "test_cc_hardmax_one_hot", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {1, 4}, {3.0f, 3.0f, 3.0f, 1.0f});
-      Tensor y = hardmax_kernel(x, -1);
+      Tensor y = hardmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, -1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

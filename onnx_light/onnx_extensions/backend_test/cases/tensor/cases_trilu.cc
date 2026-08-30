@@ -36,8 +36,7 @@ NodeProto MakeTriluNode(bool with_k, bool upper, bool set_upper_attr) {
 
 void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Trilu trilu_kernel{ctx};
+  const auto trilu_kernel = MakeReferenceKernel<onnx_kernels::kernel::Trilu>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeTriluNode(/*with_k=*/false, /*upper=*/true, /*set_upper_attr=*/false);
@@ -45,7 +44,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
            {4194304}, [trilu_kernel]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {2048, 2048}, 2001);
              onnx_kernels::kernel::Trilu::Attributes attrs;
-             Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
+             Tensor y = trilu_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, /*k=*/nullptr, attrs); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -58,7 +58,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor x = Tensor::FromFloat(
                  "X", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
              onnx_kernels::kernel::Trilu::Attributes attrs;
-             const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
+             const Tensor y = trilu_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, /*k=*/nullptr, attrs); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -71,7 +72,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
                  "X", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
              onnx_kernels::kernel::Trilu::Attributes attrs;
              attrs.upper = 0;
-             const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
+             const Tensor y = trilu_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, /*k=*/nullptr, attrs); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -84,7 +86,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
                  Tensor::FromInt64("X", {3, 4}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
              const Tensor k = Tensor::FromInt64("K", {}, {1});
              onnx_kernels::kernel::Trilu::Attributes attrs;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }
@@ -98,7 +101,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor k = Tensor::FromInt64("K", {}, {-1});
              onnx_kernels::kernel::Trilu::Attributes attrs;
              attrs.upper = 0;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }
@@ -110,7 +114,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor x = Tensor::FromFloat("X", {2, 2, 2},
                                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              onnx_kernels::kernel::Trilu::Attributes attrs;
-             const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
+             const Tensor y = trilu_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, /*k=*/nullptr, attrs); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -140,7 +145,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
            "test_cc_triu", {opset}, [=]() -> IoData {
              const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
              onnx_kernels::kernel::Trilu::Attributes attrs;
-             const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
+             const Tensor y = trilu_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, /*k=*/nullptr, attrs); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -152,7 +158,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
              const Tensor k = Tensor::FromInt64("K", {}, {-1});
              onnx_kernels::kernel::Trilu::Attributes attrs;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }
@@ -164,7 +171,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
              const Tensor k = Tensor::FromInt64("K", {}, {-7});
              onnx_kernels::kernel::Trilu::Attributes attrs;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }
@@ -176,7 +184,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
              const Tensor k = Tensor::FromInt64("K", {}, {2});
              onnx_kernels::kernel::Trilu::Attributes attrs;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }
@@ -188,7 +197,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
              const Tensor k = Tensor::FromInt64("K", {}, {6});
              onnx_kernels::kernel::Trilu::Attributes attrs;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }
@@ -199,7 +209,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
            "test_cc_triu_square", {opset}, [=]() -> IoData {
              const Tensor x = Tensor::FromInt64("X", {2, 3, 3}, x233_triu);
              onnx_kernels::kernel::Trilu::Attributes attrs;
-             const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
+             const Tensor y = trilu_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, /*k=*/nullptr, attrs); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -211,7 +222,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor x = Tensor::FromInt64("X", {2, 3, 3}, x233_triu);
              const Tensor k = Tensor::FromInt64("K", {}, {-1});
              onnx_kernels::kernel::Trilu::Attributes attrs;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }
@@ -224,7 +236,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
                  Tensor::FromInt64("X", {3, 1, 5}, {1, 4, 9, 7, 1, 9, 2, 8, 8, 4, 3, 9, 7, 4, 2});
              const Tensor k = Tensor::FromInt64("K", {}, {1});
              onnx_kernels::kernel::Trilu::Attributes attrs;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }
@@ -236,7 +249,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor x = Tensor::FromInt64("X", {0, 5}, {});
              const Tensor k = Tensor::FromInt64("K", {}, {6});
              onnx_kernels::kernel::Trilu::Attributes attrs;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }
@@ -251,7 +265,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor k = Tensor::FromInt64("K", {}, {-1});
              onnx_kernels::kernel::Trilu::Attributes attrs;
              attrs.upper = 0;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }
@@ -264,7 +279,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor k = Tensor::FromInt64("K", {}, {-7});
              onnx_kernels::kernel::Trilu::Attributes attrs;
              attrs.upper = 0;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }
@@ -277,7 +293,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor k = Tensor::FromInt64("K", {}, {2});
              onnx_kernels::kernel::Trilu::Attributes attrs;
              attrs.upper = 0;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }
@@ -290,7 +307,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor k = Tensor::FromInt64("K", {}, {6});
              onnx_kernels::kernel::Trilu::Attributes attrs;
              attrs.upper = 0;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }
@@ -302,7 +320,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor x = Tensor::FromInt64("X", {2, 3, 3}, x233_tril);
              onnx_kernels::kernel::Trilu::Attributes attrs;
              attrs.upper = 0;
-             const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
+             const Tensor y = trilu_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, /*k=*/nullptr, attrs); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -315,7 +334,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor k = Tensor::FromInt64("K", {}, {-1});
              onnx_kernels::kernel::Trilu::Attributes attrs;
              attrs.upper = 0;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }
@@ -328,7 +348,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
                  Tensor::FromInt64("X", {3, 1, 5}, {6, 2, 4, 1, 6, 8, 3, 8, 7, 0, 2, 2, 9, 5, 9});
              onnx_kernels::kernel::Trilu::Attributes attrs;
              attrs.upper = 0;
-             const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
+             const Tensor y = trilu_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, /*k=*/nullptr, attrs); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -341,7 +362,8 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor k = Tensor::FromInt64("K", {}, {6});
              onnx_kernels::kernel::Trilu::Attributes attrs;
              attrs.upper = 0;
-             const Tensor y = trilu_kernel(x, &k, attrs);
+             const Tensor y =
+                 trilu_kernel.Invoke([&](const auto &kernel) { return kernel(x, &k, attrs); });
              return IoData{{std::move(x), std::move(k)}, {std::move(y)}};
            });
   }

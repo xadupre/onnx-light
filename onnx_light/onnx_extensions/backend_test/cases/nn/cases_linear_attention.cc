@@ -33,8 +33,7 @@ NodeProto MakeLinearAttentionNode(const std::vector<std::string> &inputs,
 
 void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(27);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::LinearAttention kernel{ctx};
+  const auto kernel = MakeReferenceKernel<onnx_kernels::kernel::LinearAttention>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node =
@@ -54,7 +53,8 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
              attrs.update_rule = "linear";
              attrs.q_num_heads = 8;
              attrs.kv_num_heads = 8;
-             auto result = kernel(query, key, value, attrs);
+             auto result = kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(query, key, value, attrs); });
              return IoData{{std::move(query), std::move(key), std::move(value)},
                            {std::move(result.output), std::move(result.present_state)}};
            });
@@ -77,13 +77,14 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "linear";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    auto result = kernel(query, key, value, attrs);
     NodeProto node =
         MakeLinearAttentionNode({"query", "key", "value"}, {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "linear");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_linear", {opset}, [=]() -> IoData {
+      auto result = kernel.Invoke(
+          [&](const auto &reference_kernel) { return reference_kernel(query, key, value, attrs); });
       return IoData{{std::move(query), std::move(key), std::move(value)},
                     {std::move(result.output), std::move(result.present_state)}};
     });
@@ -98,13 +99,15 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "gated";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    auto result = kernel(query, key, value, attrs, nullptr, &decay);
     NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "", "decay"},
                                              {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "gated");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_gated", {opset}, [=]() -> IoData {
+      auto result = kernel.Invoke([&](const auto &reference_kernel) {
+        return reference_kernel(query, key, value, attrs, nullptr, &decay);
+      });
       return IoData{{std::move(query), std::move(key), std::move(value), std::move(decay)},
                     {std::move(result.output), std::move(result.present_state)}};
     });
@@ -117,13 +120,15 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "delta";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    auto result = kernel(query, key, value, attrs, nullptr, nullptr, &beta_t);
     NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "", "", "beta"},
                                              {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "delta");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_delta", {opset}, [=]() -> IoData {
+      auto result = kernel.Invoke([&](const auto &reference_kernel) {
+        return reference_kernel(query, key, value, attrs, nullptr, nullptr, &beta_t);
+      });
       return IoData{{std::move(query), std::move(key), std::move(value), std::move(beta_t)},
                     {std::move(result.output), std::move(result.present_state)}};
     });
@@ -137,7 +142,6 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    auto result = kernel(query, key, value, attrs, nullptr, &decay, &beta_t);
     NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "", "decay", "beta"},
                                              {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
@@ -145,6 +149,9 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_gated_delta", {opset},
            [=]() -> IoData {
+             auto result = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(query, key, value, attrs, nullptr, &decay, &beta_t);
+             });
              return IoData{{std::move(query), std::move(key), std::move(value), std::move(decay),
                             std::move(beta_t)},
                            {std::move(result.output), std::move(result.present_state)}};
@@ -160,7 +167,6 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "linear";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    auto result = kernel(query, key, value, attrs, &past_state);
     NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "past_state"},
                                              {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "linear");
@@ -168,6 +174,9 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_with_past_state", {opset},
            [=]() -> IoData {
+             auto result = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(query, key, value, attrs, &past_state);
+             });
              return IoData{
                  {std::move(query), std::move(key), std::move(value), std::move(past_state)},
                  {std::move(result.output), std::move(result.present_state)}};
@@ -185,13 +194,14 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "linear";
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 2;
-    auto result = kernel(q_gqa, key, value, attrs);
     NodeProto node =
         MakeLinearAttentionNode({"query", "key", "value"}, {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "linear");
     AddAttribute<int64_t>(node, "q_num_heads", 4);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_gqa", {opset}, [=]() -> IoData {
+      auto result = kernel.Invoke(
+          [&](const auto &reference_kernel) { return reference_kernel(q_gqa, key, value, attrs); });
       return IoData{{std::move(q_gqa), std::move(key), std::move(value)},
                     {std::move(result.output), std::move(result.present_state)}};
     });
@@ -205,7 +215,6 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "gated";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    auto result = kernel(query, key, value, attrs, nullptr, &decay_perdim);
     NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "", "decay"},
                                              {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "gated");
@@ -213,6 +222,9 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_gated_perdim_decay", {opset},
            [=]() -> IoData {
+             auto result = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(query, key, value, attrs, nullptr, &decay_perdim);
+             });
              return IoData{
                  {std::move(query), std::move(key), std::move(value), std::move(decay_perdim)},
                  {std::move(result.output), std::move(result.present_state)}};
@@ -227,7 +239,6 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
     attrs.scale = 2.0f;
-    auto result = kernel(query, key, value, attrs);
     NodeProto node =
         MakeLinearAttentionNode({"query", "key", "value"}, {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "linear");
@@ -236,6 +247,9 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<float>(node, "scale", 2.0f);
     Expect(registry, std::move(node), "test_cc_linear_attention_explicit_scale", {opset},
            [=]() -> IoData {
+             auto result = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(query, key, value, attrs);
+             });
              return IoData{{std::move(query), std::move(key), std::move(value)},
                            {std::move(result.output), std::move(result.present_state)}};
            });
@@ -254,7 +268,6 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "gated";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    auto result = kernel(query, key, value, attrs, nullptr, &decay_perhead);
     NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "", "decay"},
                                              {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "gated");
@@ -262,6 +275,9 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_gated_per_head_decay", {opset},
            [=]() -> IoData {
+             auto result = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(query, key, value, attrs, nullptr, &decay_perhead);
+             });
              return IoData{
                  {std::move(query), std::move(key), std::move(value), std::move(decay_perhead)},
                  {std::move(result.output), std::move(result.present_state)}};
@@ -277,7 +293,6 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    auto result = kernel(query, key, value, attrs, nullptr, &decay, &beta_scalar);
     NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "", "decay", "beta"},
                                              {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
@@ -285,6 +300,9 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_gated_delta_beta_scalar", {opset},
            [=]() -> IoData {
+             auto result = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(query, key, value, attrs, nullptr, &decay, &beta_scalar);
+             });
              return IoData{{std::move(query), std::move(key), std::move(value), std::move(decay),
                             std::move(beta_scalar)},
                            {std::move(result.output), std::move(result.present_state)}};
@@ -303,7 +321,6 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 2;
-    auto result = kernel(q_gqa, key, value, attrs, nullptr, &decay, &beta);
     NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "", "decay", "beta"},
                                              {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
@@ -311,6 +328,9 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_gated_delta_gqa", {opset},
            [=]() -> IoData {
+             auto result = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(q_gqa, key, value, attrs, nullptr, &decay, &beta);
+             });
              return IoData{{std::move(q_gqa), std::move(key), std::move(value), std::move(decay),
                             std::move(beta)},
                            {std::move(result.output), std::move(result.present_state)}};
@@ -330,7 +350,6 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 1;
-    auto result = kernel(q_mqa, k_mqa, v_mqa, attrs, nullptr, &decay, &beta);
     NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "", "decay", "beta"},
                                              {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
@@ -338,6 +357,9 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "kv_num_heads", 1);
     Expect(registry, std::move(node), "test_cc_linear_attention_gated_delta_mqa", {opset},
            [=]() -> IoData {
+             auto result = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(q_mqa, k_mqa, v_mqa, attrs, nullptr, &decay, &beta);
+             });
              return IoData{{std::move(q_mqa), std::move(k_mqa), std::move(v_mqa), std::move(decay),
                             std::move(beta)},
                            {std::move(result.output), std::move(result.present_state)}};
@@ -357,7 +379,6 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    auto result = kernel(q1, k1, v1, attrs, &past_state, &decay, &beta);
     NodeProto node = MakeLinearAttentionNode(
         {"query", "key", "value", "past_state", "decay", "beta"}, {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
@@ -365,6 +386,9 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_decode_step", {opset},
            [=]() -> IoData {
+             auto result = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(q1, k1, v1, attrs, &past_state, &decay, &beta);
+             });
              return IoData{{std::move(q1), std::move(k1), std::move(v1), std::move(past_state),
                             std::move(decay), std::move(beta)},
                            {std::move(result.output), std::move(result.present_state)}};
@@ -382,7 +406,6 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    auto result = kernel(query, key, value, attrs, &past_state, &decay, &beta);
     NodeProto node = MakeLinearAttentionNode(
         {"query", "key", "value", "past_state", "decay", "beta"}, {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
@@ -390,6 +413,9 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_prefill_with_past", {opset},
            [=]() -> IoData {
+             auto result = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(query, key, value, attrs, &past_state, &decay, &beta);
+             });
              return IoData{{std::move(query), std::move(key), std::move(value),
                             std::move(past_state), std::move(decay), std::move(beta)},
                            {std::move(result.output), std::move(result.present_state)}};
@@ -407,7 +433,6 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    auto result = kernel(query, key, value, attrs, &past_zeros, &decay, &beta);
     NodeProto node = MakeLinearAttentionNode(
         {"query", "key", "value", "past_state", "decay", "beta"}, {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
@@ -415,6 +440,9 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_no_past_explicit_zeros", {opset},
            [=]() -> IoData {
+             auto result = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(query, key, value, attrs, &past_zeros, &decay, &beta);
+             });
              return IoData{{std::move(query), std::move(key), std::move(value),
                             std::move(past_zeros), std::move(decay), std::move(beta)},
                            {std::move(result.output), std::move(result.present_state)}};
@@ -430,7 +458,6 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "linear";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    auto result = kernel(q1, k1, v1, attrs);
     NodeProto node =
         MakeLinearAttentionNode({"query", "key", "value"}, {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "linear");
@@ -438,6 +465,8 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_linear_t1_no_past", {opset},
            [=]() -> IoData {
+             auto result = kernel.Invoke(
+                 [&](const auto &reference_kernel) { return reference_kernel(q1, k1, v1, attrs); });
              return IoData{{std::move(q1), std::move(k1), std::move(v1)},
                            {std::move(result.output), std::move(result.present_state)}};
            });
@@ -460,13 +489,15 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry, TestMode mode
     attrs.update_rule = "gated_delta";
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    auto result = kernel(q16, k16, v16, attrs, nullptr, &decay16, &beta16);
     NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "", "decay", "beta"},
                                              {"output", "present_state"});
     AddAttribute<std::string>(node, "update_rule", "gated_delta");
     AddAttribute<int64_t>(node, "q_num_heads", 2);
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_linear_attention_fp16", {opset}, [=]() -> IoData {
+      auto result = kernel.Invoke([&](const auto &reference_kernel) {
+        return reference_kernel(q16, k16, v16, attrs, nullptr, &decay16, &beta16);
+      });
       return IoData{{FloatToFloat16Tensor("", q16), FloatToFloat16Tensor("", k16),
                      FloatToFloat16Tensor("", v16), FloatToFloat16Tensor("", decay16),
                      FloatToFloat16Tensor("", beta16)},

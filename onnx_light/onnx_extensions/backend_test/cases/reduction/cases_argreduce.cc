@@ -26,8 +26,7 @@ void EmitArgReduceCase(std::vector<TestCase> &registry, const std::string &op_ty
                        const std::vector<float> &data_values, bool include_axis, int64_t axis,
                        int64_t keepdims, bool select_last_index) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::ArgReduce arg_kernel{ctx, mode};
+  const auto arg_kernel = MakeReferenceKernel<onnx_kernels::kernel::ArgReduce>(opset, mode);
 
   NodeProto node;
   node.set_op_type(op_type);
@@ -42,7 +41,9 @@ void EmitArgReduceCase(std::vector<TestCase> &registry, const std::string &op_ty
   }
   Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
     Tensor data = Tensor::FromFloat("", data_shape, data_values);
-    Tensor result = arg_kernel(data, include_axis ? axis : 0, keepdims != 0, select_last_index);
+    Tensor result = arg_kernel.Invoke([&](const auto &kernel) {
+      return kernel(data, include_axis ? axis : 0, keepdims != 0, select_last_index);
+    });
 
     return IoData{{std::move(data)}, {std::move(result)}};
   });
@@ -120,9 +121,8 @@ void RegisterArgReduceCases(std::vector<TestCase> &registry, const std::string &
 void RegisterArgMaxCases(std::vector<TestCase> &registry, TestMode mode) {
 
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::ArgReduce arg_kernel{ctx,
-                                                   onnx_kernels::kernel::ArgReduce::Mode::kMax};
+  const auto arg_kernel = MakeReferenceKernel<onnx_kernels::kernel::ArgReduce>(
+      opset, onnx_kernels::kernel::ArgReduce::Mode::kMax);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -135,8 +135,9 @@ void RegisterArgMaxCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_argmax_no_keepdims_example_benchmark", {opset},
            {1024 * 1024}, {1024}, [arg_kernel]() -> IoData {
              Tensor data = RandnTensor(DataType::FLOAT, {1024, 1024}, /*seed=*/9801);
-             Tensor result =
-                 arg_kernel(data, /*axis=*/1, /*keepdims=*/false, /*select_last_index=*/false);
+             Tensor result = arg_kernel.Invoke([&](const auto &kernel) {
+               return kernel(data, /*axis=*/1, /*keepdims=*/false, /*select_last_index=*/false);
+             });
              return IoData{{std::move(data)}, {std::move(result)}};
            });
     return;
@@ -147,9 +148,8 @@ void RegisterArgMaxCases(std::vector<TestCase> &registry, TestMode mode) {
 void RegisterArgMinCases(std::vector<TestCase> &registry, TestMode mode) {
 
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::ArgReduce arg_kernel{ctx,
-                                                   onnx_kernels::kernel::ArgReduce::Mode::kMin};
+  const auto arg_kernel = MakeReferenceKernel<onnx_kernels::kernel::ArgReduce>(
+      opset, onnx_kernels::kernel::ArgReduce::Mode::kMin);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -162,8 +162,9 @@ void RegisterArgMinCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_argmin_no_keepdims_example_benchmark", {opset},
            {1024 * 1024}, {1024}, [arg_kernel]() -> IoData {
              Tensor data = RandnTensor(DataType::FLOAT, {1024, 1024}, /*seed=*/9802);
-             Tensor result =
-                 arg_kernel(data, /*axis=*/1, /*keepdims=*/false, /*select_last_index=*/false);
+             Tensor result = arg_kernel.Invoke([&](const auto &kernel) {
+               return kernel(data, /*axis=*/1, /*keepdims=*/false, /*select_last_index=*/false);
+             });
              return IoData{{std::move(data)}, {std::move(result)}};
            });
     return;

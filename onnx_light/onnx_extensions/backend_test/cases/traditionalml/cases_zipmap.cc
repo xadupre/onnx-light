@@ -16,8 +16,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 void RegisterZipMapCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::ZipMap zipmap{ctx};
+  const auto zipmap = MakeReferenceKernel<onnx_kernels::kernel::ZipMap>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     const int64_t batch = 4096;
@@ -40,7 +39,7 @@ void RegisterZipMapCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_zipmap_benchmark", {default_opset, opset},
            [zipmap, class_labels]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {batch, num_classes}, 2001);
-             Tensor z = zipmap(x, class_labels);
+             Tensor z = zipmap.Invoke([&](const auto &kernel) { return kernel(x, class_labels); });
              return IoData{{std::move(x)}, {std::move(z)}};
            },
            "backend-test", TestCaseTag::NONE,
@@ -66,7 +65,7 @@ void RegisterZipMapCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_zipmap_int64", {default_opset, opset},
            [=]() -> IoData {
              Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.7f, 0.2f, 0.3f, 0.4f, 0.3f});
-             Tensor z = zipmap(x, class_labels);
+             Tensor z = zipmap.Invoke([&](const auto &kernel) { return kernel(x, class_labels); });
 
              return IoData{{std::move(x)}, {std::move(z)}};
            },
@@ -92,7 +91,7 @@ void RegisterZipMapCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_zipmap_string", {default_opset, opset},
            [=]() -> IoData {
              Tensor x = Tensor::FromFloat("", {3}, {0.1f, 0.7f, 0.2f});
-             Tensor z = zipmap(x, class_labels);
+             Tensor z = zipmap.Invoke([&](const auto &kernel) { return kernel(x, class_labels); });
 
              return IoData{{std::move(x)}, {std::move(z)}};
            },

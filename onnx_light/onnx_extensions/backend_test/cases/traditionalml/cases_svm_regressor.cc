@@ -12,9 +12,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterSVMRegressorCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
-  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const onnx_kernels::kernel::SVMRegressor svm{ctx};
+  const auto svm = MakeReferenceKernel<onnx_kernels::kernel::SVMRegressor>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -67,8 +66,10 @@ void RegisterSVMRegressorCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_svmregressor_linear_benchmark",
            {default_opset, opset}, {16384}, {8192}, [svm]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {8192, 2}, 2681);
-             Tensor y = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {2.0f, -1.0f}, {0.5f},
-                                              "LINEAR", 0.0f, 0.0f, 0.0f);
+             Tensor y = svm.Invoke([&](const auto &kernel) {
+               return kernel.template operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {2.0f, -1.0f},
+                                                        {0.5f}, "LINEAR", 0.0f, 0.0f, 0.0f);
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -124,8 +125,10 @@ void RegisterSVMRegressorCases(std::vector<TestCase> &registry, TestMode mode) {
   Expect(registry, std::move(node), "test_cc_svmregressor_linear", {default_opset, opset},
          [=]() -> IoData {
            Tensor x = Tensor::FromFloat("", {2, 2}, {3.0f, 1.0f, 0.0f, 2.0f});
-           Tensor y = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {2.0f, -1.0f}, {0.5f},
-                                            "LINEAR", 0.0f, 0.0f, 0.0f);
+           Tensor y = svm.Invoke([&](const auto &kernel) {
+             return kernel.template operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {2.0f, -1.0f},
+                                                      {0.5f}, "LINEAR", 0.0f, 0.0f, 0.0f);
+           });
            return IoData{{std::move(x)}, {std::move(y)}};
          });
 }

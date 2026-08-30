@@ -16,8 +16,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 void RegisterHannWindowCases(std::vector<TestCase> &registry, TestMode mode) {
   constexpr int32_t kSize = 10;
   const OpsetId opset = DefaultOpset(17);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::HannWindow hann_kernel{ctx};
+  const auto hann_kernel = MakeReferenceKernel<onnx_kernels::kernel::HannWindow>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -28,7 +27,8 @@ void RegisterHannWindowCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_hannwindow_benchmark", {opset}, {1}, {size},
            [hann_kernel, size]() -> IoData {
              Tensor x = Tensor::FromInt32("", {}, {static_cast<int32_t>(size)});
-             Tensor y = hann_kernel(x, /*periodic=*/true);
+             Tensor y = hann_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, /*periodic=*/true); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -42,7 +42,8 @@ void RegisterHannWindowCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_hannwindow", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt32("", {}, {kSize});
-      Tensor y = hann_kernel(x, /*periodic=*/true);
+      Tensor y =
+          hann_kernel.Invoke([&](const auto &kernel) { return kernel(x, /*periodic=*/true); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -61,7 +62,8 @@ void RegisterHannWindowCases(std::vector<TestCase> &registry, TestMode mode) {
     attr->set_i(0);
     Expect(registry, std::move(node), "test_cc_hannwindow_symmetric", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt32("", {}, {kSize});
-      Tensor y = hann_kernel(x, /*periodic=*/false);
+      Tensor y =
+          hann_kernel.Invoke([&](const auto &kernel) { return kernel(x, /*periodic=*/false); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });

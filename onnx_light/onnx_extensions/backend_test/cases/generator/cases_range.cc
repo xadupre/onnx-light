@@ -25,8 +25,6 @@ namespace {
 void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset_v11 = DefaultOpset(11);
   const OpsetId opset_v27 = DefaultOpset(27);
-  const KernelContext ctx_v11{opset_v11};
-  const KernelContext ctx_v27{opset_v27};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -36,14 +34,15 @@ void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("delta");
     node.add_output("output");
 
-    const onnx_kernels::kernel::Range range_kernel{ctx_v11};
+    const auto range_kernel = MakeReferenceKernel<onnx_kernels::kernel::Range>(opset_v11);
     Expect(registry, std::move(node), "test_range_float_type_positive_delta_benchmark", {opset_v11},
            {1, 1, 1}, {kBenchmarkElementwiseSize}, [range_kernel]() -> IoData {
              Tensor start = Tensor::FromFloat("start", {}, {0.0f});
              Tensor limit =
                  Tensor::FromFloat("limit", {}, {static_cast<float>(kBenchmarkElementwiseSize)});
              Tensor delta = Tensor::FromFloat("delta", {}, {1.0f});
-             Tensor output = range_kernel(start, limit, delta);
+             Tensor output = range_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(start, limit, delta); });
              return IoData{{std::move(start), std::move(limit), std::move(delta)},
                            {std::move(output)}};
            });
@@ -64,7 +63,9 @@ void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor start = Tensor::FromFloat("start", {}, {1.0f});
              const Tensor limit = Tensor::FromFloat("limit", {}, {5.0f});
              const Tensor delta = Tensor::FromFloat("delta", {}, {2.0f});
-             const Tensor output = onnx_kernels::kernel::Range(ctx_v11)(start, limit, delta);
+             const Tensor output =
+                 MakeReferenceKernel<onnx_kernels::kernel::Range>(opset_v11).Invoke(
+                     [&](const auto &kernel) { return kernel(start, limit, delta); });
              return IoData{{std::move(start), std::move(limit), std::move(delta)},
                            {std::move(output)}};
            });
@@ -84,7 +85,9 @@ void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor start = Tensor::FromInt32("start", {}, {10});
              const Tensor limit = Tensor::FromInt32("limit", {}, {6});
              const Tensor delta = Tensor::FromInt32("delta", {}, {-3});
-             const Tensor output = onnx_kernels::kernel::Range(ctx_v11)(start, limit, delta);
+             const Tensor output =
+                 MakeReferenceKernel<onnx_kernels::kernel::Range>(opset_v11).Invoke(
+                     [&](const auto &kernel) { return kernel(start, limit, delta); });
              return IoData{{std::move(start), std::move(limit), std::move(delta)},
                            {std::move(output)}};
            });
@@ -104,7 +107,9 @@ void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor start = MakeFloat16Scalar("start", 1.0f);
              const Tensor limit = MakeFloat16Scalar("limit", 5.0f);
              const Tensor delta = MakeFloat16Scalar("delta", 2.0f);
-             const Tensor output = onnx_kernels::kernel::Range(ctx_v27)(start, limit, delta);
+             const Tensor output =
+                 MakeReferenceKernel<onnx_kernels::kernel::Range>(opset_v27).Invoke(
+                     [&](const auto &kernel) { return kernel(start, limit, delta); });
              return IoData{{std::move(start), std::move(limit), std::move(delta)},
                            {std::move(output)}};
            });
@@ -124,7 +129,9 @@ void RegisterRangeCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor start = MakeBfloat16Scalar("start", 1.0f);
              const Tensor limit = MakeBfloat16Scalar("limit", 5.0f);
              const Tensor delta = MakeBfloat16Scalar("delta", 2.0f);
-             const Tensor output = onnx_kernels::kernel::Range(ctx_v27)(start, limit, delta);
+             const Tensor output =
+                 MakeReferenceKernel<onnx_kernels::kernel::Range>(opset_v27).Invoke(
+                     [&](const auto &kernel) { return kernel(start, limit, delta); });
              return IoData{{std::move(start), std::move(limit), std::move(delta)},
                            {std::move(output)}};
            });

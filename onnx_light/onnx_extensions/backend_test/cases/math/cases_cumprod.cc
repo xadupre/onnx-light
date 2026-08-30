@@ -42,8 +42,7 @@ NodeProto MakeCumProdNode(bool exclusive, bool reverse) {
 // ---------------------------------------------------------------------------
 void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(26);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::CumProd cumprod_kernel{ctx};
+  const auto cumprod_kernel = MakeReferenceKernel<onnx_kernels::kernel::CumProd>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeCumProdNode(/*exclusive=*/false, /*reverse=*/false);
@@ -53,7 +52,7 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
            [cumprod_kernel, shape, count]() -> IoData {
              Tensor x = Tensor::FromDouble("", shape, std::vector<double>(count, 1.0));
              Tensor axis = Tensor::FromInt32("", {}, {0});
-             Tensor y = cumprod_kernel(x, axis);
+             Tensor y = cumprod_kernel.Invoke([&](const auto &kernel) { return kernel(x, axis); });
              return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
            });
     return;
@@ -65,7 +64,7 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cumprod_1d", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromDouble("", {3}, {1.0, 2.0, 3.0});
       Tensor axis = Tensor::FromInt32("", {}, {0});
-      Tensor y = cumprod_kernel(x, axis);
+      Tensor y = cumprod_kernel.Invoke([&](const auto &kernel) { return kernel(x, axis); });
       return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
     });
   }
@@ -76,7 +75,8 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cumprod_1d_exclusive", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromDouble("", {3}, {1.0, 2.0, 3.0});
       Tensor axis = Tensor::FromInt32("", {}, {0});
-      Tensor y = cumprod_kernel(x, axis, /*exclusive=*/true);
+      Tensor y = cumprod_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, axis, /*exclusive=*/true); });
       return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
     });
   }
@@ -87,7 +87,9 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cumprod_1d_reverse", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromDouble("", {3}, {1.0, 2.0, 3.0});
       Tensor axis = Tensor::FromInt32("", {}, {0});
-      Tensor y = cumprod_kernel(x, axis, /*exclusive=*/false, /*reverse=*/true);
+      Tensor y = cumprod_kernel.Invoke([&](const auto &kernel) {
+        return kernel(x, axis, /*exclusive=*/false, /*reverse=*/true);
+      });
       return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
     });
   }
@@ -99,7 +101,9 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              Tensor x = Tensor::FromDouble("", {3}, {1.0, 2.0, 3.0});
              Tensor axis = Tensor::FromInt32("", {}, {0});
-             Tensor y = cumprod_kernel(x, axis, /*exclusive=*/true, /*reverse=*/true);
+             Tensor y = cumprod_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, axis, /*exclusive=*/true, /*reverse=*/true);
+             });
              return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
            });
   }
@@ -110,7 +114,7 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cumprod_2d_axis_0", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
       Tensor axis = Tensor::FromInt32("", {}, {0});
-      Tensor y = cumprod_kernel(x, axis);
+      Tensor y = cumprod_kernel.Invoke([&](const auto &kernel) { return kernel(x, axis); });
       return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
     });
   }
@@ -121,7 +125,7 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cumprod_2d_axis_1", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
       Tensor axis = Tensor::FromInt32("", {}, {1});
-      Tensor y = cumprod_kernel(x, axis);
+      Tensor y = cumprod_kernel.Invoke([&](const auto &kernel) { return kernel(x, axis); });
       return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
     });
   }
@@ -132,7 +136,7 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cumprod_2d_negative_axis", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
       Tensor axis = Tensor::FromInt64("", {}, {static_cast<int64_t>(-1)});
-      Tensor y = cumprod_kernel(x, axis);
+      Tensor y = cumprod_kernel.Invoke([&](const auto &kernel) { return kernel(x, axis); });
       return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
     });
   }
@@ -143,7 +147,7 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cumprod_2d_int32", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt32("", {2, 3}, {1, 2, 3, 4, 5, 6});
       Tensor axis = Tensor::FromInt32("", {}, {0});
-      Tensor y = cumprod_kernel(x, axis);
+      Tensor y = cumprod_kernel.Invoke([&](const auto &kernel) { return kernel(x, axis); });
       return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
     });
   }
@@ -154,7 +158,8 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cumprod_1d_int32_exclusive", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt32("", {5}, {1, 2, 3, 4, 5});
       Tensor axis = Tensor::FromInt32("", {}, {0});
-      Tensor y = cumprod_kernel(x, axis, /*exclusive=*/true);
+      Tensor y = cumprod_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, axis, /*exclusive=*/true); });
       return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
     });
   }

@@ -52,97 +52,101 @@ constexpr const char *kFuncOuterName = "func_outer_add";
 void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry,
                                                        TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
-  const onnx_kernels::kernel::KernelContext kctx{opset};
 
   const std::string name = "test_cc_shape_inference_nested_local_function_add";
+  TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
+  lazy_case.build = [=](bool) -> BuiltCase {
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
+    tc.rtol = 1e-3;
+    tc.atol = 1e-7;
 
-  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+    ModelProto &model = tc.emplace_model();
+    InitModel(model, kDefaultIrVersion, {opset, OpsetId(kLocalDomain, static_cast<int64_t>(1))});
 
-  ModelProto &model = tc.emplace_model();
-  InitModel(model, kDefaultIrVersion, {opset, OpsetId(kLocalDomain, static_cast<int64_t>(1))});
+    // Inner function ``local:func_inner_add(a, b) -> c { c = Add(a, b) }``.
+    {
+      FunctionProto *func = model.add_functions();
+      func->set_name(kFuncInnerName);
+      func->set_domain(kLocalDomain);
+      func->add_input("a");
+      func->add_input("b");
+      func->add_output("c");
+      OperatorSetIdProto *func_opset = func->add_opset_import();
+      func_opset->set_domain("");
+      func_opset->set_version(static_cast<int64_t>(opset.version));
+      NodeProto *body_node = func->add_node();
+      body_node->set_op_type("Add");
+      body_node->add_input("a");
+      body_node->add_input("b");
+      body_node->add_output("c");
+    }
 
-  // Inner function ``local:func_inner_add(a, b) -> c { c = Add(a, b) }``.
-  {
-    FunctionProto *func = model.add_functions();
-    func->set_name(kFuncInnerName);
-    func->set_domain(kLocalDomain);
-    func->add_input("a");
-    func->add_input("b");
-    func->add_output("c");
-    OperatorSetIdProto *func_opset = func->add_opset_import();
-    func_opset->set_domain("");
-    func_opset->set_version(static_cast<int64_t>(opset.version));
-    NodeProto *body_node = func->add_node();
-    body_node->set_op_type("Add");
-    body_node->add_input("a");
-    body_node->add_input("b");
-    body_node->add_output("c");
-  }
+    // Outer function ``local:func_outer_add(a, b) -> c`` whose body is a
+    // single call into ``local:func_inner_add``.
+    {
+      FunctionProto *func = model.add_functions();
+      func->set_name(kFuncOuterName);
+      func->set_domain(kLocalDomain);
+      func->add_input("a");
+      func->add_input("b");
+      func->add_output("c");
+      // The outer function only needs the local domain to dispatch the
+      // inner call; the default-domain opset is still inherited from the
+      // caller via ``ExpandLocalFunctionCall``.
+      OperatorSetIdProto *func_opset = func->add_opset_import();
+      func_opset->set_domain(kLocalDomain);
+      func_opset->set_version(static_cast<int64_t>(1));
+      NodeProto *body_node = func->add_node();
+      body_node->set_op_type(kFuncInnerName);
+      body_node->set_domain(kLocalDomain);
+      body_node->add_input("a");
+      body_node->add_input("b");
+      body_node->add_output("c");
+    }
 
-  // Outer function ``local:func_outer_add(a, b) -> c`` whose body is a
-  // single call into ``local:func_inner_add``.
-  {
-    FunctionProto *func = model.add_functions();
-    func->set_name(kFuncOuterName);
-    func->set_domain(kLocalDomain);
-    func->add_input("a");
-    func->add_input("b");
-    func->add_output("c");
-    // The outer function only needs the local domain to dispatch the
-    // inner call; the default-domain opset is still inherited from the
-    // caller via ``ExpandLocalFunctionCall``.
-    OperatorSetIdProto *func_opset = func->add_opset_import();
-    func_opset->set_domain(kLocalDomain);
-    func_opset->set_version(static_cast<int64_t>(1));
-    NodeProto *body_node = func->add_node();
-    body_node->set_op_type(kFuncInnerName);
-    body_node->set_domain(kLocalDomain);
-    body_node->add_input("a");
-    body_node->add_input("b");
-    body_node->add_output("c");
-  }
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    // Single node in the main graph: a call into the outer local function.
+    // An ``Abs`` node is appended so the model's final output is computed by
+    // an Abs of the nested-function result.
+    AddNode(*graph, kFuncOuterName, {"X", "Y"}, {"Z_pre_abs"}, kLocalDomain);
+    AddNode(*graph, "Abs", {"Z_pre_abs"}, {"Z"});
 
-  // Single node in the main graph: a call into the outer local function.
-  // An ``Abs`` node is appended so the model's final output is computed by
-  // an Abs of the nested-function result.
-  AddNode(*graph, kFuncOuterName, {"X", "Y"}, {"Z_pre_abs"}, kLocalDomain);
-  AddNode(*graph, "Abs", {"Z_pre_abs"}, {"Z"});
+    // Symbolic graph inputs / outputs. Equal symbolic dims across X, Y and Z
+    // ensure that the symbolic-dim propagation pass also exercises shape
+    // propagation through the two levels of function expansion.
+    const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
+    const std::vector<DimSpec> sym_shape = {"batch", "d_model"};
+    AppendValueInfo(*graph->add_input(), "X", kFloat, sym_shape);
+    AppendValueInfo(*graph->add_input(), "Y", kFloat, sym_shape);
+    AppendValueInfo(*graph->add_value_info(), "Z_pre_abs", kFloat, sym_shape);
+    AppendValueInfo(*graph->add_output(), "Z", kFloat, sym_shape);
 
-  // Symbolic graph inputs / outputs. Equal symbolic dims across X, Y and Z
-  // ensure that the symbolic-dim propagation pass also exercises shape
-  // propagation through the two levels of function expansion.
-  const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
-  const std::vector<DimSpec> sym_shape = {"batch", "d_model"};
-  AppendValueInfo(*graph->add_input(), "X", kFloat, sym_shape);
-  AppendValueInfo(*graph->add_input(), "Y", kFloat, sym_shape);
-  AppendValueInfo(*graph->add_value_info(), "Z_pre_abs", kFloat, sym_shape);
-  AppendValueInfo(*graph->add_output(), "Z", kFloat, sym_shape);
+    // Reference DataSet with concrete (``batch=2, d_model=4``) tensors. The
+    // expanded body is just ``Add``, so the runtime expected value is the
+    // element-wise sum of the inputs.
+    const std::vector<int64_t> data_shape = {2, 4};
+    const int64_t input_size = data_shape[0] * data_shape[1];
+    std::vector<float> x_values(static_cast<size_t>(input_size));
+    std::vector<float> y_values(static_cast<size_t>(input_size));
+    for (size_t i = 0; i < x_values.size(); ++i) {
+      x_values[i] = static_cast<float>(i) * 0.1f;
+      y_values[i] = static_cast<float>(i) * 0.01f + 1.0f;
+    }
+    Tensor x = Tensor::FromFloat("X", data_shape, x_values);
+    Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
+    Tensor z_pre_abs = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(x, y); });
+    Tensor z = MakeReferenceKernel<onnx_kernels::kernel::Abs>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(z_pre_abs); });
+    z.name = "Z";
 
-  // Reference DataSet with concrete (``batch=2, d_model=4``) tensors. The
-  // expanded body is just ``Add``, so the runtime expected value is the
-  // element-wise sum of the inputs.
-  const std::vector<int64_t> data_shape = {2, 4};
-  const int64_t input_size = data_shape[0] * data_shape[1];
-  std::vector<float> x_values(static_cast<size_t>(input_size));
-  std::vector<float> y_values(static_cast<size_t>(input_size));
-  for (size_t i = 0; i < x_values.size(); ++i) {
-    x_values[i] = static_cast<float>(i) * 0.1f;
-    y_values[i] = static_cast<float>(i) * 0.01f + 1.0f;
-  }
-  Tensor x = Tensor::FromFloat("X", data_shape, x_values);
-  Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
-  Tensor z_pre_abs = onnx_kernels::kernel::Add(kctx)(x, y);
-  Tensor z = onnx_kernels::kernel::Abs(kctx)(z_pre_abs);
-  z.name = "Z";
+    AppendDataSet(tc, {x, y}, {z});
 
-  AppendDataSet(tc, {x, y}, {z});
-
-  registry.emplace_back(std::move(tc));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

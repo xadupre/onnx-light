@@ -24,8 +24,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterLRNCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::LRN kernel{ctx};
+  const auto kernel = MakeReferenceKernel<onnx_kernels::kernel::LRN>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -41,8 +40,10 @@ void RegisterLRNCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_lrn_benchmark", {opset}, {count}, {count},
            [kernel]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {1, 64, 128, 128}, 2201);
-             Tensor y = kernel(x, /*size=*/3, /*alpha=*/0.0002f, /*beta=*/0.5f,
-                               /*bias=*/2.0f);
+             Tensor y = kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, /*size=*/3, /*alpha=*/0.0002f, /*beta=*/0.5f,
+                             /*bias=*/2.0f);
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -70,7 +71,9 @@ void RegisterLRNCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<float>(node, "bias", 2.0f);
     AddAttribute<int64_t>(node, "size", 3);
     Expect(registry, std::move(node), "test_cc_lrn", {opset}, [=]() -> IoData {
-      Tensor y = kernel(x, /*size=*/3, /*alpha=*/0.0002f, /*beta=*/0.5f, /*bias=*/2.0f);
+      Tensor y = kernel.Invoke([&](const auto &kernel) {
+        return kernel(x, /*size=*/3, /*alpha=*/0.0002f, /*beta=*/0.5f, /*bias=*/2.0f);
+      });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -83,7 +86,7 @@ void RegisterLRNCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<int64_t>(node, "size", 3);
     Expect(registry, std::move(node), "test_cc_lrn_default", {opset}, [=]() -> IoData {
-      Tensor y = kernel(x, /*size=*/3);
+      Tensor y = kernel.Invoke([&](const auto &kernel) { return kernel(x, /*size=*/3); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

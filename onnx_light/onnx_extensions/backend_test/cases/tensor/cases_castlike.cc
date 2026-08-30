@@ -124,8 +124,7 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset_v21 = DefaultOpset(21); // For FLOAT8, INT4, UINT4
   const OpsetId opset_v23 = DefaultOpset(23); // For FLOAT4E2M1
   const OpsetId opset_v25 = DefaultOpset(25); // For INT2, UINT2
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::CastLike castlike_kernel{ctx};
+  const auto castlike_kernel = MakeReferenceKernel<onnx_kernels::kernel::CastLike>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeCastLikeNode();
@@ -134,7 +133,8 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
            [castlike_kernel]() -> IoData {
              Tensor input = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 2001);
              Tensor target_type = Tensor::FromDouble("target_type", {1}, {0.0});
-             Tensor output = castlike_kernel(input, target_type);
+             Tensor output = castlike_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(input, target_type); });
              return IoData{{std::move(input), std::move(target_type)}, {std::move(output)}};
            });
     return;
@@ -152,7 +152,8 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
              [=]() -> IoData {
                Tensor input = from.make_input();
                Tensor target_type = MakeTargetTypeTensor(to);
-               Tensor output = castlike_kernel(input, target_type);
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(input, target_type); });
                return IoData{{std::move(input), std::move(target_type)}, {std::move(output)}};
              });
     }
@@ -212,7 +213,7 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
   const std::vector<int64_t> e8m0_shape = {2, 4};
   const std::vector<float> e8m0_fp32_values = {0.0f, 0.124f, 0.25f, 0.5f, 1.1f, 2.0f, 4.0f, 8.0f};
 
-  const onnx_kernels::kernel::Cast cast_kernel{ctx};
+  const auto cast_kernel = MakeReferenceKernel<onnx_kernels::kernel::Cast>(opset);
 
   // FLOAT8 variants (opset 21)
   const std::vector<LowPrecisionVariant> kFloat8Variants = {
@@ -237,19 +238,25 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       Expect(registry, std::move(node), std::string("test_cc_castlike_FLOAT_to_") + v.name,
              {opset_v21}, [=]() -> IoData {
                Tensor input = Tensor::FromFloat("input", v.shape, v.values);
-               Tensor output = castlike_kernel(input, low_target);
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(input, low_target); });
                return IoData{{std::move(input), std::move(low_target)}, {std::move(output)}};
              });
     }
     // v.dtype -> FLOAT (input is the packed/encoded form of the FP32 vector).
-    Tensor encoded =
-        cast_kernel(Tensor::FromFloat("input", v.shape, v.values), static_cast<int32_t>(v.dtype));
-    Tensor packed_input("input", static_cast<int32_t>(v.dtype), v.shape, encoded.data);
+    const auto make_packed_input = [=]() {
+      Tensor encoded = cast_kernel.Invoke([&](const auto &kernel) {
+        return kernel(Tensor::FromFloat("input", v.shape, v.values), static_cast<int32_t>(v.dtype));
+      });
+      return Tensor("input", static_cast<int32_t>(v.dtype), v.shape, std::move(encoded.data));
+    };
     {
       NodeProto node = MakeCastLikeNode();
       Expect(registry, std::move(node), std::string("test_cc_castlike_") + v.name + "_to_FLOAT",
              {opset_v21}, [=]() -> IoData {
-               Tensor output = castlike_kernel(packed_input, float_target);
+               Tensor packed_input = make_packed_input();
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(packed_input, float_target); });
                return IoData{{std::move(packed_input), std::move(float_target)},
                              {std::move(output)}};
              });
@@ -260,7 +267,8 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       Expect(registry, std::move(node), std::string("test_cc_castlike_FLOAT16_to_") + v.name,
              {opset_v21}, [=]() -> IoData {
                Tensor input = MakeFloat16Tensor("input", v.shape, v.values);
-               Tensor output = castlike_kernel(input, low_target);
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(input, low_target); });
                return IoData{{std::move(input), std::move(low_target)}, {std::move(output)}};
              });
     }
@@ -269,7 +277,9 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       NodeProto node = MakeCastLikeNode();
       Expect(registry, std::move(node), std::string("test_cc_castlike_") + v.name + "_to_FLOAT16",
              {opset_v21}, [=]() -> IoData {
-               Tensor output = castlike_kernel(packed_input, float16_target);
+               Tensor packed_input = make_packed_input();
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(packed_input, float16_target); });
                return IoData{{std::move(packed_input), std::move(float16_target)},
                              {std::move(output)}};
              });
@@ -290,19 +300,25 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       Expect(registry, std::move(node), std::string("test_cc_castlike_FLOAT_to_") + v.name,
              {opset_v23}, [=]() -> IoData {
                Tensor input = Tensor::FromFloat("input", v.shape, v.values);
-               Tensor output = castlike_kernel(input, low_target);
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(input, low_target); });
                return IoData{{std::move(input), std::move(low_target)}, {std::move(output)}};
              });
     }
     // FLOAT4E2M1 -> FLOAT
-    Tensor encoded =
-        cast_kernel(Tensor::FromFloat("input", v.shape, v.values), static_cast<int32_t>(v.dtype));
-    Tensor packed_input("input", static_cast<int32_t>(v.dtype), v.shape, encoded.data);
+    const auto make_packed_input = [=]() {
+      Tensor encoded = cast_kernel.Invoke([&](const auto &kernel) {
+        return kernel(Tensor::FromFloat("input", v.shape, v.values), static_cast<int32_t>(v.dtype));
+      });
+      return Tensor("input", static_cast<int32_t>(v.dtype), v.shape, std::move(encoded.data));
+    };
     {
       NodeProto node = MakeCastLikeNode();
       Expect(registry, std::move(node), std::string("test_cc_castlike_") + v.name + "_to_FLOAT",
              {opset_v23}, [=]() -> IoData {
-               Tensor output = castlike_kernel(packed_input, float_target);
+               Tensor packed_input = make_packed_input();
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(packed_input, float_target); });
                return IoData{{std::move(packed_input), std::move(float_target)},
                              {std::move(output)}};
              });
@@ -313,7 +329,8 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       Expect(registry, std::move(node), std::string("test_cc_castlike_FLOAT16_to_") + v.name,
              {opset_v23}, [=]() -> IoData {
                Tensor input = MakeFloat16Tensor("input", v.shape, v.values);
-               Tensor output = castlike_kernel(input, low_target);
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(input, low_target); });
                return IoData{{std::move(input), std::move(low_target)}, {std::move(output)}};
              });
     }
@@ -322,7 +339,9 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       NodeProto node = MakeCastLikeNode();
       Expect(registry, std::move(node), std::string("test_cc_castlike_") + v.name + "_to_FLOAT16",
              {opset_v23}, [=]() -> IoData {
-               Tensor output = castlike_kernel(packed_input, float16_target);
+               Tensor packed_input = make_packed_input();
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(packed_input, float16_target); });
                return IoData{{std::move(packed_input), std::move(float16_target)},
                              {std::move(output)}};
              });
@@ -388,19 +407,26 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       Expect(registry, std::move(node), std::string("test_cc_castlike_FLOAT_to_") + v.name,
              {opset_v21}, [=]() -> IoData {
                Tensor input = Tensor::FromFloat("input", int4_shape, int4_fp32_values);
-               Tensor output = castlike_kernel(input, sub_target);
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(input, sub_target); });
                return IoData{{std::move(input), std::move(sub_target)}, {std::move(output)}};
              });
     }
     // sub-byte -> FLOAT (input is the packed encoding of the FP32 vector).
-    Tensor encoded = cast_kernel(Tensor::FromFloat("input", int4_shape, int4_fp32_values),
-                                 static_cast<int32_t>(v.dtype));
-    Tensor packed_input("input", static_cast<int32_t>(v.dtype), int4_shape, encoded.data);
+    const auto make_packed_input = [=]() {
+      Tensor encoded = cast_kernel.Invoke([&](const auto &kernel) {
+        return kernel(Tensor::FromFloat("input", int4_shape, int4_fp32_values),
+                      static_cast<int32_t>(v.dtype));
+      });
+      return Tensor("input", static_cast<int32_t>(v.dtype), int4_shape, std::move(encoded.data));
+    };
     {
       NodeProto node = MakeCastLikeNode();
       Expect(registry, std::move(node), std::string("test_cc_castlike_") + v.name + "_to_FLOAT",
              {opset_v21}, [=]() -> IoData {
-               Tensor output = castlike_kernel(packed_input, float_target);
+               Tensor packed_input = make_packed_input();
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(packed_input, float_target); });
                return IoData{{std::move(packed_input), std::move(float_target)},
                              {std::move(output)}};
              });
@@ -411,7 +437,9 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       Expect(registry, std::move(node),
              std::string("test_cc_castlike_") + v.name + "_to_" + v.wide_int_name, {opset_v21},
              [=]() -> IoData {
-               Tensor output = castlike_kernel(packed_input, wide_target);
+               Tensor packed_input = make_packed_input();
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(packed_input, wide_target); });
                return IoData{{std::move(packed_input), std::move(wide_target)},
                              {std::move(output)}};
              });
@@ -422,7 +450,8 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       Expect(registry, std::move(node), std::string("test_cc_castlike_FLOAT16_to_") + v.name,
              {opset_v21}, [=]() -> IoData {
                Tensor input = MakeFloat16Tensor("input", int4_shape, int4_fp32_values);
-               Tensor output = castlike_kernel(input, sub_target);
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(input, sub_target); });
                return IoData{{std::move(input), std::move(sub_target)}, {std::move(output)}};
              });
     }
@@ -431,7 +460,9 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       NodeProto node = MakeCastLikeNode();
       Expect(registry, std::move(node), std::string("test_cc_castlike_") + v.name + "_to_FLOAT16",
              {opset_v21}, [=]() -> IoData {
-               Tensor output = castlike_kernel(packed_input, float16_target);
+               Tensor packed_input = make_packed_input();
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(packed_input, float16_target); });
                return IoData{{std::move(packed_input), std::move(float16_target)},
                              {std::move(output)}};
              });
@@ -449,19 +480,26 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       Expect(registry, std::move(node), std::string("test_cc_castlike_FLOAT_to_") + v.name,
              {opset_v25}, [=]() -> IoData {
                Tensor input = Tensor::FromFloat("input", int2_shape, int2_fp32_values);
-               Tensor output = castlike_kernel(input, sub_target);
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(input, sub_target); });
                return IoData{{std::move(input), std::move(sub_target)}, {std::move(output)}};
              });
     }
     // sub-byte -> FLOAT (input is the packed encoding of the FP32 vector).
-    Tensor encoded = cast_kernel(Tensor::FromFloat("input", int2_shape, int2_fp32_values),
-                                 static_cast<int32_t>(v.dtype));
-    Tensor packed_input("input", static_cast<int32_t>(v.dtype), int2_shape, encoded.data);
+    const auto make_packed_input = [=]() {
+      Tensor encoded = cast_kernel.Invoke([&](const auto &kernel) {
+        return kernel(Tensor::FromFloat("input", int2_shape, int2_fp32_values),
+                      static_cast<int32_t>(v.dtype));
+      });
+      return Tensor("input", static_cast<int32_t>(v.dtype), int2_shape, std::move(encoded.data));
+    };
     {
       NodeProto node = MakeCastLikeNode();
       Expect(registry, std::move(node), std::string("test_cc_castlike_") + v.name + "_to_FLOAT",
              {opset_v25}, [=]() -> IoData {
-               Tensor output = castlike_kernel(packed_input, float_target);
+               Tensor packed_input = make_packed_input();
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(packed_input, float_target); });
                return IoData{{std::move(packed_input), std::move(float_target)},
                              {std::move(output)}};
              });
@@ -472,7 +510,9 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       Expect(registry, std::move(node),
              std::string("test_cc_castlike_") + v.name + "_to_" + v.wide_int_name, {opset_v25},
              [=]() -> IoData {
-               Tensor output = castlike_kernel(packed_input, wide_target);
+               Tensor packed_input = make_packed_input();
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(packed_input, wide_target); });
                return IoData{{std::move(packed_input), std::move(wide_target)},
                              {std::move(output)}};
              });
@@ -483,7 +523,8 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       Expect(registry, std::move(node), std::string("test_cc_castlike_FLOAT16_to_") + v.name,
              {opset_v25}, [=]() -> IoData {
                Tensor input = MakeFloat16Tensor("input", int2_shape, int2_fp32_values);
-               Tensor output = castlike_kernel(input, sub_target);
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(input, sub_target); });
                return IoData{{std::move(input), std::move(sub_target)}, {std::move(output)}};
              });
     }
@@ -492,7 +533,9 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
       NodeProto node = MakeCastLikeNode();
       Expect(registry, std::move(node), std::string("test_cc_castlike_") + v.name + "_to_FLOAT16",
              {opset_v25}, [=]() -> IoData {
-               Tensor output = castlike_kernel(packed_input, float16_target);
+               Tensor packed_input = make_packed_input();
+               Tensor output = castlike_kernel.Invoke(
+                   [&](const auto &kernel) { return kernel(packed_input, float16_target); });
                return IoData{{std::move(packed_input), std::move(float16_target)},
                              {std::move(output)}};
              });
@@ -518,7 +561,7 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
         {DataType::FLOAT8E5M2, "FLOAT8E5M2"},
         {DataType::FLOAT8E5M2FNUZ, "FLOAT8E5M2FNUZ"},
     };
-    const onnx_kernels::kernel::Cast cast_k{ctx};
+    const auto cast_k = MakeReferenceKernel<onnx_kernels::kernel::Cast>(opset);
     for (const auto &v : kFloat8Variants) {
       Tensor low_target("target_type", static_cast<int32_t>(v.dtype), {1},
                         std::vector<uint8_t>(1, 0u));
@@ -534,7 +577,9 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
                std::string("test_castlike_no_saturate_FLOAT_to_") + v.name, {opset_v21},
                [=]() -> IoData {
                  Tensor input = Tensor::FromFloat("input", f8_shape, f8_fp32_values);
-                 Tensor output = cast_k(input, static_cast<int32_t>(v.dtype), /*saturate=*/false);
+                 Tensor output = cast_k.Invoke([&](const auto &kernel) {
+                   return kernel(input, static_cast<int32_t>(v.dtype), /*saturate=*/false);
+                 });
                  return IoData{{std::move(input), std::move(low_target)}, {std::move(output)}};
                });
       }
@@ -550,7 +595,9 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry, TestMode mode) {
                std::string("test_castlike_no_saturate_FLOAT16_to_") + v.name, {opset_v21},
                [=]() -> IoData {
                  Tensor input = MakeFloat16Tensor("input", f8_shape, f8_fp32_values);
-                 Tensor output = cast_k(input, static_cast<int32_t>(v.dtype), /*saturate=*/false);
+                 Tensor output = cast_k.Invoke([&](const auto &kernel) {
+                   return kernel(input, static_cast<int32_t>(v.dtype), /*saturate=*/false);
+                 });
                  return IoData{{std::move(input), std::move(low_target)}, {std::move(output)}};
                });
       }

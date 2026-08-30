@@ -16,8 +16,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 namespace {
 
-void EmitReduceProdCase(std::vector<TestCase> &registry,
-                        const onnx_kernels::kernel::ReduceProd &kernel,
+void EmitReduceProdCase(std::vector<TestCase> &registry, const auto &kernel,
                         const std::string &case_name, const std::vector<int64_t> &data_shape,
                         const std::vector<float> &data_values,
                         const std::vector<int64_t> &axes_values, bool keepdims,
@@ -36,7 +35,8 @@ void EmitReduceProdCase(std::vector<TestCase> &registry,
   Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
     Tensor data = Tensor::FromFloat("", data_shape, data_values);
     Tensor axes = Tensor::FromInt64("", {static_cast<int64_t>(axes_values.size())}, axes_values);
-    Tensor reduced = kernel(data, axes, keepdims, noop_with_empty_axes);
+    Tensor reduced = kernel.Invoke(
+        [&](const auto &kernel) { return kernel(data, axes, keepdims, noop_with_empty_axes); });
 
     return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
   });
@@ -45,8 +45,7 @@ void EmitReduceProdCase(std::vector<TestCase> &registry,
 // Emits a case where the optional ``axes`` input is omitted entirely (single
 // "data" input). With ``noop_with_empty_axes`` default-false this reduces
 // over every dimension of ``data``.
-void EmitReduceProdDefaultAxesCase(std::vector<TestCase> &registry,
-                                   const onnx_kernels::kernel::ReduceProd &kernel,
+void EmitReduceProdDefaultAxesCase(std::vector<TestCase> &registry, const auto &kernel,
                                    const std::string &case_name,
                                    const std::vector<int64_t> &data_shape,
                                    const std::vector<float> &data_values, bool keepdims) {
@@ -59,7 +58,8 @@ void EmitReduceProdDefaultAxesCase(std::vector<TestCase> &registry,
   AddAttribute<int64_t>(node, "keepdims", keepdims ? 1 : 0);
   Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
     Tensor data = Tensor::FromFloat("", data_shape, data_values);
-    Tensor reduced = kernel(data, keepdims, /*noop_with_empty_axes=*/false);
+    Tensor reduced = kernel.Invoke(
+        [&](const auto &kernel) { return kernel(data, keepdims, /*noop_with_empty_axes=*/false); });
 
     return IoData{{std::move(data)}, {std::move(reduced)}};
   });
@@ -75,8 +75,7 @@ void EmitReduceProdDefaultAxesCase(std::vector<TestCase> &registry,
 // simple reductions added in opset 18. The empty-set identity is ``1``.
 // ---------------------------------------------------------------------------
 void RegisterReduceProdCases(std::vector<TestCase> &registry, TestMode mode) {
-  const KernelContext ctx{DefaultOpset(18)};
-  const onnx_kernels::kernel::ReduceProd kernel{ctx};
+  const auto kernel = MakeReferenceKernel<onnx_kernels::kernel::ReduceProd>(DefaultOpset(18));
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -88,7 +87,9 @@ void RegisterReduceProdCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_reduceprod_default_axes_keepdims_benchmark",
            {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [kernel]() -> IoData {
              Tensor data = RandnTensor(DataType::FLOAT, {256, 256, 16}, /*seed=*/9701);
-             Tensor reduced = kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             Tensor reduced = kernel.Invoke([&](const auto &kernel) {
+               return kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             });
              return IoData{{std::move(data)}, {std::move(reduced)}};
            });
     return;

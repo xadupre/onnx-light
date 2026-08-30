@@ -33,8 +33,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterGRUCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::GRU gru_kernel{ctx};
+  const auto gru_kernel = MakeReferenceKernel<onnx_kernels::kernel::GRU>(opset);
 
   constexpr int64_t kNumGates = 3;
 
@@ -62,7 +61,8 @@ void RegisterGRUCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor x = RandnTensor(DataType::FLOAT, x_shape, 2001);
              Tensor w = RandnTensor(DataType::FLOAT, w_shape, 2002);
              Tensor r = RandnTensor(DataType::FLOAT, r_shape, 2003);
-             auto [y_unused, y_h] = gru_kernel(x, w, r);
+             auto [y_unused, y_h] =
+                 gru_kernel.Invoke([&](const auto &kernel) { return kernel(x, w, r); });
              (void)y_unused;
              return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y_h)}};
            });
@@ -97,7 +97,7 @@ void RegisterGRUCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor w = Tensor::FromFloat("", {1, kNumGates * hidden_size, input_size}, w_data);
       Tensor r = Tensor::FromFloat("", {1, kNumGates * hidden_size, hidden_size}, r_data);
 
-      auto [y_unused, y_h] = gru_kernel(x, w, r);
+      auto [y_unused, y_h] = gru_kernel.Invoke([&](const auto &kernel) { return kernel(x, w, r); });
       (void)y_unused; // Y is skipped (empty output name).
 
       return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y_h)}};
@@ -141,7 +141,8 @@ void RegisterGRUCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor r = Tensor::FromFloat("", {1, kNumGates * hidden_size, hidden_size}, r_data);
       Tensor b = Tensor::FromFloat("", {1, 2 * kNumGates * hidden_size}, b_data);
 
-      auto [y_unused, y_h] = gru_kernel(x, w, r, b);
+      auto [y_unused, y_h] =
+          gru_kernel.Invoke([&](const auto &kernel) { return kernel(x, w, r, b); });
       (void)y_unused;
 
       return IoData{{std::move(x), std::move(w), std::move(r), std::move(b)}, {std::move(y_h)}};
@@ -190,7 +191,8 @@ void RegisterGRUCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor r = Tensor::FromFloat("", {1, kNumGates * hidden_size, hidden_size}, r_data);
       Tensor b = Tensor::FromFloat("", {1, 2 * kNumGates * hidden_size}, b_data);
 
-      auto [y_unused, y_h] = gru_kernel(x, w, r, b);
+      auto [y_unused, y_h] =
+          gru_kernel.Invoke([&](const auto &kernel) { return kernel(x, w, r, b); });
       (void)y_unused;
 
       return IoData{{std::move(x), std::move(w), std::move(r), std::move(b)}, {std::move(y_h)}};
@@ -248,7 +250,8 @@ void RegisterGRUCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor w = Tensor::FromFloat("", {1, kNumGates * hidden_size, input_size}, w_data);
       Tensor r = Tensor::FromFloat("", {1, kNumGates * hidden_size, hidden_size}, r_data);
 
-      auto [y_layout0, y_h_layout0] = gru_kernel(x_layout0, w, r);
+      auto [y_layout0, y_h_layout0] =
+          gru_kernel.Invoke([&](const auto &kernel) { return kernel(x_layout0, w, r); });
 
       // Permute Y: [seq, 1, batch, hidden] -> [batch, seq, 1, hidden].
       std::vector<float> y_batchwise_data(
@@ -308,7 +311,8 @@ void RegisterGRUCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor w = Tensor::FromFloat("", {1, kNumGates * hidden_size, input_size}, w_data);
       Tensor r = Tensor::FromFloat("", {1, kNumGates * hidden_size, hidden_size}, r_data);
 
-      auto [y_unused, y_h] = gru_kernel(x, w, r, Tensor{}, Tensor{}, 0, 0, "reverse");
+      auto [y_unused, y_h] = gru_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, w, r, Tensor{}, Tensor{}, 0, 0, "reverse"); });
       (void)y_unused; // Y is skipped (empty output name).
 
       return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y_h)}};
@@ -356,7 +360,9 @@ void RegisterGRUCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor r =
           Tensor::FromFloat("", {num_directions, kNumGates * hidden_size, hidden_size}, r_data);
 
-      auto [y, y_h] = gru_kernel(x, w, r, Tensor{}, Tensor{}, 0, 0, "bidirectional");
+      auto [y, y_h] = gru_kernel.Invoke([&](const auto &kernel) {
+        return kernel(x, w, r, Tensor{}, Tensor{}, 0, 0, "bidirectional");
+      });
 
       return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y), std::move(y_h)}};
     });

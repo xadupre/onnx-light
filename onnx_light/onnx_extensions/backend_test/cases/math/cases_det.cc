@@ -12,8 +12,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Det det_kernel{ctx};
+  const auto det_kernel = MakeReferenceKernel<onnx_kernels::kernel::Det>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -24,7 +23,7 @@ void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_det_benchmark", {opset}, {512 * 64 * 64}, {512},
            [det_kernel, shape]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, shape, 439);
-             Tensor y = det_kernel(x);
+             Tensor y = det_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -38,7 +37,7 @@ void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y");
     Expect(registry, std::move(node), "test_cc_det_2d", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 1.0f, 2.0f, 3.0f});
-      Tensor y = det_kernel(x);
+      Tensor y = det_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -52,7 +51,7 @@ void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_det_nd", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat(
           "", {3, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, 2.0f, 2.0f, 1.0f, 1.0f, 3.0f, 3.0f, 1.0f});
-      Tensor y = det_kernel(x);
+      Tensor y = det_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

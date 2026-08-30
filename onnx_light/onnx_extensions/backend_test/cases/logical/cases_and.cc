@@ -20,13 +20,13 @@ namespace {
 // shape to keep the data deterministic across runs.
 void RegisterAndOnnxCase(const std::string &name, const std::vector<int64_t> &x_shape,
                          uint64_t x_seed, const std::vector<int64_t> &y_shape, uint64_t y_seed,
-                         const onnx_kernels::kernel::And &and_kernel, const OpsetId &opset,
+                         const auto &and_kernel, const OpsetId &opset,
                          std::vector<TestCase> &registry) {
   NodeProto node = MakeNode("And", {"x", "y"}, {"and"});
   Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
     Tensor x = RandBool(x_shape, x_seed);
     Tensor y = RandBool(y_shape, y_seed);
-    Tensor z = and_kernel(x, y);
+    Tensor z = and_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
 
     return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
   });
@@ -40,8 +40,7 @@ void RegisterAndOnnxCase(const std::string &name, const std::vector<int64_t> &x_
 // ---------------------------------------------------------------------------
 void RegisterAndCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(7);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::And and_kernel{ctx};
+  const auto and_kernel = MakeReferenceKernel<onnx_kernels::kernel::And>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("And", {"x", "y"}, {"z"});
@@ -52,7 +51,7 @@ void RegisterAndCases(std::vector<TestCase> &registry, TestMode mode) {
            [and_kernel, shape]() -> IoData {
              Tensor x = RandBool(shape, /*seed=*/9101);
              Tensor y = RandBool(shape, /*seed=*/9102);
-             Tensor z = and_kernel(x, y);
+             Tensor z = and_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
     return;
@@ -64,7 +63,7 @@ void RegisterAndCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_and", {opset}, [=]() -> IoData {
       Tensor x("", DataType::BOOL, {2, 2}, {1, 0, 1, 0});
       Tensor y("", DataType::BOOL, {2, 2}, {1, 1, 0, 0});
-      Tensor z = and_kernel(x, y);
+      Tensor z = and_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -76,7 +75,7 @@ void RegisterAndCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_and_bcast", {opset}, [=]() -> IoData {
       Tensor x("", DataType::BOOL, {2, 2}, {1, 0, 1, 0});
       Tensor y("", DataType::BOOL, {}, {1});
-      Tensor z = and_kernel(x, y);
+      Tensor z = and_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });

@@ -29,8 +29,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::QLinearConv qc{ctx};
+  const auto qc = MakeReferenceKernel<onnx_kernels::kernel::QLinearConv>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -63,8 +62,10 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor B;
 
              onnx_kernels::kernel::QLinearConv::Attributes attrs;
-             Tensor y = qc(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale,
-                           y_zero_point, B, attrs);
+             Tensor y = qc.Invoke([&](const auto &kernel) {
+               return kernel(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale,
+                             y_zero_point, B, attrs);
+             });
              y.name = "y";
              return IoData{{std::move(x), std::move(x_scale), std::move(x_zero_point), std::move(w),
                             std::move(w_scale), std::move(w_zero_point), std::move(y_scale),
@@ -96,10 +97,6 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor B;
 
     onnx_kernels::kernel::QLinearConv::Attributes attrs;
-    Tensor y =
-        qc(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point, B, attrs);
-    y.name = "y";
-
     NodeProto node;
     node.set_op_type("QLinearConv");
     node.add_input("x");
@@ -112,6 +109,11 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y_zero_point");
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_qlinearconv", {opset}, [=]() -> IoData {
+      Tensor y = qc.Invoke([&](const auto &kernel) {
+        return kernel(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point, B,
+                      attrs);
+      });
+      y.name = "y";
       return IoData{{std::move(x), std::move(x_scale), std::move(x_zero_point), std::move(w),
                      std::move(w_scale), std::move(w_zero_point), std::move(y_scale),
                      std::move(y_zero_point)},

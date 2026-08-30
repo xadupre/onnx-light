@@ -14,11 +14,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterGeluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Gelu gelu_kernel{ctx};
+  const auto gelu_kernel = MakeReferenceKernel<onnx_kernels::kernel::Gelu>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Gelu", gelu_kernel, "test_cc_gelu_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Gelu>("Gelu", "test_cc_gelu_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -30,7 +30,7 @@ void RegisterGeluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y");
     Expect(registry, std::move(node), "test_cc_gelu_default_1", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-      Tensor y = gelu_kernel(x);
+      Tensor y = gelu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -49,7 +49,7 @@ void RegisterGeluCases(std::vector<TestCase> &registry, TestMode mode) {
       approximate->set_s("none");
 
       Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
-      Tensor y = gelu_kernel(x, "none");
+      Tensor y = gelu_kernel.Invoke([&](const auto &kernel) { return kernel(x, "none"); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -68,7 +68,7 @@ void RegisterGeluCases(std::vector<TestCase> &registry, TestMode mode) {
       approximate->set_s("tanh");
 
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-      Tensor y = gelu_kernel(x, "tanh");
+      Tensor y = gelu_kernel.Invoke([&](const auto &kernel) { return kernel(x, "tanh"); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -87,7 +87,7 @@ void RegisterGeluCases(std::vector<TestCase> &registry, TestMode mode) {
       approximate->set_s("tanh");
 
       Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
-      Tensor y = gelu_kernel(x, "tanh");
+      Tensor y = gelu_kernel.Invoke([&](const auto &kernel) { return kernel(x, "tanh"); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -100,7 +100,7 @@ void RegisterGeluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y");
     Expect(registry, std::move(node), "test_cc_gelu_default_float16", {opset}, [=]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {3}, {-1.0f, 0.0f, 1.0f});
-      Tensor y = gelu_kernel(x);
+      Tensor y = gelu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -119,7 +119,7 @@ void RegisterGeluCases(std::vector<TestCase> &registry, TestMode mode) {
       approximate->set_s("tanh");
 
       Tensor x = MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
-      Tensor y = gelu_kernel(x, "tanh");
+      Tensor y = gelu_kernel.Invoke([&](const auto &kernel) { return kernel(x, "tanh"); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -138,7 +138,7 @@ void RegisterGeluCases(std::vector<TestCase> &registry, TestMode mode) {
         dst[i] = FloatToBfloat16Bits(vals[i]);
       }
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {4}, std::move(raw));
-      Tensor y = gelu_kernel(x);
+      Tensor y = gelu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

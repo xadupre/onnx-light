@@ -103,8 +103,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry);
 void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset13 = DefaultOpset(13);
   const OpsetId opset18 = DefaultOpset(18);
-  const KernelContext ctx{opset13};
-  const onnx_kernels::kernel::Resize resize_kernel{ctx};
+  const auto resize_kernel = MakeReferenceKernel<onnx_kernels::kernel::Resize>(opset13);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeResizeNodeScales("nearest", "asymmetric");
@@ -115,7 +114,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::Resize::Attributes attrs;
              attrs.mode = "nearest";
              attrs.coordinate_transformation_mode = "asymmetric";
-             Tensor Y = resize_kernel(X, scales, attrs);
+             Tensor Y =
+                 resize_kernel.Invoke([&](const auto &kernel) { return kernel(X, scales, attrs); });
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
            });
     return;
@@ -134,7 +134,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::Resize::Attributes attrs;
              attrs.mode = "nearest";
              attrs.coordinate_transformation_mode = "asymmetric";
-             const Tensor Y = resize_kernel(X, scales, attrs);
+             const Tensor Y =
+                 resize_kernel.Invoke([&](const auto &kernel) { return kernel(X, scales, attrs); });
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
            });
   }
@@ -150,7 +151,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::Resize::Attributes attrs;
              attrs.mode = "nearest";
              attrs.coordinate_transformation_mode = "asymmetric";
-             const Tensor Y = resize_kernel(X, scales, attrs);
+             const Tensor Y =
+                 resize_kernel.Invoke([&](const auto &kernel) { return kernel(X, scales, attrs); });
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
            });
   }
@@ -166,7 +168,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::Resize::Attributes attrs;
              attrs.mode = "nearest";
              attrs.coordinate_transformation_mode = "asymmetric";
-             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             const Tensor Y = resize_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel.ResizeSizes(X, sizes, attrs); });
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
   }
@@ -189,7 +192,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
              onnx_kernels::kernel::Resize::Attributes
                  attrs; // defaults: half_pixel + round_prefer_floor
-             const Tensor Y = resize_kernel(X, scales, attrs);
+             const Tensor Y =
+                 resize_kernel.Invoke([&](const auto &kernel) { return kernel(X, scales, attrs); });
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
            });
   }
@@ -202,7 +206,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
                                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 0.6f, 0.6f});
              onnx_kernels::kernel::Resize::Attributes attrs;
-             const Tensor Y = resize_kernel(X, scales, attrs);
+             const Tensor Y =
+                 resize_kernel.Invoke([&](const auto &kernel) { return kernel(X, scales, attrs); });
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
            });
   }
@@ -214,7 +219,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({1, 1, 7, 8});
              onnx_kernels::kernel::Resize::Attributes attrs;
-             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             const Tensor Y = resize_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel.ResizeSizes(X, sizes, attrs); });
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
   }
@@ -227,7 +233,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
                                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              const Tensor sizes = MakeSizesTensor({1, 1, 1, 3});
              onnx_kernels::kernel::Resize::Attributes attrs;
-             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             const Tensor Y = resize_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel.ResizeSizes(X, sizes, attrs); });
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
   }
@@ -245,7 +252,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::Resize::Attributes attrs;
              attrs.coordinate_transformation_mode = "align_corners";
              attrs.nearest_mode = "floor";
-             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             const Tensor Y = resize_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel.ResizeSizes(X, sizes, attrs); });
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
   }
@@ -264,7 +272,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::Resize::Attributes attrs;
              attrs.coordinate_transformation_mode = "asymmetric";
              attrs.nearest_mode = "round_prefer_ceil";
-             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             const Tensor Y = resize_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel.ResizeSizes(X, sizes, attrs); });
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
   }
@@ -281,7 +290,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::Resize::Attributes attrs;
              attrs.coordinate_transformation_mode = "half_pixel";
              attrs.nearest_mode = "ceil";
-             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             const Tensor Y = resize_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel.ResizeSizes(X, sizes, attrs); });
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
   }
@@ -295,7 +305,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
            "test_resize_upsample_scales_nearest_axes_2_3", {opset18}, [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({2.0f, 3.0f});
-             const Tensor Y = resize_kernel(X, scales, attrs);
+             const Tensor Y =
+                 resize_kernel.Invoke([&](const auto &kernel) { return kernel(X, scales, attrs); });
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
            });
   }
@@ -310,7 +321,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
            "test_resize_upsample_scales_nearest_axes_3_2", {opset18}, [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({3.0f, 2.0f});
-             const Tensor Y = resize_kernel(X, scales, attrs);
+             const Tensor Y =
+                 resize_kernel.Invoke([&](const auto &kernel) { return kernel(X, scales, attrs); });
              return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
            });
   }
@@ -324,7 +336,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
            "test_resize_upsample_sizes_nearest_axes_2_3", {opset18}, [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({7, 8});
-             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             const Tensor Y = resize_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel.ResizeSizes(X, sizes, attrs); });
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
   }
@@ -339,7 +352,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
            "test_resize_upsample_sizes_nearest_axes_3_2", {opset18}, [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({8, 7});
-             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             const Tensor Y = resize_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel.ResizeSizes(X, sizes, attrs); });
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
   }
@@ -357,7 +371,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
            "test_resize_upsample_sizes_nearest_not_larger", {opset18}, [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({7, 8});
-             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             const Tensor Y = resize_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel.ResizeSizes(X, sizes, attrs); });
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
   }
@@ -375,7 +390,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
            "test_resize_upsample_sizes_nearest_not_smaller", {opset18}, [=]() -> IoData {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({7, 8});
-             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             const Tensor Y = resize_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel.ResizeSizes(X, sizes, attrs); });
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
   }
@@ -393,7 +409,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 4},
                                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              const Tensor sizes = MakeSizesTensor({1, 3});
-             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             const Tensor Y = resize_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel.ResizeSizes(X, sizes, attrs); });
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
   }
@@ -411,7 +428,8 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 4},
                                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              const Tensor sizes = MakeSizesTensor({1, 3});
-             const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
+             const Tensor Y = resize_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel.ResizeSizes(X, sizes, attrs); });
              return IoData{{std::move(X), std::move(sizes)}, {std::move(Y)}};
            });
   }

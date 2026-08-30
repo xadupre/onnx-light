@@ -38,13 +38,13 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     t->set_raw_data(utils::ByteSpan(value.data));
 
     const OpsetId opset = DefaultOpset(13);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::Constant constant_kernel{ctx};
+    const auto constant_kernel = MakeReferenceKernel<onnx_kernels::kernel::Constant>(opset);
 
     Expect(registry, std::move(node), "test_cc_constant_benchmark", {opset},
            /*in_counts=*/{}, {kBenchmarkElementwiseSize},
            [constant_kernel, value]() mutable -> IoData {
-             Tensor y = constant_kernel(std::move(value));
+             Tensor y = constant_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(std::move(value)); });
              return IoData{/*inputs=*/{}, {std::move(y)}};
            });
     return;
@@ -69,11 +69,10 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
   t->set_raw_data(utils::ByteSpan(value.data));
 
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-
   Expect(registry, std::move(node), "test_cc_constant", {opset},
-         [ctx, value = std::move(value)]() mutable -> IoData {
-           Tensor y = onnx_kernels::kernel::Constant(ctx)(std::move(value));
+         [opset, value = std::move(value)]() mutable -> IoData {
+           Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Constant>(opset).Invoke(
+               [&](const auto &kernel) { return kernel(std::move(value)); });
            return IoData{/*inputs=*/{}, {std::move(y)}};
          });
 
@@ -120,7 +119,8 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     }
 
     Expect(registry, std::move(upstream_node), "test_constant", {opset}, [=]() -> IoData {
-      Tensor y_upstream = onnx_kernels::kernel::Constant(ctx)(std::move(values));
+      Tensor y_upstream = MakeReferenceKernel<onnx_kernels::kernel::Constant>(opset).Invoke(
+          [&](const auto &kernel) { return kernel(std::move(values)); });
       return IoData{{}, {std::move(y_upstream)}};
     });
   }

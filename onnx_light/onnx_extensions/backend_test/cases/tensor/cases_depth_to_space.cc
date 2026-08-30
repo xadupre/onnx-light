@@ -36,8 +36,7 @@ NodeProto MakeDepthToSpaceNode(int64_t blocksize, const std::string &mode) {
 // ---------------------------------------------------------------------------
 void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::DepthToSpace d2s{ctx};
+  const auto d2s = MakeReferenceKernel<onnx_kernels::kernel::DepthToSpace>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeDepthToSpaceNode(2, "DCR");
@@ -47,7 +46,7 @@ void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::DepthToSpace::Attributes attrs;
              attrs.blocksize = 2;
              attrs.mode = "DCR";
-             Tensor output = d2s(input, attrs);
+             Tensor output = d2s.Invoke([&](const auto &kernel) { return kernel(input, attrs); });
              return IoData{{std::move(input)}, {std::move(output)}};
            });
     return;
@@ -67,7 +66,8 @@ void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::DepthToSpace::Attributes attrs;
              attrs.blocksize = 2;
              attrs.mode = "DCR";
-             const Tensor output = d2s(input, attrs);
+             const Tensor output =
+                 d2s.Invoke([&](const auto &kernel) { return kernel(input, attrs); });
              return IoData{{std::move(input)}, {std::move(output)}};
            });
   }
@@ -84,7 +84,8 @@ void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::DepthToSpace::Attributes attrs;
              attrs.blocksize = 2;
              attrs.mode = "CRD";
-             const Tensor output = d2s(input, attrs);
+             const Tensor output =
+                 d2s.Invoke([&](const auto &kernel) { return kernel(input, attrs); });
              return IoData{{std::move(input)}, {std::move(output)}};
            });
   }
@@ -102,7 +103,8 @@ void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::DepthToSpace::Attributes attrs;
              attrs.blocksize = 2;
              attrs.mode = "DCR";
-             const Tensor output = d2s(input, attrs);
+             const Tensor output =
+                 d2s.Invoke([&](const auto &kernel) { return kernel(input, attrs); });
              return IoData{{std::move(input)}, {std::move(output)}};
            });
   }
@@ -123,7 +125,8 @@ void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::DepthToSpace::Attributes attrs;
              attrs.blocksize = 2;
              attrs.mode = "DCR";
-             const Tensor output = d2s(input, attrs);
+             const Tensor output =
+                 d2s.Invoke([&](const auto &kernel) { return kernel(input, attrs); });
              return IoData{{std::move(input)}, {std::move(output)}};
            });
   }
@@ -143,7 +146,8 @@ void RegisterDepthToSpaceCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::DepthToSpace::Attributes attrs;
              attrs.blocksize = 2;
              attrs.mode = "CRD";
-             const Tensor output = d2s(input, attrs);
+             const Tensor output =
+                 d2s.Invoke([&](const auto &kernel) { return kernel(input, attrs); });
              return IoData{{std::move(input)}, {std::move(output)}};
            });
   }

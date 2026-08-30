@@ -17,8 +17,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
 void EmitReduceL1L2Case(std::vector<TestCase> &registry, const std::string &op_type,
-                        const onnx_kernels::kernel::ReduceL1L2 &kernel,
-                        const std::string &case_name, const std::vector<int64_t> &data_shape,
+                        const auto &kernel, const std::string &case_name,
+                        const std::vector<int64_t> &data_shape,
                         const std::vector<float> &data_values,
                         const std::vector<int64_t> &axes_values, bool keepdims,
                         bool noop_with_empty_axes) {
@@ -46,8 +46,7 @@ void EmitReduceL1L2Case(std::vector<TestCase> &registry, const std::string &op_t
 // "data" input). With ``noop_with_empty_axes`` default-false this reduces
 // over every dimension of ``data``.
 void EmitReduceL1L2DefaultAxesCase(std::vector<TestCase> &registry, const std::string &op_type,
-                                   const onnx_kernels::kernel::ReduceL1L2 &kernel,
-                                   const std::string &case_name,
+                                   const auto &kernel, const std::string &case_name,
                                    const std::vector<int64_t> &data_shape,
                                    const std::vector<float> &data_values, bool keepdims) {
   const OpsetId opset = DefaultOpset(18);
@@ -66,8 +65,7 @@ void EmitReduceL1L2DefaultAxesCase(std::vector<TestCase> &registry, const std::s
 }
 
 void RegisterReduceL1L2Cases(std::vector<TestCase> &registry, const std::string &op_type,
-                             const onnx_kernels::kernel::ReduceL1L2 &kernel,
-                             const std::string &name_prefix) {
+                             const auto &kernel, const std::string &name_prefix) {
   const std::vector<int64_t> shape = {3, 2, 2};
   // Same ``[3, 2, 2]`` ``arange(1, 13)`` payload used by the sibling
   // ``cases_reducesum.cc`` / ``cases_reduceminmax.cc`` files and by the
@@ -112,8 +110,7 @@ void RegisterReduceL1L2Cases(std::vector<TestCase> &registry, const std::string 
 //                     cast to float32 (same seed across all reduce-op random
 //                     variants in the upstream ONNX test suite).
 void RegisterReduceL1L2OnnxCases(std::vector<TestCase> &registry, const std::string &op_type,
-                                 const onnx_kernels::kernel::ReduceL1L2 &kernel,
-                                 const std::string &onnx_prefix) {
+                                 const auto &kernel, const std::string &onnx_prefix) {
   const std::vector<int64_t> shape = {3, 2, 2};
   const std::vector<float> example_values = {1.0f, 2.0f, 3.0f, 4.0f,  5.0f,  6.0f,
                                              7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};
@@ -164,8 +161,8 @@ void RegisterReduceL1L2OnnxCases(std::vector<TestCase> &registry, const std::str
 } // namespace
 
 void RegisterReduceL1Cases(std::vector<TestCase> &registry, TestMode mode) {
-  const KernelContext ctx{DefaultOpset(18)};
-  const onnx_kernels::kernel::ReduceL1 reduce_l1_kernel{ctx};
+  const auto reduce_l1_kernel =
+      MakeReferenceKernel<onnx_kernels::kernel::ReduceL1>(DefaultOpset(18));
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -177,8 +174,9 @@ void RegisterReduceL1Cases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_reducel1_default_axes_keepdims_benchmark",
            {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [reduce_l1_kernel]() -> IoData {
              Tensor data = RandnTensor(DataType::FLOAT, {256, 256, 16}, /*seed=*/9701);
-             Tensor reduced =
-                 reduce_l1_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             Tensor reduced = reduce_l1_kernel.Invoke([&](const auto &kernel) {
+               return kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             });
              return IoData{{std::move(data)}, {std::move(reduced)}};
            });
     return;
@@ -188,8 +186,8 @@ void RegisterReduceL1Cases(std::vector<TestCase> &registry, TestMode mode) {
 }
 
 void RegisterReduceL2Cases(std::vector<TestCase> &registry, TestMode mode) {
-  const KernelContext ctx{DefaultOpset(18)};
-  const onnx_kernels::kernel::ReduceL2 reduce_l2_kernel{ctx};
+  const auto reduce_l2_kernel =
+      MakeReferenceKernel<onnx_kernels::kernel::ReduceL2>(DefaultOpset(18));
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -201,8 +199,9 @@ void RegisterReduceL2Cases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_reducel2_default_axes_keepdims_benchmark",
            {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [reduce_l2_kernel]() -> IoData {
              Tensor data = RandnTensor(DataType::FLOAT, {256, 256, 16}, /*seed=*/9701);
-             Tensor reduced =
-                 reduce_l2_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             Tensor reduced = reduce_l2_kernel.Invoke([&](const auto &kernel) {
+               return kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             });
              return IoData{{std::move(data)}, {std::move(reduced)}};
            });
     return;

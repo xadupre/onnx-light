@@ -25,7 +25,6 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
   //      [0.0, 1.0]]    (node 2 contributes to class 1)
 
   const OpsetId opset("ai.onnx.ml", 1);
-  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
 
   if (mode == TestMode::BENCHMARK) {
@@ -95,17 +94,25 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
     const std::vector<int64_t> class_ids{0, 1};
     const std::vector<float> class_weights{1.0f, 1.0f};
 
-    const onnx_kernels::kernel::TreeEnsembleClassifier cls{
-        ctx,           nodes_treeids,     nodes_nodeids,      nodes_featureids, nodes_values,
-        nodes_modes,   nodes_truenodeids, nodes_falsenodeids, nodes_missing,    class_treeids,
-        class_nodeids, class_ids,         class_weights};
+    const auto cls =
+        MakeReferenceKernel<onnx_kernels::kernel::TreeEnsembleClassifier, std::vector<int64_t>,
+                            std::vector<int64_t>, std::vector<int64_t>, std::vector<float>,
+                            ParamStrings, std::vector<int64_t>, std::vector<int64_t>,
+                            std::vector<int64_t>, std::vector<int64_t>, std::vector<int64_t>,
+                            std::vector<int64_t>, std::vector<float>>(
+            opset, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
+            nodes_truenodeids, nodes_falsenodeids, nodes_missing, class_treeids, class_nodeids,
+            class_ids, class_weights);
 
     Expect(registry, std::move(node), "test_cc_treeensembleclassifier_int64_binary_benchmark",
            {default_opset, opset}, {8192}, {8192, 16384}, [cls]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {8192, 1}, 2721);
-             auto [y, z] = cls.operator()<float>(x,
-                                                 /*classlabels_int64s=*/std::vector<int64_t>{0, 1},
-                                                 /*base_values=*/{}, /*post_transform=*/"NONE");
+             auto [y, z] = cls.Invoke([&](const auto &kernel) {
+               return kernel.template operator()<float>(
+                   x,
+                   /*classlabels_int64s=*/std::vector<int64_t>{0, 1},
+                   /*base_values=*/{}, /*post_transform=*/"NONE");
+             });
              return IoData{{std::move(x)}, {std::move(y), std::move(z)}};
            });
     return;
@@ -177,17 +184,25 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
   const std::vector<int64_t> class_ids{0, 1};
   const std::vector<float> class_weights{1.0f, 1.0f};
 
-  const onnx_kernels::kernel::TreeEnsembleClassifier cls{
-      ctx,           nodes_treeids,     nodes_nodeids,      nodes_featureids, nodes_values,
-      nodes_modes,   nodes_truenodeids, nodes_falsenodeids, nodes_missing,    class_treeids,
-      class_nodeids, class_ids,         class_weights};
+  const auto cls =
+      MakeReferenceKernel<onnx_kernels::kernel::TreeEnsembleClassifier, std::vector<int64_t>,
+                          std::vector<int64_t>, std::vector<int64_t>, std::vector<float>,
+                          ParamStrings, std::vector<int64_t>, std::vector<int64_t>,
+                          std::vector<int64_t>, std::vector<int64_t>, std::vector<int64_t>,
+                          std::vector<int64_t>, std::vector<float>>(
+          opset, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
+          nodes_truenodeids, nodes_falsenodeids, nodes_missing, class_treeids, class_nodeids,
+          class_ids, class_weights);
 
   Expect(registry, std::move(node), "test_cc_treeensembleclassifier_int64_binary",
          {default_opset, opset}, [=]() -> IoData {
            Tensor x = Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f});
-           auto yz = cls.operator()<float>(x,
-                                           /*classlabels_int64s=*/std::vector<int64_t>{0, 1},
-                                           /*base_values=*/{}, /*post_transform=*/"NONE");
+           auto yz = cls.Invoke([&](const auto &kernel) {
+             return kernel.template operator()<float>(
+                 x,
+                 /*classlabels_int64s=*/std::vector<int64_t>{0, 1},
+                 /*base_values=*/{}, /*post_transform=*/"NONE");
+           });
            return IoData{{std::move(x)}, {std::move(yz.first), std::move(yz.second)}};
          });
 }

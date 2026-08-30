@@ -31,8 +31,7 @@ NodeProto MakeCompressNode(std::optional<int64_t> axis) {
 
 void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Compress compress_kernel{ctx};
+  const auto compress_kernel = MakeReferenceKernel<onnx_kernels::kernel::Compress>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeCompressNode(std::nullopt);
@@ -46,7 +45,8 @@ void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
              }
              Tensor condition =
                  Tensor::FromBool("condition", {kBenchmarkElementwiseSize}, condition_values);
-             Tensor output = compress_kernel(input, condition, std::nullopt);
+             Tensor output = compress_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(input, condition, std::nullopt); });
              return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
            });
     return;
@@ -59,7 +59,8 @@ void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor input =
                  Tensor::FromFloat("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
              Tensor condition = Tensor::FromBool("condition", {6}, {1, 0, 1, 1, 0, 0});
-             Tensor output = compress_kernel(input, condition, std::nullopt);
+             Tensor output = compress_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(input, condition, std::nullopt); });
              return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
            });
   }
@@ -69,7 +70,8 @@ void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, MakeCompressNode(0), "test_cc_compress_axis0", {opset}, [=]() -> IoData {
       Tensor input = Tensor::FromFloat("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       Tensor condition = Tensor::FromBool("condition", {3}, {1, 0, 1});
-      Tensor output = compress_kernel(input, condition, 0);
+      Tensor output =
+          compress_kernel.Invoke([&](const auto &kernel) { return kernel(input, condition, 0); });
       return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
     });
   }
@@ -79,7 +81,8 @@ void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, MakeCompressNode(1), "test_cc_compress_axis1", {opset}, [=]() -> IoData {
       Tensor input = Tensor::FromFloat("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       Tensor condition = Tensor::FromBool("condition", {2}, {0, 1});
-      Tensor output = compress_kernel(input, condition, 1);
+      Tensor output =
+          compress_kernel.Invoke([&](const auto &kernel) { return kernel(input, condition, 1); });
       return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
     });
   }
@@ -90,7 +93,8 @@ void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
         registry, MakeCompressNode(-1), "test_cc_compress_negative_axis", {opset}, [=]() -> IoData {
           Tensor input = Tensor::FromFloat("input", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
           Tensor condition = Tensor::FromBool("condition", {3}, {1, 0, 1});
-          Tensor output = compress_kernel(input, condition, -1);
+          Tensor output = compress_kernel.Invoke(
+              [&](const auto &kernel) { return kernel(input, condition, -1); });
           return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
         });
   }
@@ -102,7 +106,8 @@ void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor input = Tensor::FromFloat("input", {4, 2},
                                               {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              Tensor condition = Tensor::FromBool("condition", {2}, {1, 0});
-             Tensor output = compress_kernel(input, condition, 0);
+             Tensor output = compress_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(input, condition, 0); });
              return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
            });
   }
@@ -112,7 +117,8 @@ void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, MakeCompressNode(0), "test_cc_compress_int64", {opset}, [=]() -> IoData {
       Tensor input = Tensor::FromInt64("input", {3}, {10, 20, 30});
       Tensor condition = Tensor::FromBool("condition", {3}, {0, 1, 1});
-      Tensor output = compress_kernel(input, condition, 0);
+      Tensor output =
+          compress_kernel.Invoke([&](const auto &kernel) { return kernel(input, condition, 0); });
       return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
     });
   }
@@ -123,7 +129,8 @@ void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, MakeCompressNode(0), "test_cc_compress_0", {opset}, [=]() -> IoData {
       Tensor input = Tensor::FromFloat("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       Tensor condition = Tensor::FromBool("condition", {3}, {0, 1, 1});
-      Tensor output = compress_kernel(input, condition, 0);
+      Tensor output =
+          compress_kernel.Invoke([&](const auto &kernel) { return kernel(input, condition, 0); });
       return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
     });
   }
@@ -134,7 +141,8 @@ void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, MakeCompressNode(1), "test_cc_compress_1", {opset}, [=]() -> IoData {
       Tensor input = Tensor::FromFloat("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       Tensor condition = Tensor::FromBool("condition", {2}, {0, 1});
-      Tensor output = compress_kernel(input, condition, 1);
+      Tensor output =
+          compress_kernel.Invoke([&](const auto &kernel) { return kernel(input, condition, 1); });
       return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
     });
   }
@@ -148,7 +156,8 @@ void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor input =
                  Tensor::FromFloat("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
              Tensor condition = Tensor::FromBool("condition", {5}, {0, 1, 0, 0, 1});
-             Tensor output = compress_kernel(input, condition, std::nullopt);
+             Tensor output = compress_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(input, condition, std::nullopt); });
              return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
            });
   }

@@ -76,8 +76,7 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &case_name,
 void RegisterNonMaxSuppressionCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     const OpsetId opset = DefaultOpset(11);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::NonMaxSuppression nms_kernel{ctx};
+    const auto nms_kernel = MakeReferenceKernel<onnx_kernels::kernel::NonMaxSuppression>(opset);
     const int64_t num_boxes = 2000;
     const int64_t num_classes = 10;
     NodeProto node = MakeNmsNode();
@@ -102,7 +101,9 @@ void RegisterNonMaxSuppressionCases(std::vector<TestCase> &registry, TestMode mo
              Tensor iou_thr = Tensor::FromFloat("", {1}, {0.5f});
              Tensor score_thr = Tensor::FromFloat("", {1}, {0.0f});
              onnx_kernels::kernel::NonMaxSuppression::Attributes attrs;
-             Tensor selected = nms_kernel(boxes, scores, &max_out, &iou_thr, &score_thr, attrs);
+             Tensor selected = nms_kernel.Invoke([&](const auto &kernel) {
+               return kernel(boxes, scores, &max_out, &iou_thr, &score_thr, attrs);
+             });
              return IoData{{std::move(boxes), std::move(scores), std::move(max_out),
                             std::move(iou_thr), std::move(score_thr)},
                            {std::move(selected)}};

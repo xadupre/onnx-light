@@ -21,8 +21,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterGroupNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(21);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::GroupNormalization groupnorm_kernel{ctx};
+  const auto groupnorm_kernel =
+      MakeReferenceKernel<onnx_kernels::kernel::GroupNormalization>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -43,7 +43,8 @@ void RegisterGroupNormalizationCases(std::vector<TestCase> &registry, TestMode m
              Tensor x = RandnTensor(DataType::FLOAT, {N, C, H, W}, 1901);
              Tensor scale = RandnTensor(DataType::FLOAT, {C}, 1902);
              Tensor bias = RandnTensor(DataType::FLOAT, {C}, 1903);
-             Tensor y = groupnorm_kernel(x, scale, bias, /*num_groups=*/2);
+             Tensor y = groupnorm_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, scale, bias, /*num_groups=*/2); });
              return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
            });
     return;
@@ -75,7 +76,8 @@ void RegisterGroupNormalizationCases(std::vector<TestCase> &registry, TestMode m
              Tensor scale = Tensor::FromFloat("", {C}, {0.5f, 1.0f, 1.5f, 2.0f});
              Tensor bias = Tensor::FromFloat("", {C}, {-0.25f, 0.0f, 0.25f, 0.5f});
 
-             Tensor y = groupnorm_kernel(x, scale, bias, /*num_groups=*/2);
+             Tensor y = groupnorm_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, scale, bias, /*num_groups=*/2); });
 
              return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
            });
@@ -106,7 +108,9 @@ void RegisterGroupNormalizationCases(std::vector<TestCase> &registry, TestMode m
              Tensor scale = Tensor::FromFloat("", {C}, {0.5f, 1.0f, 1.5f, 2.0f});
              Tensor bias = Tensor::FromFloat("", {C}, {-0.25f, 0.0f, 0.25f, 0.5f});
 
-             Tensor y = groupnorm_kernel(x, scale, bias, /*num_groups=*/2, 1e-2f);
+             Tensor y = groupnorm_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, scale, bias, /*num_groups=*/2, 1e-2f);
+             });
 
              return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
            });

@@ -12,9 +12,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterArrayFeatureExtractorCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
-  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const onnx_kernels::kernel::ArrayFeatureExtractor afe{ctx};
+  const auto afe = MakeReferenceKernel<onnx_kernels::kernel::ArrayFeatureExtractor>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -28,7 +27,8 @@ void RegisterArrayFeatureExtractorCases(std::vector<TestCase> &registry, TestMod
            {default_opset, opset}, {32768, 3}, {24576}, [afe]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {8192, 4}, 2701);
              Tensor y = Tensor::FromInt64("", {3}, {0, 2, 3});
-             Tensor z = afe.operator()<float>(x, y);
+             Tensor z = afe.Invoke(
+                 [&](const auto &kernel) { return kernel.template operator()<float>(x, y); });
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
     return;
@@ -47,7 +47,8 @@ void RegisterArrayFeatureExtractorCases(std::vector<TestCase> &registry, TestMod
                "", {3, 4},
                {0.0f, 1.0f, 2.0f, 3.0f, 10.0f, 11.0f, 12.0f, 13.0f, 20.0f, 21.0f, 22.0f, 23.0f});
            Tensor y = Tensor::FromInt64("", {3}, {0, 2, 3});
-           Tensor z = afe.operator()<float>(x, y);
+           Tensor z = afe.Invoke(
+               [&](const auto &kernel) { return kernel.template operator()<float>(x, y); });
            return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
          });
 }

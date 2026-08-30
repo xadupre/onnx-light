@@ -13,8 +13,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::MatMul matmul_kernel{ctx};
+  const auto matmul_kernel = MakeReferenceKernel<onnx_kernels::kernel::MatMul>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -28,7 +27,7 @@ void RegisterMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
            [matmul_kernel, shape]() -> IoData {
              Tensor a = RandnTensor(DataType::FLOAT, shape, 435);
              Tensor b = RandnTensor(DataType::FLOAT, shape, 436);
-             Tensor y = matmul_kernel(a, b);
+             Tensor y = matmul_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
              return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
            });
     return;
@@ -44,7 +43,7 @@ void RegisterMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_matmul_2d", {opset}, [=]() -> IoData {
       Tensor a = RandnTensor(DataType::FLOAT, {2, 3}, /*seed=*/21);
       Tensor b = RandnTensor(DataType::FLOAT, {3, 4}, /*seed=*/22);
-      Tensor y = matmul_kernel(a, b);
+      Tensor y = matmul_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
@@ -59,7 +58,7 @@ void RegisterMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_matmul_vector_matrix", {opset}, [=]() -> IoData {
       Tensor a = RandnTensor(DataType::FLOAT, {3}, /*seed=*/23);
       Tensor b = RandnTensor(DataType::FLOAT, {3, 2}, /*seed=*/24);
-      Tensor y = matmul_kernel(a, b);
+      Tensor y = matmul_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
@@ -74,7 +73,7 @@ void RegisterMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_matmul_batch_broadcast", {opset}, [=]() -> IoData {
       Tensor a = RandnTensor(DataType::FLOAT, {2, 2, 3}, /*seed=*/25);
       Tensor b = RandnTensor(DataType::FLOAT, {1, 3, 4}, /*seed=*/26);
-      Tensor y = matmul_kernel(a, b);
+      Tensor y = matmul_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
@@ -95,7 +94,7 @@ void RegisterMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_matmul_1d_1d", {opset}, [=]() -> IoData {
       Tensor a = RandnTensor(DataType::FLOAT, {3}, /*seed=*/27);
       Tensor b = RandnTensor(DataType::FLOAT, {3}, /*seed=*/28);
-      Tensor y = matmul_kernel(a, b);
+      Tensor y = matmul_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
@@ -111,7 +110,7 @@ void RegisterMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_matmul_1d_3d", {opset}, [=]() -> IoData {
       Tensor a = RandnTensor(DataType::FLOAT, {4}, /*seed=*/29);
       Tensor b = RandnTensor(DataType::FLOAT, {2, 4, 3}, /*seed=*/30);
-      Tensor y = matmul_kernel(a, b);
+      Tensor y = matmul_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
@@ -126,7 +125,7 @@ void RegisterMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_matmul_3d", {opset}, [=]() -> IoData {
       Tensor a = RandnTensor(DataType::FLOAT, {2, 3, 4}, /*seed=*/31);
       Tensor b = RandnTensor(DataType::FLOAT, {2, 4, 3}, /*seed=*/32);
-      Tensor y = matmul_kernel(a, b);
+      Tensor y = matmul_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
@@ -141,7 +140,7 @@ void RegisterMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_matmul_4d", {opset}, [=]() -> IoData {
       Tensor a = RandnTensor(DataType::FLOAT, {1, 2, 3, 4}, /*seed=*/33);
       Tensor b = RandnTensor(DataType::FLOAT, {1, 2, 4, 3}, /*seed=*/34);
-      Tensor y = matmul_kernel(a, b);
+      Tensor y = matmul_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
@@ -157,7 +156,7 @@ void RegisterMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_matmul_4d_1d", {opset}, [=]() -> IoData {
       Tensor a = RandnTensor(DataType::FLOAT, {2, 3, 4, 5}, /*seed=*/35);
       Tensor b = RandnTensor(DataType::FLOAT, {5}, /*seed=*/36);
-      Tensor y = matmul_kernel(a, b);
+      Tensor y = matmul_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
@@ -173,7 +172,7 @@ void RegisterMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_matmul_bcast", {opset}, [=]() -> IoData {
       Tensor a = RandnTensor(DataType::FLOAT, {2, 3, 4}, /*seed=*/37);
       Tensor b = RandnTensor(DataType::FLOAT, {4, 5}, /*seed=*/38);
-      Tensor y = matmul_kernel(a, b);
+      Tensor y = matmul_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }

@@ -20,11 +20,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterAcosCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Acos acos_kernel{ctx};
+  const auto acos_kernel = MakeReferenceKernel<onnx_kernels::kernel::Acos>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Acos", acos_kernel, "test_cc_acos_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Acos>("Acos", "test_cc_acos_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -35,7 +35,7 @@ void RegisterAcosCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_acos", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -0.5f, 0.0f, 0.25f, 0.5f, 1.0f});
-      Tensor y = acos_kernel(x);
+      Tensor y = acos_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -52,7 +52,7 @@ void RegisterAcosCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_acos_example", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {3}, {-0.5f, 0.0f, 0.5f});
-      Tensor y = acos_kernel(x);
+      Tensor y = acos_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -65,7 +65,7 @@ void RegisterAcosCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_acos", {opset}, [=]() -> IoData {
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = Tensor::FromFloat("", shape, Rand<float>(shape, /*seed=*/1));
-      Tensor y = acos_kernel(x);
+      Tensor y = acos_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

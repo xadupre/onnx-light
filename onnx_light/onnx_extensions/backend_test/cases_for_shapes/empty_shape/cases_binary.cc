@@ -45,8 +45,7 @@ void RegisterBinaryEmptyShape(std::vector<TestCase> &registry, const char *op_ty
                               int opset_version, const std::string &test_name_stem,
                               int second_input_kind = kSecondInputDefault) {
   const OpsetId opset = DefaultOpset(opset_version);
-  const onnx_kernels::kernel::KernelContext ctx{opset};
-  const Kernel kk{ctx};
+  const auto kk = MakeReferenceKernel<Kernel>(opset);
 
   const char *second_input_name = (second_input_kind == kSecondInputSlope) ? "slope" : "y";
   const char *output_name = (second_input_kind == kSecondInputSlope) ? "y" : "z";
@@ -71,10 +70,14 @@ void RegisterBinaryEmptyShape(std::vector<TestCase> &registry, const char *op_ty
 
     Tensor x = Tensor::FromFloat("", c.shape, data_x);
     Tensor y = Tensor::FromFloat("", c.shape, data_y);
-    Tensor z = kk(x, y);
-
     const std::string name = "test_cc_" + test_name_stem + "_empty_shape_" + c.suffix;
-    Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry, TestCaseTag::EMPTY_SHAPE);
+    Expect(
+        registry, std::move(node), name, {opset},
+        [=]() -> IoData {
+          Tensor z = kk.Invoke([&](const auto &kernel) { return kernel(x, y); });
+          return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+        },
+        "backend-test", TestCaseTag::EMPTY_SHAPE);
   }
 }
 

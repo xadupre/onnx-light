@@ -44,8 +44,7 @@ Tensor MakeFloatTensor(const std::string &name, const std::vector<int64_t> &shap
 
 // Registers a single LayerNormalization case named ``test_cc_<base>`` with
 // inputs ``[X, W, B]`` and outputs ``[Y, Mean, InvStdDev]``.
-void RegisterCase(std::vector<TestCase> &registry,
-                  const onnx_kernels::kernel::LayerNormalization &kernel, const OpsetId &opset,
+void RegisterCase(std::vector<TestCase> &registry, const auto &kernel, const OpsetId &opset,
                   const std::string &base, const std::vector<int64_t> &x_shape, int64_t axis,
                   bool include_axis_attr, float epsilon, bool include_epsilon_attr) {
   // Normalized shape = X.shape[axis:].
@@ -81,8 +80,8 @@ void RegisterCase(std::vector<TestCase> &registry,
 
 void RegisterLayerNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(17);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::LayerNormalization layernorm_kernel{ctx};
+  const auto layernorm_kernel =
+      MakeReferenceKernel<onnx_kernels::kernel::LayerNormalization>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     constexpr float kDefaultEpsilon = 1e-5f;
@@ -105,7 +104,8 @@ void RegisterLayerNormalizationCases(std::vector<TestCase> &registry, TestMode m
              Tensor x = MakeFloatTensor("", x_shape, 0.05f, -0.5f);
              Tensor w = MakeFloatTensor("", normalized_shape, 0.02f, 0.5f);
              Tensor b = MakeFloatTensor("", normalized_shape, 0.01f, -0.25f);
-             auto [y, mean, inv_std_dev] = layernorm_kernel(x, w, b, /*axis=*/0, kDefaultEpsilon);
+             auto [y, mean, inv_std_dev] = layernorm_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, w, b, /*axis=*/0, kDefaultEpsilon); });
              return IoData{{std::move(x), std::move(w), std::move(b)},
                            {std::move(y), std::move(mean), std::move(inv_std_dev)}};
            });

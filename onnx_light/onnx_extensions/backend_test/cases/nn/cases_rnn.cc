@@ -32,8 +32,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::RNN rnn_kernel{ctx};
+  const auto rnn_kernel = MakeReferenceKernel<onnx_kernels::kernel::RNN>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     const int64_t seq_length = 64;
@@ -59,7 +58,8 @@ void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
           Tensor x = RandnTensor(DataType::FLOAT, x_shape, 2001);
           Tensor w = RandnTensor(DataType::FLOAT, w_shape, 2002);
           Tensor r = RandnTensor(DataType::FLOAT, r_shape, 2003);
-          auto [y_unused, y_h] = rnn_kernel(x, w, r);
+          auto [y_unused, y_h] =
+              rnn_kernel.Invoke([&](const auto &kernel) { return kernel(x, w, r); });
           (void)y_unused;
           return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y_h)}};
         });
@@ -98,7 +98,7 @@ void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor w = Tensor::FromFloat("", {1, hidden_size, input_size}, w_data);
       Tensor r = Tensor::FromFloat("", {1, hidden_size, hidden_size}, r_data);
 
-      auto [y_unused, y_h] = rnn_kernel(x, w, r);
+      auto [y_unused, y_h] = rnn_kernel.Invoke([&](const auto &kernel) { return kernel(x, w, r); });
       (void)y_unused; // Y is skipped (empty output name).
 
       return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y_h)}};
@@ -151,7 +151,8 @@ void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor b = Tensor::FromFloat("", {1, 2 * hidden_size}, b_data);
              Tensor h0 = Tensor::FromFloat("", {1, batch_size, hidden_size}, h0_data);
 
-             auto [y, y_h] = rnn_kernel(x, w, r, b, h0);
+             auto [y, y_h] =
+                 rnn_kernel.Invoke([&](const auto &kernel) { return kernel(x, w, r, b, h0); });
 
              return IoData{{std::move(x), std::move(w), std::move(r), std::move(b), std::move(h0)},
                            {std::move(y), std::move(y_h)}};
@@ -197,7 +198,8 @@ void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor r = Tensor::FromFloat("", {1, hidden_size, hidden_size}, r_data);
       Tensor b = Tensor::FromFloat("", {1, 2 * hidden_size}, b_data);
 
-      auto [y_unused, y_h] = rnn_kernel(x, w, r, b);
+      auto [y_unused, y_h] =
+          rnn_kernel.Invoke([&](const auto &kernel) { return kernel(x, w, r, b); });
       (void)y_unused; // Y is skipped (empty output name).
 
       return IoData{{std::move(x), std::move(w), std::move(r), std::move(b)}, {std::move(y_h)}};
@@ -253,7 +255,8 @@ void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor w = Tensor::FromFloat("", {1, hidden_size, input_size}, w_data);
       Tensor r = Tensor::FromFloat("", {1, hidden_size, hidden_size}, r_data);
 
-      auto [y_layout0, y_h_layout0] = rnn_kernel(x_layout0, w, r);
+      auto [y_layout0, y_h_layout0] =
+          rnn_kernel.Invoke([&](const auto &kernel) { return kernel(x_layout0, w, r); });
 
       // Permute Y: [seq, 1, batch, hidden] -> [batch, seq, 1, hidden].
       std::vector<float> y_batchwise_data(
@@ -311,7 +314,8 @@ void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor w = Tensor::FromFloat("", {1, hidden_size, input_size}, w_data);
       Tensor r = Tensor::FromFloat("", {1, hidden_size, hidden_size}, r_data);
 
-      auto [y_unused, y_h] = rnn_kernel(x, w, r, Tensor{}, Tensor{}, 0, "reverse");
+      auto [y_unused, y_h] = rnn_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, w, r, Tensor{}, Tensor{}, 0, "reverse"); });
       (void)y_unused; // Y is skipped (empty output name).
 
       return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y_h)}};
@@ -356,7 +360,9 @@ void RegisterRNNCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor w = Tensor::FromFloat("", {num_directions, hidden_size, input_size}, w_data);
       Tensor r = Tensor::FromFloat("", {num_directions, hidden_size, hidden_size}, r_data);
 
-      auto [y, y_h] = rnn_kernel(x, w, r, Tensor{}, Tensor{}, 0, "bidirectional");
+      auto [y, y_h] = rnn_kernel.Invoke([&](const auto &kernel) {
+        return kernel(x, w, r, Tensor{}, Tensor{}, 0, "bidirectional");
+      });
 
       return IoData{{std::move(x), std::move(w), std::move(r)}, {std::move(y), std::move(y_h)}};
     });

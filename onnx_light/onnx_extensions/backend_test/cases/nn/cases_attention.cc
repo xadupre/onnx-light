@@ -281,11 +281,9 @@ Tensor MakeQ_1_4_2_2_gqa() {
                             1.0f, 1.0f, 0.0f, 0.5f, -0.5f});
 }
 
-void RegisterAttentionBenchmark(std::vector<TestCase> &registry,
-                                const onnx_kernels::kernel::Attention &attention,
-                                const OpsetId &opset, const std::string &name, int64_t query_heads,
-                                int64_t kv_heads, int64_t query_length, int64_t kv_length,
-                                bool causal) {
+void RegisterAttentionBenchmark(std::vector<TestCase> &registry, const OpsetId &opset,
+                                const std::string &name, int64_t query_heads, int64_t kv_heads,
+                                int64_t query_length, int64_t kv_length, bool causal) {
   constexpr int64_t batch = 1;
   constexpr int64_t head_size = 64;
   const std::vector<int64_t> q_shape = {batch, query_heads, query_length, head_size};
@@ -300,11 +298,12 @@ void RegisterAttentionBenchmark(std::vector<TestCase> &registry,
   onnx_kernels::kernel::Attention::Attributes attributes;
   attributes.is_causal = causal;
   Expect(registry, std::move(node), name, {opset}, {q_count, kv_count, kv_count}, {q_count},
-         [attention, attributes, q_shape, kv_shape, q_count, kv_count]() -> IoData {
+         [opset, attributes, q_shape, kv_shape, q_count, kv_count]() -> IoData {
            Tensor Q = RandnTensor(DataType::FLOAT, q_shape, 2501 + q_count);
            Tensor K = RandnTensor(DataType::FLOAT, kv_shape, 2502 + kv_count);
            Tensor V = RandnTensor(DataType::FLOAT, kv_shape, 2503 + kv_count);
-           Tensor Y = attention(Q, K, V, attributes).Y;
+           Tensor Y =
+               MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attributes).Y;
            return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
          });
 }
@@ -313,23 +312,20 @@ void RegisterAttentionBenchmark(std::vector<TestCase> &registry,
 
 void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(23);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Attention attention{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    RegisterAttentionBenchmark(registry, attention, opset,
-                               "test_cc_attention_prefill_mha_benchmark", 12, 12, 128, 128, true);
-    RegisterAttentionBenchmark(registry, attention, opset,
-                               "test_cc_attention_prefill_gqa_benchmark", 16, 4, 128, 128, true);
-    RegisterAttentionBenchmark(registry, attention, opset,
-                               "test_cc_attention_prefill_mqa_benchmark", 16, 1, 128, 128, true);
-    RegisterAttentionBenchmark(registry, attention, opset,
-                               "test_cc_attention_decode_mha_128_benchmark", 12, 12, 1, 128, false);
-    RegisterAttentionBenchmark(registry, attention, opset,
-                               "test_cc_attention_decode_gqa_128_benchmark", 16, 4, 1, 128, false);
-    RegisterAttentionBenchmark(registry, attention, opset,
-                               "test_cc_attention_decode_mqa_1024_benchmark", 16, 1, 1, 1024,
-                               false);
+    RegisterAttentionBenchmark(registry, opset, "test_cc_attention_prefill_mha_benchmark", 12, 12,
+                               128, 128, true);
+    RegisterAttentionBenchmark(registry, opset, "test_cc_attention_prefill_gqa_benchmark", 16, 4,
+                               128, 128, true);
+    RegisterAttentionBenchmark(registry, opset, "test_cc_attention_prefill_mqa_benchmark", 16, 1,
+                               128, 128, true);
+    RegisterAttentionBenchmark(registry, opset, "test_cc_attention_decode_mha_128_benchmark", 12,
+                               12, 1, 128, false);
+    RegisterAttentionBenchmark(registry, opset, "test_cc_attention_decode_gqa_128_benchmark", 16, 4,
+                               1, 128, false);
+    RegisterAttentionBenchmark(registry, opset, "test_cc_attention_decode_mqa_1024_benchmark", 16,
+                               1, 1, 1024, false);
     return;
   }
 
@@ -339,9 +335,9 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = MakeQ_1_2_2_2_basic();
     Tensor K = MakeKV_basic_K();
     Tensor V = MakeKV_basic_V();
-    Tensor Y = attention(Q, K, V);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     Expect(registry, std::move(node), "test_cc_attention_4d", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V);
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -351,9 +347,9 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = MakeQ_1_4_2_2_gqa();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
-    Tensor Y = attention(Q, K, V);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     Expect(registry, std::move(node), "test_cc_attention_4d_gqa", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V);
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -368,10 +364,10 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 1e-2f;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddFloat(node, "scale", 1e-2f);
     Expect(registry, std::move(node), "test_cc_attention_4d_scaled", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -382,10 +378,10 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q = MakeQ_1_2_2_2();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_3();
-    Tensor Y = attention(Q, K, V);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     Expect(registry, std::move(node), "test_cc_attention_4d_diff_heads_sizes", {opset},
            [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V);
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -401,10 +397,10 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor V = MakeV_1_2_3_2();
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "is_causal", 1);
     Expect(registry, std::move(node), "test_cc_attention_4d_causal", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -417,11 +413,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor mask = Tensor::FromFloat("", {1, 2, 2, 3},
                                     {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, -0.1f,  // head 0
                                      -0.2f, 0.3f, 0.0f, 0.0f, -0.1f, 0.4f}); // head 1
-    Tensor Y = attention(Q, K, V, /*scale=*/0.5f, mask);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
     Expect(registry, std::move(node), "test_cc_attention_4d_attn_mask_4d", {opset},
            [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, /*scale=*/0.5f, mask);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
                            {std::move(Y)}};
            });
@@ -433,11 +430,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
     Tensor mask = Tensor::FromFloat("", {1, 2, 3}, {0.0f, -1.0f, 0.5f, 0.2f, 0.0f, -0.4f});
-    Tensor Y = attention(Q, K, V, /*scale=*/0.5f, mask);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
     Expect(registry, std::move(node), "test_cc_attention_4d_attn_mask_3d", {opset},
            [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, /*scale=*/0.5f, mask);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
                            {std::move(Y)}};
            });
@@ -450,10 +448,11 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
     Tensor mask = Tensor::FromFloat("", {2, 3}, {0.0f, -0.5f, -1.0f, 0.5f, 0.0f, -0.2f});
-    Tensor Y = attention(Q, K, V, /*scale=*/0.5f, mask);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
     Expect(registry, std::move(node), "test_cc_attention_4d_attn_mask", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V,
+                                                                             /*scale=*/0.5f, mask);
       return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)}, {std::move(Y)}};
     });
   }
@@ -469,14 +468,15 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
-    Expect(registry, std::move(node), "test_cc_attention_4d_attn_mask_bool", {opset},
-           [=]() -> IoData {
-             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
-                           {std::move(Y)}};
-           });
+    Expect(
+        registry, std::move(node), "test_cc_attention_4d_attn_mask_bool", {opset}, [=]() -> IoData {
+          Tensor Y =
+              MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs, &mask).Y;
+          return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
+                        {std::move(Y)}};
+        });
   }
 
   // Case 10: ``softcap > 0``. ``softcap * tanh(s / softcap)`` is applied
@@ -490,11 +490,11 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.has_scale = true;
     attrs.scale = 1.0f;
     attrs.softcap = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddFloat(node, "scale", 1.0f);
     AddFloat(node, "softcap", 0.5f);
     Expect(registry, std::move(node), "test_cc_attention_4d_softcap", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -513,11 +513,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
     onnx_kernels::kernel::Attention::Attributes attrs;
-    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
     Expect(registry, std::move(node), "test_cc_attention_4d_with_past_and_present", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(past_key),
                             std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value)}};
@@ -532,10 +533,10 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor V = MakeV_1_2_3_2();
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 0;
-    auto r = attention(Q, K, V, attrs);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y", "", "", "qk_matmul_output"});
     Expect(registry, std::move(node), "test_cc_attention_4d_with_qk_matmul", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs);
              return IoData{{std::move(Q), std::move(K), std::move(V)},
                            {std::move(r.Y), std::move(r.qk_matmul_output)}};
            });
@@ -551,13 +552,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.qk_matmul_output_mode = 1;
-    auto r = attention(Q, K, V, attrs, &mask);
     NodeProto node =
         MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y", "", "", "qk_matmul_output"});
     AddFloat(node, "scale", 0.5f);
     AddInt(node, "qk_matmul_output_mode", 1);
     Expect(registry, std::move(node), "test_cc_attention_4d_with_qk_matmul_bias", {opset},
            [=]() -> IoData {
+             auto r =
+                 MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs, &mask);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
                            {std::move(r.Y), std::move(r.qk_matmul_output)}};
            });
@@ -573,13 +575,13 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.scale = 1.0f;
     attrs.softcap = 0.5f;
     attrs.qk_matmul_output_mode = 2;
-    auto r = attention(Q, K, V, attrs);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y", "", "", "qk_matmul_output"});
     AddFloat(node, "scale", 1.0f);
     AddFloat(node, "softcap", 0.5f);
     AddInt(node, "qk_matmul_output_mode", 2);
     Expect(registry, std::move(node), "test_cc_attention_4d_with_qk_matmul_softcap", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs);
              return IoData{{std::move(Q), std::move(K), std::move(V)},
                            {std::move(r.Y), std::move(r.qk_matmul_output)}};
            });
@@ -592,11 +594,11 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor V = MakeV_1_2_3_2();
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 3;
-    auto r = attention(Q, K, V, attrs);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y", "", "", "qk_matmul_output"});
     AddInt(node, "qk_matmul_output_mode", 3);
     Expect(registry, std::move(node), "test_cc_attention_4d_with_qk_matmul_softmax", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs);
              return IoData{{std::move(Q), std::move(K), std::move(V)},
                            {std::move(r.Y), std::move(r.qk_matmul_output)}};
            });
@@ -635,11 +637,11 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "q_num_heads", 2);
     AddInt(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_attention_3d", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -659,11 +661,11 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 2;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "q_num_heads", 4);
     AddInt(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_attention_3d_gqa", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -678,12 +680,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.is_causal = true;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "q_num_heads", 2);
     AddInt(node, "kv_num_heads", 2);
     AddInt(node, "is_causal", 1);
     Expect(registry, std::move(node), "test_cc_attention_3d_causal", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -703,13 +705,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
     AddInt(node, "q_num_heads", 2);
     AddInt(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_attention_3d_with_past_and_present", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(past_key),
                             std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value)}};
@@ -730,12 +733,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
     attrs.scale = 1e-2f;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "q_num_heads", 2);
     AddInt(node, "kv_num_heads", 2);
     AddFloat(node, "scale", 1e-2f);
     Expect(registry, std::move(node), "test_cc_attention_3d_scaled", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -751,13 +754,13 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.has_scale = true;
     attrs.scale = 1.0f;
     attrs.softcap = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "q_num_heads", 2);
     AddInt(node, "kv_num_heads", 2);
     AddFloat(node, "scale", 1.0f);
     AddFloat(node, "softcap", 0.5f);
     Expect(registry, std::move(node), "test_cc_attention_3d_softcap", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -773,12 +776,13 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddInt(node, "q_num_heads", 2);
     AddInt(node, "kv_num_heads", 2);
     AddFloat(node, "scale", 0.5f);
     Expect(registry, std::move(node), "test_cc_attention_3d_attn_mask", {opset}, [=]() -> IoData {
+      Tensor Y =
+          MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs, &mask).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)}, {std::move(Y)}};
     });
   }
@@ -794,12 +798,13 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "q_num_heads", 2);
     AddInt(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_attention_3d_diff_heads_sizes", {opset},
            [=]() -> IoData {
+             Tensor Y =
+                 MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -816,12 +821,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
     attrs.scale = 1e-2f;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "q_num_heads", 4);
     AddInt(node, "kv_num_heads", 2);
     AddFloat(node, "scale", 1e-2f);
     Expect(registry, std::move(node), "test_cc_attention_3d_gqa_scaled", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -839,13 +844,13 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.has_scale = true;
     attrs.scale = 1.0f;
     attrs.softcap = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "q_num_heads", 4);
     AddInt(node, "kv_num_heads", 2);
     AddFloat(node, "scale", 1.0f);
     AddFloat(node, "softcap", 0.5f);
     Expect(registry, std::move(node), "test_cc_attention_3d_gqa_softcap", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -863,16 +868,17 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddInt(node, "q_num_heads", 4);
     AddInt(node, "kv_num_heads", 2);
     AddFloat(node, "scale", 0.5f);
-    Expect(registry, std::move(node), "test_cc_attention_3d_gqa_attn_mask", {opset},
-           [=]() -> IoData {
-             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
-                           {std::move(Y)}};
-           });
+    Expect(
+        registry, std::move(node), "test_cc_attention_3d_gqa_attn_mask", {opset}, [=]() -> IoData {
+          Tensor Y =
+              MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs, &mask).Y;
+          return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
+                        {std::move(Y)}};
+        });
   }
 
   // 3D GQA + causal — square q/kv sequence lengths.
@@ -887,12 +893,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 2;
     attrs.is_causal = true;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "q_num_heads", 4);
     AddInt(node, "kv_num_heads", 2);
     AddInt(node, "is_causal", 1);
     Expect(registry, std::move(node), "test_cc_attention_3d_gqa_causal", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -911,13 +917,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = 4;
     attrs.kv_num_heads = 2;
-    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
     AddInt(node, "q_num_heads", 4);
     AddInt(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_attention_3d_gqa_with_past_and_present", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(past_key),
                             std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value)}};
@@ -937,13 +944,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.qk_matmul_output_mode = 0;
-    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value", "qk_matmul_output"});
     AddInt(node, "q_num_heads", 2);
     AddInt(node, "kv_num_heads", 2);
     Expect(registry, std::move(node), "test_cc_attention_3d_with_past_and_present_qk_matmul",
            {opset}, [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(past_key),
                             std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value),
@@ -968,7 +976,6 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.qk_matmul_output_mode = 1;
-    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value", "qk_matmul_output"});
     AddInt(node, "q_num_heads", 2);
@@ -977,6 +984,8 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     AddInt(node, "qk_matmul_output_mode", 1);
     Expect(registry, std::move(node), "test_cc_attention_3d_with_past_and_present_qk_matmul_bias",
            {opset}, [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, &mask, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask),
                             std::move(past_key), std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value),
@@ -1000,7 +1009,6 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.scale = 1.0f;
     attrs.softcap = 0.5f;
     attrs.qk_matmul_output_mode = 2;
-    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value", "qk_matmul_output"});
     AddInt(node, "q_num_heads", 2);
@@ -1011,6 +1019,8 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node),
            "test_cc_attention_3d_with_past_and_present_qk_matmul_softcap", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(past_key),
                             std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value),
@@ -1031,7 +1041,6 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.qk_matmul_output_mode = 3;
-    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value", "qk_matmul_output"});
     AddInt(node, "q_num_heads", 2);
@@ -1040,6 +1049,8 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node),
            "test_cc_attention_3d_with_past_and_present_qk_matmul_softmax", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(past_key),
                             std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value),
@@ -1059,10 +1070,10 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 1e-2f;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddFloat(node, "scale", 1e-2f);
     Expect(registry, std::move(node), "test_cc_attention_4d_gqa_scaled", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -1076,11 +1087,11 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.has_scale = true;
     attrs.scale = 1.0f;
     attrs.softcap = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddFloat(node, "scale", 1.0f);
     AddFloat(node, "softcap", 0.5f);
     Expect(registry, std::move(node), "test_cc_attention_4d_gqa_softcap", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -1094,14 +1105,15 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
-    Expect(registry, std::move(node), "test_cc_attention_4d_gqa_attn_mask", {opset},
-           [=]() -> IoData {
-             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
-                           {std::move(Y)}};
-           });
+    Expect(
+        registry, std::move(node), "test_cc_attention_4d_gqa_attn_mask", {opset}, [=]() -> IoData {
+          Tensor Y =
+              MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs, &mask).Y;
+          return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
+                        {std::move(Y)}};
+        });
   }
 
   // 4D GQA + causal — square q/kv sequence lengths.
@@ -1119,10 +1131,10 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor V = MakeV_1_2_3_2();
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "is_causal", 1);
     Expect(registry, std::move(node), "test_cc_attention_4d_gqa_causal", {opset}, [=]() -> IoData {
+      Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
   }
@@ -1137,11 +1149,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor past_value =
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
     onnx_kernels::kernel::Attention::Attributes attrs;
-    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
     Expect(registry, std::move(node), "test_cc_attention_4d_gqa_with_past_and_present", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(past_key),
                             std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value)}};
@@ -1163,15 +1176,17 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.is_causal = true;
-    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
     AddInt(node, "is_causal", 1);
-    Expect(registry, std::move(node), "test_cc_attention_4d_attn_mask_4d_causal", {opset},
-           [=]() -> IoData {
-             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
-                           {std::move(Y)}};
-           });
+    Expect(
+        registry, std::move(node), "test_cc_attention_4d_attn_mask_4d_causal", {opset},
+        [=]() -> IoData {
+          Tensor Y =
+              MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs, &mask).Y;
+          return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
+                        {std::move(Y)}};
+        });
   }
 
   // 4D + 3D ``attn_mask`` + causal.
@@ -1187,15 +1202,17 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.is_causal = true;
-    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
     AddInt(node, "is_causal", 1);
-    Expect(registry, std::move(node), "test_cc_attention_4d_attn_mask_3d_causal", {opset},
-           [=]() -> IoData {
-             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
-                           {std::move(Y)}};
-           });
+    Expect(
+        registry, std::move(node), "test_cc_attention_4d_attn_mask_3d_causal", {opset},
+        [=]() -> IoData {
+          Tensor Y =
+              MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs, &mask).Y;
+          return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
+                        {std::move(Y)}};
+        });
   }
 
   // 4D BOOL ``attn_mask`` with 4D shape.
@@ -1209,14 +1226,16 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
-    Expect(registry, std::move(node), "test_cc_attention_4d_attn_mask_bool_4d", {opset},
-           [=]() -> IoData {
-             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
-                           {std::move(Y)}};
-           });
+    Expect(
+        registry, std::move(node), "test_cc_attention_4d_attn_mask_bool_4d", {opset},
+        [=]() -> IoData {
+          Tensor Y =
+              MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs, &mask).Y;
+          return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
+                        {std::move(Y)}};
+        });
   }
 
   // 4D with past_and_present + qk_matmul_output (mode 0).
@@ -1230,11 +1249,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 0;
-    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value", "qk_matmul_output"});
     Expect(registry, std::move(node), "test_cc_attention_4d_with_past_and_present_qk_matmul",
            {opset}, [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(past_key),
                             std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value),
@@ -1257,13 +1277,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.qk_matmul_output_mode = 1;
-    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value", "qk_matmul_output"});
     AddFloat(node, "scale", 0.5f);
     AddInt(node, "qk_matmul_output_mode", 1);
     Expect(registry, std::move(node), "test_cc_attention_4d_with_past_and_present_qk_matmul_bias",
            {opset}, [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, &mask, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask),
                             std::move(past_key), std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value),
@@ -1286,7 +1307,6 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.qk_matmul_output_mode = 1;
-    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value", "qk_matmul_output"});
     AddFloat(node, "scale", 0.5f);
@@ -1294,6 +1314,8 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node),
            "test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, &mask, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask),
                             std::move(past_key), std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value),
@@ -1317,7 +1339,6 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.qk_matmul_output_mode = 1;
-    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value", "qk_matmul_output"});
     AddFloat(node, "scale", 0.5f);
@@ -1325,6 +1346,8 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node),
            "test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, &mask, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask),
                             std::move(past_key), std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value),
@@ -1348,7 +1371,6 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.scale = 0.5f;
     attrs.is_causal = true;
     attrs.qk_matmul_output_mode = 1;
-    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value", "qk_matmul_output"});
     AddFloat(node, "scale", 0.5f);
@@ -1357,6 +1379,8 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node),
            "test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, &mask, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask),
                             std::move(past_key), std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value),
@@ -1381,7 +1405,6 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.scale = 0.5f;
     attrs.is_causal = true;
     attrs.qk_matmul_output_mode = 1;
-    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value", "qk_matmul_output"});
     AddFloat(node, "scale", 0.5f);
@@ -1390,6 +1413,8 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node),
            "test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask_causal", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, &mask, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask),
                             std::move(past_key), std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value),
@@ -1405,11 +1430,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 1e-2f;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddFloat(node, "scale", 1e-2f);
     Expect(registry, std::move(node), "test_cc_attention_4d_diff_heads_sizes_scaled", {opset},
            [=]() -> IoData {
+             Tensor Y =
+                 MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -1423,12 +1449,13 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.has_scale = true;
     attrs.scale = 1.0f;
     attrs.softcap = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddFloat(node, "scale", 1.0f);
     AddFloat(node, "softcap", 0.5f);
     Expect(registry, std::move(node), "test_cc_attention_4d_diff_heads_sizes_softcap", {opset},
            [=]() -> IoData {
+             Tensor Y =
+                 MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -1439,11 +1466,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_3();
     Tensor mask = Tensor::FromFloat("", {2, 3}, {0.0f, -0.5f, -1.0f, 0.5f, 0.0f, -0.2f});
-    Tensor Y = attention(Q, K, V, /*scale=*/0.5f, mask);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
     Expect(registry, std::move(node), "test_cc_attention_4d_diff_heads_sizes_attn_mask", {opset},
            [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, /*scale=*/0.5f, mask);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
                            {std::move(Y)}};
            });
@@ -1458,11 +1486,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor V = MakeV_1_2_3_3();
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "is_causal", 1);
     Expect(registry, std::move(node), "test_cc_attention_4d_diff_heads_sizes_causal", {opset},
            [=]() -> IoData {
+             Tensor Y =
+                 MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -1477,11 +1506,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor past_value =
         Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
     onnx_kernels::kernel::Attention::Attributes attrs;
-    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
     Expect(registry, std::move(node), "test_cc_attention_4d_diff_heads_with_past_and_present",
            {opset}, [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(past_key),
                             std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value)}};
@@ -1502,13 +1532,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
-    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
     AddFloat(node, "scale", 0.5f);
     Expect(registry, std::move(node),
            "test_cc_attention_4d_diff_heads_with_past_and_present_mask3d", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, &mask, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask),
                             std::move(past_key), std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value)}};
@@ -1530,13 +1561,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
-    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
     AddFloat(node, "scale", 0.5f);
     Expect(registry, std::move(node),
            "test_cc_attention_4d_diff_heads_with_past_and_present_mask4d", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, &mask, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask),
                             std::move(past_key), std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value)}};
@@ -1554,14 +1586,16 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
-    Expect(registry, std::move(node), "test_cc_attention_4d_diff_heads_mask4d_padded_kv", {opset},
-           [=]() -> IoData {
-             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
-                           {std::move(Y)}};
-           });
+    Expect(
+        registry, std::move(node), "test_cc_attention_4d_diff_heads_mask4d_padded_kv", {opset},
+        [=]() -> IoData {
+          Tensor Y =
+              MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs, &mask).Y;
+          return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
+                        {std::move(Y)}};
+        });
   }
 
   // 4D ``diff_heads`` with ``nonpad_kv_seqlen`` masking trailing padding
@@ -1588,14 +1622,15 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs, &mask, /*past_key=*/nullptr, /*past_value=*/nullptr,
-                         &nonpad_kv_seqlen)
-                   .Y;
     NodeProto node =
         MakeAttentionNode({"Q", "K", "V", "attn_mask", "", "", "nonpad_kv_seqlen"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
     Expect(registry, std::move(node), "test_cc_attention_4d_diff_heads_mask4d_nonpad_kv", {opset24},
            [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                            Q, K, V, attrs, &mask, /*past_key=*/nullptr, /*past_value=*/nullptr,
+                            &nonpad_kv_seqlen)
+                            .Y;
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask),
                             std::move(nonpad_kv_seqlen)},
                            {std::move(Y)}};
@@ -1617,13 +1652,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor nonpad_kv_seqlen = Tensor::FromInt64("", {2}, {4, 3});
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
-    Tensor Y = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
-                         /*past_value=*/nullptr, &nonpad_kv_seqlen)
-                   .Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "", "", "nonpad_kv_seqlen"}, {"Y"});
     AddInt(node, "is_causal", 1);
     Expect(registry, std::move(node), "test_cc_attention_4d_causal_nonpad_kv_continued_prefill",
            {opset24}, [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                            Q, K, V, attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
+                            /*past_value=*/nullptr, &nonpad_kv_seqlen)
+                            .Y;
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(nonpad_kv_seqlen)},
                            {std::move(Y)}};
            });
@@ -1640,12 +1676,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs, &bool_mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
     Expect(registry, std::move(node),
            "test_cc_attention_23_boolmask_fullymasked_row_nan_robustness", {opset},
            [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs,
+                                                                                    &bool_mask)
+                            .Y;
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(bool_mask)},
                            {std::move(Y)}};
            });
@@ -1662,12 +1700,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.is_causal = true;
-    Tensor Y = attention(Q, K, V, attrs, &bool_mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
     AddInt(node, "is_causal", 1);
     Expect(registry, std::move(node), "test_cc_attention_causal_boolmask_nan_robustness", {opset},
            [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs,
+                                                                                    &bool_mask)
+                            .Y;
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(bool_mask)},
                            {std::move(Y)}};
            });
@@ -1682,13 +1722,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
                                          0, 0, 0, 0, 0, 0}); // head 1
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 3;
-    auto r = attention(Q, K, V, attrs, &bool_mask);
     NodeProto node =
         MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y", "", "", "qk_matmul_output"});
     AddInt(node, "qk_matmul_output_mode", 3);
     Expect(registry, std::move(node),
            "test_cc_attention_23_fullymasked_qk_matmul_output_mode3_zero", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs,
+                                                                                  &bool_mask);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(bool_mask)},
                            {std::move(r.Y), std::move(r.qk_matmul_output)}};
            });
@@ -1704,13 +1745,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
                                          0, 0, 0, 0, 0, 0}); // head 1
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 3;
-    auto r = attention(Q, K, V, attrs, &bool_mask);
     NodeProto node =
         MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y", "", "", "qk_matmul_output"});
     AddInt(node, "qk_matmul_output_mode", 3);
     Expect(registry, std::move(node),
            "test_cc_attention_24_fullymasked_qk_matmul_output_mode3_zero", {opset24},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs,
+                                                                                  &bool_mask);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(bool_mask)},
                            {std::move(r.Y), std::move(r.qk_matmul_output)}};
            });
@@ -1726,12 +1768,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor V = MakeDeterministicFloatTensor({1, 2, 3, 4}, kSoftmaxPrecisionVSeed, 0.0f, 1.0f);
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 3;
-    auto r = attention(Q, K, V, attrs);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y", "", "", "qk_matmul_output"});
     AddInt(node, "qk_matmul_output_mode", 3);
     Expect(registry, std::move(node),
            "test_cc_attention_24_qk_matmul_output_mode3_softmax_precision", {opset24},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs);
              return IoData{{std::move(Q), std::move(K), std::move(V)},
                            {std::move(r.Y), std::move(r.qk_matmul_output)}};
            });
@@ -1751,8 +1793,6 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor nonpad_kv_seqlen = Tensor::FromInt64("", {2}, {4, 3});
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
-    auto r = attention(Q, K, V, attrs, &mask, /*past_key=*/nullptr, /*past_value=*/nullptr,
-                       &nonpad_kv_seqlen);
     NodeProto node =
         MakeAttentionNode({"Q", "K", "V", "attn_mask", "", "", "nonpad_kv_seqlen"}, {"Y"});
     AddInt(node, "is_causal", 1);
@@ -1763,6 +1803,8 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     // matching case for each name.  The lambda copies from its captures so it
     // can be safely passed to multiple Expect calls.
     auto make_nonpad_composition_io = [=]() -> IoData {
+      auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+          Q, K, V, attrs, &mask, /*past_key=*/nullptr, /*past_value=*/nullptr, &nonpad_kv_seqlen);
       return IoData{{Q, K, V, mask, nonpad_kv_seqlen}, {r.Y}};
     };
     Expect(registry, node, "test_cc_attention_4d_causal_nonpad_attn_mask_composition", {opset24},
@@ -1784,13 +1826,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor nonpad_kv_seqlen = Tensor::FromInt64("", {1}, {3});
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
-    Tensor Y = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
-                         /*past_value=*/nullptr, &nonpad_kv_seqlen)
-                   .Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "", "", "nonpad_kv_seqlen"}, {"Y"});
     AddInt(node, "is_causal", 1);
     Expect(registry, std::move(node), "test_cc_attention_4d_gqa_causal_nonpad_decode", {opset24},
            [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                            Q, K, V, attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
+                            /*past_value=*/nullptr, &nonpad_kv_seqlen)
+                            .Y;
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(nonpad_kv_seqlen)},
                            {std::move(Y)}};
            });
@@ -1806,12 +1849,13 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor V = MakeV_1_2_3_2();
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
-    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
     AddInt(node, "is_causal", 1);
     Expect(registry, std::move(node), "test_cc_attention_4d_causal_with_past_and_present", {opset},
            [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(past_key),
                             std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value)}};
@@ -1838,14 +1882,16 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor mask = Tensor::FromFloat("", {4, 6}, mask_data);
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.softcap = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "softcap", 0.5f);
-    Expect(registry, std::move(node), "test_cc_attention_4d_softcap_neginf_mask", {opset},
-           [=]() -> IoData {
-             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
-                           {std::move(Y)}};
-           });
+    Expect(
+        registry, std::move(node), "test_cc_attention_4d_softcap_neginf_mask", {opset},
+        [=]() -> IoData {
+          Tensor Y =
+              MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs, &mask).Y;
+          return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
+                        {std::move(Y)}};
+        });
   }
 
   // Same as above but with "poison" values at the masked KV positions.
@@ -1872,14 +1918,16 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor mask = Tensor::FromFloat("", {4, 6}, mask_data);
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.softcap = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "softcap", 0.5f);
-    Expect(registry, std::move(node), "test_cc_attention_4d_softcap_neginf_mask_poison", {opset},
-           [=]() -> IoData {
-             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
-                           {std::move(Y)}};
-           });
+    Expect(
+        registry, std::move(node), "test_cc_attention_4d_softcap_neginf_mask_poison", {opset},
+        [=]() -> IoData {
+          Tensor Y =
+              MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs, &mask).Y;
+          return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
+                        {std::move(Y)}};
+        });
   }
 
   // -------------------------------------------------------------------
@@ -1908,13 +1956,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
     attrs.scale = 1e-2f;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "q_num_heads", 2);
     AddInt(node, "kv_num_heads", 2);
     AddFloat(node, "scale", 1e-2f);
     Expect(registry, std::move(node), "test_cc_attention_3d_diff_heads_sizes_scaled", {opset},
            [=]() -> IoData {
+             Tensor Y =
+                 MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -1930,7 +1979,6 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.has_scale = true;
     attrs.scale = 1.0f;
     attrs.softcap = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "q_num_heads", 2);
     AddInt(node, "kv_num_heads", 2);
@@ -1938,6 +1986,8 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloat(node, "softcap", 0.5f);
     Expect(registry, std::move(node), "test_cc_attention_3d_diff_heads_sizes_softcap", {opset},
            [=]() -> IoData {
+             Tensor Y =
+                 MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -1953,16 +2003,18 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddInt(node, "q_num_heads", 2);
     AddInt(node, "kv_num_heads", 2);
     AddFloat(node, "scale", 0.5f);
-    Expect(registry, std::move(node), "test_cc_attention_3d_diff_heads_sizes_attn_mask", {opset},
-           [=]() -> IoData {
-             return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
-                           {std::move(Y)}};
-           });
+    Expect(
+        registry, std::move(node), "test_cc_attention_3d_diff_heads_sizes_attn_mask", {opset},
+        [=]() -> IoData {
+          Tensor Y =
+              MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs, &mask).Y;
+          return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask)},
+                        {std::move(Y)}};
+        });
   }
 
   // 3D diff_heads_sizes + causal — square q/kv lengths.
@@ -1975,13 +2027,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.q_num_heads = 2;
     attrs.kv_num_heads = 2;
     attrs.is_causal = true;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "q_num_heads", 2);
     AddInt(node, "kv_num_heads", 2);
     AddInt(node, "is_causal", 1);
     Expect(registry, std::move(node), "test_cc_attention_3d_diff_heads_sizes_causal", {opset},
            [=]() -> IoData {
+             Tensor Y =
+                 MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -2008,7 +2061,6 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.kv_num_heads = 2;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
-    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
     AddInt(node, "q_num_heads", 2);
@@ -2016,6 +2068,8 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloat(node, "scale", 0.5f);
     Expect(registry, std::move(node), "test_cc_attention_3d_diff_heads_with_past_and_present",
            {opset}, [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q, K, V, attrs, &mask, &past_key, &past_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask),
                             std::move(past_key), std::move(past_value)},
                            {std::move(r.Y), std::move(r.present_key), std::move(r.present_value)}};
@@ -2055,12 +2109,13 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.q_num_heads = q_num_heads;
     attrs.kv_num_heads = kv_num_heads;
-    Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "q_num_heads", q_num_heads);
     AddInt(node, "kv_num_heads", kv_num_heads);
     Expect(registry, std::move(node), "test_cc_attention_3d_transpose_verification", {opset},
            [=]() -> IoData {
+             Tensor Y =
+                 MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q, K, V, attrs).Y;
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -2080,13 +2135,13 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor Q_in = RoundToFloat16(Q32);
     Tensor K_in = RoundToFloat16(K32);
     Tensor V_in = RoundToFloat16(V32);
-    Tensor Y32 = attention(Q_in, K_in, V_in);
-    Tensor Q = FloatToFloat16Tensor("", Q_in);
-    Tensor K = FloatToFloat16Tensor("", K_in);
-    Tensor V = FloatToFloat16Tensor("", V_in);
-    Tensor Y = FloatToFloat16Tensor("", Y32);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     Expect(registry, std::move(node), "test_cc_attention_4d_fp16", {opset}, [=]() -> IoData {
+      Tensor Y32 = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(Q_in, K_in, V_in);
+      Tensor Q = FloatToFloat16Tensor("", Q_in);
+      Tensor K = FloatToFloat16Tensor("", K_in);
+      Tensor V = FloatToFloat16Tensor("", V_in);
+      Tensor Y = FloatToFloat16Tensor("", Y32);
       return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
     });
     registry.back().atol = 5e-3;
@@ -2107,20 +2162,21 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor pk_in = RoundToFloat16(pk32);
     Tensor pv_in = RoundToFloat16(pv32);
     onnx_kernels::kernel::Attention::Attributes attrs;
-    auto r = attention(Q_in, K_in, V_in, attrs, &mask_in, &pk_in, &pv_in);
-    Tensor Q = FloatToFloat16Tensor("", Q_in);
-    Tensor K = FloatToFloat16Tensor("", K_in);
-    Tensor V = FloatToFloat16Tensor("", V_in);
-    Tensor mask = FloatToFloat16Tensor("", mask_in);
-    Tensor pk = FloatToFloat16Tensor("", pk_in);
-    Tensor pv = FloatToFloat16Tensor("", pv_in);
-    Tensor Y = FloatToFloat16Tensor("", r.Y);
-    Tensor present_key = FloatToFloat16Tensor("", r.present_key);
-    Tensor present_value = FloatToFloat16Tensor("", r.present_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
     Expect(registry, std::move(node), "test_cc_attention_4d_gqa_with_past_and_present_fp16",
            {opset}, [=]() -> IoData {
+             auto r = MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                 Q_in, K_in, V_in, attrs, &mask_in, &pk_in, &pv_in);
+             Tensor Q = FloatToFloat16Tensor("", Q_in);
+             Tensor K = FloatToFloat16Tensor("", K_in);
+             Tensor V = FloatToFloat16Tensor("", V_in);
+             Tensor mask = FloatToFloat16Tensor("", mask_in);
+             Tensor pk = FloatToFloat16Tensor("", pk_in);
+             Tensor pv = FloatToFloat16Tensor("", pv_in);
+             Tensor Y = FloatToFloat16Tensor("", r.Y);
+             Tensor present_key = FloatToFloat16Tensor("", r.present_key);
+             Tensor present_value = FloatToFloat16Tensor("", r.present_value);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(mask),
                             std::move(pk), std::move(pv)},
                            {std::move(Y), std::move(present_key), std::move(present_value)}};
@@ -2131,16 +2187,20 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor nonpad_kv_seqlen = Tensor::FromInt64("nonpad_kv_seqlen", {2}, {6, 5});
     onnx_kernels::kernel::Attention::Attributes decode_attrs;
     decode_attrs.is_causal = true;
-    Tensor decode_y =
-        attention(Q_in, K_in, V_in, decode_attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
-                  /*past_value=*/nullptr, &nonpad_kv_seqlen)
-            .Y;
-    Tensor decode_Y = FloatToFloat16Tensor("", decode_y);
     NodeProto decode_node =
         MakeAttentionNode({"Q", "K", "V", "", "", "", "nonpad_kv_seqlen"}, {"Y"});
     AddInt(decode_node, "is_causal", 1);
     Expect(registry, std::move(decode_node), "test_cc_attention_4d_gqa_causal_nonpad_decode_fp16",
            {opset24}, [=]() -> IoData {
+             Tensor decode_y =
+                 MakeReferenceKernel<onnx_kernels::kernel::Attention>(opset)(
+                     Q_in, K_in, V_in, decode_attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
+                     /*past_value=*/nullptr, &nonpad_kv_seqlen)
+                     .Y;
+             Tensor decode_Y = FloatToFloat16Tensor("", decode_y);
+             Tensor Q = FloatToFloat16Tensor("", Q_in);
+             Tensor K = FloatToFloat16Tensor("", K_in);
+             Tensor V = FloatToFloat16Tensor("", V_in);
              return IoData{{std::move(Q), std::move(K), std::move(V), std::move(nonpad_kv_seqlen)},
                            {std::move(decode_Y)}};
            });

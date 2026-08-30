@@ -12,8 +12,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterShrinkCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(9);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Shrink shrink_kernel{ctx};
+  const auto shrink_kernel = MakeReferenceKernel<onnx_kernels::kernel::Shrink>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -28,7 +27,8 @@ void RegisterShrinkCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_shrink_benchmark", {opset}, {count}, {count},
            [shrink_kernel]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654321ULL);
-             Tensor y = shrink_kernel(x, /*bias=*/0.0f, /*lambd=*/1.5f);
+             Tensor y = shrink_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, /*bias=*/0.0f, /*lambd=*/1.5f); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -48,7 +48,8 @@ void RegisterShrinkCases(std::vector<TestCase> &registry, TestMode mode) {
       lambd->set_f(1.5f);
 
       Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -1.0f, 0.0f, 1.0f, 2.0f});
-      Tensor y = shrink_kernel(x, /*bias=*/0.0f, /*lambd=*/1.5f);
+      Tensor y = shrink_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, /*bias=*/0.0f, /*lambd=*/1.5f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -72,7 +73,8 @@ void RegisterShrinkCases(std::vector<TestCase> &registry, TestMode mode) {
       lambd->set_f(1.5f);
 
       Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -1.0f, 0.0f, 1.0f, 2.0f});
-      Tensor y = shrink_kernel(x, /*bias=*/1.5f, /*lambd=*/1.5f);
+      Tensor y = shrink_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, /*bias=*/1.5f, /*lambd=*/1.5f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -85,7 +87,8 @@ void RegisterShrinkCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_shrink_default", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -0.5f, -0.1f, 0.1f, 0.5f, 1.0f});
-      Tensor y = shrink_kernel(x, /*bias=*/0.0f, /*lambd=*/0.5f);
+      Tensor y = shrink_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, /*bias=*/0.0f, /*lambd=*/0.5f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

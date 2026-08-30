@@ -27,8 +27,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::IsInf isinf_kernel{ctx};
+  const auto isinf_kernel = MakeReferenceKernel<onnx_kernels::kernel::IsInf>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
@@ -36,7 +35,7 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_isinf_benchmark", {opset}, {count}, {count},
            [isinf_kernel, count]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {count}, /*seed=*/9301);
-             Tensor y = isinf_kernel(x);
+             Tensor y = isinf_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -48,7 +47,7 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
     Expect(registry, std::move(node), "test_cc_isinf", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {3}, {1.0f, inf_v, -inf_v});
-      Tensor y = isinf_kernel(x);
+      Tensor y = isinf_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -60,7 +59,7 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
     Expect(registry, std::move(node), "test_isinf", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
-      Tensor y = isinf_kernel(x);
+      Tensor y = isinf_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -73,7 +72,9 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<int64_t>(node, "detect_negative", 0);
     Expect(registry, std::move(node), "test_isinf_positive", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {6}, {-1.7f, nan_v, inf_v, 3.6f, -inf_v, inf_v});
-      Tensor y = isinf_kernel(x, /*detect_positive=*/1, /*detect_negative=*/0);
+      Tensor y = isinf_kernel.Invoke([&](const auto &kernel) {
+        return kernel(x, /*detect_positive=*/1, /*detect_negative=*/0);
+      });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -86,7 +87,9 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<int64_t>(node, "detect_positive", 0);
     Expect(registry, std::move(node), "test_isinf_negative", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {6}, {-1.7f, nan_v, inf_v, -3.6f, -inf_v, inf_v});
-      Tensor y = isinf_kernel(x, /*detect_positive=*/0, /*detect_negative=*/1);
+      Tensor y = isinf_kernel.Invoke([&](const auto &kernel) {
+        return kernel(x, /*detect_positive=*/0, /*detect_negative=*/1);
+      });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

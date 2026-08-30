@@ -35,8 +35,7 @@ NodeProto MakeTensorScatterNode(const std::string &mode, bool set_mode_attr) {
 
 void RegisterTensorScatterCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(24);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::TensorScatter ts_kernel{ctx};
+  const auto ts_kernel = MakeReferenceKernel<onnx_kernels::kernel::TensorScatter>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeTensorScatterNode("linear", /*set_mode_attr=*/true);
@@ -46,7 +45,9 @@ void RegisterTensorScatterCases(std::vector<TestCase> &registry, TestMode mode) 
              Tensor update = RandnTensor(DataType::FLOAT, {2, 1, 1, 512}, 2002);
              Tensor write_indices = Tensor::FromInt64("write_indices", {2}, {2048, 3072});
              onnx_kernels::kernel::TensorScatter::Attributes attrs;
-             Tensor present_cache = ts_kernel(past_cache, update, &write_indices, attrs);
+             Tensor present_cache = ts_kernel.Invoke([&](const auto &kernel) {
+               return kernel(past_cache, update, &write_indices, attrs);
+             });
              return IoData{{std::move(past_cache), std::move(update), std::move(write_indices)},
                            {std::move(present_cache)}};
            });
@@ -66,7 +67,9 @@ void RegisterTensorScatterCases(std::vector<TestCase> &registry, TestMode mode) 
                  Tensor::FromFloat("update", {2, 1, 1, 5}, {5, 5, 5, 5, 5, 1, 1, 1, 1, 1});
              const Tensor write_indices = Tensor::FromInt64("write_indices", {2}, {1, 2});
              onnx_kernels::kernel::TensorScatter::Attributes attrs;
-             const Tensor present_cache = ts_kernel(past_cache, update, &write_indices, attrs);
+             const Tensor present_cache = ts_kernel.Invoke([&](const auto &kernel) {
+               return kernel(past_cache, update, &write_indices, attrs);
+             });
              return IoData{{std::move(past_cache), std::move(update), std::move(write_indices)},
                            {std::move(present_cache)}};
            });
@@ -88,7 +91,9 @@ void RegisterTensorScatterCases(std::vector<TestCase> &registry, TestMode mode) 
              const Tensor write_indices = Tensor::FromInt64("write_indices", {2}, {1, 3});
              onnx_kernels::kernel::TensorScatter::Attributes attrs;
              attrs.mode = "circular";
-             const Tensor present_cache = ts_kernel(past_cache, update, &write_indices, attrs);
+             const Tensor present_cache = ts_kernel.Invoke([&](const auto &kernel) {
+               return kernel(past_cache, update, &write_indices, attrs);
+             });
              return IoData{{std::move(past_cache), std::move(update), std::move(write_indices)},
                            {std::move(present_cache)}};
            });
@@ -109,7 +114,9 @@ void RegisterTensorScatterCases(std::vector<TestCase> &registry, TestMode mode) 
                                                       7, 7, 7, 7, 7, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3});
              const Tensor write_indices = Tensor::FromInt64("write_indices", {3}, {1, 2, 0});
              onnx_kernels::kernel::TensorScatter::Attributes attrs;
-             const Tensor present_cache = ts_kernel(past_cache, update, &write_indices, attrs);
+             const Tensor present_cache = ts_kernel.Invoke([&](const auto &kernel) {
+               return kernel(past_cache, update, &write_indices, attrs);
+             });
              return IoData{{std::move(past_cache), std::move(update), std::move(write_indices)},
                            {std::move(present_cache)}};
            });

@@ -42,7 +42,6 @@ constexpr int64_t kDefaultIrVersion = 10;
 void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &registry,
                                                        TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
-  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   // Use rank 15 (one less than the upstream regression model, which used
   // ``axis_count = 16``). The upstream test exercised a memcpy buffer
@@ -65,89 +64,95 @@ void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &re
   const Tensor axes_tensor = Tensor::FromInt64("unsq_axes", {kAxisCount}, axes_values);
 
   const std::string name = "test_cc_shape_inference_shape_identity_unsqueeze";
+  TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
+  lazy_case.build = [=](bool) -> BuiltCase {
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
+    tc.rtol = 1e-3;
+    tc.atol = 1e-7;
 
-  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+    ModelProto &model = tc.emplace_model();
+    InitModel(model, kDefaultIrVersion, {opset});
 
-  ModelProto &model = tc.emplace_model();
-  InitModel(model, kDefaultIrVersion, {opset});
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    AddNode(*graph, "Shape", {"input"}, {"shape_out"});
+    AddNode(*graph, "Identity", {"shape_out"}, {"identity_out"});
+    AddNode(*graph, "Unsqueeze", {"identity_out", "unsq_axes"}, {"output_pre_abs"});
+    AddNode(*graph, "Abs", {"output_pre_abs"}, {"output"});
 
-  AddNode(*graph, "Shape", {"input"}, {"shape_out"});
-  AddNode(*graph, "Identity", {"shape_out"}, {"identity_out"});
-  AddNode(*graph, "Unsqueeze", {"identity_out", "unsq_axes"}, {"output_pre_abs"});
-  AddNode(*graph, "Abs", {"output_pre_abs"}, {"output"});
+    // Register ``unsq_axes`` as an actual initializer (not just a graph input)
+    // so shape inference's data-propagation pass sees the concrete INT64 axes
+    // values; this is the path the upstream regression model exercises.
+    TensorProto *init = graph->add_initializer();
+    init->set_name("unsq_axes");
+    init->set_data_type(static_cast<DataType>(axes_tensor.data_type));
+    for (int64_t d : axes_tensor.shape) {
+      init->add_dims(static_cast<uint64_t>(d));
+    }
+    init->set_raw_data(utils::ByteSpan(axes_tensor.data));
 
-  // Register ``unsq_axes`` as an actual initializer (not just a graph input)
-  // so shape inference's data-propagation pass sees the concrete INT64 axes
-  // values; this is the path the upstream regression model exercises.
-  TensorProto *init = graph->add_initializer();
-  init->set_name("unsq_axes");
-  init->set_data_type(static_cast<DataType>(axes_tensor.data_type));
-  for (int64_t d : axes_tensor.shape) {
-    init->add_dims(static_cast<uint64_t>(d));
-  }
-  init->set_raw_data(utils::ByteSpan(axes_tensor.data));
+    // Graph input: ``input`` with all-ones static shape (rank ``kAxisCount``).
+    const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
+    const int32_t kInt64 = static_cast<int32_t>(DataType::INT64);
+    std::vector<DimSpec> input_dims;
+    input_dims.reserve(static_cast<size_t>(kAxisCount));
+    for (int64_t i = 0; i < kAxisCount; ++i) {
+      input_dims.emplace_back(static_cast<int64_t>(1));
+    }
+    AppendValueInfo(*graph->add_input(), "input", kFloat, input_dims);
 
-  // Graph input: ``input`` with all-ones static shape (rank ``kAxisCount``).
-  const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
-  const int32_t kInt64 = static_cast<int32_t>(DataType::INT64);
-  std::vector<DimSpec> input_dims;
-  input_dims.reserve(static_cast<size_t>(kAxisCount));
-  for (int64_t i = 0; i < kAxisCount; ++i) {
-    input_dims.emplace_back(static_cast<int64_t>(1));
-  }
-  AppendValueInfo(*graph->add_input(), "input", kFloat, input_dims);
+    // Expected intermediate value_info entries: ``shape_out`` and
+    // ``identity_out`` are both 1-D INT64 tensors of length ``kAxisCount``.
+    AppendValueInfo(*graph->add_value_info(), "shape_out", kInt64,
+                    {DimSpec(static_cast<int64_t>(kAxisCount))});
+    AppendValueInfo(*graph->add_value_info(), "identity_out", kInt64,
+                    {DimSpec(static_cast<int64_t>(kAxisCount))});
 
-  // Expected intermediate value_info entries: ``shape_out`` and
-  // ``identity_out`` are both 1-D INT64 tensors of length ``kAxisCount``.
-  AppendValueInfo(*graph->add_value_info(), "shape_out", kInt64,
-                  {DimSpec(static_cast<int64_t>(kAxisCount))});
-  AppendValueInfo(*graph->add_value_info(), "identity_out", kInt64,
-                  {DimSpec(static_cast<int64_t>(kAxisCount))});
+    // ``output_pre_abs`` mirrors the post-Abs ``output`` shape: rank
+    // ``kAxisCount + 1`` (``kAxisCount`` leading 1s + trailing ``kAxisCount``).
+    std::vector<DimSpec> pre_abs_dims;
+    pre_abs_dims.reserve(static_cast<size_t>(kAxisCount) + 1);
+    for (int64_t i = 0; i < kAxisCount; ++i) {
+      pre_abs_dims.emplace_back(static_cast<int64_t>(1));
+    }
+    pre_abs_dims.emplace_back(static_cast<int64_t>(kAxisCount));
+    AppendValueInfo(*graph->add_value_info(), "output_pre_abs", kInt64, pre_abs_dims);
 
-  // ``output_pre_abs`` mirrors the post-Abs ``output`` shape: rank
-  // ``kAxisCount + 1`` (``kAxisCount`` leading 1s + trailing ``kAxisCount``).
-  std::vector<DimSpec> pre_abs_dims;
-  pre_abs_dims.reserve(static_cast<size_t>(kAxisCount) + 1);
-  for (int64_t i = 0; i < kAxisCount; ++i) {
-    pre_abs_dims.emplace_back(static_cast<int64_t>(1));
-  }
-  pre_abs_dims.emplace_back(static_cast<int64_t>(kAxisCount));
-  AppendValueInfo(*graph->add_value_info(), "output_pre_abs", kInt64, pre_abs_dims);
+    // Expected output: rank ``kAxisCount + 1`` (16 leading 1s + trailing
+    // ``kAxisCount``). Shape inference must recover this fully from the
+    // ``axes`` initializer and the (data-propagated) shape of ``input``.
+    std::vector<DimSpec> output_dims;
+    output_dims.reserve(static_cast<size_t>(kAxisCount) + 1);
+    for (int64_t i = 0; i < kAxisCount; ++i) {
+      output_dims.emplace_back(static_cast<int64_t>(1));
+    }
+    output_dims.emplace_back(static_cast<int64_t>(kAxisCount));
+    AppendValueInfo(*graph->add_output(), "output", kInt64, output_dims);
 
-  // Expected output: rank ``kAxisCount + 1`` (16 leading 1s + trailing
-  // ``kAxisCount``). Shape inference must recover this fully from the
-  // ``axes`` initializer and the (data-propagated) shape of ``input``.
-  std::vector<DimSpec> output_dims;
-  output_dims.reserve(static_cast<size_t>(kAxisCount) + 1);
-  for (int64_t i = 0; i < kAxisCount; ++i) {
-    output_dims.emplace_back(static_cast<int64_t>(1));
-  }
-  output_dims.emplace_back(static_cast<int64_t>(kAxisCount));
-  AppendValueInfo(*graph->add_output(), "output", kInt64, output_dims);
+    // Build the reference DataSet so the case is executable end-to-end.
+    std::vector<float> input_values(static_cast<size_t>(1));
+    input_values[0] = 0.0f;
+    Tensor input_tensor = Tensor::FromFloat("input", input_shape, input_values);
 
-  // Build the reference DataSet so the case is executable end-to-end.
-  std::vector<float> input_values(static_cast<size_t>(1));
-  input_values[0] = 0.0f;
-  Tensor input_tensor = Tensor::FromFloat("input", input_shape, input_values);
+    // Shape(input) -> [1, 1, ..., 1] (kAxisCount INT64 entries)
+    Tensor shape_out =
+        MakeReferenceKernel<onnx_kernels::kernel::Shape>(opset).Invoke([&](const auto &kernel) {
+          return kernel(input_tensor, onnx_kernels::kernel::Shape::Attributes{});
+        });
+    // Identity is a no-op other than renaming the output.
+    Tensor identity_out = shape_out;
+    identity_out.name = "identity_out";
+    // Unsqueeze along all axes => shape becomes ``[1] * kAxisCount + [kAxisCount]``.
+    Tensor output_tensor = MakeReferenceKernel<onnx_kernels::kernel::Unsqueeze>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(identity_out, axes_values); });
+    output_tensor.name = "output";
 
-  // Shape(input) -> [1, 1, ..., 1] (kAxisCount INT64 entries)
-  Tensor shape_out =
-      onnx_kernels::kernel::Shape(ctx)(input_tensor, onnx_kernels::kernel::Shape::Attributes{});
-  // Identity is a no-op other than renaming the output.
-  Tensor identity_out = shape_out;
-  identity_out.name = "identity_out";
-  // Unsqueeze along all axes => shape becomes ``[1] * kAxisCount + [kAxisCount]``.
-  Tensor output_tensor = onnx_kernels::kernel::Unsqueeze(ctx)(identity_out, axes_values);
-  output_tensor.name = "output";
+    AppendDataSet(tc, {input_tensor}, {output_tensor});
 
-  AppendDataSet(tc, {input_tensor}, {output_tensor});
-
-  registry.emplace_back(std::move(tc));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

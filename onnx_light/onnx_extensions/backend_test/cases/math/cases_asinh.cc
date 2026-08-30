@@ -33,11 +33,11 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterAsinhCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Asinh asinh_kernel{ctx};
+  const auto asinh_kernel = MakeReferenceKernel<onnx_kernels::kernel::Asinh>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Asinh", asinh_kernel, "test_cc_asinh_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Asinh>("Asinh", "test_cc_asinh_benchmark",
+                                                           opset, registry);
     return;
   }
 
@@ -48,7 +48,7 @@ void RegisterAsinhCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_asinh", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -0.5f, 0.0f, 0.5f, 1.0f, 3.0f});
-      Tensor y = asinh_kernel(x);
+      Tensor y = asinh_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -65,7 +65,7 @@ void RegisterAsinhCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_asinh_example", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-      Tensor y = asinh_kernel(x);
+      Tensor y = asinh_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -77,7 +77,7 @@ void RegisterAsinhCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_asinh", {opset}, [=]() -> IoData {
       Tensor x = RandnFloat({3, 4, 5}, /*seed=*/1);
-      Tensor y = asinh_kernel(x);
+      Tensor y = asinh_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

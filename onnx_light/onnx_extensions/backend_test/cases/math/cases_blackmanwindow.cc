@@ -16,8 +16,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 void RegisterBlackmanWindowCases(std::vector<TestCase> &registry, TestMode mode) {
   constexpr int32_t kSize = 10;
   const OpsetId opset = DefaultOpset(17);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::BlackmanWindow blackman_kernel{ctx};
+  const auto blackman_kernel = MakeReferenceKernel<onnx_kernels::kernel::BlackmanWindow>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -28,7 +27,8 @@ void RegisterBlackmanWindowCases(std::vector<TestCase> &registry, TestMode mode)
     Expect(registry, std::move(node), "test_cc_blackmanwindow_benchmark", {opset}, {1}, {size},
            [blackman_kernel, size]() -> IoData {
              Tensor x = Tensor::FromInt32("", {}, {size});
-             Tensor y = blackman_kernel(x, /*periodic=*/true);
+             Tensor y = blackman_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, /*periodic=*/true); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -42,7 +42,8 @@ void RegisterBlackmanWindowCases(std::vector<TestCase> &registry, TestMode mode)
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_blackmanwindow", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt32("", {}, {kSize});
-      Tensor y = blackman_kernel(x, /*periodic=*/true);
+      Tensor y =
+          blackman_kernel.Invoke([&](const auto &kernel) { return kernel(x, /*periodic=*/true); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -61,7 +62,8 @@ void RegisterBlackmanWindowCases(std::vector<TestCase> &registry, TestMode mode)
     attr->set_i(0);
     Expect(registry, std::move(node), "test_cc_blackmanwindow_symmetric", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt32("", {}, {kSize});
-      Tensor y = blackman_kernel(x, /*periodic=*/false);
+      Tensor y =
+          blackman_kernel.Invoke([&](const auto &kernel) { return kernel(x, /*periodic=*/false); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });

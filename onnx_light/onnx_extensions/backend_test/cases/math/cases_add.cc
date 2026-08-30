@@ -29,11 +29,11 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Add add_kernel{ctx};
+  const auto add_kernel = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkBinaryFloat("Add", add_kernel, "test_cc_add_benchmark", opset, registry);
+    ExpectBenchmarkBinaryFloat<onnx_kernels::kernel::Add>("Add", "test_cc_add_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -47,7 +47,7 @@ void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_add", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       Tensor y = Tensor::FromFloat("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
-      Tensor z = add_kernel(x, y);
+      Tensor z = add_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -63,7 +63,7 @@ void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_add_bcast", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = Tensor::FromFloat("", {}, {0.5f});
-      Tensor z = add_kernel(x, y);
+      Tensor z = add_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -90,35 +90,40 @@ void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
        [=]() -> IoData {
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/5);
          auto inputs_1 = RandnFloat({3, 4, 5}, /*seed=*/6);
-         Tensor z = add_kernel(inputs_0, inputs_1);
+         Tensor z =
+             add_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_add_int8",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/41);
          auto inputs_1 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/42);
-         Tensor z = add_kernel(inputs_0, inputs_1);
+         Tensor z =
+             add_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_add_int16",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/43);
          auto inputs_1 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/44);
-         Tensor z = add_kernel(inputs_0, inputs_1);
+         Tensor z =
+             add_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_add_int32",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/141);
          auto inputs_1 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/142);
-         Tensor z = add_kernel(inputs_0, inputs_1);
+         Tensor z =
+             add_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_add_int64",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT64, {3, 4, 5}, /*seed=*/143);
          auto inputs_1 = RandnTensor(DataType::INT64, {3, 4, 5}, /*seed=*/144);
-         Tensor z = add_kernel(inputs_0, inputs_1);
+         Tensor z =
+             add_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_add_uint8",
@@ -127,7 +132,8 @@ void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/45));
          auto inputs_1 =
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/46));
-         Tensor z = add_kernel(inputs_0, inputs_1);
+         Tensor z =
+             add_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_add_uint16",
@@ -136,7 +142,8 @@ void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/47));
          auto inputs_1 =
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/48));
-         Tensor z = add_kernel(inputs_0, inputs_1);
+         Tensor z =
+             add_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_add_uint32",
@@ -145,7 +152,8 @@ void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/49));
          auto inputs_1 =
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/50));
-         Tensor z = add_kernel(inputs_0, inputs_1);
+         Tensor z =
+             add_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_add_uint64",
@@ -154,7 +162,8 @@ void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/51));
          auto inputs_1 =
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/52));
-         Tensor z = add_kernel(inputs_0, inputs_1);
+         Tensor z =
+             add_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       // From Add.export_add_broadcast():
@@ -162,7 +171,8 @@ void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
        [=]() -> IoData {
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/7);
          auto inputs_1 = RandnFloat({5}, /*seed=*/8);
-         Tensor z = add_kernel(inputs_0, inputs_1);
+         Tensor z =
+             add_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
   };
@@ -181,7 +191,7 @@ void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(n16), "test_cc_add_float16", {opset}, [=]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       Tensor y = MakeFloat16Tensor("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
-      Tensor z = add_kernel(x, y);
+      Tensor z = add_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }
@@ -205,7 +215,7 @@ void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
       }
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {4}, std::move(rx));
       Tensor y("", static_cast<int32_t>(DataType::BFLOAT16), {4}, std::move(ry));
-      Tensor z = add_kernel(x, y);
+      Tensor z = add_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }
@@ -220,7 +230,7 @@ void RegisterAddCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(nd), "test_cc_add_double", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
       Tensor y = Tensor::FromDouble("", {2, 3}, {10.0, 20.0, 30.0, 40.0, 50.0, 60.0});
-      Tensor z = add_kernel(x, y);
+      Tensor z = add_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }

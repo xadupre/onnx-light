@@ -13,11 +13,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterCeluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(12);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Celu celu_kernel{ctx};
+  const auto celu_kernel = MakeReferenceKernel<onnx_kernels::kernel::Celu>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Celu", celu_kernel, "test_cc_celu_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Celu>("Celu", "test_cc_celu_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -34,7 +34,7 @@ void RegisterCeluCases(std::vector<TestCase> &registry, TestMode mode) {
       alpha->set_f(2.0f);
 
       Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-      Tensor y = celu_kernel(x, 2.0f);
+      Tensor y = celu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 2.0f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -47,7 +47,7 @@ void RegisterCeluCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_celu_default", {opset}, [=]() -> IoData {
       // No alpha attribute: defaults to 1.0.
       Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-      Tensor y = celu_kernel(x);
+      Tensor y = celu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -69,7 +69,7 @@ void RegisterCeluCases(std::vector<TestCase> &registry, TestMode mode) {
       alpha->set_f(2.0f);
 
       Tensor x = MakeFloat16Tensor("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-      Tensor y = celu_kernel(x, 2.0f);
+      Tensor y = celu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 2.0f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -88,7 +88,7 @@ void RegisterCeluCases(std::vector<TestCase> &registry, TestMode mode) {
       alpha->set_f(1.0f);
 
       Tensor x = MakeBfloat16Tensor("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-      Tensor y = celu_kernel(x, 1.0f);
+      Tensor y = celu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 1.0f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

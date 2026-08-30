@@ -20,9 +20,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterBinarizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
-  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const onnx_kernels::kernel::Binarizer binarizer{ctx};
+  const auto binarizer = MakeReferenceKernel<onnx_kernels::kernel::Binarizer>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -40,7 +39,9 @@ void RegisterBinarizerCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_ai_onnx_ml_binarizer_benchmark", {default_opset, opset},
            {32768}, {32768}, [binarizer, threshold]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {8192, 4}, 2611);
-             Tensor y = binarizer.operator()<float>(x, threshold);
+             Tensor y = binarizer.Invoke([&](const auto &kernel) {
+               return kernel.template operator()<float>(x, threshold);
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -68,7 +69,9 @@ void RegisterBinarizerCases(std::vector<TestCase> &registry, TestMode mode) {
              // branches of the kernel.
              Tensor x =
                  Tensor::FromFloat("", {2, 4}, {0.5f, 1.0f, 1.5f, 2.0f, -1.0f, 1.0f, 3.0f, 0.9f});
-             Tensor y = binarizer.operator()<float>(x, threshold);
+             Tensor y = binarizer.Invoke([&](const auto &kernel) {
+               return kernel.template operator()<float>(x, threshold);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -92,7 +95,9 @@ void RegisterBinarizerCases(std::vector<TestCase> &registry, TestMode mode) {
              threshold_attr->set_f(static_cast<float>(threshold));
 
              Tensor x = Tensor::FromInt64("", {5}, {0, 3, 4, -2, 10});
-             Tensor y = binarizer.operator()<int64_t>(x, threshold);
+             Tensor y = binarizer.Invoke([&](const auto &kernel) {
+               return kernel.template operator()<int64_t>(x, threshold);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });

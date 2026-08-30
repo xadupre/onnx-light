@@ -51,13 +51,13 @@ std::vector<float> Iota(int64_t n) {
 }
 
 void RegisterUnsqueezeOneAxisCase(std::vector<TestCase> &registry, const OpsetId &opset,
-                                  const onnx_kernels::kernel::Unsqueeze &unsqueeze_kernel,
-                                  int64_t axis, const std::string &name) {
+                                  const auto &unsqueeze_kernel, int64_t axis,
+                                  const std::string &name) {
   Expect(registry, MakeUnsqueezeNodeXY(), name, {opset}, [=]() -> IoData {
     const Tensor x = Tensor::FromFloat("", {3, 4, 5}, Iota(60));
     const std::vector<int64_t> axes{axis};
     const Tensor axes_tensor = MakeAxesTensor(axes);
-    const Tensor y = unsqueeze_kernel(x, axes);
+    const Tensor y = unsqueeze_kernel.Invoke([&](const auto &kernel) { return kernel(x, axes); });
     return IoData{{std::move(x), std::move(axes_tensor)}, {std::move(y)}};
   });
 }
@@ -66,8 +66,7 @@ void RegisterUnsqueezeOneAxisCase(std::vector<TestCase> &registry, const OpsetId
 
 void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Unsqueeze unsqueeze_kernel{ctx};
+  const auto unsqueeze_kernel = MakeReferenceKernel<onnx_kernels::kernel::Unsqueeze>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeUnsqueezeNode();
@@ -76,7 +75,8 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
            {4194304}, [unsqueeze_kernel, axes]() -> IoData {
              Tensor data = RandnTensor(DataType::FLOAT, {2048, 2048}, 2001);
              Tensor axes_tensor = MakeAxesTensor(axes);
-             Tensor expanded = unsqueeze_kernel(data, axes);
+             Tensor expanded =
+                 unsqueeze_kernel.Invoke([&](const auto &kernel) { return kernel(data, axes); });
              return IoData{{std::move(data), std::move(axes_tensor)}, {std::move(expanded)}};
            });
     return;
@@ -88,7 +88,8 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
       const Tensor data = Tensor::FromFloat("", {2, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
       const std::vector<int64_t> axes{0, 2};
       const Tensor axes_tensor = MakeAxesTensor(axes);
-      const Tensor expanded = unsqueeze_kernel(data, axes);
+      const Tensor expanded =
+          unsqueeze_kernel.Invoke([&](const auto &kernel) { return kernel(data, axes); });
       return IoData{{std::move(data), std::move(axes_tensor)}, {std::move(expanded)}};
     });
   }
@@ -107,7 +108,7 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
       const Tensor x = Tensor::FromFloat("", {3, 4, 5}, Iota(60));
       const std::vector<int64_t> axes{1, 4};
       const Tensor axes_tensor = MakeAxesTensor(axes);
-      const Tensor y = unsqueeze_kernel(x, axes);
+      const Tensor y = unsqueeze_kernel.Invoke([&](const auto &kernel) { return kernel(x, axes); });
       return IoData{{std::move(x), std::move(axes_tensor)}, {std::move(y)}};
     });
   }
@@ -118,7 +119,7 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
       const Tensor x = Tensor::FromFloat("", {3, 4, 5}, Iota(60));
       const std::vector<int64_t> axes{2, 4, 5};
       const Tensor axes_tensor = MakeAxesTensor(axes);
-      const Tensor y = unsqueeze_kernel(x, axes);
+      const Tensor y = unsqueeze_kernel.Invoke([&](const auto &kernel) { return kernel(x, axes); });
       return IoData{{std::move(x), std::move(axes_tensor)}, {std::move(y)}};
     });
   }
@@ -132,7 +133,8 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
              // so the output is identical to test_unsqueeze_three_axes.
              const std::vector<int64_t> axes{5, 4, 2};
              const Tensor axes_tensor = MakeAxesTensor(axes);
-             const Tensor y = unsqueeze_kernel(x, axes);
+             const Tensor y =
+                 unsqueeze_kernel.Invoke([&](const auto &kernel) { return kernel(x, axes); });
              return IoData{{std::move(x), std::move(axes_tensor)}, {std::move(y)}};
            });
   }
@@ -144,7 +146,8 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor x = Tensor::FromFloat("", {1, 3, 1, 5}, Iota(15));
              const std::vector<int64_t> axes{-2};
              const Tensor axes_tensor = MakeAxesTensor(axes);
-             const Tensor y = unsqueeze_kernel(x, axes);
+             const Tensor y =
+                 unsqueeze_kernel.Invoke([&](const auto &kernel) { return kernel(x, axes); });
              return IoData{{std::move(x), std::move(axes_tensor)}, {std::move(y)}};
            });
   }

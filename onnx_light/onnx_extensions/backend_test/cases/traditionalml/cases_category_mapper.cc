@@ -24,9 +24,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterCategoryMapperCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
-  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const onnx_kernels::kernel::CategoryMapper category_mapper{ctx};
+  const auto category_mapper = MakeReferenceKernel<onnx_kernels::kernel::CategoryMapper>(opset);
 
   const std::vector<std::string> cats_strings{"hello", "world", "good morning"};
   const std::vector<int64_t> cats_int64s{1, 2, 3};
@@ -63,8 +62,10 @@ void RegisterCategoryMapperCases(std::vector<TestCase> &registry, TestMode mode)
                x_values[static_cast<size_t>(i)] = (i % 3) + 1;
              }
              Tensor x = Tensor::FromInt64("", {count}, x_values);
-             Tensor y = category_mapper.operator()<int64_t, std::string>(
-                 x, cats_strings, cats_int64s, default_string);
+             Tensor y = category_mapper.Invoke([&](const auto &kernel) {
+               return kernel.template operator()<int64_t, std::string>(x, cats_strings, cats_int64s,
+                                                                       default_string);
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -101,8 +102,10 @@ void RegisterCategoryMapperCases(std::vector<TestCase> &registry, TestMode mode)
              default_attr->set_i(default_int64);
 
              Tensor x = Tensor::FromStrings("", {4}, {"hello", "world", "?", "good morning"});
-             Tensor y = category_mapper.operator()<std::string, int64_t>(
-                 x, cats_strings, cats_int64s, default_int64);
+             Tensor y = category_mapper.Invoke([&](const auto &kernel) {
+               return kernel.template operator()<std::string, int64_t>(x, cats_strings, cats_int64s,
+                                                                       default_int64);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -139,8 +142,10 @@ void RegisterCategoryMapperCases(std::vector<TestCase> &registry, TestMode mode)
              default_attr->set_s(utils::String(default_string));
 
              Tensor x = Tensor::FromInt64("", {4}, {1, 2, 4, 3});
-             Tensor y = category_mapper.operator()<int64_t, std::string>(
-                 x, cats_strings, cats_int64s, default_string);
+             Tensor y = category_mapper.Invoke([&](const auto &kernel) {
+               return kernel.template operator()<int64_t, std::string>(x, cats_strings, cats_int64s,
+                                                                       default_string);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });

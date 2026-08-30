@@ -37,15 +37,15 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
   // optional types. The default opset chosen here matches the most common
   // tensor-only usage exercised by these reference cases.
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Identity identity_kernel{ctx};
+  const auto identity_kernel = MakeReferenceKernel<onnx_kernels::kernel::Identity>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeIdentityNode();
     Expect(registry, std::move(node), "test_cc_identity_benchmark", {opset},
            {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize}, [identity_kernel]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 2001);
-             Tensor y = Rename(identity_kernel(x), "y");
+             Tensor y =
+                 Rename(identity_kernel.Invoke([&](const auto &kernel) { return kernel(x); }), "y");
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -58,7 +58,8 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
       const Tensor x = Tensor::FromFloat(
           "x", {1, 3, 2, 2},
           {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
-      const Tensor y = Rename(identity_kernel(x), "y");
+      const Tensor y =
+          Rename(identity_kernel.Invoke([&](const auto &kernel) { return kernel(x); }), "y");
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -67,7 +68,8 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeIdentityNode(), "test_cc_identity_scalar", {opset}, [=]() -> IoData {
       const Tensor x = Tensor::FromFloat("x", {}, {42.0f});
-      const Tensor y = Rename(identity_kernel(x), "y");
+      const Tensor y =
+          Rename(identity_kernel.Invoke([&](const auto &kernel) { return kernel(x); }), "y");
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -76,7 +78,8 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeIdentityNode(), "test_cc_identity_int64", {opset}, [=]() -> IoData {
       const Tensor x = Tensor::FromInt64("x", {2, 3}, {1, 2, 3, 4, 5, 6});
-      const Tensor y = Rename(identity_kernel(x), "y");
+      const Tensor y =
+          Rename(identity_kernel.Invoke([&](const auto &kernel) { return kernel(x); }), "y");
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

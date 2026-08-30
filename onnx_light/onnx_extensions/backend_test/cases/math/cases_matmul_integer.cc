@@ -59,8 +59,7 @@ NodeProto MakeMatMulIntegerNodeNoBZP() {
 // ---------------------------------------------------------------------------
 void RegisterMatMulIntegerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::MatMulInteger mmi{ctx};
+  const auto mmi = MakeReferenceKernel<onnx_kernels::kernel::MatMulInteger>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> shape = {512, 512};
@@ -74,7 +73,7 @@ void RegisterMatMulIntegerCases(std::vector<TestCase> &registry, TestMode mode) 
                          std::vector<uint8_t>{0});
              Tensor b_zp("b_zero_point", static_cast<int32_t>(DataType::UINT8), {1},
                          std::vector<uint8_t>{0});
-             Tensor Y = mmi(A, B, a_zp, b_zp);
+             Tensor Y = mmi.Invoke([&](const auto &kernel) { return kernel(A, B, a_zp, b_zp); });
              Y.name = "Y";
              return IoData{{std::move(A), std::move(B), std::move(a_zp), std::move(b_zp)},
                            {std::move(Y)}};
@@ -91,10 +90,10 @@ void RegisterMatMulIntegerCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor b_zp("b_zero_point", static_cast<int32_t>(DataType::UINT8), {1},
                 std::vector<uint8_t>{0});
 
-    Tensor Y = mmi(A, B, a_zp, b_zp);
-    Y.name = "Y";
     NodeProto node = MakeMatMulIntegerNode();
     Expect(registry, std::move(node), "test_cc_matmulinteger", {opset}, [=]() -> IoData {
+      Tensor Y = mmi.Invoke([&](const auto &kernel) { return kernel(A, B, a_zp, b_zp); });
+      Y.name = "Y";
       return IoData{{std::move(A), std::move(B), std::move(a_zp), std::move(b_zp)}, {std::move(Y)}};
     });
   }
@@ -108,10 +107,10 @@ void RegisterMatMulIntegerCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor b_zp("b_zero_point", static_cast<int32_t>(DataType::INT8), {},
                 std::vector<uint8_t>{static_cast<uint8_t>(static_cast<int8_t>(-1))});
 
-    Tensor Y = mmi(A, B, a_zp, b_zp);
-    Y.name = "Y";
     NodeProto node = MakeMatMulIntegerNode();
     Expect(registry, std::move(node), "test_cc_matmulinteger_int8", {opset}, [=]() -> IoData {
+      Tensor Y = mmi.Invoke([&](const auto &kernel) { return kernel(A, B, a_zp, b_zp); });
+      Y.name = "Y";
       return IoData{{std::move(A), std::move(B), std::move(a_zp), std::move(b_zp)}, {std::move(Y)}};
     });
   }
@@ -125,11 +124,11 @@ void RegisterMatMulIntegerCases(std::vector<TestCase> &registry, TestMode mode) 
 
     // Default-constructed Tensor signals an absent optional input to the kernel.
     const Tensor no_a_zp;
-    Tensor Y = mmi(A, B, no_a_zp, b_zp);
-    Y.name = "Y";
     NodeProto node = MakeMatMulIntegerNodeNoAZP();
     Expect(registry, std::move(node), "test_cc_matmulinteger_per_col_b_zp", {opset},
            [=]() -> IoData {
+             Tensor Y = mmi.Invoke([&](const auto &kernel) { return kernel(A, B, no_a_zp, b_zp); });
+             Y.name = "Y";
              return IoData{{std::move(A), std::move(B), std::move(b_zp)}, {std::move(Y)}};
            });
   }
@@ -143,11 +142,11 @@ void RegisterMatMulIntegerCases(std::vector<TestCase> &registry, TestMode mode) 
 
     // Default-constructed Tensor signals an absent optional input to the kernel.
     const Tensor no_b_zp;
-    Tensor Y = mmi(A, B, a_zp, no_b_zp);
-    Y.name = "Y";
     NodeProto node = MakeMatMulIntegerNodeNoBZP();
     Expect(registry, std::move(node), "test_cc_matmulinteger_per_row_a_zp", {opset},
            [=]() -> IoData {
+             Tensor Y = mmi.Invoke([&](const auto &kernel) { return kernel(A, B, a_zp, no_b_zp); });
+             Y.name = "Y";
              return IoData{{std::move(A), std::move(B), std::move(a_zp)}, {std::move(Y)}};
            });
   }

@@ -52,7 +52,6 @@ void AddIntsAttr(NodeProto &node, const char *name, const std::vector<int64_t> &
 // ---------------------------------------------------------------------------
 void RegisterRandomNormalCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
   const std::vector<int64_t> shape = {2, 3};
 
   if (mode == TestMode::BENCHMARK) {
@@ -62,11 +61,13 @@ void RegisterRandomNormalCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddIntsAttr(node, "shape", large_shape);
 
-    const onnx_kernels::kernel::RandomNormal random_normal_kernel{ctx};
+    const auto random_normal_kernel =
+        MakeReferenceKernel<onnx_kernels::kernel::RandomNormal>(opset);
     Expect(registry, std::move(node), "test_cc_randomnormal_benchmark", {opset},
            /*in_counts=*/{}, {kBenchmarkElementwiseSize},
            [random_normal_kernel, large_shape]() -> IoData {
-             Tensor y = random_normal_kernel(large_shape);
+             Tensor y = random_normal_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(large_shape); });
              return IoData{/*inputs=*/{}, {std::move(y)}};
            });
     return;
@@ -79,7 +80,8 @@ void RegisterRandomNormalCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddIntsAttr(node, "shape", shape);
     Expect(registry, std::move(node), "test_cc_randomnormal", {opset}, [=]() -> IoData {
-      Tensor y = onnx_kernels::kernel::RandomNormal(ctx)(shape);
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::RandomNormal>(opset).Invoke(
+          [&](const auto &kernel) { return kernel(shape); });
       return IoData{{}, {std::move(y)}};
     });
   }
@@ -94,9 +96,11 @@ void RegisterRandomNormalCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttr(node, "seed", 42.0f);
     AddIntsAttr(node, "shape", shape);
     Expect(registry, std::move(node), "test_cc_randomnormal_seeded", {opset}, [=]() -> IoData {
-      Tensor y =
-          onnx_kernels::kernel::RandomNormal(ctx)(shape, /*mean=*/1.0, /*scale=*/2.0, /*seed=*/42,
-                                                  /*dtype=*/0);
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::RandomNormal>(opset).Invoke(
+          [&](const auto &kernel) {
+            return kernel(shape, /*mean=*/1.0, /*scale=*/2.0, /*seed=*/42,
+                          /*dtype=*/0);
+          });
       return IoData{{}, {std::move(y)}};
     });
   }
@@ -109,9 +113,12 @@ void RegisterRandomNormalCases(std::vector<TestCase> &registry, TestMode mode) {
     AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::DOUBLE));
     AddIntsAttr(node, "shape", shape);
     Expect(registry, std::move(node), "test_cc_randomnormal_double", {opset}, [=]() -> IoData {
-      Tensor y = onnx_kernels::kernel::RandomNormal(ctx)(
-          shape, /*mean=*/0.0, /*scale=*/1.0, onnx_kernels::kernel::RandomNormal::kNoSeed,
-          /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::RandomNormal>(opset).Invoke(
+          [&](const auto &kernel) {
+            return kernel(shape, /*mean=*/0.0, /*scale=*/1.0,
+                          onnx_kernels::kernel::RandomNormal::kNoSeed,
+                          /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
+          });
       return IoData{{}, {std::move(y)}};
     });
   }
@@ -123,7 +130,6 @@ void RegisterRandomNormalCases(std::vector<TestCase> &registry, TestMode mode) {
 // ---------------------------------------------------------------------------
 void RegisterRandomUniformCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
   const std::vector<int64_t> shape = {2, 3};
 
   if (mode == TestMode::BENCHMARK) {
@@ -133,11 +139,13 @@ void RegisterRandomUniformCases(std::vector<TestCase> &registry, TestMode mode) 
     node.add_output("y");
     AddIntsAttr(node, "shape", large_shape);
 
-    const onnx_kernels::kernel::RandomUniform random_uniform_kernel{ctx};
+    const auto random_uniform_kernel =
+        MakeReferenceKernel<onnx_kernels::kernel::RandomUniform>(opset);
     Expect(registry, std::move(node), "test_cc_randomuniform_benchmark", {opset},
            /*in_counts=*/{}, {kBenchmarkElementwiseSize},
            [random_uniform_kernel, large_shape]() -> IoData {
-             Tensor y = random_uniform_kernel(large_shape);
+             Tensor y = random_uniform_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(large_shape); });
              return IoData{/*inputs=*/{}, {std::move(y)}};
            });
     return;
@@ -150,7 +158,8 @@ void RegisterRandomUniformCases(std::vector<TestCase> &registry, TestMode mode) 
     node.add_output("y");
     AddIntsAttr(node, "shape", shape);
     Expect(registry, std::move(node), "test_cc_randomuniform", {opset}, [=]() -> IoData {
-      Tensor y = onnx_kernels::kernel::RandomUniform(ctx)(shape);
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::RandomUniform>(opset).Invoke(
+          [&](const auto &kernel) { return kernel(shape); });
       return IoData{{}, {std::move(y)}};
     });
   }
@@ -165,9 +174,11 @@ void RegisterRandomUniformCases(std::vector<TestCase> &registry, TestMode mode) 
     AddFloatAttr(node, "seed", 42.0f);
     AddIntsAttr(node, "shape", shape);
     Expect(registry, std::move(node), "test_cc_randomuniform_seeded", {opset}, [=]() -> IoData {
-      Tensor y =
-          onnx_kernels::kernel::RandomUniform(ctx)(shape, /*low=*/-1.0, /*high=*/3.0, /*seed=*/42,
-                                                   /*dtype=*/0);
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::RandomUniform>(opset).Invoke(
+          [&](const auto &kernel) {
+            return kernel(shape, /*low=*/-1.0, /*high=*/3.0, /*seed=*/42,
+                          /*dtype=*/0);
+          });
       return IoData{{}, {std::move(y)}};
     });
   }
@@ -180,9 +191,12 @@ void RegisterRandomUniformCases(std::vector<TestCase> &registry, TestMode mode) 
     AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::DOUBLE));
     AddIntsAttr(node, "shape", shape);
     Expect(registry, std::move(node), "test_cc_randomuniform_double", {opset}, [=]() -> IoData {
-      Tensor y = onnx_kernels::kernel::RandomUniform(ctx)(
-          shape, /*low=*/0.0, /*high=*/1.0, onnx_kernels::kernel::RandomUniform::kNoSeed,
-          /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::RandomUniform>(opset).Invoke(
+          [&](const auto &kernel) {
+            return kernel(shape, /*low=*/0.0, /*high=*/1.0,
+                          onnx_kernels::kernel::RandomUniform::kNoSeed,
+                          /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
+          });
       return IoData{{}, {std::move(y)}};
     });
   }
@@ -193,20 +207,20 @@ void RegisterRandomUniformCases(std::vector<TestCase> &registry, TestMode mode) 
 // ---------------------------------------------------------------------------
 void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
     node.set_op_type("RandomNormalLike");
     node.add_input("x");
     node.add_output("y");
 
-    const onnx_kernels::kernel::RandomNormalLike random_normal_like_kernel{ctx};
+    const auto random_normal_like_kernel =
+        MakeReferenceKernel<onnx_kernels::kernel::RandomNormalLike>(opset);
     Expect(registry, std::move(node), "test_cc_randomnormallike_benchmark", {opset},
            {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
            [random_normal_like_kernel]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654321ULL);
-             Tensor y = random_normal_like_kernel(x);
+             Tensor y =
+                 random_normal_like_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -221,7 +235,8 @@ void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry, TestMode mod
     node.add_input("x");
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_randomnormallike", {opset}, [=]() -> IoData {
-      Tensor y = onnx_kernels::kernel::RandomNormalLike(ctx)(x);
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::RandomNormalLike>(opset).Invoke(
+          [&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -236,9 +251,12 @@ void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry, TestMode mod
     node.add_output("y");
     AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::DOUBLE));
     Expect(registry, std::move(node), "test_cc_randomnormallike_double", {opset}, [=]() -> IoData {
-      Tensor y = onnx_kernels::kernel::RandomNormalLike(ctx)(
-          x, /*mean=*/0.0, /*scale=*/1.0, onnx_kernels::kernel::RandomNormalLike::kNoSeed,
-          /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::RandomNormalLike>(opset).Invoke(
+          [&](const auto &kernel) {
+            return kernel(x, /*mean=*/0.0, /*scale=*/1.0,
+                          onnx_kernels::kernel::RandomNormalLike::kNoSeed,
+                          /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
+          });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -255,9 +273,11 @@ void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry, TestMode mod
     AddFloatAttr(node, "scale", 0.5f);
     AddFloatAttr(node, "seed", 7.0f);
     Expect(registry, std::move(node), "test_cc_randomnormallike_seeded", {opset}, [=]() -> IoData {
-      Tensor y =
-          onnx_kernels::kernel::RandomNormalLike(ctx)(x, /*mean=*/1.0, /*scale=*/0.5, /*seed=*/7,
-                                                      /*dtype=*/0);
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::RandomNormalLike>(opset).Invoke(
+          [&](const auto &kernel) {
+            return kernel(x, /*mean=*/1.0, /*scale=*/0.5, /*seed=*/7,
+                          /*dtype=*/0);
+          });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -268,20 +288,20 @@ void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry, TestMode mod
 // ---------------------------------------------------------------------------
 void RegisterRandomUniformLikeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
     node.set_op_type("RandomUniformLike");
     node.add_input("x");
     node.add_output("y");
 
-    const onnx_kernels::kernel::RandomUniformLike random_uniform_like_kernel{ctx};
+    const auto random_uniform_like_kernel =
+        MakeReferenceKernel<onnx_kernels::kernel::RandomUniformLike>(opset);
     Expect(registry, std::move(node), "test_cc_randomuniformlike_benchmark", {opset},
            {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
            [random_uniform_like_kernel]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654322ULL);
-             Tensor y = random_uniform_like_kernel(x);
+             Tensor y =
+                 random_uniform_like_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -296,7 +316,8 @@ void RegisterRandomUniformLikeCases(std::vector<TestCase> &registry, TestMode mo
     node.add_input("x");
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_randomuniformlike", {opset}, [=]() -> IoData {
-      Tensor y = onnx_kernels::kernel::RandomUniformLike(ctx)(x);
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::RandomUniformLike>(opset).Invoke(
+          [&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -311,9 +332,12 @@ void RegisterRandomUniformLikeCases(std::vector<TestCase> &registry, TestMode mo
     node.add_output("y");
     AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::DOUBLE));
     Expect(registry, std::move(node), "test_cc_randomuniformlike_double", {opset}, [=]() -> IoData {
-      Tensor y = onnx_kernels::kernel::RandomUniformLike(ctx)(
-          x, /*low=*/0.0, /*high=*/1.0, onnx_kernels::kernel::RandomUniformLike::kNoSeed,
-          /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::RandomUniformLike>(opset).Invoke(
+          [&](const auto &kernel) {
+            return kernel(x, /*low=*/0.0, /*high=*/1.0,
+                          onnx_kernels::kernel::RandomUniformLike::kNoSeed,
+                          /*dtype=*/static_cast<int32_t>(DataType::DOUBLE));
+          });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -330,9 +354,11 @@ void RegisterRandomUniformLikeCases(std::vector<TestCase> &registry, TestMode mo
     AddFloatAttr(node, "high", 5.0f);
     AddFloatAttr(node, "seed", 7.0f);
     Expect(registry, std::move(node), "test_cc_randomuniformlike_seeded", {opset}, [=]() -> IoData {
-      Tensor y =
-          onnx_kernels::kernel::RandomUniformLike(ctx)(x, /*low=*/-2.0, /*high=*/5.0, /*seed=*/7,
-                                                       /*dtype=*/0);
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::RandomUniformLike>(opset).Invoke(
+          [&](const auto &kernel) {
+            return kernel(x, /*low=*/-2.0, /*high=*/5.0, /*seed=*/7,
+                          /*dtype=*/0);
+          });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

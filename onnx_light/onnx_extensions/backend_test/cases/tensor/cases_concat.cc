@@ -44,8 +44,7 @@ NodeProto MakeConcatNode(int64_t axis) {
 
 void RegisterConcatCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Concat concat_kernel{ctx};
+  const auto concat_kernel = MakeReferenceKernel<onnx_kernels::kernel::Concat>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> shape = {kBenchmarkElementwiseSize / 2};
@@ -55,7 +54,8 @@ void RegisterConcatCases(std::vector<TestCase> &registry, TestMode mode) {
            {kBenchmarkElementwiseSize}, [concat_kernel, shape]() -> IoData {
              Tensor x0 = RandnTensor(DataType::FLOAT, shape, 2001);
              Tensor x1 = RandnTensor(DataType::FLOAT, shape, 2002);
-             Tensor y = concat_kernel({x0, x1}, 0);
+             Tensor y =
+                 concat_kernel.Invoke([&](const auto &kernel) { return kernel({x0, x1}, 0); });
              return IoData{{std::move(x0), std::move(x1)}, {std::move(y)}};
            });
     return;
@@ -86,7 +86,8 @@ void RegisterConcatCases(std::vector<TestCase> &registry, TestMode mode) {
              [=]() -> IoData {
                Tensor x0 = Tensor::FromFloat("", shape, values0);
                Tensor x1 = Tensor::FromFloat("", shape, values1);
-               Tensor y = concat_kernel({x0, x1}, axis);
+               Tensor y =
+                   concat_kernel.Invoke([&](const auto &kernel) { return kernel({x0, x1}, axis); });
                return IoData{{std::move(x0), std::move(x1)}, {std::move(y)}};
              });
     }
@@ -98,7 +99,8 @@ void RegisterConcatCases(std::vector<TestCase> &registry, TestMode mode) {
              {opset}, [=]() -> IoData {
                Tensor x0 = Tensor::FromFloat("", shape, values0);
                Tensor x1 = Tensor::FromFloat("", shape, values1);
-               Tensor y = concat_kernel({x0, x1}, axis);
+               Tensor y =
+                   concat_kernel.Invoke([&](const auto &kernel) { return kernel({x0, x1}, axis); });
                return IoData{{std::move(x0), std::move(x1)}, {std::move(y)}};
              });
     }

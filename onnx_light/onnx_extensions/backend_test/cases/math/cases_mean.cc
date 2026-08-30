@@ -22,8 +22,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterMeanCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Mean mean_kernel{ctx};
+  const auto mean_kernel = MakeReferenceKernel<onnx_kernels::kernel::Mean>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -37,7 +36,7 @@ void RegisterMeanCases(std::vector<TestCase> &registry, TestMode mode) {
            [mean_kernel, shape]() -> IoData {
              Tensor x0 = RandnTensor(DataType::FLOAT, shape, 425);
              Tensor x1 = RandnTensor(DataType::FLOAT, shape, 426);
-             Tensor z = mean_kernel({x0, x1});
+             Tensor z = mean_kernel.Invoke([&](const auto &kernel) { return kernel({x0, x1}); });
              return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
            });
     return;
@@ -55,7 +54,7 @@ void RegisterMeanCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 0.0f, 2.0f});
       Tensor x1 = Tensor::FromFloat("", {3}, {1.0f, 3.0f, 4.0f});
       Tensor x2 = Tensor::FromFloat("", {3}, {2.0f, 6.0f, 6.0f});
-      Tensor z = mean_kernel({x0, x1, x2});
+      Tensor z = mean_kernel.Invoke([&](const auto &kernel) { return kernel({x0, x1, x2}); });
 
       return IoData{{std::move(x0), std::move(x1), std::move(x2)}, {std::move(z)}};
     });
@@ -69,7 +68,7 @@ void RegisterMeanCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("result");
     Expect(registry, std::move(node), "test_mean_one_input", {opset}, [=]() -> IoData {
       Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 0.0f, 2.0f});
-      Tensor z = mean_kernel({x0});
+      Tensor z = mean_kernel.Invoke([&](const auto &kernel) { return kernel({x0}); });
 
       return IoData{{std::move(x0)}, {std::move(z)}};
     });
@@ -85,7 +84,7 @@ void RegisterMeanCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_mean_two_inputs", {opset}, [=]() -> IoData {
       Tensor x0 = Tensor::FromFloat("", {3}, {3.0f, 0.0f, 2.0f});
       Tensor x1 = Tensor::FromFloat("", {3}, {1.0f, 3.0f, 4.0f});
-      Tensor z = mean_kernel({x0, x1});
+      Tensor z = mean_kernel.Invoke([&](const auto &kernel) { return kernel({x0, x1}); });
 
       return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
     });
@@ -101,7 +100,7 @@ void RegisterMeanCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_mean_bcast", {opset}, [=]() -> IoData {
       Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor x1 = Tensor::FromFloat("", {}, {10.0f});
-      Tensor z = mean_kernel({x0, x1});
+      Tensor z = mean_kernel.Invoke([&](const auto &kernel) { return kernel({x0, x1}); });
 
       return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
     });

@@ -45,8 +45,7 @@ template <typename Kernel>
 void RegisterBinaryNanInf(std::vector<TestCase> &registry, const char *op_type, int opset_version,
                           const std::string &test_name_stem) {
   const OpsetId opset = DefaultOpset(opset_version);
-  const onnx_kernels::kernel::KernelContext ctx{opset};
-  const Kernel kk{ctx};
+  const auto kk = MakeReferenceKernel<Kernel>(opset);
 
   // Element-wise case using the shared NaN/Inf operand vectors.
   {
@@ -54,10 +53,14 @@ void RegisterBinaryNanInf(std::vector<TestCase> &registry, const char *op_type, 
 
     Tensor x = Tensor::FromFloat("x", kBinaryShape, kXValues);
     Tensor y = Tensor::FromFloat("y", kBinaryShape, kYValues);
-    Tensor z = kk(x, y);
-
     const std::string name = "test_cc_" + test_name_stem + "_nan_inf";
-    Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry, TestCaseTag::NAN_INF);
+    Expect(
+        registry, std::move(node), name, {opset},
+        [=]() -> IoData {
+          Tensor z = kk.Invoke([&](const auto &kernel) { return kernel(x, y); });
+          return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+        },
+        "backend-test", TestCaseTag::NAN_INF);
   }
 
   // Scalar-broadcast case: combining a NaN scalar against a vector of
@@ -67,10 +70,14 @@ void RegisterBinaryNanInf(std::vector<TestCase> &registry, const char *op_type, 
 
     Tensor x = Tensor::FromFloat("x", {4}, {1.0f, -1.0f, 2.0f, -2.0f});
     Tensor y = Tensor::FromFloat("y", {}, {kNan});
-    Tensor z = kk(x, y);
-
     const std::string name = "test_cc_" + test_name_stem + "_nan_inf_bcast_nan_scalar";
-    Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry, TestCaseTag::NAN_INF);
+    Expect(
+        registry, std::move(node), name, {opset},
+        [=]() -> IoData {
+          Tensor z = kk.Invoke([&](const auto &kernel) { return kernel(x, y); });
+          return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+        },
+        "backend-test", TestCaseTag::NAN_INF);
   }
 
   // Scalar-broadcast case: combining a +Inf scalar against a vector of
@@ -81,10 +88,14 @@ void RegisterBinaryNanInf(std::vector<TestCase> &registry, const char *op_type, 
 
     Tensor x = Tensor::FromFloat("x", {4}, {1.0f, -1.0f, 2.0f, -2.0f});
     Tensor y = Tensor::FromFloat("y", {}, {kPosInf});
-    Tensor z = kk(x, y);
-
     const std::string name = "test_cc_" + test_name_stem + "_nan_inf_bcast_inf_scalar";
-    Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry, TestCaseTag::NAN_INF);
+    Expect(
+        registry, std::move(node), name, {opset},
+        [=]() -> IoData {
+          Tensor z = kk.Invoke([&](const auto &kernel) { return kernel(x, y); });
+          return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+        },
+        "backend-test", TestCaseTag::NAN_INF);
   }
 }
 

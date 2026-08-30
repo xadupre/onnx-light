@@ -26,8 +26,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::LpNormalization kernel{ctx};
+  const auto kernel = MakeReferenceKernel<onnx_kernels::kernel::LpNormalization>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -39,7 +38,7 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode
     Expect(registry, std::move(node), "test_cc_lpnormalization_default_benchmark", {opset}, {count},
            {count}, [kernel]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {32, 64, 1024}, 2101);
-             Tensor y = kernel(x);
+             Tensor y = kernel.Invoke([&](const auto &kernel) { return kernel(x); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -55,7 +54,7 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode
     node.add_input("x");
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_lpnormalization_default", {opset}, [=]() -> IoData {
-      Tensor y = kernel(x);
+      Tensor y = kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -69,7 +68,7 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "axis", 0);
     AddAttribute<int64_t>(node, "p", 1);
     Expect(registry, std::move(node), "test_cc_lpnormalization_axis0_p1", {opset}, [=]() -> IoData {
-      Tensor y = kernel(x, /*axis=*/0, /*p=*/1);
+      Tensor y = kernel.Invoke([&](const auto &kernel) { return kernel(x, /*axis=*/0, /*p=*/1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -83,7 +82,7 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "axis", 0);
     AddAttribute<int64_t>(node, "p", 2);
     Expect(registry, std::move(node), "test_l2normalization_axis_0", {opset}, [=]() -> IoData {
-      Tensor y = kernel(x, /*axis=*/0, /*p=*/2);
+      Tensor y = kernel.Invoke([&](const auto &kernel) { return kernel(x, /*axis=*/0, /*p=*/2); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -100,7 +99,8 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "axis", 1);
     AddAttribute<int64_t>(node, "p", 2);
     Expect(registry, std::move(node), "test_l2normalization_axis_1", {opset}, [=]() -> IoData {
-      Tensor y = kernel(x22, /*axis=*/1, /*p=*/2);
+      Tensor y =
+          kernel.Invoke([&](const auto &kernel) { return kernel(x22, /*axis=*/1, /*p=*/2); });
       return IoData{{std::move(x22)}, {std::move(y)}};
     });
   }
@@ -115,7 +115,7 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "axis", 0);
     AddAttribute<int64_t>(node, "p", 1);
     Expect(registry, std::move(node), "test_l1normalization_axis_0", {opset}, [=]() -> IoData {
-      Tensor y = kernel(x1, /*axis=*/0, /*p=*/1);
+      Tensor y = kernel.Invoke([&](const auto &kernel) { return kernel(x1, /*axis=*/0, /*p=*/1); });
       return IoData{{std::move(x1)}, {std::move(y)}};
     });
   }
@@ -129,7 +129,8 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "axis", 1);
     AddAttribute<int64_t>(node, "p", 1);
     Expect(registry, std::move(node), "test_l1normalization_axis_1", {opset}, [=]() -> IoData {
-      Tensor y = kernel(x22, /*axis=*/1, /*p=*/1);
+      Tensor y =
+          kernel.Invoke([&](const auto &kernel) { return kernel(x22, /*axis=*/1, /*p=*/1); });
       return IoData{{std::move(x22)}, {std::move(y)}};
     });
   }
@@ -143,7 +144,7 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode
     AddAttribute<int64_t>(node, "axis", -1);
     AddAttribute<int64_t>(node, "p", 1);
     Expect(registry, std::move(node), "test_l1normalization_axis_last", {opset}, [=]() -> IoData {
-      Tensor y = kernel(x, /*axis=*/-1, /*p=*/1);
+      Tensor y = kernel.Invoke([&](const auto &kernel) { return kernel(x, /*axis=*/-1, /*p=*/1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

@@ -38,8 +38,7 @@ NodeProto MakeOneHotNode(bool set_axis, int64_t axis) {
 
 void RegisterOneHotCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::OneHot one_hot_kernel{ctx};
+  const auto one_hot_kernel = MakeReferenceKernel<onnx_kernels::kernel::OneHot>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     constexpr int64_t index_count = kBenchmarkElementwiseSize / 12;
@@ -54,7 +53,8 @@ void RegisterOneHotCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor depth = Tensor::FromFloat("depth", {}, {12.0f});
              Tensor values = Tensor::FromInt32("values", {2}, {2, 5});
              onnx_kernels::kernel::OneHot::Attributes attrs;
-             Tensor y = one_hot_kernel(indices, depth, values, attrs);
+             Tensor y = one_hot_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(indices, depth, values, attrs); });
              return IoData{{std::move(indices), std::move(depth), std::move(values)},
                            {std::move(y)}};
            });
@@ -70,7 +70,8 @@ void RegisterOneHotCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor depth = Tensor::FromFloat("depth", {}, {12.0f});
              const Tensor values = Tensor::FromInt32("values", {2}, {2, 5});
              onnx_kernels::kernel::OneHot::Attributes attrs; // axis = -1
-             const Tensor y = one_hot_kernel(indices, depth, values, attrs);
+             const Tensor y = one_hot_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(indices, depth, values, attrs); });
              return IoData{{std::move(indices), std::move(depth), std::move(values)},
                            {std::move(y)}};
            });
@@ -86,7 +87,8 @@ void RegisterOneHotCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor values = Tensor::FromFloat("values", {2}, {1.0f, 3.0f});
              onnx_kernels::kernel::OneHot::Attributes attrs;
              attrs.axis = 1;
-             const Tensor y = one_hot_kernel(indices, depth, values, attrs);
+             const Tensor y = one_hot_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(indices, depth, values, attrs); });
              return IoData{{std::move(indices), std::move(depth), std::move(values)},
                            {std::move(y)}};
            });
@@ -102,7 +104,8 @@ void RegisterOneHotCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor values = Tensor::FromFloat("values", {2}, {1.0f, 3.0f});
              onnx_kernels::kernel::OneHot::Attributes attrs;
              attrs.axis = 1;
-             const Tensor y = one_hot_kernel(indices, depth, values, attrs);
+             const Tensor y = one_hot_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(indices, depth, values, attrs); });
              return IoData{{std::move(indices), std::move(depth), std::move(values)},
                            {std::move(y)}};
            });
@@ -118,7 +121,8 @@ void RegisterOneHotCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor values = Tensor::FromFloat("values", {2}, {1.0f, 3.0f});
              onnx_kernels::kernel::OneHot::Attributes attrs;
              attrs.axis = 1;
-             const Tensor y = one_hot_kernel(indices, depth, values, attrs);
+             const Tensor y = one_hot_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(indices, depth, values, attrs); });
              return IoData{{std::move(indices), std::move(depth), std::move(values)},
                            {std::move(y)}};
            });
@@ -134,7 +138,8 @@ void RegisterOneHotCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor values = Tensor::FromFloat("values", {2}, {1.0f, 3.0f});
              onnx_kernels::kernel::OneHot::Attributes attrs;
              attrs.axis = -2;
-             const Tensor y = one_hot_kernel(indices, depth, values, attrs);
+             const Tensor y = one_hot_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(indices, depth, values, attrs); });
              return IoData{{std::move(indices), std::move(depth), std::move(values)},
                            {std::move(y)}};
            });
@@ -149,7 +154,8 @@ void RegisterOneHotCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor depth = Tensor::FromInt64("depth", {}, {3});
              const Tensor values = Tensor::FromFloat("values", {2}, {0.0f, 1.0f});
              onnx_kernels::kernel::OneHot::Attributes attrs;
-             const Tensor y = one_hot_kernel(indices, depth, values, attrs);
+             const Tensor y = one_hot_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(indices, depth, values, attrs); });
              return IoData{{std::move(indices), std::move(depth), std::move(values)},
                            {std::move(y)}};
            });

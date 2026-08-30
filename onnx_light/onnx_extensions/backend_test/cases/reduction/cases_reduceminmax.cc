@@ -17,8 +17,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
 void EmitReduceMinMaxCase(std::vector<TestCase> &registry, const std::string &op_type,
-                          const onnx_kernels::kernel::ReduceMinMax &kernel,
-                          const std::string &case_name, const std::vector<int64_t> &data_shape,
+                          const auto &kernel, const std::string &case_name,
+                          const std::vector<int64_t> &data_shape,
                           const std::vector<float> &data_values,
                           const std::vector<int64_t> &axes_values, bool keepdims,
                           bool noop_with_empty_axes) {
@@ -46,8 +46,7 @@ void EmitReduceMinMaxCase(std::vector<TestCase> &registry, const std::string &op
 // "data" input). With ``noop_with_empty_axes`` default-false this reduces
 // over every dimension of ``data``.
 void EmitReduceMinMaxDefaultAxesCase(std::vector<TestCase> &registry, const std::string &op_type,
-                                     const onnx_kernels::kernel::ReduceMinMax &kernel,
-                                     const std::string &case_name,
+                                     const auto &kernel, const std::string &case_name,
                                      const std::vector<int64_t> &data_shape,
                                      const std::vector<float> &data_values, bool keepdims) {
   const OpsetId opset = DefaultOpset(18);
@@ -66,8 +65,7 @@ void EmitReduceMinMaxDefaultAxesCase(std::vector<TestCase> &registry, const std:
 }
 
 void RegisterReduceMinMaxCases(std::vector<TestCase> &registry, const std::string &op_type,
-                               const onnx_kernels::kernel::ReduceMinMax &kernel,
-                               const std::string &name_prefix) {
+                               const auto &kernel, const std::string &name_prefix) {
   const std::vector<int64_t> shape = {3, 2, 2};
   const std::vector<float> values = {1.0f, 2.0f, 3.0f, 4.0f,  5.0f,  6.0f,
                                      7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};
@@ -109,8 +107,7 @@ void RegisterReduceMinMaxCases(std::vector<TestCase> &registry, const std::strin
 // bit-match the upstream fixture.
 // ---------------------------------------------------------------------------
 void RegisterReduceMinMaxOnnxCases(std::vector<TestCase> &registry, const std::string &op_type,
-                                   const onnx_kernels::kernel::ReduceMinMax &kernel,
-                                   const std::string &onnx_prefix) {
+                                   const auto &kernel, const std::string &onnx_prefix) {
   const std::vector<int64_t> shape = {3, 2, 2};
   const std::vector<float> example_values = {1.0f, 2.0f, 3.0f, 4.0f,  5.0f,  6.0f,
                                              7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};
@@ -148,8 +145,8 @@ void RegisterReduceMinMaxOnnxCases(std::vector<TestCase> &registry, const std::s
 } // namespace
 
 void RegisterReduceMaxCases(std::vector<TestCase> &registry, TestMode mode) {
-  const KernelContext ctx{DefaultOpset(18)};
-  const onnx_kernels::kernel::ReduceMax reduce_max_kernel{ctx};
+  const auto reduce_max_kernel =
+      MakeReferenceKernel<onnx_kernels::kernel::ReduceMax>(DefaultOpset(18));
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -161,8 +158,9 @@ void RegisterReduceMaxCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_reducemax_default_axes_keepdims_benchmark",
            {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [reduce_max_kernel]() -> IoData {
              Tensor data = RandnTensor(DataType::FLOAT, {256, 256, 16}, /*seed=*/9701);
-             Tensor reduced =
-                 reduce_max_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             Tensor reduced = reduce_max_kernel.Invoke([&](const auto &kernel) {
+               return kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             });
              return IoData{{std::move(data)}, {std::move(reduced)}};
            });
     return;
@@ -192,7 +190,9 @@ void RegisterReduceMaxCases(std::vector<TestCase> &registry, TestMode mode) {
       const std::vector<uint8_t> bool_data = {1, 1, 1, 0, 0, 1, 0, 0};
       Tensor data = Tensor::FromBool("", {4, 2}, bool_data);
       Tensor axes = Tensor::FromInt64("", {1}, {1});
-      Tensor reduced = reduce_max_kernel(data, axes, /*keepdims=*/true, /*noop=*/false);
+      Tensor reduced = reduce_max_kernel.Invoke([&](const auto &kernel) {
+        return kernel(data, axes, /*keepdims=*/true, /*noop=*/false);
+      });
       return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
     });
   }
@@ -212,15 +212,17 @@ void RegisterReduceMaxCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_reduce_max_empty_set_bool", {opset}, [=]() -> IoData {
       Tensor data = Tensor::FromBool("", {2, 0, 4}, {});
       Tensor axes = Tensor::FromInt64("", {1}, {1});
-      Tensor reduced = reduce_max_kernel(data, axes, /*keepdims=*/true, /*noop=*/false);
+      Tensor reduced = reduce_max_kernel.Invoke([&](const auto &kernel) {
+        return kernel(data, axes, /*keepdims=*/true, /*noop=*/false);
+      });
       return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
     });
   }
 }
 
 void RegisterReduceMinCases(std::vector<TestCase> &registry, TestMode mode) {
-  const KernelContext ctx{DefaultOpset(18)};
-  const onnx_kernels::kernel::ReduceMin reduce_min_kernel{ctx};
+  const auto reduce_min_kernel =
+      MakeReferenceKernel<onnx_kernels::kernel::ReduceMin>(DefaultOpset(18));
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -232,8 +234,9 @@ void RegisterReduceMinCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_reducemin_default_axes_keepdims_benchmark",
            {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [reduce_min_kernel]() -> IoData {
              Tensor data = RandnTensor(DataType::FLOAT, {256, 256, 16}, /*seed=*/9701);
-             Tensor reduced =
-                 reduce_min_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             Tensor reduced = reduce_min_kernel.Invoke([&](const auto &kernel) {
+               return kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             });
              return IoData{{std::move(data)}, {std::move(reduced)}};
            });
     return;
@@ -260,7 +263,9 @@ void RegisterReduceMinCases(std::vector<TestCase> &registry, TestMode mode) {
       const std::vector<uint8_t> bool_data = {1, 1, 1, 0, 0, 1, 0, 0};
       Tensor data = Tensor::FromBool("", {4, 2}, bool_data);
       Tensor axes = Tensor::FromInt64("", {1}, {1});
-      Tensor reduced = reduce_min_kernel(data, axes, /*keepdims=*/true, /*noop=*/false);
+      Tensor reduced = reduce_min_kernel.Invoke([&](const auto &kernel) {
+        return kernel(data, axes, /*keepdims=*/true, /*noop=*/false);
+      });
       return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
     });
   }

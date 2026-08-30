@@ -12,9 +12,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterLinearRegressorCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
-  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const onnx_kernels::kernel::LinearRegressor reg{ctx};
+  const auto reg = MakeReferenceKernel<onnx_kernels::kernel::LinearRegressor>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -47,7 +46,9 @@ void RegisterLinearRegressorCases(std::vector<TestCase> &registry, TestMode mode
     Expect(registry, std::move(node), "test_cc_linearregressor_single_target_benchmark",
            {default_opset, opset}, {16384}, {8192}, [reg]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {8192, 2}, 2661);
-             Tensor y = reg.operator()<float>(x, {0.5f, -1.0f}, {0.25f}, 1, "NONE");
+             Tensor y = reg.Invoke([&](const auto &kernel) {
+               return kernel.template operator()<float>(x, {0.5f, -1.0f}, {0.25f}, 1, "NONE");
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -83,7 +84,9 @@ void RegisterLinearRegressorCases(std::vector<TestCase> &registry, TestMode mode
   Expect(registry, std::move(node), "test_cc_linearregressor_single_target", {default_opset, opset},
          [=]() -> IoData {
            Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 1.0f, 0.0f, 3.0f});
-           Tensor y = reg.operator()<float>(x, {0.5f, -1.0f}, {0.25f}, 1, "NONE");
+           Tensor y = reg.Invoke([&](const auto &kernel) {
+             return kernel.template operator()<float>(x, {0.5f, -1.0f}, {0.25f}, 1, "NONE");
+           });
            return IoData{{std::move(x)}, {std::move(y)}};
          });
 }

@@ -82,8 +82,7 @@ Tensor MakeQuantTensor(const std::string &name, DataType dtype, const std::vecto
 // ---------------------------------------------------------------------------
 void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::QLinearMatMul ql{ctx};
+  const auto ql = MakeReferenceKernel<onnx_kernels::kernel::QLinearMatMul>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> a_shape{512, 512};
@@ -100,7 +99,9 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
              Tensor a_zp = MakeQuantScalar("a_zero_point", DataType::UINT8, 113);
              Tensor b_zp_2d = MakeQuantScalar("b_zero_point", DataType::UINT8, 114);
              Tensor y_zp = MakeQuantScalar("y_zero_point", DataType::UINT8, 118);
-             Tensor y_2d = ql(a_2d, a_scale_f, a_zp, b_2d, b_scale_f, b_zp_2d, y_scale_f, y_zp);
+             Tensor y_2d = ql.Invoke([&](const auto &kernel) {
+               return kernel(a_2d, a_scale_f, a_zp, b_2d, b_scale_f, b_zp_2d, y_scale_f, y_zp);
+             });
              y_2d.name = "y";
              return IoData{{std::move(a_2d), std::move(a_scale_f), std::move(a_zp), std::move(b_2d),
                             std::move(b_scale_f), std::move(b_zp_2d), std::move(y_scale_f),
@@ -141,12 +142,18 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
     // 2-D case.
     Tensor a_2d = MakeQuantTensor("a", dtype, {2, 4}, shift_int8(a_2d_raw, is_int8));
     Tensor b_2d = MakeQuantTensor("b", dtype, {4, 3}, shift_int8(b_raw, is_int8));
-    Tensor y_2d = ql(a_2d, a_scale_f, a_zp, b_2d, b_scale_f, b_zp_2d, y_scale_f, y_zp);
-    y_2d.name = "y";
+    const auto make_y_2d = [=]() {
+      Tensor y = ql.Invoke([&](const auto &kernel) {
+        return kernel(a_2d, a_scale_f, a_zp, b_2d, b_scale_f, b_zp_2d, y_scale_f, y_zp);
+      });
+      y.name = "y";
+      return y;
+    };
     {
       NodeProto node = MakeQLinearMatMulNode();
       Expect(registry, std::move(node), "test_cc_qlinearmatmul_2D_" + dtype_suffix + "_float32",
              {opset}, [=]() -> IoData {
+               Tensor y_2d = make_y_2d();
                return IoData{{std::move(a_2d), std::move(a_scale_f), std::move(a_zp),
                               std::move(b_2d), std::move(b_scale_f), std::move(b_zp_2d),
                               std::move(y_scale_f), std::move(y_zp)},
@@ -157,6 +164,7 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
       NodeProto node = MakeQLinearMatMulNode();
       Expect(registry, std::move(node), "test_cc_qlinearmatmul_2D_" + dtype_suffix + "_float16",
              {opset}, [=]() -> IoData {
+               Tensor y_2d = make_y_2d();
                return IoData{{std::move(a_2d), std::move(a_scale_h), std::move(a_zp),
                               std::move(b_2d), std::move(b_scale_h), std::move(b_zp_2d),
                               std::move(y_scale_h), std::move(y_zp)},
@@ -180,12 +188,18 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor b_3d = MakeQuantTensor("b", dtype, {2, 4, 3}, shift_int8(b_3d_src, is_int8));
     Tensor b_zp_3d = MakeQuantScalar("b_zero_point", dtype, /*value=*/b_zp_val_2d);
 
-    Tensor y_3d_f32 = ql(a_3d, a_scale_f, a_zp, b_3d, b_scale_f, b_zp_3d, y_scale_f, y_zp);
-    y_3d_f32.name = "y";
+    const auto make_y_3d = [=]() {
+      Tensor y = ql.Invoke([&](const auto &kernel) {
+        return kernel(a_3d, a_scale_f, a_zp, b_3d, b_scale_f, b_zp_3d, y_scale_f, y_zp);
+      });
+      y.name = "y";
+      return y;
+    };
     {
       NodeProto node = MakeQLinearMatMulNode();
       Expect(registry, std::move(node), "test_cc_qlinearmatmul_3D_" + dtype_suffix + "_float32",
              {opset}, [=]() -> IoData {
+               Tensor y_3d_f32 = make_y_3d();
                return IoData{{std::move(a_3d), std::move(a_scale_f), std::move(a_zp),
                               std::move(b_3d), std::move(b_scale_f), std::move(b_zp_3d),
                               std::move(y_scale_f), std::move(y_zp)},
@@ -203,6 +217,7 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry, TestMode mode) 
       NodeProto node = MakeQLinearMatMulNode();
       Expect(registry, std::move(node), "test_cc_qlinearmatmul_3D_" + dtype_suffix + "_float16",
              {opset}, [=]() -> IoData {
+               Tensor y_3d_f32 = make_y_3d();
                return IoData{{std::move(a_3d), std::move(a_scale_h), std::move(a_zp),
                               std::move(b_3d), std::move(b_scale_h), std::move(b_zp_3d),
                               std::move(y_scale_h), std::move(y_zp)},

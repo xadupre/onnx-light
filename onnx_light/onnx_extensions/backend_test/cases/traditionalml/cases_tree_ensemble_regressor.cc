@@ -29,7 +29,6 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
   // y[1] = 3.0 + 4.0 = 7.0   (both trees follow false branch)
 
   const OpsetId opset("ai.onnx.ml", 1);
-  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
 
   if (mode == TestMode::BENCHMARK) {
@@ -107,17 +106,24 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
     const std::vector<int64_t> target_ids{0, 0, 0, 0};
     const std::vector<float> target_weights{1.0f, 3.0f, 2.0f, 4.0f};
 
-    const onnx_kernels::kernel::TreeEnsembleRegressor reg{
-        ctx,           nodes_treeids,  nodes_nodeids,     nodes_featureids,
-        nodes_values,  nodes_modes,    nodes_truenodeids, nodes_falsenodeids,
-        nodes_missing, target_treeids, target_nodeids,    target_ids,
-        target_weights};
+    const auto reg =
+        MakeReferenceKernel<onnx_kernels::kernel::TreeEnsembleRegressor, std::vector<int64_t>,
+                            std::vector<int64_t>, std::vector<int64_t>, std::vector<float>,
+                            ParamStrings, std::vector<int64_t>, std::vector<int64_t>,
+                            std::vector<int64_t>, std::vector<int64_t>, std::vector<int64_t>,
+                            std::vector<int64_t>, std::vector<float>>(
+            opset, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
+            nodes_truenodeids, nodes_falsenodeids, nodes_missing, target_treeids, target_nodeids,
+            target_ids, target_weights);
 
     Expect(registry, std::move(node), "test_cc_treeensembleregressor_sum_single_target_benchmark",
            {default_opset, opset}, {8192}, {8192}, [reg]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {8192, 1}, 2731);
-             Tensor y = reg.operator()<float>(x, /*n_targets=*/1, /*aggregate_function=*/"SUM",
-                                              /*post_transform=*/"NONE", /*base_values=*/{});
+             Tensor y = reg.Invoke([&](const auto &kernel) {
+               return kernel.template operator()<float>(
+                   x, /*n_targets=*/1, /*aggregate_function=*/"SUM",
+                   /*post_transform=*/"NONE", /*base_values=*/{});
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -197,17 +203,24 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
   const std::vector<int64_t> target_ids{0, 0, 0, 0};
   const std::vector<float> target_weights{1.0f, 3.0f, 2.0f, 4.0f};
 
-  const onnx_kernels::kernel::TreeEnsembleRegressor reg{
-      ctx,           nodes_treeids,  nodes_nodeids,     nodes_featureids,
-      nodes_values,  nodes_modes,    nodes_truenodeids, nodes_falsenodeids,
-      nodes_missing, target_treeids, target_nodeids,    target_ids,
-      target_weights};
+  const auto reg =
+      MakeReferenceKernel<onnx_kernels::kernel::TreeEnsembleRegressor, std::vector<int64_t>,
+                          std::vector<int64_t>, std::vector<int64_t>, std::vector<float>,
+                          ParamStrings, std::vector<int64_t>, std::vector<int64_t>,
+                          std::vector<int64_t>, std::vector<int64_t>, std::vector<int64_t>,
+                          std::vector<int64_t>, std::vector<float>>(
+          opset, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
+          nodes_truenodeids, nodes_falsenodeids, nodes_missing, target_treeids, target_nodeids,
+          target_ids, target_weights);
 
   Expect(registry, std::move(node), "test_cc_treeensembleregressor_sum_single_target",
          {default_opset, opset}, [=]() -> IoData {
            Tensor x = Tensor::FromFloat("", {2, 1}, {0.5f, 3.0f});
-           Tensor y = reg.operator()<float>(x, /*n_targets=*/1, /*aggregate_function=*/"SUM",
-                                            /*post_transform=*/"NONE", /*base_values=*/{});
+           Tensor y = reg.Invoke([&](const auto &kernel) {
+             return kernel.template operator()<float>(
+                 x, /*n_targets=*/1, /*aggregate_function=*/"SUM",
+                 /*post_transform=*/"NONE", /*base_values=*/{});
+           });
            return IoData{{std::move(x)}, {std::move(y)}};
          });
 }

@@ -46,8 +46,7 @@ void AddIntsAttr(NodeProto &node, const char *name, const std::vector<int64_t> &
 void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::DictVectorizer dict{ctx};
+  const auto dict = MakeReferenceKernel<onnx_kernels::kernel::DictVectorizer>(opset);
 
   // string -> int64 dictionary with string vocabulary.
   {
@@ -63,7 +62,9 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode /*mod
              const std::vector<std::string> keys{"a", "c"};
              const std::vector<int64_t> values{4, 8};
              Map x("x", Tensor::FromStrings("", {2}, keys), Tensor::FromInt64("", {2}, values));
-             Tensor y = dict.operator()<std::string, int64_t>(keys, values, vocab);
+             Tensor y = dict.Invoke([&](const auto &kernel) {
+               return kernel.template operator()<std::string, int64_t>(keys, values, vocab);
+             });
              return IoData{{}, {std::move(y)}, {std::move(x)}};
            });
   }
@@ -82,7 +83,9 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode /*mod
              const std::vector<int64_t> keys{10, 30};
              const std::vector<float> values{1.5f, 2.5f};
              Map x("x", Tensor::FromInt64("", {2}, keys), Tensor::FromFloat("", {2}, values));
-             Tensor y = dict.operator()<int64_t, float>(keys, values, vocab);
+             Tensor y = dict.Invoke([&](const auto &kernel) {
+               return kernel.template operator()<int64_t, float>(keys, values, vocab);
+             });
              return IoData{{}, {std::move(y)}, {std::move(x)}};
            });
   }
@@ -96,8 +99,7 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry, TestMode /*mod
 void RegisterFeatureVectorizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::FeatureVectorizer fv{ctx};
+  const auto fv = MakeReferenceKernel<onnx_kernels::kernel::FeatureVectorizer>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -113,7 +115,7 @@ void RegisterFeatureVectorizerCases(std::vector<TestCase> &registry, TestMode mo
            {default_opset, opset}, {16384, 8192}, {24576}, [fv]() -> IoData {
              Tensor x0 = RandnTensor(DataType::FLOAT, {8192, 2}, 2711);
              Tensor x1 = RandnTensor(DataType::FLOAT, {8192, 1}, 2712);
-             Tensor y = fv({x0, x1}, {2, 1});
+             Tensor y = fv.Invoke([&](const auto &kernel) { return kernel({x0, x1}, {2, 1}); });
              return IoData{{std::move(x0), std::move(x1)}, {std::move(y)}};
            });
     return;
@@ -132,7 +134,7 @@ void RegisterFeatureVectorizerCases(std::vector<TestCase> &registry, TestMode mo
            {default_opset, opset}, [=]() -> IoData {
              Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              Tensor x1 = Tensor::FromFloat("", {2, 1}, {10.0f, 20.0f});
-             Tensor y = fv({x0, x1}, {2, 1});
+             Tensor y = fv.Invoke([&](const auto &kernel) { return kernel({x0, x1}, {2, 1}); });
 
              return IoData{{std::move(x0), std::move(x1)}, {std::move(y)}};
            });
@@ -151,7 +153,7 @@ void RegisterFeatureVectorizerCases(std::vector<TestCase> &registry, TestMode mo
            {default_opset, opset}, [=]() -> IoData {
              Tensor x0 = Tensor::FromInt64("", {1, 2}, {1, 2});
              Tensor x1 = Tensor::FromFloat("", {1, 2}, {3.5f, 4.5f});
-             Tensor y = fv({x0, x1}, {2, 2});
+             Tensor y = fv.Invoke([&](const auto &kernel) { return kernel({x0, x1}, {2, 2}); });
 
              return IoData{{std::move(x0), std::move(x1)}, {std::move(y)}};
            });

@@ -32,7 +32,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const KernelContext ctx{opset};
 
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> elem_shape = {512, 512};
@@ -43,13 +42,15 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mo
     }
     node.add_output("output_sequence");
     Expect(registry, std::move(node), "test_cc_sequence_construct_benchmark", {opset},
-           [ctx, elem_shape]() -> IoData {
+           [opset, elem_shape]() -> IoData {
              std::vector<Tensor> tensors;
              tensors.reserve(8);
              for (int i = 0; i < 8; ++i) {
                tensors.push_back(RandnTensor(DataType::FLOAT, elem_shape, 2001 + i));
              }
-             Tensor output = onnx_kernels::kernel::SequenceConstruct(ctx)(tensors);
+             Tensor output =
+                 MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+                     [&](const auto &kernel) { return kernel(tensors); });
              return IoData{std::move(tensors), {std::move(output)}};
            },
            "", TestCaseTag::NONE,
@@ -74,7 +75,8 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mo
              Tensor c = Tensor::FromFloat("", elem_shape, {6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f});
 
              Tensor output =
-                 onnx_kernels::kernel::SequenceConstruct(ctx)(std::vector<Tensor>{a, b, c});
+                 MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+                     [&](const auto &kernel) { return kernel(std::vector<Tensor>{a, b, c}); });
 
              return IoData{{std::move(a), std::move(b), std::move(c)}, {std::move(output)}};
            },
@@ -93,7 +95,9 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry, TestMode mo
            [=]() -> IoData {
              Tensor a = Tensor::FromInt64("", elem_shape, {-1, 0, 1, 2});
 
-             Tensor output = onnx_kernels::kernel::SequenceConstruct(ctx)(std::vector<Tensor>{a});
+             Tensor output =
+                 MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+                     [&](const auto &kernel) { return kernel(std::vector<Tensor>{a}); });
 
              return IoData{{std::move(a)}, {std::move(output)}};
            },

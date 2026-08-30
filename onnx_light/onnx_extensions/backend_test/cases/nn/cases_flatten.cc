@@ -58,8 +58,7 @@ std::vector<float> SequentialFloats(size_t count) {
 // ---------------------------------------------------------------------------
 void RegisterFlattenCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(25);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Flatten kernel{ctx};
+  const auto kernel = MakeReferenceKernel<onnx_kernels::kernel::Flatten>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeFlattenNode(/*axis=*/1, /*include_axis=*/false);
@@ -67,7 +66,7 @@ void RegisterFlattenCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_flatten_default_axis_benchmark", {opset}, {count},
            {count}, [kernel]() -> IoData {
              Tensor a = RandnTensor(DataType::FLOAT, {64, 64, 32, 32}, 1701);
-             Tensor b = kernel(a);
+             Tensor b = kernel.Invoke([&](const auto &kernel) { return kernel(a); });
              return IoData{{std::move(a)}, {std::move(b)}};
            });
     return;
@@ -79,7 +78,7 @@ void RegisterFlattenCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_flatten_default_axis", {opset}, [=]() -> IoData {
       std::vector<float> data = SequentialFloats(5 * 4 * 3 * 2);
       Tensor a = Tensor::FromFloat("", {5, 4, 3, 2}, data);
-      Tensor b = kernel(a);
+      Tensor b = kernel.Invoke([&](const auto &kernel) { return kernel(a); });
       return IoData{{std::move(a)}, {std::move(b)}};
     });
   }
@@ -93,7 +92,7 @@ void RegisterFlattenCases(std::vector<TestCase> &registry, TestMode mode) {
              [kernel, shape, axis]() -> IoData {
                std::vector<float> data = SequentialFloats(2 * 3 * 4 * 5);
                Tensor a = Tensor::FromFloat("", shape, data);
-               Tensor b = kernel(a, axis);
+               Tensor b = kernel.Invoke([&](const auto &kernel) { return kernel(a, axis); });
                return IoData{{std::move(a)}, {std::move(b)}};
              });
     }
@@ -108,7 +107,7 @@ void RegisterFlattenCases(std::vector<TestCase> &registry, TestMode mode) {
              [kernel, shape, axis]() -> IoData {
                std::vector<float> data = SequentialFloats(2 * 3 * 4 * 5);
                Tensor a = Tensor::FromFloat("", shape, data);
-               Tensor b = kernel(a, axis);
+               Tensor b = kernel.Invoke([&](const auto &kernel) { return kernel(a, axis); });
                return IoData{{std::move(a)}, {std::move(b)}};
              });
     }

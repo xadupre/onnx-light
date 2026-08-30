@@ -94,8 +94,10 @@ struct TestCase;
  * Product of a lazily-built :ref:`TestCase`: the single-node ``ModelProto``
  * together with its input/output data sets. A ``TestCase`` stores a builder
  * returning this so that constructing the (potentially large) model and
- * running the kernel that computes the expected outputs is deferred until a
- * consumer actually needs them. Collecting a large family of cases (in
+ * running the short-lived reference kernel that computes expected outputs is
+ * deferred until a consumer actually needs them. Neither the builder nor an
+ * unmaterialized case owns a kernel or ``KernelContext``. Collecting a large
+ * family of cases (in
  * particular the ``BENCHMARK`` cases whose inputs contain millions of
  * elements) therefore stays cheap.
  */
@@ -122,9 +124,8 @@ struct BuiltCase {
  * it carries a ``build`` closure that produces the :ref:`BuiltCase` — the
  * ``ModelProto`` and its ``data_sets`` — on first access via :func:`model` /
  * :func:`data_sets` / :func:`Materialize`. Manually-assembled cases
- * (control-flow, sequence, ...) initially populate the model and data-set
- * caches directly; the top-level collector replaces those caches with a
- * rebuilding closure before returning them to consumers. Every case records
+ * (control-flow, sequence, ...) use the same lazy builder model so collection
+ * never computes expected outputs. Every case records
  * ``declared_input_element_counts`` /
  * ``declared_output_element_counts`` so its sizing can be checked without
  * running the (potentially expensive) builder.
@@ -211,7 +212,7 @@ struct TestCase {
   void Materialize();
 
   /// Releases the cached payload and, for collected cases, the primary build
-  /// closure together with resources such as captured kernel instances.
+  /// closure together with any captured input-generation state.
   /// Existing Python references retain shared ownership of released models or
   /// data sets. Eager cases without a rebuild fallback reject unloading.
   void unload();
@@ -322,15 +323,15 @@ void AppendValueInfo(ValueInfoProto &vi, const std::string &name, TensorProto::D
 /**
  * Describes an ONNX value type for a graph value-info, supporting the
  * container kinds the backend test cases need: a plain ``Tensor``, a
- * ``Sequence`` of an element type, or a ``Map`` from a key type to a value
- * type. Built via the factory helpers :func:`TensorTypeSpec`,
- * :func:`SequenceTypeSpec` and :func:`MapTypeSpec` and consumed by
+ * ``Sequence`` or ``Optional`` of an element type, or a ``Map`` from a key
+ * type to a value type. Built via the factory helpers :func:`TensorTypeSpec`,
+ * :func:`SequenceTypeSpec`, :func:`OptionalTypeSpec` and :func:`MapTypeSpec` and consumed by
  * :func:`AppendValueInfo` / :func:`Expect` to emit value-infos whose declared
  * schema type differs from the materialized ``Tensor`` representation (e.g.
  * sequence- or map-valued outputs).
  */
 struct TypeSpec {
-  enum class Kind { kTensor, kSequence, kMap };
+  enum class Kind { kTensor, kSequence, kOptional, kMap };
 
   Kind kind = Kind::kTensor;
   /// For ``kTensor``: the tensor element type. For ``kMap``: the key type.
@@ -356,6 +357,10 @@ TypeSpec TensorTypeSpec(int32_t elem_type, std::vector<int64_t> shape);
 /// Returns a ``TypeSpec`` describing a ``Sequence`` whose elements have type
 /// ``elem``.
 TypeSpec SequenceTypeSpec(TypeSpec elem);
+
+/// Returns a ``TypeSpec`` describing an ``Optional`` whose element has type
+/// ``elem``.
+TypeSpec OptionalTypeSpec(TypeSpec elem);
 
 /// Returns a ``TypeSpec`` describing a ``Map`` from ``key_type`` keys to
 /// ``value`` values.

@@ -76,8 +76,7 @@ void BuildConstantBranch(GraphProto &g, const std::string &graph_name,
 // ---------------------------------------------------------------------------
 void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const If if_kernel{ctx};
+  const auto if_kernel = MakeReferenceKernel<If>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> big_shape = {512, 512};
@@ -101,7 +100,8 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
 
     Expect(registry, std::move(node), "test_cc_if_benchmark", {opset}, [=]() -> IoData {
       Tensor cond("", DataType::BOOL, {}, {1});
-      Tensor res = if_kernel(cond, then_value, else_value);
+      Tensor res = if_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(cond, then_value, else_value); });
       return IoData{{std::move(cond)}, {std::move(res)}};
     });
     return;
@@ -134,7 +134,8 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = make_node();
     Expect(registry, std::move(node), "test_cc_if", {opset}, [=]() -> IoData {
       Tensor cond("", DataType::BOOL, {}, {1});
-      Tensor res = if_kernel(cond, then_value, else_value);
+      Tensor res = if_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(cond, then_value, else_value); });
       return IoData{{std::move(cond)}, {std::move(res)}};
     });
   }
@@ -144,7 +145,8 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
     NodeProto node = make_node();
     Expect(registry, std::move(node), "test_cc_if_else", {opset}, [=]() -> IoData {
       Tensor cond("", DataType::BOOL, {}, {0});
-      Tensor res = if_kernel(cond, then_value, else_value);
+      Tensor res = if_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(cond, then_value, else_value); });
       return IoData{{std::move(cond)}, {std::move(res)}};
     });
   }

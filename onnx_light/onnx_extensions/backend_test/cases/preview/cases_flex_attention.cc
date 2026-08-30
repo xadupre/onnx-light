@@ -485,9 +485,7 @@ Tensor ComputeFlexAttentionExpected(const Tensor &Q, const Tensor &K, const Tens
 // ---------------------------------------------------------------------------
 void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = PreviewOpset(1);
-  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const onnx_kernels::kernel::FlexAttention flex{ctx};
 
   auto make_node = []() {
     NodeProto node;
@@ -504,11 +502,11 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     NodeProto node = make_node();
     const int64_t count = 1 * 8 * 128 * 64;
     Expect(registry, std::move(node), "test_cc_flexattention_basic_benchmark",
-           {default_opset, opset}, {count, count, count}, {count}, [flex]() -> IoData {
+           {default_opset, opset}, {count, count, count}, {count}, [opset]() -> IoData {
              Tensor Q = RandnTensor(DataType::FLOAT, {1, 8, 128, 64}, 987654321ULL);
              Tensor K = RandnTensor(DataType::FLOAT, {1, 8, 128, 64}, 987654322ULL);
              Tensor V = RandnTensor(DataType::FLOAT, {1, 8, 128, 64}, 987654323ULL);
-             Tensor Y = flex(Q, K, V);
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::FlexAttention>(opset)(Q, K, V);
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
     return;
@@ -552,10 +550,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
                                      0.0f,
                                      1.0f, // v1
                                  });
-    Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
     Expect(registry, std::move(node), "test_cc_flexattention_basic", {default_opset, opset},
            [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::FlexAttention>(opset)(Q, K, V);
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -623,10 +621,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
                                      -0.5f,
                                      0.0f,
                                  });
-    Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
     Expect(registry, std::move(node), "test_cc_flexattention_gqa", {default_opset, opset},
            [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::FlexAttention>(opset)(Q, K, V);
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -670,11 +668,11 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
                                  });
     // Modifier shape: (B, Hq, Lq, Lkv) = (1, 2, 2, 2).
     const std::vector<int64_t> modifier_shape = {1, 2, 2, 2};
-    Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
     AddGraphAttribute(node, "prob_mod", BuildIdentityProbMod(modifier_shape));
     Expect(registry, std::move(node), "test_cc_flexattention_prob_mod_identity",
            {default_opset, opset}, [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::FlexAttention>(opset)(Q, K, V);
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -720,21 +718,21 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     constexpr float kScale = 0.5f;
 
     // Compute expected: baseline output scaled by ``kScale``.
-    Tensor Y_baseline = flex(Q, K, V);
-    Tensor Y = Tensor::FromFloat("", Y_baseline.shape,
-                                 std::vector<float>(Y_baseline.element_count(), 0.0f));
-    {
-      const float *src = Y_baseline.AsFloat();
-      float *dst = Y.AsFloat();
-      for (int64_t i = 0; i < Y_baseline.element_count(); ++i) {
-        dst[i] = kScale * src[i];
-      }
-    }
-
     NodeProto node = make_node();
     AddGraphAttribute(node, "prob_mod", BuildScaleProbMod(modifier_shape, kScale));
     Expect(registry, std::move(node), "test_cc_flexattention_prob_mod_scale_half",
            {default_opset, opset}, [=]() -> IoData {
+             Tensor Y_baseline =
+                 MakeReferenceKernel<onnx_kernels::kernel::FlexAttention>(opset)(Q, K, V);
+             Tensor Y = Tensor::FromFloat("", Y_baseline.shape,
+                                          std::vector<float>(Y_baseline.element_count(), 0.0f));
+             {
+               const float *src = Y_baseline.AsFloat();
+               float *dst = Y.AsFloat();
+               for (int64_t i = 0; i < Y_baseline.element_count(); ++i) {
+                 dst[i] = kScale * src[i];
+               }
+             }
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -750,7 +748,6 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
         Tensor::FromFloat("", {1, 2, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, -1.0f, 1.0f});
     Tensor V =
         Tensor::FromFloat("", {1, 2, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f, -1.0f, 0.0f, 0.0f, 1.0f});
-    Tensor Y = flex(Q, K, V, kExplicitScale);
     NodeProto node = make_node();
     AttributeProto *a = node.add_attribute();
     a->set_name("scale");
@@ -758,6 +755,8 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     a->set_f(kExplicitScale);
     Expect(registry, std::move(node), "test_cc_flexattention_scaled", {default_opset, opset},
            [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::FlexAttention>(opset)(
+                 Q, K, V, kExplicitScale);
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -788,10 +787,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
                                      1.0f,
                                      -1.0f, // v1
                                  });
-    Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
     Expect(registry, std::move(node), "test_cc_flexattention_diff_head_sizes",
            {default_opset, opset}, [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::FlexAttention>(opset)(Q, K, V);
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -940,10 +939,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
                                       0.0,
                                       1.0, // v1
                                   });
-    Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
     Expect(registry, std::move(node), "test_cc_flexattention_double", {default_opset, opset},
            [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::FlexAttention>(opset)(Q, K, V);
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }
@@ -988,10 +987,10 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
                                      0.0f,
                                      1.0f, // v1
                                  });
-    Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
     Expect(registry, std::move(node), "test_cc_flexattention_fp16", {default_opset, opset},
            [=]() -> IoData {
+             Tensor Y = MakeReferenceKernel<onnx_kernels::kernel::FlexAttention>(opset)(Q, K, V);
              return IoData{{std::move(Q), std::move(K), std::move(V)}, {std::move(Y)}};
            });
   }

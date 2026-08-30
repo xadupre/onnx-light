@@ -43,82 +43,94 @@ constexpr int64_t kDefaultIrVersion = 10;
 void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry,
                                                  TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
-  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   Tensor reshape_shape = Tensor::FromInt64("reshape_shape", {3}, {0, 0, -1});
 
   const std::string name = "test_cc_shape_inference_add_concat_reshape";
+  TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
+  lazy_case.build = [=](bool) -> BuiltCase {
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
+    tc.rtol = 1e-3;
+    tc.atol = 1e-7;
 
-  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+    ModelProto &model = tc.emplace_model();
+    InitModel(model, kDefaultIrVersion, {opset});
 
-  ModelProto &model = tc.emplace_model();
-  InitModel(model, kDefaultIrVersion, {opset});
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    AddNode(*graph, "Add", {"X", "Y"}, {"added"});
+    NodeProto &concat_node = AddNode(*graph, "Concat", {"added", "X"}, {"concat_out"});
+    AddAxisAttribute(concat_node, 2);
+    AddNode(*graph, "Reshape", {"concat_out", "reshape_shape"}, {"Z_pre_abs"});
+    AddNode(*graph, "Abs", {"Z_pre_abs"}, {"Z"});
 
-  AddNode(*graph, "Add", {"X", "Y"}, {"added"});
-  NodeProto &concat_node = AddNode(*graph, "Concat", {"added", "X"}, {"concat_out"});
-  AddAxisAttribute(concat_node, 2);
-  AddNode(*graph, "Reshape", {"concat_out", "reshape_shape"}, {"Z_pre_abs"});
-  AddNode(*graph, "Abs", {"Z_pre_abs"}, {"Z"});
+    TensorProto &tensor = *graph->add_initializer();
+    tensor.set_name("reshape_shape");
+    tensor.set_data_type(TensorProto::DataType::INT64);
+    tensor.add_dims(static_cast<int64_t>(3));
+    tensor.ref_int64_data().push_back(0);
+    tensor.ref_int64_data().push_back(0);
+    tensor.ref_int64_data().push_back(-1);
 
-  TensorProto &tensor = *graph->add_initializer();
-  tensor.set_name("reshape_shape");
-  tensor.set_data_type(TensorProto::DataType::INT64);
-  tensor.add_dims(static_cast<int64_t>(3));
-  tensor.ref_int64_data().push_back(0);
-  tensor.ref_int64_data().push_back(0);
-  tensor.ref_int64_data().push_back(-1);
+    // Graph inputs: X, Y use the symbolic shape from the page; reshape_shape
+    // is a concrete-shape initializer carried by ``FillValueInfo``.
+    const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
+    const std::vector<DimSpec> input_shape = {"batch", "seq", "d_model"};
+    AppendValueInfo(*graph->add_input(), "X", kFloat, input_shape);
+    AppendValueInfo(*graph->add_input(), "Y", kFloat, input_shape);
 
-  // Graph inputs: X, Y use the symbolic shape from the page; reshape_shape
-  // is a concrete-shape initializer carried by ``FillValueInfo``.
-  const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
-  const std::vector<DimSpec> input_shape = {"batch", "seq", "d_model"};
-  AppendValueInfo(*graph->add_input(), "X", kFloat, input_shape);
-  AppendValueInfo(*graph->add_input(), "Y", kFloat, input_shape);
+    // Intermediate value_info entries with symbolic dim names. The last dim
+    // of ``concat_out``/``Z`` is ``2 * d_model`` on the page; ONNX shape
+    // inference cannot represent that symbolic product, so we give it a
+    // dedicated symbolic name (``two_d_model``) instead of leaving the dim
+    // unannotated. The reference DataSet uses ``2 * d_model = 16``.
+    const std::vector<DimSpec> concat_shape = {"batch", "seq", "2*d_model"};
+    // ``value_info`` entries are ordered to match the alphabetical ordering
+    // returned by ``infer_shapes_model`` (which the Python test
+    // ``test_inference_shape`` checks positionally).
+    AppendValueInfo(*graph->add_value_info(), "Z_pre_abs", kFloat, concat_shape);
+    AppendValueInfo(*graph->add_value_info(), "added", kFloat, input_shape);
+    AppendValueInfo(*graph->add_value_info(), "concat_out", kFloat, concat_shape);
 
-  // Intermediate value_info entries with symbolic dim names. The last dim
-  // of ``concat_out``/``Z`` is ``2 * d_model`` on the page; ONNX shape
-  // inference cannot represent that symbolic product, so we give it a
-  // dedicated symbolic name (``two_d_model``) instead of leaving the dim
-  // unannotated. The reference DataSet uses ``2 * d_model = 16``.
-  const std::vector<DimSpec> concat_shape = {"batch", "seq", "2*d_model"};
-  // ``value_info`` entries are ordered to match the alphabetical ordering
-  // returned by ``infer_shapes_model`` (which the Python test
-  // ``test_inference_shape`` checks positionally).
-  AppendValueInfo(*graph->add_value_info(), "Z_pre_abs", kFloat, concat_shape);
-  AppendValueInfo(*graph->add_value_info(), "added", kFloat, input_shape);
-  AppendValueInfo(*graph->add_value_info(), "concat_out", kFloat, concat_shape);
+    // Graph output Z — same symbolic dims as concat_out.
+    AppendValueInfo(*graph->add_output(), "Z", kFloat, concat_shape);
 
-  // Graph output Z — same symbolic dims as concat_out.
-  AppendValueInfo(*graph->add_output(), "Z", kFloat, concat_shape);
+    // Build the reference DataSet right next to its consumers: concrete
+    // ``batch=2, seq=5, d_model=8`` tensors, then run the kernels to
+    // materialise Z.
+    const std::vector<int64_t> data_shape = {2, 5, 8}; // batch=2, seq=5, d_model=8
+    const int64_t input_size = data_shape[0] * data_shape[1] * data_shape[2];
+    std::vector<float> x_values(static_cast<size_t>(input_size));
+    std::vector<float> y_values(static_cast<size_t>(input_size));
+    for (size_t i = 0; i < x_values.size(); ++i) {
+      x_values[i] = static_cast<float>(i) * 0.1f;
+      y_values[i] = static_cast<float>(i) * 0.01f + 1.0f;
+    }
+    Tensor x = Tensor::FromFloat("X", data_shape, x_values);
+    Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
+    const Tensor new_shape = Tensor::FromInt64("", {3}, {0, 0, -1});
+    Tensor z_pre_abs =
+        MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset).Invoke([&](const auto &kernel) {
+          return kernel(MakeReferenceKernel<onnx_kernels::kernel::Concat>(opset).Invoke(
+                            [&](const auto &kernel) {
+                              return kernel(
+                                  {MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
+                                       [&](const auto &kernel) { return kernel(x, y); }),
+                                   x},
+                                  /*axis=*/2);
+                            }),
+                        new_shape);
+        });
+    Tensor z = MakeReferenceKernel<onnx_kernels::kernel::Abs>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(z_pre_abs); });
+    z.name = "Z";
 
-  // Build the reference DataSet right next to its consumers: concrete
-  // ``batch=2, seq=5, d_model=8`` tensors, then run the kernels to
-  // materialise Z.
-  const std::vector<int64_t> data_shape = {2, 5, 8}; // batch=2, seq=5, d_model=8
-  const int64_t input_size = data_shape[0] * data_shape[1] * data_shape[2];
-  std::vector<float> x_values(static_cast<size_t>(input_size));
-  std::vector<float> y_values(static_cast<size_t>(input_size));
-  for (size_t i = 0; i < x_values.size(); ++i) {
-    x_values[i] = static_cast<float>(i) * 0.1f;
-    y_values[i] = static_cast<float>(i) * 0.01f + 1.0f;
-  }
-  Tensor x = Tensor::FromFloat("X", data_shape, x_values);
-  Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
-  const Tensor new_shape = Tensor::FromInt64("", {3}, {0, 0, -1});
-  Tensor z_pre_abs = onnx_kernels::kernel::Reshape(ctx)(
-      onnx_kernels::kernel::Concat(ctx)({onnx_kernels::kernel::Add(ctx)(x, y), x}, /*axis=*/2),
-      new_shape);
-  Tensor z = onnx_kernels::kernel::Abs(ctx)(z_pre_abs);
-  z.name = "Z";
+    AppendDataSet(tc, {x, y}, {z});
 
-  AppendDataSet(tc, {x, y}, {z});
-
-  registry.emplace_back(std::move(tc));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

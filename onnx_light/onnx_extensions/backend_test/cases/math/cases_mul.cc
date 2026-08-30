@@ -28,11 +28,11 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Mul mul_kernel{ctx};
+  const auto mul_kernel = MakeReferenceKernel<onnx_kernels::kernel::Mul>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkBinaryFloat("Mul", mul_kernel, "test_cc_mul_benchmark", opset, registry);
+    ExpectBenchmarkBinaryFloat<onnx_kernels::kernel::Mul>("Mul", "test_cc_mul_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -46,7 +46,7 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_mul", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       Tensor y = Tensor::FromFloat("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
-      Tensor z = mul_kernel(x, y);
+      Tensor z = mul_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -62,7 +62,7 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_mul_bcast", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = Tensor::FromFloat("", {}, {2.0f});
-      Tensor z = mul_kernel(x, y);
+      Tensor z = mul_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -91,42 +91,48 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
        [=]() -> IoData {
          auto inputs_0 = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
          auto inputs_1 = Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f});
-         Tensor z = mul_kernel(inputs_0, inputs_1);
+         Tensor z =
+             mul_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_mul",
        [=]() -> IoData {
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/17);
          auto inputs_1 = RandnFloat({3, 4, 5}, /*seed=*/18);
-         Tensor z = mul_kernel(inputs_0, inputs_1);
+         Tensor z =
+             mul_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_mul_int8",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/41);
          auto inputs_1 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/42);
-         Tensor z = mul_kernel(inputs_0, inputs_1);
+         Tensor z =
+             mul_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_mul_int16",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/43);
          auto inputs_1 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/44);
-         Tensor z = mul_kernel(inputs_0, inputs_1);
+         Tensor z =
+             mul_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_mul_int32",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/153);
          auto inputs_1 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/154);
-         Tensor z = mul_kernel(inputs_0, inputs_1);
+         Tensor z =
+             mul_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_mul_int64",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT64, {3, 4, 5}, /*seed=*/155);
          auto inputs_1 = RandnTensor(DataType::INT64, {3, 4, 5}, /*seed=*/156);
-         Tensor z = mul_kernel(inputs_0, inputs_1);
+         Tensor z =
+             mul_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_mul_uint8",
@@ -135,7 +141,8 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(4, {3, 4, 5}, /*seed=*/45));
          auto inputs_1 =
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/46));
-         Tensor z = mul_kernel(inputs_0, inputs_1);
+         Tensor z =
+             mul_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_mul_uint16",
@@ -144,7 +151,8 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(4, {3, 4, 5}, /*seed=*/47));
          auto inputs_1 =
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/48));
-         Tensor z = mul_kernel(inputs_0, inputs_1);
+         Tensor z =
+             mul_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_mul_uint32",
@@ -153,7 +161,8 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(4, {3, 4, 5}, /*seed=*/49));
          auto inputs_1 =
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/50));
-         Tensor z = mul_kernel(inputs_0, inputs_1);
+         Tensor z =
+             mul_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_mul_uint64",
@@ -162,7 +171,8 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(4, {3, 4, 5}, /*seed=*/51));
          auto inputs_1 =
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/52));
-         Tensor z = mul_kernel(inputs_0, inputs_1);
+         Tensor z =
+             mul_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       // From Mul.export_mul_broadcast():
@@ -170,7 +180,8 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
        [=]() -> IoData {
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/19);
          auto inputs_1 = RandnFloat({5}, /*seed=*/20);
-         Tensor z = mul_kernel(inputs_0, inputs_1);
+         Tensor z =
+             mul_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
   };
@@ -189,7 +200,7 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(n16), "test_cc_mul_float16", {opset}, [=]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       Tensor y = MakeFloat16Tensor("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
-      Tensor z = mul_kernel(x, y);
+      Tensor z = mul_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }
@@ -213,7 +224,7 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
       }
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {4}, std::move(rx));
       Tensor y("", static_cast<int32_t>(DataType::BFLOAT16), {4}, std::move(ry));
-      Tensor z = mul_kernel(x, y);
+      Tensor z = mul_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }
@@ -228,7 +239,7 @@ void RegisterMulCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(nd), "test_cc_mul_double", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
       Tensor y = Tensor::FromDouble("", {2, 3}, {10.0, 20.0, 30.0, 40.0, 50.0, 60.0});
-      Tensor z = mul_kernel(x, y);
+      Tensor z = mul_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }

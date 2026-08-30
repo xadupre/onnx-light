@@ -28,11 +28,11 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Sub sub_kernel{ctx};
+  const auto sub_kernel = MakeReferenceKernel<onnx_kernels::kernel::Sub>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkBinaryFloat("Sub", sub_kernel, "test_cc_sub_benchmark", opset, registry);
+    ExpectBenchmarkBinaryFloat<onnx_kernels::kernel::Sub>("Sub", "test_cc_sub_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -46,7 +46,7 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_sub", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       Tensor y = Tensor::FromFloat("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
-      Tensor z = sub_kernel(x, y);
+      Tensor z = sub_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -62,7 +62,7 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_sub_bcast", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = Tensor::FromFloat("", {}, {0.5f});
-      Tensor z = sub_kernel(x, y);
+      Tensor z = sub_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -88,7 +88,7 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
       // test_sub_example: expected z = [-2, 0, 2].
       Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
       Tensor y = Tensor::FromFloat("", {3}, {3.0f, 2.0f, 1.0f});
-      Tensor z = sub_kernel(x, y);
+      Tensor z = sub_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }
@@ -107,35 +107,40 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
        [=]() -> IoData {
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/1);
          auto inputs_1 = RandnFloat({3, 4, 5}, /*seed=*/2);
-         Tensor z = sub_kernel(inputs_0, inputs_1);
+         Tensor z =
+             sub_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_int8",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/11);
          auto inputs_1 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/12);
-         Tensor z = sub_kernel(inputs_0, inputs_1);
+         Tensor z =
+             sub_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_int16",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/13);
          auto inputs_1 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/14);
-         Tensor z = sub_kernel(inputs_0, inputs_1);
+         Tensor z =
+             sub_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_int32",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/113);
          auto inputs_1 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/114);
-         Tensor z = sub_kernel(inputs_0, inputs_1);
+         Tensor z =
+             sub_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_int64",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT64, {3, 4, 5}, /*seed=*/115);
          auto inputs_1 = RandnTensor(DataType::INT64, {3, 4, 5}, /*seed=*/116);
-         Tensor z = sub_kernel(inputs_0, inputs_1);
+         Tensor z =
+             sub_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_uint8",
@@ -144,7 +149,8 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/15));
          auto inputs_1 =
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(12, {3, 4, 5}, /*seed=*/16));
-         Tensor z = sub_kernel(inputs_0, inputs_1);
+         Tensor z =
+             sub_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_uint16",
@@ -153,7 +159,8 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/17));
          auto inputs_1 =
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(12, {3, 4, 5}, /*seed=*/18));
-         Tensor z = sub_kernel(inputs_0, inputs_1);
+         Tensor z =
+             sub_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_uint32",
@@ -162,7 +169,8 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/19));
          auto inputs_1 =
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(12, {3, 4, 5}, /*seed=*/20));
-         Tensor z = sub_kernel(inputs_0, inputs_1);
+         Tensor z =
+             sub_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_uint64",
@@ -171,7 +179,8 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/21));
          auto inputs_1 =
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(12, {3, 4, 5}, /*seed=*/22));
-         Tensor z = sub_kernel(inputs_0, inputs_1);
+         Tensor z =
+             sub_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       // From Sub.export_sub_broadcast():
@@ -179,7 +188,8 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
        [=]() -> IoData {
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/3);
          auto inputs_1 = RandnFloat({5}, /*seed=*/4);
-         Tensor z = sub_kernel(inputs_0, inputs_1);
+         Tensor z =
+             sub_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
   };
@@ -198,7 +208,7 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(n16), "test_cc_sub_float16", {opset}, [=]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       Tensor y = MakeFloat16Tensor("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
-      Tensor z = sub_kernel(x, y);
+      Tensor z = sub_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }
@@ -222,7 +232,7 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
       }
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {4}, std::move(rx));
       Tensor y("", static_cast<int32_t>(DataType::BFLOAT16), {4}, std::move(ry));
-      Tensor z = sub_kernel(x, y);
+      Tensor z = sub_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }
@@ -237,7 +247,7 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(nd), "test_cc_sub_double", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
       Tensor y = Tensor::FromDouble("", {2, 3}, {10.0, 20.0, 30.0, 40.0, 50.0, 60.0});
-      Tensor z = sub_kernel(x, y);
+      Tensor z = sub_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }

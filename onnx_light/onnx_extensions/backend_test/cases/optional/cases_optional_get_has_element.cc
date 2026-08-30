@@ -52,51 +52,61 @@ void AddOptionalOfTensorTypeAttr(NodeProto &node, int32_t elem_type,
 //
 // ``expected_output`` is materialised as the expected DataSet output.
 void RegisterOptionalInputCase(const std::string &name, const std::string &op_type,
-                               const Tensor &input, const Tensor &expected_output,
-                               const std::vector<int64_t> &input_shape, int32_t input_elem_type,
-                               const OpsetId &opset, std::vector<TestCase> &registry) {
-  TestCase tc(name, name);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+                               const Tensor &input, const std::vector<int64_t> &input_shape,
+                               int32_t input_elem_type, const OpsetId &opset,
+                               std::vector<TestCase> &registry) {
+  TestCase lazy_case(name, name);
+  lazy_case.rtol = 1e-3;
+  lazy_case.atol = 1e-7;
+  lazy_case.build = [=](bool) -> BuiltCase {
+    Tensor expected_output =
+        op_type == "OptionalGetElement"
+            ? MakeReferenceKernel<onnx_kernels::kernel::OptionalGetElement>(opset)(input)
+            : MakeReferenceKernel<onnx_kernels::kernel::OptionalHasElement>(opset)(input);
+    TestCase tc(name, name);
+    tc.rtol = 1e-3;
+    tc.atol = 1e-7;
 
-  ModelProto &model = tc.emplace_model();
-  model.set_ir_version(kDefaultIrVersion);
-  model.set_producer_name("backend-test");
-  OperatorSetIdProto proto;
-  proto.set_domain(opset.domain);
-  proto.set_version(opset.version);
-  model.add_opset_import(proto);
+    ModelProto &model = tc.emplace_model();
+    model.set_ir_version(kDefaultIrVersion);
+    model.set_producer_name("backend-test");
+    OperatorSetIdProto proto;
+    proto.set_domain(opset.domain);
+    proto.set_version(opset.version);
+    model.add_opset_import(proto);
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  // Node 1: Optional input -> opt_value
-  NodeProto *opt_node = graph->add_node();
-  opt_node->set_op_type("Optional");
-  opt_node->add_input("input");
-  opt_node->add_output("opt_value");
-  AddOptionalOfTensorTypeAttr(*opt_node, input_elem_type, input_shape);
+    // Node 1: Optional input -> opt_value
+    NodeProto *opt_node = graph->add_node();
+    opt_node->set_op_type("Optional");
+    opt_node->add_input("input");
+    opt_node->add_output("opt_value");
+    AddOptionalOfTensorTypeAttr(*opt_node, input_elem_type, input_shape);
 
-  // Node 2: <op_type> opt_value -> output
-  NodeProto *get_node = graph->add_node();
-  get_node->set_op_type(op_type);
-  get_node->add_input("opt_value");
-  get_node->add_output("output");
+    // Node 2: <op_type> opt_value -> output
+    NodeProto *get_node = graph->add_node();
+    get_node->set_op_type(op_type);
+    get_node->add_input("opt_value");
+    get_node->add_output("output");
 
-  // Graph input/output value-infos (both are plain tensors).
-  Tensor named_input = input;
-  named_input.name = "input";
-  FillValueInfo(named_input, *graph->add_input());
-  Tensor named_output = expected_output;
-  named_output.name = "output";
-  FillValueInfo(named_output, *graph->add_output());
+    // Graph input/output value-infos (both are plain tensors).
+    Tensor named_input = input;
+    named_input.name = "input";
+    FillValueInfo(named_input, *graph->add_input());
+    Tensor named_output = expected_output;
+    named_output.name = "output";
+    FillValueInfo(named_output, *graph->add_output());
 
-  DataSet ds;
-  ds.inputs.push_back(named_input);
-  ds.outputs.push_back(named_output);
-  tc.data_sets().emplace_back(std::move(ds));
+    DataSet ds;
+    ds.inputs.push_back(named_input);
+    ds.outputs.push_back(named_output);
+    tc.data_sets().emplace_back(std::move(ds));
 
-  registry.emplace_back(std::move(tc));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 // Builds a single-node model that exercises the opset-18 tensor-input
@@ -104,14 +114,19 @@ void RegisterOptionalInputCase(const std::string &name, const std::string &op_ty
 // contains a single ``op_type`` node whose input is a plain tensor and
 // whose output is ``expected_output``.
 void RegisterTensorInputCase(const std::string &name, const std::string &op_type,
-                             const Tensor &input, const Tensor &expected_output,
-                             const OpsetId &opset, std::vector<TestCase> &registry) {
+                             const Tensor &input, const OpsetId &opset,
+                             std::vector<TestCase> &registry) {
   NodeProto node;
   node.set_op_type(op_type);
   node.add_input("input");
   node.add_output("output");
-  Expect(registry, std::move(node), name, {opset},
-         [=]() -> IoData { return IoData{{std::move(input)}, {std::move(expected_output)}}; });
+  Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
+    Tensor expected_output =
+        op_type == "OptionalGetElement"
+            ? MakeReferenceKernel<onnx_kernels::kernel::OptionalGetElement>(opset)(input)
+            : MakeReferenceKernel<onnx_kernels::kernel::OptionalHasElement>(opset)(input);
+    return IoData{{std::move(input)}, {std::move(expected_output)}};
+  });
 }
 
 // Builds a model that exercises ``OptionalGetElement`` on a sequence-typed
@@ -139,83 +154,88 @@ void RegisterOptionalGetElementSequenceCase(const std::string &name, bool with_o
                                             const std::vector<int64_t> &elem_shape,
                                             int32_t elem_type, const OpsetId &opset,
                                             std::vector<TestCase> &registry) {
-  const KernelContext ctx{opset};
+  TestCase lazy_case(name, name);
+  lazy_case.rtol = 1e-3;
+  lazy_case.atol = 1e-7;
+  lazy_case.build = [=](bool) -> BuiltCase {
+    // The expected sequence equals the constructed sequence (passthrough).
+    Tensor stacked = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(inputs); });
+    stacked.name = "output_sequence";
 
-  // The expected sequence equals the constructed sequence (passthrough).
-  Tensor stacked = onnx_kernels::kernel::SequenceConstruct(ctx)(inputs);
-  stacked.name = "output_sequence";
+    TestCase tc(name, name);
+    tc.rtol = 1e-3;
+    tc.atol = 1e-7;
 
-  TestCase tc(name, name);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+    ModelProto &model = tc.emplace_model();
+    model.set_ir_version(kDefaultIrVersion);
+    model.set_producer_name("backend-test");
+    OperatorSetIdProto proto;
+    proto.set_domain(opset.domain);
+    proto.set_version(opset.version);
+    model.add_opset_import(proto);
 
-  ModelProto &model = tc.emplace_model();
-  model.set_ir_version(kDefaultIrVersion);
-  model.set_producer_name("backend-test");
-  OperatorSetIdProto proto;
-  proto.set_domain(opset.domain);
-  proto.set_version(opset.version);
-  model.add_opset_import(proto);
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
-
-  // Node 1: SequenceConstruct <inputs…> → seq.
-  NodeProto *seq_node = graph->add_node();
-  seq_node->set_op_type("SequenceConstruct");
-  for (const Tensor &t : inputs) {
-    seq_node->add_input(t.name);
-  }
-  seq_node->add_output("seq");
-
-  std::string get_input = "seq";
-  if (with_optional) {
-    // Node 2: Optional seq → opt_seq with type attribute
-    // ``Optional<Sequence<Tensor<elem_type, elem_shape>>>``.
-    NodeProto *opt_node = graph->add_node();
-    opt_node->set_op_type("Optional");
-    opt_node->add_input("seq");
-    opt_node->add_output("opt_seq");
-    AttributeProto *attr = opt_node->add_attribute();
-    attr->set_name("type");
-    attr->set_type(AttributeProto::AttributeType::TYPE_PROTO);
-    TypeProto *tp = attr->add_tp();
-    TypeProto::Optional *opt_type = tp->add_optional_type();
-    TypeProto *opt_elem = opt_type->add_elem_type();
-    TypeProto::Sequence *opt_seq_type = opt_elem->add_sequence_type();
-    TypeProto *opt_seq_elem = opt_seq_type->add_elem_type();
-    TypeProto::Tensor *opt_tensor = opt_seq_elem->add_tensor_type();
-    opt_tensor->set_elem_type(static_cast<int>(elem_type));
-    TensorShapeProto *opt_shape = opt_tensor->add_shape();
-    for (int64_t d : elem_shape) {
-      opt_shape->add_dim()->set_dim_value(d);
+    // Node 1: SequenceConstruct <inputs…> → seq.
+    NodeProto *seq_node = graph->add_node();
+    seq_node->set_op_type("SequenceConstruct");
+    for (const Tensor &t : inputs) {
+      seq_node->add_input(t.name);
     }
-    get_input = "opt_seq";
-  }
+    seq_node->add_output("seq");
 
-  // Final node: OptionalGetElement <get_input> → output_sequence.
-  NodeProto *get_node = graph->add_node();
-  get_node->set_op_type("OptionalGetElement");
-  get_node->add_input(get_input);
-  get_node->add_output("output_sequence");
+    std::string get_input = "seq";
+    if (with_optional) {
+      // Node 2: Optional seq → opt_seq with type attribute
+      // ``Optional<Sequence<Tensor<elem_type, elem_shape>>>``.
+      NodeProto *opt_node = graph->add_node();
+      opt_node->set_op_type("Optional");
+      opt_node->add_input("seq");
+      opt_node->add_output("opt_seq");
+      AttributeProto *attr = opt_node->add_attribute();
+      attr->set_name("type");
+      attr->set_type(AttributeProto::AttributeType::TYPE_PROTO);
+      TypeProto *tp = attr->add_tp();
+      TypeProto::Optional *opt_type = tp->add_optional_type();
+      TypeProto *opt_elem = opt_type->add_elem_type();
+      TypeProto::Sequence *opt_seq_type = opt_elem->add_sequence_type();
+      TypeProto *opt_seq_elem = opt_seq_type->add_elem_type();
+      TypeProto::Tensor *opt_tensor = opt_seq_elem->add_tensor_type();
+      opt_tensor->set_elem_type(static_cast<int>(elem_type));
+      TensorShapeProto *opt_shape = opt_tensor->add_shape();
+      for (int64_t d : elem_shape) {
+        opt_shape->add_dim()->set_dim_value(d);
+      }
+      get_input = "opt_seq";
+    }
 
-  // Graph inputs: the individual tensors fed into SequenceConstruct.
-  for (const Tensor &t : inputs) {
-    FillValueInfo(t, *graph->add_input());
-  }
+    // Final node: OptionalGetElement <get_input> → output_sequence.
+    NodeProto *get_node = graph->add_node();
+    get_node->set_op_type("OptionalGetElement");
+    get_node->add_input(get_input);
+    get_node->add_output("output_sequence");
 
-  // Graph output: ``output_sequence`` declared as a SequenceType.
-  AppendValueInfo(*graph->add_output(), stacked.name,
-                  SequenceTypeSpec(TensorTypeSpec(elem_type, elem_shape)));
+    // Graph inputs: the individual tensors fed into SequenceConstruct.
+    for (const Tensor &t : inputs) {
+      FillValueInfo(t, *graph->add_input());
+    }
 
-  DataSet ds;
-  for (const Tensor &t : inputs) {
-    ds.inputs.push_back(t);
-  }
-  ds.outputs.push_back(stacked);
-  tc.data_sets().emplace_back(std::move(ds));
+    // Graph output: ``output_sequence`` declared as a SequenceType.
+    AppendValueInfo(*graph->add_output(), stacked.name,
+                    SequenceTypeSpec(TensorTypeSpec(elem_type, elem_shape)));
 
-  registry.emplace_back(std::move(tc));
+    DataSet ds;
+    for (const Tensor &t : inputs) {
+      ds.inputs.push_back(t);
+    }
+    ds.outputs.push_back(stacked);
+    tc.data_sets().emplace_back(std::move(ds));
+
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 // Builds and registers a single ``OptionalHasElement`` test case for the
@@ -234,40 +254,46 @@ void RegisterOptionalGetElementSequenceCase(const std::string &name, bool with_o
 // the runtime semantics of an "empty optional" input.
 void RegisterOptionalHasElementEmptyCase(const std::string &name, bool with_empty_input_name,
                                          const OpsetId &opset, std::vector<TestCase> &registry) {
-  const KernelContext ctx{opset};
-  Tensor expected = onnx_kernels::kernel::OptionalHasElement(ctx)();
-  expected.name = "output";
+  TestCase lazy_case(name, name);
+  lazy_case.rtol = 1e-3;
+  lazy_case.atol = 1e-7;
+  lazy_case.build = [=](bool) -> BuiltCase {
+    Tensor expected = MakeReferenceKernel<onnx_kernels::kernel::OptionalHasElement>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(); });
+    expected.name = "output";
 
-  TestCase tc(name, name);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+    TestCase tc(name, name);
+    tc.rtol = 1e-3;
+    tc.atol = 1e-7;
 
-  ModelProto &model = tc.emplace_model();
-  model.set_ir_version(kDefaultIrVersion);
-  model.set_producer_name("backend-test");
-  OperatorSetIdProto proto;
-  proto.set_domain(opset.domain);
-  proto.set_version(opset.version);
-  model.add_opset_import(proto);
+    ModelProto &model = tc.emplace_model();
+    model.set_ir_version(kDefaultIrVersion);
+    model.set_producer_name("backend-test");
+    OperatorSetIdProto proto;
+    proto.set_domain(opset.domain);
+    proto.set_version(opset.version);
+    model.add_opset_import(proto);
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  NodeProto *node = graph->add_node();
-  node->set_op_type("OptionalHasElement");
-  if (with_empty_input_name) {
-    node->add_input("");
-  }
-  node->add_output("output");
+    NodeProto *node = graph->add_node();
+    node->set_op_type("OptionalHasElement");
+    if (with_empty_input_name) {
+      node->add_input("");
+    }
+    node->add_output("output");
 
-  // No graph inputs (the "empty optional" input is not materialised).
-  FillValueInfo(expected, *graph->add_output());
+    // No graph inputs (the "empty optional" input is not materialised).
+    FillValueInfo(expected, *graph->add_output());
 
-  DataSet ds;
-  ds.outputs.push_back(expected);
-  tc.data_sets().emplace_back(std::move(ds));
+    DataSet ds;
+    ds.outputs.push_back(expected);
+    tc.data_sets().emplace_back(std::move(ds));
 
-  registry.emplace_back(std::move(tc));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace
@@ -294,10 +320,8 @@ void RegisterOptionalGetElementCases(std::vector<TestCase> &registry, TestMode m
     const std::vector<int64_t> big_shape = {512, 512};
     Tensor input = RandnTensor(DataType::FLOAT, big_shape, 4101);
     const OpsetId opset = DefaultOpset(18);
-    const KernelContext ctx{opset};
-    Tensor output = onnx_kernels::kernel::OptionalGetElement(ctx)(input);
     RegisterTensorInputCase("test_cc_optional_get_element_benchmark", "OptionalGetElement", input,
-                            output, opset, registry);
+                            opset, registry);
     return;
   }
 
@@ -307,20 +331,15 @@ void RegisterOptionalGetElementCases(std::vector<TestCase> &registry, TestMode m
   // Opset 15: Optional → OptionalGetElement.
   {
     const OpsetId opset = DefaultOpset(15);
-    const KernelContext ctx{opset};
-    Tensor output = onnx_kernels::kernel::OptionalGetElement(ctx)(input);
     RegisterOptionalInputCase("test_cc_optional_get_element_optional_tensor", "OptionalGetElement",
-                              input, output, shape, static_cast<int32_t>(DataType::FLOAT), opset,
-                              registry);
+                              input, shape, static_cast<int32_t>(DataType::FLOAT), opset, registry);
   }
 
   // Opset 18: single-node case with a plain tensor input (passthrough).
   {
     const OpsetId opset = DefaultOpset(18);
-    const KernelContext ctx{opset};
-    Tensor output = onnx_kernels::kernel::OptionalGetElement(ctx)(input);
     RegisterTensorInputCase("test_cc_optional_get_element_tensor", "OptionalGetElement", input,
-                            output, opset, registry);
+                            opset, registry);
   }
 
   // Sequence-input cases: build an in-graph sequence via SequenceConstruct
@@ -375,10 +394,8 @@ void RegisterOptionalHasElementCases(std::vector<TestCase> &registry, TestMode m
     const std::vector<int64_t> big_shape = {512, 512};
     Tensor input = RandnTensor(DataType::FLOAT, big_shape, 4201);
     const OpsetId opset = DefaultOpset(18);
-    const KernelContext ctx{opset};
-    Tensor output = onnx_kernels::kernel::OptionalHasElement(ctx)(input);
     RegisterTensorInputCase("test_cc_optional_has_element_benchmark", "OptionalHasElement", input,
-                            output, opset, registry);
+                            opset, registry);
     return;
   }
 
@@ -388,20 +405,15 @@ void RegisterOptionalHasElementCases(std::vector<TestCase> &registry, TestMode m
   // Opset 15: Optional → OptionalHasElement, expecting true.
   {
     const OpsetId opset = DefaultOpset(15);
-    const KernelContext ctx{opset};
-    Tensor output = onnx_kernels::kernel::OptionalHasElement(ctx)(input);
     RegisterOptionalInputCase("test_cc_optional_has_element_optional_input", "OptionalHasElement",
-                              input, output, shape, static_cast<int32_t>(DataType::FLOAT), opset,
-                              registry);
+                              input, shape, static_cast<int32_t>(DataType::FLOAT), opset, registry);
   }
 
   // Opset 18: single-node case with a plain tensor input, expecting true.
   {
     const OpsetId opset = DefaultOpset(18);
-    const KernelContext ctx{opset};
-    Tensor output = onnx_kernels::kernel::OptionalHasElement(ctx)(input);
     RegisterTensorInputCase("test_cc_optional_has_element_tensor_input", "OptionalHasElement",
-                            input, output, opset, registry);
+                            input, opset, registry);
   }
 
   // Opset 18: "empty input" flavours, all expecting false. The first three

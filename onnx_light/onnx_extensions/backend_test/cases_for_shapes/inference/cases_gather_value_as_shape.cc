@@ -44,81 +44,87 @@ constexpr int64_t kDefaultIrVersion = 10;
 void RegisterGatherValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry,
                                                    TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(20);
-  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   const std::string name = "test_cc_shape_inference_gather_value_as_shape";
+  TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
+  lazy_case.build = [=](bool) -> BuiltCase {
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
 
-  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
+    ModelProto &model = tc.emplace_model();
+    InitModel(model, kDefaultIrVersion, {opset});
 
-  ModelProto &model = tc.emplace_model();
-  InitModel(model, kDefaultIrVersion, {opset});
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    // shape_x = Shape(x)
+    AddNode(*graph, "Shape", {"x"}, {"shape_x"});
 
-  // shape_x = Shape(x)
-  AddNode(*graph, "Shape", {"x"}, {"shape_x"});
+    // n_vec = Gather(shape_x, idx, axis=0)
+    NodeProto &gather_node = AddNode(*graph, "Gather", {"shape_x", "idx"}, {"n_vec"});
+    AddAxisAttribute(gather_node, 0);
 
-  // n_vec = Gather(shape_x, idx, axis=0)
-  NodeProto &gather_node = AddNode(*graph, "Gather", {"shape_x", "idx"}, {"n_vec"});
-  AddAxisAttribute(gather_node, 0);
+    // expanded = Expand(y, n_vec)
+    AddNode(*graph, "Expand", {"y", "n_vec"}, {"expanded"});
 
-  // expanded = Expand(y, n_vec)
-  AddNode(*graph, "Expand", {"y", "n_vec"}, {"expanded"});
+    // z = Abs(expanded)
+    AddNode(*graph, "Abs", {"expanded"}, {"z"});
 
-  // z = Abs(expanded)
-  AddNode(*graph, "Abs", {"expanded"}, {"z"});
+    // Initializer ``idx`` : int64[1] = [0] — index that selects the first dim (N).
+    AddInitializerShape(*graph, "idx", {0});
 
-  // Initializer ``idx`` : int64[1] = [0] — index that selects the first dim (N).
-  AddInitializerShape(*graph, "idx", {0});
+    // Graph inputs: x with symbolic shape [N, D], y as float[1].
+    AppendValueInfo(*graph->add_input(), "x", DataType::FLOAT, {DimSpec("N"), DimSpec("D")});
+    AppendValueInfo(*graph->add_input(), "y", DataType::FLOAT, {DimSpec(int64_t{1})});
 
-  // Graph inputs: x with symbolic shape [N, D], y as float[1].
-  AppendValueInfo(*graph->add_input(), "x", DataType::FLOAT, {DimSpec("N"), DimSpec("D")});
-  AppendValueInfo(*graph->add_input(), "y", DataType::FLOAT, {DimSpec(int64_t{1})});
+    // Intermediate value_info entries stripped by SnapshotAndStripValueInfo and
+    // used as ground truth for the shape-inference assertions.
+    AppendValueInfo(*graph->add_value_info(), "shape_x", DataType::INT64, {DimSpec(int64_t{2})});
+    AppendValueInfo(*graph->add_value_info(), "n_vec", DataType::INT64, {DimSpec(int64_t{1})});
+    AppendValueInfo(*graph->add_value_info(), "expanded", DataType::FLOAT, {DimSpec("N")});
 
-  // Intermediate value_info entries stripped by SnapshotAndStripValueInfo and
-  // used as ground truth for the shape-inference assertions.
-  AppendValueInfo(*graph->add_value_info(), "shape_x", DataType::INT64, {DimSpec(int64_t{2})});
-  AppendValueInfo(*graph->add_value_info(), "n_vec", DataType::INT64, {DimSpec(int64_t{1})});
-  AppendValueInfo(*graph->add_value_info(), "expanded", DataType::FLOAT, {DimSpec("N")});
+    // Graph output: z : float[N].
+    AppendValueInfo(*graph->add_output(), "z", DataType::FLOAT, {DimSpec("N")});
 
-  // Graph output: z : float[N].
-  AppendValueInfo(*graph->add_output(), "z", DataType::FLOAT, {DimSpec("N")});
+    // Build the reference DataSet — concrete N=3, D=4 tensors.
+    constexpr int64_t kN = 3;
+    constexpr int64_t kD = 4;
 
-  // Build the reference DataSet — concrete N=3, D=4 tensors.
-  constexpr int64_t kN = 3;
-  constexpr int64_t kD = 4;
+    std::vector<float> x_values(static_cast<size_t>(kN * kD));
+    for (size_t i = 0; i < x_values.size(); ++i) {
+      x_values[i] = static_cast<float>(i) * 0.1f + 1.0f;
+    }
+    Tensor x = Tensor::FromFloat("x", {kN, kD}, x_values);
 
-  std::vector<float> x_values(static_cast<size_t>(kN * kD));
-  for (size_t i = 0; i < x_values.size(); ++i) {
-    x_values[i] = static_cast<float>(i) * 0.1f + 1.0f;
-  }
-  Tensor x = Tensor::FromFloat("x", {kN, kD}, x_values);
+    Tensor y = Tensor::FromFloat("y", {1}, {2.0f});
 
-  Tensor y = Tensor::FromFloat("y", {1}, {2.0f});
+    // idx = int64[1] = [0]
+    const Tensor idx = Tensor::FromInt64("idx", {1}, {0});
 
-  // idx = int64[1] = [0]
-  const Tensor idx = Tensor::FromInt64("idx", {1}, {0});
+    // shape_x = Shape(x) = [3, 4]
+    Tensor shape_x = MakeReferenceKernel<onnx_kernels::kernel::Shape>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(x, onnx_kernels::kernel::Shape::Attributes{}); });
+    shape_x.name = "shape_x";
 
-  // shape_x = Shape(x) = [3, 4]
-  Tensor shape_x = onnx_kernels::kernel::Shape(ctx)(x, onnx_kernels::kernel::Shape::Attributes{});
-  shape_x.name = "shape_x";
+    // n_vec = Gather(shape_x, idx, axis=0) = int64[1] = [3]
+    Tensor n_vec = MakeReferenceKernel<onnx_kernels::kernel::Gather>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(shape_x, idx, 0); });
+    n_vec.name = "n_vec";
 
-  // n_vec = Gather(shape_x, idx, axis=0) = int64[1] = [3]
-  Tensor n_vec = onnx_kernels::kernel::Gather(ctx)(shape_x, idx, 0);
-  n_vec.name = "n_vec";
+    // expanded = Expand(y, n_vec) = float[3] = [2.0, 2.0, 2.0]
+    Tensor expanded = MakeReferenceKernel<onnx_kernels::kernel::Expand>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(y, n_vec); });
+    expanded.name = "expanded";
 
-  // expanded = Expand(y, n_vec) = float[3] = [2.0, 2.0, 2.0]
-  Tensor expanded = onnx_kernels::kernel::Expand(ctx)(y, n_vec);
-  expanded.name = "expanded";
+    // z = Abs(expanded) = float[3] = [2.0, 2.0, 2.0]
+    Tensor z = MakeReferenceKernel<onnx_kernels::kernel::Abs>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(expanded); });
+    z.name = "z";
 
-  // z = Abs(expanded) = float[3] = [2.0, 2.0, 2.0]
-  Tensor z = onnx_kernels::kernel::Abs(ctx)(expanded);
-  z.name = "z";
+    AppendDataSet(tc, {std::move(x), std::move(y)}, {std::move(z)});
 
-  AppendDataSet(tc, {std::move(x), std::move(y)}, {std::move(z)});
-
-  registry.emplace_back(std::move(tc));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

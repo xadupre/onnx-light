@@ -193,57 +193,63 @@ GraphProto BuildShapeBody(int32_t elem_type, const std::vector<int64_t> &in_elem
 void RegisterSequenceMapIdentityCase(const std::string &name, const std::vector<Tensor> &inputs,
                                      const std::vector<int64_t> &elem_shape, int32_t elem_type,
                                      const OpsetId &opset, std::vector<TestCase> &registry) {
-  const KernelContext ctx{opset};
+  TestCase lazy_case(name, name);
+  lazy_case.build = [=](bool) -> BuiltCase {
+    // Build the input sequence and the body-output rows (identity → inputs).
+    const Sequence in_seq =
+        MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+            [&](const auto &kernel) { return kernel.AsSequence(inputs); });
+    std::vector<Tensors> body_outputs_per_iter = {inputs};
+    Sequences out_seqs = MakeReferenceKernel<onnx_kernels::kernel::SequenceMap>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(in_seq, body_outputs_per_iter); });
 
-  // Build the input sequence and the body-output rows (identity → inputs).
-  const Sequence in_seq = onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(inputs);
-  std::vector<Tensors> body_outputs_per_iter = {inputs};
-  Sequences out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(in_seq, body_outputs_per_iter);
+    // Materialise the (single) output sequence as a stacked tensor.
+    std::vector<Tensor> stacked_in(out_seqs[0].values.begin(), out_seqs[0].values.end());
+    Tensor stacked = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(stacked_in); });
+    stacked.name = "output_sequence";
 
-  // Materialise the (single) output sequence as a stacked tensor.
-  std::vector<Tensor> stacked_in(out_seqs[0].values.begin(), out_seqs[0].values.end());
-  Tensor stacked = onnx_kernels::kernel::SequenceConstruct(ctx)(stacked_in);
-  stacked.name = "output_sequence";
+    TestCase tc(name, name);
+    GraphProto *graph = InitSequenceMapModel(tc, name, opset);
 
-  TestCase tc(name, name);
-  GraphProto *graph = InitSequenceMapModel(tc, name, opset);
+    // Node 1: SequenceConstruct <inputs…> → input_seq.
+    NodeProto *seq_node = graph->add_node();
+    seq_node->set_op_type("SequenceConstruct");
+    for (const Tensor &t : inputs) {
+      seq_node->add_input(t.name);
+    }
+    seq_node->add_output("input_seq");
 
-  // Node 1: SequenceConstruct <inputs…> → input_seq.
-  NodeProto *seq_node = graph->add_node();
-  seq_node->set_op_type("SequenceConstruct");
-  for (const Tensor &t : inputs) {
-    seq_node->add_input(t.name);
-  }
-  seq_node->add_output("input_seq");
+    // Node 2: SequenceMap(input_seq, body=identity) → output_sequence.
+    NodeProto *map_node = graph->add_node();
+    map_node->set_op_type("SequenceMap");
+    map_node->add_input("input_seq");
+    map_node->add_output("output_sequence");
+    AttributeProto *body_attr = map_node->add_attribute();
+    body_attr->set_name("body");
+    body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+    *body_attr->add_g() = BuildIdentityMapBody(elem_type, elem_shape);
 
-  // Node 2: SequenceMap(input_seq, body=identity) → output_sequence.
-  NodeProto *map_node = graph->add_node();
-  map_node->set_op_type("SequenceMap");
-  map_node->add_input("input_seq");
-  map_node->add_output("output_sequence");
-  AttributeProto *body_attr = map_node->add_attribute();
-  body_attr->set_name("body");
-  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
-  *body_attr->add_g() = BuildIdentityMapBody(elem_type, elem_shape);
+    // Graph inputs: the individual tensors.
+    for (const Tensor &t : inputs) {
+      FillValueInfo(t, *graph->add_input());
+    }
 
-  // Graph inputs: the individual tensors.
-  for (const Tensor &t : inputs) {
-    FillValueInfo(t, *graph->add_input());
-  }
+    // Graph output: ``output_sequence`` declared as a SequenceType.
+    AppendValueInfo(*graph->add_output(), stacked.name,
+                    SequenceTypeSpec(TensorTypeSpec(elem_type, elem_shape)));
 
-  // Graph output: ``output_sequence`` declared as a SequenceType.
-  AppendValueInfo(*graph->add_output(), stacked.name,
-                  SequenceTypeSpec(TensorTypeSpec(elem_type, elem_shape)));
+    // DataSet: feed the original tensors, expect the stacked output.
+    DataSet ds;
+    for (const Tensor &t : inputs) {
+      ds.inputs.push_back(t);
+    }
+    ds.outputs.push_back(std::move(stacked));
+    tc.data_sets().emplace_back(std::move(ds));
 
-  // DataSet: feed the original tensors, expect the stacked output.
-  DataSet ds;
-  for (const Tensor &t : inputs) {
-    ds.inputs.push_back(t);
-  }
-  ds.outputs.push_back(std::move(stacked));
-  tc.data_sets().emplace_back(std::move(ds));
-
-  registry.emplace_back(std::move(tc));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 // Mirrors upstream ``test_sequence_map_identity_2_sequences``: two
@@ -253,90 +259,101 @@ void RegisterSequenceMapIdentityCase(const std::string &name, const std::vector<
 void RegisterSequenceMapIdentity2SequencesCase(const OpsetId &opset,
                                                std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_identity_2_sequences";
-  const KernelContext ctx{opset};
-  const std::vector<int64_t> shape0 = {3};
-  const std::vector<int64_t> shape1 = {4};
+  TestCase lazy_case(name, name);
+  lazy_case.build = [=](bool) -> BuiltCase {
+    const std::vector<int64_t> shape0 = {3};
+    const std::vector<int64_t> shape1 = {4};
 
-  // Per-iteration tensors of each input sequence.
-  std::vector<Tensor> x0 = {
-      Tensor::FromFloat("x0_0", shape0, {0.0f, 1.0f, 2.0f}),
-      Tensor::FromFloat("x0_1", shape0, {-0.5f, 1.5f, 2.5f}),
-      Tensor::FromFloat("x0_2", shape0, {10.0f, 20.0f, 30.0f}),
+    // Per-iteration tensors of each input sequence.
+    std::vector<Tensor> x0 = {
+        Tensor::FromFloat("x0_0", shape0, {0.0f, 1.0f, 2.0f}),
+        Tensor::FromFloat("x0_1", shape0, {-0.5f, 1.5f, 2.5f}),
+        Tensor::FromFloat("x0_2", shape0, {10.0f, 20.0f, 30.0f}),
+    };
+    std::vector<Tensor> x1 = {
+        Tensor::FromFloat("x1_0", shape1, {0.0f, 1.0f, 2.0f, 3.0f}),
+        Tensor::FromFloat("x1_1", shape1, {0.25f, 0.5f, 0.75f, 1.0f}),
+        Tensor::FromFloat("x1_2", shape1, {-1.0f, -2.0f, -3.0f, -4.0f}),
+    };
+    const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);
+
+    // Compose expected output sequences via the reference kernel.
+    std::vector<Tensors> body_outputs_per_iter = {x0, x1};
+    Sequences out_seqs = MakeReferenceKernel<onnx_kernels::kernel::SequenceMap>(opset).Invoke(
+        [&](const auto &kernel) {
+          return kernel(MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+                            [&](const auto &kernel) { return kernel.AsSequence(x0); }),
+                        body_outputs_per_iter);
+        });
+
+    // Materialise both output sequences as stacked tensors.
+    Tensor stacked0 = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+        [&](const auto &kernel) {
+          return kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
+        });
+    stacked0.name = "y0";
+    Tensor stacked1 = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+        [&](const auto &kernel) {
+          return kernel({out_seqs[1].values.begin(), out_seqs[1].values.end()});
+        });
+    stacked1.name = "y1";
+
+    TestCase tc(name, name);
+    GraphProto *graph = InitSequenceMapModel(tc, name, opset);
+
+    // Node 1+2: build the two input sequences.
+    NodeProto *sc0 = graph->add_node();
+    sc0->set_op_type("SequenceConstruct");
+    for (const Tensor &t : x0) {
+      sc0->add_input(t.name);
+    }
+    sc0->add_output("x0_seq");
+    NodeProto *sc1 = graph->add_node();
+    sc1->set_op_type("SequenceConstruct");
+    for (const Tensor &t : x1) {
+      sc1->add_input(t.name);
+    }
+    sc1->add_output("x1_seq");
+
+    // Node 3: SequenceMap(x0_seq, x1_seq, body=identity_2) → (y0, y1).
+    NodeProto *map_node = graph->add_node();
+    map_node->set_op_type("SequenceMap");
+    map_node->add_input("x0_seq");
+    map_node->add_input("x1_seq");
+    map_node->add_output("y0");
+    map_node->add_output("y1");
+    AttributeProto *body_attr = map_node->add_attribute();
+    body_attr->set_name("body");
+    body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+    *body_attr->add_g() = BuildIdentity2InputsBody(elem_type, shape0, shape1);
+
+    // Graph inputs: individual tensors of both sequences.
+    for (const Tensor &t : x0) {
+      FillValueInfo(t, *graph->add_input());
+    }
+    for (const Tensor &t : x1) {
+      FillValueInfo(t, *graph->add_input());
+    }
+    // Graph outputs: y0 and y1 declared as SequenceTypes.
+    AppendValueInfo(*graph->add_output(), stacked0.name,
+                    SequenceTypeSpec(TensorTypeSpec(elem_type, shape0)));
+    AppendValueInfo(*graph->add_output(), stacked1.name,
+                    SequenceTypeSpec(TensorTypeSpec(elem_type, shape1)));
+
+    DataSet ds;
+    for (const Tensor &t : x0) {
+      ds.inputs.push_back(t);
+    }
+    for (const Tensor &t : x1) {
+      ds.inputs.push_back(t);
+    }
+    ds.outputs.push_back(std::move(stacked0));
+    ds.outputs.push_back(std::move(stacked1));
+    tc.data_sets().emplace_back(std::move(ds));
+
+    return tc.take_materialized();
   };
-  std::vector<Tensor> x1 = {
-      Tensor::FromFloat("x1_0", shape1, {0.0f, 1.0f, 2.0f, 3.0f}),
-      Tensor::FromFloat("x1_1", shape1, {0.25f, 0.5f, 0.75f, 1.0f}),
-      Tensor::FromFloat("x1_2", shape1, {-1.0f, -2.0f, -3.0f, -4.0f}),
-  };
-  const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);
-
-  // Compose expected output sequences via the reference kernel.
-  std::vector<Tensors> body_outputs_per_iter = {x0, x1};
-  Sequences out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
-      onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(x0), body_outputs_per_iter);
-
-  // Materialise both output sequences as stacked tensors.
-  Tensor stacked0 = onnx_kernels::kernel::SequenceConstruct(ctx)(
-      {out_seqs[0].values.begin(), out_seqs[0].values.end()});
-  stacked0.name = "y0";
-  Tensor stacked1 = onnx_kernels::kernel::SequenceConstruct(ctx)(
-      {out_seqs[1].values.begin(), out_seqs[1].values.end()});
-  stacked1.name = "y1";
-
-  TestCase tc(name, name);
-  GraphProto *graph = InitSequenceMapModel(tc, name, opset);
-
-  // Node 1+2: build the two input sequences.
-  NodeProto *sc0 = graph->add_node();
-  sc0->set_op_type("SequenceConstruct");
-  for (const Tensor &t : x0) {
-    sc0->add_input(t.name);
-  }
-  sc0->add_output("x0_seq");
-  NodeProto *sc1 = graph->add_node();
-  sc1->set_op_type("SequenceConstruct");
-  for (const Tensor &t : x1) {
-    sc1->add_input(t.name);
-  }
-  sc1->add_output("x1_seq");
-
-  // Node 3: SequenceMap(x0_seq, x1_seq, body=identity_2) → (y0, y1).
-  NodeProto *map_node = graph->add_node();
-  map_node->set_op_type("SequenceMap");
-  map_node->add_input("x0_seq");
-  map_node->add_input("x1_seq");
-  map_node->add_output("y0");
-  map_node->add_output("y1");
-  AttributeProto *body_attr = map_node->add_attribute();
-  body_attr->set_name("body");
-  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
-  *body_attr->add_g() = BuildIdentity2InputsBody(elem_type, shape0, shape1);
-
-  // Graph inputs: individual tensors of both sequences.
-  for (const Tensor &t : x0) {
-    FillValueInfo(t, *graph->add_input());
-  }
-  for (const Tensor &t : x1) {
-    FillValueInfo(t, *graph->add_input());
-  }
-  // Graph outputs: y0 and y1 declared as SequenceTypes.
-  AppendValueInfo(*graph->add_output(), stacked0.name,
-                  SequenceTypeSpec(TensorTypeSpec(elem_type, shape0)));
-  AppendValueInfo(*graph->add_output(), stacked1.name,
-                  SequenceTypeSpec(TensorTypeSpec(elem_type, shape1)));
-
-  DataSet ds;
-  for (const Tensor &t : x0) {
-    ds.inputs.push_back(t);
-  }
-  for (const Tensor &t : x1) {
-    ds.inputs.push_back(t);
-  }
-  ds.outputs.push_back(std::move(stacked0));
-  ds.outputs.push_back(std::move(stacked1));
-  tc.data_sets().emplace_back(std::move(ds));
-
-  registry.emplace_back(std::move(tc));
+  registry.emplace_back(std::move(lazy_case));
 }
 
 // Mirrors upstream ``test_sequence_map_add_2_sequences``: two input
@@ -344,88 +361,97 @@ void RegisterSequenceMapIdentity2SequencesCase(const OpsetId &opset,
 // single output sequence ``y0[i] == x0[i] + x1[i]``.
 void RegisterSequenceMapAdd2SequencesCase(const OpsetId &opset, std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_add_2_sequences";
-  const KernelContext ctx{opset};
-  const std::vector<int64_t> elem_shape = {4};
-  const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);
+  TestCase lazy_case(name, name);
+  lazy_case.build = [=](bool) -> BuiltCase {
+    const std::vector<int64_t> elem_shape = {4};
+    const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);
 
-  std::vector<Tensor> x0 = {
-      Tensor::FromFloat("x0_0", elem_shape, {0.0f, 1.0f, 2.0f, 3.0f}),
-      Tensor::FromFloat("x0_1", elem_shape, {-1.0f, -2.0f, -3.0f, -4.0f}),
-      Tensor::FromFloat("x0_2", elem_shape, {0.5f, 1.5f, 2.5f, 3.5f}),
-  };
-  std::vector<Tensor> x1 = {
-      Tensor::FromFloat("x1_0", elem_shape, {10.0f, 10.0f, 10.0f, 10.0f}),
-      Tensor::FromFloat("x1_1", elem_shape, {0.25f, 0.5f, 0.75f, 1.0f}),
-      Tensor::FromFloat("x1_2", elem_shape, {-0.5f, -1.5f, -2.5f, -3.5f}),
-  };
+    std::vector<Tensor> x0 = {
+        Tensor::FromFloat("x0_0", elem_shape, {0.0f, 1.0f, 2.0f, 3.0f}),
+        Tensor::FromFloat("x0_1", elem_shape, {-1.0f, -2.0f, -3.0f, -4.0f}),
+        Tensor::FromFloat("x0_2", elem_shape, {0.5f, 1.5f, 2.5f, 3.5f}),
+    };
+    std::vector<Tensor> x1 = {
+        Tensor::FromFloat("x1_0", elem_shape, {10.0f, 10.0f, 10.0f, 10.0f}),
+        Tensor::FromFloat("x1_1", elem_shape, {0.25f, 0.5f, 0.75f, 1.0f}),
+        Tensor::FromFloat("x1_2", elem_shape, {-0.5f, -1.5f, -2.5f, -3.5f}),
+    };
 
-  // Compute expected per-iteration outputs (Add).
-  std::vector<Tensor> y_per_iter;
-  y_per_iter.reserve(x0.size());
-  for (std::size_t i = 0; i < x0.size(); ++i) {
-    const float *a = x0[i].As<float>();
-    const float *b = x1[i].As<float>();
-    std::vector<float> out(static_cast<std::size_t>(x0[i].element_count()));
-    for (std::size_t j = 0; j < out.size(); ++j) {
-      out[j] = a[j] + b[j];
+    // Compute expected per-iteration outputs (Add).
+    std::vector<Tensor> y_per_iter;
+    y_per_iter.reserve(x0.size());
+    for (std::size_t i = 0; i < x0.size(); ++i) {
+      const float *a = x0[i].As<float>();
+      const float *b = x1[i].As<float>();
+      std::vector<float> out(static_cast<std::size_t>(x0[i].element_count()));
+      for (std::size_t j = 0; j < out.size(); ++j) {
+        out[j] = a[j] + b[j];
+      }
+      y_per_iter.push_back(Tensor::FromFloat("y0_" + std::to_string(i), elem_shape, out));
     }
-    y_per_iter.push_back(Tensor::FromFloat("y0_" + std::to_string(i), elem_shape, out));
-  }
 
-  // Assemble through the reference kernel and stack into a single output.
-  std::vector<Tensors> body_outputs_per_iter = {y_per_iter};
-  Sequences out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
-      onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(x0), body_outputs_per_iter);
-  Tensor stacked = onnx_kernels::kernel::SequenceConstruct(ctx)(
-      {out_seqs[0].values.begin(), out_seqs[0].values.end()});
-  stacked.name = "y0";
+    // Assemble through the reference kernel and stack into a single output.
+    std::vector<Tensors> body_outputs_per_iter = {y_per_iter};
+    Sequences out_seqs = MakeReferenceKernel<onnx_kernels::kernel::SequenceMap>(opset).Invoke(
+        [&](const auto &kernel) {
+          return kernel(MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+                            [&](const auto &kernel) { return kernel.AsSequence(x0); }),
+                        body_outputs_per_iter);
+        });
+    Tensor stacked = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+        [&](const auto &kernel) {
+          return kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
+        });
+    stacked.name = "y0";
 
-  TestCase tc(name, name);
-  GraphProto *graph = InitSequenceMapModel(tc, name, opset);
+    TestCase tc(name, name);
+    GraphProto *graph = InitSequenceMapModel(tc, name, opset);
 
-  NodeProto *sc0 = graph->add_node();
-  sc0->set_op_type("SequenceConstruct");
-  for (const Tensor &t : x0) {
-    sc0->add_input(t.name);
-  }
-  sc0->add_output("x0_seq");
-  NodeProto *sc1 = graph->add_node();
-  sc1->set_op_type("SequenceConstruct");
-  for (const Tensor &t : x1) {
-    sc1->add_input(t.name);
-  }
-  sc1->add_output("x1_seq");
+    NodeProto *sc0 = graph->add_node();
+    sc0->set_op_type("SequenceConstruct");
+    for (const Tensor &t : x0) {
+      sc0->add_input(t.name);
+    }
+    sc0->add_output("x0_seq");
+    NodeProto *sc1 = graph->add_node();
+    sc1->set_op_type("SequenceConstruct");
+    for (const Tensor &t : x1) {
+      sc1->add_input(t.name);
+    }
+    sc1->add_output("x1_seq");
 
-  NodeProto *map_node = graph->add_node();
-  map_node->set_op_type("SequenceMap");
-  map_node->add_input("x0_seq");
-  map_node->add_input("x1_seq");
-  map_node->add_output("y0");
-  AttributeProto *body_attr = map_node->add_attribute();
-  body_attr->set_name("body");
-  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
-  *body_attr->add_g() = BuildAddBody(elem_type, elem_shape);
+    NodeProto *map_node = graph->add_node();
+    map_node->set_op_type("SequenceMap");
+    map_node->add_input("x0_seq");
+    map_node->add_input("x1_seq");
+    map_node->add_output("y0");
+    AttributeProto *body_attr = map_node->add_attribute();
+    body_attr->set_name("body");
+    body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+    *body_attr->add_g() = BuildAddBody(elem_type, elem_shape);
 
-  for (const Tensor &t : x0) {
-    FillValueInfo(t, *graph->add_input());
-  }
-  for (const Tensor &t : x1) {
-    FillValueInfo(t, *graph->add_input());
-  }
-  AppendValueInfo(*graph->add_output(), stacked.name,
-                  SequenceTypeSpec(TensorTypeSpec(elem_type, elem_shape)));
+    for (const Tensor &t : x0) {
+      FillValueInfo(t, *graph->add_input());
+    }
+    for (const Tensor &t : x1) {
+      FillValueInfo(t, *graph->add_input());
+    }
+    AppendValueInfo(*graph->add_output(), stacked.name,
+                    SequenceTypeSpec(TensorTypeSpec(elem_type, elem_shape)));
 
-  DataSet ds;
-  for (const Tensor &t : x0) {
-    ds.inputs.push_back(t);
-  }
-  for (const Tensor &t : x1) {
-    ds.inputs.push_back(t);
-  }
-  ds.outputs.push_back(std::move(stacked));
-  tc.data_sets().emplace_back(std::move(ds));
+    DataSet ds;
+    for (const Tensor &t : x0) {
+      ds.inputs.push_back(t);
+    }
+    for (const Tensor &t : x1) {
+      ds.inputs.push_back(t);
+    }
+    ds.outputs.push_back(std::move(stacked));
+    tc.data_sets().emplace_back(std::move(ds));
 
-  registry.emplace_back(std::move(tc));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 // Mirrors upstream ``test_sequence_map_add_1_sequence_1_tensor``: one
@@ -435,74 +461,83 @@ void RegisterSequenceMapAdd2SequencesCase(const OpsetId &opset, std::vector<Test
 void RegisterSequenceMapAdd1Sequence1TensorCase(const OpsetId &opset,
                                                 std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_add_1_sequence_1_tensor";
-  const KernelContext ctx{opset};
-  const std::vector<int64_t> elem_shape = {4};
-  const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);
+  TestCase lazy_case(name, name);
+  lazy_case.build = [=](bool) -> BuiltCase {
+    const std::vector<int64_t> elem_shape = {4};
+    const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);
 
-  std::vector<Tensor> x0 = {
-      Tensor::FromFloat("x0_0", elem_shape, {0.0f, 1.0f, 2.0f, 3.0f}),
-      Tensor::FromFloat("x0_1", elem_shape, {-1.0f, -2.0f, -3.0f, -4.0f}),
-      Tensor::FromFloat("x0_2", elem_shape, {0.5f, 1.5f, 2.5f, 3.5f}),
-  };
-  Tensor x1 = Tensor::FromFloat("x1", elem_shape, {100.0f, 200.0f, 300.0f, 400.0f});
+    std::vector<Tensor> x0 = {
+        Tensor::FromFloat("x0_0", elem_shape, {0.0f, 1.0f, 2.0f, 3.0f}),
+        Tensor::FromFloat("x0_1", elem_shape, {-1.0f, -2.0f, -3.0f, -4.0f}),
+        Tensor::FromFloat("x0_2", elem_shape, {0.5f, 1.5f, 2.5f, 3.5f}),
+    };
+    Tensor x1 = Tensor::FromFloat("x1", elem_shape, {100.0f, 200.0f, 300.0f, 400.0f});
 
-  // Compute expected per-iteration outputs (Add with broadcast x1).
-  std::vector<Tensor> y_per_iter;
-  y_per_iter.reserve(x0.size());
-  const float *b = x1.As<float>();
-  for (std::size_t i = 0; i < x0.size(); ++i) {
-    const float *a = x0[i].As<float>();
-    std::vector<float> out(static_cast<std::size_t>(x0[i].element_count()));
-    for (std::size_t j = 0; j < out.size(); ++j) {
-      out[j] = a[j] + b[j];
+    // Compute expected per-iteration outputs (Add with broadcast x1).
+    std::vector<Tensor> y_per_iter;
+    y_per_iter.reserve(x0.size());
+    const float *b = x1.As<float>();
+    for (std::size_t i = 0; i < x0.size(); ++i) {
+      const float *a = x0[i].As<float>();
+      std::vector<float> out(static_cast<std::size_t>(x0[i].element_count()));
+      for (std::size_t j = 0; j < out.size(); ++j) {
+        out[j] = a[j] + b[j];
+      }
+      y_per_iter.push_back(Tensor::FromFloat("y0_" + std::to_string(i), elem_shape, out));
     }
-    y_per_iter.push_back(Tensor::FromFloat("y0_" + std::to_string(i), elem_shape, out));
-  }
 
-  std::vector<Tensors> body_outputs_per_iter = {y_per_iter};
-  Sequences out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
-      onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(x0), body_outputs_per_iter);
-  Tensor stacked = onnx_kernels::kernel::SequenceConstruct(ctx)(
-      {out_seqs[0].values.begin(), out_seqs[0].values.end()});
-  stacked.name = "y0";
+    std::vector<Tensors> body_outputs_per_iter = {y_per_iter};
+    Sequences out_seqs = MakeReferenceKernel<onnx_kernels::kernel::SequenceMap>(opset).Invoke(
+        [&](const auto &kernel) {
+          return kernel(MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+                            [&](const auto &kernel) { return kernel.AsSequence(x0); }),
+                        body_outputs_per_iter);
+        });
+    Tensor stacked = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+        [&](const auto &kernel) {
+          return kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
+        });
+    stacked.name = "y0";
 
-  TestCase tc(name, name);
-  GraphProto *graph = InitSequenceMapModel(tc, name, opset);
+    TestCase tc(name, name);
+    GraphProto *graph = InitSequenceMapModel(tc, name, opset);
 
-  NodeProto *sc0 = graph->add_node();
-  sc0->set_op_type("SequenceConstruct");
-  for (const Tensor &t : x0) {
-    sc0->add_input(t.name);
-  }
-  sc0->add_output("x0_seq");
+    NodeProto *sc0 = graph->add_node();
+    sc0->set_op_type("SequenceConstruct");
+    for (const Tensor &t : x0) {
+      sc0->add_input(t.name);
+    }
+    sc0->add_output("x0_seq");
 
-  // SequenceMap takes the sequence and the broadcast tensor directly.
-  NodeProto *map_node = graph->add_node();
-  map_node->set_op_type("SequenceMap");
-  map_node->add_input("x0_seq");
-  map_node->add_input("x1");
-  map_node->add_output("y0");
-  AttributeProto *body_attr = map_node->add_attribute();
-  body_attr->set_name("body");
-  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
-  *body_attr->add_g() = BuildAddBody(elem_type, elem_shape);
+    // SequenceMap takes the sequence and the broadcast tensor directly.
+    NodeProto *map_node = graph->add_node();
+    map_node->set_op_type("SequenceMap");
+    map_node->add_input("x0_seq");
+    map_node->add_input("x1");
+    map_node->add_output("y0");
+    AttributeProto *body_attr = map_node->add_attribute();
+    body_attr->set_name("body");
+    body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+    *body_attr->add_g() = BuildAddBody(elem_type, elem_shape);
 
-  for (const Tensor &t : x0) {
-    FillValueInfo(t, *graph->add_input());
-  }
-  FillValueInfo(x1, *graph->add_input());
-  AppendValueInfo(*graph->add_output(), stacked.name,
-                  SequenceTypeSpec(TensorTypeSpec(elem_type, elem_shape)));
+    for (const Tensor &t : x0) {
+      FillValueInfo(t, *graph->add_input());
+    }
+    FillValueInfo(x1, *graph->add_input());
+    AppendValueInfo(*graph->add_output(), stacked.name,
+                    SequenceTypeSpec(TensorTypeSpec(elem_type, elem_shape)));
 
-  DataSet ds;
-  for (const Tensor &t : x0) {
-    ds.inputs.push_back(t);
-  }
-  ds.inputs.push_back(x1);
-  ds.outputs.push_back(std::move(stacked));
-  tc.data_sets().emplace_back(std::move(ds));
+    DataSet ds;
+    for (const Tensor &t : x0) {
+      ds.inputs.push_back(t);
+    }
+    ds.inputs.push_back(x1);
+    ds.outputs.push_back(std::move(stacked));
+    tc.data_sets().emplace_back(std::move(ds));
 
-  registry.emplace_back(std::move(tc));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 // Mirrors upstream ``test_sequence_map_extract_shapes``: one input
@@ -511,76 +546,85 @@ void RegisterSequenceMapAdd1Sequence1TensorCase(const OpsetId &opset,
 // shape vectors.
 void RegisterSequenceMapExtractShapesCase(const OpsetId &opset, std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_extract_shapes";
-  const KernelContext ctx{opset};
-  const int32_t in_elem_type = static_cast<int32_t>(DataType::FLOAT);
-  const int32_t out_elem_type = static_cast<int32_t>(DataType::INT64);
-  const std::vector<int64_t> out_elem_shape = {3};
+  TestCase lazy_case(name, name);
+  lazy_case.build = [=](bool) -> BuiltCase {
+    const int32_t in_elem_type = static_cast<int32_t>(DataType::FLOAT);
+    const int32_t out_elem_type = static_cast<int32_t>(DataType::INT64);
+    const std::vector<int64_t> out_elem_shape = {3};
 
-  // Three per-iteration tensors with distinct shapes (rank fixed at 3).
-  const std::vector<std::vector<int64_t>> shapes = {
-      {4, 3, 2},
-      {2, 5, 1},
-      {1, 1, 7},
+    // Three per-iteration tensors with distinct shapes (rank fixed at 3).
+    const std::vector<std::vector<int64_t>> shapes = {
+        {4, 3, 2},
+        {2, 5, 1},
+        {1, 1, 7},
+    };
+    std::vector<Tensor> x;
+    x.reserve(shapes.size());
+    for (std::size_t i = 0; i < shapes.size(); ++i) {
+      std::vector<float> values(
+          static_cast<std::size_t>(shapes[i][0] * shapes[i][1] * shapes[i][2]), 0.0f);
+      x.push_back(Tensor::FromFloat("x_" + std::to_string(i), shapes[i], values));
+    }
+
+    // Per-iteration body outputs: shape vectors as INT64[3].
+    std::vector<Tensor> y_per_iter;
+    y_per_iter.reserve(shapes.size());
+    for (std::size_t i = 0; i < shapes.size(); ++i) {
+      y_per_iter.push_back(
+          Tensor::FromInt64("shape_" + std::to_string(i), out_elem_shape, shapes[i]));
+    }
+
+    std::vector<Tensors> body_outputs_per_iter = {y_per_iter};
+    Sequences out_seqs = MakeReferenceKernel<onnx_kernels::kernel::SequenceMap>(opset).Invoke(
+        [&](const auto &kernel) {
+          return kernel(MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+                            [&](const auto &kernel) { return kernel.AsSequence(x); }),
+                        body_outputs_per_iter);
+        });
+    Tensor stacked = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+        [&](const auto &kernel) {
+          return kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
+        });
+    stacked.name = "shapes";
+
+    TestCase tc(name, name);
+    GraphProto *graph = InitSequenceMapModel(tc, name, opset);
+
+    NodeProto *sc = graph->add_node();
+    sc->set_op_type("SequenceConstruct");
+    for (const Tensor &t : x) {
+      sc->add_input(t.name);
+    }
+    sc->add_output("in_seq");
+
+    NodeProto *map_node = graph->add_node();
+    map_node->set_op_type("SequenceMap");
+    map_node->add_input("in_seq");
+    map_node->add_output("shapes");
+    AttributeProto *body_attr = map_node->add_attribute();
+    body_attr->set_name("body");
+    body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+    // The body input shape is left rank-3 with all dynamic dims (use the
+    // first iteration's shape as a representative; this is only used by
+    // upstream shape inference and never executed by the kernel).
+    *body_attr->add_g() = BuildShapeBody(in_elem_type, shapes[0], 3);
+
+    for (const Tensor &t : x) {
+      FillValueInfo(t, *graph->add_input());
+    }
+    AppendValueInfo(*graph->add_output(), stacked.name,
+                    SequenceTypeSpec(TensorTypeSpec(out_elem_type, out_elem_shape)));
+
+    DataSet ds;
+    for (const Tensor &t : x) {
+      ds.inputs.push_back(t);
+    }
+    ds.outputs.push_back(std::move(stacked));
+    tc.data_sets().emplace_back(std::move(ds));
+
+    return tc.take_materialized();
   };
-  std::vector<Tensor> x;
-  x.reserve(shapes.size());
-  for (std::size_t i = 0; i < shapes.size(); ++i) {
-    std::vector<float> values(static_cast<std::size_t>(shapes[i][0] * shapes[i][1] * shapes[i][2]),
-                              0.0f);
-    x.push_back(Tensor::FromFloat("x_" + std::to_string(i), shapes[i], values));
-  }
-
-  // Per-iteration body outputs: shape vectors as INT64[3].
-  std::vector<Tensor> y_per_iter;
-  y_per_iter.reserve(shapes.size());
-  for (std::size_t i = 0; i < shapes.size(); ++i) {
-    y_per_iter.push_back(
-        Tensor::FromInt64("shape_" + std::to_string(i), out_elem_shape, shapes[i]));
-  }
-
-  std::vector<Tensors> body_outputs_per_iter = {y_per_iter};
-  Sequences out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
-      onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(x), body_outputs_per_iter);
-  Tensor stacked = onnx_kernels::kernel::SequenceConstruct(ctx)(
-      {out_seqs[0].values.begin(), out_seqs[0].values.end()});
-  stacked.name = "shapes";
-
-  TestCase tc(name, name);
-  GraphProto *graph = InitSequenceMapModel(tc, name, opset);
-
-  NodeProto *sc = graph->add_node();
-  sc->set_op_type("SequenceConstruct");
-  for (const Tensor &t : x) {
-    sc->add_input(t.name);
-  }
-  sc->add_output("in_seq");
-
-  NodeProto *map_node = graph->add_node();
-  map_node->set_op_type("SequenceMap");
-  map_node->add_input("in_seq");
-  map_node->add_output("shapes");
-  AttributeProto *body_attr = map_node->add_attribute();
-  body_attr->set_name("body");
-  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
-  // The body input shape is left rank-3 with all dynamic dims (use the
-  // first iteration's shape as a representative; this is only used by
-  // upstream shape inference and never executed by the kernel).
-  *body_attr->add_g() = BuildShapeBody(in_elem_type, shapes[0], 3);
-
-  for (const Tensor &t : x) {
-    FillValueInfo(t, *graph->add_input());
-  }
-  AppendValueInfo(*graph->add_output(), stacked.name,
-                  SequenceTypeSpec(TensorTypeSpec(out_elem_type, out_elem_shape)));
-
-  DataSet ds;
-  for (const Tensor &t : x) {
-    ds.inputs.push_back(t);
-  }
-  ds.outputs.push_back(std::move(stacked));
-  tc.data_sets().emplace_back(std::move(ds));
-
-  registry.emplace_back(std::move(tc));
+  registry.emplace_back(std::move(lazy_case));
 }
 
 // Mirrors upstream ``test_sequence_map_identity_1_sequence_1_tensor``:
@@ -591,86 +635,97 @@ void RegisterSequenceMapExtractShapesCase(const OpsetId &opset, std::vector<Test
 void RegisterSequenceMapIdentity1Sequence1TensorCase(const OpsetId &opset,
                                                      std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_identity_1_sequence_1_tensor";
-  const KernelContext ctx{opset};
-  const std::vector<int64_t> seq_elem_shape = {5};
-  const std::vector<int64_t> tensor_shape = {4};
-  const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);
+  TestCase lazy_case(name, name);
+  lazy_case.build = [=](bool) -> BuiltCase {
+    const std::vector<int64_t> seq_elem_shape = {5};
+    const std::vector<int64_t> tensor_shape = {4};
+    const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);
 
-  // Three per-iteration tensors of the input sequence.
-  std::vector<Tensor> x0 = {
-      Tensor::FromFloat("x0_0", seq_elem_shape, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f}),
-      Tensor::FromFloat("x0_1", seq_elem_shape, {-0.5f, -1.0f, -1.5f, -2.0f, -2.5f}),
-      Tensor::FromFloat("x0_2", seq_elem_shape, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f}),
+    // Three per-iteration tensors of the input sequence.
+    std::vector<Tensor> x0 = {
+        Tensor::FromFloat("x0_0", seq_elem_shape, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f}),
+        Tensor::FromFloat("x0_1", seq_elem_shape, {-0.5f, -1.0f, -1.5f, -2.0f, -2.5f}),
+        Tensor::FromFloat("x0_2", seq_elem_shape, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f}),
+    };
+    // The broadcast tensor (replicated once per iteration).
+    Tensor x1 = Tensor::FromFloat("x1", tensor_shape, {10.0f, 20.0f, 30.0f, 40.0f});
+
+    // Per-iteration body outputs: out0 = identity(x0[i]), out1 = identity(x1).
+    std::vector<Tensor> y0_per_iter = x0;
+    std::vector<Tensor> y1_per_iter = {x1, x1, x1};
+    for (std::size_t i = 0; i < y0_per_iter.size(); ++i) {
+      y0_per_iter[i].name = "y0_" + std::to_string(i);
+    }
+    for (std::size_t i = 0; i < y1_per_iter.size(); ++i) {
+      y1_per_iter[i].name = "y1_" + std::to_string(i);
+    }
+
+    std::vector<Tensors> body_outputs_per_iter = {y0_per_iter, y1_per_iter};
+    Sequences out_seqs = MakeReferenceKernel<onnx_kernels::kernel::SequenceMap>(opset).Invoke(
+        [&](const auto &kernel) {
+          return kernel(MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+                            [&](const auto &kernel) { return kernel.AsSequence(x0); }),
+                        body_outputs_per_iter);
+        });
+
+    // Materialise both output sequences as stacked tensors.
+    Tensor stacked0 = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+        [&](const auto &kernel) {
+          return kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
+        });
+    stacked0.name = "y0";
+    Tensor stacked1 = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+        [&](const auto &kernel) {
+          return kernel({out_seqs[1].values.begin(), out_seqs[1].values.end()});
+        });
+    stacked1.name = "y1";
+
+    TestCase tc(name, name);
+    GraphProto *graph = InitSequenceMapModel(tc, name, opset);
+
+    // Node 1: SequenceConstruct the input sequence.
+    NodeProto *sc0 = graph->add_node();
+    sc0->set_op_type("SequenceConstruct");
+    for (const Tensor &t : x0) {
+      sc0->add_input(t.name);
+    }
+    sc0->add_output("x0_seq");
+
+    // Node 2: SequenceMap(x0_seq, x1, body=identity_2) → (y0, y1).
+    NodeProto *map_node = graph->add_node();
+    map_node->set_op_type("SequenceMap");
+    map_node->add_input("x0_seq");
+    map_node->add_input("x1");
+    map_node->add_output("y0");
+    map_node->add_output("y1");
+    AttributeProto *body_attr = map_node->add_attribute();
+    body_attr->set_name("body");
+    body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+    *body_attr->add_g() = BuildIdentity2InputsBody(elem_type, seq_elem_shape, tensor_shape);
+
+    // Graph inputs: individual tensors of x0 + the broadcast x1.
+    for (const Tensor &t : x0) {
+      FillValueInfo(t, *graph->add_input());
+    }
+    FillValueInfo(x1, *graph->add_input());
+    // Graph outputs: y0 and y1 declared as SequenceTypes.
+    AppendValueInfo(*graph->add_output(), stacked0.name,
+                    SequenceTypeSpec(TensorTypeSpec(elem_type, seq_elem_shape)));
+    AppendValueInfo(*graph->add_output(), stacked1.name,
+                    SequenceTypeSpec(TensorTypeSpec(elem_type, tensor_shape)));
+
+    DataSet ds;
+    for (const Tensor &t : x0) {
+      ds.inputs.push_back(t);
+    }
+    ds.inputs.push_back(x1);
+    ds.outputs.push_back(std::move(stacked0));
+    ds.outputs.push_back(std::move(stacked1));
+    tc.data_sets().emplace_back(std::move(ds));
+
+    return tc.take_materialized();
   };
-  // The broadcast tensor (replicated once per iteration).
-  Tensor x1 = Tensor::FromFloat("x1", tensor_shape, {10.0f, 20.0f, 30.0f, 40.0f});
-
-  // Per-iteration body outputs: out0 = identity(x0[i]), out1 = identity(x1).
-  std::vector<Tensor> y0_per_iter = x0;
-  std::vector<Tensor> y1_per_iter = {x1, x1, x1};
-  for (std::size_t i = 0; i < y0_per_iter.size(); ++i) {
-    y0_per_iter[i].name = "y0_" + std::to_string(i);
-  }
-  for (std::size_t i = 0; i < y1_per_iter.size(); ++i) {
-    y1_per_iter[i].name = "y1_" + std::to_string(i);
-  }
-
-  std::vector<Tensors> body_outputs_per_iter = {y0_per_iter, y1_per_iter};
-  Sequences out_seqs = onnx_kernels::kernel::SequenceMap(ctx)(
-      onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(x0), body_outputs_per_iter);
-
-  // Materialise both output sequences as stacked tensors.
-  Tensor stacked0 = onnx_kernels::kernel::SequenceConstruct(ctx)(
-      {out_seqs[0].values.begin(), out_seqs[0].values.end()});
-  stacked0.name = "y0";
-  Tensor stacked1 = onnx_kernels::kernel::SequenceConstruct(ctx)(
-      {out_seqs[1].values.begin(), out_seqs[1].values.end()});
-  stacked1.name = "y1";
-
-  TestCase tc(name, name);
-  GraphProto *graph = InitSequenceMapModel(tc, name, opset);
-
-  // Node 1: SequenceConstruct the input sequence.
-  NodeProto *sc0 = graph->add_node();
-  sc0->set_op_type("SequenceConstruct");
-  for (const Tensor &t : x0) {
-    sc0->add_input(t.name);
-  }
-  sc0->add_output("x0_seq");
-
-  // Node 2: SequenceMap(x0_seq, x1, body=identity_2) → (y0, y1).
-  NodeProto *map_node = graph->add_node();
-  map_node->set_op_type("SequenceMap");
-  map_node->add_input("x0_seq");
-  map_node->add_input("x1");
-  map_node->add_output("y0");
-  map_node->add_output("y1");
-  AttributeProto *body_attr = map_node->add_attribute();
-  body_attr->set_name("body");
-  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
-  *body_attr->add_g() = BuildIdentity2InputsBody(elem_type, seq_elem_shape, tensor_shape);
-
-  // Graph inputs: individual tensors of x0 + the broadcast x1.
-  for (const Tensor &t : x0) {
-    FillValueInfo(t, *graph->add_input());
-  }
-  FillValueInfo(x1, *graph->add_input());
-  // Graph outputs: y0 and y1 declared as SequenceTypes.
-  AppendValueInfo(*graph->add_output(), stacked0.name,
-                  SequenceTypeSpec(TensorTypeSpec(elem_type, seq_elem_shape)));
-  AppendValueInfo(*graph->add_output(), stacked1.name,
-                  SequenceTypeSpec(TensorTypeSpec(elem_type, tensor_shape)));
-
-  DataSet ds;
-  for (const Tensor &t : x0) {
-    ds.inputs.push_back(t);
-  }
-  ds.inputs.push_back(x1);
-  ds.outputs.push_back(std::move(stacked0));
-  ds.outputs.push_back(std::move(stacked1));
-  tc.data_sets().emplace_back(std::move(ds));
-
-  registry.emplace_back(std::move(tc));
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace

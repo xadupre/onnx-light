@@ -14,12 +14,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterSoftsignCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Softsign softsign_kernel{ctx};
+  const auto softsign_kernel = MakeReferenceKernel<onnx_kernels::kernel::Softsign>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Softsign", softsign_kernel, "test_cc_softsign_benchmark", opset,
-                              registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Softsign>(
+        "Softsign", "test_cc_softsign_benchmark", opset, registry);
     return;
   }
 
@@ -30,7 +29,7 @@ void RegisterSoftsignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y");
     Expect(registry, std::move(node), "test_cc_softsign", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {-4.0f, -1.0f, 0.0f, 1.0f, 2.0f, 4.0f});
-      Tensor y = softsign_kernel(x);
+      Tensor y = softsign_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -43,7 +42,7 @@ void RegisterSoftsignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_softsign_example", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
-      Tensor y = softsign_kernel(x);
+      Tensor y = softsign_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -55,7 +54,7 @@ void RegisterSoftsignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_softsign_float16", {opset}, [=]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f});
-      Tensor y = softsign_kernel(x);
+      Tensor y = softsign_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -73,7 +72,7 @@ void RegisterSoftsignCases(std::vector<TestCase> &registry, TestMode mode) {
       for (size_t i = 0; i < vals.size(); ++i)
         dst[i] = FloatToBfloat16Bits(vals[i]);
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-      Tensor y = softsign_kernel(x);
+      Tensor y = softsign_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

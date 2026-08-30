@@ -42,9 +42,8 @@ OpsetId TrainingOpset(int64_t version) { return OpsetId(kOnnxPreviewTrainingDoma
 // ---------------------------------------------------------------------------
 void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = TrainingOpset(1);
-  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const onnx_kernels::kernel::Adam adam{ctx};
+  const auto adam = MakeReferenceKernel<onnx_kernels::kernel::Adam>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -75,8 +74,10 @@ void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor G = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654322ULL);
              Tensor V = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654323ULL);
              Tensor H = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654324ULL);
-             std::vector<Tensor> outs = adam(R, T, {X}, {G}, {V}, {H}, alpha, beta, epsilon,
-                                             norm_coefficient, norm_coefficient_post);
+             std::vector<Tensor> outs = adam.Invoke([&](const auto &kernel) {
+               return kernel(R, T, {X}, {G}, {V}, {H}, alpha, beta, epsilon, norm_coefficient,
+                             norm_coefficient_post);
+             });
              return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(V),
                             std::move(H)},
                            {std::move(outs[0]), std::move(outs[1]), std::move(outs[2])}};
@@ -111,8 +112,10 @@ void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor V = Tensor::FromFloat("", {3}, {0.0f, 0.0f, 0.0f});
              Tensor H = Tensor::FromFloat("", {3}, {0.0f, 0.0f, 0.0f});
 
-             std::vector<Tensor> outs = adam(R, T, {X}, {G}, {V}, {H}, alpha, beta, epsilon,
-                                             norm_coefficient, norm_coefficient_post);
+             std::vector<Tensor> outs = adam.Invoke([&](const auto &kernel) {
+               return kernel(R, T, {X}, {G}, {V}, {H}, alpha, beta, epsilon, norm_coefficient,
+                             norm_coefficient_post);
+             });
              return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(V),
                             std::move(H)},
                            {std::move(outs[0]), std::move(outs[1]), std::move(outs[2])}};
@@ -138,27 +141,29 @@ void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttribute(node, "epsilon", epsilon);
     AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
     AddFloatAttribute(node, "norm_coefficient_post", norm_coefficient_post);
-    Expect(
-        registry, std::move(node), "test_cc_adam_multiple", {default_opset, opset},
-        [=]() -> IoData {
-          Tensor R = Tensor::FromFloat("", {}, {0.05f});
-          Tensor T = Tensor::FromInt64("", {}, {5});
-          Tensor X1 = Tensor::FromFloat("", {2}, {0.5f, -0.5f});
-          Tensor X2 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-          Tensor G1 = Tensor::FromFloat("", {2}, {0.1f, -0.2f});
-          Tensor G2 = Tensor::FromFloat("", {2, 2}, {-0.5f, 0.25f, 0.75f, -1.0f});
-          Tensor V1 = Tensor::FromFloat("", {2}, {0.01f, 0.02f});
-          Tensor V2 = Tensor::FromFloat("", {2, 2}, {0.05f, 0.05f, -0.05f, 0.0f});
-          Tensor H1 = Tensor::FromFloat("", {2}, {0.001f, 0.002f});
-          Tensor H2 = Tensor::FromFloat("", {2, 2}, {0.01f, 0.02f, 0.03f, 0.04f});
+    Expect(registry, std::move(node), "test_cc_adam_multiple", {default_opset, opset},
+           [=]() -> IoData {
+             Tensor R = Tensor::FromFloat("", {}, {0.05f});
+             Tensor T = Tensor::FromInt64("", {}, {5});
+             Tensor X1 = Tensor::FromFloat("", {2}, {0.5f, -0.5f});
+             Tensor X2 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+             Tensor G1 = Tensor::FromFloat("", {2}, {0.1f, -0.2f});
+             Tensor G2 = Tensor::FromFloat("", {2, 2}, {-0.5f, 0.25f, 0.75f, -1.0f});
+             Tensor V1 = Tensor::FromFloat("", {2}, {0.01f, 0.02f});
+             Tensor V2 = Tensor::FromFloat("", {2, 2}, {0.05f, 0.05f, -0.05f, 0.0f});
+             Tensor H1 = Tensor::FromFloat("", {2}, {0.001f, 0.002f});
+             Tensor H2 = Tensor::FromFloat("", {2, 2}, {0.01f, 0.02f, 0.03f, 0.04f});
 
-          std::vector<Tensor> outs = adam(R, T, {X1, X2}, {G1, G2}, {V1, V2}, {H1, H2}, alpha, beta,
-                                          epsilon, norm_coefficient, norm_coefficient_post);
-          return IoData{{std::move(R), std::move(T), std::move(X1), std::move(X2), std::move(G1),
-                         std::move(G2), std::move(V1), std::move(V2), std::move(H1), std::move(H2)},
-                        {std::move(outs[0]), std::move(outs[1]), std::move(outs[2]),
-                         std::move(outs[3]), std::move(outs[4]), std::move(outs[5])}};
-        });
+             std::vector<Tensor> outs = adam.Invoke([&](const auto &kernel) {
+               return kernel(R, T, {X1, X2}, {G1, G2}, {V1, V2}, {H1, H2}, alpha, beta, epsilon,
+                             norm_coefficient, norm_coefficient_post);
+             });
+             return IoData{{std::move(R), std::move(T), std::move(X1), std::move(X2), std::move(G1),
+                            std::move(G2), std::move(V1), std::move(V2), std::move(H1),
+                            std::move(H2)},
+                           {std::move(outs[0]), std::move(outs[1]), std::move(outs[2]),
+                            std::move(outs[3]), std::move(outs[4]), std::move(outs[5])}};
+           });
   }
 
   // ----- Upstream ONNX cases (mirror onnx.backend.test.case.node.adam.Adam).
@@ -192,8 +197,9 @@ void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor V = Tensor::FromFloat("", {2}, {1.7f, 3.6f});
       Tensor H = Tensor::FromFloat("", {2}, {0.1f, 0.1f});
 
-      std::vector<Tensor> outs =
-          adam(R, T, {X}, {G}, {V}, {H}, alpha, beta, epsilon, norm_coefficient);
+      std::vector<Tensor> outs = adam.Invoke([&](const auto &kernel) {
+        return kernel(R, T, {X}, {G}, {V}, {H}, alpha, beta, epsilon, norm_coefficient);
+      });
       return IoData{
           {std::move(R), std::move(T), std::move(X), std::move(G), std::move(V), std::move(H)},
           {std::move(outs[0]), std::move(outs[1]), std::move(outs[2])}};
@@ -229,8 +235,10 @@ void RegisterAdamCases(std::vector<TestCase> &registry, TestMode mode) {
           Tensor H1 = Tensor::FromFloat("", {1}, {0.5f});
           Tensor H2 = Tensor::FromFloat("", {2}, {1.0f, 10.0f});
 
-          std::vector<Tensor> outs = adam(R, T, {X1, X2}, {G1, G2}, {V1, V2}, {H1, H2}, alpha, beta,
-                                          epsilon, norm_coefficient);
+          std::vector<Tensor> outs = adam.Invoke([&](const auto &kernel) {
+            return kernel(R, T, {X1, X2}, {G1, G2}, {V1, V2}, {H1, H2}, alpha, beta, epsilon,
+                          norm_coefficient);
+          });
           return IoData{{std::move(R), std::move(T), std::move(X1), std::move(X2), std::move(G1),
                          std::move(G2), std::move(V1), std::move(V2), std::move(H1), std::move(H2)},
                         {std::move(outs[0]), std::move(outs[1]), std::move(outs[2]),

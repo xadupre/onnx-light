@@ -13,11 +13,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterPowCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Pow pow_kernel{ctx};
+  const auto pow_kernel = MakeReferenceKernel<onnx_kernels::kernel::Pow>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkBinaryFloat("Pow", pow_kernel, "test_cc_pow_benchmark", opset, registry);
+    ExpectBenchmarkBinaryFloat<onnx_kernels::kernel::Pow>("Pow", "test_cc_pow_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -134,7 +134,7 @@ void RegisterPowCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, node, "test_cc_pow_types_float16_float32", {opset}, [=]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {3}, {1.0f, 2.0f, 3.0f});
       Tensor y = Tensor::FromFloat("", {3}, {2.0f, 3.0f, 4.0f});
-      Tensor z = pow_kernel(x, y);
+      Tensor z = pow_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }
@@ -144,7 +144,7 @@ void RegisterPowCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, node, "test_cc_pow_types_bfloat16_float32", {opset}, [=]() -> IoData {
       Tensor x = MakeBfloat16Tensor("", {3}, {1.0f, 2.0f, 3.0f});
       Tensor y = Tensor::FromFloat("", {3}, {2.0f, 3.0f, 4.0f});
-      Tensor z = pow_kernel(x, y);
+      Tensor z = pow_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }

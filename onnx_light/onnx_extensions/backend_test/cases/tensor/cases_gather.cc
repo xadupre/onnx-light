@@ -30,8 +30,7 @@ NodeProto MakeGatherNode(int64_t axis) {
 
 void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Gather gather_kernel{ctx};
+  const auto gather_kernel = MakeReferenceKernel<onnx_kernels::kernel::Gather>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeGatherNode(0);
@@ -44,7 +43,8 @@ void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
                index_values[static_cast<std::size_t>(i)] = i;
              }
              Tensor indices = Tensor::FromInt64("", {4096}, index_values);
-             Tensor output = gather_kernel(data, indices, 0);
+             Tensor output =
+                 gather_kernel.Invoke([&](const auto &kernel) { return kernel(data, indices, 0); });
              return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
            });
     return;
@@ -58,7 +58,8 @@ void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
                                       {0.0f, 0.1f, 0.2f, 0.3f, 1.0f, 1.1f, 1.2f, 1.3f, 2.0f, 2.1f,
                                        2.2f, 2.3f, 3.0f, 3.1f, 3.2f, 3.3f, 4.0f, 4.1f, 4.2f, 4.3f});
       Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 1, 1, 2});
-      Tensor output = gather_kernel(data, indices, 0);
+      Tensor output =
+          gather_kernel.Invoke([&](const auto &kernel) { return kernel(data, indices, 0); });
       return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
     });
   }
@@ -69,7 +70,8 @@ void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor data =
           Tensor::FromFloat("", {3, 3}, {1.0f, 1.2f, 1.9f, 2.3f, 3.4f, 3.9f, 4.5f, 5.7f, 5.9f});
       Tensor indices = Tensor::FromInt64("", {1, 2}, {0, 2});
-      Tensor output = gather_kernel(data, indices, 1);
+      Tensor output =
+          gather_kernel.Invoke([&](const auto &kernel) { return kernel(data, indices, 1); });
       return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
     });
   }
@@ -81,7 +83,8 @@ void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor data =
           Tensor::FromFloat("", {3, 3}, {1.0f, 1.2f, 1.9f, 2.3f, 3.4f, 3.9f, 4.5f, 5.7f, 5.9f});
       Tensor indices = Tensor::FromInt64("", {1, 2}, {0, 2});
-      Tensor output = gather_kernel(data, indices, 1);
+      Tensor output =
+          gather_kernel.Invoke([&](const auto &kernel) { return kernel(data, indices, 1); });
       return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
     });
   }
@@ -92,7 +95,8 @@ void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              Tensor data = Tensor::FromFloat("", {5}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
              Tensor indices = Tensor::FromInt64("", {3}, {0, -1, -2});
-             Tensor output = gather_kernel(data, indices, 0);
+             Tensor output =
+                 gather_kernel.Invoke([&](const auto &kernel) { return kernel(data, indices, 0); });
              return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
            });
   }

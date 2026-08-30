@@ -128,8 +128,7 @@ void RegisterGridSampleCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
 
   if (mode == TestMode::BENCHMARK) {
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::GridSample gridsample_kernel{ctx};
+    const auto gridsample_kernel = MakeReferenceKernel<onnx_kernels::kernel::GridSample>(opset);
     const std::vector<int64_t> x_shape = {1, 16, 256, 256};
     const std::vector<int64_t> grid_shape = {1, 256, 256, 2};
     NodeProto node;
@@ -145,7 +144,8 @@ void RegisterGridSampleCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor Grid = RandnTensor(DataType::FLOAT, grid_shape, 2002);
              onnx_kernels::kernel::GridSample::Attributes attrs;
              attrs.mode = "linear";
-             Tensor Y = gridsample_kernel(X, Grid, attrs);
+             Tensor Y = gridsample_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(X, Grid, attrs); });
              Y.name = "Y";
              return IoData{{std::move(X), std::move(Grid)}, {std::move(Y)}};
            });

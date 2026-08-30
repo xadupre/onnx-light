@@ -48,8 +48,7 @@ Tensor Rename(Tensor t, const std::string &name) {
 
 void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(15);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Shape shape_kernel{ctx};
+  const auto shape_kernel = MakeReferenceKernel<onnx_kernels::kernel::Shape>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     // Shape only reads the input's dimensions, so the case exists mainly for
@@ -61,7 +60,8 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
            [shape_kernel, shape]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, shape, 2001);
              onnx_kernels::kernel::Shape::Attributes attrs;
-             Tensor y = Rename(shape_kernel(x, attrs), "y");
+             Tensor y = Rename(
+                 shape_kernel.Invoke([&](const auto &kernel) { return kernel(x, attrs); }), "y");
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -78,7 +78,8 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/std::nullopt),
            "test_cc_shape_example", {opset}, [=]() -> IoData {
              onnx_kernels::kernel::Shape::Attributes attrs;
-             const Tensor y = Rename(shape_kernel(x2d, attrs), "y");
+             const Tensor y = Rename(
+                 shape_kernel.Invoke([&](const auto &kernel) { return kernel(x2d, attrs); }), "y");
              return IoData{{std::move(x2d)}, {std::move(y)}};
            });
   }
@@ -88,7 +89,8 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, MakeShapeNode(/*start=*/std::nullopt, /*end=*/std::nullopt), "test_cc_shape",
            {opset}, [=]() -> IoData {
              onnx_kernels::kernel::Shape::Attributes attrs;
-             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             const Tensor y = Rename(
+                 shape_kernel.Invoke([&](const auto &kernel) { return kernel(x3d, attrs); }), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
            });
   }
@@ -99,7 +101,8 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
            {opset}, [=]() -> IoData {
              onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.start = 1;
-             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             const Tensor y = Rename(
+                 shape_kernel.Invoke([&](const auto &kernel) { return kernel(x3d, attrs); }), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
            });
   }
@@ -110,7 +113,8 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
            {opset}, [=]() -> IoData {
              onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.end = 1;
-             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             const Tensor y = Rename(
+                 shape_kernel.Invoke([&](const auto &kernel) { return kernel(x3d, attrs); }), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
            });
   }
@@ -121,7 +125,8 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
            "test_cc_shape_start_negative_1", {opset}, [=]() -> IoData {
              onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.start = -1;
-             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             const Tensor y = Rename(
+                 shape_kernel.Invoke([&](const auto &kernel) { return kernel(x3d, attrs); }), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
            });
   }
@@ -132,7 +137,8 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
            "test_cc_shape_end_negative_1", {opset}, [=]() -> IoData {
              onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.end = -1;
-             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             const Tensor y = Rename(
+                 shape_kernel.Invoke([&](const auto &kernel) { return kernel(x3d, attrs); }), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
            });
   }
@@ -144,7 +150,8 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.start = 1;
              attrs.end = -1;
-             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             const Tensor y = Rename(
+                 shape_kernel.Invoke([&](const auto &kernel) { return kernel(x3d, attrs); }), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
            });
   }
@@ -156,7 +163,8 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.start = 1;
              attrs.end = 2;
-             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             const Tensor y = Rename(
+                 shape_kernel.Invoke([&](const auto &kernel) { return kernel(x3d, attrs); }), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
            });
   }
@@ -167,7 +175,8 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
            {opset}, [=]() -> IoData {
              onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.start = -10;
-             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             const Tensor y = Rename(
+                 shape_kernel.Invoke([&](const auto &kernel) { return kernel(x3d, attrs); }), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
            });
   }
@@ -178,7 +187,8 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
            {opset}, [=]() -> IoData {
              onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.end = 10;
-             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             const Tensor y = Rename(
+                 shape_kernel.Invoke([&](const auto &kernel) { return kernel(x3d, attrs); }), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
            });
   }
@@ -190,7 +200,8 @@ void RegisterShapeCases(std::vector<TestCase> &registry, TestMode mode) {
              onnx_kernels::kernel::Shape::Attributes attrs;
              attrs.start = 2;
              attrs.end = 1;
-             const Tensor y = Rename(shape_kernel(x3d, attrs), "y");
+             const Tensor y = Rename(
+                 shape_kernel.Invoke([&](const auto &kernel) { return kernel(x3d, attrs); }), "y");
              return IoData{{std::move(x3d)}, {std::move(y)}};
            });
   }

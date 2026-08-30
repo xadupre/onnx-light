@@ -42,7 +42,6 @@ void AddIntAttr(NodeProto &node, const char *name, int64_t value) {
 // ---------------------------------------------------------------------------
 void RegisterMultinomialCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -50,11 +49,11 @@ void RegisterMultinomialCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
 
-    const onnx_kernels::kernel::Multinomial multinomial_kernel{ctx};
+    const auto multinomial_kernel = MakeReferenceKernel<onnx_kernels::kernel::Multinomial>(opset);
     Expect(registry, std::move(node), "test_cc_multinomial_benchmark", {opset}, {1024 * 4096},
            {1024}, [multinomial_kernel]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {1024, 4096}, 987654321ULL);
-             Tensor y = multinomial_kernel(x);
+             Tensor y = multinomial_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -71,7 +70,8 @@ void RegisterMultinomialCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_multinomial", {opset}, [=]() -> IoData {
-      Tensor y = onnx_kernels::kernel::Multinomial(ctx)(x);
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Multinomial>(opset).Invoke(
+          [&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -88,8 +88,10 @@ void RegisterMultinomialCases(std::vector<TestCase> &registry, TestMode mode) {
     AddIntAttr(node, "sample_size", 5);
     AddFloatAttr(node, "seed", 42.0f);
     Expect(registry, std::move(node), "test_cc_multinomial_seeded", {opset}, [=]() -> IoData {
-      Tensor y =
-          onnx_kernels::kernel::Multinomial(ctx)(x, /*sample_size=*/5, /*seed=*/42, /*dtype=*/0);
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Multinomial>(opset).Invoke(
+          [&](const auto &kernel) {
+            return kernel(x, /*sample_size=*/5, /*seed=*/42, /*dtype=*/0);
+          });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -105,9 +107,11 @@ void RegisterMultinomialCases(std::vector<TestCase> &registry, TestMode mode) {
     AddIntAttr(node, "sample_size", 4);
     AddIntAttr(node, "dtype", static_cast<int64_t>(DataType::INT64));
     Expect(registry, std::move(node), "test_cc_multinomial_int64", {opset}, [=]() -> IoData {
-      Tensor y = onnx_kernels::kernel::Multinomial(ctx)(
-          x, /*sample_size=*/4, onnx_kernels::kernel::Multinomial::kNoSeed,
-          /*dtype=*/static_cast<int32_t>(DataType::INT64));
+      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Multinomial>(opset).Invoke(
+          [&](const auto &kernel) {
+            return kernel(x, /*sample_size=*/4, onnx_kernels::kernel::Multinomial::kNoSeed,
+                          /*dtype=*/static_cast<int32_t>(DataType::INT64));
+          });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

@@ -22,8 +22,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(19);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Equal equal_kernel{ctx};
+  const auto equal_kernel = MakeReferenceKernel<onnx_kernels::kernel::Equal>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -38,7 +37,7 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
            [equal_kernel, shape]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/9201);
              Tensor y = RandnTensor(DataType::FLOAT, shape, /*seed=*/9202);
-             Tensor z = equal_kernel(x, y);
+             Tensor z = equal_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
     return;
@@ -54,7 +53,7 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_equal", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = Tensor::FromFloat("", {2, 2}, {1.0f, 5.0f, 3.0f, 0.0f});
-      Tensor z = equal_kernel(x, y);
+      Tensor z = equal_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -70,7 +69,7 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_equal_bcast", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = Tensor::FromFloat("", {}, {2.0f});
-      Tensor z = equal_kernel(x, y);
+      Tensor z = equal_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -99,21 +98,24 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/51);
          auto inputs_1 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/52);
-         Tensor z = equal_kernel(inputs_0, inputs_1);
+         Tensor z =
+             equal_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_equal_int8",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/53);
          auto inputs_1 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/54);
-         Tensor z = equal_kernel(inputs_0, inputs_1);
+         Tensor z =
+             equal_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_equal_int16",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/55);
          auto inputs_1 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/56);
-         Tensor z = equal_kernel(inputs_0, inputs_1);
+         Tensor z =
+             equal_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_equal_uint8",
@@ -122,7 +124,8 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/57));
          auto inputs_1 =
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/58));
-         Tensor z = equal_kernel(inputs_0, inputs_1);
+         Tensor z =
+             equal_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_equal_uint16",
@@ -131,7 +134,8 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/59));
          auto inputs_1 =
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/60));
-         Tensor z = equal_kernel(inputs_0, inputs_1);
+         Tensor z =
+             equal_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_equal_uint32",
@@ -140,7 +144,8 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/61));
          auto inputs_1 =
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/62));
-         Tensor z = equal_kernel(inputs_0, inputs_1);
+         Tensor z =
+             equal_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_equal_uint64",
@@ -149,7 +154,8 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/63));
          auto inputs_1 =
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/64));
-         Tensor z = equal_kernel(inputs_0, inputs_1);
+         Tensor z =
+             equal_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       // From Equal.export_equal_broadcast():
@@ -157,7 +163,8 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/65);
          auto inputs_1 = RandnTensor(DataType::INT32, {5}, /*seed=*/66);
-         Tensor z = equal_kernel(inputs_0, inputs_1);
+         Tensor z =
+             equal_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
   };
@@ -179,7 +186,7 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
       Expect(registry, string_node, "test_equal_string", {opset}, [=]() -> IoData {
         Tensor x = Tensor::FromStrings("", {2}, {"string1", "string2"});
         Tensor y = Tensor::FromStrings("", {2}, {"string1", "string3"});
-        Tensor z = equal_kernel(x, y);
+        Tensor z = equal_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
         return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
       });
     }
@@ -187,7 +194,7 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
       Expect(registry, string_node, "test_equal_string_broadcast", {opset}, [=]() -> IoData {
         Tensor x = Tensor::FromStrings("", {2}, {"string1", "string2"});
         Tensor y = Tensor::FromStrings("", {1}, {"string1"});
-        Tensor z = equal_kernel(x, y);
+        Tensor z = equal_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
         return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
       });
     }
@@ -203,7 +210,7 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(n16), "test_cc_equal_float16", {opset}, [=]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
       Tensor y = MakeFloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
-      Tensor z = equal_kernel(x, y);
+      Tensor z = equal_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }
@@ -218,7 +225,7 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(nbf), "test_cc_equal_bfloat16", {opset}, [=]() -> IoData {
       Tensor x = MakeBfloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
       Tensor y = MakeBfloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
-      Tensor z = equal_kernel(x, y);
+      Tensor z = equal_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }
@@ -233,7 +240,7 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(nd), "test_cc_equal_double", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromDouble("", {3}, {1.0, 2.0, 3.0});
       Tensor y = Tensor::FromDouble("", {3}, {1.0, 3.0, 3.0});
-      Tensor z = equal_kernel(x, y);
+      Tensor z = equal_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }
@@ -248,7 +255,7 @@ void RegisterEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(ni), "test_cc_equal_int64", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt64("", {3}, {1, 2, 3});
       Tensor y = Tensor::FromInt64("", {3}, {1, 3, 3});
-      Tensor z = equal_kernel(x, y);
+      Tensor z = equal_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }

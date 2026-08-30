@@ -42,8 +42,7 @@ Tensor MakeShapeTensor(const std::vector<int64_t> &dims) {
 
 void RegisterExpandCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Expand expand_kernel{ctx};
+  const auto expand_kernel = MakeReferenceKernel<onnx_kernels::kernel::Expand>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeExpandNode();
@@ -51,7 +50,8 @@ void RegisterExpandCases(std::vector<TestCase> &registry, TestMode mode) {
            {2 * 4096 * 512}, [expand_kernel]() -> IoData {
              Tensor input = RandnTensor(DataType::FLOAT, {4096, 1}, 2001);
              Tensor shape = MakeShapeTensor({2, 4096, 512});
-             Tensor output = expand_kernel(input, shape);
+             Tensor output =
+                 expand_kernel.Invoke([&](const auto &kernel) { return kernel(input, shape); });
              return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
            });
     return;
@@ -65,7 +65,8 @@ void RegisterExpandCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, MakeExpandNode(), "test_cc_expand_dim_changed", {opset}, [=]() -> IoData {
       const Tensor input = Tensor::FromFloat("", {3, 1}, {1.0f, 2.0f, 3.0f});
       const Tensor shape = MakeShapeTensor({2, 3, 6});
-      const Tensor output = expand_kernel(input, shape);
+      const Tensor output =
+          expand_kernel.Invoke([&](const auto &kernel) { return kernel(input, shape); });
       return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
     });
   }
@@ -78,7 +79,8 @@ void RegisterExpandCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, MakeExpandNode(), "test_cc_expand_dim_unchanged", {opset}, [=]() -> IoData {
       const Tensor input = Tensor::FromFloat("", {3, 1}, {1.0f, 2.0f, 3.0f});
       const Tensor shape = MakeShapeTensor({3, 4});
-      const Tensor output = expand_kernel(input, shape);
+      const Tensor output =
+          expand_kernel.Invoke([&](const auto &kernel) { return kernel(input, shape); });
       return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
     });
   }
@@ -91,7 +93,8 @@ void RegisterExpandCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, MakeExpandNode(), "test_cc_expand_1d_to_2d", {opset}, [=]() -> IoData {
       const Tensor input = Tensor::FromFloat("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
       const Tensor shape = MakeShapeTensor({3, 4});
-      const Tensor output = expand_kernel(input, shape);
+      const Tensor output =
+          expand_kernel.Invoke([&](const auto &kernel) { return kernel(input, shape); });
       return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
     });
   }

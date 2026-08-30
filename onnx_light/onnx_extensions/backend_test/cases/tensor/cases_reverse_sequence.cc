@@ -40,8 +40,7 @@ NodeProto MakeReverseSequenceNode(int64_t time_axis, int64_t batch_axis, bool se
 
 void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::ReverseSequence reverse_seq_kernel{ctx};
+  const auto reverse_seq_kernel = MakeReferenceKernel<onnx_kernels::kernel::ReverseSequence>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeReverseSequenceNode(0, 1, /*set_time_attr=*/true, /*set_batch_attr=*/true);
@@ -53,7 +52,8 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
              onnx_kernels::kernel::ReverseSequence::Attributes attrs;
              attrs.time_axis = 0;
              attrs.batch_axis = 1;
-             Tensor y = reverse_seq_kernel(x, seq, attrs);
+             Tensor y = reverse_seq_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, seq, attrs); });
              return IoData{{std::move(x), std::move(seq)}, {std::move(y)}};
            });
     return;
@@ -72,7 +72,8 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
              onnx_kernels::kernel::ReverseSequence::Attributes attrs;
              attrs.time_axis = 0;
              attrs.batch_axis = 1;
-             const Tensor y = reverse_seq_kernel(x, seq, attrs);
+             const Tensor y = reverse_seq_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, seq, attrs); });
              return IoData{{std::move(x), std::move(seq)}, {std::move(y)}};
            });
   }
@@ -90,22 +91,24 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
              onnx_kernels::kernel::ReverseSequence::Attributes attrs;
              attrs.time_axis = 1;
              attrs.batch_axis = 0;
-             const Tensor y = reverse_seq_kernel(x, seq, attrs);
+             const Tensor y = reverse_seq_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, seq, attrs); });
              return IoData{{std::move(x), std::move(seq)}, {std::move(y)}};
            });
   }
 
   // test_cc_reversesequence_default_attrs: defaults (time_axis=0, batch_axis=1).
   {
-    Expect(registry,
-           MakeReverseSequenceNode(0, 1, /*set_time_attr=*/false, /*set_batch_attr=*/false),
-           "test_cc_reversesequence_default_attrs", {opset}, [=]() -> IoData {
-             const Tensor x = Tensor::FromFloat("X", {3, 2}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
-             const Tensor seq = Tensor::FromInt64("sequence_lens", {2}, {3, 2});
-             onnx_kernels::kernel::ReverseSequence::Attributes attrs;
-             const Tensor y = reverse_seq_kernel(x, seq, attrs);
-             return IoData{{std::move(x), std::move(seq)}, {std::move(y)}};
-           });
+    Expect(
+        registry, MakeReverseSequenceNode(0, 1, /*set_time_attr=*/false, /*set_batch_attr=*/false),
+        "test_cc_reversesequence_default_attrs", {opset}, [=]() -> IoData {
+          const Tensor x = Tensor::FromFloat("X", {3, 2}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+          const Tensor seq = Tensor::FromInt64("sequence_lens", {2}, {3, 2});
+          onnx_kernels::kernel::ReverseSequence::Attributes attrs;
+          const Tensor y =
+              reverse_seq_kernel.Invoke([&](const auto &kernel) { return kernel(x, seq, attrs); });
+          return IoData{{std::move(x), std::move(seq)}, {std::move(y)}};
+        });
   }
 
   // test_cc_reversesequence_with_inner_dim: rank-3 input exercising the
@@ -121,7 +124,8 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
              onnx_kernels::kernel::ReverseSequence::Attributes attrs;
              attrs.time_axis = 0;
              attrs.batch_axis = 1;
-             const Tensor y = reverse_seq_kernel(x, seq, attrs);
+             const Tensor y = reverse_seq_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, seq, attrs); });
              return IoData{{std::move(x), std::move(seq)}, {std::move(y)}};
            });
   }

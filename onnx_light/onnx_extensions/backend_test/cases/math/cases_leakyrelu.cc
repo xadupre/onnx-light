@@ -12,12 +12,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterLeakyReluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::LeakyRelu leakyrelu_kernel{ctx};
+  const auto leakyrelu_kernel = MakeReferenceKernel<onnx_kernels::kernel::LeakyRelu>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("LeakyRelu", leakyrelu_kernel, "test_cc_leakyrelu_benchmark", opset,
-                              registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::LeakyRelu>(
+        "LeakyRelu", "test_cc_leakyrelu_benchmark", opset, registry);
     return;
   }
 
@@ -34,7 +33,7 @@ void RegisterLeakyReluCases(std::vector<TestCase> &registry, TestMode mode) {
       alpha->set_f(0.1f);
 
       Tensor x = Tensor::FromFloat("", {3, 4, 5}, std::vector<float>(60, -1.0f));
-      Tensor y = leakyrelu_kernel(x, 0.1f);
+      Tensor y = leakyrelu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 0.1f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -52,7 +51,7 @@ void RegisterLeakyReluCases(std::vector<TestCase> &registry, TestMode mode) {
       alpha->set_f(0.1f);
 
       Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-      Tensor y = leakyrelu_kernel(x, 0.1f);
+      Tensor y = leakyrelu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 0.1f); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -65,7 +64,7 @@ void RegisterLeakyReluCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_leakyrelu_default", {opset}, [=]() -> IoData {
       // No alpha attribute: defaults to 0.01.
       Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
-      Tensor y = leakyrelu_kernel(x);
+      Tensor y = leakyrelu_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

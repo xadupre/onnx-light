@@ -13,8 +13,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     const OpsetId opset = DefaultOpset(13);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const auto logsoftmax_kernel = MakeReferenceKernel<onnx_kernels::kernel::LogSoftmax>(opset);
     NodeProto node;
     node.set_op_type("LogSoftmax");
     node.add_input("input");
@@ -28,7 +27,7 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_logsoftmax_benchmark", {opset}, {count}, {count},
            [logsoftmax_kernel, shape]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, shape, 432);
-             Tensor y = logsoftmax_kernel(x, 1);
+             Tensor y = logsoftmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, 1); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -36,8 +35,7 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
 
   {
     const OpsetId opset = DefaultOpset(13);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const auto logsoftmax_kernel = MakeReferenceKernel<onnx_kernels::kernel::LogSoftmax>(opset);
 
     NodeProto node;
     node.set_op_type("LogSoftmax");
@@ -51,15 +49,14 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
       axis->set_i(1);
 
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 1.0f, 2.0f, 3.0f});
-      Tensor y = logsoftmax_kernel(x, 1);
+      Tensor y = logsoftmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, 1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
 
   {
     const OpsetId opset = DefaultOpset(13);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const auto logsoftmax_kernel = MakeReferenceKernel<onnx_kernels::kernel::LogSoftmax>(opset);
 
     NodeProto node;
     node.set_op_type("LogSoftmax");
@@ -67,15 +64,14 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("output");
     Expect(registry, std::move(node), "test_cc_logsoftmax_default_axis", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, -1.0f});
-      Tensor y = logsoftmax_kernel(x, -1);
+      Tensor y = logsoftmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, -1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
 
   {
     const OpsetId opset = DefaultOpset(13);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const auto logsoftmax_kernel = MakeReferenceKernel<onnx_kernels::kernel::LogSoftmax>(opset);
 
     NodeProto node;
     node.set_op_type("LogSoftmax");
@@ -89,15 +85,14 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
       axis->set_i(-1);
 
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, -1.0f});
-      Tensor y = logsoftmax_kernel(x, -1);
+      Tensor y = logsoftmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, -1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
 
   {
     const OpsetId opset = DefaultOpset(13);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const auto logsoftmax_kernel = MakeReferenceKernel<onnx_kernels::kernel::LogSoftmax>(opset);
 
     NodeProto node;
     node.set_op_type("LogSoftmax");
@@ -111,15 +106,14 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
       axis->set_i(0);
 
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, -1.0f});
-      Tensor y = logsoftmax_kernel(x, 0);
+      Tensor y = logsoftmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, 0); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
 
   {
     const OpsetId opset = DefaultOpset(13);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const auto logsoftmax_kernel = MakeReferenceKernel<onnx_kernels::kernel::LogSoftmax>(opset);
 
     NodeProto node;
     node.set_op_type("LogSoftmax");
@@ -133,15 +127,14 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
       axis->set_i(1);
 
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, -1.0f});
-      Tensor y = logsoftmax_kernel(x, 1);
+      Tensor y = logsoftmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, 1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
 
   {
     const OpsetId opset = DefaultOpset(13);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const auto logsoftmax_kernel = MakeReferenceKernel<onnx_kernels::kernel::LogSoftmax>(opset);
 
     NodeProto node;
     node.set_op_type("LogSoftmax");
@@ -157,15 +150,14 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor x = Tensor::FromFloat(
           "", {2, 2, 3},
           {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, -1.0f, 0.5f, -0.5f, 2.0f, -2.0f, 1.5f, 0.0f});
-      Tensor y = logsoftmax_kernel(x, 2);
+      Tensor y = logsoftmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, 2); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
 
   {
     const OpsetId opset = DefaultOpset(13);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::LogSoftmax logsoftmax_kernel{ctx};
+    const auto logsoftmax_kernel = MakeReferenceKernel<onnx_kernels::kernel::LogSoftmax>(opset);
 
     NodeProto node;
     node.set_op_type("LogSoftmax");
@@ -175,7 +167,7 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
       // Numerical stability check: large inputs should not overflow.
       Tensor x =
           Tensor::FromFloat("", {2, 3}, {1000.0f, 1001.0f, 1002.0f, 1002.0f, 1001.0f, 1000.0f});
-      Tensor y = logsoftmax_kernel(x, -1);
+      Tensor y = logsoftmax_kernel.Invoke([&](const auto &kernel) { return kernel(x, -1); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

@@ -21,11 +21,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterNegCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Neg neg_kernel{ctx};
+  const auto neg_kernel = MakeReferenceKernel<onnx_kernels::kernel::Neg>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Neg", neg_kernel, "test_cc_neg_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Neg>("Neg", "test_cc_neg_benchmark", opset,
+                                                         registry);
     return;
   }
 
@@ -36,7 +36,7 @@ void RegisterNegCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_neg", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
-      Tensor y = neg_kernel(x);
+      Tensor y = neg_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -53,7 +53,7 @@ void RegisterNegCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_neg_example", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2}, {-4.0f, 2.0f});
-      Tensor y = neg_kernel(x);
+      Tensor y = neg_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -66,7 +66,7 @@ void RegisterNegCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_neg", {opset}, [=]() -> IoData {
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/1);
-      Tensor y = neg_kernel(x);
+      Tensor y = neg_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -78,7 +78,7 @@ void RegisterNegCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_neg_float16", {opset}, [=]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
-      Tensor y = neg_kernel(x);
+      Tensor y = neg_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -96,7 +96,7 @@ void RegisterNegCases(std::vector<TestCase> &registry, TestMode mode) {
       for (size_t i = 0; i < vals.size(); ++i)
         dst[i] = FloatToBfloat16Bits(vals[i]);
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-      Tensor y = neg_kernel(x);
+      Tensor y = neg_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -109,7 +109,7 @@ void RegisterNegCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_neg_int8", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt8("", {2, 3}, {-1, 0, 2, -127, 3, -5});
-      Tensor y = neg_kernel(x);
+      Tensor y = neg_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -122,7 +122,7 @@ void RegisterNegCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_neg_int16", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt16("", {2, 3}, {-1, 0, 2, -1000, 3, -5});
-      Tensor y = neg_kernel(x);
+      Tensor y = neg_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -135,7 +135,7 @@ void RegisterNegCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_neg_int32", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt32("", {2, 3}, {-1, 0, 2, -100000, 3, -5});
-      Tensor y = neg_kernel(x);
+      Tensor y = neg_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -148,7 +148,7 @@ void RegisterNegCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_neg_int64", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromInt64("", {2, 3}, {-1, 0, 2, -1000000000000LL, 3, -5});
-      Tensor y = neg_kernel(x);
+      Tensor y = neg_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -161,7 +161,7 @@ void RegisterNegCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_neg_double", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromDouble("", {2, 3}, {-1.0, 0.0, 1.5, -2.25, 3.5, -4.75});
-      Tensor y = neg_kernel(x);
+      Tensor y = neg_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

@@ -32,11 +32,11 @@ Tensor PositiveRandFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Log log_kernel{ctx};
+  const auto log_kernel = MakeReferenceKernel<onnx_kernels::kernel::Log>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Log", log_kernel, "test_cc_log_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Log>("Log", "test_cc_log_benchmark", opset,
+                                                         registry);
     return;
   }
 
@@ -47,7 +47,7 @@ void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_log", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.5f, 1.0f, 2.0f, 4.0f, 10.0f});
-      Tensor y = log_kernel(x);
+      Tensor y = log_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -60,7 +60,7 @@ void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_log_example", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2}, {1.0f, 10.0f});
-      Tensor y = log_kernel(x);
+      Tensor y = log_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -73,7 +73,7 @@ void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_log", {opset}, [=]() -> IoData {
       Tensor x = PositiveRandFloat({3, 4, 5}, /*seed=*/1);
-      Tensor y = log_kernel(x);
+      Tensor y = log_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -85,7 +85,7 @@ void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_log_float16", {opset}, [=]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {2, 3}, {0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f});
-      Tensor y = log_kernel(x);
+      Tensor y = log_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -103,7 +103,7 @@ void RegisterLogCases(std::vector<TestCase> &registry, TestMode mode) {
       for (size_t i = 0; i < vals.size(); ++i)
         dst[i] = FloatToBfloat16Bits(vals[i]);
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-      Tensor y = log_kernel(x);
+      Tensor y = log_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

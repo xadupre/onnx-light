@@ -19,47 +19,54 @@ namespace {
 // regular tensor inputs.
 void RegisterSequenceLengthCase(const std::string &name, const std::vector<Tensor> &inputs,
                                 const OpsetId &opset, std::vector<TestCase> &registry) {
-  const KernelContext ctx{opset};
-  const Sequence seq = onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(inputs);
-  Tensor expected = onnx_kernels::kernel::SequenceLength(ctx)(seq);
-  expected.name = "length";
+  TestCase lazy_case(name, name);
+  lazy_case.rtol = 1e-3;
+  lazy_case.atol = 1e-7;
+  lazy_case.build = [=](bool) -> BuiltCase {
+    const Sequence seq = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
+        [&](const auto &kernel) { return kernel.AsSequence(inputs); });
+    Tensor expected = MakeReferenceKernel<onnx_kernels::kernel::SequenceLength>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(seq); });
+    expected.name = "length";
 
-  ModelProto model;
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
-  model.set_ir_version(13);
-  model.set_producer_name("backend-test");
-  OperatorSetIdProto proto;
-  proto.set_domain(opset.domain);
-  proto.set_version(opset.version);
-  model.add_opset_import(proto);
+    ModelProto model;
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
+    model.set_ir_version(13);
+    model.set_producer_name("backend-test");
+    OperatorSetIdProto proto;
+    proto.set_domain(opset.domain);
+    proto.set_version(opset.version);
+    model.add_opset_import(proto);
 
-  NodeProto *seq_node = graph->add_node();
-  seq_node->set_op_type("SequenceConstruct");
-  for (const Tensor &t : inputs) {
-    seq_node->add_input(t.name);
-  }
-  seq_node->add_output("input_seq");
+    NodeProto *seq_node = graph->add_node();
+    seq_node->set_op_type("SequenceConstruct");
+    for (const Tensor &t : inputs) {
+      seq_node->add_input(t.name);
+    }
+    seq_node->add_output("input_seq");
 
-  NodeProto *len_node = graph->add_node();
-  len_node->set_op_type("SequenceLength");
-  len_node->add_input("input_seq");
-  len_node->add_output("length");
+    NodeProto *len_node = graph->add_node();
+    len_node->set_op_type("SequenceLength");
+    len_node->add_input("input_seq");
+    len_node->add_output("length");
 
-  for (const Tensor &t : inputs) {
-    FillValueInfo(t, *graph->add_input());
-  }
-  FillValueInfo(expected, *graph->add_output());
+    for (const Tensor &t : inputs) {
+      FillValueInfo(t, *graph->add_input());
+    }
+    FillValueInfo(expected, *graph->add_output());
 
-  TestCase tc(name, name);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
-  tc.set_model(std::move(model));
-  DataSet ds;
-  ds.inputs = inputs;
-  ds.outputs = {expected};
-  tc.data_sets().emplace_back(std::move(ds));
-  registry.emplace_back(std::move(tc));
+    TestCase tc(name, name);
+    tc.rtol = 1e-3;
+    tc.atol = 1e-7;
+    tc.set_model(std::move(model));
+    DataSet ds;
+    ds.inputs = inputs;
+    ds.outputs = {expected};
+    tc.data_sets().emplace_back(std::move(ds));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace

@@ -35,8 +35,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::DynamicQuantizeLinear dyn_quantize_kernel{ctx};
+  const auto dyn_quantize_kernel =
+      MakeReferenceKernel<onnx_kernels::kernel::DynamicQuantizeLinear>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -50,7 +50,8 @@ void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMod
     Expect(registry, std::move(node), "test_dynamicquantizelinear_benchmark", {opset}, {count},
            {count, 1, 1}, [dyn_quantize_kernel]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 2521);
-             auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
+             auto [y, y_scale, y_zero_point] =
+                 dyn_quantize_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
              return IoData{{std::move(x)},
                            {std::move(y), std::move(y_scale), std::move(y_zero_point)}};
            });
@@ -68,7 +69,8 @@ void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMod
   {
     Expect(registry, node, "test_dynamicquantizelinear", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {6}, {0.0f, 2.0f, -3.0f, -2.5f, 1.34f, 0.5f});
-      auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
+      auto [y, y_scale, y_zero_point] =
+          dyn_quantize_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y), std::move(y_scale), std::move(y_zero_point)}};
     });
   }
@@ -78,7 +80,8 @@ void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMod
   {
     Expect(registry, node, "test_dynamicquantizelinear_max_adjusted", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {6}, {-1.0f, -2.1f, -1.3f, -2.5f, -3.34f, -4.0f});
-      auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
+      auto [y, y_scale, y_zero_point] =
+          dyn_quantize_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y), std::move(y_scale), std::move(y_zero_point)}};
     });
   }
@@ -89,7 +92,8 @@ void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMod
     Expect(registry, node, "test_dynamicquantizelinear_min_adjusted", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat(
           "", {3, 4}, {1.0f, 2.1f, 1.3f, 2.5f, 3.34f, 4.0f, 1.5f, 2.6f, 3.9f, 4.0f, 3.0f, 2.345f});
-      auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
+      auto [y, y_scale, y_zero_point] =
+          dyn_quantize_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y), std::move(y_scale), std::move(y_zero_point)}};
     });
   }

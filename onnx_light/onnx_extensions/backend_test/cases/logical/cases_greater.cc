@@ -29,8 +29,7 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Greater greater_kernel{ctx};
+  const auto greater_kernel = MakeReferenceKernel<onnx_kernels::kernel::Greater>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -45,7 +44,7 @@ void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
            [greater_kernel, shape]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/9201);
              Tensor y = RandnTensor(DataType::FLOAT, shape, /*seed=*/9202);
-             Tensor z = greater_kernel(x, y);
+             Tensor z = greater_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
     return;
@@ -61,7 +60,7 @@ void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_greater", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
-      Tensor z = greater_kernel(x, y);
+      Tensor z = greater_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -77,7 +76,7 @@ void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_greater_bcast", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = Tensor::FromFloat("", {}, {2.5f});
-      Tensor z = greater_kernel(x, y);
+      Tensor z = greater_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -106,21 +105,24 @@ void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
        [=]() -> IoData {
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/21);
          auto inputs_1 = RandnFloat({3, 4, 5}, /*seed=*/22);
-         Tensor z = greater_kernel(inputs_0, inputs_1);
+         Tensor z =
+             greater_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_greater_int8",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/31);
          auto inputs_1 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/32);
-         Tensor z = greater_kernel(inputs_0, inputs_1);
+         Tensor z =
+             greater_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_greater_int16",
        [=]() -> IoData {
          auto inputs_0 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/33);
          auto inputs_1 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/34);
-         Tensor z = greater_kernel(inputs_0, inputs_1);
+         Tensor z =
+             greater_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_greater_uint8",
@@ -129,7 +131,8 @@ void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/35));
          auto inputs_1 =
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/36));
-         Tensor z = greater_kernel(inputs_0, inputs_1);
+         Tensor z =
+             greater_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_greater_uint16",
@@ -138,7 +141,8 @@ void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/37));
          auto inputs_1 =
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/38));
-         Tensor z = greater_kernel(inputs_0, inputs_1);
+         Tensor z =
+             greater_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_greater_uint32",
@@ -147,7 +151,8 @@ void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/39));
          auto inputs_1 =
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/40));
-         Tensor z = greater_kernel(inputs_0, inputs_1);
+         Tensor z =
+             greater_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_greater_uint64",
@@ -156,7 +161,8 @@ void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/41));
          auto inputs_1 =
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/42));
-         Tensor z = greater_kernel(inputs_0, inputs_1);
+         Tensor z =
+             greater_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       // From Greater.export_greater_broadcast():
@@ -164,7 +170,8 @@ void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
        [=]() -> IoData {
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/23);
          auto inputs_1 = RandnFloat({5}, /*seed=*/24);
-         Tensor z = greater_kernel(inputs_0, inputs_1);
+         Tensor z =
+             greater_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
   };
@@ -183,7 +190,7 @@ void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(n16), "test_cc_greater_float16", {opset}, [=]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
       Tensor y = MakeFloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
-      Tensor z = greater_kernel(x, y);
+      Tensor z = greater_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }
@@ -198,7 +205,7 @@ void RegisterGreaterCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(nbf), "test_cc_greater_bfloat16", {opset}, [=]() -> IoData {
       Tensor x = MakeBfloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
       Tensor y = MakeBfloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
-      Tensor z = greater_kernel(x, y);
+      Tensor z = greater_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }

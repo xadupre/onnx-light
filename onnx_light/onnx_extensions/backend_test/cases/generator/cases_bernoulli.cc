@@ -43,10 +43,10 @@ void RegisterOneBernoulli(const std::string &case_name, const Tensor &input, int
     attr->set_i(static_cast<int64_t>(dtype));
   }
   Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
-    const KernelContext ctx{opset};
     Tensor input_named = input;
     input_named.name = "x";
-    Tensor y = onnx_kernels::kernel::Bernoulli(ctx)(input_named, seed, dtype);
+    Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Bernoulli>(opset).Invoke(
+        [&](const auto &kernel) { return kernel(input_named, seed, dtype); });
 
     return IoData{{std::move(input_named)}, {std::move(y)}};
   });
@@ -77,15 +77,15 @@ void RegisterBernoulliCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Bernoulli");
     node.add_input("x");
     node.add_output("y");
-
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::Bernoulli bernoulli_kernel{ctx};
+    const auto bernoulli_kernel = MakeReferenceKernel<onnx_kernels::kernel::Bernoulli>(opset);
     Expect(registry, std::move(node), "test_cc_bernoulli_benchmark", {opset},
            {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
            [bernoulli_kernel]() -> IoData {
              Tensor x = Tensor::FromFloat("x", /*shape=*/{kBenchmarkElementwiseSize},
                                           std::vector<float>(kBenchmarkElementwiseSize, 0.5f));
-             Tensor y = bernoulli_kernel(x, onnx_kernels::kernel::Bernoulli::kNoSeed, /*dtype=*/0);
+             Tensor y = bernoulli_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, onnx_kernels::kernel::Bernoulli::kNoSeed, /*dtype=*/0);
+             });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;

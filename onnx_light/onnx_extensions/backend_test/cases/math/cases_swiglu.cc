@@ -18,12 +18,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(28);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::SwiGLU swiglu_kernel{ctx};
+  const auto swiglu_kernel = MakeReferenceKernel<onnx_kernels::kernel::SwiGLU>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkBinaryFloat("SwiGLU", swiglu_kernel, "test_cc_swiglu_benchmark", opset,
-                               registry);
+    ExpectBenchmarkBinaryFloat<onnx_kernels::kernel::SwiGLU>("SwiGLU", "test_cc_swiglu_benchmark",
+                                                             opset, registry);
     return;
   }
 
@@ -37,7 +36,7 @@ void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
       // No alpha attribute: defaults to 1.0.
       Tensor a = Tensor::FromFloat("", {2, 4}, {1.0f, -2.0f, 3.0f, 4.0f, -1.0f, 2.0f, -3.0f, 0.5f});
       Tensor b = Tensor::FromFloat("", {2, 4}, {0.5f, 1.0f, -1.0f, 2.0f, 2.0f, -1.0f, 0.5f, 1.0f});
-      Tensor y = swiglu_kernel(a, b);
+      Tensor y = swiglu_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
@@ -57,7 +56,7 @@ void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
 
       Tensor a = Tensor::FromFloat("", {2, 4}, {1.0f, -2.0f, 3.0f, 4.0f, -1.0f, 2.0f, -3.0f, 0.5f});
       Tensor b = Tensor::FromFloat("", {2, 4}, {0.5f, 1.0f, -1.0f, 2.0f, 2.0f, -1.0f, 0.5f, 1.0f});
-      Tensor y = swiglu_kernel(a, b, 0.5f);
+      Tensor y = swiglu_kernel.Invoke([&](const auto &kernel) { return kernel(a, b, 0.5f); });
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
@@ -73,7 +72,7 @@ void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
       // No alpha attribute: defaults to 1.0.
       Tensor a = MakeFloat16Tensor("", {2, 4}, {1.0f, -2.0f, 3.0f, 4.0f, -1.0f, 2.0f, -3.0f, 0.5f});
       Tensor b = MakeFloat16Tensor("", {2, 4}, {0.5f, 1.0f, -1.0f, 2.0f, 2.0f, -1.0f, 0.5f, 1.0f});
-      Tensor y = swiglu_kernel(a, b);
+      Tensor y = swiglu_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
@@ -90,7 +89,7 @@ void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor a =
           MakeBfloat16Tensor("", {2, 4}, {1.0f, -2.0f, 3.0f, 4.0f, -1.0f, 2.0f, -3.0f, 0.5f});
       Tensor b = MakeBfloat16Tensor("", {2, 4}, {0.5f, 1.0f, -1.0f, 2.0f, 2.0f, -1.0f, 0.5f, 1.0f});
-      Tensor y = swiglu_kernel(a, b);
+      Tensor y = swiglu_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }

@@ -15,8 +15,8 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
 
   if (mode == TestMode::BENCHMARK) {
     const OpsetId opset = DefaultOpset(13);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::MeanVarianceNormalization mvn_kernel{ctx};
+    const auto mvn_kernel =
+        MakeReferenceKernel<onnx_kernels::kernel::MeanVarianceNormalization>(opset);
 
     NodeProto node;
     node.set_op_type("MeanVarianceNormalization");
@@ -27,7 +27,7 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
     Expect(registry, std::move(node), "test_cc_mvn_benchmark", {opset}, {count}, {count},
            [mvn_kernel]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {32, 64, 64, 1, 16}, 2401);
-             Tensor y = mvn_kernel(x);
+             Tensor y = mvn_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -36,8 +36,8 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
   // ``mvn``: default axes [0,2,3].
   {
     const OpsetId opset = DefaultOpset(13);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::MeanVarianceNormalization mvn_kernel{ctx};
+    const auto mvn_kernel =
+        MakeReferenceKernel<onnx_kernels::kernel::MeanVarianceNormalization>(opset);
 
     NodeProto node;
     node.set_op_type("MeanVarianceNormalization");
@@ -52,7 +52,7 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
                                     34.0f, 35.0f, 36.0f, 37.0f, 38.0f, 39.0f, 40.0f, 41.0f, 42.0f,
                                     43.0f, 44.0f, 45.0f, 46.0f, 47.0f, 48.0f, 49.0f, 50.0f, 51.0f});
 
-      Tensor y = mvn_kernel(x);
+      Tensor y = mvn_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -61,8 +61,8 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
   // ``mvn_explicit_axes``: explicit axes [0,2,3].
   {
     const OpsetId opset = DefaultOpset(13);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::MeanVarianceNormalization mvn_kernel{ctx};
+    const auto mvn_kernel =
+        MakeReferenceKernel<onnx_kernels::kernel::MeanVarianceNormalization>(opset);
 
     NodeProto node;
     node.set_op_type("MeanVarianceNormalization");
@@ -78,7 +78,7 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
                                     34.0f, 35.0f, 36.0f, 37.0f, 38.0f, 39.0f, 40.0f, 41.0f, 42.0f,
                                     43.0f, 44.0f, 45.0f, 46.0f, 47.0f, 48.0f, 49.0f, 50.0f, 51.0f});
 
-      Tensor y = mvn_kernel(x, {0, 2, 3});
+      Tensor y = mvn_kernel.Invoke([&](const auto &kernel) { return kernel(x, {0, 2, 3}); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -87,8 +87,8 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
   // ``mvn_explicit_axes_ver18``: same explicit axes with opset 18 import.
   {
     const OpsetId opset = DefaultOpset(18);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::MeanVarianceNormalization mvn_kernel{ctx};
+    const auto mvn_kernel =
+        MakeReferenceKernel<onnx_kernels::kernel::MeanVarianceNormalization>(opset);
 
     NodeProto node;
     node.set_op_type("MeanVarianceNormalization");
@@ -104,7 +104,7 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry, Tes
                                     33.0f, 34.0f, 35.0f, 36.0f, 37.0f, 38.0f, 39.0f, 40.0f, 41.0f,
                                     42.0f, 43.0f, 44.0f, 45.0f, 46.0f, 47.0f, 48.0f, 49.0f, 50.0f});
 
-      Tensor y = mvn_kernel(x, {0, 2, 3});
+      Tensor y = mvn_kernel.Invoke([&](const auto &kernel) { return kernel(x, {0, 2, 3}); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });

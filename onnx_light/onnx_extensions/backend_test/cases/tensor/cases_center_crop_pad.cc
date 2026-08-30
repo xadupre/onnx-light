@@ -36,8 +36,7 @@ NodeProto MakeCenterCropPadNode(const std::vector<int64_t> &axes) {
 // ---------------------------------------------------------------------------
 void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::CenterCropPad op{ctx};
+  const auto op = MakeReferenceKernel<onnx_kernels::kernel::CenterCropPad>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeCenterCropPadNode({});
@@ -46,7 +45,8 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) 
              Tensor input = RandnTensor(DataType::FLOAT, {4096, 2048, 1}, 2001);
              Tensor shape = Tensor::FromInt64("", {3}, std::vector<int64_t>{2048, 2048, 1});
              onnx_kernels::kernel::CenterCropPad::Attributes attrs;
-             Tensor output = op(input, shape, attrs);
+             Tensor output =
+                 op.Invoke([&](const auto &kernel) { return kernel(input, shape, attrs); });
              return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
            });
     return;
@@ -64,7 +64,8 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) 
              const Tensor input = Tensor::FromFloat("", {20, 10, 3}, values);
              const Tensor shape = Tensor::FromInt64("", {3}, std::vector<int64_t>{10, 7, 3});
              onnx_kernels::kernel::CenterCropPad::Attributes attrs;
-             const Tensor output = op(input, shape, attrs);
+             const Tensor output =
+                 op.Invoke([&](const auto &kernel) { return kernel(input, shape, attrs); });
              return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
            });
   }
@@ -80,7 +81,8 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) 
              const Tensor input = Tensor::FromFloat("", {10, 7, 3}, values);
              const Tensor shape = Tensor::FromInt64("", {3}, std::vector<int64_t>{20, 10, 3});
              onnx_kernels::kernel::CenterCropPad::Attributes attrs;
-             const Tensor output = op(input, shape, attrs);
+             const Tensor output =
+                 op.Invoke([&](const auto &kernel) { return kernel(input, shape, attrs); });
              return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
            });
   }
@@ -96,7 +98,8 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) 
              const Tensor input = Tensor::FromFloat("", {20, 8, 3}, values);
              const Tensor shape = Tensor::FromInt64("", {3}, std::vector<int64_t>{10, 10, 3});
              onnx_kernels::kernel::CenterCropPad::Attributes attrs;
-             const Tensor output = op(input, shape, attrs);
+             const Tensor output =
+                 op.Invoke([&](const auto &kernel) { return kernel(input, shape, attrs); });
              return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
            });
   }
@@ -115,7 +118,8 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) 
              onnx_kernels::kernel::CenterCropPad::Attributes attrs;
              attrs.axes = {0, 1};
              attrs.axes_present = true;
-             const Tensor output = op(input, shape, attrs);
+             const Tensor output =
+                 op.Invoke([&](const auto &kernel) { return kernel(input, shape, attrs); });
              return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
            });
   }
@@ -133,7 +137,8 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) 
              onnx_kernels::kernel::CenterCropPad::Attributes attrs;
              attrs.axes = {-3, -2};
              attrs.axes_present = true;
-             const Tensor output = op(input, shape, attrs);
+             const Tensor output =
+                 op.Invoke([&](const auto &kernel) { return kernel(input, shape, attrs); });
              return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
            });
   }
@@ -152,7 +157,8 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) 
              onnx_kernels::kernel::CenterCropPad::Attributes attrs;
              attrs.axes = {1, 2};
              attrs.axes_present = true;
-             const Tensor output = op(input, shape, attrs);
+             const Tensor output =
+                 op.Invoke([&](const auto &kernel) { return kernel(input, shape, attrs); });
              return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
            });
   }

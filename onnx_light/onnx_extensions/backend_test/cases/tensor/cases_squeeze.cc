@@ -57,8 +57,7 @@ NodeProto MakeSqueezeNodeEmptyAxes() {
 
 void RegisterSqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Squeeze squeeze_kernel{ctx};
+  const auto squeeze_kernel = MakeReferenceKernel<onnx_kernels::kernel::Squeeze>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeSqueezeNode();
@@ -66,7 +65,8 @@ void RegisterSqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
            {4194304}, [squeeze_kernel]() -> IoData {
              Tensor data = RandnTensor(DataType::FLOAT, {2048, 1, 2048, 1}, 2001);
              Tensor axes = MakeAxesTensor({1, 3});
-             Tensor squeezed = squeeze_kernel(data, {1, 3});
+             Tensor squeezed =
+                 squeeze_kernel.Invoke([&](const auto &kernel) { return kernel(data, {1, 3}); });
              return IoData{{std::move(data), std::move(axes)}, {std::move(squeezed)}};
            });
     return;
@@ -77,7 +77,8 @@ void RegisterSqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, MakeSqueezeNode(), "test_cc_squeeze_axes", {opset}, [=]() -> IoData {
       const Tensor data = Tensor::FromFloat("", {2, 1, 3, 1}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
       const Tensor axes = MakeAxesTensor({1, 3});
-      const Tensor squeezed = squeeze_kernel(data, {1, 3});
+      const Tensor squeezed =
+          squeeze_kernel.Invoke([&](const auto &kernel) { return kernel(data, {1, 3}); });
       return IoData{{std::move(data), std::move(axes)}, {std::move(squeezed)}};
     });
   }
@@ -87,7 +88,8 @@ void RegisterSqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, MakeSqueezeNode(), "test_cc_squeeze_all_singleton", {opset}, [=]() -> IoData {
       const Tensor data = Tensor::FromFloat("", {1, 2, 1, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
       const Tensor axes = MakeAxesTensor({});
-      const Tensor squeezed = squeeze_kernel(data, {});
+      const Tensor squeezed =
+          squeeze_kernel.Invoke([&](const auto &kernel) { return kernel(data, {}); });
       return IoData{{std::move(data), std::move(axes)}, {std::move(squeezed)}};
     });
   }
@@ -99,7 +101,8 @@ void RegisterSqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              const Tensor data =
                  Tensor::FromFloat("", {1, 2, 1, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-             const Tensor squeezed = squeeze_kernel(data, {});
+             const Tensor squeezed =
+                 squeeze_kernel.Invoke([&](const auto &kernel) { return kernel(data, {}); });
              return IoData{{std::move(data)}, {std::move(squeezed)}};
            });
   }
@@ -111,7 +114,8 @@ void RegisterSqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
            [=]() -> IoData {
              const Tensor data =
                  Tensor::FromFloat("", {1, 2, 1, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-             const Tensor squeezed = squeeze_kernel(data, {});
+             const Tensor squeezed =
+                 squeeze_kernel.Invoke([&](const auto &kernel) { return kernel(data, {}); });
              return IoData{{std::move(data)}, {std::move(squeezed)}};
            });
   }

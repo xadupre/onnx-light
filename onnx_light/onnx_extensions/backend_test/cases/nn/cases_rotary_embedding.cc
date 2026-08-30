@@ -42,8 +42,7 @@ NodeProto MakeRotaryNode(const std::vector<std::string> &inputs,
 
 void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(23);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::RotaryEmbedding kernel{ctx};
+  const auto kernel = MakeReferenceKernel<onnx_kernels::kernel::RotaryEmbedding>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     const int64_t batch = 8;
@@ -70,7 +69,9 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
              }
              Tensor position_ids = Tensor::FromInt64("", {batch, seq}, pos);
              onnx_kernels::kernel::RotaryEmbedding::Attributes attrs;
-             Tensor Y = kernel(X, cos_cache, sin_cache, position_ids, attrs);
+             Tensor Y = kernel.Invoke([&](const auto &kernel) {
+               return kernel(X, cos_cache, sin_cache, position_ids, attrs);
+             });
              return IoData{{std::move(X), std::move(cos_cache), std::move(sin_cache),
                             std::move(position_ids)},
                            {std::move(Y)}};
@@ -93,9 +94,11 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
   // Case 1: default attributes (interleaved=0, full rotation).
   {
     onnx_kernels::kernel::RotaryEmbedding::Attributes attrs;
-    Tensor Y = kernel(X4, cos2, sin2, position_ids, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache", "position_ids"}, {"Y"});
     Expect(registry, std::move(node), "test_cc_rotary_embedding", {opset}, [=]() -> IoData {
+      Tensor Y = kernel.Invoke([&](const auto &reference_kernel) {
+        return reference_kernel(X4, cos2, sin2, position_ids, attrs);
+      });
       return IoData{{std::move(X4), std::move(cos2), std::move(sin2), std::move(position_ids)},
                     {std::move(Y)}};
     });
@@ -105,11 +108,13 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
   {
     onnx_kernels::kernel::RotaryEmbedding::Attributes attrs;
     attrs.interleaved = true;
-    Tensor Y = kernel(X4, cos2, sin2, position_ids, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache", "position_ids"}, {"Y"});
     AddAttribute<int64_t>(node, "interleaved", 1);
     Expect(registry, std::move(node), "test_cc_rotary_embedding_interleaved", {opset},
            [=]() -> IoData {
+             Tensor Y = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(X4, cos2, sin2, position_ids, attrs);
+             });
              return IoData{
                  {std::move(X4), std::move(cos2), std::move(sin2), std::move(position_ids)},
                  {std::move(Y)}};
@@ -124,11 +129,13 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
                                                   0.8f, 0.9f, 1.0f, 1.1f, 2.0f, 2.1f, 2.2f, 2.3f});
     onnx_kernels::kernel::RotaryEmbedding::Attributes attrs;
     attrs.num_heads = 2;
-    Tensor Y = kernel(X3, cos2, sin2, position_ids, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache", "position_ids"}, {"Y"});
     AddAttribute<int64_t>(node, "num_heads", 2);
     Expect(
         registry, std::move(node), "test_cc_rotary_embedding_3d_input", {opset}, [=]() -> IoData {
+          Tensor Y = kernel.Invoke([&](const auto &reference_kernel) {
+            return reference_kernel(X3, cos2, sin2, position_ids, attrs);
+          });
           return IoData{{std::move(X3), std::move(cos2), std::move(sin2), std::move(position_ids)},
                         {std::move(Y)}};
         });
@@ -141,10 +148,12 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
   {
     onnx_kernels::kernel::RotaryEmbedding::Attributes attrs;
     Tensor empty;
-    Tensor Y = kernel(X4, cos3, sin3, empty, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache"}, {"Y"});
     Expect(registry, std::move(node), "test_cc_rotary_embedding_no_position_ids", {opset},
            [=]() -> IoData {
+             Tensor Y = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(X4, cos3, sin3, empty, attrs);
+             });
              return IoData{{std::move(X4), std::move(cos3), std::move(sin3)}, {std::move(Y)}};
            });
   }
@@ -154,11 +163,13 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
     onnx_kernels::kernel::RotaryEmbedding::Attributes attrs;
     attrs.interleaved = true;
     Tensor empty;
-    Tensor Y = kernel(X4, cos3, sin3, empty, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache"}, {"Y"});
     AddAttribute<int64_t>(node, "interleaved", 1);
     Expect(registry, std::move(node), "test_cc_rotary_embedding_no_position_ids_interleaved",
            {opset}, [=]() -> IoData {
+             Tensor Y = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(X4, cos3, sin3, empty, attrs);
+             });
              return IoData{{std::move(X4), std::move(cos3), std::move(sin3)}, {std::move(Y)}};
            });
   }
@@ -172,11 +183,13 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
     Tensor sin_partial = Tensor::FromFloat("", {5, 1}, {0.0f, 0.3f, 0.7f, 0.9f, 0.5f});
     onnx_kernels::kernel::RotaryEmbedding::Attributes attrs;
     attrs.rotary_embedding_dim = 2;
-    Tensor Y = kernel(X4, cos_partial, sin_partial, position_ids, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache", "position_ids"}, {"Y"});
     AddAttribute<int64_t>(node, "rotary_embedding_dim", 2);
     Expect(registry, std::move(node), "test_cc_rotary_embedding_with_rotary_dim", {opset},
            [=]() -> IoData {
+             Tensor Y = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(X4, cos_partial, sin_partial, position_ids, attrs);
+             });
              return IoData{{std::move(X4), std::move(cos_partial), std::move(sin_partial),
                             std::move(position_ids)},
                            {std::move(Y)}};
@@ -190,12 +203,14 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
     onnx_kernels::kernel::RotaryEmbedding::Attributes attrs;
     attrs.interleaved = true;
     attrs.rotary_embedding_dim = 2;
-    Tensor Y = kernel(X4, cos_partial, sin_partial, position_ids, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache", "position_ids"}, {"Y"});
     AddAttribute<int64_t>(node, "interleaved", 1);
     AddAttribute<int64_t>(node, "rotary_embedding_dim", 2);
     Expect(registry, std::move(node), "test_cc_rotary_embedding_with_interleaved_rotary_dim",
            {opset}, [=]() -> IoData {
+             Tensor Y = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(X4, cos_partial, sin_partial, position_ids, attrs);
+             });
              return IoData{{std::move(X4), std::move(cos_partial), std::move(sin_partial),
                             std::move(position_ids)},
                            {std::move(Y)}};
@@ -210,11 +225,13 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry, TestMode mode
     onnx_kernels::kernel::RotaryEmbedding::Attributes attrs;
     attrs.rotary_embedding_dim = 2;
     Tensor empty;
-    Tensor Y = kernel(X4, cos_p3, sin_p3, empty, attrs);
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache"}, {"Y"});
     AddAttribute<int64_t>(node, "rotary_embedding_dim", 2);
     Expect(registry, std::move(node), "test_cc_rotary_embedding_no_position_ids_rotary_dim",
            {opset}, [=]() -> IoData {
+             Tensor Y = kernel.Invoke([&](const auto &reference_kernel) {
+               return reference_kernel(X4, cos_p3, sin_p3, empty, attrs);
+             });
              return IoData{{std::move(X4), std::move(cos_p3), std::move(sin_p3)}, {std::move(Y)}};
            });
   }

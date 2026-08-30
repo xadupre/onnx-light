@@ -12,11 +12,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterMishCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Mish mish_kernel{ctx};
+  const auto mish_kernel = MakeReferenceKernel<onnx_kernels::kernel::Mish>(opset);
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Mish", mish_kernel, "test_cc_mish_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Mish>("Mish", "test_cc_mish_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -27,7 +27,7 @@ void RegisterMishCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y");
     Expect(registry, std::move(node), "test_cc_mish", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {2, 3}, {-4.0f, -1.0f, 0.0f, 1.0f, 2.0f, 4.0f});
-      Tensor y = mish_kernel(x);
+      Tensor y = mish_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

@@ -82,11 +82,10 @@ using onnx_kernels::kernel::AutoPad;
 // ---------------------------------------------------------------------------
 void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset18 = DefaultOpset(18);
-  const KernelContext ctx18{opset18};
-  const onnx_kernels::kernel::AveragePool average_pool_kernel18{ctx18};
+  const auto average_pool_kernel18 =
+      MakeReferenceKernel<onnx_kernels::kernel::AveragePool>(opset18);
   const OpsetId opset = DefaultOpset(19);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::AveragePool average_pool_kernel{ctx};
+  const auto average_pool_kernel = MakeReferenceKernel<onnx_kernels::kernel::AveragePool>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -100,7 +99,8 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_averagepool_2d_default_benchmark", {opset},
            {in_count}, {out_count}, [average_pool_kernel]() -> IoData {
              Tensor x = RandnTensor(DataType::FLOAT, {1, 32, 128, 128}, 1101);
-             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2});
+             Tensor y = average_pool_kernel.Invoke(
+                 [&](const auto &kernel) { return kernel(x, /*kernel_shape=*/{2, 2}); });
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -117,7 +117,8 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
                                     11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-      Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2});
+      Tensor y = average_pool_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, /*kernel_shape=*/{2, 2}); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -136,7 +137,9 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
                                    {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
                                     10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
                                     19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
-      Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2});
+      Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+        return kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2});
+      });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -158,9 +161,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
                  "", {1, 1, 5, 5}, {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
                                     10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
                                     19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
-             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1},
-                                            /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/false,
-                                            /*count_include_pad=*/true);
+             Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1},
+                             /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/false,
+                             /*count_include_pad=*/true);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -176,7 +181,8 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2});
     Expect(registry, std::move(node), "test_cc_averagepool_1d_default", {opset}, [=]() -> IoData {
       Tensor x = Tensor::FromFloat("", {1, 1, 8}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
-      Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2});
+      Tensor y = average_pool_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, /*kernel_shape=*/{2}); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -202,9 +208,10 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
                                    {2.0903f, 4.6493f, 1.6320f, -3.2051f, 4.6975f, 4.7296f, 3.3653f,
                                     -1.5815f, -2.3832f, 0.9628f, -1.5899f, -2.6820f, 5.7529f,
                                     7.7346f, -0.8910f, -2.0151f, 0.1313f, -0.5374f});
-             Tensor y =
-                 average_pool_kernel18(x, /*kernel_shape=*/{7}, /*strides=*/{3}, /*pads=*/{3, 3},
-                                       /*ceil_mode=*/true, /*count_include_pad=*/true);
+             Tensor y = average_pool_kernel18.Invoke([&](const auto &kernel) {
+               return kernel(x, /*kernel_shape=*/{7}, /*strides=*/{3}, /*pads=*/{3, 3},
+                             /*ceil_mode=*/true, /*count_include_pad=*/true);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -224,9 +231,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
                                     11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-      Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2},
-                                     /*pads=*/{}, /*ceil_mode=*/true,
-                                     /*count_include_pad=*/false);
+      Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+        return kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2},
+                      /*pads=*/{}, /*ceil_mode=*/true,
+                      /*count_include_pad=*/false);
+      });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -249,9 +258,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                           {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f,
                                            10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-             Tensor y = average_pool_kernel18(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2},
-                                              /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/true,
-                                              /*count_include_pad=*/true);
+             Tensor y = average_pool_kernel18.Invoke([&](const auto &kernel) {
+               return kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2},
+                             /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/true,
+                             /*count_include_pad=*/true);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -274,9 +285,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                           {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f,
                                            10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-             Tensor y = average_pool_kernel18(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2},
-                                              /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/true,
-                                              /*count_include_pad=*/false);
+             Tensor y = average_pool_kernel18.Invoke([&](const auto &kernel) {
+               return kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2},
+                             /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/true,
+                             /*count_include_pad=*/false);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -298,9 +311,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_averagepool_2d_ceil_last_window_starts_on_pad",
            {opset}, [=]() -> IoData {
              Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{3, 3},
-                                            /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/true,
-                                            /*count_include_pad=*/true);
+             Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{3, 3},
+                             /*pads=*/{1, 1, 1, 1}, /*ceil_mode=*/true,
+                             /*count_include_pad=*/true);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -319,9 +334,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
                                     11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-      Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1},
-                                     /*pads=*/{2, 2, 2, 2}, /*ceil_mode=*/false,
-                                     /*count_include_pad=*/false);
+      Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+        return kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1},
+                      /*pads=*/{2, 2, 2, 2}, /*ceil_mode=*/false,
+                      /*count_include_pad=*/false);
+      });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -342,9 +359,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
                  "", {1, 1, 5, 5}, {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
                                     10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
                                     19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
-             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{1, 1},
-                                            /*pads=*/{2, 2, 2, 2}, /*ceil_mode=*/false,
-                                            /*count_include_pad=*/false);
+             Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{1, 1},
+                             /*pads=*/{2, 2, 2, 2}, /*ceil_mode=*/false,
+                             /*count_include_pad=*/false);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -366,9 +385,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
                  "", {1, 1, 5, 5}, {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
                                     10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
                                     19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
-             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{1, 1},
-                                            /*pads=*/{2, 2, 2, 2}, /*ceil_mode=*/false,
-                                            /*count_include_pad=*/true);
+             Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{1, 1},
+                             /*pads=*/{2, 2, 2, 2}, /*ceil_mode=*/false,
+                             /*count_include_pad=*/true);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -389,7 +410,9 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
                  "", {1, 1, 5, 5}, {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
                                     10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
                                     19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
-             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2});
+             Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2});
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -409,7 +432,8 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
         data[i] = static_cast<float>(i + 1);
       }
       Tensor x = Tensor::FromFloat("", {1, 1, 3, 3, 3}, data);
-      Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2, 2});
+      Tensor y = average_pool_kernel.Invoke(
+          [&](const auto &kernel) { return kernel(x, /*kernel_shape=*/{2, 2, 2}); });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -434,9 +458,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
                data[i] = static_cast<float>(i + 1);
              }
              Tensor x = Tensor::FromFloat("", {1, 1, 3, 3, 3}, data);
-             Tensor y = average_pool_kernel18(x, /*kernel_shape=*/{3, 3, 3}, /*strides=*/{2, 2, 2},
-                                              /*pads=*/{1, 1, 1, 1, 1, 1}, /*ceil_mode=*/true,
-                                              /*count_include_pad=*/true);
+             Tensor y = average_pool_kernel18.Invoke([&](const auto &kernel) {
+               return kernel(x, /*kernel_shape=*/{3, 3, 3}, /*strides=*/{2, 2, 2},
+                             /*pads=*/{1, 1, 1, 1, 1, 1}, /*ceil_mode=*/true,
+                             /*count_include_pad=*/true);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -458,10 +484,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
                  "", {1, 1, 5, 5}, {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
                                     10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
                                     19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
-             Tensor y =
-                 average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2}, /*pads=*/{},
-                                     /*ceil_mode=*/false, /*count_include_pad=*/false,
-                                     /*dilations=*/{}, /*auto_pad=*/AutoPad::kSameUpper);
+             Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2}, /*pads=*/{},
+                             /*ceil_mode=*/false, /*count_include_pad=*/false,
+                             /*dilations=*/{}, /*auto_pad=*/AutoPad::kSameUpper);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -481,9 +508,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                           {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f,
                                            10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
-                                            /*ceil_mode=*/false, /*count_include_pad=*/false,
-                                            /*dilations=*/{}, /*auto_pad=*/AutoPad::kSameUpper);
+             Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
+                             /*ceil_mode=*/false, /*count_include_pad=*/false,
+                             /*dilations=*/{}, /*auto_pad=*/AutoPad::kSameUpper);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -503,9 +532,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                           {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f,
                                            10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
-                                            /*ceil_mode=*/false, /*count_include_pad=*/false,
-                                            /*dilations=*/{}, /*auto_pad=*/AutoPad::kSameLower);
+             Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
+                             /*ceil_mode=*/false, /*count_include_pad=*/false,
+                             /*dilations=*/{}, /*auto_pad=*/AutoPad::kSameLower);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -526,9 +557,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
                                     11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
-      Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{1, 1}, /*pads=*/{},
-                                     /*ceil_mode=*/true, /*count_include_pad=*/false,
-                                     /*dilations=*/{2, 2});
+      Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+        return kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{1, 1}, /*pads=*/{},
+                      /*ceil_mode=*/true, /*count_include_pad=*/false,
+                      /*dilations=*/{2, 2});
+      });
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -555,10 +588,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
                   21.0f, 22.0f, 23.0f, 24.0f, 25.0f, 26.0f, 27.0f, 28.0f, 29.0f, 30.0f,
                   31.0f, 32.0f, 33.0f, 34.0f, 35.0f, 36.0f, 37.0f, 38.0f, 39.0f, 40.0f,
                   41.0f, 42.0f, 43.0f, 44.0f, 45.0f, 46.0f, 47.0f, 48.0f, 49.0f});
-             Tensor y =
-                 average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1}, /*pads=*/{},
-                                     /*ceil_mode=*/false, /*count_include_pad=*/false,
-                                     /*dilations=*/{2, 2}, /*auto_pad=*/AutoPad::kValid);
+             Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1}, /*pads=*/{},
+                             /*ceil_mode=*/false, /*count_include_pad=*/false,
+                             /*dilations=*/{2, 2}, /*auto_pad=*/AutoPad::kValid);
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -587,9 +621,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
                }
              }
              Tensor x = Tensor::FromFloat("", {1, 1, 4, 4, 4}, data);
-             Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2, 2}, /*strides=*/{1, 1, 1},
-                                            /*pads=*/{}, /*ceil_mode=*/true,
-                                            /*count_include_pad=*/false, /*dilations=*/{2, 2, 2});
+             Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+               return kernel(x, /*kernel_shape=*/{2, 2, 2}, /*strides=*/{1, 1, 1},
+                             /*pads=*/{}, /*ceil_mode=*/true,
+                             /*count_include_pad=*/false, /*dilations=*/{2, 2, 2});
+             });
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -623,10 +659,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
                [average_pool_kernel, cip, ceil_mode, captured_seed]() -> IoData {
                  Tensor x =
                      RandnTensor(DataType::FLOAT, {1, 1, 32, 32, 32}, /*seed=*/captured_seed);
-                 Tensor y =
-                     average_pool_kernel(x, /*kernel_shape=*/{5, 5, 5}, /*strides=*/{3, 3, 3},
-                                         /*pads=*/{}, /*ceil_mode=*/ceil_mode,
-                                         /*count_include_pad=*/cip != 0, /*dilations=*/{2, 2, 2});
+                 Tensor y = average_pool_kernel.Invoke([&](const auto &kernel) {
+                   return kernel(x, /*kernel_shape=*/{5, 5, 5}, /*strides=*/{3, 3, 3},
+                                 /*pads=*/{}, /*ceil_mode=*/ceil_mode,
+                                 /*count_include_pad=*/cip != 0, /*dilations=*/{2, 2, 2});
+                 });
                  return IoData{{std::move(x)}, {std::move(y)}};
                });
       }

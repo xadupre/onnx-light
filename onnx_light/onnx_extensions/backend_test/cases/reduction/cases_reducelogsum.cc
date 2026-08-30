@@ -17,8 +17,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
 void EmitReduceLogSumCase(std::vector<TestCase> &registry, const std::string &op_type,
-                          const onnx_kernels::kernel::ReduceLogSumOp &kernel,
-                          const std::string &case_name, const std::vector<int64_t> &data_shape,
+                          const auto &kernel, const std::string &case_name,
+                          const std::vector<int64_t> &data_shape,
                           const std::vector<float> &data_values,
                           const std::vector<int64_t> &axes_values, bool keepdims,
                           bool noop_with_empty_axes) {
@@ -36,7 +36,8 @@ void EmitReduceLogSumCase(std::vector<TestCase> &registry, const std::string &op
   Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
     Tensor data = Tensor::FromFloat("", data_shape, data_values);
     Tensor axes = Tensor::FromInt64("", {static_cast<int64_t>(axes_values.size())}, axes_values);
-    Tensor reduced = kernel(data, axes, keepdims, noop_with_empty_axes);
+    Tensor reduced = kernel.Invoke(
+        [&](const auto &kernel) { return kernel(data, axes, keepdims, noop_with_empty_axes); });
 
     return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
   });
@@ -46,8 +47,7 @@ void EmitReduceLogSumCase(std::vector<TestCase> &registry, const std::string &op
 // "data" input). With ``noop_with_empty_axes`` default-false this reduces
 // over every dimension of ``data``.
 void EmitReduceLogSumDefaultAxesCase(std::vector<TestCase> &registry, const std::string &op_type,
-                                     const onnx_kernels::kernel::ReduceLogSumOp &kernel,
-                                     const std::string &case_name,
+                                     const auto &kernel, const std::string &case_name,
                                      const std::vector<int64_t> &data_shape,
                                      const std::vector<float> &data_values, bool keepdims) {
   const OpsetId opset = DefaultOpset(18);
@@ -59,15 +59,15 @@ void EmitReduceLogSumDefaultAxesCase(std::vector<TestCase> &registry, const std:
   AddAttribute<int64_t>(node, "keepdims", keepdims ? 1 : 0);
   Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
     Tensor data = Tensor::FromFloat("", data_shape, data_values);
-    Tensor reduced = kernel(data, keepdims, /*noop_with_empty_axes=*/false);
+    Tensor reduced = kernel.Invoke(
+        [&](const auto &kernel) { return kernel(data, keepdims, /*noop_with_empty_axes=*/false); });
 
     return IoData{{std::move(data)}, {std::move(reduced)}};
   });
 }
 
 void RegisterReduceLogSumOpCases(std::vector<TestCase> &registry, const std::string &op_type,
-                                 const onnx_kernels::kernel::ReduceLogSumOp &kernel,
-                                 const std::string &name_prefix) {
+                                 const auto &kernel, const std::string &name_prefix) {
   const std::vector<int64_t> shape = {3, 2, 2};
   // Same ``[3, 2, 2]`` ``arange(1, 13)`` payload used by the sibling
   // ``cases_reducesum.cc`` / ``cases_reducel1l2.cc`` files and by the
@@ -107,8 +107,7 @@ void RegisterReduceLogSumOpCases(std::vector<TestCase> &registry, const std::str
 // Outputs are computed by the reference kernel so the data does not need to
 // bit-match the upstream fixture.
 // ---------------------------------------------------------------------------
-void RegisterReduceLogSumExpOnnxCases(std::vector<TestCase> &registry,
-                                      const onnx_kernels::kernel::ReduceLogSumOp &kernel) {
+void RegisterReduceLogSumExpOnnxCases(std::vector<TestCase> &registry, const auto &kernel) {
   const std::vector<int64_t> shape = {3, 2, 2};
   const std::vector<float> example_values = {1.0f, 2.0f, 3.0f, 4.0f,  5.0f,  6.0f,
                                              7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};
@@ -154,8 +153,7 @@ void RegisterReduceLogSumExpOnnxCases(std::vector<TestCase> &registry,
 // ``_negative_axes`` (axes = [-2]). ``_empty_set`` is shared with the other
 // reductions. Outputs are computed by the reference kernel.
 // ---------------------------------------------------------------------------
-void RegisterReduceLogSumOnnxCases(std::vector<TestCase> &registry,
-                                   const onnx_kernels::kernel::ReduceLogSumOp &kernel) {
+void RegisterReduceLogSumOnnxCases(std::vector<TestCase> &registry, const auto &kernel) {
   // Multi-axis cases use the upstream ``[3, 4, 5]`` shape.
   const std::vector<int64_t> shape_3_4_5 = {3, 4, 5};
   std::vector<float> data_3_4_5(3 * 4 * 5);
@@ -184,8 +182,7 @@ void RegisterReduceLogSumOnnxCases(std::vector<TestCase> &registry,
 } // namespace
 
 void RegisterReduceLogSumCases(std::vector<TestCase> &registry, TestMode mode) {
-  const KernelContext ctx{DefaultOpset(18)};
-  const onnx_kernels::kernel::ReduceLogSum kernel{ctx};
+  const auto kernel = MakeReferenceKernel<onnx_kernels::kernel::ReduceLogSum>(DefaultOpset(18));
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -197,7 +194,9 @@ void RegisterReduceLogSumCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_reducelogsum_default_axes_keepdims_benchmark",
            {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [kernel]() -> IoData {
              Tensor data = RandnTensor(DataType::FLOAT, {256, 256, 16}, /*seed=*/9701);
-             Tensor reduced = kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             Tensor reduced = kernel.Invoke([&](const auto &kernel) {
+               return kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             });
              return IoData{{std::move(data)}, {std::move(reduced)}};
            });
     return;
@@ -218,15 +217,16 @@ void RegisterReduceLogSumCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor data = Tensor::FromDouble(
           "", {3, 2, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
       Tensor axes = Tensor::FromInt64("", {1}, {1});
-      Tensor reduced = kernel(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+      Tensor reduced = kernel.Invoke([&](const auto &kernel) {
+        return kernel(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+      });
       return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
     });
   }
 }
 
 void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry, TestMode mode) {
-  const KernelContext ctx{DefaultOpset(18)};
-  const onnx_kernels::kernel::ReduceLogSumExp kernel{ctx};
+  const auto kernel = MakeReferenceKernel<onnx_kernels::kernel::ReduceLogSumExp>(DefaultOpset(18));
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -238,7 +238,9 @@ void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry, TestMode mode
     Expect(registry, std::move(node), "test_cc_reducelogsumexp_default_axes_keepdims_benchmark",
            {DefaultOpset(18)}, {256 * 256 * 16}, {1}, [kernel]() -> IoData {
              Tensor data = RandnTensor(DataType::FLOAT, {256, 256, 16}, /*seed=*/9701);
-             Tensor reduced = kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             Tensor reduced = kernel.Invoke([&](const auto &kernel) {
+               return kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+             });
              return IoData{{std::move(data)}, {std::move(reduced)}};
            });
     return;
@@ -259,7 +261,9 @@ void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry, TestMode mode
       Tensor data = Tensor::FromDouble(
           "", {3, 2, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
       Tensor axes = Tensor::FromInt64("", {1}, {1});
-      Tensor reduced = kernel(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+      Tensor reduced = kernel.Invoke([&](const auto &kernel) {
+        return kernel(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+      });
       return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
     });
   }

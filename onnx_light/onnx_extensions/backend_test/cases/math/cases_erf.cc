@@ -20,11 +20,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterErfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Erf erf_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Erf", erf_kernel, "test_cc_erf_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Erf>("Erf", "test_cc_erf_benchmark", opset,
+                                                         registry);
     return;
   }
 
@@ -33,7 +32,12 @@ void RegisterErfCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Erf");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_erf", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_erf", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext erf_kernel_ctx{opset};
+      const onnx_kernels::kernel::Erf erf_kernel{erf_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f});
       Tensor y = erf_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -46,7 +50,12 @@ void RegisterErfCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Erf");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_erf_example", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_erf_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext erf_kernel_ctx{opset};
+      const onnx_kernels::kernel::Erf erf_kernel{erf_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
       Tensor y = erf_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -59,7 +68,12 @@ void RegisterErfCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Erf");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_erf", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_erf", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext erf_kernel_ctx{opset};
+      const onnx_kernels::kernel::Erf erf_kernel{erf_kernel_ctx};
+
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/1);
       Tensor y = erf_kernel(x);
@@ -72,7 +86,12 @@ void RegisterErfCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Erf");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_erf_float16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_erf_float16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext erf_kernel_ctx{opset};
+      const onnx_kernels::kernel::Erf erf_kernel{erf_kernel_ctx};
+
       Tensor x = MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f});
       Tensor y = erf_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -85,7 +104,12 @@ void RegisterErfCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Erf");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_erf_bfloat16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_erf_bfloat16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext erf_kernel_ctx{opset};
+      const onnx_kernels::kernel::Erf erf_kernel{erf_kernel_ctx};
+
       std::vector<float> vals = {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f};
       std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
       auto *dst = reinterpret_cast<uint16_t *>(raw.data());

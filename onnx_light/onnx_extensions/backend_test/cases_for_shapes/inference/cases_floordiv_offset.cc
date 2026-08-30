@@ -23,30 +23,37 @@ constexpr int64_t kDefaultIrVersion = 10;
 void RegisterFloorDivOffsetShapeInferenceCase(std::vector<TestCase> &registry) {
   const std::string name("test_cc_shape_inference_floordiv_offset_expression");
   const OpsetId opset = DefaultOpset(18);
-  const onnx_kernels::kernel::KernelContext ctx{opset};
-  const onnx_kernels::kernel::MaxPool maxpool_kernel{ctx};
 
-  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
-  ModelProto &model = tc.emplace_model();
-  InitModel(model, kDefaultIrVersion, {opset});
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+  TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
 
-  NodeProto &node = AddNode(*graph, "MaxPool", {"X"}, {"Y"});
-  AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {7});
-  AddAttribute<std::vector<int64_t>>(node, "pads", {6, 6});
-  AddAttribute<std::vector<int64_t>>(node, "strides", {5});
+    const KernelContext maxpool_kernel_ctx{opset};
+    const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
 
-  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"batch", "channel", "seq"});
-  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {"batch", "channel", "seq//5+2"});
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
+    ModelProto &model = tc.emplace_model();
+    InitModel(model, kDefaultIrVersion, {opset});
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  Tensor x = Tensor::FromFloat("X", {2, 1, 4},
-                               {1.0f, 0.0f, 2.0f, 0.0f, //
-                                0.0f, 3.0f, 0.0f, 4.0f});
-  Tensor y = maxpool_kernel(x, /*kernel_shape=*/{7}, /*strides=*/{5}, /*pads=*/{6, 6});
-  y.name = "Y";
-  AppendDataSet(tc, {std::move(x)}, {std::move(y)});
-  registry.emplace_back(std::move(tc));
+    NodeProto &node = AddNode(*graph, "MaxPool", {"X"}, {"Y"});
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {7});
+    AddAttribute<std::vector<int64_t>>(node, "pads", {6, 6});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {5});
+
+    AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"batch", "channel", "seq"});
+    AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {"batch", "channel", "seq//5+2"});
+
+    Tensor x = Tensor::FromFloat("X", {2, 1, 4},
+                                 {1.0f, 0.0f, 2.0f, 0.0f, //
+                                  0.0f, 3.0f, 0.0f, 4.0f});
+    Tensor y = maxpool_kernel(x, /*kernel_shape=*/{7}, /*strides=*/{5}, /*pads=*/{6, 6});
+    y.name = "Y";
+    AppendDataSet(tc, {std::move(x)}, {std::move(y)});
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

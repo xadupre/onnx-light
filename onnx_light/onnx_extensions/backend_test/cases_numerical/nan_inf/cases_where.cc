@@ -15,8 +15,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterWhereNanInfCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(16);
-  const onnx_kernels::kernel::KernelContext ctx{opset};
-  const onnx_kernels::kernel::Where where_kernel{ctx};
 
   constexpr float kNan = std::numeric_limits<float>::quiet_NaN();
   constexpr float kPosInf = std::numeric_limits<float>::infinity();
@@ -31,10 +29,22 @@ void RegisterWhereNanInfCases(std::vector<TestCase> &registry, TestMode /*mode*/
     Tensor condition = Tensor::FromBool("condition", {6}, {1, 0, 1, 0, 1, 0});
     Tensor x = Tensor::FromFloat("x", {6}, {kNan, 1.0f, kPosInf, 2.0f, kNegInf, 3.0f});
     Tensor y = Tensor::FromFloat("y", {6}, {0.0f, kNan, 0.0f, kPosInf, 0.0f, kNegInf});
-    Tensor output = where_kernel(condition, x, y);
+    Expect(
+        registry, std::move(node), "test_cc_where_nan_inf", {opset},
+        []() -> IoData {
+          Tensor condition = Tensor::FromBool("condition", {6}, {1, 0, 1, 0, 1, 0});
+          Tensor x = Tensor::FromFloat("x", {6}, {kNan, 1.0f, kPosInf, 2.0f, kNegInf, 3.0f});
+          Tensor y = Tensor::FromFloat("y", {6}, {0.0f, kNan, 0.0f, kPosInf, 0.0f, kNegInf});
 
-    Expect(node, {condition, x, y}, {output}, "test_cc_where_nan_inf", {opset}, "backend-test",
-           registry, TestCaseTag::NAN_INF);
+          const OpsetId opset = DefaultOpset(16);
+
+          const KernelContext where_kernel_ctx{opset};
+          const onnx_kernels::kernel::Where where_kernel{where_kernel_ctx};
+
+          Tensor output = where_kernel(condition, x, y);
+          return IoData{{std::move(condition), std::move(x), std::move(y)}, {std::move(output)}};
+        },
+        "backend-test", TestCaseTag::NAN_INF);
   }
 
   // Broadcast case: the condition broadcasts a single column across all
@@ -46,10 +56,22 @@ void RegisterWhereNanInfCases(std::vector<TestCase> &registry, TestMode /*mode*/
     Tensor condition = Tensor::FromBool("condition", {2, 1}, {1, 0});
     Tensor x = Tensor::FromFloat("x", {2, 3}, {kPosInf, 1.0f, kPosInf, 2.0f, kPosInf, 3.0f});
     Tensor y = Tensor::FromFloat("y", {1, 3}, {kNegInf, kNan, 0.0f});
-    Tensor output = where_kernel(condition, x, y);
+    Expect(
+        registry, std::move(node), "test_cc_where_nan_inf_bcast", {opset},
+        []() -> IoData {
+          Tensor condition = Tensor::FromBool("condition", {2, 1}, {1, 0});
+          Tensor x = Tensor::FromFloat("x", {2, 3}, {kPosInf, 1.0f, kPosInf, 2.0f, kPosInf, 3.0f});
+          Tensor y = Tensor::FromFloat("y", {1, 3}, {kNegInf, kNan, 0.0f});
 
-    Expect(node, {condition, x, y}, {output}, "test_cc_where_nan_inf_bcast", {opset},
-           "backend-test", registry, TestCaseTag::NAN_INF);
+          const OpsetId opset = DefaultOpset(16);
+
+          const KernelContext where_kernel_ctx{opset};
+          const onnx_kernels::kernel::Where where_kernel{where_kernel_ctx};
+
+          Tensor output = where_kernel(condition, x, y);
+          return IoData{{std::move(condition), std::move(x), std::move(y)}, {std::move(output)}};
+        },
+        "backend-test", TestCaseTag::NAN_INF);
   }
 }
 

@@ -19,11 +19,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterTanCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Tan tan_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Tan", tan_kernel, "test_cc_tan_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Tan>("Tan", "test_cc_tan_benchmark", opset,
+                                                         registry);
     return;
   }
 
@@ -32,7 +31,12 @@ void RegisterTanCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Tan");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_tan", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_tan", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext tan_kernel_ctx{opset};
+      const onnx_kernels::kernel::Tan tan_kernel{tan_kernel_ctx};
+
       // Stay clear of pi/2 ± k*pi where tan(x) is unbounded.
       Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -0.5f, 0.0f, 0.25f, 0.5f, 1.0f});
       Tensor y = tan_kernel(x);
@@ -50,7 +54,12 @@ void RegisterTanCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Tan");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_tan_example", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_tan_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext tan_kernel_ctx{opset};
+      const onnx_kernels::kernel::Tan tan_kernel{tan_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
       Tensor y = tan_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -62,7 +71,12 @@ void RegisterTanCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Tan");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_tan", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_tan", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext tan_kernel_ctx{opset};
+      const onnx_kernels::kernel::Tan tan_kernel{tan_kernel_ctx};
+
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/1);
       Tensor y = tan_kernel(x);

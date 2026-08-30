@@ -29,8 +29,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::QLinearConv qc{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -48,7 +46,12 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
     const std::vector<int64_t> x_shape{1, 1, 1024, 1024};
     const int64_t count = 1024 * 1024;
     Expect(registry, std::move(node), "test_cc_qlinearconv_benchmark", {opset},
-           {count, 1, 1, 1, 1, 1, 1, 1}, {count}, [qc, x_shape]() -> IoData {
+           {count, 1, 1, 1, 1, 1, 1, 1}, {count}, [x_shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext qc_ctx{opset};
+             const onnx_kernels::kernel::QLinearConv qc{qc_ctx};
+
              Tensor x = Tensor::FromUint8("x", x_shape, RandUint<uint8_t>(256, x_shape, 2541));
              Tensor x_scale = Tensor::FromFloat("x_scale", {}, {0.00369204697f});
              Tensor x_zero_point("x_zero_point", static_cast<int32_t>(DataType::UINT8), {},
@@ -96,10 +99,6 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor B;
 
     onnx_kernels::kernel::QLinearConv::Attributes attrs;
-    Tensor y =
-        qc(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point, B, attrs);
-    y.name = "y";
-
     NodeProto node;
     node.set_op_type("QLinearConv");
     node.add_input("x");
@@ -111,12 +110,20 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y_scale");
     node.add_input("y_zero_point");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_qlinearconv", {opset}, [=]() -> IoData {
-      return IoData{{std::move(x), std::move(x_scale), std::move(x_zero_point), std::move(w),
-                     std::move(w_scale), std::move(w_zero_point), std::move(y_scale),
-                     std::move(y_zero_point)},
-                    {std::move(y)}};
-    });
+    Expect(registry, std::move(node), "test_cc_qlinearconv", {opset},
+           [opset, x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point, B,
+            attrs]() -> IoData {
+             const KernelContext qc_ctx{opset};
+             const onnx_kernels::kernel::QLinearConv qc{qc_ctx};
+
+             Tensor y = qc(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale,
+                           y_zero_point, B, attrs);
+             y.name = "y";
+             return IoData{{std::move(x), std::move(x_scale), std::move(x_zero_point), std::move(w),
+                            std::move(w_scale), std::move(w_zero_point), std::move(y_scale),
+                            std::move(y_zero_point)},
+                           {std::move(y)}};
+           });
   }
 
   {
@@ -151,7 +158,23 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y_scale");
     node.add_input("y_zero_point");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_qlinearconv_int8", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_qlinearconv_int8", {opset}, [to_byte]() -> IoData {
+      Tensor x("x", static_cast<int32_t>(DataType::INT8), {1, 1, 2, 2},
+               std::vector<uint8_t>{to_byte(10), to_byte(20), to_byte(30), to_byte(40)});
+      Tensor x_scale = Tensor::FromFloat("x_scale", {}, {0.1f});
+      Tensor x_zero_point("x_zero_point", static_cast<int32_t>(DataType::INT8), {},
+                          std::vector<uint8_t>{to_byte(5)});
+      Tensor w("w", static_cast<int32_t>(DataType::INT8), {1, 1, 2, 2},
+               std::vector<uint8_t>{to_byte(1), to_byte(1), to_byte(1), to_byte(1)});
+      Tensor w_scale = Tensor::FromFloat("w_scale", {1}, {1.0f});
+      Tensor w_zero_point("w_zero_point", static_cast<int32_t>(DataType::INT8), {1},
+                          std::vector<uint8_t>{to_byte(0)});
+      Tensor y_scale = Tensor::FromFloat("y_scale", {}, {1.0f});
+      Tensor y_zero_point("y_zero_point", static_cast<int32_t>(DataType::INT8), {},
+                          std::vector<uint8_t>{to_byte(-10)});
+      Tensor y("y", static_cast<int32_t>(DataType::INT8), {1, 1, 1, 1},
+               std::vector<uint8_t>{to_byte(-2)});
+
       return IoData{{std::move(x), std::move(x_scale), std::move(x_zero_point), std::move(w),
                      std::move(w_scale), std::move(w_zero_point), std::move(y_scale),
                      std::move(y_zero_point)},

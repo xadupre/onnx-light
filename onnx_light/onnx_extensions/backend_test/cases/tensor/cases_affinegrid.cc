@@ -69,8 +69,6 @@ Tensor MakeUpstreamTheta3D() {
 // ---------------------------------------------------------------------------
 void RegisterAffineGridCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::AffineGrid ag_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -81,7 +79,12 @@ void RegisterAffineGridCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<int64_t>(node, "align_corners", 0);
 
     Expect(registry, std::move(node), "test_affine_grid_2d_benchmark", {opset}, {6, 4},
-           {1448 * 1448 * 2}, [ag_kernel]() -> IoData {
+           {1448 * 1448 * 2}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
+
+             const KernelContext ag_kernel_ctx{opset};
+             const onnx_kernels::kernel::AffineGrid ag_kernel{ag_kernel_ctx};
+
              Tensor theta = Tensor::FromFloat("", {1, 2, 3}, {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f});
              Tensor size = Tensor::FromInt64("", {4}, {1, 1, 1448, 1448});
              onnx_kernels::kernel::AffineGrid::Attributes attrs;
@@ -94,23 +97,31 @@ void RegisterAffineGridCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // Helper that registers one case for the requested rank
   // (``size_dims`` is {N, C, H, W} for 2D or {N, C, D, H, W} for 3D).
-  auto register_case = [&](const std::string &case_name, const Tensor &theta,
-                           const std::vector<int64_t> &size_dims, int64_t align_corners) {
+  auto register_case = [&registry, &opset](const std::string &case_name, const Tensor &theta,
+                                           const std::vector<int64_t> &size_dims,
+                                           int64_t align_corners) {
     NodeProto node;
     node.set_op_type("AffineGrid");
     node.add_input("theta");
     node.add_input("size");
     node.add_output("grid");
     AddAttribute<int64_t>(node, "align_corners", align_corners);
-    Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
-      Tensor size = Tensor::FromInt64("", {static_cast<int64_t>(size_dims.size())}, size_dims);
+    Expect(registry, std::move(node), case_name, {opset},
+           [size_dims, align_corners, theta]() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
 
-      onnx_kernels::kernel::AffineGrid::Attributes attrs;
-      attrs.align_corners = align_corners;
-      Tensor grid = ag_kernel(theta, size, attrs);
+             const KernelContext ag_kernel_ctx{opset};
+             const onnx_kernels::kernel::AffineGrid ag_kernel{ag_kernel_ctx};
 
-      return IoData{{std::move(theta), std::move(size)}, {std::move(grid)}};
-    });
+             Tensor size =
+                 Tensor::FromInt64("", {static_cast<int64_t>(size_dims.size())}, size_dims);
+
+             onnx_kernels::kernel::AffineGrid::Attributes attrs;
+             attrs.align_corners = align_corners;
+             Tensor grid = ag_kernel(theta, size, attrs);
+
+             return IoData{{std::move(theta), std::move(size)}, {std::move(grid)}};
+           });
   };
 
   // Upstream ``test_affine_grid_2d`` cases: theta=(2,2,3), size=(N=2, C=3,

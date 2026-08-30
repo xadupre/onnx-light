@@ -61,91 +61,101 @@ constexpr int64_t kDefaultIrVersion = 10;
 // ---------------------------------------------------------------------------
 void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(13);
-  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   const std::string name = "test_cc_shape_inference_resize_tile";
+  TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(13);
 
-  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Resize kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Tile kernel_2{ctx_2};
 
-  ModelProto &model = tc.emplace_model();
-  InitModel(model, kDefaultIrVersion, {opset});
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    ModelProto &model = tc.emplace_model();
+    InitModel(model, kDefaultIrVersion, {opset});
 
-  // Resize(X, roi=<absent>, scales) → resized_out
-  // asymmetric coordinate mode: x_original = x_resized / 0.5 = x_resized * 2.
-  NodeProto &resize_node = AddNode(*graph, "Resize", {"X", "", "scales"}, {"resized_out"});
-  AddAttribute<std::string>(resize_node, "mode", "nearest");
-  AddAttribute<std::string>(resize_node, "coordinate_transformation_mode", "asymmetric");
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  // Tile(resized_out, repeats) → tile_out
-  AddNode(*graph, "Tile", {"resized_out", "repeats"}, {"tile_out"});
+    // Resize(X, roi=<absent>, scales) → resized_out
+    // asymmetric coordinate mode: x_original = x_resized / 0.5 = x_resized * 2.
+    NodeProto &resize_node = AddNode(*graph, "Resize", {"X", "", "scales"}, {"resized_out"});
+    AddAttribute<std::string>(resize_node, "mode", "nearest");
+    AddAttribute<std::string>(resize_node, "coordinate_transformation_mode", "asymmetric");
 
-  // Max(tile_out, zeros_scalar) → output
-  // The scalar ``zeros_scalar`` broadcasts to the shape of ``tile_out`` and
-  // the Max is an identity for non-negative inputs.
-  AddNode(*graph, "Max", {"tile_out", "zeros_scalar"}, {"output"});
+    // Tile(resized_out, repeats) → tile_out
+    AddNode(*graph, "Tile", {"resized_out", "repeats"}, {"tile_out"});
 
-  // Initializers: ``scales`` (FLOAT), ``repeats`` (INT64), and
-  // ``zeros_scalar`` (FLOAT scalar 0.0).
-  AddInitializer<float>(*graph, "scales", {2}, {0.5f, 0.5f});
-  AddInitializer<int64_t>(*graph, "repeats", {2}, {int64_t{2}, int64_t{2}});
-  AddInitializer<float>(*graph, "zeros_scalar", {}, {0.0f});
+    // Max(tile_out, zeros_scalar) → output
+    // The scalar ``zeros_scalar`` broadcasts to the shape of ``tile_out`` and
+    // the Max is an identity for non-negative inputs.
+    AddNode(*graph, "Max", {"tile_out", "zeros_scalar"}, {"output"});
 
-  // Graph input X: float[H, 2*h] with symbolic dim names.
-  // The concrete test data uses H=10 (even) and h=3 (so W = 2*h = 6).
-  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"H", "2*h"});
+    // Initializers: ``scales`` (FLOAT), ``repeats`` (INT64), and
+    // ``zeros_scalar`` (FLOAT scalar 0.0).
+    AddInitializer<float>(*graph, "scales", {2}, {0.5f, 0.5f});
+    AddInitializer<int64_t>(*graph, "repeats", {2}, {int64_t{2}, int64_t{2}});
+    AddInitializer<float>(*graph, "zeros_scalar", {}, {0.0f});
 
-  // Intermediate value_info: resized_out inferred as [H//2, h].
-  // ComputeShapeResize detects the uniform float scale 0.5 (min==max==0.5)
-  // and applies dim_div: dim_div("H", 2) → "H//2", dim_div("2*h", 2) → "h".
-  AppendValueInfo(*graph->add_value_info(), "resized_out", DataType::FLOAT, {"H//2", "h"});
+    // Graph input X: float[H, 2*h] with symbolic dim names.
+    // The concrete test data uses H=10 (even) and h=3 (so W = 2*h = 6).
+    AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"H", "2*h"});
 
-  // Intermediate value_info: tile_out inferred as [2*(H//2), 2*h].
-  // ComputeShapeTile applies dim_mul when the repeat count is known and the
-  // input dim is symbolic: dim_mul("H//2", 2) → "2*(H//2)", dim_mul("h", 2) → "2*h".
-  AppendValueInfo(*graph->add_value_info(), "tile_out", DataType::FLOAT, {"2*(H//2)", "2*h"});
+    // Intermediate value_info: resized_out inferred as [H//2, h].
+    // ComputeShapeResize detects the uniform float scale 0.5 (min==max==0.5)
+    // and applies dim_div: dim_div("H", 2) → "H//2", dim_div("2*h", 2) → "h".
+    AppendValueInfo(*graph->add_value_info(), "resized_out", DataType::FLOAT, {"H//2", "h"});
 
-  // Graph output: Max result with shape preserved from tile_out.
-  // ComputeShapeElementWiseBroadcast propagates the shape [2*(H//2), 2*h]
-  // when broadcasting with the scalar zeros_scalar.
-  AppendValueInfo(*graph->add_output(), "output", DataType::FLOAT, {"2*(H//2)", "2*h"});
+    // Intermediate value_info: tile_out inferred as [2*(H//2), 2*h].
+    // ComputeShapeTile applies dim_mul when the repeat count is known and the
+    // input dim is symbolic: dim_mul("H//2", 2) → "2*(H//2)", dim_mul("h", 2) → "2*h".
+    AppendValueInfo(*graph->add_value_info(), "tile_out", DataType::FLOAT, {"2*(H//2)", "2*h"});
 
-  // Reference DataSet — concrete H=10 (even), h=3, W=2*h=6.
-  constexpr int64_t kH = 10;     // even, represents symbolic "H"
-  constexpr int64_t kh = 3;      // represents symbolic "h"
-  constexpr int64_t kW = 2 * kh; // = 6, represents symbolic "2*h"
+    // Graph output: Max result with shape preserved from tile_out.
+    // ComputeShapeElementWiseBroadcast propagates the shape [2*(H//2), 2*h]
+    // when broadcasting with the scalar zeros_scalar.
+    AppendValueInfo(*graph->add_output(), "output", DataType::FLOAT, {"2*(H//2)", "2*h"});
 
-  std::vector<float> x_values(static_cast<size_t>(kH * kW));
-  for (size_t i = 0; i < x_values.size(); ++i) {
-    x_values[i] = static_cast<float>(i) + 1.0f;
-  }
-  Tensor x = Tensor::FromFloat("X", {kH, kW}, x_values);
+    // Reference DataSet — concrete H=10 (even), h=3, W=2*h=6.
+    constexpr int64_t kH = 10;     // even, represents symbolic "H"
+    constexpr int64_t kh = 3;      // represents symbolic "h"
+    constexpr int64_t kW = 2 * kh; // = 6, represents symbolic "2*h"
 
-  // Resize with scales=[0.5, 0.5], asymmetric + nearest:
-  //   floor(H * 0.5) = 5, floor(W * 0.5) = 3  →  resized_out shape [5, 3].
-  const Tensor scales_tensor = Tensor::FromFloat("", {2}, {0.5f, 0.5f});
-  onnx_kernels::kernel::Resize::Attributes resize_attrs;
-  resize_attrs.mode = "nearest";
-  resize_attrs.coordinate_transformation_mode = "asymmetric";
-  Tensor resized_out = onnx_kernels::kernel::Resize{ctx}(x, scales_tensor, resize_attrs);
-  resized_out.name = "resized_out";
+    std::vector<float> x_values(static_cast<size_t>(kH * kW));
+    for (size_t i = 0; i < x_values.size(); ++i) {
+      x_values[i] = static_cast<float>(i) + 1.0f;
+    }
+    Tensor x = Tensor::FromFloat("X", {kH, kW}, x_values);
 
-  // Tile with repeats=[2, 2]:  [5, 3] → [10, 6].
-  const Tensor repeats_tensor = Tensor::FromInt64("", {2}, {int64_t{2}, int64_t{2}});
-  Tensor tile_out = onnx_kernels::kernel::Tile{ctx}(resized_out, repeats_tensor);
-  tile_out.name = "tile_out";
+    // Resize with scales=[0.5, 0.5], asymmetric + nearest:
+    //   floor(H * 0.5) = 5, floor(W * 0.5) = 3  →  resized_out shape [5, 3].
+    const Tensor scales_tensor = Tensor::FromFloat("", {2}, {0.5f, 0.5f});
+    onnx_kernels::kernel::Resize::Attributes resize_attrs;
+    resize_attrs.mode = "nearest";
+    resize_attrs.coordinate_transformation_mode = "asymmetric";
+    Tensor resized_out = kernel_1(x, scales_tensor, resize_attrs);
+    resized_out.name = "resized_out";
 
-  // Max(tile_out, zeros_scalar): all x_values > 0 so Max is identity → [10, 6].
-  const Tensor zeros_scalar = Tensor::FromFloat("zeros_scalar", {}, {0.0f});
-  const onnx_kernels::kernel::Max max_kernel{ctx};
-  Tensor output = max_kernel({tile_out, zeros_scalar});
-  output.name = "output";
+    // Tile with repeats=[2, 2]:  [5, 3] → [10, 6].
+    const Tensor repeats_tensor = Tensor::FromInt64("", {2}, {int64_t{2}, int64_t{2}});
+    Tensor tile_out = kernel_2(resized_out, repeats_tensor);
+    tile_out.name = "tile_out";
 
-  AppendDataSet(tc, {std::move(x)}, {std::move(output)});
+    // Max(tile_out, zeros_scalar): all x_values > 0 so Max is identity → [10, 6].
+    const Tensor zeros_scalar = Tensor::FromFloat("zeros_scalar", {}, {0.0f});
+    const KernelContext max_kernel_ctx{opset};
+    const onnx_kernels::kernel::Max max_kernel{max_kernel_ctx};
+    Tensor output = max_kernel({tile_out, zeros_scalar});
+    output.name = "output";
 
-  registry.emplace_back(std::move(tc));
+    AppendDataSet(tc, {std::move(x)}, {std::move(output)});
+
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

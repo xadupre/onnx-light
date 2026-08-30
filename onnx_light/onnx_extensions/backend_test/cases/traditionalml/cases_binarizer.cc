@@ -20,9 +20,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterBinarizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
-  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const onnx_kernels::kernel::Binarizer binarizer{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -38,9 +36,12 @@ void RegisterBinarizerCases(std::vector<TestCase> &registry, TestMode mode) {
     threshold_attr->set_f(threshold);
 
     Expect(registry, std::move(node), "test_ai_onnx_ml_binarizer_benchmark", {default_opset, opset},
-           {32768}, {32768}, [binarizer, threshold]() -> IoData {
+           {32768}, {32768}, [opset, threshold]() -> IoData {
+             const KernelContext binarizer_ctx{opset};
+             const onnx_kernels::kernel::Binarizer binarizer{binarizer_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {8192, 4}, 2611);
-             Tensor y = binarizer.operator()<float>(x, threshold);
+             Tensor y = binarizer.template operator()<float>(x, threshold);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -56,11 +57,14 @@ void RegisterBinarizerCases(std::vector<TestCase> &registry, TestMode mode) {
 
     const float threshold = 1.0f;
     AttributeProto *threshold_attr = node.add_attribute();
+    threshold_attr->set_name("threshold");
+    threshold_attr->set_type(AttributeProto::AttributeType::FLOAT);
+    threshold_attr->set_f(threshold);
+
     Expect(registry, std::move(node), "test_ai_onnx_ml_binarizer", {default_opset, opset},
-           [=]() -> IoData {
-             threshold_attr->set_name("threshold");
-             threshold_attr->set_type(AttributeProto::AttributeType::FLOAT);
-             threshold_attr->set_f(threshold);
+           [opset, threshold]() -> IoData {
+             const KernelContext binarizer_ctx{opset};
+             const onnx_kernels::kernel::Binarizer binarizer{binarizer_ctx};
 
              // Small representative slice of the upstream (3, 4, 5) input. Using a
              // compact ``(2, 4)`` tensor keeps the test case self-contained while
@@ -68,7 +72,7 @@ void RegisterBinarizerCases(std::vector<TestCase> &registry, TestMode mode) {
              // branches of the kernel.
              Tensor x =
                  Tensor::FromFloat("", {2, 4}, {0.5f, 1.0f, 1.5f, 2.0f, -1.0f, 1.0f, 3.0f, 0.9f});
-             Tensor y = binarizer.operator()<float>(x, threshold);
+             Tensor y = binarizer.template operator()<float>(x, threshold);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -85,14 +89,17 @@ void RegisterBinarizerCases(std::vector<TestCase> &registry, TestMode mode) {
 
     const int64_t threshold = 3;
     AttributeProto *threshold_attr = node.add_attribute();
+    threshold_attr->set_name("threshold");
+    threshold_attr->set_type(AttributeProto::AttributeType::FLOAT);
+    threshold_attr->set_f(static_cast<float>(threshold));
+
     Expect(registry, std::move(node), "test_cc_binarizer_int64", {default_opset, opset},
-           [=]() -> IoData {
-             threshold_attr->set_name("threshold");
-             threshold_attr->set_type(AttributeProto::AttributeType::FLOAT);
-             threshold_attr->set_f(static_cast<float>(threshold));
+           [opset]() -> IoData {
+             const KernelContext binarizer_ctx{opset};
+             const onnx_kernels::kernel::Binarizer binarizer{binarizer_ctx};
 
              Tensor x = Tensor::FromInt64("", {5}, {0, 3, 4, -2, 10});
-             Tensor y = binarizer.operator()<int64_t>(x, threshold);
+             Tensor y = binarizer.template operator()<int64_t>(x, threshold);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });

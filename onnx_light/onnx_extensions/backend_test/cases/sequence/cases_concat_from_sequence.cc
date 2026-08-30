@@ -37,78 +37,86 @@ void RegisterConcatFromSequenceCase(const std::string &name,
                                     const Tensor &b, const Tensor &c, int64_t axis,
                                     int64_t new_axis, const OpsetId &opset,
                                     std::vector<TestCase> &registry) {
-  const KernelContext ctx{opset};
-  Tensor expected = onnx_kernels::kernel::ConcatFromSequence(ctx)({a, b, c}, axis, new_axis);
-  expected.name = "concat_result";
+  TestCase lazy_case(name, name);
+  lazy_case.rtol = 1e-3;
+  lazy_case.atol = 1e-7;
+  lazy_case.build = [opset, a, b, c, axis, new_axis, name](bool) -> BuiltCase {
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::ConcatFromSequence kernel_1{ctx_1};
 
-  TestCase tc(name, name);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+    Tensor expected = kernel_1({a, b, c}, axis, new_axis);
+    expected.name = "concat_result";
 
-  ModelProto &model = tc.emplace_model();
-  model.set_ir_version(kDefaultIrVersion);
-  model.set_producer_name("backend-test");
-  OperatorSetIdProto proto;
-  proto.set_domain(opset.domain);
-  proto.set_version(opset.version);
-  model.add_opset_import(proto);
+    TestCase tc(name, name);
+    tc.rtol = 1e-3;
+    tc.atol = 1e-7;
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    ModelProto &model = tc.emplace_model();
+    model.set_ir_version(kDefaultIrVersion);
+    model.set_producer_name("backend-test");
+    OperatorSetIdProto proto;
+    proto.set_domain(opset.domain);
+    proto.set_version(opset.version);
+    model.add_opset_import(proto);
 
-  // Node 1: SequenceConstruct ``a``, ``b``, ``c`` → ``input_seq``.
-  NodeProto *seq_node = graph->add_node();
-  seq_node->set_op_type("SequenceConstruct");
-  seq_node->add_input("a");
-  seq_node->add_input("b");
-  seq_node->add_input("c");
-  seq_node->add_output("input_seq");
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  // Node 2: ConcatFromSequence ``input_seq`` → ``concat_result``.
-  NodeProto *concat_node = graph->add_node();
-  concat_node->set_op_type("ConcatFromSequence");
-  concat_node->add_input("input_seq");
-  concat_node->add_output("concat_result");
-  AttributeProto *axis_attr = concat_node->add_attribute();
-  axis_attr->set_name("axis");
-  axis_attr->set_type(AttributeProto::AttributeType::INT);
-  axis_attr->set_i(axis);
-  if (new_axis != 0) {
-    AttributeProto *new_axis_attr = concat_node->add_attribute();
-    new_axis_attr->set_name("new_axis");
-    new_axis_attr->set_type(AttributeProto::AttributeType::INT);
-    new_axis_attr->set_i(new_axis);
-  }
+    // Node 1: SequenceConstruct ``a``, ``b``, ``c`` → ``input_seq``.
+    NodeProto *seq_node = graph->add_node();
+    seq_node->set_op_type("SequenceConstruct");
+    seq_node->add_input("a");
+    seq_node->add_input("b");
+    seq_node->add_input("c");
+    seq_node->add_output("input_seq");
 
-  // Graph inputs ``a``, ``b``, ``c`` (tensor-typed).
-  for (const Tensor *t : {&a, &b, &c}) {
-    Tensor named = *t;
-    if (named.name.empty()) {
-      named.name = (t == &a) ? "a" : (t == &b ? "b" : "c");
+    // Node 2: ConcatFromSequence ``input_seq`` → ``concat_result``.
+    NodeProto *concat_node = graph->add_node();
+    concat_node->set_op_type("ConcatFromSequence");
+    concat_node->add_input("input_seq");
+    concat_node->add_output("concat_result");
+    AttributeProto *axis_attr = concat_node->add_attribute();
+    axis_attr->set_name("axis");
+    axis_attr->set_type(AttributeProto::AttributeType::INT);
+    axis_attr->set_i(axis);
+    if (new_axis != 0) {
+      AttributeProto *new_axis_attr = concat_node->add_attribute();
+      new_axis_attr->set_name("new_axis");
+      new_axis_attr->set_type(AttributeProto::AttributeType::INT);
+      new_axis_attr->set_i(new_axis);
     }
-    FillValueInfo(named, *graph->add_input());
-  }
 
-  // Graph output ``concat_result`` (tensor-typed).
-  FillValueInfo(expected, *graph->add_output());
+    // Graph inputs ``a``, ``b``, ``c`` (tensor-typed).
+    for (const Tensor *t : {&a, &b, &c}) {
+      Tensor named = *t;
+      if (named.name.empty()) {
+        named.name = (t == &a) ? "a" : (t == &b ? "b" : "c");
+      }
+      FillValueInfo(named, *graph->add_input());
+    }
 
-  DataSet ds;
-  ds.inputs.reserve(3);
-  {
-    Tensor ta = a;
-    ta.name = "a";
-    ds.inputs.emplace_back(std::move(ta));
-    Tensor tb = b;
-    tb.name = "b";
-    ds.inputs.emplace_back(std::move(tb));
-    Tensor tc_in = c;
-    tc_in.name = "c";
-    ds.inputs.emplace_back(std::move(tc_in));
-  }
-  ds.outputs.emplace_back(expected);
-  tc.data_sets().emplace_back(std::move(ds));
+    // Graph output ``concat_result`` (tensor-typed).
+    FillValueInfo(expected, *graph->add_output());
 
-  registry.emplace_back(std::move(tc));
+    DataSet ds;
+    ds.inputs.reserve(3);
+    {
+      Tensor ta = a;
+      ta.name = "a";
+      ds.inputs.emplace_back(std::move(ta));
+      Tensor tb = b;
+      tb.name = "b";
+      ds.inputs.emplace_back(std::move(tb));
+      Tensor tc_in = c;
+      tc_in.name = "c";
+      ds.inputs.emplace_back(std::move(tc_in));
+    }
+    ds.outputs.emplace_back(expected);
+    tc.data_sets().emplace_back(std::move(ds));
+
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace

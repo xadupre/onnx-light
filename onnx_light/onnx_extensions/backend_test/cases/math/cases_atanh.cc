@@ -21,11 +21,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterAtanhCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Atanh atanh_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Atanh", atanh_kernel, "test_cc_atanh_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Atanh>("Atanh", "test_cc_atanh_benchmark",
+                                                           opset, registry);
     return;
   }
 
@@ -34,7 +33,12 @@ void RegisterAtanhCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Atanh");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_atanh", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_atanh", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext atanh_kernel_ctx{opset};
+      const onnx_kernels::kernel::Atanh atanh_kernel{atanh_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 3}, {-0.9f, -0.5f, 0.0f, 0.25f, 0.5f, 0.9f});
       Tensor y = atanh_kernel(x);
 
@@ -51,7 +55,12 @@ void RegisterAtanhCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Atanh");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_atanh_example", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_atanh_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext atanh_kernel_ctx{opset};
+      const onnx_kernels::kernel::Atanh atanh_kernel{atanh_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {3}, {-0.5f, 0.0f, 0.5f});
       Tensor y = atanh_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -63,7 +72,12 @@ void RegisterAtanhCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Atanh");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_atanh", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_atanh", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext atanh_kernel_ctx{opset};
+      const onnx_kernels::kernel::Atanh atanh_kernel{atanh_kernel_ctx};
+
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = Tensor::FromFloat("", shape, Rand<float>(shape, /*seed=*/1));
       Tensor y = atanh_kernel(x);

@@ -54,94 +54,113 @@ constexpr int64_t kDefaultIrVersion = 10;
 // ---------------------------------------------------------------------------
 void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
-  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   // ---- case 1: Shape → Reshape -----------------------------------------------
   {
     const std::string name = "test_cc_release_shape_reshape";
+    TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
+    lazy_case.build = [name](bool) -> BuiltCase {
+      const OpsetId opset = DefaultOpset(18);
 
-    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
-    tc.rtol = 1e-3;
-    tc.atol = 1e-7;
+      const KernelContext ctx_1{opset};
+      const onnx_kernels::kernel::Shape kernel_1{ctx_1};
+      const KernelContext ctx_2{opset};
+      const onnx_kernels::kernel::Reshape kernel_2{ctx_2};
 
-    ModelProto &model = tc.emplace_model();
-    InitModel(model, kDefaultIrVersion, {opset});
+      TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
+      tc.rtol = 1e-3;
+      tc.atol = 1e-7;
 
-    GraphProto *graph = model.add_graph();
-    graph->set_name(name);
+      ModelProto &model = tc.emplace_model();
+      InitModel(model, kDefaultIrVersion, {opset});
 
-    AddNode(*graph, "Shape", {"X"}, {"S"});
-    AddNode(*graph, "Reshape", {"X", "S"}, {"Y"});
+      GraphProto *graph = model.add_graph();
+      graph->set_name(name);
 
-    // Concrete input shape [2, 3] so the model is executable end-to-end.
-    AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
-    AppendValueInfo(*graph->add_value_info(), "S", DataType::INT64, {DimSpec(2)});
-    AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+      AddNode(*graph, "Shape", {"X"}, {"S"});
+      AddNode(*graph, "Reshape", {"X", "S"}, {"Y"});
 
-    // Pre-embed the expected release metadata.
-    // The graph has exactly two nodes: node 0 = Shape, node 1 = Reshape.
-    // S is produced by Shape and consumed only by Reshape, so the release point
-    // is node 1. X is a declared graph input and also reaches its last use on
-    // node 1, so it is reported as "not used after". No shape-tag metadata is
-    // involved here.
-    // NOLINTNEXTLINE: nodes has exactly 2 elements (Shape + Reshape added above).
-    (*graph->mutable_node())[1].add_metadata(core::compute::kReleaseAfterMetadataKey, "S");
-    (*graph->mutable_node())[1].add_metadata(core::compute::kNotUsedAfterMetadataKey, "X");
+      // Concrete input shape [2, 3] so the model is executable end-to-end.
+      AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+      AppendValueInfo(*graph->add_value_info(), "S", DataType::INT64, {DimSpec(2)});
+      AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
 
-    // Build the reference DataSet so the case is executable end-to-end.
-    const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-    Tensor s = onnx_kernels::kernel::Shape(ctx)(x, onnx_kernels::kernel::Shape::Attributes{});
-    s.name = "S";
-    Tensor y = onnx_kernels::kernel::Reshape(ctx)(x, s);
-    y.name = "Y";
+      // Pre-embed the expected release metadata.
+      // The graph has exactly two nodes: node 0 = Shape, node 1 = Reshape.
+      // S is produced by Shape and consumed only by Reshape, so the release point
+      // is node 1. X is a declared graph input and also reaches its last use on
+      // node 1, so it is reported as "not used after". No shape-tag metadata is
+      // involved here.
+      // NOLINTNEXTLINE: nodes has exactly 2 elements (Shape + Reshape added above).
+      (*graph->mutable_node())[1].add_metadata(core::compute::kReleaseAfterMetadataKey, "S");
+      (*graph->mutable_node())[1].add_metadata(core::compute::kNotUsedAfterMetadataKey, "X");
 
-    AppendDataSet(tc, {x}, {y});
+      // Build the reference DataSet so the case is executable end-to-end.
+      const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+      Tensor s = kernel_1(x, onnx_kernels::kernel::Shape::Attributes{});
+      s.name = "S";
+      Tensor y = kernel_2(x, s);
+      y.name = "Y";
 
-    registry.emplace_back(std::move(tc));
+      AppendDataSet(tc, {x}, {y});
+
+      return tc.take_materialized();
+    };
+    registry.emplace_back(std::move(lazy_case));
   }
 
   // ---- case 2: Add(input, initializer) → Relu --------------------------------
   {
     const std::string name = "test_cc_release_initializer_add";
+    TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
+    lazy_case.build = [name](bool) -> BuiltCase {
+      const OpsetId opset = DefaultOpset(18);
 
-    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
-    tc.rtol = 1e-3;
-    tc.atol = 1e-7;
+      const KernelContext ctx_3{opset};
+      const onnx_kernels::kernel::Add kernel_3{ctx_3};
+      const KernelContext ctx_4{opset};
+      const onnx_kernels::kernel::Relu kernel_4{ctx_4};
 
-    ModelProto &model = tc.emplace_model();
-    InitModel(model, kDefaultIrVersion, {opset});
+      TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
+      tc.rtol = 1e-3;
+      tc.atol = 1e-7;
 
-    GraphProto *graph = model.add_graph();
-    graph->set_name(name);
+      ModelProto &model = tc.emplace_model();
+      InitModel(model, kDefaultIrVersion, {opset});
 
-    AddNode(*graph, "Add", {"X", "W"}, {"T"});
-    AddNode(*graph, "Relu", {"T"}, {"Y"});
+      GraphProto *graph = model.add_graph();
+      graph->set_name(name);
 
-    AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
-    AppendValueInfo(*graph->add_value_info(), "T", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
-    AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
-    AddInitializer<float>(*graph, "W", {2, 3}, {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f});
+      AddNode(*graph, "Add", {"X", "W"}, {"T"});
+      AddNode(*graph, "Relu", {"T"}, {"Y"});
 
-    // Pre-embed the expected release metadata.
-    // Node 0 (Add): X (graph input) and W (initializer) both reach their last
-    // use here, so they are listed under kNotUsedAfterMetadataKey in node-input
-    // order.
-    // Node 1 (Relu): T (the intermediate produced by Add) is released here.
-    // NOLINTNEXTLINE: nodes has exactly 2 elements (Add + Relu added above).
-    (*graph->mutable_node())[0].add_metadata(core::compute::kNotUsedAfterMetadataKey, "X;W");
-    (*graph->mutable_node())[1].add_metadata(core::compute::kReleaseAfterMetadataKey, "T");
+      AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+      AppendValueInfo(*graph->add_value_info(), "T", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+      AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+      AddInitializer<float>(*graph, "W", {2, 3}, {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f});
 
-    // Build the reference DataSet so the case is executable end-to-end.
-    const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, -5.0f, -6.0f});
-    const Tensor w = Tensor::FromFloat("W", {2, 3}, {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f});
-    Tensor t = onnx_kernels::kernel::Add(ctx)(x, w);
-    t.name = "T";
-    Tensor y = onnx_kernels::kernel::Relu(ctx)(t);
-    y.name = "Y";
+      // Pre-embed the expected release metadata.
+      // Node 0 (Add): X (graph input) and W (initializer) both reach their last
+      // use here, so they are listed under kNotUsedAfterMetadataKey in node-input
+      // order.
+      // Node 1 (Relu): T (the intermediate produced by Add) is released here.
+      // NOLINTNEXTLINE: nodes has exactly 2 elements (Add + Relu added above).
+      (*graph->mutable_node())[0].add_metadata(core::compute::kNotUsedAfterMetadataKey, "X;W");
+      (*graph->mutable_node())[1].add_metadata(core::compute::kReleaseAfterMetadataKey, "T");
 
-    AppendDataSet(tc, {x}, {y});
+      // Build the reference DataSet so the case is executable end-to-end.
+      const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, -5.0f, -6.0f});
+      const Tensor w = Tensor::FromFloat("W", {2, 3}, {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f});
+      Tensor t = kernel_3(x, w);
+      t.name = "T";
+      Tensor y = kernel_4(t);
+      y.name = "Y";
 
-    registry.emplace_back(std::move(tc));
+      AppendDataSet(tc, {x}, {y});
+
+      return tc.take_materialized();
+    };
+    registry.emplace_back(std::move(lazy_case));
   }
 }
 

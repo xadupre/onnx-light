@@ -12,8 +12,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::HardSigmoid hard_sigmoid_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -30,7 +28,12 @@ void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     beta->set_f(0.6f);
     const int64_t n = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_hardsigmoid_benchmark", {opset}, {n}, {n},
-           [hard_sigmoid_kernel, n]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext hard_sigmoid_kernel_ctx{opset};
+             const onnx_kernels::kernel::HardSigmoid hard_sigmoid_kernel{hard_sigmoid_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {n}, 987654321ULL);
              Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
              return IoData{{std::move(x)}, {std::move(y)}};
@@ -52,8 +55,13 @@ void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *beta = node.add_attribute();
     beta->set_name("beta");
     beta->set_type(AttributeProto::FLOAT);
-    Expect(registry, std::move(node), "test_cc_hardsigmoid_example", {opset}, [=]() -> IoData {
-      beta->set_f(0.6f);
+    beta->set_f(0.6f);
+
+    Expect(registry, std::move(node), "test_cc_hardsigmoid_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext hard_sigmoid_kernel_ctx{opset};
+      const onnx_kernels::kernel::HardSigmoid hard_sigmoid_kernel{hard_sigmoid_kernel_ctx};
 
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
       Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
@@ -75,8 +83,13 @@ void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *beta = node.add_attribute();
     beta->set_name("beta");
     beta->set_type(AttributeProto::FLOAT);
-    Expect(registry, std::move(node), "test_cc_hardsigmoid", {opset}, [=]() -> IoData {
-      beta->set_f(0.6f);
+    beta->set_f(0.6f);
+
+    Expect(registry, std::move(node), "test_cc_hardsigmoid", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext hard_sigmoid_kernel_ctx{opset};
+      const onnx_kernels::kernel::HardSigmoid hard_sigmoid_kernel{hard_sigmoid_kernel_ctx};
 
       Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, -0.5f, 0.5f, 1.0f, 3.0f});
       Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
@@ -89,7 +102,12 @@ void RegisterHardSigmoidCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("HardSigmoid");
     node.add_input("X");
     node.add_output("Y");
-    Expect(registry, std::move(node), "test_cc_hardsigmoid_default", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_hardsigmoid_default", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext hard_sigmoid_kernel_ctx{opset};
+      const onnx_kernels::kernel::HardSigmoid hard_sigmoid_kernel{hard_sigmoid_kernel_ctx};
+
       // No alpha/beta attributes: defaults to 0.2 and 0.5.
       Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, -0.5f, 0.5f, 1.0f, 3.0f});
       Tensor y = hard_sigmoid_kernel(x, 0.2f, 0.5f);

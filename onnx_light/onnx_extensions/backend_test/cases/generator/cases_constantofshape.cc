@@ -28,18 +28,18 @@ void RegisterOneConstantOfShape(const std::string &case_name,
   attr->set_name("value");
   attr->set_type(AttributeProto::AttributeType::TENSOR);
   TensorProto *t = attr->add_t();
-  Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
-    t->set_data_type(static_cast<DataType>(value.data_type));
-    for (int64_t d : value.shape) {
-      t->add_dims(d);
-    }
-    t->set_raw_data(utils::ByteSpan(value.data));
+  t->set_data_type(static_cast<DataType>(value.data_type));
+  for (int64_t d : value.shape) {
+    t->add_dims(d);
+  }
+  t->set_raw_data(utils::ByteSpan(value.data));
+  Expect(registry, std::move(node), case_name, {opset}, [opset, value, shape_values]() -> IoData {
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::ConstantOfShape kernel_1{ctx_1};
 
     const Tensor shape_input =
         Tensor::FromInt64("x", {static_cast<int64_t>(shape_values.size())}, shape_values);
-
-    const KernelContext ctx{opset};
-    Tensor y = onnx_kernels::kernel::ConstantOfShape(ctx)(shape_input, value);
+    Tensor y = kernel_1(shape_input, value);
 
     return IoData{{std::move(shape_input)}, {std::move(y)}};
   });
@@ -76,11 +76,16 @@ void RegisterConstantOfShapeCases(std::vector<TestCase> &registry, TestMode mode
     }
     t->set_raw_data(utils::ByteSpan(value.data));
 
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::ConstantOfShape constant_of_shape_kernel{ctx};
     Expect(registry, std::move(node), "test_constantofshape_float_ones_benchmark", {opset}, {1},
-           {kBenchmarkElementwiseSize},
-           [constant_of_shape_kernel, shape_values, value]() -> IoData {
+           {kBenchmarkElementwiseSize}, [shape_values]() -> IoData {
+             const Tensor value = Tensor::FromFloat("", /*shape=*/{1}, {1.0f});
+
+             const OpsetId opset = DefaultOpset(20);
+
+             const KernelContext constant_of_shape_kernel_ctx{opset};
+             const onnx_kernels::kernel::ConstantOfShape constant_of_shape_kernel{
+                 constant_of_shape_kernel_ctx};
+
              Tensor shape_input =
                  Tensor::FromInt64("x", {static_cast<int64_t>(shape_values.size())}, shape_values);
              Tensor y = constant_of_shape_kernel(shape_input, value);

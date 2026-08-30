@@ -74,8 +74,6 @@ std::vector<float> Range1ToN(int64_t n) {
 // ---------------------------------------------------------------------------
 void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::MaxPool maxpool_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -87,7 +85,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t in_count = 1 * 32 * 16384;
     constexpr int64_t out_count = 1 * 32 * 16383;
     Expect(registry, std::move(node), "test_cc_maxpool_1d_default_benchmark", {opset}, {in_count},
-           {out_count}, [maxpool_kernel]() -> IoData {
+           {out_count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext maxpool_kernel_ctx{opset};
+             const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 32, 16384}, 2301);
              Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2});
              return IoData{{std::move(x)}, {std::move(y)}};
@@ -102,7 +105,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2});
-    Expect(registry, std::move(node), "test_cc_maxpool_1d_default", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_maxpool_1d_default", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext maxpool_kernel_ctx{opset};
+      const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
       Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32}, /*seed=*/1);
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2});
 
@@ -117,7 +125,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
-    Expect(registry, std::move(node), "test_cc_maxpool_2d_default", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_maxpool_2d_default", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext maxpool_kernel_ctx{opset};
+      const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
       Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32}, /*seed=*/2);
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2, 2});
 
@@ -133,7 +146,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {5, 5});
     AddAttribute<std::vector<int64_t>>(node, "strides", {3, 3});
-    Expect(registry, std::move(node), "test_cc_maxpool_2d_strides", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_maxpool_2d_strides", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext maxpool_kernel_ctx{opset};
+      const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
       Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32}, /*seed=*/3);
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{3, 3});
 
@@ -150,7 +168,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
     AddAttribute<int64_t>(node, "ceil_mode", 1);
-    Expect(registry, std::move(node), "test_cc_maxpool_2d_ceil", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_maxpool_2d_ceil", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext maxpool_kernel_ctx{opset};
+      const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {1, 1, 4, 4}, Range1ToN(16));
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2}, /*pads=*/{},
                                 /*ceil_mode=*/true);
@@ -171,7 +194,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
     AddAttribute<int64_t>(node, "ceil_mode", 1);
     Expect(registry, std::move(node), "test_cc_maxpool_2d_ceil_output_size_reduce_by_one", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext maxpool_kernel_ctx{opset};
+             const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
              Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              Tensor y = maxpool_kernel(x, /*kernel_shape=*/{1, 1}, /*strides=*/{2, 2}, /*pads=*/{},
                                        /*ceil_mode=*/true);
@@ -189,7 +217,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "strides", {1, 1});
     AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2});
-    Expect(registry, std::move(node), "test_cc_maxpool_2d_dilations", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_maxpool_2d_dilations", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext maxpool_kernel_ctx{opset};
+      const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {1, 1, 4, 4}, Range1ToN(16));
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{1, 1}, /*pads=*/{},
                                 /*ceil_mode=*/false, /*dilations=*/{2, 2});
@@ -206,7 +239,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {2, 2, 2, 2});
-    Expect(registry, std::move(node), "test_cc_maxpool_2d_pads", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_maxpool_2d_pads", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext maxpool_kernel_ctx{opset};
+      const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
       Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 28, 28}, /*seed=*/4);
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1},
                                 /*pads=*/{2, 2, 2, 2});
@@ -224,7 +262,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {5, 5});
     AddAttribute<std::vector<int64_t>>(node, "pads", {2, 2, 2, 2});
     Expect(registry, std::move(node), "test_cc_maxpool_2d_precomputed_pads", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext maxpool_kernel_ctx{opset};
+             const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
              Tensor x = Tensor::FromFloat("", {1, 1, 5, 5}, Range1ToN(25));
              Tensor y = maxpool_kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{1, 1},
                                        /*pads=*/{2, 2, 2, 2});
@@ -243,7 +286,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
     AddAttribute<std::string>(node, "auto_pad", "SAME_UPPER");
     Expect(registry, std::move(node), "test_cc_maxpool_2d_precomputed_same_upper", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext maxpool_kernel_ctx{opset};
+             const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
              Tensor x = Tensor::FromFloat("", {1, 1, 5, 5}, Range1ToN(25));
              Tensor y = maxpool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2}, /*pads=*/{},
                                        /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/0,
@@ -262,7 +310,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
     Expect(registry, std::move(node), "test_cc_maxpool_2d_precomputed_strides", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext maxpool_kernel_ctx{opset};
+             const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
              Tensor x = Tensor::FromFloat("", {1, 1, 5, 5}, Range1ToN(25));
              Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2});
 
@@ -278,7 +331,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::string>(node, "auto_pad", "SAME_LOWER");
-    Expect(registry, std::move(node), "test_cc_maxpool_2d_same_lower", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_maxpool_2d_same_lower", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext maxpool_kernel_ctx{opset};
+      const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
       Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32}, /*seed=*/5);
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
                                 /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/0,
@@ -296,7 +354,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::string>(node, "auto_pad", "SAME_UPPER");
-    Expect(registry, std::move(node), "test_cc_maxpool_2d_same_upper", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_maxpool_2d_same_upper", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext maxpool_kernel_ctx{opset};
+      const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
       Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32}, /*seed=*/6);
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
                                 /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/0,
@@ -313,7 +376,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2, 2});
-    Expect(registry, std::move(node), "test_cc_maxpool_3d_default", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_maxpool_3d_default", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext maxpool_kernel_ctx{opset};
+      const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
       Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32, 32}, /*seed=*/7);
       Tensor y = maxpool_kernel(x, /*kernel_shape=*/{2, 2, 2});
 
@@ -331,7 +399,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {5, 5});
     AddAttribute<std::vector<int64_t>>(node, "pads", {2, 2, 2, 2});
     Expect(registry, std::move(node), "test_cc_maxpool_with_argmax_2d_precomputed_pads", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext maxpool_kernel_ctx{opset};
+             const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
              Tensor x = Tensor::FromFloat("", {1, 1, 5, 5}, Range1ToN(25));
              auto yz = maxpool_kernel.WithIndices(x, /*kernel_shape=*/{5, 5}, /*strides=*/{1, 1},
                                                   /*pads=*/{2, 2, 2, 2});
@@ -351,7 +424,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2, 2});
     AddAttribute<std::vector<int64_t>>(node, "strides", {1, 1, 1});
     AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2, 2});
-    Expect(registry, std::move(node), "test_cc_maxpool_3d_dilations", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_maxpool_3d_dilations", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext maxpool_kernel_ctx{opset};
+      const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
       std::vector<float> data;
       data.reserve(64);
       for (int slice = 0; slice < 4; ++slice) {
@@ -381,7 +459,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "strides", {1, 1, 1});
     AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2, 2});
     Expect(registry, std::move(node), "test_cc_maxpool_3d_dilations_use_ref_impl", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext maxpool_kernel_ctx{opset};
+             const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
              std::vector<float> data;
              data.reserve(64);
              for (int slice = 0; slice < 4; ++slice) {
@@ -411,7 +494,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2, 2});
     AddAttribute<int64_t>(node, "ceil_mode", 1);
     Expect(registry, std::move(node), "test_cc_maxpool_3d_dilations_use_ref_impl_large", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext maxpool_kernel_ctx{opset};
+             const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 1, 32, 32, 32}, /*seed=*/8);
              Tensor y = maxpool_kernel(x, /*kernel_shape=*/{5, 5, 5}, /*strides=*/{3, 3, 3},
                                        /*pads=*/{}, /*ceil_mode=*/true, /*dilations=*/{2, 2, 2});
@@ -430,7 +518,12 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {5, 5});
     AddAttribute<std::vector<int64_t>>(node, "pads", {2, 2, 2, 2});
-    Expect(registry, std::move(node), "test_cc_maxpool_2d_uint8", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_maxpool_2d_uint8", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext maxpool_kernel_ctx{opset};
+      const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
       std::vector<uint8_t> xv;
       xv.reserve(25);
       for (int v = 1; v <= 25; ++v) {
@@ -456,7 +549,7 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
     AddAttribute<int64_t>(node, "storage_order", 1);
     Expect(registry, std::move(node), "test_cc_maxpool_with_argmax_2d_precomputed_strides", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
              Tensor x = Tensor::FromFloat("", {1, 1, 5, 5}, Range1ToN(25));
              Tensor y = Tensor::FromFloat("", {1, 1, 2, 2}, {7.0f, 9.0f, 17.0f, 19.0f});
              Tensor z = Tensor::FromInt64("", {1, 1, 2, 2}, {6, 16, 8, 18});

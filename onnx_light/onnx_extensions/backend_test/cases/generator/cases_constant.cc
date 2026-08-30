@@ -38,12 +38,16 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     t->set_raw_data(utils::ByteSpan(value.data));
 
     const OpsetId opset = DefaultOpset(13);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::Constant constant_kernel{ctx};
 
     Expect(registry, std::move(node), "test_cc_constant_benchmark", {opset},
-           /*in_counts=*/{}, {kBenchmarkElementwiseSize},
-           [constant_kernel, value]() mutable -> IoData {
+           /*in_counts=*/{}, {kBenchmarkElementwiseSize}, []() mutable -> IoData {
+             Tensor value = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654321ULL);
+
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext constant_kernel_ctx{opset};
+             const onnx_kernels::kernel::Constant constant_kernel{constant_kernel_ctx};
+
              Tensor y = constant_kernel(std::move(value));
              return IoData{/*inputs=*/{}, {std::move(y)}};
            });
@@ -69,11 +73,14 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
   t->set_raw_data(utils::ByteSpan(value.data));
 
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-
   Expect(registry, std::move(node), "test_cc_constant", {opset},
-         [ctx, value = std::move(value)]() mutable -> IoData {
-           Tensor y = onnx_kernels::kernel::Constant(ctx)(std::move(value));
+         [value = std::move(value)]() mutable -> IoData {
+           const OpsetId opset = DefaultOpset(13);
+
+           const KernelContext ctx_2{opset};
+           const onnx_kernels::kernel::Constant kernel_2{ctx_2};
+
+           Tensor y = kernel_2(std::move(value));
            return IoData{/*inputs=*/{}, {std::move(y)}};
          });
 
@@ -119,10 +126,18 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
       ut->add_float_data(v);
     }
 
-    Expect(registry, std::move(upstream_node), "test_constant", {opset}, [=]() -> IoData {
-      Tensor y_upstream = onnx_kernels::kernel::Constant(ctx)(std::move(values));
-      return IoData{{}, {std::move(y_upstream)}};
-    });
+    Expect(registry, std::move(upstream_node), "test_constant", {opset},
+           [values_shape, values_data]() -> IoData {
+             Tensor values = Tensor::FromFloat("", values_shape, values_data);
+
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext ctx_3{opset};
+             const onnx_kernels::kernel::Constant kernel_3{ctx_3};
+
+             Tensor y_upstream = kernel_3(std::move(values));
+             return IoData{{}, {std::move(y_upstream)}};
+           });
   }
 
   // Attribute-variant cases. Constant (since opset 12) accepts exclusive
@@ -144,7 +159,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     a->set_name("value_float");
     a->set_type(AttributeProto::AttributeType::FLOAT);
     a->set_f(3.5f);
-    Expect(registry, std::move(n), "test_cc_constant_value_float", {v12}, [=]() -> IoData {
+    Expect(registry, std::move(n), "test_cc_constant_value_float", {v12}, []() -> IoData {
       Tensor y = Tensor::FromFloat("", /*shape=*/{}, {3.5f});
       return IoData{{}, {std::move(y)}};
     });
@@ -162,7 +177,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     for (float v : vals) {
       a->floats().push_back(v);
     }
-    Expect(registry, std::move(n), "test_cc_constant_value_floats", {v12}, [=]() -> IoData {
+    Expect(registry, std::move(n), "test_cc_constant_value_floats", {v12}, [vals]() -> IoData {
       Tensor y = Tensor::FromFloat("", {static_cast<int64_t>(vals.size())}, vals);
       return IoData{{}, {std::move(y)}};
     });
@@ -177,7 +192,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     a->set_name("value_int");
     a->set_type(AttributeProto::AttributeType::INT);
     a->set_i(42);
-    Expect(registry, std::move(n), "test_cc_constant_value_int", {v12}, [=]() -> IoData {
+    Expect(registry, std::move(n), "test_cc_constant_value_int", {v12}, []() -> IoData {
       Tensor y = Tensor::FromInt64("", /*shape=*/{}, {static_cast<int64_t>(42)});
       return IoData{{}, {std::move(y)}};
     });
@@ -195,7 +210,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     for (int64_t v : vals) {
       a->ints().push_back(v);
     }
-    Expect(registry, std::move(n), "test_cc_constant_value_ints", {v12}, [=]() -> IoData {
+    Expect(registry, std::move(n), "test_cc_constant_value_ints", {v12}, [vals]() -> IoData {
       Tensor y = Tensor::FromInt64("", {static_cast<int64_t>(vals.size())}, vals);
       return IoData{{}, {std::move(y)}};
     });
@@ -210,7 +225,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     a->set_name("value_string");
     a->set_type(AttributeProto::AttributeType::STRING);
     a->set_s(utils::String("hello"));
-    Expect(registry, std::move(n), "test_cc_constant_value_string", {v12}, [=]() -> IoData {
+    Expect(registry, std::move(n), "test_cc_constant_value_string", {v12}, []() -> IoData {
       Tensor y = Tensor::FromStrings("", /*shape=*/{}, {std::string("hello")});
       return IoData{{}, {std::move(y)}};
     });
@@ -228,7 +243,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry, TestMode mode) {
     for (const std::string &v : vals) {
       *a->add_strings() = utils::String(v);
     }
-    Expect(registry, std::move(n), "test_cc_constant_value_strings", {v12}, [=]() -> IoData {
+    Expect(registry, std::move(n), "test_cc_constant_value_strings", {v12}, [vals]() -> IoData {
       Tensor y = Tensor::FromStrings("", {static_cast<int64_t>(vals.size())}, vals);
       return IoData{{}, {std::move(y)}};
     });

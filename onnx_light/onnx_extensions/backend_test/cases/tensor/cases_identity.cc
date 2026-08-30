@@ -37,13 +37,16 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
   // optional types. The default opset chosen here matches the most common
   // tensor-only usage exercised by these reference cases.
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Identity identity_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeIdentityNode();
     Expect(registry, std::move(node), "test_cc_identity_benchmark", {opset},
-           {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize}, [identity_kernel]() -> IoData {
+           {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext identity_kernel_ctx{opset};
+             const onnx_kernels::kernel::Identity identity_kernel{identity_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 2001);
              Tensor y = Rename(identity_kernel(x), "y");
              return IoData{{std::move(x)}, {std::move(y)}};
@@ -54,7 +57,12 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_identity — 4-D float tensor with non-trivial shape; mirrors the
   // ONNX upstream ``test_identity`` case shape (1, 3, 2, 2).
   {
-    Expect(registry, MakeIdentityNode(), "test_cc_identity", {opset}, [=]() -> IoData {
+    Expect(registry, MakeIdentityNode(), "test_cc_identity", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext identity_kernel_ctx{opset};
+      const onnx_kernels::kernel::Identity identity_kernel{identity_kernel_ctx};
+
       const Tensor x = Tensor::FromFloat(
           "x", {1, 3, 2, 2},
           {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
@@ -65,7 +73,12 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_identity_scalar — 0-D input is propagated verbatim.
   {
-    Expect(registry, MakeIdentityNode(), "test_cc_identity_scalar", {opset}, [=]() -> IoData {
+    Expect(registry, MakeIdentityNode(), "test_cc_identity_scalar", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext identity_kernel_ctx{opset};
+      const onnx_kernels::kernel::Identity identity_kernel{identity_kernel_ctx};
+
       const Tensor x = Tensor::FromFloat("x", {}, {42.0f});
       const Tensor y = Rename(identity_kernel(x), "y");
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -74,7 +87,12 @@ void RegisterIdentityCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_identity_int64 — integer dtype is preserved.
   {
-    Expect(registry, MakeIdentityNode(), "test_cc_identity_int64", {opset}, [=]() -> IoData {
+    Expect(registry, MakeIdentityNode(), "test_cc_identity_int64", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext identity_kernel_ctx{opset};
+      const onnx_kernels::kernel::Identity identity_kernel{identity_kernel_ctx};
+
       const Tensor x = Tensor::FromInt64("x", {2, 3}, {1, 2, 3, 4, 5, 6});
       const Tensor y = Rename(identity_kernel(x), "y");
       return IoData{{std::move(x)}, {std::move(y)}};

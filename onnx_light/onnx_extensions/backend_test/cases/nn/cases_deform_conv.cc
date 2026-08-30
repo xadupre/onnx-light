@@ -41,8 +41,6 @@ NodeProto MakeDeformConvNode(const std::vector<std::string> &inputs,
 // expectations stay self-consistent with this library.
 void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::DeformConv dc{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeDeformConvNode({"X", "W", "offset"}, {"Y"});
@@ -53,7 +51,12 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t offset_count = 1 * 8 * 127 * 127;
     constexpr int64_t y_count = 1 * 16 * 127 * 127;
     Expect(registry, std::move(node), "test_cc_basic_deform_conv_without_padding_benchmark",
-           {opset}, {x_count, w_count, offset_count}, {y_count}, [dc]() -> IoData {
+           {opset}, {x_count, w_count, offset_count}, {y_count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext dc_ctx{opset};
+             const onnx_kernels::kernel::DeformConv dc{dc_ctx};
+
              Tensor X = RandnTensor(DataType::FLOAT, {1, 16, 128, 128}, 1501);
              Tensor W = RandnTensor(DataType::FLOAT, {16, 16, 2, 2}, 1502);
              Tensor offset = RandnTensor(DataType::FLOAT, {1, 8, 127, 127}, 1503);
@@ -84,13 +87,24 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::DeformConv::Attributes attrs;
     attrs.kernel_shape = {2, 2};
     attrs.pads = {0, 0, 0, 0};
-    Tensor Y = dc(X, W, offset, B, mask, attrs);
-    Y.name = "Y";
     NodeProto node = MakeDeformConvNode({"X", "W", "offset"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "pads", {0, 0, 0, 0});
     Expect(registry, std::move(node), "test_cc_basic_deform_conv_without_padding", {opset},
-           [=]() -> IoData {
+           [attrs, off]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 1, 3, 3}, {0, 1, 2, 3, 4, 5, 6, 7, 8});
+             Tensor W = Tensor::FromFloat("W", {1, 1, 2, 2}, {1, 1, 1, 1});
+             Tensor offset = Tensor::FromFloat("offset", {1, 8, 2, 2}, off);
+             Tensor B;
+             Tensor mask;
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext dc_ctx{opset};
+             const onnx_kernels::kernel::DeformConv dc{dc_ctx};
+
+             Tensor Y = dc(X, W, offset, B, mask, attrs);
+             Y.name = "Y";
              return IoData{{std::move(X), std::move(W), std::move(offset)}, {std::move(Y)}};
            });
   }
@@ -110,13 +124,24 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::DeformConv::Attributes attrs;
     attrs.kernel_shape = {2, 2};
     attrs.pads = {1, 1, 1, 1};
-    Tensor Y = dc(X, W, offset, B, mask, attrs);
-    Y.name = "Y";
     NodeProto node = MakeDeformConvNode({"X", "W", "offset"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
     Expect(registry, std::move(node), "test_cc_basic_deform_conv_with_padding", {opset},
-           [=]() -> IoData {
+           [attrs, off]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 1, 3, 3}, {0, 1, 2, 3, 4, 5, 6, 7, 8});
+             Tensor W = Tensor::FromFloat("W", {1, 1, 2, 2}, {1, 1, 1, 1});
+             Tensor offset = Tensor::FromFloat("offset", {1, 8, 4, 4}, off);
+             Tensor B;
+             Tensor mask;
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext dc_ctx{opset};
+             const onnx_kernels::kernel::DeformConv dc{dc_ctx};
+
+             Tensor Y = dc(X, W, offset, B, mask, attrs);
+             Y.name = "Y";
              return IoData{{std::move(X), std::move(W), std::move(offset)}, {std::move(Y)}};
            });
   }
@@ -138,13 +163,24 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::DeformConv::Attributes attrs;
     attrs.kernel_shape = {2, 2};
     attrs.pads = {0, 0, 0, 0};
-    Tensor Y = dc(X, W, offset, B, mask, attrs);
-    Y.name = "Y";
     NodeProto node = MakeDeformConvNode({"X", "W", "offset", "B", "mask"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "pads", {0, 0, 0, 0});
     Expect(registry, std::move(node), "test_cc_deform_conv_with_mask_bias", {opset},
-           [=]() -> IoData {
+           [attrs, off, mvec]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 1, 3, 3}, {0, 1, 2, 3, 4, 5, 6, 7, 8});
+             Tensor W = Tensor::FromFloat("W", {1, 1, 2, 2}, {1, 1, 1, 1});
+             Tensor offset = Tensor::FromFloat("offset", {1, 8, 2, 2}, off);
+             Tensor B = Tensor::FromFloat("B", {1}, {1.0f});
+             Tensor mask = Tensor::FromFloat("mask", {1, 4, 2, 2}, mvec);
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext dc_ctx{opset};
+             const onnx_kernels::kernel::DeformConv dc{dc_ctx};
+
+             Tensor Y = dc(X, W, offset, B, mask, attrs);
+             Y.name = "Y";
              return IoData{
                  {std::move(X), std::move(W), std::move(offset), std::move(B), std::move(mask)},
                  {std::move(Y)}};
@@ -172,14 +208,25 @@ void RegisterDeformConvCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.kernel_shape = {2, 2};
     attrs.pads = {0, 0, 0, 0};
     attrs.offset_group = 2;
-    Tensor Y = dc(X, W, offset, B, mask, attrs);
-    Y.name = "Y";
     NodeProto node = MakeDeformConvNode({"X", "W", "offset"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<std::vector<int64_t>>(node, "pads", {0, 0, 0, 0});
     AddAttribute<int64_t>(node, "offset_group", 2);
     Expect(registry, std::move(node), "test_cc_deform_conv_with_multiple_offset_groups", {opset},
-           [=]() -> IoData {
+           [attrs, Xv, off]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 2, 3, 3}, Xv);
+             Tensor W = Tensor::FromFloat("W", {1, 2, 2, 2}, std::vector<float>(8, 1.0f));
+             Tensor offset = Tensor::FromFloat("offset", {1, 16, 2, 2}, off);
+             Tensor B;
+             Tensor mask;
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext dc_ctx{opset};
+             const onnx_kernels::kernel::DeformConv dc{dc_ctx};
+
+             Tensor Y = dc(X, W, offset, B, mask, attrs);
+             Y.name = "Y";
              return IoData{{std::move(X), std::move(W), std::move(offset)}, {std::move(Y)}};
            });
   }

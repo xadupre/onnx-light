@@ -45,20 +45,22 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &case_name,
                   const std::vector<int64_t> &expected, int64_t center_point_box = 0) {
   const OpsetId opset = DefaultOpset(11);
   NodeProto node = MakeNmsNode(center_point_box);
-  Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
-    Tensor boxes = Tensor::FromFloat("", boxes_shape, boxes_values);
-    Tensor scores = Tensor::FromFloat("", scores_shape, scores_values);
-    Tensor max_out = Tensor::FromInt64("", {1}, {max_output_boxes_per_class});
-    Tensor iou_thr = Tensor::FromFloat("", {1}, {iou_threshold});
-    Tensor score_thr = Tensor::FromFloat("", {1}, {score_threshold});
+  Expect(registry, std::move(node), case_name, {opset},
+         [boxes_shape, boxes_values, scores_shape, scores_values, max_output_boxes_per_class,
+          iou_threshold, score_threshold, expected]() -> IoData {
+           Tensor boxes = Tensor::FromFloat("", boxes_shape, boxes_values);
+           Tensor scores = Tensor::FromFloat("", scores_shape, scores_values);
+           Tensor max_out = Tensor::FromInt64("", {1}, {max_output_boxes_per_class});
+           Tensor iou_thr = Tensor::FromFloat("", {1}, {iou_threshold});
+           Tensor score_thr = Tensor::FromFloat("", {1}, {score_threshold});
 
-    const int64_t num_selected = static_cast<int64_t>(expected.size()) / 3;
-    Tensor selected = Tensor::FromInt64("", {num_selected, 3}, expected);
+           const int64_t num_selected = static_cast<int64_t>(expected.size()) / 3;
+           Tensor selected = Tensor::FromInt64("", {num_selected, 3}, expected);
 
-    return IoData{{std::move(boxes), std::move(scores), std::move(max_out), std::move(iou_thr),
-                   std::move(score_thr)},
-                  {std::move(selected)}};
-  });
+           return IoData{{std::move(boxes), std::move(scores), std::move(max_out),
+                          std::move(iou_thr), std::move(score_thr)},
+                         {std::move(selected)}};
+         });
 }
 
 } // namespace
@@ -76,13 +78,17 @@ void RegisterCase(std::vector<TestCase> &registry, const std::string &case_name,
 void RegisterNonMaxSuppressionCases(std::vector<TestCase> &registry, TestMode mode) {
   if (mode == TestMode::BENCHMARK) {
     const OpsetId opset = DefaultOpset(11);
-    const KernelContext ctx{opset};
-    const onnx_kernels::kernel::NonMaxSuppression nms_kernel{ctx};
+
     const int64_t num_boxes = 2000;
     const int64_t num_classes = 10;
     NodeProto node = MakeNmsNode();
     Expect(registry, std::move(node), "test_cc_nonmaxsuppression_benchmark", {opset},
-           [nms_kernel, num_boxes, num_classes]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(11);
+
+             const KernelContext nms_kernel_ctx{opset};
+             const onnx_kernels::kernel::NonMaxSuppression nms_kernel{nms_kernel_ctx};
+
              // Corner-format [y1, x1, y2, x2] boxes with random centres and a
              // fixed size so many boxes overlap, giving NMS real work to do.
              const std::vector<float> centres = Randn<float>({num_boxes, 2}, 2001);

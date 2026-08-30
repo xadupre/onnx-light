@@ -22,8 +22,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::GlobalAveragePool kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -34,7 +32,12 @@ void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry, TestMode mo
     constexpr int64_t in_count = 1 * 64 * 128 * 128;
     constexpr int64_t out_count = 1 * 64 * 1 * 1;
     Expect(registry, std::move(node), "test_cc_globalaveragepool_benchmark", {opset}, {in_count},
-           {out_count}, [kernel]() -> IoData {
+           {out_count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext kernel_ctx{opset};
+             const onnx_kernels::kernel::GlobalAveragePool kernel{kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 64, 128, 128}, 1801);
              Tensor y = kernel(x);
              return IoData{{std::move(x)}, {std::move(y)}};
@@ -48,7 +51,12 @@ void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry, TestMode mo
     node.set_op_type("GlobalAveragePool");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_globalaveragepool", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_globalaveragepool", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext kernel_ctx{opset};
+      const onnx_kernels::kernel::GlobalAveragePool kernel{kernel_ctx};
+
       std::vector<float> x_data(1 * 3 * 5 * 5);
       for (size_t i = 0; i < x_data.size(); ++i) {
         x_data[i] = static_cast<float>(i + 1);
@@ -67,7 +75,12 @@ void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry, TestMode mo
     node.add_input("x");
     node.add_output("y");
     Expect(registry, std::move(node), "test_cc_globalaveragepool_precomputed", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext kernel_ctx{opset};
+             const onnx_kernels::kernel::GlobalAveragePool kernel{kernel_ctx};
+
              Tensor x = Tensor::FromFloat("", {1, 1, 3, 3},
                                           {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
              Tensor y = kernel(x); // expected: 5.0
@@ -87,8 +100,6 @@ void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry, TestMode mo
 // ---------------------------------------------------------------------------
 void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::GlobalMaxPool kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -99,7 +110,12 @@ void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) 
     constexpr int64_t in_count = 1 * 64 * 128 * 128;
     constexpr int64_t out_count = 1 * 64 * 1 * 1;
     Expect(registry, std::move(node), "test_cc_globalmaxpool_benchmark", {opset}, {in_count},
-           {out_count}, [kernel]() -> IoData {
+           {out_count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext kernel_ctx{opset};
+             const onnx_kernels::kernel::GlobalMaxPool kernel{kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 64, 128, 128}, 1802);
              Tensor y = kernel(x);
              return IoData{{std::move(x)}, {std::move(y)}};
@@ -113,7 +129,12 @@ void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) 
     node.set_op_type("GlobalMaxPool");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_globalmaxpool", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_globalmaxpool", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext kernel_ctx{opset};
+      const onnx_kernels::kernel::GlobalMaxPool kernel{kernel_ctx};
+
       std::vector<float> x_data(1 * 3 * 5 * 5);
       for (size_t i = 0; i < x_data.size(); ++i) {
         x_data[i] = static_cast<float>(i + 1);
@@ -131,14 +152,18 @@ void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) 
     node.set_op_type("GlobalMaxPool");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_globalmaxpool_precomputed", {opset},
-           [=]() -> IoData {
-             Tensor x = Tensor::FromFloat("", {1, 1, 3, 3},
-                                          {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
-             Tensor y = kernel(x); // expected: 9.0
+    Expect(registry, std::move(node), "test_cc_globalmaxpool_precomputed", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
 
-             return IoData{{std::move(x)}, {std::move(y)}};
-           });
+      const KernelContext kernel_ctx{opset};
+      const onnx_kernels::kernel::GlobalMaxPool kernel{kernel_ctx};
+
+      Tensor x = Tensor::FromFloat("", {1, 1, 3, 3},
+                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
+      Tensor y = kernel(x); // expected: 9.0
+
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 
@@ -153,8 +178,6 @@ void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) 
 // ---------------------------------------------------------------------------
 void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::GlobalLpPool kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -166,7 +189,12 @@ void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t in_count = 1 * 64 * 128 * 128;
     constexpr int64_t out_count = 1 * 64 * 1 * 1;
     Expect(registry, std::move(node), "test_cc_globallppool_lp1_benchmark", {opset}, {in_count},
-           {out_count}, [kernel]() -> IoData {
+           {out_count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext kernel_ctx{opset};
+             const onnx_kernels::kernel::GlobalLpPool kernel{kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 64, 128, 128}, 1803);
              Tensor y = kernel(x, /*p=*/1);
              return IoData{{std::move(x)}, {std::move(y)}};
@@ -181,7 +209,12 @@ void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddAttribute<int64_t>(node, "p", 1);
-    Expect(registry, std::move(node), "test_cc_globallppool_lp1", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_globallppool_lp1", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext kernel_ctx{opset};
+      const onnx_kernels::kernel::GlobalLpPool kernel{kernel_ctx};
+
       std::vector<float> x_data(1 * 3 * 5 * 5);
       for (size_t i = 0; i < x_data.size(); ++i) {
         x_data[i] = static_cast<float>(i + 1);
@@ -200,7 +233,12 @@ void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddAttribute<int64_t>(node, "p", 2);
-    Expect(registry, std::move(node), "test_cc_globallppool_lp2", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_globallppool_lp2", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext kernel_ctx{opset};
+      const onnx_kernels::kernel::GlobalLpPool kernel{kernel_ctx};
+
       std::vector<float> x_data(1 * 3 * 5 * 5);
       for (size_t i = 0; i < x_data.size(); ++i) {
         x_data[i] = static_cast<float>(i + 1);
@@ -218,7 +256,12 @@ void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("GlobalLpPool");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_globallppool_default", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_globallppool_default", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext kernel_ctx{opset};
+      const onnx_kernels::kernel::GlobalLpPool kernel{kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {1, 1, 3, 3},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
       Tensor y = kernel(x); // expected: sqrt(1+4+9+16+25+36+49+64+81) = sqrt(285)

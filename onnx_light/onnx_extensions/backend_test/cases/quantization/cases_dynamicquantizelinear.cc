@@ -35,8 +35,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::DynamicQuantizeLinear dyn_quantize_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -48,7 +46,13 @@ void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMod
 
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_dynamicquantizelinear_benchmark", {opset}, {count},
-           {count, 1, 1}, [dyn_quantize_kernel]() -> IoData {
+           {count, 1, 1}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(11);
+
+             const KernelContext dyn_quantize_kernel_ctx{opset};
+             const onnx_kernels::kernel::DynamicQuantizeLinear dyn_quantize_kernel{
+                 dyn_quantize_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 2521);
              auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
              return IoData{{std::move(x)},
@@ -66,7 +70,13 @@ void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMod
 
   // From DynamicQuantizeLinear.export(): 1-D input straddling zero.
   {
-    Expect(registry, node, "test_dynamicquantizelinear", {opset}, [=]() -> IoData {
+    Expect(registry, node, "test_dynamicquantizelinear", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext dyn_quantize_kernel_ctx{opset};
+      const onnx_kernels::kernel::DynamicQuantizeLinear dyn_quantize_kernel{
+          dyn_quantize_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {6}, {0.0f, 2.0f, -3.0f, -2.5f, 1.34f, 0.5f});
       auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
       return IoData{{std::move(x)}, {std::move(y), std::move(y_scale), std::move(y_zero_point)}};
@@ -76,7 +86,13 @@ void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMod
   // From DynamicQuantizeLinear.export_max_adjusted(): all-negative 1-D input,
   // so ``max`` gets clipped to 0.
   {
-    Expect(registry, node, "test_dynamicquantizelinear_max_adjusted", {opset}, [=]() -> IoData {
+    Expect(registry, node, "test_dynamicquantizelinear_max_adjusted", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext dyn_quantize_kernel_ctx{opset};
+      const onnx_kernels::kernel::DynamicQuantizeLinear dyn_quantize_kernel{
+          dyn_quantize_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {6}, {-1.0f, -2.1f, -1.3f, -2.5f, -3.34f, -4.0f});
       auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
       return IoData{{std::move(x)}, {std::move(y), std::move(y_scale), std::move(y_zero_point)}};
@@ -86,7 +102,13 @@ void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMod
   // From DynamicQuantizeLinear.export_min_adjusted(): all-positive 2-D input,
   // so ``min`` gets clipped to 0.
   {
-    Expect(registry, node, "test_dynamicquantizelinear_min_adjusted", {opset}, [=]() -> IoData {
+    Expect(registry, node, "test_dynamicquantizelinear_min_adjusted", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext dyn_quantize_kernel_ctx{opset};
+      const onnx_kernels::kernel::DynamicQuantizeLinear dyn_quantize_kernel{
+          dyn_quantize_kernel_ctx};
+
       Tensor x = Tensor::FromFloat(
           "", {3, 4}, {1.0f, 2.1f, 1.3f, 2.5f, 3.34f, 4.0f, 1.5f, 2.6f, 3.9f, 4.0f, 3.0f, 2.345f});
       auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);

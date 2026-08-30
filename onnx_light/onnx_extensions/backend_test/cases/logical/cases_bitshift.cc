@@ -36,14 +36,17 @@ NodeProto MakeBitShiftNode(const char *direction) {
 // ---------------------------------------------------------------------------
 void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::BitShift k{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeBitShiftNode("RIGHT");
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_bitshift_right_u8_benchmark", {opset},
-           {count, count}, {count}, [k, count]() -> IoData {
+           {count, count}, {count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(11);
+
+             const KernelContext k_ctx{opset};
+             const onnx_kernels::kernel::BitShift k{k_ctx};
+
              Tensor x =
                  Tensor::FromUint8("", {count}, RandUint<uint8_t>(256, {count}, /*seed=*/9501));
              Tensor y =
@@ -58,7 +61,12 @@ void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   // (X=[1, 4], S=[1, 1], direction="RIGHT" => Z=[0, 2]).
   {
     NodeProto node = MakeBitShiftNode("RIGHT");
-    Expect(registry, std::move(node), "test_cc_bitshift_right_u8", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_bitshift_right_u8", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext k_ctx{opset};
+      const onnx_kernels::kernel::BitShift k{k_ctx};
+
       Tensor x = Tensor::FromUint8("", {2}, {1, 4});
       Tensor y = Tensor::FromUint8("", {2}, {1, 1});
       Tensor z = k(x, y, onnx_kernels::kernel::BitShift::Direction::kRight);
@@ -67,7 +75,12 @@ void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   }
   {
     NodeProto node = MakeBitShiftNode("LEFT");
-    Expect(registry, std::move(node), "test_cc_bitshift_left_u8", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_bitshift_left_u8", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext k_ctx{opset};
+      const onnx_kernels::kernel::BitShift k{k_ctx};
+
       Tensor x = Tensor::FromUint8("", {2}, {1, 2});
       Tensor y = Tensor::FromUint8("", {2}, {1, 2});
       Tensor z = k(x, y, onnx_kernels::kernel::BitShift::Direction::kLeft);
@@ -80,7 +93,12 @@ void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   // RIGHT direction over UINT8.
   {
     NodeProto node = MakeBitShiftNode("RIGHT");
-    Expect(registry, std::move(node), "test_bitshift_right_uint8", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_bitshift_right_uint8", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext k_ctx{opset};
+      const onnx_kernels::kernel::BitShift k{k_ctx};
+
       Tensor x = Tensor::FromUint8("", {3}, {16, 4, 1});
       Tensor y = Tensor::FromUint8("", {3}, {1, 2, 3});
       Tensor z = k(x, y, onnx_kernels::kernel::BitShift::Direction::kRight);
@@ -90,7 +108,12 @@ void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   // RIGHT direction over UINT16.
   {
     NodeProto node = MakeBitShiftNode("RIGHT");
-    Expect(registry, std::move(node), "test_bitshift_right_uint16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_bitshift_right_uint16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext k_ctx{opset};
+      const onnx_kernels::kernel::BitShift k{k_ctx};
+
       Tensor x = Tensor::FromUint16("", {3}, {16, 4, 1});
       Tensor y = Tensor::FromUint16("", {3}, {1, 2, 3});
       Tensor z = k(x, y, onnx_kernels::kernel::BitShift::Direction::kRight);
@@ -100,7 +123,12 @@ void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   // RIGHT direction over UINT32.
   {
     NodeProto node = MakeBitShiftNode("RIGHT");
-    Expect(registry, std::move(node), "test_bitshift_right_uint32", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_bitshift_right_uint32", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext k_ctx{opset};
+      const onnx_kernels::kernel::BitShift k{k_ctx};
+
       Tensor x = Tensor::FromUint32("", {3}, {16, 4, 1});
       Tensor y = Tensor::FromUint32("", {3}, {1, 2, 3});
       Tensor z = k(x, y, onnx_kernels::kernel::BitShift::Direction::kRight);
@@ -110,7 +138,12 @@ void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   // RIGHT direction over UINT64.
   {
     NodeProto node = MakeBitShiftNode("RIGHT");
-    Expect(registry, std::move(node), "test_bitshift_right_uint64", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_bitshift_right_uint64", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext k_ctx{opset};
+      const onnx_kernels::kernel::BitShift k{k_ctx};
+
       Tensor x = Tensor::FromUint64("", {3}, {16, 4, 1});
       Tensor y = Tensor::FromUint64("", {3}, {1, 2, 3});
       Tensor z = k(x, y, onnx_kernels::kernel::BitShift::Direction::kRight);
@@ -120,7 +153,12 @@ void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   // LEFT direction over UINT8.
   {
     NodeProto node = MakeBitShiftNode("LEFT");
-    Expect(registry, std::move(node), "test_bitshift_left_uint8", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_bitshift_left_uint8", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext k_ctx{opset};
+      const onnx_kernels::kernel::BitShift k{k_ctx};
+
       Tensor x = Tensor::FromUint8("", {3}, {16, 4, 1});
       Tensor y = Tensor::FromUint8("", {3}, {1, 2, 3});
       Tensor z = k(x, y, onnx_kernels::kernel::BitShift::Direction::kLeft);
@@ -130,7 +168,12 @@ void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   // LEFT direction over UINT16.
   {
     NodeProto node = MakeBitShiftNode("LEFT");
-    Expect(registry, std::move(node), "test_bitshift_left_uint16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_bitshift_left_uint16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext k_ctx{opset};
+      const onnx_kernels::kernel::BitShift k{k_ctx};
+
       Tensor x = Tensor::FromUint16("", {3}, {16, 4, 1});
       Tensor y = Tensor::FromUint16("", {3}, {1, 2, 3});
       Tensor z = k(x, y, onnx_kernels::kernel::BitShift::Direction::kLeft);
@@ -140,7 +183,12 @@ void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   // LEFT direction over UINT32.
   {
     NodeProto node = MakeBitShiftNode("LEFT");
-    Expect(registry, std::move(node), "test_bitshift_left_uint32", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_bitshift_left_uint32", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext k_ctx{opset};
+      const onnx_kernels::kernel::BitShift k{k_ctx};
+
       Tensor x = Tensor::FromUint32("", {3}, {16, 4, 1});
       Tensor y = Tensor::FromUint32("", {3}, {1, 2, 3});
       Tensor z = k(x, y, onnx_kernels::kernel::BitShift::Direction::kLeft);
@@ -150,7 +198,12 @@ void RegisterBitShiftCases(std::vector<TestCase> &registry, TestMode mode) {
   // LEFT direction over UINT64.
   {
     NodeProto node = MakeBitShiftNode("LEFT");
-    Expect(registry, std::move(node), "test_bitshift_left_uint64", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_bitshift_left_uint64", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext k_ctx{opset};
+      const onnx_kernels::kernel::BitShift k{k_ctx};
+
       Tensor x = Tensor::FromUint64("", {3}, {16, 4, 1});
       Tensor y = Tensor::FromUint64("", {3}, {1, 2, 3});
       Tensor z = k(x, y, onnx_kernels::kernel::BitShift::Direction::kLeft);

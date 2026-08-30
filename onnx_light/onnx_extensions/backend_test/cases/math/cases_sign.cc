@@ -19,11 +19,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Sign sign_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Sign", sign_kernel, "test_cc_sign_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Sign>("Sign", "test_cc_sign_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -32,7 +31,12 @@ void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sign");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_sign", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sign", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sign_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sign sign_kernel{sign_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 3}, {-2.5f, -1.0f, 0.0f, 0.5f, 1.0f, 3.25f});
       Tensor y = sign_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -45,7 +49,12 @@ void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sign");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_sign", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_sign", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sign_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sign sign_kernel{sign_kernel_ctx};
+
       Tensor x = Tensor::FromFloat(
           "", {11}, {-5.0f, -4.0f, -3.0f, -2.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
       Tensor y = sign_kernel(x);
@@ -58,7 +67,12 @@ void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sign");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_sign_float16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sign_float16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sign_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sign sign_kernel{sign_kernel_ctx};
+
       Tensor x = MakeFloat16Tensor("", {2, 3}, {-3.0f, -0.5f, 0.0f, 0.5f, 2.0f, -1.0f});
       Tensor y = sign_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -71,7 +85,12 @@ void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sign");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_sign_bfloat16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sign_bfloat16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sign_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sign sign_kernel{sign_kernel_ctx};
+
       std::vector<float> vals = {-3.0f, -0.5f, 0.0f, 0.5f, 2.0f, -1.0f};
       std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
       auto *dst = reinterpret_cast<uint16_t *>(raw.data());
@@ -89,7 +108,12 @@ void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sign");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_sign_uint8", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sign_uint8", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sign_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sign sign_kernel{sign_kernel_ctx};
+
       Tensor x = Tensor::FromUint8("", {2, 3}, {0, 1, 2, 0, 5, 255});
       Tensor y = sign_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -102,7 +126,12 @@ void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sign");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_sign_uint16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sign_uint16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sign_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sign sign_kernel{sign_kernel_ctx};
+
       Tensor x = Tensor::FromUint16("", {2, 3}, {0, 1, 1000, 0, 5, 65535});
       Tensor y = sign_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -115,7 +144,12 @@ void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sign");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_sign_uint32", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sign_uint32", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sign_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sign sign_kernel{sign_kernel_ctx};
+
       Tensor x = Tensor::FromUint32("", {2, 3}, {0, 1, 1000000, 0, 5, 4294967295u});
       Tensor y = sign_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -128,7 +162,12 @@ void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sign");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_sign_uint64", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sign_uint64", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sign_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sign sign_kernel{sign_kernel_ctx};
+
       Tensor x =
           Tensor::FromUint64("", {2, 3}, {0, 1, 1000000000000ULL, 0, 5, 18446744073709551615ULL});
       Tensor y = sign_kernel(x);
@@ -142,7 +181,12 @@ void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sign");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_sign_int8", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sign_int8", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sign_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sign sign_kernel{sign_kernel_ctx};
+
       Tensor x = Tensor::FromInt8("", {2, 3}, {-1, 0, 2, -127, 3, -5});
       Tensor y = sign_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -155,7 +199,12 @@ void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sign");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_sign_int16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sign_int16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sign_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sign sign_kernel{sign_kernel_ctx};
+
       Tensor x = Tensor::FromInt16("", {2, 3}, {-1, 0, 2, -1000, 3, -5});
       Tensor y = sign_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -168,7 +217,12 @@ void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sign");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_sign_int32", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sign_int32", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sign_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sign sign_kernel{sign_kernel_ctx};
+
       Tensor x = Tensor::FromInt32("", {2, 3}, {-1, 0, 2, -100000, 3, -5});
       Tensor y = sign_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -181,7 +235,12 @@ void RegisterSignCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sign");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_sign_int64", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sign_int64", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sign_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sign sign_kernel{sign_kernel_ctx};
+
       Tensor x = Tensor::FromInt64("", {2, 3}, {-1, 0, 2, -1000000000000LL, 3, -5});
       Tensor y = sign_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};

@@ -228,7 +228,7 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry, TestMod
     namespace ann = core::compute;
 
     // Helper: add a metadata entry to the i-th node.
-    const auto node_meta = [&](int i, const char *key, const std::string &value) {
+    const auto node_meta = [&graph](int i, const char *key, const std::string &value) {
       (*graph->mutable_node())[static_cast<std::size_t>(i)].add_metadata(key, value);
     };
 
@@ -494,7 +494,7 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry, TestMod
 
     // Per-value kValueTagMetadataKey on initializers (insertion order, see
     // AddInitializer calls above).
-    const auto init_meta = [&](std::size_t i, const char *tag) {
+    const auto init_meta = [&graph](std::size_t i, const char *tag) {
       auto *entry = graph->mutable_initializer(i)->add_metadata_props();
       entry->set_key(ann::kValueTagMetadataKey);
       entry->set_value(tag);
@@ -533,7 +533,7 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry, TestMod
     // Constant information: every initializer is a build-time constant. No
     // intermediate value or node is constant because they all depend on the
     // runtime graph inputs (input_ids, attention_mask, past_key, past_value).
-    const auto init_const = [&](std::size_t i) {
+    const auto init_const = [&graph](std::size_t i) {
       auto *entry = graph->mutable_initializer(i)->add_metadata_props();
       entry->set_key(ann::kConstantMetadataKey);
       entry->set_value("1");
@@ -583,8 +583,8 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry, 
   // Inlines ``RMSNormalization(x, weight)`` as
   // ``Mul(Div(x, Sqrt(Add(ReduceMean(Mul(x, x)), eps))), weight)``. ``prefix``
   // disambiguates the intermediate value names across the three call sites.
-  const auto add_rmsnorm = [&](const std::string &x, const std::string &weight,
-                               const std::string &out, const std::string &prefix) {
+  const auto add_rmsnorm = [&graph](const std::string &x, const std::string &weight,
+                                    const std::string &out, const std::string &prefix) {
     AddNode(*graph, "Mul", {x, x}, {prefix + "_sq"});
     AddNode(*graph, "ReduceMean", {prefix + "_sq", "rms_axes"}, {prefix + "_mean"});
     AddNode(*graph, "Add", {prefix + "_mean", "rms_eps"}, {prefix + "_meaneps"});
@@ -800,7 +800,7 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry, 
     //   "weight").
 
     // Helper: add a metadata entry to the i-th node.
-    const auto node_meta = [&](int i, const char *key, const std::string &value) {
+    const auto node_meta = [&graph](int i, const char *key, const std::string &value) {
       (*graph->mutable_node())[static_cast<std::size_t>(i)].add_metadata(key, value);
     };
 
@@ -1373,7 +1373,7 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry, 
 
     // Per-value kValueTagMetadataKey on initializers (insertion order, see
     // AddInitializer calls above).
-    const auto init_meta = [&](std::size_t i, const char *tag) {
+    const auto init_meta = [&graph](std::size_t i, const char *tag) {
       auto *entry = graph->mutable_initializer(i)->add_metadata_props();
       entry->set_key(ann::kValueTagMetadataKey);
       entry->set_value(tag);

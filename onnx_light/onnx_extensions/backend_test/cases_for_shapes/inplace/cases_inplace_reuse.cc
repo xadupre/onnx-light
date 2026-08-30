@@ -24,45 +24,53 @@ constexpr const char *kNotUsedAfterMetadataKey = "onnx_light.not_used_after";
 
 void RegisterInPlaceReuseCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(14);
-  const onnx_kernels::kernel::KernelContext ctx{opset};
-  const onnx_kernels::kernel::Abs abs_kernel{ctx};
 
   const std::string name = "test_cc_shape_inference_inplace_reuse";
 
   TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INPLACE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
+  tc.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(14);
 
-  ModelProto &model = tc.emplace_model();
-  InitModel(model, kDefaultIrVersion, {opset});
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INPLACE);
+    tc.rtol = 1e-3;
+    tc.atol = 1e-7;
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    ModelProto &model = tc.emplace_model();
+    InitModel(model, kDefaultIrVersion, {opset});
 
-  AddNode(*graph, "Abs", {"X"}, {"A"});
-  AddNode(*graph, "Abs", {"A"}, {"B"});
-  AddNode(*graph, "Abs", {"B"}, {"Y"});
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
-  const std::vector<DimSpec> shape = {"batch", "features"};
-  AppendValueInfo(*graph->add_input(), "X", kFloat, shape);
-  AppendValueInfo(*graph->add_value_info(), "A", kFloat, shape);
-  AppendValueInfo(*graph->add_value_info(), "B", kFloat, shape);
-  AppendValueInfo(*graph->add_output(), "Y", kFloat, shape);
+    AddNode(*graph, "Abs", {"X"}, {"A"});
+    AddNode(*graph, "Abs", {"A"}, {"B"});
+    AddNode(*graph, "Abs", {"B"}, {"Y"});
 
-  (*graph->mutable_node())[0].add_metadata(kNotUsedAfterMetadataKey, "X");
-  (*graph->mutable_node())[1].add_metadata(kInPlaceReuseMetadataKey, "0:0:equal");
-  (*graph->mutable_node())[1].add_metadata(kReleaseAfterMetadataKey, "A");
-  (*graph->mutable_node())[2].add_metadata(kInPlaceReuseMetadataKey, "0:0:equal");
-  (*graph->mutable_node())[2].add_metadata(kReleaseAfterMetadataKey, "B");
+    const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
+    const std::vector<DimSpec> shape = {"batch", "features"};
+    AppendValueInfo(*graph->add_input(), "X", kFloat, shape);
+    AppendValueInfo(*graph->add_value_info(), "A", kFloat, shape);
+    AppendValueInfo(*graph->add_value_info(), "B", kFloat, shape);
+    AppendValueInfo(*graph->add_output(), "Y", kFloat, shape);
 
-  const Tensor x = Tensor::FromFloat(
-      "X", {3, 4}, {-3.0f, -2.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f, -5.0f, -6.0f, 7.0f, 8.0f});
-  Tensor y = abs_kernel(abs_kernel(abs_kernel(x)));
-  y.name = "Y";
+    (*graph->mutable_node())[0].add_metadata(kNotUsedAfterMetadataKey, "X");
+    (*graph->mutable_node())[1].add_metadata(kInPlaceReuseMetadataKey, "0:0:equal");
+    (*graph->mutable_node())[1].add_metadata(kReleaseAfterMetadataKey, "A");
+    (*graph->mutable_node())[2].add_metadata(kInPlaceReuseMetadataKey, "0:0:equal");
+    (*graph->mutable_node())[2].add_metadata(kReleaseAfterMetadataKey, "B");
 
-  AppendDataSet(tc, {x}, {y});
+    const Tensor x = Tensor::FromFloat(
+        "X", {3, 4}, {-3.0f, -2.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f, -5.0f, -6.0f, 7.0f, 8.0f});
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::Abs abs_kernel{ctx};
+    Tensor y = abs_kernel(abs_kernel(abs_kernel(x)));
+    y.name = "Y";
 
+    AppendDataSet(tc, {x}, {y});
+
+    return tc.take_materialized();
+  };
   registry.emplace_back(std::move(tc));
 }
 

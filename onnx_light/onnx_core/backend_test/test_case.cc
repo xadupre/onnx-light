@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+
 #include "onnx_core/backend_test/test_case_registry.h"
 
 #include <stdexcept>
@@ -29,6 +30,11 @@ void BuildTypeProto(const TypeSpec &spec, TypeProto &tp) {
   case TypeSpec::Kind::kSequence: {
     TypeProto::Sequence *seq = tp.add_sequence_type();
     BuildTypeProto(spec.children.front(), *seq->add_elem_type());
+    break;
+  }
+  case TypeSpec::Kind::kOptional: {
+    TypeProto::Optional *optional = tp.add_optional_type();
+    BuildTypeProto(spec.children.front(), *optional->add_elem_type());
     break;
   }
   case TypeSpec::Kind::kMap: {
@@ -130,6 +136,12 @@ void TestCase::Materialize() {
   }
   BuiltCase built =
       build ? build(expected_outputs_generated) : rebuild_(expected_outputs_generated);
+  if (!expected_outputs_generated) {
+    for (DataSet &data_set : built.data_sets) {
+      data_set.expected_outputs_generated = false;
+      data_set.outputs.clear();
+    }
+  }
   model_ = std::make_shared<ModelProto>(std::move(built.model));
   if (!data_sets_) {
     data_sets_ = std::make_shared<std::vector<DataSet>>(std::move(built.data_sets));
@@ -239,6 +251,13 @@ TypeSpec TensorTypeSpec(int32_t elem_type, std::vector<int64_t> shape) {
 TypeSpec SequenceTypeSpec(TypeSpec elem) {
   TypeSpec spec;
   spec.kind = TypeSpec::Kind::kSequence;
+  spec.children.push_back(std::move(elem));
+  return spec;
+}
+
+TypeSpec OptionalTypeSpec(TypeSpec elem) {
+  TypeSpec spec;
+  spec.kind = TypeSpec::Kind::kOptional;
   spec.children.push_back(std::move(elem));
   return spec;
 }

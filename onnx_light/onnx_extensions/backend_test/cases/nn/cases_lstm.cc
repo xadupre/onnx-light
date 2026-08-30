@@ -32,8 +32,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::LSTM lstm_kernel{ctx};
 
   constexpr int64_t kNumGates = 4;
   constexpr int64_t kNumPeepholes = 3;
@@ -54,8 +52,12 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_lstm_benchmark", {opset},
            {seq_length * batch_size * input_size, kNumGates * hidden_size * input_size,
             kNumGates * hidden_size * hidden_size},
-           {batch_size * hidden_size},
-           [lstm_kernel, seq_length, batch_size, input_size, hidden_size]() -> IoData {
+           {batch_size * hidden_size}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext lstm_kernel_ctx{opset};
+             const onnx_kernels::kernel::LSTM lstm_kernel{lstm_kernel_ctx};
+
              const std::vector<int64_t> x_shape = {seq_length, batch_size, input_size};
              const std::vector<int64_t> w_shape = {1, kNumGates * hidden_size, input_size};
              const std::vector<int64_t> r_shape = {1, kNumGates * hidden_size, hidden_size};
@@ -82,7 +84,12 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("");
     node.add_output("Y_h");
     AddAttribute<int64_t>(node, "hidden_size", 3);
-    Expect(registry, std::move(node), "test_cc_lstm_defaults", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_lstm_defaults", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext lstm_kernel_ctx{opset};
+      const onnx_kernels::kernel::LSTM lstm_kernel{lstm_kernel_ctx};
+
       const int64_t seq_length = 1;
       const int64_t batch_size = 3;
       const int64_t input_size = 2;
@@ -119,7 +126,12 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("");
     node.add_output("Y_h");
     AddAttribute<int64_t>(node, "hidden_size", 4);
-    Expect(registry, std::move(node), "test_cc_lstm_with_initial_bias", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_lstm_with_initial_bias", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext lstm_kernel_ctx{opset};
+      const onnx_kernels::kernel::LSTM lstm_kernel{lstm_kernel_ctx};
+
       const int64_t seq_length = 1;
       const int64_t batch_size = 3;
       const int64_t input_size = 3;
@@ -171,7 +183,12 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("");
     node.add_output("Y_h");
     AddAttribute<int64_t>(node, "hidden_size", 3);
-    Expect(registry, std::move(node), "test_cc_lstm_with_peepholes", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_lstm_with_peepholes", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext lstm_kernel_ctx{opset};
+      const onnx_kernels::kernel::LSTM lstm_kernel{lstm_kernel_ctx};
+
       const int64_t seq_length = 1;
       const int64_t batch_size = 2;
       const int64_t input_size = 4;
@@ -225,7 +242,12 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y_h");
     AddAttribute<int64_t>(node, "hidden_size", 7);
     AddAttribute<int64_t>(node, "layout", 1);
-    Expect(registry, std::move(node), "test_cc_lstm_batchwise", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_lstm_batchwise", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext lstm_kernel_ctx{opset};
+      const onnx_kernels::kernel::LSTM lstm_kernel{lstm_kernel_ctx};
+
       const int64_t batch_size = 3;
       const int64_t seq_length = 1;
       const int64_t input_size = 2;
@@ -307,7 +329,12 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y_c");
     AddAttribute<int64_t>(node, "hidden_size", 3);
     AddAttribute(node, "direction", std::string("reverse"));
-    Expect(registry, std::move(node), "test_cc_lstm_reverse", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_lstm_reverse", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext lstm_kernel_ctx{opset};
+      const onnx_kernels::kernel::LSTM lstm_kernel{lstm_kernel_ctx};
+
       const int64_t seq_length = 3;
       const int64_t batch_size = 1;
       const int64_t input_size = 2;
@@ -345,7 +372,12 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y_c");
     AddAttribute<int64_t>(node, "hidden_size", 3);
     AddAttribute(node, "direction", std::string("bidirectional"));
-    Expect(registry, std::move(node), "test_cc_lstm_bidirectional", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_lstm_bidirectional", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext lstm_kernel_ctx{opset};
+      const onnx_kernels::kernel::LSTM lstm_kernel{lstm_kernel_ctx};
+
       const int64_t num_directions = 2;
       const int64_t seq_length = 3;
       const int64_t batch_size = 1;

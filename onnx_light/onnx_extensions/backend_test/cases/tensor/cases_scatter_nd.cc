@@ -44,13 +44,16 @@ Tensor MakeUpdates2x4x4() {
 
 void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::ScatterND snd_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeScatterNDNode("none");
     Expect(registry, std::move(node), "test_cc_scatternd_benchmark", {opset},
-           {4194304, 256, 4194304}, {4194304}, [snd_kernel]() -> IoData {
+           {4194304, 256, 4194304}, {4194304}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext snd_kernel_ctx{opset};
+             const onnx_kernels::kernel::ScatterND snd_kernel{snd_kernel_ctx};
+
              Tensor data = RandnTensor(DataType::FLOAT, {256, 128, 128}, 2001);
              std::vector<int64_t> index_values(256);
              for (int64_t i = 0; i < 256; ++i) {
@@ -68,7 +71,12 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_scatternd — mirrors upstream ``test_scatternd``.
   {
-    Expect(registry, MakeScatterNDNode("none"), "test_cc_scatternd", {opset}, [=]() -> IoData {
+    Expect(registry, MakeScatterNDNode("none"), "test_cc_scatternd", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(18);
+
+      const KernelContext snd_kernel_ctx{opset};
+      const onnx_kernels::kernel::ScatterND snd_kernel{snd_kernel_ctx};
+
       Tensor data = MakeData4x4x4();
       Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 2});
       Tensor updates = MakeUpdates2x4x4();
@@ -80,7 +88,12 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_scatternd_add — mirrors upstream ``test_scatternd_add``.
   {
-    Expect(registry, MakeScatterNDNode("add"), "test_cc_scatternd_add", {opset}, [=]() -> IoData {
+    Expect(registry, MakeScatterNDNode("add"), "test_cc_scatternd_add", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(18);
+
+      const KernelContext snd_kernel_ctx{opset};
+      const onnx_kernels::kernel::ScatterND snd_kernel{snd_kernel_ctx};
+
       Tensor data = MakeData4x4x4();
       Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
       Tensor updates = MakeUpdates2x4x4();
@@ -94,7 +107,12 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_scatternd_multiply — mirrors upstream ``test_scatternd_multiply``.
   {
     Expect(registry, MakeScatterNDNode("mul"), "test_cc_scatternd_multiply", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext snd_kernel_ctx{opset};
+             const onnx_kernels::kernel::ScatterND snd_kernel{snd_kernel_ctx};
+
              Tensor data = MakeData4x4x4();
              Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
              Tensor updates = MakeUpdates2x4x4();
@@ -108,7 +126,12 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_scatternd_max — mirrors upstream ``test_scatternd_max``.
   {
-    Expect(registry, MakeScatterNDNode("max"), "test_cc_scatternd_max", {opset}, [=]() -> IoData {
+    Expect(registry, MakeScatterNDNode("max"), "test_cc_scatternd_max", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(18);
+
+      const KernelContext snd_kernel_ctx{opset};
+      const onnx_kernels::kernel::ScatterND snd_kernel{snd_kernel_ctx};
+
       Tensor data = MakeData4x4x4();
       Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
       Tensor updates = MakeUpdates2x4x4();
@@ -121,7 +144,12 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_scatternd_min — mirrors upstream ``test_scatternd_min``.
   {
-    Expect(registry, MakeScatterNDNode("min"), "test_cc_scatternd_min", {opset}, [=]() -> IoData {
+    Expect(registry, MakeScatterNDNode("min"), "test_cc_scatternd_min", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(18);
+
+      const KernelContext snd_kernel_ctx{opset};
+      const onnx_kernels::kernel::ScatterND snd_kernel{snd_kernel_ctx};
+
       Tensor data = MakeData4x4x4();
       Tensor indices = Tensor::FromInt64("", {2, 1}, {0, 0});
       Tensor updates = MakeUpdates2x4x4();
@@ -138,7 +166,12 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
   // element-level reduction.
   {
     Expect(registry, MakeScatterNDNode("max"), "test_cc_scatternd_max_with_element_indices",
-           {opset}, [=]() -> IoData {
+           {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext snd_kernel_ctx{opset};
+             const onnx_kernels::kernel::ScatterND snd_kernel{snd_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {2, 2}, {1, 2, 3, 4});
              Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 1});
              Tensor updates = Tensor::FromFloat("", {2}, {5, 1});
@@ -154,7 +187,12 @@ void RegisterScatterNDCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``test_scatternd_min_with_element_indices``.
   {
     Expect(registry, MakeScatterNDNode("min"), "test_cc_scatternd_min_with_element_indices",
-           {opset}, [=]() -> IoData {
+           {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext snd_kernel_ctx{opset};
+             const onnx_kernels::kernel::ScatterND snd_kernel{snd_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {2, 2}, {1, 2, 3, 4});
              Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 1});
              Tensor updates = Tensor::FromFloat("", {2}, {5, 1});

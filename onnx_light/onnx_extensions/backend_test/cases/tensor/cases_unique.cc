@@ -45,8 +45,6 @@ NodeProto MakeUniqueNode(std::optional<int64_t> sorted_attr, std::optional<int64
 // ---------------------------------------------------------------------------
 void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Unique unique_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/0, /*axis_attr=*/std::nullopt);
@@ -58,7 +56,12 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_cc_unique_not_sorted_without_axis_benchmark", {opset},
            {kUniqueBenchmarkSize},
            {kDistinctValues, kDistinctValues, kUniqueBenchmarkSize, kDistinctValues},
-           [unique_kernel]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(11);
+
+             const KernelContext unique_kernel_ctx{opset};
+             const onnx_kernels::kernel::Unique unique_kernel{unique_kernel_ctx};
+
              std::vector<float> values(static_cast<std::size_t>(kUniqueBenchmarkSize));
              for (int64_t i = 0; i < kUniqueBenchmarkSize; ++i) {
                values[static_cast<std::size_t>(i)] = static_cast<float>(i % kDistinctValues);
@@ -78,7 +81,12 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/0, /*axis_attr=*/std::nullopt);
     Expect(registry, std::move(node), "test_cc_unique_not_sorted_without_axis", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(11);
+
+             const KernelContext unique_kernel_ctx{opset};
+             const onnx_kernels::kernel::Unique unique_kernel{unique_kernel_ctx};
+
              const Tensor x = Tensor::FromFloat("X", {6}, {2.f, 1.f, 1.f, 3.f, 4.f, 3.f});
              onnx_kernels::kernel::Unique::Attributes attrs;
              attrs.sorted = false;
@@ -93,7 +101,12 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/std::nullopt, /*axis_attr=*/std::nullopt);
     Expect(registry, std::move(node), "test_cc_unique_sorted_without_axis", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(11);
+
+             const KernelContext unique_kernel_ctx{opset};
+             const onnx_kernels::kernel::Unique unique_kernel{unique_kernel_ctx};
+
              const Tensor x = Tensor::FromFloat("X", {6}, {2.f, 1.f, 1.f, 3.f, 4.f, 3.f});
              auto out = unique_kernel(x);
              return IoData{{std::move(x)},
@@ -105,7 +118,12 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_unique_length_1 — single-element input.
   {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/std::nullopt, /*axis_attr=*/std::nullopt);
-    Expect(registry, std::move(node), "test_cc_unique_length_1", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_unique_length_1", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext unique_kernel_ctx{opset};
+      const onnx_kernels::kernel::Unique unique_kernel{unique_kernel_ctx};
+
       const Tensor x = Tensor::FromFloat("X", {1}, {7.f});
       auto out = unique_kernel(x);
       return IoData{{std::move(x)},
@@ -117,7 +135,12 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_unique_sorted_with_axis — 2-D float input, sorted=1, axis=0.
   {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/1, /*axis_attr=*/0);
-    Expect(registry, std::move(node), "test_cc_unique_sorted_with_axis", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_unique_sorted_with_axis", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext unique_kernel_ctx{opset};
+      const onnx_kernels::kernel::Unique unique_kernel{unique_kernel_ctx};
+
       const Tensor x =
           Tensor::FromFloat("X", {3, 3}, {1.f, 0.f, 0.f, 1.f, 0.f, 0.f, 2.f, 3.f, 4.f});
       onnx_kernels::kernel::Unique::Attributes attrs;
@@ -135,7 +158,12 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/1, /*axis_attr=*/-1);
     Expect(registry, std::move(node), "test_cc_unique_sorted_with_negative_axis", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(11);
+
+             const KernelContext unique_kernel_ctx{opset};
+             const onnx_kernels::kernel::Unique unique_kernel{unique_kernel_ctx};
+
              const Tensor x =
                  Tensor::FromFloat("X", {2, 4}, {1.f, 1.f, 0.f, 2.f, 1.f, 1.f, 0.f, 2.f});
              onnx_kernels::kernel::Unique::Attributes attrs;
@@ -152,7 +180,12 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/1, /*axis_attr=*/1);
     Expect(registry, std::move(node), "test_cc_unique_sorted_with_axis_3d", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(11);
+
+             const KernelContext unique_kernel_ctx{opset};
+             const onnx_kernels::kernel::Unique unique_kernel{unique_kernel_ctx};
+
              const Tensor x = Tensor::FromFloat(
                  "X", {2, 4, 2},
                  {1.f, 1.f, 0.f, 1.f, 2.f, 1.f, 0.f, 1.f, 1.f, 1.f, 0.f, 1.f, 2.f, 1.f, 0.f, 1.f});

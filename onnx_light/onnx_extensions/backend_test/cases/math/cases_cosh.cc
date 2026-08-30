@@ -32,11 +32,10 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterCoshCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Cosh cosh_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Cosh", cosh_kernel, "test_cc_cosh_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Cosh>("Cosh", "test_cc_cosh_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -45,7 +44,12 @@ void RegisterCoshCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Cosh");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_cosh", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_cosh", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext cosh_kernel_ctx{opset};
+      const onnx_kernels::kernel::Cosh cosh_kernel{cosh_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -0.5f, 0.0f, 0.5f, 1.0f, 3.0f});
       Tensor y = cosh_kernel(x);
 
@@ -62,7 +66,12 @@ void RegisterCoshCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Cosh");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cosh_example", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cosh_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext cosh_kernel_ctx{opset};
+      const onnx_kernels::kernel::Cosh cosh_kernel{cosh_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
       Tensor y = cosh_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -74,7 +83,12 @@ void RegisterCoshCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Cosh");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cosh", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cosh", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext cosh_kernel_ctx{opset};
+      const onnx_kernels::kernel::Cosh cosh_kernel{cosh_kernel_ctx};
+
       Tensor x = RandnFloat({3, 4, 5}, /*seed=*/1);
       Tensor y = cosh_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};

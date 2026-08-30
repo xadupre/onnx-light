@@ -58,14 +58,17 @@ std::vector<float> SequentialFloats(size_t count) {
 // ---------------------------------------------------------------------------
 void RegisterFlattenCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(25);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Flatten kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeFlattenNode(/*axis=*/1, /*include_axis=*/false);
     constexpr int64_t count = 64 * 64 * 32 * 32;
     Expect(registry, std::move(node), "test_cc_flatten_default_axis_benchmark", {opset}, {count},
-           {count}, [kernel]() -> IoData {
+           {count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(25);
+
+             const KernelContext kernel_ctx{opset};
+             const onnx_kernels::kernel::Flatten kernel{kernel_ctx};
+
              Tensor a = RandnTensor(DataType::FLOAT, {64, 64, 32, 32}, 1701);
              Tensor b = kernel(a);
              return IoData{{std::move(a)}, {std::move(b)}};
@@ -76,7 +79,12 @@ void RegisterFlattenCases(std::vector<TestCase> &registry, TestMode mode) {
   // Default axis (axis=1) on a (5, 4, 3, 2) input.
   {
     NodeProto node = MakeFlattenNode(/*axis=*/1, /*include_axis=*/false);
-    Expect(registry, std::move(node), "test_cc_flatten_default_axis", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_flatten_default_axis", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(25);
+
+      const KernelContext kernel_ctx{opset};
+      const onnx_kernels::kernel::Flatten kernel{kernel_ctx};
+
       std::vector<float> data = SequentialFloats(5 * 4 * 3 * 2);
       Tensor a = Tensor::FromFloat("", {5, 4, 3, 2}, data);
       Tensor b = kernel(a);
@@ -89,8 +97,12 @@ void RegisterFlattenCases(std::vector<TestCase> &registry, TestMode mode) {
     const std::vector<int64_t> shape{2, 3, 4, 5};
     for (int64_t axis = 0; axis < 4; ++axis) {
       Expect(registry, MakeFlattenNode(axis, /*include_axis=*/true),
-             "test_cc_flatten_axis" + std::to_string(axis), {opset},
-             [kernel, shape, axis]() -> IoData {
+             "test_cc_flatten_axis" + std::to_string(axis), {opset}, [shape, axis]() -> IoData {
+               const OpsetId opset = DefaultOpset(25);
+
+               const KernelContext kernel_ctx{opset};
+               const onnx_kernels::kernel::Flatten kernel{kernel_ctx};
+
                std::vector<float> data = SequentialFloats(2 * 3 * 4 * 5);
                Tensor a = Tensor::FromFloat("", shape, data);
                Tensor b = kernel(a, axis);
@@ -105,7 +117,12 @@ void RegisterFlattenCases(std::vector<TestCase> &registry, TestMode mode) {
     for (int64_t axis = -4; axis < 0; ++axis) {
       Expect(registry, MakeFlattenNode(axis, /*include_axis=*/true),
              "test_cc_flatten_negative_axis" + std::to_string(-axis), {opset},
-             [kernel, shape, axis]() -> IoData {
+             [shape, axis]() -> IoData {
+               const OpsetId opset = DefaultOpset(25);
+
+               const KernelContext kernel_ctx{opset};
+               const onnx_kernels::kernel::Flatten kernel{kernel_ctx};
+
                std::vector<float> data = SequentialFloats(2 * 3 * 4 * 5);
                Tensor a = Tensor::FromFloat("", shape, data);
                Tensor b = kernel(a, axis);

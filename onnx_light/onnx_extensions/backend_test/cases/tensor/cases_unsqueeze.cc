@@ -51,9 +51,11 @@ std::vector<float> Iota(int64_t n) {
 }
 
 void RegisterUnsqueezeOneAxisCase(std::vector<TestCase> &registry, const OpsetId &opset,
-                                  const onnx_kernels::kernel::Unsqueeze &unsqueeze_kernel,
                                   int64_t axis, const std::string &name) {
-  Expect(registry, MakeUnsqueezeNodeXY(), name, {opset}, [=]() -> IoData {
+  Expect(registry, MakeUnsqueezeNodeXY(), name, {opset}, [opset, axis]() -> IoData {
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::Unsqueeze unsqueeze_kernel{ctx};
+
     const Tensor x = Tensor::FromFloat("", {3, 4, 5}, Iota(60));
     const std::vector<int64_t> axes{axis};
     const Tensor axes_tensor = MakeAxesTensor(axes);
@@ -66,14 +68,17 @@ void RegisterUnsqueezeOneAxisCase(std::vector<TestCase> &registry, const OpsetId
 
 void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Unsqueeze unsqueeze_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeUnsqueezeNode();
     const std::vector<int64_t> axes{0, 2};
     Expect(registry, std::move(node), "test_cc_unsqueeze_axes_benchmark", {opset}, {4194304, 2},
-           {4194304}, [unsqueeze_kernel, axes]() -> IoData {
+           {4194304}, [axes]() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext unsqueeze_kernel_ctx{opset};
+             const onnx_kernels::kernel::Unsqueeze unsqueeze_kernel{unsqueeze_kernel_ctx};
+
              Tensor data = RandnTensor(DataType::FLOAT, {2048, 2048}, 2001);
              Tensor axes_tensor = MakeAxesTensor(axes);
              Tensor expanded = unsqueeze_kernel(data, axes);
@@ -84,7 +89,12 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_unsqueeze_axes
   {
-    Expect(registry, MakeUnsqueezeNode(), "test_cc_unsqueeze_axes", {opset}, [=]() -> IoData {
+    Expect(registry, MakeUnsqueezeNode(), "test_cc_unsqueeze_axes", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext unsqueeze_kernel_ctx{opset};
+      const onnx_kernels::kernel::Unsqueeze unsqueeze_kernel{unsqueeze_kernel_ctx};
+
       const Tensor data = Tensor::FromFloat("", {2, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
       const std::vector<int64_t> axes{0, 2};
       const Tensor axes_tensor = MakeAxesTensor(axes);
@@ -97,13 +107,18 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
   // (onnx/backend/test/case/node/unsqueeze.py).
 
   // test_unsqueeze_axis_0, test_unsqueeze_axis_1, test_unsqueeze_axis_2
-  RegisterUnsqueezeOneAxisCase(registry, opset, unsqueeze_kernel, 0, "test_unsqueeze_axis_0");
-  RegisterUnsqueezeOneAxisCase(registry, opset, unsqueeze_kernel, 1, "test_unsqueeze_axis_1");
-  RegisterUnsqueezeOneAxisCase(registry, opset, unsqueeze_kernel, 2, "test_unsqueeze_axis_2");
+  RegisterUnsqueezeOneAxisCase(registry, opset, 0, "test_unsqueeze_axis_0");
+  RegisterUnsqueezeOneAxisCase(registry, opset, 1, "test_unsqueeze_axis_1");
+  RegisterUnsqueezeOneAxisCase(registry, opset, 2, "test_unsqueeze_axis_2");
 
   // test_unsqueeze_two_axes
   {
-    Expect(registry, MakeUnsqueezeNodeXY(), "test_unsqueeze_two_axes", {opset}, [=]() -> IoData {
+    Expect(registry, MakeUnsqueezeNodeXY(), "test_unsqueeze_two_axes", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext unsqueeze_kernel_ctx{opset};
+      const onnx_kernels::kernel::Unsqueeze unsqueeze_kernel{unsqueeze_kernel_ctx};
+
       const Tensor x = Tensor::FromFloat("", {3, 4, 5}, Iota(60));
       const std::vector<int64_t> axes{1, 4};
       const Tensor axes_tensor = MakeAxesTensor(axes);
@@ -114,7 +129,12 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_unsqueeze_three_axes
   {
-    Expect(registry, MakeUnsqueezeNodeXY(), "test_unsqueeze_three_axes", {opset}, [=]() -> IoData {
+    Expect(registry, MakeUnsqueezeNodeXY(), "test_unsqueeze_three_axes", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext unsqueeze_kernel_ctx{opset};
+      const onnx_kernels::kernel::Unsqueeze unsqueeze_kernel{unsqueeze_kernel_ctx};
+
       const Tensor x = Tensor::FromFloat("", {3, 4, 5}, Iota(60));
       const std::vector<int64_t> axes{2, 4, 5};
       const Tensor axes_tensor = MakeAxesTensor(axes);
@@ -126,7 +146,12 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_unsqueeze_unsorted_axes
   {
     Expect(registry, MakeUnsqueezeNodeXY(), "test_unsqueeze_unsorted_axes", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext unsqueeze_kernel_ctx{opset};
+             const onnx_kernels::kernel::Unsqueeze unsqueeze_kernel{unsqueeze_kernel_ctx};
+
              const Tensor x = Tensor::FromFloat("", {3, 4, 5}, Iota(60));
              // ONNX exports the axes in unsorted order; kernel sorts them internally,
              // so the output is identical to test_unsqueeze_three_axes.
@@ -140,7 +165,12 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_unsqueeze_negative_axes
   {
     Expect(registry, MakeUnsqueezeNodeXY(), "test_unsqueeze_negative_axes", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext unsqueeze_kernel_ctx{opset};
+             const onnx_kernels::kernel::Unsqueeze unsqueeze_kernel{unsqueeze_kernel_ctx};
+
              const Tensor x = Tensor::FromFloat("", {1, 3, 1, 5}, Iota(15));
              const std::vector<int64_t> axes{-2};
              const Tensor axes_tensor = MakeAxesTensor(axes);

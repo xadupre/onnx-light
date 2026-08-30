@@ -83,8 +83,6 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
   const OpsetId opset_v21 = DefaultOpset(25);
   const OpsetId opset_v23 = DefaultOpset(25);
   const OpsetId opset_v25 = DefaultOpset(25);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::DequantizeLinear dequantize_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -95,7 +93,12 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
 
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_dequantizelinear_benchmark", {opset}, {count, 1},
-           {count}, [dequantize_kernel]() -> IoData {
+           {count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(25);
+
+             const KernelContext dequantize_kernel_ctx{opset};
+             const onnx_kernels::kernel::DequantizeLinear dequantize_kernel{dequantize_kernel_ctx};
+
              Tensor x =
                  Tensor::FromUint8("", {kBenchmarkElementwiseSize},
                                    RandUint<uint8_t>(256, {kBenchmarkElementwiseSize}, 2511));
@@ -113,7 +116,12 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
     node.add_input("x");
     node.add_input("x_scale");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_dequantizelinear", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_dequantizelinear", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(25);
+
+      const KernelContext dequantize_kernel_ctx{opset};
+      const onnx_kernels::kernel::DequantizeLinear dequantize_kernel{dequantize_kernel_ctx};
+
       Tensor x = Tensor::FromUint8("", {4}, {0, 3, 128, 255});
       Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
       Tensor y = dequantize_kernel(x, x_scale);
@@ -130,7 +138,12 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
     node.add_input("x_scale");
     node.add_input("x_zero_point");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_dequantizelinear_int8", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_dequantizelinear_int8", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(25);
+
+      const KernelContext dequantize_kernel_ctx{opset};
+      const onnx_kernels::kernel::DequantizeLinear dequantize_kernel{dequantize_kernel_ctx};
+
       Tensor x = Tensor::FromInt8("", {4}, {-10, -9, 0, 127});
       Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
       const Tensor x_zero_point(
@@ -152,7 +165,12 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
     node.add_output("y");
     AddAttribute<int64_t>(node, "axis", 1);
     Expect(registry, std::move(node), "test_cc_dequantizelinear_axis_no_zero_point", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(25);
+
+             const KernelContext dequantize_kernel_ctx{opset};
+             const onnx_kernels::kernel::DequantizeLinear dequantize_kernel{dequantize_kernel_ctx};
+
              Tensor x = Tensor::FromUint8(
                  "", {1, 3, 3, 2},
                  {3, 89, 34, 200, 74, 59, 5, 24, 24, 87, 32, 13, 245, 99, 4, 142, 121, 102});
@@ -175,7 +193,12 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
 
   // From DequantizeLinear.export(): UINT8 with explicit zero_point=128.
   {
-    Expect(registry, node, "test_dequantizelinear", {opset}, [=]() -> IoData {
+    Expect(registry, node, "test_dequantizelinear", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(25);
+
+      const KernelContext dequantize_kernel_ctx{opset};
+      const onnx_kernels::kernel::DequantizeLinear dequantize_kernel{dequantize_kernel_ctx};
+
       Tensor x = Tensor::FromUint8("", {4}, {0, 3, 128, 255});
       Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
       const Tensor x_zero_point("", static_cast<int32_t>(DataType::UINT8), {},
@@ -187,7 +210,12 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
 
   // From DequantizeLinear.export_uint16(): UINT16 with zero_point=32767.
   {
-    Expect(registry, node, "test_dequantizelinear_uint16", {opset}, [=]() -> IoData {
+    Expect(registry, node, "test_dequantizelinear_uint16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(25);
+
+      const KernelContext dequantize_kernel_ctx{opset};
+      const onnx_kernels::kernel::DequantizeLinear dequantize_kernel{dequantize_kernel_ctx};
+
       Tensor x = Tensor::FromUint16("", {4}, {30000, 31000, 32768, 33000});
       Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
       const Tensor x_zero_point = Uint16ZeroPoint(32767);
@@ -198,7 +226,12 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
 
   // From DequantizeLinear.export_int16(): INT16 with zero_point=-1024.
   {
-    Expect(registry, node, "test_dequantizelinear_int16", {opset}, [=]() -> IoData {
+    Expect(registry, node, "test_dequantizelinear_int16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(25);
+
+      const KernelContext dequantize_kernel_ctx{opset};
+      const onnx_kernels::kernel::DequantizeLinear dequantize_kernel{dequantize_kernel_ctx};
+
       Tensor x = Tensor::FromInt16("", {4}, {-300, -30, -1025, 1270});
       Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
       const Tensor x_zero_point = Int16ZeroPoint(-1024);
@@ -224,7 +257,12 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
     e4m3fn_node.add_output("y");
     AddAttribute<int64_t>(e4m3fn_node, "axis", 0);
     Expect(registry, std::move(e4m3fn_node), "test_dequantizelinear_e4m3fn", {opset_v21},
-           [=]() -> IoData {
+           [f8_shape, f8_values]() -> IoData {
+             const OpsetId opset = DefaultOpset(25);
+
+             const KernelContext dequantize_kernel_ctx{opset};
+             const onnx_kernels::kernel::DequantizeLinear dequantize_kernel{dequantize_kernel_ctx};
+
              Tensor x = MakeFloat8Tensor(DataType::FLOAT8E4M3FN, f8_shape, f8_values,
                                          &FloatToFloat8E4M3FNBits);
              Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
@@ -241,15 +279,20 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
     e5m2_node.add_input("x_scale");
     e5m2_node.add_output("y");
     AddAttribute<int64_t>(e5m2_node, "axis", 0);
-    Expect(
-        registry, std::move(e5m2_node), "test_dequantizelinear_e5m2", {opset_v21}, [=]() -> IoData {
-          const std::vector<float> e5m2_values = {0.0f, 0.5f, 1.0f, 49152.0f, -96.0f};
-          Tensor x =
-              MakeFloat8Tensor(DataType::FLOAT8E5M2, f8_shape, e5m2_values, &FloatToFloat8E5M2Bits);
-          Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
-          Tensor y = dequantize_kernel(x, x_scale);
-          return IoData{{std::move(x), std::move(x_scale)}, {std::move(y)}};
-        });
+    Expect(registry, std::move(e5m2_node), "test_dequantizelinear_e5m2", {opset_v21},
+           [f8_shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(25);
+
+             const KernelContext dequantize_kernel_ctx{opset};
+             const onnx_kernels::kernel::DequantizeLinear dequantize_kernel{dequantize_kernel_ctx};
+
+             const std::vector<float> e5m2_values = {0.0f, 0.5f, 1.0f, 49152.0f, -96.0f};
+             Tensor x = MakeFloat8Tensor(DataType::FLOAT8E5M2, f8_shape, e5m2_values,
+                                         &FloatToFloat8E5M2Bits);
+             Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
+             Tensor y = dequantize_kernel(x, x_scale);
+             return IoData{{std::move(x), std::move(x_scale)}, {std::move(y)}};
+           });
   }
 
   // From DequantizeLinear.export_e4m3fn_zero_point(): FLOAT8E4M3FN with
@@ -263,7 +306,12 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
     e4m3fn_zp_node.add_output("y");
     AddAttribute<int64_t>(e4m3fn_zp_node, "axis", 0);
     Expect(registry, std::move(e4m3fn_zp_node), "test_dequantizelinear_e4m3fn_zero_point",
-           {opset_v21}, [=]() -> IoData {
+           {opset_v21}, [f8_shape, f8_values]() -> IoData {
+             const OpsetId opset = DefaultOpset(25);
+
+             const KernelContext dequantize_kernel_ctx{opset};
+             const onnx_kernels::kernel::DequantizeLinear dequantize_kernel{dequantize_kernel_ctx};
+
              Tensor x = MakeFloat8Tensor(DataType::FLOAT8E4M3FN, f8_shape, f8_values,
                                          &FloatToFloat8E4M3FNBits);
              Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
@@ -287,7 +335,12 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
     axis_node.add_input("x_scale");
     axis_node.add_input("x_zero_point");
     axis_node.add_output("y");
-    Expect(registry, std::move(axis_node), "test_dequantizelinear_axis", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(axis_node), "test_dequantizelinear_axis", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(25);
+
+      const KernelContext dequantize_kernel_ctx{opset};
+      const onnx_kernels::kernel::DequantizeLinear dequantize_kernel{dequantize_kernel_ctx};
+
       Tensor x = Tensor::FromUint8(
           "", {1, 3, 3, 2},
           {3, 89, 34, 200, 74, 59, 5, 24, 24, 87, 32, 13, 245, 99, 4, 142, 121, 102});
@@ -311,7 +364,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
     AddAttribute<int64_t>(blocked_node, "axis", 1);
     AddAttribute<int64_t>(blocked_node, "block_size", 2);
     Expect(registry, std::move(blocked_node), "test_dequantizelinear_blocked", {opset_v21},
-           [=]() -> IoData {
+           []() -> IoData {
              Tensor x = Tensor::FromUint8("", {1, 4, 3, 2},
                                           {3, 89, 34, 200, 74, 59, 5,   24, 24, 87,  32,  13,
                                            5, 12, 12, 33,  65, 42, 245, 99, 4,  142, 121, 102});
@@ -340,7 +393,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
     f16_node.add_output("y");
     AddAttribute<int64_t>(f16_node, "axis", 0);
     Expect(registry, std::move(f16_node), "test_dequantizelinear_e4m3fn_float16", {opset_v21},
-           [=]() -> IoData {
+           [f8_shape, f8_values]() -> IoData {
              Tensor x = MakeFloat8Tensor(DataType::FLOAT8E4M3FN, f8_shape, f8_values,
                                          &FloatToFloat8E4M3FNBits);
              Tensor x_scale = MakeFloat16Tensor("", {}, {2.0f});
@@ -365,7 +418,9 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
 
   // From DequantizeLinear.export_uint4().
   {
-    Expect(registry, sub_byte_node, "test_dequantizelinear_uint4", {opset_v21}, [=]() -> IoData {
+    Expect(registry, sub_byte_node, "test_dequantizelinear_uint4", {opset_v21}, []() -> IoData {
+      Tensor sub_byte_scale = Tensor::FromFloat("", {}, {2.0f});
+
       Tensor x = MakeSubByteTensor(DataType::UINT4, {5}, {0, 1, 7, 10, 15}, /*bits=*/4);
       Tensor x_zero_point = MakeSubByteTensor(DataType::UINT4, {1}, {1}, /*bits=*/4);
       Tensor y = Tensor::FromFloat("", {5}, {-2.0f, 0.0f, 12.0f, 18.0f, 28.0f});
@@ -376,7 +431,9 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
 
   // From DequantizeLinear.export_int4().
   {
-    Expect(registry, sub_byte_node, "test_dequantizelinear_int4", {opset_v21}, [=]() -> IoData {
+    Expect(registry, sub_byte_node, "test_dequantizelinear_int4", {opset_v21}, []() -> IoData {
+      Tensor sub_byte_scale = Tensor::FromFloat("", {}, {2.0f});
+
       Tensor x = MakeSubByteTensor(DataType::INT4, {5}, {0, 1, 7, -4, -8}, /*bits=*/4);
       Tensor x_zero_point = MakeSubByteTensor(DataType::INT4, {1}, {1}, /*bits=*/4);
       Tensor y = Tensor::FromFloat("", {5}, {-2.0f, 0.0f, 12.0f, -10.0f, -18.0f});
@@ -387,7 +444,9 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
 
   // From DequantizeLinear.export_uint2().
   {
-    Expect(registry, sub_byte_node, "test_dequantizelinear_uint2", {opset_v25}, [=]() -> IoData {
+    Expect(registry, sub_byte_node, "test_dequantizelinear_uint2", {opset_v25}, []() -> IoData {
+      Tensor sub_byte_scale = Tensor::FromFloat("", {}, {2.0f});
+
       Tensor x = MakeSubByteTensor(DataType::UINT2, {4}, {0, 1, 2, 3}, /*bits=*/2);
       Tensor x_zero_point = MakeSubByteTensor(DataType::UINT2, {1}, {1}, /*bits=*/2);
       Tensor y = Tensor::FromFloat("", {4}, {-2.0f, 0.0f, 2.0f, 4.0f});
@@ -398,7 +457,9 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
 
   // From DequantizeLinear.export_int2().
   {
-    Expect(registry, sub_byte_node, "test_dequantizelinear_int2", {opset_v25}, [=]() -> IoData {
+    Expect(registry, sub_byte_node, "test_dequantizelinear_int2", {opset_v25}, []() -> IoData {
+      Tensor sub_byte_scale = Tensor::FromFloat("", {}, {2.0f});
+
       Tensor x = MakeSubByteTensor(DataType::INT2, {4}, {0, 1, -1, -2}, /*bits=*/2);
       Tensor x_zero_point = MakeSubByteTensor(DataType::INT2, {1}, {1}, /*bits=*/2);
       Tensor y = Tensor::FromFloat("", {4}, {-2.0f, 0.0f, -4.0f, -6.0f});
@@ -410,7 +471,9 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
   // From DequantizeLinear.export_float4e2m1().
   {
     Expect(registry, sub_byte_node, "test_dequantizelinear_float4e2m1", {opset_v23},
-           [=]() -> IoData {
+           []() -> IoData {
+             Tensor sub_byte_scale = Tensor::FromFloat("", {}, {2.0f});
+
              Tensor x = MakeFloat4E2M1Tensor({5}, {0.0f, 1.0f, -1.0f, 1.5f, -4.0f});
              Tensor x_zero_point = MakeFloat4E2M1Tensor({1}, {0.0f});
              Tensor y = Tensor::FromFloat("", {5}, {0.0f, 2.0f, -2.0f, 3.0f, -8.0f});

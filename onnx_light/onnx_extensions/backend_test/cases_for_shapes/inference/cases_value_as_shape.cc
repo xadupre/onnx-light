@@ -51,114 +51,133 @@ constexpr int64_t kDefaultIrVersion = 10;
 // ---------------------------------------------------------------------------
 void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(20);
-  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   const std::string name = "test_cc_shape_inference_value_as_shape";
+  TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(20);
 
-  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Expand kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Add kernel_2{ctx_2};
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::Add kernel_3{ctx_3};
+    const KernelContext ctx_4{opset};
+    const onnx_kernels::kernel::Add kernel_4{ctx_4};
+    const KernelContext ctx_5{opset};
+    const onnx_kernels::kernel::Add kernel_5{ctx_5};
+    const KernelContext ctx_6{opset};
+    const onnx_kernels::kernel::Add kernel_6{ctx_6};
+    const KernelContext ctx_7{opset};
+    const onnx_kernels::kernel::Abs kernel_7{ctx_7};
 
-  ModelProto &model = tc.emplace_model();
-  InitModel(model, kDefaultIrVersion, {opset});
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    ModelProto &model = tc.emplace_model();
+    InitModel(model, kDefaultIrVersion, {opset});
 
-  // n = Shape(x, start=0, end=1)
-  NodeProto &n_node = AddNode(*graph, "Shape", {"x"}, {"n"});
-  AddAttribute<int64_t>(n_node, "start", 0);
-  AddAttribute<int64_t>(n_node, "end", 1);
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  // b = Shape(x, start=1, end=2)
-  NodeProto &b_node = AddNode(*graph, "Shape", {"x"}, {"b"});
-  AddAttribute<int64_t>(b_node, "start", 1);
-  AddAttribute<int64_t>(b_node, "end", 2);
+    // n = Shape(x, start=0, end=1)
+    NodeProto &n_node = AddNode(*graph, "Shape", {"x"}, {"n"});
+    AddAttribute<int64_t>(n_node, "start", 0);
+    AddAttribute<int64_t>(n_node, "end", 1);
 
-  // shape = Concat([n, b], axis=0)
-  NodeProto &concat_node = AddNode(*graph, "Concat", {"n", "b"}, {"shape"});
-  AddAxisAttribute(concat_node, 0);
+    // b = Shape(x, start=1, end=2)
+    NodeProto &b_node = AddNode(*graph, "Shape", {"x"}, {"b"});
+    AddAttribute<int64_t>(b_node, "start", 1);
+    AddAttribute<int64_t>(b_node, "end", 2);
 
-  AddNode(*graph, "Add", {"shape", "one"}, {"shape1"});
-  AddNode(*graph, "Sub", {"shape1", "one"}, {"shape2"});
-  AddNode(*graph, "Expand", {"x", "shape2"}, {"expanded"});
+    // shape = Concat([n, b], axis=0)
+    NodeProto &concat_node = AddNode(*graph, "Concat", {"n", "b"}, {"shape"});
+    AddAxisAttribute(concat_node, 0);
 
-  AddNode(*graph, "Add", {"expanded", "y1"}, {"z1"});
-  AddNode(*graph, "Add", {"expanded", "y2"}, {"z2"});
-  AddNode(*graph, "Add", {"expanded", "y3"}, {"z3"});
+    AddNode(*graph, "Add", {"shape", "one"}, {"shape1"});
+    AddNode(*graph, "Sub", {"shape1", "one"}, {"shape2"});
+    AddNode(*graph, "Expand", {"x", "shape2"}, {"expanded"});
 
-  AddNode(*graph, "Add", {"z1", "z2"}, {"z12"});
-  AddNode(*graph, "Add", {"z12", "z3"}, {"z_pre_abs"});
-  AddNode(*graph, "Abs", {"z_pre_abs"}, {"z"});
+    AddNode(*graph, "Add", {"expanded", "y1"}, {"z1"});
+    AddNode(*graph, "Add", {"expanded", "y2"}, {"z2"});
+    AddNode(*graph, "Add", {"expanded", "y3"}, {"z3"});
 
-  // Initializer ``one`` : int64[1] = [1].
-  AddInitializer<int64_t>(*graph, "one", {1}, {1});
+    AddNode(*graph, "Add", {"z1", "z2"}, {"z12"});
+    AddNode(*graph, "Add", {"z12", "z3"}, {"z_pre_abs"});
+    AddNode(*graph, "Abs", {"z_pre_abs"}, {"z"});
 
-  // Graph inputs use the symbolic shapes from the Python test:
-  //   x : float[N, 1], y1/y2/y3 : float[1, B].
-  AppendValueInfo(*graph->add_input(), "x", DataType::FLOAT, {"N", DimSpec(int64_t{1})});
-  AppendValueInfo(*graph->add_input(), "y1", DataType::FLOAT, {DimSpec(int64_t{1}), "B"});
-  AppendValueInfo(*graph->add_input(), "y2", DataType::FLOAT, {DimSpec(int64_t{1}), "B"});
-  AppendValueInfo(*graph->add_input(), "y3", DataType::FLOAT, {DimSpec(int64_t{1}), "B"});
+    // Initializer ``one`` : int64[1] = [1].
+    AddInitializer<int64_t>(*graph, "one", {1}, {1});
 
-  // Explicit intermediate value_info annotations mirror the ``value_info``
-  // list in the Python test. They are stripped by
-  // :cpp:func:`SnapshotAndStripValueInfo` in the
-  // ``AllCollectedCasesInferOutputShapes`` test and used as the ground
-  // truth that shape inference must recover.
-  // Shape-computation intermediates (INT64): n/b/shape/shape1/shape2 flow
-  // into Expand as value-as-shape tensors and must be listed in value_info
-  // so that shape inference does not introduce previously-unknown names.
-  AppendValueInfo(*graph->add_value_info(), "n", DataType::INT64, {DimSpec(int64_t{1})});
-  AppendValueInfo(*graph->add_value_info(), "b", DataType::INT64, {DimSpec(int64_t{1})});
-  AppendValueInfo(*graph->add_value_info(), "shape", DataType::INT64, {DimSpec(int64_t{2})});
-  AppendValueInfo(*graph->add_value_info(), "shape1", DataType::INT64, {DimSpec(int64_t{2})});
-  AppendValueInfo(*graph->add_value_info(), "shape2", DataType::INT64, {DimSpec(int64_t{2})});
-  AppendValueInfo(*graph->add_value_info(), "expanded", DataType::FLOAT,
-                  {"N", DimSpec(int64_t{1})});
-  AppendValueInfo(*graph->add_value_info(), "z1", DataType::FLOAT, {"N", "B"});
-  AppendValueInfo(*graph->add_value_info(), "z2", DataType::FLOAT, {"N", "B"});
-  AppendValueInfo(*graph->add_value_info(), "z12", DataType::FLOAT, {"N", "B"});
-  AppendValueInfo(*graph->add_value_info(), "z3", DataType::FLOAT, {"N", "B"});
-  AppendValueInfo(*graph->add_value_info(), "z_pre_abs", DataType::FLOAT, {"N", "B"});
+    // Graph inputs use the symbolic shapes from the Python test:
+    //   x : float[N, 1], y1/y2/y3 : float[1, B].
+    AppendValueInfo(*graph->add_input(), "x", DataType::FLOAT, {"N", DimSpec(int64_t{1})});
+    AppendValueInfo(*graph->add_input(), "y1", DataType::FLOAT, {DimSpec(int64_t{1}), "B"});
+    AppendValueInfo(*graph->add_input(), "y2", DataType::FLOAT, {DimSpec(int64_t{1}), "B"});
+    AppendValueInfo(*graph->add_input(), "y3", DataType::FLOAT, {DimSpec(int64_t{1}), "B"});
 
-  // Graph output: z : float[N, B].
-  AppendValueInfo(*graph->add_output(), "z", DataType::FLOAT, {"N", "B"});
+    // Explicit intermediate value_info annotations mirror the ``value_info``
+    // list in the Python test. They are stripped by
+    // :cpp:func:`SnapshotAndStripValueInfo` in the
+    // ``AllCollectedCasesInferOutputShapes`` test and used as the ground
+    // truth that shape inference must recover.
+    // Shape-computation intermediates (INT64): n/b/shape/shape1/shape2 flow
+    // into Expand as value-as-shape tensors and must be listed in value_info
+    // so that shape inference does not introduce previously-unknown names.
+    AppendValueInfo(*graph->add_value_info(), "n", DataType::INT64, {DimSpec(int64_t{1})});
+    AppendValueInfo(*graph->add_value_info(), "b", DataType::INT64, {DimSpec(int64_t{1})});
+    AppendValueInfo(*graph->add_value_info(), "shape", DataType::INT64, {DimSpec(int64_t{2})});
+    AppendValueInfo(*graph->add_value_info(), "shape1", DataType::INT64, {DimSpec(int64_t{2})});
+    AppendValueInfo(*graph->add_value_info(), "shape2", DataType::INT64, {DimSpec(int64_t{2})});
+    AppendValueInfo(*graph->add_value_info(), "expanded", DataType::FLOAT,
+                    {"N", DimSpec(int64_t{1})});
+    AppendValueInfo(*graph->add_value_info(), "z1", DataType::FLOAT, {"N", "B"});
+    AppendValueInfo(*graph->add_value_info(), "z2", DataType::FLOAT, {"N", "B"});
+    AppendValueInfo(*graph->add_value_info(), "z12", DataType::FLOAT, {"N", "B"});
+    AppendValueInfo(*graph->add_value_info(), "z3", DataType::FLOAT, {"N", "B"});
+    AppendValueInfo(*graph->add_value_info(), "z_pre_abs", DataType::FLOAT, {"N", "B"});
 
-  // Build the reference DataSet — concrete N=3, B=4 tensors and the kernels
-  // chained to materialise the expected ``z`` output.
-  constexpr int64_t kN = 3;
-  constexpr int64_t kB = 4;
-  std::vector<float> x_values(static_cast<size_t>(kN));
-  for (size_t i = 0; i < x_values.size(); ++i) {
-    x_values[i] = static_cast<float>(i) * 0.1f + 1.0f;
-  }
-  Tensor x = Tensor::FromFloat("x", {kN, 1}, x_values);
+    // Graph output: z : float[N, B].
+    AppendValueInfo(*graph->add_output(), "z", DataType::FLOAT, {"N", "B"});
 
-  std::vector<float> y1_values(static_cast<size_t>(kB));
-  std::vector<float> y2_values(static_cast<size_t>(kB));
-  std::vector<float> y3_values(static_cast<size_t>(kB));
-  for (size_t i = 0; i < y1_values.size(); ++i) {
-    y1_values[i] = static_cast<float>(i) * 0.01f + 2.0f;
-    y2_values[i] = static_cast<float>(i) * 0.02f + 3.0f;
-    y3_values[i] = static_cast<float>(i) * 0.03f + 4.0f;
-  }
-  Tensor y1 = Tensor::FromFloat("y1", {1, kB}, y1_values);
-  Tensor y2 = Tensor::FromFloat("y2", {1, kB}, y2_values);
-  Tensor y3 = Tensor::FromFloat("y3", {1, kB}, y3_values);
+    // Build the reference DataSet — concrete N=3, B=4 tensors and the kernels
+    // chained to materialise the expected ``z`` output.
+    constexpr int64_t kN = 3;
+    constexpr int64_t kB = 4;
+    std::vector<float> x_values(static_cast<size_t>(kN));
+    for (size_t i = 0; i < x_values.size(); ++i) {
+      x_values[i] = static_cast<float>(i) * 0.1f + 1.0f;
+    }
+    Tensor x = Tensor::FromFloat("x", {kN, 1}, x_values);
 
-  // shape2 evaluates to [N, 1] = [3, 1].
-  const Tensor shape2 = Tensor::FromInt64("", {2}, {kN, 1});
-  Tensor expanded = onnx_kernels::kernel::Expand(ctx)(x, shape2);
-  Tensor z1 = onnx_kernels::kernel::Add(ctx)(expanded, y1);
-  Tensor z2 = onnx_kernels::kernel::Add(ctx)(expanded, y2);
-  Tensor z3 = onnx_kernels::kernel::Add(ctx)(expanded, y3);
-  Tensor z12 = onnx_kernels::kernel::Add(ctx)(z1, z2);
-  Tensor z_pre_abs = onnx_kernels::kernel::Add(ctx)(z12, z3);
-  Tensor z = onnx_kernels::kernel::Abs(ctx)(z_pre_abs);
-  z.name = "z";
+    std::vector<float> y1_values(static_cast<size_t>(kB));
+    std::vector<float> y2_values(static_cast<size_t>(kB));
+    std::vector<float> y3_values(static_cast<size_t>(kB));
+    for (size_t i = 0; i < y1_values.size(); ++i) {
+      y1_values[i] = static_cast<float>(i) * 0.01f + 2.0f;
+      y2_values[i] = static_cast<float>(i) * 0.02f + 3.0f;
+      y3_values[i] = static_cast<float>(i) * 0.03f + 4.0f;
+    }
+    Tensor y1 = Tensor::FromFloat("y1", {1, kB}, y1_values);
+    Tensor y2 = Tensor::FromFloat("y2", {1, kB}, y2_values);
+    Tensor y3 = Tensor::FromFloat("y3", {1, kB}, y3_values);
 
-  AppendDataSet(tc, {std::move(x), std::move(y1), std::move(y2), std::move(y3)}, {std::move(z)});
+    // shape2 evaluates to [N, 1] = [3, 1].
+    const Tensor shape2 = Tensor::FromInt64("", {2}, {kN, 1});
+    Tensor expanded = kernel_1(x, shape2);
+    Tensor z1 = kernel_2(expanded, y1);
+    Tensor z2 = kernel_3(expanded, y2);
+    Tensor z3 = kernel_4(expanded, y3);
+    Tensor z12 = kernel_5(z1, z2);
+    Tensor z_pre_abs = kernel_6(z12, z3);
+    Tensor z = kernel_7(z_pre_abs);
+    z.name = "z";
 
-  registry.emplace_back(std::move(tc));
+    AppendDataSet(tc, {std::move(x), std::move(y1), std::move(y2), std::move(y3)}, {std::move(z)});
+
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

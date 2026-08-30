@@ -42,98 +42,115 @@ template <typename T> void MarkConstant(T &value) {
 // ---------------------------------------------------------------------------
 void RegisterConstantInfoCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
-  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   // ---- case 1: Add(C, C) → D ; Add(X, D) → Y --------------------------------
   {
     const std::string name = "test_cc_constant_add_chain";
+    TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::CONSTANT);
+    lazy_case.build = [name](bool) -> BuiltCase {
+      const OpsetId opset = DefaultOpset(18);
 
-    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::CONSTANT);
-    tc.rtol = 1e-3;
-    tc.atol = 1e-7;
+      const KernelContext ctx_1{opset};
+      const onnx_kernels::kernel::Add kernel_1{ctx_1};
+      const KernelContext ctx_2{opset};
+      const onnx_kernels::kernel::Add kernel_2{ctx_2};
 
-    ModelProto &model = tc.emplace_model();
-    InitModel(model, kDefaultIrVersion, {opset});
+      TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::CONSTANT);
+      tc.rtol = 1e-3;
+      tc.atol = 1e-7;
 
-    GraphProto *graph = model.add_graph();
-    graph->set_name(name);
+      ModelProto &model = tc.emplace_model();
+      InitModel(model, kDefaultIrVersion, {opset});
 
-    AddNode(*graph, "Add", {"C", "C"}, {"D"});
-    AddNode(*graph, "Add", {"X", "D"}, {"Y"});
+      GraphProto *graph = model.add_graph();
+      graph->set_name(name);
 
-    AddInitializer<float>(*graph, "C", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-    AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
-    AppendValueInfo(*graph->add_value_info(), "D", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
-    AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+      AddNode(*graph, "Add", {"C", "C"}, {"D"});
+      AddNode(*graph, "Add", {"X", "D"}, {"Y"});
 
-    // Pre-embed the expected constant-information metadata.
-    // node[0] Add(C, C): both inputs are the constant initializer C → constant.
-    // node[1] Add(X, D): X is a runtime input → not constant.
-    (*graph->mutable_node())[0].add_metadata(core::compute::kConstantMetadataKey, "1");
-    MarkConstant(*graph->mutable_initializer(0)); // C
-    MarkConstant(*graph->mutable_value_info(0));  // D
+      AddInitializer<float>(*graph, "C", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+      AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+      AppendValueInfo(*graph->add_value_info(), "D", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+      AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
 
-    const Tensor c = Tensor::FromFloat("C", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-    const Tensor x = Tensor::FromFloat("X", {2, 3}, {-1.0f, -2.0f, -3.0f, 0.5f, 1.5f, 2.5f});
-    Tensor d = onnx_kernels::kernel::Add(ctx)(c, c);
-    d.name = "D";
-    Tensor y = onnx_kernels::kernel::Add(ctx)(x, d);
-    y.name = "Y";
+      // Pre-embed the expected constant-information metadata.
+      // node[0] Add(C, C): both inputs are the constant initializer C → constant.
+      // node[1] Add(X, D): X is a runtime input → not constant.
+      (*graph->mutable_node())[0].add_metadata(core::compute::kConstantMetadataKey, "1");
+      MarkConstant(*graph->mutable_initializer(0)); // C
+      MarkConstant(*graph->mutable_value_info(0));  // D
 
-    AppendDataSet(tc, {x}, {y});
+      const Tensor c = Tensor::FromFloat("C", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+      const Tensor x = Tensor::FromFloat("X", {2, 3}, {-1.0f, -2.0f, -3.0f, 0.5f, 1.5f, 2.5f});
+      Tensor d = kernel_1(c, c);
+      d.name = "D";
+      Tensor y = kernel_2(x, d);
+      y.name = "Y";
 
-    registry.emplace_back(std::move(tc));
+      AppendDataSet(tc, {x}, {y});
+
+      return tc.take_materialized();
+    };
+    registry.emplace_back(std::move(lazy_case));
   }
 
   // ---- case 2: Constant → K ; Add(X, K) → Y ---------------------------------
   {
     const std::string name = "test_cc_constant_node_source";
+    TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::CONSTANT);
+    lazy_case.build = [name](bool) -> BuiltCase {
+      const OpsetId opset = DefaultOpset(18);
 
-    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::CONSTANT);
-    tc.rtol = 1e-3;
-    tc.atol = 1e-7;
+      const KernelContext ctx_3{opset};
+      const onnx_kernels::kernel::Add kernel_3{ctx_3};
 
-    ModelProto &model = tc.emplace_model();
-    InitModel(model, kDefaultIrVersion, {opset});
+      TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::CONSTANT);
+      tc.rtol = 1e-3;
+      tc.atol = 1e-7;
 
-    GraphProto *graph = model.add_graph();
-    graph->set_name(name);
+      ModelProto &model = tc.emplace_model();
+      InitModel(model, kDefaultIrVersion, {opset});
 
-    const Tensor k_value =
-        Tensor::FromFloat("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
-    NodeProto &const_node = AddNode(*graph, "Constant", {}, {"K"});
-    {
-      AttributeProto *attr = const_node.add_attribute();
-      attr->set_name("value");
-      attr->set_type(AttributeProto::AttributeType::TENSOR);
-      TensorProto *t = attr->add_t();
-      t->set_data_type(static_cast<DataType>(k_value.data_type));
-      for (int64_t d : k_value.shape) {
-        t->add_dims(static_cast<uint64_t>(d));
+      GraphProto *graph = model.add_graph();
+      graph->set_name(name);
+
+      const Tensor k_value =
+          Tensor::FromFloat("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
+      NodeProto &const_node = AddNode(*graph, "Constant", {}, {"K"});
+      {
+        AttributeProto *attr = const_node.add_attribute();
+        attr->set_name("value");
+        attr->set_type(AttributeProto::AttributeType::TENSOR);
+        TensorProto *t = attr->add_t();
+        t->set_data_type(static_cast<DataType>(k_value.data_type));
+        for (int64_t d : k_value.shape) {
+          t->add_dims(static_cast<uint64_t>(d));
+        }
+        t->set_raw_data(utils::ByteSpan(k_value.data));
       }
-      t->set_raw_data(utils::ByteSpan(k_value.data));
-    }
-    AddNode(*graph, "Add", {"X", "K"}, {"Y"});
+      AddNode(*graph, "Add", {"X", "K"}, {"Y"});
 
-    AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
-    AppendValueInfo(*graph->add_value_info(), "K", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
-    AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+      AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+      AppendValueInfo(*graph->add_value_info(), "K", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+      AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
 
-    // Pre-embed the expected constant-information metadata.
-    // node[0] Constant: no inputs, deterministic → constant, K constant.
-    // node[1] Add(X, K): X is a runtime input → not constant.
-    (*graph->mutable_node())[0].add_metadata(core::compute::kConstantMetadataKey, "1");
-    MarkConstant(*graph->mutable_value_info(0)); // K
+      // Pre-embed the expected constant-information metadata.
+      // node[0] Constant: no inputs, deterministic → constant, K constant.
+      // node[1] Add(X, K): X is a runtime input → not constant.
+      (*graph->mutable_node())[0].add_metadata(core::compute::kConstantMetadataKey, "1");
+      MarkConstant(*graph->mutable_value_info(0)); // K
 
-    const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 1.0f, 1.0f, -1.0f, -1.0f, -1.0f});
-    Tensor k = k_value;
-    k.name = "K";
-    Tensor y = onnx_kernels::kernel::Add(ctx)(x, k);
-    y.name = "Y";
+      const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 1.0f, 1.0f, -1.0f, -1.0f, -1.0f});
+      Tensor k = k_value;
+      k.name = "K";
+      Tensor y = kernel_3(x, k);
+      y.name = "Y";
 
-    AppendDataSet(tc, {x}, {y});
+      AppendDataSet(tc, {x}, {y});
 
-    registry.emplace_back(std::move(tc));
+      return tc.take_materialized();
+    };
+    registry.emplace_back(std::move(lazy_case));
   }
 }
 

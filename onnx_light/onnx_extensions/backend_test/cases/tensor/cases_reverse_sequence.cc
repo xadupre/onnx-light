@@ -40,13 +40,16 @@ NodeProto MakeReverseSequenceNode(int64_t time_axis, int64_t batch_axis, bool se
 
 void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::ReverseSequence reverse_seq_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeReverseSequenceNode(0, 1, /*set_time_attr=*/true, /*set_batch_attr=*/true);
     Expect(registry, std::move(node), "test_cc_reversesequence_time_benchmark", {opset},
-           {4194304, 1024}, {4194304}, [reverse_seq_kernel]() -> IoData {
+           {4194304, 1024}, {4194304}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext reverse_seq_kernel_ctx{opset};
+             const onnx_kernels::kernel::ReverseSequence reverse_seq_kernel{reverse_seq_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {4096, 1024}, 2001);
              Tensor seq =
                  Tensor::FromInt64("sequence_lens", {1024}, std::vector<int64_t>(1024, 4096));
@@ -63,7 +66,12 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
   // Matches Example 1 in the ONNX spec.
   {
     Expect(registry, MakeReverseSequenceNode(0, 1, /*set_time_attr=*/true, /*set_batch_attr=*/true),
-           "test_cc_reversesequence_time", {opset}, [=]() -> IoData {
+           "test_cc_reversesequence_time", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext reverse_seq_kernel_ctx{opset};
+             const onnx_kernels::kernel::ReverseSequence reverse_seq_kernel{reverse_seq_kernel_ctx};
+
              const Tensor x =
                  Tensor::FromFloat("X", {4, 4},
                                    {0.0f, 4.0f, 8.0f, 12.0f, 1.0f, 5.0f, 9.0f, 13.0f, 2.0f, 6.0f,
@@ -81,7 +89,12 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
   // Matches Example 2 in the ONNX spec.
   {
     Expect(registry, MakeReverseSequenceNode(1, 0, /*set_time_attr=*/true, /*set_batch_attr=*/true),
-           "test_cc_reversesequence_batch", {opset}, [=]() -> IoData {
+           "test_cc_reversesequence_batch", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext reverse_seq_kernel_ctx{opset};
+             const onnx_kernels::kernel::ReverseSequence reverse_seq_kernel{reverse_seq_kernel_ctx};
+
              const Tensor x =
                  Tensor::FromFloat("X", {4, 4},
                                    {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f,
@@ -99,7 +112,12 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
   {
     Expect(registry,
            MakeReverseSequenceNode(0, 1, /*set_time_attr=*/false, /*set_batch_attr=*/false),
-           "test_cc_reversesequence_default_attrs", {opset}, [=]() -> IoData {
+           "test_cc_reversesequence_default_attrs", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext reverse_seq_kernel_ctx{opset};
+             const onnx_kernels::kernel::ReverseSequence reverse_seq_kernel{reverse_seq_kernel_ctx};
+
              const Tensor x = Tensor::FromFloat("X", {3, 2}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              const Tensor seq = Tensor::FromInt64("sequence_lens", {2}, {3, 2});
              onnx_kernels::kernel::ReverseSequence::Attributes attrs;
@@ -112,7 +130,12 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
   // inner-dimension copy path (time_axis=0, batch_axis=1, inner=2).
   {
     Expect(registry, MakeReverseSequenceNode(0, 1, /*set_time_attr=*/true, /*set_batch_attr=*/true),
-           "test_cc_reversesequence_with_inner_dim", {opset}, [=]() -> IoData {
+           "test_cc_reversesequence_with_inner_dim", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext reverse_seq_kernel_ctx{opset};
+             const onnx_kernels::kernel::ReverseSequence reverse_seq_kernel{reverse_seq_kernel_ctx};
+
              // shape [3 (time), 2 (batch), 2 (inner)]
              const Tensor x = Tensor::FromFloat(
                  "X", {3, 2, 2},

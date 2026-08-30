@@ -29,8 +29,6 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::LessOrEqual le_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -42,7 +40,12 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     const std::vector<int64_t> shape = {1024, 4096};
     const int64_t count = 1024 * 4096;
     Expect(registry, std::move(node), "test_cc_less_or_equal_benchmark", {opset}, {count, count},
-           {count}, [le_kernel, shape]() -> IoData {
+           {count}, [shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(16);
+
+             const KernelContext le_kernel_ctx{opset};
+             const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/9201);
              Tensor y = RandnTensor(DataType::FLOAT, shape, /*seed=*/9202);
              Tensor z = le_kernel(x, y);
@@ -58,7 +61,12 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_less_or_equal", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_less_or_equal", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
+
+      const KernelContext le_kernel_ctx{opset};
+      const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
       Tensor z = le_kernel(x, y);
@@ -74,7 +82,12 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_less_or_equal_bcast", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_less_or_equal_bcast", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
+
+      const KernelContext le_kernel_ctx{opset};
+      const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = Tensor::FromFloat("", {}, {2.5f});
       Tensor z = le_kernel(x, y);
@@ -90,7 +103,12 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_less_or_equal_float16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_less_or_equal_float16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
+
+      const KernelContext le_kernel_ctx{opset};
+      const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
       Tensor x = MakeFloat16Tensor("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = MakeFloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
       Tensor z = le_kernel(x, y);
@@ -106,7 +124,12 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_less_or_equal_bfloat16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_less_or_equal_bfloat16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
+
+      const KernelContext le_kernel_ctx{opset};
+      const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
       Tensor x = MakeBfloat16Tensor("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = MakeBfloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
       Tensor z = le_kernel(x, y);
@@ -136,28 +159,48 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
   const std::vector<std::pair<std::string, std::function<IoData()>>> cases = {
       // From Less.export() in less_equal.py:
       {"test_less_equal",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext le_kernel_ctx{opset};
+         const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/221);
          auto inputs_1 = RandnFloat({3, 4, 5}, /*seed=*/222);
          Tensor z = le_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_less_equal_int8",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext le_kernel_ctx{opset};
+         const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
          auto inputs_0 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/231);
          auto inputs_1 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/232);
          Tensor z = le_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_less_equal_int16",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext le_kernel_ctx{opset};
+         const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
          auto inputs_0 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/233);
          auto inputs_1 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/234);
          Tensor z = le_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_less_equal_uint8",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext le_kernel_ctx{opset};
+         const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/235));
          auto inputs_1 =
@@ -166,7 +209,12 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_less_equal_uint16",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext le_kernel_ctx{opset};
+         const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/237));
          auto inputs_1 =
@@ -175,7 +223,12 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_less_equal_uint32",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext le_kernel_ctx{opset};
+         const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/239));
          auto inputs_1 =
@@ -184,7 +237,12 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_less_equal_uint64",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext le_kernel_ctx{opset};
+         const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/241));
          auto inputs_1 =
@@ -194,7 +252,12 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
        }},
       // From Less.export_less_broadcast() in less_equal.py:
       {"test_less_equal_bcast",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext le_kernel_ctx{opset};
+         const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/223);
          auto inputs_1 = RandnFloat({5}, /*seed=*/224);
          Tensor z = le_kernel(inputs_0, inputs_1);
@@ -213,7 +276,12 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     n16.add_input("x");
     n16.add_input("y");
     n16.add_output("z");
-    Expect(registry, std::move(n16), "test_cc_less_or_equal_float16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(n16), "test_cc_less_or_equal_float16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
+
+      const KernelContext le_kernel_ctx{opset};
+      const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
       Tensor x = MakeFloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
       Tensor y = MakeFloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
       Tensor z = le_kernel(x, y);
@@ -228,7 +296,12 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
     nbf.add_input("x");
     nbf.add_input("y");
     nbf.add_output("z");
-    Expect(registry, std::move(nbf), "test_cc_less_or_equal_bfloat16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(nbf), "test_cc_less_or_equal_bfloat16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
+
+      const KernelContext le_kernel_ctx{opset};
+      const onnx_kernels::kernel::LessOrEqual le_kernel{le_kernel_ctx};
+
       Tensor x = MakeBfloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
       Tensor y = MakeBfloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
       Tensor z = le_kernel(x, y);

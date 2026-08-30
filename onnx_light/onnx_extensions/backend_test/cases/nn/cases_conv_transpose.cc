@@ -34,8 +34,6 @@ NodeProto MakeConvTransposeNode(const std::vector<std::string> &inputs,
 
 void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::ConvTranspose ct{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
@@ -44,7 +42,12 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     constexpr int64_t w_count = 32 * 32 * 3 * 3;
     constexpr int64_t y_count = 1 * 32 * 130 * 130;
     Expect(registry, std::move(node), "test_cc_convtranspose_benchmark", {opset},
-           {x_count, w_count}, {y_count}, [ct]() -> IoData {
+           {x_count, w_count}, {y_count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext ct_ctx{opset};
+             const onnx_kernels::kernel::ConvTranspose ct{ct_ctx};
+
              Tensor X = RandnTensor(DataType::FLOAT, {1, 32, 128, 128}, 1401);
              Tensor W = RandnTensor(DataType::FLOAT, {32, 32, 3, 3}, 1402);
              Tensor B;
@@ -69,12 +72,22 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor B;
     onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     attrs.kernel_shape = {3, 3};
-    Tensor Y = ct(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
-    Expect(registry, std::move(node), "test_cc_convtranspose", {opset},
-           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+    Expect(registry, std::move(node), "test_cc_convtranspose", {opset}, [attrs, Xv]() -> IoData {
+      Tensor X = Tensor::FromFloat("X", {1, 1, 3, 3}, Xv);
+      Tensor W = Tensor::FromFloat("W", {1, 2, 3, 3}, std::vector<float>(18, 1.0f));
+      Tensor B;
+
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext ct_ctx{opset};
+      const onnx_kernels::kernel::ConvTranspose ct{ct_ctx};
+
+      Tensor Y = ct(X, W, B, attrs);
+      Y.name = "Y";
+      return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+    });
   }
 
   // -------------------------------------------------------------------
@@ -91,14 +104,25 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     attrs.kernel_shape = {3, 3};
     attrs.pads = {1, 2, 1, 2};
     attrs.strides = {3, 2};
-    Tensor Y = ct(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 2, 1, 2});
     AddAttribute<std::vector<int64_t>>(node, "strides", {3, 2});
     Expect(registry, std::move(node), "test_cc_convtranspose_pads", {opset},
-           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+           [attrs, Xv]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 1, 3, 3}, Xv);
+             Tensor W = Tensor::FromFloat("W", {1, 2, 3, 3}, std::vector<float>(18, 1.0f));
+             Tensor B;
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext ct_ctx{opset};
+             const onnx_kernels::kernel::ConvTranspose ct{ct_ctx};
+
+             Tensor Y = ct(X, W, B, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -113,12 +137,21 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor B = Tensor::FromFloat("B", {1}, {0.5f});
     onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     attrs.kernel_shape = {3, 3};
-    Tensor Y = ct(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W", "B"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     Expect(registry, std::move(node), "test_cc_convtranspose_with_kernel", {opset},
-           [=]() -> IoData {
+           [attrs, Xv]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 1, 3, 3}, Xv);
+             Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
+             Tensor B = Tensor::FromFloat("B", {1}, {0.5f});
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext ct_ctx{opset};
+             const onnx_kernels::kernel::ConvTranspose ct{ct_ctx};
+
+             Tensor Y = ct(X, W, B, attrs);
+             Y.name = "Y";
              return IoData{{std::move(X), std::move(W), std::move(B)}, {std::move(Y)}};
            });
   }
@@ -130,11 +163,21 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor W = Tensor::FromFloat("W", {1, 2, 3}, std::vector<float>(6, 1.0f));
     Tensor B;
     onnx_kernels::kernel::ConvTranspose::Attributes attrs;
-    Tensor Y = ct(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
-    Expect(registry, std::move(node), "test_cc_convtranspose_1d", {opset},
-           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+    Expect(registry, std::move(node), "test_cc_convtranspose_1d", {opset}, [attrs]() -> IoData {
+      Tensor X = Tensor::FromFloat("X", {1, 1, 3}, {0.0f, 1.0f, 2.0f});
+      Tensor W = Tensor::FromFloat("W", {1, 2, 3}, std::vector<float>(6, 1.0f));
+      Tensor B;
+
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext ct_ctx{opset};
+      const onnx_kernels::kernel::ConvTranspose ct{ct_ctx};
+
+      Tensor Y = ct(X, W, B, attrs);
+      Y.name = "Y";
+      return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+    });
   }
 
   // -------------------------------------------------------------------
@@ -148,11 +191,21 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor W = Tensor::FromFloat("W", {1, 2, 3, 3, 3}, std::vector<float>(54, 1.0f));
     Tensor B;
     onnx_kernels::kernel::ConvTranspose::Attributes attrs;
-    Tensor Y = ct(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
-    Expect(registry, std::move(node), "test_cc_convtranspose_3d", {opset},
-           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+    Expect(registry, std::move(node), "test_cc_convtranspose_3d", {opset}, [attrs, Xv]() -> IoData {
+      Tensor X = Tensor::FromFloat("X", {1, 1, 3, 4, 5}, Xv);
+      Tensor W = Tensor::FromFloat("W", {1, 2, 3, 3, 3}, std::vector<float>(54, 1.0f));
+      Tensor B;
+
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext ct_ctx{opset};
+      const onnx_kernels::kernel::ConvTranspose ct{ct_ctx};
+
+      Tensor Y = ct(X, W, B, attrs);
+      Y.name = "Y";
+      return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+    });
   }
 
   // -------------------------------------------------------------------
@@ -169,13 +222,24 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     attrs.auto_pad = AutoPad::kSameUpper;
     attrs.strides = {2, 2};
-    Tensor Y = ct(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
     AddAttribute<std::string>(node, "auto_pad", "SAME_UPPER");
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
     Expect(registry, std::move(node), "test_cc_convtranspose_autopad_same", {opset},
-           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+           [attrs, Xv]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 1, 3, 3}, Xv);
+             Tensor W = Tensor::FromFloat("W", {1, 2, 3, 3}, std::vector<float>(18, 1.0f));
+             Tensor B;
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext ct_ctx{opset};
+             const onnx_kernels::kernel::ConvTranspose ct{ct_ctx};
+
+             Tensor Y = ct(X, W, B, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -187,12 +251,24 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor B;
     onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     attrs.dilations = {2, 2};
-    Tensor Y = ct(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2});
     Expect(registry, std::move(node), "test_cc_convtranspose_dilations", {opset},
-           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+           [attrs]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 1, 3, 3},
+                                          {3.0f, 8.0f, 1.0f, 9.0f, 5.0f, 7.0f, 3.0f, 2.0f, 6.0f});
+             Tensor W = Tensor::FromFloat("W", {1, 1, 2, 2}, {7.0f, 2.0f, 1.0f, 9.0f});
+             Tensor B;
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext ct_ctx{opset};
+             const onnx_kernels::kernel::ConvTranspose ct{ct_ctx};
+
+             Tensor Y = ct(X, W, B, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -207,12 +283,23 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor B;
     onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     attrs.group = 2;
-    Tensor Y = ct(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
     AddAttribute<int64_t>(node, "group", 2);
     Expect(registry, std::move(node), "test_cc_convtranspose_group_2", {opset},
-           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+           [attrs, Xv]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 2, 3, 3}, Xv);
+             Tensor W = Tensor::FromFloat("W", {2, 1, 3, 3}, std::vector<float>(18, 1.0f));
+             Tensor B;
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext ct_ctx{opset};
+             const onnx_kernels::kernel::ConvTranspose ct{ct_ctx};
+
+             Tensor Y = ct(X, W, B, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -230,12 +317,29 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
     Tensor B;
     onnx_kernels::kernel::ConvTranspose::Attributes attrs;
     attrs.group = 2;
-    Tensor Y = ct(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
     AddAttribute<int64_t>(node, "group", 2);
     Expect(registry, std::move(node), "test_cc_convtranspose_group_2_image_3", {opset},
-           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+           [attrs]() -> IoData {
+             Tensor X = Tensor::FromFloat(
+                 "X", {3, 2, 3, 3},
+                 {0.0f,  1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,  10.0f,
+                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f, 19.0f, 20.0f, 21.0f,
+                  22.0f, 23.0f, 24.0f, 25.0f, 26.0f, 9.0f,  10.0f, 11.0f, 12.0f, 13.0f, 14.0f,
+                  15.0f, 16.0f, 17.0f, 0.0f,  1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,
+                  8.0f,  9.0f,  10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f});
+             Tensor W = Tensor::FromFloat("W", {2, 1, 3, 3}, std::vector<float>(18, 1.0f));
+             Tensor B;
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext ct_ctx{opset};
+             const onnx_kernels::kernel::ConvTranspose ct{ct_ctx};
+
+             Tensor Y = ct(X, W, B, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -255,13 +359,24 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
       onnx_kernels::kernel::ConvTranspose::Attributes attrs;
       attrs.strides = {3, 2};
       attrs.output_shape = {10, 8};
-      Tensor Y = ct(X, W, B, attrs);
-      Y.name = "Y";
       NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
       AddAttribute<std::vector<int64_t>>(node, "strides", {3, 2});
       AddAttribute<std::vector<int64_t>>(node, "output_shape", {10, 8});
       Expect(registry, std::move(node), "test_cc_convtranspose_output_shape", {opset},
-             [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+             [attrs, Xv]() -> IoData {
+               Tensor X = Tensor::FromFloat("X", {1, 1, 3, 3}, Xv);
+               Tensor W = Tensor::FromFloat("W", {1, 2, 3, 3}, std::vector<float>(18, 1.0f));
+               Tensor B;
+
+               const OpsetId opset = DefaultOpset(22);
+
+               const KernelContext ct_ctx{opset};
+               const onnx_kernels::kernel::ConvTranspose ct{ct_ctx};
+
+               Tensor Y = ct(X, W, B, attrs);
+               Y.name = "Y";
+               return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+             });
     }
 
     {
@@ -270,15 +385,26 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
       attrs.output_shape = {10, 8};
       attrs.kernel_shape = {3, 3};
       attrs.output_padding = {1, 1};
-      Tensor Y = ct(X, W, B, attrs);
-      Y.name = "Y";
       NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
       AddAttribute<std::vector<int64_t>>(node, "strides", {3, 2});
       AddAttribute<std::vector<int64_t>>(node, "output_shape", {10, 8});
       AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
       AddAttribute<std::vector<int64_t>>(node, "output_padding", {1, 1});
       Expect(registry, std::move(node), "test_cc_convtranspose_kernel_shape", {opset},
-             [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+             [attrs, Xv]() -> IoData {
+               Tensor X = Tensor::FromFloat("X", {1, 1, 3, 3}, Xv);
+               Tensor W = Tensor::FromFloat("W", {1, 2, 3, 3}, std::vector<float>(18, 1.0f));
+               Tensor B;
+
+               const OpsetId opset = DefaultOpset(22);
+
+               const KernelContext ct_ctx{opset};
+               const onnx_kernels::kernel::ConvTranspose ct{ct_ctx};
+
+               Tensor Y = ct(X, W, B, attrs);
+               Y.name = "Y";
+               return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+             });
     }
   }
 }

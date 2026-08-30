@@ -44,15 +44,18 @@ NodeProto MakeConcatNode(int64_t axis) {
 
 void RegisterConcatCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Concat concat_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> shape = {kBenchmarkElementwiseSize / 2};
     NodeProto node = MakeConcatNode(0);
     Expect(registry, std::move(node), "test_cc_concat_1d_axis_0_benchmark", {opset},
            {kBenchmarkElementwiseSize / 2, kBenchmarkElementwiseSize / 2},
-           {kBenchmarkElementwiseSize}, [concat_kernel, shape]() -> IoData {
+           {kBenchmarkElementwiseSize}, [shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext concat_kernel_ctx{opset};
+             const onnx_kernels::kernel::Concat concat_kernel{concat_kernel_ctx};
+
              Tensor x0 = RandnTensor(DataType::FLOAT, shape, 2001);
              Tensor x1 = RandnTensor(DataType::FLOAT, shape, 2002);
              Tensor y = concat_kernel({x0, x1}, 0);
@@ -83,7 +86,12 @@ void RegisterConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     for (int64_t axis = 0; axis < rank; ++axis) {
       Expect(registry, MakeConcatNode(axis),
              std::string("test_cc_concat_") + label + "_axis_" + std::to_string(axis), {opset},
-             [=]() -> IoData {
+             [shape, values0, values1, axis]() -> IoData {
+               const OpsetId opset = DefaultOpset(13);
+
+               const KernelContext concat_kernel_ctx{opset};
+               const onnx_kernels::kernel::Concat concat_kernel{concat_kernel_ctx};
+
                Tensor x0 = Tensor::FromFloat("", shape, values0);
                Tensor x1 = Tensor::FromFloat("", shape, values1);
                Tensor y = concat_kernel({x0, x1}, axis);
@@ -95,7 +103,12 @@ void RegisterConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     for (int64_t axis = -rank; axis < 0; ++axis) {
       Expect(registry, MakeConcatNode(axis),
              std::string("test_cc_concat_") + label + "_axis_negative_" + std::to_string(-axis),
-             {opset}, [=]() -> IoData {
+             {opset}, [shape, values0, values1, axis]() -> IoData {
+               const OpsetId opset = DefaultOpset(13);
+
+               const KernelContext concat_kernel_ctx{opset};
+               const onnx_kernels::kernel::Concat concat_kernel{concat_kernel_ctx};
+
                Tensor x0 = Tensor::FromFloat("", shape, values0);
                Tensor x1 = Tensor::FromFloat("", shape, values1);
                Tensor y = concat_kernel({x0, x1}, axis);

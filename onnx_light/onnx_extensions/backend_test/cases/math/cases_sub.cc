@@ -28,11 +28,10 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Sub sub_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkBinaryFloat("Sub", sub_kernel, "test_cc_sub_benchmark", opset, registry);
+    ExpectBenchmarkBinaryFloat<onnx_kernels::kernel::Sub>("Sub", "test_cc_sub_benchmark", opset,
+                                                          registry);
     return;
   }
 
@@ -43,7 +42,12 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_sub", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sub", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(14);
+
+      const KernelContext sub_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       Tensor y = Tensor::FromFloat("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
       Tensor z = sub_kernel(x, y);
@@ -59,7 +63,12 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_sub_bcast", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sub_bcast", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(14);
+
+      const KernelContext sub_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = Tensor::FromFloat("", {}, {0.5f});
       Tensor z = sub_kernel(x, y);
@@ -84,7 +93,12 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_sub_example", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_sub_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(14);
+
+      const KernelContext sub_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
       // test_sub_example: expected z = [-2, 0, 2].
       Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
       Tensor y = Tensor::FromFloat("", {3}, {3.0f, 2.0f, 1.0f});
@@ -104,42 +118,72 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
   const std::vector<std::pair<std::string, std::function<IoData()>>> cases = {
       // From Sub.export():
       {"test_sub",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(14);
+
+         const KernelContext sub_kernel_ctx{opset};
+         const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/1);
          auto inputs_1 = RandnFloat({3, 4, 5}, /*seed=*/2);
          Tensor z = sub_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_int8",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(14);
+
+         const KernelContext sub_kernel_ctx{opset};
+         const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
          auto inputs_0 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/11);
          auto inputs_1 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/12);
          Tensor z = sub_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_int16",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(14);
+
+         const KernelContext sub_kernel_ctx{opset};
+         const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
          auto inputs_0 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/13);
          auto inputs_1 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/14);
          Tensor z = sub_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_int32",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(14);
+
+         const KernelContext sub_kernel_ctx{opset};
+         const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
          auto inputs_0 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/113);
          auto inputs_1 = RandnTensor(DataType::INT32, {3, 4, 5}, /*seed=*/114);
          Tensor z = sub_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_int64",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(14);
+
+         const KernelContext sub_kernel_ctx{opset};
+         const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
          auto inputs_0 = RandnTensor(DataType::INT64, {3, 4, 5}, /*seed=*/115);
          auto inputs_1 = RandnTensor(DataType::INT64, {3, 4, 5}, /*seed=*/116);
          Tensor z = sub_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_uint8",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(14);
+
+         const KernelContext sub_kernel_ctx{opset};
+         const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/15));
          auto inputs_1 =
@@ -148,7 +192,12 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_uint16",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(14);
+
+         const KernelContext sub_kernel_ctx{opset};
+         const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/17));
          auto inputs_1 =
@@ -157,7 +206,12 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_uint32",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(14);
+
+         const KernelContext sub_kernel_ctx{opset};
+         const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/19));
          auto inputs_1 =
@@ -166,7 +220,12 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_sub_uint64",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(14);
+
+         const KernelContext sub_kernel_ctx{opset};
+         const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/21));
          auto inputs_1 =
@@ -176,7 +235,12 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
        }},
       // From Sub.export_sub_broadcast():
       {"test_sub_bcast",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(14);
+
+         const KernelContext sub_kernel_ctx{opset};
+         const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/3);
          auto inputs_1 = RandnFloat({5}, /*seed=*/4);
          Tensor z = sub_kernel(inputs_0, inputs_1);
@@ -195,7 +259,12 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
     n16.add_input("x");
     n16.add_input("y");
     n16.add_output("z");
-    Expect(registry, std::move(n16), "test_cc_sub_float16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(n16), "test_cc_sub_float16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(14);
+
+      const KernelContext sub_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
       Tensor x = MakeFloat16Tensor("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       Tensor y = MakeFloat16Tensor("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
       Tensor z = sub_kernel(x, y);
@@ -210,7 +279,12 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
     nbf.add_input("x");
     nbf.add_input("y");
     nbf.add_output("z");
-    Expect(registry, std::move(nbf), "test_cc_sub_bfloat16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(nbf), "test_cc_sub_bfloat16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(14);
+
+      const KernelContext sub_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
       std::vector<float> vx = {1.0f, 2.0f, 3.0f, 4.0f};
       std::vector<float> vy = {0.5f, 1.5f, 2.5f, 3.5f};
       std::vector<uint8_t> rx(vx.size() * 2), ry(vy.size() * 2);
@@ -234,7 +308,12 @@ void RegisterSubCases(std::vector<TestCase> &registry, TestMode mode) {
     nd.add_input("x");
     nd.add_input("y");
     nd.add_output("z");
-    Expect(registry, std::move(nd), "test_cc_sub_double", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(nd), "test_cc_sub_double", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(14);
+
+      const KernelContext sub_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sub sub_kernel{sub_kernel_ctx};
+
       Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
       Tensor y = Tensor::FromDouble("", {2, 3}, {10.0, 20.0, 30.0, 40.0, 50.0, 60.0});
       Tensor z = sub_kernel(x, y);

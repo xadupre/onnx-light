@@ -36,102 +36,121 @@ enum class NonZeroOutputAnnotation { kAnonymousDims, kNamedDims };
 // ``NonZero`` produces a deterministic ``(rank, nnz)`` index tensor.
 void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
-  const onnx_kernels::kernel::KernelContext ctx{opset};
+  TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
 
-  // Input contains a deterministic mix of zero and positive entries so that
-  // ``NonZero`` returns a non-trivial number of indices.
-  const std::vector<int64_t> input_shape = {3, 4};
-  const std::vector<float> x_values = {1.0f, 0.0f, 2.0f, 0.0f, //
-                                       0.0f, 3.0f, 0.0f, 4.0f, //
-                                       5.0f, 0.0f, 6.0f, 0.0f};
-  Tensor x = Tensor::FromFloat("X", input_shape, x_values);
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Abs kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Add kernel_2{ctx_2};
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::Mul kernel_3{ctx_3};
+    const KernelContext ctx_4{opset};
+    const onnx_kernels::kernel::NonZero kernel_4{ctx_4};
+    const KernelContext ctx_5{opset};
+    const onnx_kernels::kernel::Transpose kernel_5{ctx_5};
+    const KernelContext ctx_6{opset};
+    const onnx_kernels::kernel::Cast kernel_6{ctx_6};
+    const KernelContext ctx_7{opset};
+    const onnx_kernels::kernel::Abs kernel_7{ctx_7};
 
-  // Reference computation:
-  //   abs_out         = |X|
-  //   relu_out        = Relu(abs_out) = abs_out (no negative entries)
-  //   double_out      = abs_out + abs_out
-  //   mul_out         = double_out * abs_out
-  //   nz_pre_abs      = NonZero(mul_out)   shape (2, nnz)
-  //   nz              = Abs(nz_pre_abs)    shape (2, nnz)
-  //   transposed_nz   = Transpose(nz)      shape (nnz, 2)
-  //   nz_float_pre_abs= Cast(transposed_nz, FLOAT)
-  //   nz_float        = Abs(nz_float_pre_abs)
-  Tensor abs_out = onnx_kernels::kernel::Abs(ctx)(x);
-  Tensor relu_out = abs_out;
-  relu_out.name = "";
-  Tensor double_out = onnx_kernels::kernel::Add(ctx)(relu_out, relu_out);
-  Tensor mul_out = onnx_kernels::kernel::Mul(ctx)(double_out, relu_out);
-  // NonZero output is non-negative, so Abs is identity on it; reuse the same
-  // tensor under the post-Abs name ``nz`` directly.
-  Tensor nz = onnx_kernels::kernel::NonZero(ctx)(mul_out);
-  nz.name = "nz";
-  Tensor transposed_nz = onnx_kernels::kernel::Transpose(ctx)(nz, /*perm=*/{});
-  Tensor nz_float_pre_abs =
-      onnx_kernels::kernel::Cast(ctx)(transposed_nz, static_cast<int32_t>(DataType::FLOAT));
-  Tensor nz_float = onnx_kernels::kernel::Abs(ctx)(nz_float_pre_abs);
-  nz_float.name = "nz_float";
+    // Input contains a deterministic mix of zero and positive entries so that
+    // ``NonZero`` returns a non-trivial number of indices.
+    const std::vector<int64_t> input_shape = {3, 4};
+    const std::vector<float> x_values = {1.0f, 0.0f, 2.0f, 0.0f, //
+                                         0.0f, 3.0f, 0.0f, 4.0f, //
+                                         5.0f, 0.0f, 6.0f, 0.0f};
+    Tensor x = Tensor::FromFloat("X", input_shape, x_values);
 
-  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+    // Reference computation:
+    //   abs_out         = |X|
+    //   relu_out        = Relu(abs_out) = abs_out (no negative entries)
+    //   double_out      = abs_out + abs_out
+    //   mul_out         = double_out * abs_out
+    //   nz_pre_abs      = NonZero(mul_out)   shape (2, nnz)
+    //   nz              = Abs(nz_pre_abs)    shape (2, nnz)
+    //   transposed_nz   = Transpose(nz)      shape (nnz, 2)
+    //   nz_float_pre_abs= Cast(transposed_nz, FLOAT)
+    //   nz_float        = Abs(nz_float_pre_abs)
+    Tensor abs_out = kernel_1(x);
+    Tensor relu_out = abs_out;
+    relu_out.name = "";
+    Tensor double_out = kernel_2(relu_out, relu_out);
+    Tensor mul_out = kernel_3(double_out, relu_out);
+    // NonZero output is non-negative, so Abs is identity on it; reuse the same
+    // tensor under the post-Abs name ``nz`` directly.
+    Tensor nz = kernel_4(mul_out);
+    nz.name = "nz";
+    Tensor transposed_nz = kernel_5(nz, /*perm=*/{});
+    Tensor nz_float_pre_abs = kernel_6(transposed_nz, static_cast<int32_t>(DataType::FLOAT));
+    Tensor nz_float = kernel_7(nz_float_pre_abs);
+    nz_float.name = "nz_float";
 
-  ModelProto &model = tc.emplace_model();
-  InitModel(model, kDefaultIrVersion, {opset});
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
+    tc.rtol = 1e-3;
+    tc.atol = 1e-7;
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    ModelProto &model = tc.emplace_model();
+    InitModel(model, kDefaultIrVersion, {opset});
 
-  AddNode(*graph, "Abs", {"X"}, {"abs_out"});
-  AddNode(*graph, "Relu", {"abs_out"}, {"relu_out"});
-  AddNode(*graph, "Add", {"relu_out", "relu_out"}, {"double_out"});
-  AddNode(*graph, "Mul", {"double_out", "relu_out"}, {"mul_out"});
-  AddNode(*graph, "NonZero", {"mul_out"}, {"nz_pre_abs"});
-  AddNode(*graph, "Abs", {"nz_pre_abs"}, {"nz"});
-  AddNode(*graph, "Transpose", {"nz"}, {"transposed_nz"});
-  NodeProto &cast_node = AddNode(*graph, "Cast", {"transposed_nz"}, {"nz_float_pre_abs"});
-  AddAttribute<int64_t>(cast_node, "to", static_cast<int64_t>(DataType::FLOAT));
-  AddNode(*graph, "Abs", {"nz_float_pre_abs"}, {"nz_float"});
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  // Graph input X uses symbolic ``batch``/``seq`` dims; concrete sizes
-  // ``[3, 4]`` are only used in the DataSet below.
-  const int32_t kInt64 = static_cast<int32_t>(DataType::INT64);
-  const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
-  const std::vector<DimSpec> symbolic_input_shape = {"batch", "seq"};
-  AppendValueInfo(*graph->add_input(), "X", kFloat, symbolic_input_shape);
+    AddNode(*graph, "Abs", {"X"}, {"abs_out"});
+    AddNode(*graph, "Relu", {"abs_out"}, {"relu_out"});
+    AddNode(*graph, "Add", {"relu_out", "relu_out"}, {"double_out"});
+    AddNode(*graph, "Mul", {"double_out", "relu_out"}, {"mul_out"});
+    AddNode(*graph, "NonZero", {"mul_out"}, {"nz_pre_abs"});
+    AddNode(*graph, "Abs", {"nz_pre_abs"}, {"nz"});
+    AddNode(*graph, "Transpose", {"nz"}, {"transposed_nz"});
+    NodeProto &cast_node = AddNode(*graph, "Cast", {"transposed_nz"}, {"nz_float_pre_abs"});
+    AddAttribute<int64_t>(cast_node, "to", static_cast<int64_t>(DataType::FLOAT));
+    AddNode(*graph, "Abs", {"nz_float_pre_abs"}, {"nz_float"});
 
-  // Intermediate value_info entries. Tensors before ``NonZero`` keep the
-  // input's symbolic ``[batch, seq]`` shape; ``transposed_nz`` has the same
-  // data-dependent ``nnz`` dimension as ``nz``. The annotation style mirrors
-  // the graph outputs (anonymous vs named ``nnz``/``do1``). ``nz_pre_abs``
-  // and ``nz_float_pre_abs`` share the layout of their post-Abs counterparts.
-  AppendValueInfo(*graph->add_value_info(), "abs_out", kFloat, symbolic_input_shape);
-  AppendValueInfo(*graph->add_value_info(), "relu_out", kFloat, symbolic_input_shape);
-  AppendValueInfo(*graph->add_value_info(), "double_out", kFloat, symbolic_input_shape);
-  AppendValueInfo(*graph->add_value_info(), "mul_out", kFloat, symbolic_input_shape);
-  AppendValueInfo(*graph->add_value_info(), "nz_pre_abs", kInt64, {DimSpec(2), DimSpec("do1")});
+    // Graph input X uses symbolic ``batch``/``seq`` dims; concrete sizes
+    // ``[3, 4]`` are only used in the DataSet below.
+    const int32_t kInt64 = static_cast<int32_t>(DataType::INT64);
+    const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
+    const std::vector<DimSpec> symbolic_input_shape = {"batch", "seq"};
+    AppendValueInfo(*graph->add_input(), "X", kFloat, symbolic_input_shape);
 
-  // Graph outputs: nz and nz_float. The rank dimension is always known
-  // (equal to the input rank, 2), so it is declared with ``dim_value=2``.
-  // The data-dependent ``nnz`` dimension stays symbolic — either named
-  // (``"nnz"``/``"do1"``) or anonymous (default-constructed ``DimSpec()``).
-  //
-  // Intermediate value_info for ``nz`` would collide with the graph output of
-  // the same name, so it is omitted. ``transposed_nz`` is a pure intermediate
-  // and its shape mirrors ``nz_float`` (same dim layout, INT64 dtype).
-  AppendValueInfo(*graph->add_value_info(), "transposed_nz", kInt64, {DimSpec("do1"), DimSpec(2)});
-  AppendValueInfo(*graph->add_value_info(), "nz_float_pre_abs", kFloat,
-                  {DimSpec("do1"), DimSpec(2)});
-  AppendValueInfo(*graph->add_output(), "nz", kInt64, {DimSpec(2), DimSpec("do1")});
-  AppendValueInfo(*graph->add_output(), "nz_float", kFloat, {DimSpec("do1"), DimSpec(2)});
+    // Intermediate value_info entries. Tensors before ``NonZero`` keep the
+    // input's symbolic ``[batch, seq]`` shape; ``transposed_nz`` has the same
+    // data-dependent ``nnz`` dimension as ``nz``. The annotation style mirrors
+    // the graph outputs (anonymous vs named ``nnz``/``do1``). ``nz_pre_abs``
+    // and ``nz_float_pre_abs`` share the layout of their post-Abs counterparts.
+    AppendValueInfo(*graph->add_value_info(), "abs_out", kFloat, symbolic_input_shape);
+    AppendValueInfo(*graph->add_value_info(), "relu_out", kFloat, symbolic_input_shape);
+    AppendValueInfo(*graph->add_value_info(), "double_out", kFloat, symbolic_input_shape);
+    AppendValueInfo(*graph->add_value_info(), "mul_out", kFloat, symbolic_input_shape);
+    AppendValueInfo(*graph->add_value_info(), "nz_pre_abs", kInt64, {DimSpec(2), DimSpec("do1")});
 
-  // Provide a concrete DataSet so the case is executable end-to-end.
-  Tensor nz_out = nz;
-  nz_out.name = "nz";
-  Tensor nz_float_out = nz_float;
-  nz_float_out.name = "nz_float";
-  AppendDataSet(tc, {x}, {std::move(nz_out), std::move(nz_float_out)});
+    // Graph outputs: nz and nz_float. The rank dimension is always known
+    // (equal to the input rank, 2), so it is declared with ``dim_value=2``.
+    // The data-dependent ``nnz`` dimension stays symbolic — either named
+    // (``"nnz"``/``"do1"``) or anonymous (default-constructed ``DimSpec()``).
+    //
+    // Intermediate value_info for ``nz`` would collide with the graph output of
+    // the same name, so it is omitted. ``transposed_nz`` is a pure intermediate
+    // and its shape mirrors ``nz_float`` (same dim layout, INT64 dtype).
+    AppendValueInfo(*graph->add_value_info(), "transposed_nz", kInt64,
+                    {DimSpec("do1"), DimSpec(2)});
+    AppendValueInfo(*graph->add_value_info(), "nz_float_pre_abs", kFloat,
+                    {DimSpec("do1"), DimSpec(2)});
+    AppendValueInfo(*graph->add_output(), "nz", kInt64, {DimSpec(2), DimSpec("do1")});
+    AppendValueInfo(*graph->add_output(), "nz_float", kFloat, {DimSpec("do1"), DimSpec(2)});
 
-  registry.emplace_back(std::move(tc));
+    // Provide a concrete DataSet so the case is executable end-to-end.
+    Tensor nz_out = nz;
+    nz_out.name = "nz";
+    Tensor nz_float_out = nz_float;
+    nz_float_out.name = "nz_float";
+    AppendDataSet(tc, {x}, {std::move(nz_out), std::move(nz_float_out)});
+
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace

@@ -63,14 +63,17 @@ std::vector<int8_t> ToInt8(const std::vector<float> &v) {
 // ---------------------------------------------------------------------------
 void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Clip clip_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeClipNode();
     const int64_t size = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_clip_benchmark", {opset}, {size, 1, 1}, {size},
-           [clip_kernel, size]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext clip_kernel_ctx{opset};
+             const onnx_kernels::kernel::Clip clip_kernel{clip_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {size}, /*seed=*/2001);
              Tensor min_val = ScalarTensor<float>(-1.0f);
              Tensor max_val = ScalarTensor<float>(1.0f);
@@ -83,7 +86,12 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   // Deterministic onnx-light-specific case (``test_cc_*``).
   {
     NodeProto node = MakeClipNode();
-    Expect(registry, std::move(node), "test_cc_clip", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_clip", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext clip_kernel_ctx{opset};
+      const onnx_kernels::kernel::Clip clip_kernel{clip_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -0.5f, 0.0f, 0.5f, 2.0f});
       Tensor min_val = ScalarTensor<float>(-1.0f);
       Tensor max_val = ScalarTensor<float>(1.0f);
@@ -95,7 +103,12 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   // Upstream ONNX ``Clip.export()`` cases — float min/max in [-1, 1].
   {
     NodeProto node = MakeClipNode();
-    Expect(registry, std::move(node), "test_clip_example", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_clip_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext clip_kernel_ctx{opset};
+      const onnx_kernels::kernel::Clip clip_kernel{clip_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {3}, {-2.0f, 0.0f, 2.0f});
       Tensor min_val = ScalarTensor<float>(-1.0f);
       Tensor max_val = ScalarTensor<float>(1.0f);
@@ -105,7 +118,12 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   }
   {
     NodeProto node = MakeClipNode();
-    Expect(registry, std::move(node), "test_clip", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_clip", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext clip_kernel_ctx{opset};
+      const onnx_kernels::kernel::Clip clip_kernel{clip_kernel_ctx};
+
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/1);
       Tensor min_val = ScalarTensor<float>(-1.0f);
@@ -118,7 +136,12 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   // float min/max in [-5, 5] — inbounds / outbounds / splitbounds.
   {
     NodeProto node = MakeClipNode();
-    Expect(registry, std::move(node), "test_clip_inbounds", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_clip_inbounds", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext clip_kernel_ctx{opset};
+      const onnx_kernels::kernel::Clip clip_kernel{clip_kernel_ctx};
+
       Tensor min_val = ScalarTensor<float>(-5.0f);
       Tensor max_val = ScalarTensor<float>(5.0f);
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
@@ -128,7 +151,12 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   }
   {
     NodeProto node = MakeClipNode();
-    Expect(registry, std::move(node), "test_clip_outbounds", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_clip_outbounds", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext clip_kernel_ctx{opset};
+      const onnx_kernels::kernel::Clip clip_kernel{clip_kernel_ctx};
+
       Tensor min_val = ScalarTensor<float>(-5.0f);
       Tensor max_val = ScalarTensor<float>(5.0f);
       Tensor x = Tensor::FromFloat("", {3}, {-6.0f, 0.0f, 6.0f});
@@ -138,7 +166,12 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   }
   {
     NodeProto node = MakeClipNode();
-    Expect(registry, std::move(node), "test_clip_splitbounds", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_clip_splitbounds", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext clip_kernel_ctx{opset};
+      const onnx_kernels::kernel::Clip clip_kernel{clip_kernel_ctx};
+
       Tensor min_val = ScalarTensor<float>(-5.0f);
       Tensor max_val = ScalarTensor<float>(5.0f);
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 6.0f});
@@ -150,7 +183,12 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   // min > max: per the ONNX spec, all input values are replaced by max.
   {
     NodeProto node = MakeClipNode();
-    Expect(registry, std::move(node), "test_clip_min_greater_than_max", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_clip_min_greater_than_max", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext clip_kernel_ctx{opset};
+      const onnx_kernels::kernel::Clip clip_kernel{clip_kernel_ctx};
+
       Tensor min_val = ScalarTensor<float>(2.0f);
       Tensor max_val = ScalarTensor<float>(1.0f);
       Tensor x = Tensor::FromFloat("", {3}, {-2.0f, 0.0f, 6.0f});
@@ -167,7 +205,12 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("min");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_clip_default_min", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_clip_default_min", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext clip_kernel_ctx{opset};
+      const onnx_kernels::kernel::Clip clip_kernel{clip_kernel_ctx};
+
       Tensor min_val = ScalarTensor<float>(0.0f);
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/2);
@@ -183,7 +226,12 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("");
     node.add_input("max");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_clip_default_max", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_clip_default_max", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext clip_kernel_ctx{opset};
+      const onnx_kernels::kernel::Clip clip_kernel{clip_kernel_ctx};
+
       Tensor max_val = ScalarTensor<float>(0.0f);
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/3);
@@ -193,7 +241,12 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   }
   {
     NodeProto node = MakeClipNodeNoBounds();
-    Expect(registry, std::move(node), "test_clip_default_inbounds", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_clip_default_inbounds", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext clip_kernel_ctx{opset};
+      const onnx_kernels::kernel::Clip clip_kernel{clip_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
       Tensor y = clip_kernel(x, /*min=*/nullptr, /*max=*/nullptr);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -202,8 +255,7 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // int8 variants: opset 12 widened ``T`` to all numeric tensors.
   const OpsetId opset12 = DefaultOpset(12);
-  const KernelContext ctx12{opset12};
-  const onnx_kernels::kernel::Clip clip_kernel12{ctx12};
+
   {
     // Inputs: ``["x", "min"]`` — trailing optional ``max`` omitted entirely.
     NodeProto node;
@@ -211,7 +263,12 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("min");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_clip_default_int8_min", {opset12}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_clip_default_int8_min", {opset12}, []() -> IoData {
+      const OpsetId opset12 = DefaultOpset(12);
+
+      const KernelContext clip_kernel12_ctx{opset12};
+      const onnx_kernels::kernel::Clip clip_kernel12{clip_kernel12_ctx};
+
       Tensor min_val = ScalarTensor<int8_t>(0);
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = Tensor::FromInt8("", shape, ToInt8(Randn<float>(shape, /*seed=*/4)));
@@ -226,7 +283,12 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("");
     node.add_input("max");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_clip_default_int8_max", {opset12}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_clip_default_int8_max", {opset12}, []() -> IoData {
+      const OpsetId opset12 = DefaultOpset(12);
+
+      const KernelContext clip_kernel12_ctx{opset12};
+      const onnx_kernels::kernel::Clip clip_kernel12{clip_kernel12_ctx};
+
       Tensor max_val = ScalarTensor<int8_t>(0);
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = Tensor::FromInt8("", shape, ToInt8(Randn<float>(shape, /*seed=*/5)));
@@ -236,12 +298,16 @@ void RegisterClipCases(std::vector<TestCase> &registry, TestMode mode) {
   }
   {
     NodeProto node = MakeClipNodeNoBounds();
-    Expect(registry, std::move(node), "test_clip_default_int8_inbounds", {opset12},
-           [=]() -> IoData {
-             Tensor x = Tensor::FromInt8("", {3}, {-1, 0, 1});
-             Tensor y = clip_kernel12(x, /*min=*/nullptr, /*max=*/nullptr);
-             return IoData{{std::move(x)}, {std::move(y)}};
-           });
+    Expect(registry, std::move(node), "test_clip_default_int8_inbounds", {opset12}, []() -> IoData {
+      const OpsetId opset12 = DefaultOpset(12);
+
+      const KernelContext clip_kernel12_ctx{opset12};
+      const onnx_kernels::kernel::Clip clip_kernel12{clip_kernel12_ctx};
+
+      Tensor x = Tensor::FromInt8("", {3}, {-1, 0, 1});
+      Tensor y = clip_kernel12(x, /*min=*/nullptr, /*max=*/nullptr);
+      return IoData{{std::move(x)}, {std::move(y)}};
+    });
   }
 }
 

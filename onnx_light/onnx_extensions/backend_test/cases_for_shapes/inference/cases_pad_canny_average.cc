@@ -72,110 +72,123 @@ constexpr int64_t kDefaultIrVersion = 10;
 void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry,
                                                 TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
-  const onnx_kernels::kernel::KernelContext ctx{opset};
 
   const std::string name = "test_cc_shape_inference_pad_canny_average";
+  TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
 
-  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Pad kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Conv kernel_2{ctx_2};
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::ReduceMean kernel_3{ctx_3};
+    const KernelContext ctx_4{opset};
+    const onnx_kernels::kernel::Sub kernel_4{ctx_4};
 
-  ModelProto &model = tc.emplace_model();
-  InitModel(model, kDefaultIrVersion, {opset});
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    ModelProto &model = tc.emplace_model();
+    InitModel(model, kDefaultIrVersion, {opset});
 
-  // Pad(X, pads, mode="reflect") → padded
-  NodeProto &pad_node = AddNode(*graph, "Pad", {"X", "pads"}, {"padded"});
-  AddAttribute<std::string>(pad_node, "mode", "reflect");
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  // Conv(padded, W) → filtered. The Laplacian weight acts as a Canny-style
-  // edge filter; the 3×3 kernel without padding shrinks each spatial dim by 2.
-  NodeProto &conv_node = AddNode(*graph, "Conv", {"padded", "W"}, {"filtered"});
-  AddAttribute<std::vector<int64_t>>(conv_node, "kernel_shape", {int64_t{3}, int64_t{3}});
-  AddAttribute<std::vector<int64_t>>(conv_node, "pads",
-                                     {int64_t{0}, int64_t{0}, int64_t{0}, int64_t{0}});
+    // Pad(X, pads, mode="reflect") → padded
+    NodeProto &pad_node = AddNode(*graph, "Pad", {"X", "pads"}, {"padded"});
+    AddAttribute<std::string>(pad_node, "mode", "reflect");
 
-  // ReduceMean(filtered, axes=[0,1,2,3], keepdims=1) → avg ([1, 1, 1, 1]).
-  NodeProto &mean_node = AddNode(*graph, "ReduceMean", {"filtered", "axes_mean"}, {"avg"});
-  AddAttribute<int64_t>(mean_node, "keepdims", 1);
+    // Conv(padded, W) → filtered. The Laplacian weight acts as a Canny-style
+    // edge filter; the 3×3 kernel without padding shrinks each spatial dim by 2.
+    NodeProto &conv_node = AddNode(*graph, "Conv", {"padded", "W"}, {"filtered"});
+    AddAttribute<std::vector<int64_t>>(conv_node, "kernel_shape", {int64_t{3}, int64_t{3}});
+    AddAttribute<std::vector<int64_t>>(conv_node, "pads",
+                                       {int64_t{0}, int64_t{0}, int64_t{0}, int64_t{0}});
 
-  // Sub(filtered, avg) → Y (broadcasts the scalar mean back to filtered shape).
-  AddNode(*graph, "Sub", {"filtered", "avg"}, {"Y"});
+    // ReduceMean(filtered, axes=[0,1,2,3], keepdims=1) → avg ([1, 1, 1, 1]).
+    NodeProto &mean_node = AddNode(*graph, "ReduceMean", {"filtered", "axes_mean"}, {"avg"});
+    AddAttribute<int64_t>(mean_node, "keepdims", 1);
 
-  // Initializers: the Laplacian convolution weight ``W`` (M=1, C=1, 3×3), the
-  // INT64 ``pads`` and the INT64 ``axes_mean`` data-propagated through shape
-  // inference.
-  AddInitializer<float>(*graph, "W", {1, 1, 3, 3},
-                        {0.0f, -1.0f, 0.0f, -1.0f, 4.0f, -1.0f, 0.0f, -1.0f, 0.0f});
-  AddInitializer<int64_t>(*graph, "pads", {8},
-                          {int64_t{0}, int64_t{0}, int64_t{1}, int64_t{1}, int64_t{0}, int64_t{0},
-                           int64_t{1}, int64_t{1}});
-  AddInitializer<int64_t>(*graph, "axes_mean", {4},
-                          {int64_t{0}, int64_t{1}, int64_t{2}, int64_t{3}});
+    // Sub(filtered, avg) → Y (broadcasts the scalar mean back to filtered shape).
+    AddNode(*graph, "Sub", {"filtered", "avg"}, {"Y"});
 
-  // Graph input X: float[N, 1, H, W] with symbolic spatial dims. The channel
-  // dim is the concrete grayscale channel (1).
-  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("H"), DimSpec("W")});
+    // Initializers: the Laplacian convolution weight ``W`` (M=1, C=1, 3×3), the
+    // INT64 ``pads`` and the INT64 ``axes_mean`` data-propagated through shape
+    // inference.
+    AddInitializer<float>(*graph, "W", {1, 1, 3, 3},
+                          {0.0f, -1.0f, 0.0f, -1.0f, 4.0f, -1.0f, 0.0f, -1.0f, 0.0f});
+    AddInitializer<int64_t>(*graph, "pads", {8},
+                            {int64_t{0}, int64_t{0}, int64_t{1}, int64_t{1}, int64_t{0}, int64_t{0},
+                             int64_t{1}, int64_t{1}});
+    AddInitializer<int64_t>(*graph, "axes_mean", {4},
+                            {int64_t{0}, int64_t{1}, int64_t{2}, int64_t{3}});
 
-  // Intermediate value_info entries (ordered alphabetically to match the
-  // ordering returned by ``infer_shapes_model``).
-  AppendValueInfo(
-      *graph->add_value_info(), "avg", DataType::FLOAT,
-      {DimSpec(int64_t{1}), DimSpec(int64_t{1}), DimSpec(int64_t{1}), DimSpec(int64_t{1})});
-  AppendValueInfo(*graph->add_value_info(), "filtered", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("H"), DimSpec("W")});
-  AppendValueInfo(*graph->add_value_info(), "padded", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("H+2"), DimSpec("W+2")});
+    // Graph input X: float[N, 1, H, W] with symbolic spatial dims. The channel
+    // dim is the concrete grayscale channel (1).
+    AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT,
+                    {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("H"), DimSpec("W")});
 
-  // Graph output Y — same symbolic dims as filtered.
-  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("H"), DimSpec("W")});
+    // Intermediate value_info entries (ordered alphabetically to match the
+    // ordering returned by ``infer_shapes_model``).
+    AppendValueInfo(
+        *graph->add_value_info(), "avg", DataType::FLOAT,
+        {DimSpec(int64_t{1}), DimSpec(int64_t{1}), DimSpec(int64_t{1}), DimSpec(int64_t{1})});
+    AppendValueInfo(*graph->add_value_info(), "filtered", DataType::FLOAT,
+                    {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("H"), DimSpec("W")});
+    AppendValueInfo(*graph->add_value_info(), "padded", DataType::FLOAT,
+                    {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("H+2"), DimSpec("W+2")});
 
-  // Reference DataSet — concrete N=2, H=5, W=7.
-  constexpr int64_t kN = 2;
-  constexpr int64_t kC = 1;
-  constexpr int64_t kH = 5;
-  constexpr int64_t kW = 7;
+    // Graph output Y — same symbolic dims as filtered.
+    AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT,
+                    {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("H"), DimSpec("W")});
 
-  std::vector<float> x_values(static_cast<size_t>(kN * kC * kH * kW));
-  for (size_t i = 0; i < x_values.size(); ++i) {
-    x_values[i] = static_cast<float>(i) + 1.0f;
-  }
-  Tensor x_tensor = Tensor::FromFloat("X", {kN, kC, kH, kW}, x_values);
+    // Reference DataSet — concrete N=2, H=5, W=7.
+    constexpr int64_t kN = 2;
+    constexpr int64_t kC = 1;
+    constexpr int64_t kH = 5;
+    constexpr int64_t kW = 7;
 
-  // Pad(reflect) by one pixel on every spatial side: [2, 1, 5, 7] → [2, 1, 7, 9].
-  const Tensor pads_tensor = Tensor::FromInt64("", {8},
-                                               {int64_t{0}, int64_t{0}, int64_t{1}, int64_t{1},
-                                                int64_t{0}, int64_t{0}, int64_t{1}, int64_t{1}});
-  Tensor padded = onnx_kernels::kernel::Pad{ctx}(x_tensor, pads_tensor, /*constant_value=*/nullptr,
-                                                 /*axes=*/nullptr, "reflect");
-  padded.name = "padded";
+    std::vector<float> x_values(static_cast<size_t>(kN * kC * kH * kW));
+    for (size_t i = 0; i < x_values.size(); ++i) {
+      x_values[i] = static_cast<float>(i) + 1.0f;
+    }
+    Tensor x_tensor = Tensor::FromFloat("X", {kN, kC, kH, kW}, x_values);
 
-  // Conv with the 3×3 Laplacian kernel, no padding: [2, 1, 7, 9] → [2, 1, 5, 7].
-  const Tensor w_tensor = Tensor::FromFloat(
-      "W", {1, 1, 3, 3}, {0.0f, -1.0f, 0.0f, -1.0f, 4.0f, -1.0f, 0.0f, -1.0f, 0.0f});
-  const Tensor bias; // empty → optional bias absent
-  onnx_kernels::kernel::Conv::Attributes conv_attrs;
-  conv_attrs.kernel_shape = {3, 3};
-  conv_attrs.pads = {0, 0, 0, 0};
-  Tensor filtered = onnx_kernels::kernel::Conv{ctx}(padded, w_tensor, bias, conv_attrs);
-  filtered.name = "filtered";
+    // Pad(reflect) by one pixel on every spatial side: [2, 1, 5, 7] → [2, 1, 7, 9].
+    const Tensor pads_tensor = Tensor::FromInt64("", {8},
+                                                 {int64_t{0}, int64_t{0}, int64_t{1}, int64_t{1},
+                                                  int64_t{0}, int64_t{0}, int64_t{1}, int64_t{1}});
+    Tensor padded = kernel_1(x_tensor, pads_tensor, /*constant_value=*/nullptr,
+                             /*axes=*/nullptr, "reflect");
+    padded.name = "padded";
 
-  // ReduceMean over every axis (keepdims): [2, 1, 5, 7] → [1, 1, 1, 1].
-  const Tensor axes_tensor =
-      Tensor::FromInt64("", {4}, {int64_t{0}, int64_t{1}, int64_t{2}, int64_t{3}});
-  Tensor avg = onnx_kernels::kernel::ReduceMean{ctx}(filtered, axes_tensor, /*keepdims=*/true,
-                                                     /*noop_with_empty_axes=*/false);
-  avg.name = "avg";
+    // Conv with the 3×3 Laplacian kernel, no padding: [2, 1, 7, 9] → [2, 1, 5, 7].
+    const Tensor w_tensor = Tensor::FromFloat(
+        "W", {1, 1, 3, 3}, {0.0f, -1.0f, 0.0f, -1.0f, 4.0f, -1.0f, 0.0f, -1.0f, 0.0f});
+    const Tensor bias; // empty → optional bias absent
+    onnx_kernels::kernel::Conv::Attributes conv_attrs;
+    conv_attrs.kernel_shape = {3, 3};
+    conv_attrs.pads = {0, 0, 0, 0};
+    Tensor filtered = kernel_2(padded, w_tensor, bias, conv_attrs);
+    filtered.name = "filtered";
 
-  // Sub(filtered, avg): broadcasts the scalar mean back to the filtered shape.
-  Tensor y = onnx_kernels::kernel::Sub{ctx}(filtered, avg);
-  y.name = "Y";
+    // ReduceMean over every axis (keepdims): [2, 1, 5, 7] → [1, 1, 1, 1].
+    const Tensor axes_tensor =
+        Tensor::FromInt64("", {4}, {int64_t{0}, int64_t{1}, int64_t{2}, int64_t{3}});
+    Tensor avg = kernel_3(filtered, axes_tensor, /*keepdims=*/true,
+                          /*noop_with_empty_axes=*/false);
+    avg.name = "avg";
 
-  AppendDataSet(tc, {std::move(x_tensor)}, {std::move(y)});
+    // Sub(filtered, avg): broadcasts the scalar mean back to the filtered shape.
+    Tensor y = kernel_4(filtered, avg);
+    y.name = "Y";
 
-  registry.emplace_back(std::move(tc));
+    AppendDataSet(tc, {std::move(x_tensor)}, {std::move(y)});
+
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

@@ -43,8 +43,6 @@ NodeProto MakeTopKNode(int64_t axis, int64_t largest = 1, int64_t sorted_attr = 
 // ---------------------------------------------------------------------------
 void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::TopK topk_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeTopKNode(/*axis=*/1);
@@ -53,7 +51,12 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t k_count = 1;
     const int64_t output_count = 1024 * 100;
     Expect(registry, std::move(node), "test_cc_top_k_benchmark", {opset}, {input_count, k_count},
-           {output_count, output_count}, [topk_kernel, shape]() -> IoData {
+           {output_count, output_count}, [shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(11);
+
+             const KernelContext topk_kernel_ctx{opset};
+             const onnx_kernels::kernel::TopK topk_kernel{topk_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, shape, 442);
              Tensor k = Tensor::FromInt64("", {1}, {100});
              auto [values, indices] =
@@ -66,7 +69,12 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_top_k — 3x4 float input, axis=1, k=3, largest=1 (default).
   {
     NodeProto node = MakeTopKNode(/*axis=*/1);
-    Expect(registry, std::move(node), "test_cc_top_k", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_top_k", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext topk_kernel_ctx{opset};
+      const onnx_kernels::kernel::TopK topk_kernel{topk_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {3, 4},
                                    {0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f, 11.f});
       Tensor k = Tensor::FromInt64("", {1}, {3});
@@ -79,7 +87,12 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeTopKNode(/*axis=*/1, /*largest=*/0, /*sorted_attr=*/1,
                                   /*include_largest=*/true, /*include_sorted=*/true);
-    Expect(registry, std::move(node), "test_cc_top_k_smallest", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_top_k_smallest", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext topk_kernel_ctx{opset};
+      const onnx_kernels::kernel::TopK topk_kernel{topk_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {3, 4},
                                    {0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 11.f, 10.f, 9.f, 8.f});
       Tensor k = Tensor::FromInt64("", {1}, {3});
@@ -91,7 +104,12 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_top_k_negative_axis — axis=-1, k=3.
   {
     NodeProto node = MakeTopKNode(/*axis=*/-1);
-    Expect(registry, std::move(node), "test_cc_top_k_negative_axis", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_top_k_negative_axis", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext topk_kernel_ctx{opset};
+      const onnx_kernels::kernel::TopK topk_kernel{topk_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {3, 4},
                                    {0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f, 11.f});
       Tensor k = Tensor::FromInt64("", {1}, {3});
@@ -106,7 +124,12 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeTopKNode(/*axis=*/1, /*largest=*/1, /*sorted_attr=*/0,
                                   /*include_largest=*/false, /*include_sorted=*/true);
-    Expect(registry, std::move(node), "test_cc_top_k_not_sorted", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_top_k_not_sorted", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext topk_kernel_ctx{opset};
+      const onnx_kernels::kernel::TopK topk_kernel{topk_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {3, 4},
                                    {0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f, 11.f});
       Tensor k = Tensor::FromInt64("", {1}, {3});
@@ -119,7 +142,12 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
   // Tiebreak uses the smaller original index.
   {
     NodeProto node = MakeTopKNode(/*axis=*/0);
-    Expect(registry, std::move(node), "test_cc_top_k_same_values", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_top_k_same_values", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext topk_kernel_ctx{opset};
+      const onnx_kernels::kernel::TopK topk_kernel{topk_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {5}, {1.f, 2.f, 3.f, 3.f, 2.f});
       Tensor k = Tensor::FromInt64("", {1}, {3});
       auto [values, indices] = topk_kernel(x, 3, /*axis=*/0, /*largest=*/true, /*sorted=*/true);
@@ -130,7 +158,12 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_top_k_same_values_2d — 2-D input with ties along axis=1.
   {
     NodeProto node = MakeTopKNode(/*axis=*/1);
-    Expect(registry, std::move(node), "test_cc_top_k_same_values_2d", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_top_k_same_values_2d", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext topk_kernel_ctx{opset};
+      const onnx_kernels::kernel::TopK topk_kernel{topk_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 4}, {1.f, 2.f, 2.f, 3.f, 5.f, 5.f, 4.f, 3.f});
       Tensor k = Tensor::FromInt64("", {1}, {3});
       auto [values, indices] = topk_kernel(x, 3, /*axis=*/1, /*largest=*/true, /*sorted=*/true);
@@ -142,20 +175,29 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeTopKNode(/*axis=*/0, /*largest=*/1, /*sorted_attr=*/1,
                                   /*include_largest=*/true, /*include_sorted=*/true);
-    Expect(
-        registry, std::move(node), "test_cc_top_k_same_values_largest", {opset}, [=]() -> IoData {
-          Tensor x = Tensor::FromFloat("", {5}, {1.f, 2.f, 3.f, 3.f, 2.f});
-          Tensor k = Tensor::FromInt64("", {1}, {3});
-          auto [values, indices] = topk_kernel(x, 3, /*axis=*/0, /*largest=*/true, /*sorted=*/true);
-          return IoData{{std::move(x), std::move(k)}, {std::move(values), std::move(indices)}};
-        });
+    Expect(registry, std::move(node), "test_cc_top_k_same_values_largest", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext topk_kernel_ctx{opset};
+      const onnx_kernels::kernel::TopK topk_kernel{topk_kernel_ctx};
+
+      Tensor x = Tensor::FromFloat("", {5}, {1.f, 2.f, 3.f, 3.f, 2.f});
+      Tensor k = Tensor::FromInt64("", {1}, {3});
+      auto [values, indices] = topk_kernel(x, 3, /*axis=*/0, /*largest=*/true, /*sorted=*/true);
+      return IoData{{std::move(x), std::move(k)}, {std::move(values), std::move(indices)}};
+    });
   }
 
   // test_cc_top_k_uint64 — uint64 input exercises the all_numeric_types
   // type constraint introduced at opset 11.
   {
     NodeProto node = MakeTopKNode(/*axis=*/1);
-    Expect(registry, std::move(node), "test_cc_top_k_uint64", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_top_k_uint64", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext topk_kernel_ctx{opset};
+      const onnx_kernels::kernel::TopK topk_kernel{topk_kernel_ctx};
+
       Tensor x = Tensor::FromUint64("", {3, 4}, {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u});
       Tensor k = Tensor::FromInt64("", {1}, {3});
       auto [values, indices] = topk_kernel(x, 3, /*axis=*/1, /*largest=*/true, /*sorted=*/true);

@@ -31,9 +31,7 @@ void AddStringAttr(NodeProto &node, const char *name, const std::string &value) 
 // ---------------------------------------------------------------------------
 void RegisterNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
-  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const onnx_kernels::kernel::Normalizer normalizer{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -44,9 +42,12 @@ void RegisterNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
     AddStringAttr(node, "norm", "L2");
 
     Expect(registry, std::move(node), "test_cc_normalizer_l2_float_benchmark",
-           {default_opset, opset}, {524288}, {524288}, [normalizer]() -> IoData {
+           {default_opset, opset}, {524288}, {524288}, [opset]() -> IoData {
+             const KernelContext normalizer_ctx{opset};
+             const onnx_kernels::kernel::Normalizer normalizer{normalizer_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {8192, 64}, 2621);
-             Tensor y = normalizer.operator()<float>(x, "L2");
+             Tensor y = normalizer.template operator()<float>(x, "L2");
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -61,9 +62,12 @@ void RegisterNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddStringAttr(node, "norm", "L2");
     Expect(registry, std::move(node), "test_cc_normalizer_l2_float", {default_opset, opset},
-           [=]() -> IoData {
+           [opset]() -> IoData {
+             const KernelContext normalizer_ctx{opset};
+             const onnx_kernels::kernel::Normalizer normalizer{normalizer_ctx};
+
              Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 2.0f, 0.0f, 3.0f, 4.0f});
-             Tensor y = normalizer.operator()<float>(x, "L2");
+             Tensor y = normalizer.template operator()<float>(x, "L2");
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -79,9 +83,12 @@ void RegisterNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddStringAttr(node, "norm", "L1");
     Expect(registry, std::move(node), "test_cc_normalizer_l1_int64", {default_opset, opset},
-           [=]() -> IoData {
+           [opset]() -> IoData {
+             const KernelContext normalizer_ctx{opset};
+             const onnx_kernels::kernel::Normalizer normalizer{normalizer_ctx};
+
              Tensor x = Tensor::FromInt64("", {4}, {1, -1, 2, -2});
-             Tensor y = normalizer.operator()<int64_t>(x, "L1");
+             Tensor y = normalizer.template operator()<int64_t>(x, "L1");
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -97,9 +104,12 @@ void RegisterNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddStringAttr(node, "norm", "MAX");
     Expect(registry, std::move(node), "test_cc_normalizer_max_double", {default_opset, opset},
-           [=]() -> IoData {
+           [opset]() -> IoData {
+             const KernelContext normalizer_ctx{opset};
+             const onnx_kernels::kernel::Normalizer normalizer{normalizer_ctx};
+
              Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, -3.0, 2.0, 0.0, 0.0, 0.0});
-             Tensor y = normalizer.operator()<double>(x, "MAX");
+             Tensor y = normalizer.template operator()<double>(x, "MAX");
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });

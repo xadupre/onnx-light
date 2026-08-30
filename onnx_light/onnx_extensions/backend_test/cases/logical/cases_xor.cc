@@ -20,16 +20,19 @@ namespace {
 // shape to keep the data deterministic across runs.
 void RegisterXorOnnxCase(const std::string &name, const std::vector<int64_t> &x_shape,
                          uint64_t x_seed, const std::vector<int64_t> &y_shape, uint64_t y_seed,
-                         const onnx_kernels::kernel::Xor &xor_kernel, const OpsetId &opset,
-                         std::vector<TestCase> &registry) {
+                         const OpsetId &opset, std::vector<TestCase> &registry) {
   NodeProto node = MakeNode("Xor", {"x", "y"}, {"xor"});
-  Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
-    Tensor x = RandBool(x_shape, x_seed);
-    Tensor y = RandBool(y_shape, y_seed);
-    Tensor z = xor_kernel(x, y);
+  Expect(registry, std::move(node), name, {opset},
+         [opset, x_shape, x_seed, y_shape, y_seed]() -> IoData {
+           const KernelContext ctx{opset};
+           const onnx_kernels::kernel::Xor xor_kernel{ctx};
 
-    return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-  });
+           Tensor x = RandBool(x_shape, x_seed);
+           Tensor y = RandBool(y_shape, y_seed);
+           Tensor z = xor_kernel(x, y);
+
+           return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+         });
 }
 
 } // namespace
@@ -40,8 +43,6 @@ void RegisterXorOnnxCase(const std::string &name, const std::vector<int64_t> &x_
 // ---------------------------------------------------------------------------
 void RegisterXorCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(7);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Xor xor_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("Xor", {"x", "y"}, {"z"});
@@ -49,7 +50,12 @@ void RegisterXorCases(std::vector<TestCase> &registry, TestMode mode) {
     const std::vector<int64_t> shape = {1024, 4096};
     const int64_t count = 1024 * 4096;
     Expect(registry, std::move(node), "test_cc_xor_benchmark", {opset}, {count, count}, {count},
-           [xor_kernel, shape]() -> IoData {
+           [shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(7);
+
+             const KernelContext xor_kernel_ctx{opset};
+             const onnx_kernels::kernel::Xor xor_kernel{xor_kernel_ctx};
+
              Tensor x = RandBool(shape, /*seed=*/9101);
              Tensor y = RandBool(shape, /*seed=*/9102);
              Tensor z = xor_kernel(x, y);
@@ -61,7 +67,12 @@ void RegisterXorCases(std::vector<TestCase> &registry, TestMode mode) {
   // Equal-shape variant.
   {
     NodeProto node = MakeNode("Xor", {"x", "y"}, {"z"});
-    Expect(registry, std::move(node), "test_cc_xor", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_xor", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(7);
+
+      const KernelContext xor_kernel_ctx{opset};
+      const onnx_kernels::kernel::Xor xor_kernel{xor_kernel_ctx};
+
       Tensor x("", DataType::BOOL, {2, 2}, {1, 0, 1, 0});
       Tensor y("", DataType::BOOL, {2, 2}, {1, 1, 0, 0});
       Tensor z = xor_kernel(x, y);
@@ -73,7 +84,12 @@ void RegisterXorCases(std::vector<TestCase> &registry, TestMode mode) {
   // Scalar broadcast variant: z[i] = x[i] XOR y (scalar).
   {
     NodeProto node = MakeNode("Xor", {"x", "y"}, {"z"});
-    Expect(registry, std::move(node), "test_cc_xor_bcast", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_xor_bcast", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(7);
+
+      const KernelContext xor_kernel_ctx{opset};
+      const onnx_kernels::kernel::Xor xor_kernel{xor_kernel_ctx};
+
       Tensor x("", DataType::BOOL, {2, 2}, {1, 0, 1, 0});
       Tensor y("", DataType::BOOL, {}, {1});
       Tensor z = xor_kernel(x, y);
@@ -89,20 +105,15 @@ void RegisterXorCases(std::vector<TestCase> &registry, TestMode mode) {
   // outputs are computed by ``kernel::Xor`` with multidirectional broadcasting.
   //
   // From Xor.export():
-  RegisterXorOnnxCase("test_xor2d", {3, 4}, 201, {3, 4}, 202, xor_kernel, opset, registry);
-  RegisterXorOnnxCase("test_xor3d", {3, 4, 5}, 203, {3, 4, 5}, 204, xor_kernel, opset, registry);
-  RegisterXorOnnxCase("test_xor4d", {3, 4, 5, 6}, 205, {3, 4, 5, 6}, 206, xor_kernel, opset,
-                      registry);
+  RegisterXorOnnxCase("test_xor2d", {3, 4}, 201, {3, 4}, 202, opset, registry);
+  RegisterXorOnnxCase("test_xor3d", {3, 4, 5}, 203, {3, 4, 5}, 204, opset, registry);
+  RegisterXorOnnxCase("test_xor4d", {3, 4, 5, 6}, 205, {3, 4, 5, 6}, 206, opset, registry);
   // From Xor.export_xor_broadcast():
-  RegisterXorOnnxCase("test_xor_bcast3v1d", {3, 4, 5}, 207, {5}, 208, xor_kernel, opset, registry);
-  RegisterXorOnnxCase("test_xor_bcast3v2d", {3, 4, 5}, 209, {4, 5}, 210, xor_kernel, opset,
-                      registry);
-  RegisterXorOnnxCase("test_xor_bcast4v2d", {3, 4, 5, 6}, 211, {5, 6}, 212, xor_kernel, opset,
-                      registry);
-  RegisterXorOnnxCase("test_xor_bcast4v3d", {3, 4, 5, 6}, 213, {4, 5, 6}, 214, xor_kernel, opset,
-                      registry);
-  RegisterXorOnnxCase("test_xor_bcast4v4d", {1, 4, 1, 6}, 215, {3, 1, 5, 6}, 216, xor_kernel, opset,
-                      registry);
+  RegisterXorOnnxCase("test_xor_bcast3v1d", {3, 4, 5}, 207, {5}, 208, opset, registry);
+  RegisterXorOnnxCase("test_xor_bcast3v2d", {3, 4, 5}, 209, {4, 5}, 210, opset, registry);
+  RegisterXorOnnxCase("test_xor_bcast4v2d", {3, 4, 5, 6}, 211, {5, 6}, 212, opset, registry);
+  RegisterXorOnnxCase("test_xor_bcast4v3d", {3, 4, 5, 6}, 213, {4, 5, 6}, 214, opset, registry);
+  RegisterXorOnnxCase("test_xor_bcast4v4d", {1, 4, 1, 6}, 215, {3, 1, 5, 6}, 216, opset, registry);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

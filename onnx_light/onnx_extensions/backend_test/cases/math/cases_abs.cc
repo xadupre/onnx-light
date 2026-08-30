@@ -15,12 +15,11 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Abs abs_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Abs", abs_kernel, "test_cc_abs_benchmark", opset, registry,
-                              /*with_float16=*/true, /*with_bfloat16=*/true);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Abs>(
+        "Abs", "test_cc_abs_benchmark", opset, registry,
+        /*with_float16=*/true, /*with_bfloat16=*/true);
     return;
   }
 
@@ -29,7 +28,12 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_abs", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_abs", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext abs_kernel_ctx{opset};
+      const onnx_kernels::kernel::Abs abs_kernel{abs_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
       Tensor y = abs_kernel(x);
 
@@ -42,7 +46,12 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_abs", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_abs", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext abs_kernel_ctx{opset};
+      const onnx_kernels::kernel::Abs abs_kernel{abs_kernel_ctx};
+
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/5);
       Tensor y = abs_kernel(x);
@@ -56,7 +65,12 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_abs_float16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_abs_float16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext abs_kernel_ctx{opset};
+      const onnx_kernels::kernel::Abs abs_kernel{abs_kernel_ctx};
+
       Tensor x = MakeFloat16Tensor("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
       Tensor y = abs_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -69,7 +83,12 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_abs_bfloat16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_abs_bfloat16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext abs_kernel_ctx{opset};
+      const onnx_kernels::kernel::Abs abs_kernel{abs_kernel_ctx};
+
       std::vector<float> vals = {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f};
       std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
       auto *dst = reinterpret_cast<uint16_t *>(raw.data());
@@ -87,7 +106,12 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_abs_int8", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_abs_int8", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext abs_kernel_ctx{opset};
+      const onnx_kernels::kernel::Abs abs_kernel{abs_kernel_ctx};
+
       Tensor x = Tensor::FromInt8("", {2, 3}, {-1, 0, 2, -127, 3, -5});
       Tensor y = abs_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -100,7 +124,12 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_abs_int16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_abs_int16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext abs_kernel_ctx{opset};
+      const onnx_kernels::kernel::Abs abs_kernel{abs_kernel_ctx};
+
       Tensor x = Tensor::FromInt16("", {2, 3}, {-1, 0, 2, -1000, 3, -5});
       Tensor y = abs_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -113,7 +142,12 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_abs_int32", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_abs_int32", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext abs_kernel_ctx{opset};
+      const onnx_kernels::kernel::Abs abs_kernel{abs_kernel_ctx};
+
       Tensor x = Tensor::FromInt32("", {2, 3}, {-1, 0, 2, -100000, 3, -5});
       Tensor y = abs_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -126,7 +160,12 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_abs_int64", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_abs_int64", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext abs_kernel_ctx{opset};
+      const onnx_kernels::kernel::Abs abs_kernel{abs_kernel_ctx};
+
       Tensor x = Tensor::FromInt64("", {2, 3}, {-1, 0, 2, -1000000000000LL, 3, -5});
       Tensor y = abs_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -139,7 +178,12 @@ void RegisterAbsCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Abs");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_abs_double", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_abs_double", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext abs_kernel_ctx{opset};
+      const onnx_kernels::kernel::Abs abs_kernel{abs_kernel_ctx};
+
       Tensor x = Tensor::FromDouble("", {2, 3}, {-1.0, 0.0, 1.5, -2.25, 3.5, -4.75});
       Tensor y = abs_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};

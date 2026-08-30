@@ -30,14 +30,16 @@ NodeProto MakeGatherNode(int64_t axis) {
 
 void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Gather gather_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeGatherNode(0);
     Expect(registry, std::move(node), "test_cc_gather_0_benchmark", {opset},
-           {kBenchmarkElementwiseSize, 4096}, {kBenchmarkElementwiseSize},
-           [gather_kernel]() -> IoData {
+           {kBenchmarkElementwiseSize, 4096}, {kBenchmarkElementwiseSize}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext gather_kernel_ctx{opset};
+             const onnx_kernels::kernel::Gather gather_kernel{gather_kernel_ctx};
+
              Tensor data = RandnTensor(DataType::FLOAT, {4096, 1024}, 2001);
              std::vector<int64_t> index_values(4096);
              for (int64_t i = 0; i < 4096; ++i) {
@@ -53,7 +55,12 @@ void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_gather_0 — mirrors the upstream ``test_gather_0`` node test:
   // gather along axis=0 with 2-D indices.
   {
-    Expect(registry, MakeGatherNode(0), "test_cc_gather_0", {opset}, [=]() -> IoData {
+    Expect(registry, MakeGatherNode(0), "test_cc_gather_0", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext gather_kernel_ctx{opset};
+      const onnx_kernels::kernel::Gather gather_kernel{gather_kernel_ctx};
+
       Tensor data = Tensor::FromFloat("", {5, 4},
                                       {0.0f, 0.1f, 0.2f, 0.3f, 1.0f, 1.1f, 1.2f, 1.3f, 2.0f, 2.1f,
                                        2.2f, 2.3f, 3.0f, 3.1f, 3.2f, 3.3f, 4.0f, 4.1f, 4.2f, 4.3f});
@@ -65,7 +72,12 @@ void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_gather_1 — gather along axis=1.
   {
-    Expect(registry, MakeGatherNode(1), "test_cc_gather_1", {opset}, [=]() -> IoData {
+    Expect(registry, MakeGatherNode(1), "test_cc_gather_1", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext gather_kernel_ctx{opset};
+      const onnx_kernels::kernel::Gather gather_kernel{gather_kernel_ctx};
+
       Tensor data =
           Tensor::FromFloat("", {3, 3}, {1.0f, 1.2f, 1.9f, 2.3f, 3.4f, 3.9f, 4.5f, 5.7f, 5.9f});
       Tensor indices = Tensor::FromInt64("", {1, 2}, {0, 2});
@@ -77,7 +89,12 @@ void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_gather_2d_indices — mirrors the upstream ``test_gather_2d_indices``
   // node test: gather along axis=1 with 2-D indices.
   {
-    Expect(registry, MakeGatherNode(1), "test_cc_gather_2d_indices", {opset}, [=]() -> IoData {
+    Expect(registry, MakeGatherNode(1), "test_cc_gather_2d_indices", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext gather_kernel_ctx{opset};
+      const onnx_kernels::kernel::Gather gather_kernel{gather_kernel_ctx};
+
       Tensor data =
           Tensor::FromFloat("", {3, 3}, {1.0f, 1.2f, 1.9f, 2.3f, 3.4f, 3.9f, 4.5f, 5.7f, 5.9f});
       Tensor indices = Tensor::FromInt64("", {1, 2}, {0, 2});
@@ -88,13 +105,17 @@ void RegisterGatherCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // test_cc_gather_negative_indices — negative indices wrap around the axis.
   {
-    Expect(registry, MakeGatherNode(0), "test_cc_gather_negative_indices", {opset},
-           [=]() -> IoData {
-             Tensor data = Tensor::FromFloat("", {5}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
-             Tensor indices = Tensor::FromInt64("", {3}, {0, -1, -2});
-             Tensor output = gather_kernel(data, indices, 0);
-             return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
-           });
+    Expect(registry, MakeGatherNode(0), "test_cc_gather_negative_indices", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext gather_kernel_ctx{opset};
+      const onnx_kernels::kernel::Gather gather_kernel{gather_kernel_ctx};
+
+      Tensor data = Tensor::FromFloat("", {5}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
+      Tensor indices = Tensor::FromInt64("", {3}, {0, -1, -2});
+      Tensor output = gather_kernel(data, indices, 0);
+      return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+    });
   }
 }
 

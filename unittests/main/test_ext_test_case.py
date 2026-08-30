@@ -5,6 +5,8 @@ import unittest
 from io import StringIO
 from unittest import mock
 
+import numpy as np
+
 from onnx_light.ext_test_case import ExtTestCase, hide_stdout
 
 
@@ -89,6 +91,20 @@ class TestHideStdout(ExtTestCase):
             # The decorator installs its own filter ignoring UserWarning, so the
             # warning must not be raised as an error.
             Dummy().run()
+
+    def test_assert_almost_equal_supports_unittest_places(self):
+        self.assertAlmostEqual(0.1234567, 0.1234568, places=6)
+        with self.assertRaises(AssertionError):
+            self.assertAlmostEqual(0.1234567, 0.1234568, places=7)
+
+    def test_assert_almost_equal_supports_array_tolerances(self):
+        self.assertAlmostEqual(np.array([1.0]), np.array([1.01]), atol=0.01)
+        with self.assertRaises(AssertionError):
+            self.assertAlmostEqual(np.array([1.0]), np.array([1.01]), atol=0.001)
+
+    def test_assert_not_almost_equal_fails_for_equal_arrays(self):
+        with self.assertRaises(AssertionError):
+            self.assertNotAlmostEqual(np.array([1.0]), np.array([1.0]))
 
 
 if __name__ == "__main__":

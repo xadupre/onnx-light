@@ -1328,11 +1328,10 @@ TEST(BackendTestCase, BenchmarkModeProducesLargeInputCases) {
       if (c.name.find("_benchmark_bfloat16") != std::string::npos) {
         ++benchmark_bfloat16_cases;
       }
-      // Lazy cases must not have been materialized during collection. Use the
-      // introspection helpers (which do *not* trigger materialization) rather
-      // than data_sets(), which would build the multi-million-element tensors.
+      // Cases must not have been materialized during collection. Inspect the
+      // state rather than data_sets(), which would build the multi-million-
+      // element tensors.
       EXPECT_FALSE(c.materialized()) << "benchmark case materialized eagerly: " << c.name;
-      EXPECT_TRUE(c.is_lazy()) << "benchmark case missing builder: " << c.name;
       int64_t max_elems = 0;
       for (int64_t n : c.declared_input_element_counts) {
         max_elems = std::max(max_elems, n);

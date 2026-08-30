@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
+#include "test_case_utils.h"
 
 #include <gtest/gtest.h>
 
@@ -22,6 +23,7 @@ using core::backend_test::CollectTestCases;
 using core::backend_test::DataSet;
 using core::backend_test::DefaultOpset;
 using core::backend_test::TestCase;
+using core::backend_test::TestCaseUnloadGuard;
 using core::runtime::DataType;
 using core::runtime::ExecutionPlan;
 using core::runtime::Map;
@@ -89,15 +91,18 @@ void RunModelViaSession(const ModelProto &model, RuntimeContext &rt) {
 // Evaluates the optional ``accept_test_case`` predicate once per
 // ``TestCase`` (before any ``DataSet`` is examined); returning ``false``
 // skips the entire case. Evaluates the optional ``accept_data_set``
-// predicate per ``DataSet`` within an accepted case.
+// predicate per ``DataSet`` within an accepted case. Unloads each materialized
+// case after processing by default.
 void RunBackendCasesFor(const std::string &op_type,
                         const std::function<bool(const TestCase &)> &accept_test_case,
-                        const std::function<bool(const DataSet &)> &accept_data_set) {
-  const std::vector<TestCase> cases = CollectTestCases(op_type);
+                        const std::function<bool(const DataSet &)> &accept_data_set,
+                        bool unload = true) {
+  std::vector<TestCase> cases = CollectTestCases(op_type);
   ASSERT_FALSE(cases.empty()) << "No backend test cases found for op_type=" << op_type;
 
   size_t executed = 0;
-  for (const TestCase &tc : cases) {
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc, unload);
     const auto &graph = tc.model().ref_graph();
     if (graph.ref_node().size() != 1u) {
       continue;
@@ -143,9 +148,11 @@ void RunBackendCasesFor(const std::string &op_type,
 }
 
 void RunBackendCasesFor(
-    const std::string &op_type, const std::function<bool(const DataSet &)> &accept_data_set =
-                                    [](const DataSet &) { return true; }) {
-  RunBackendCasesFor(op_type, [](const TestCase &) { return true; }, accept_data_set);
+    const std::string &op_type,
+    const std::function<bool(const DataSet &)> &accept_data_set =
+        [](const DataSet &) { return true; },
+    bool unload = true) {
+  RunBackendCasesFor(op_type, [](const TestCase &) { return true; }, accept_data_set, unload);
 }
 
 } // namespace
@@ -560,11 +567,12 @@ TEST(BackendRunModel, FlexAttention) {
 // sequence by re-stacking the latter through
 // :cpp:class:`kernel::SequenceConstruct`.
 TEST(BackendRunModel, SequenceMap) {
-  const std::vector<TestCase> cases = CollectTestCases("SequenceMap");
+  std::vector<TestCase> cases = CollectTestCases("SequenceMap");
   ASSERT_FALSE(cases.empty()) << "No backend test cases found for SequenceMap";
 
   std::size_t executed = 0;
-  for (const TestCase &tc : cases) {
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     SCOPED_TRACE(tc.name);
     const onnx_kernels::kernel::KernelContext kctx(
         DefaultOpset(GetDefaultOpsetVersion(tc.model())));
@@ -609,11 +617,12 @@ TEST(BackendRunModel, SequenceMap) {
 // :cpp:class:`RuntimeContext`, exercising the runtime-allocator path for the
 // kernel's split-size buffer.
 TEST(BackendRunModel, SplitToSequence) {
-  const std::vector<TestCase> cases = CollectTestCases("SplitToSequence");
+  std::vector<TestCase> cases = CollectTestCases("SplitToSequence");
   ASSERT_FALSE(cases.empty()) << "No backend test cases found for SplitToSequence";
 
   std::size_t executed = 0;
-  for (const TestCase &tc : cases) {
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     const auto &graph = tc.model().ref_graph();
     if (graph.ref_node().size() != 1u || graph.ref_node()[0].ref_op_type() != "SplitToSequence") {
       continue;

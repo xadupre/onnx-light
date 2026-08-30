@@ -30,6 +30,7 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
 #include <regex>
 #include <stdexcept>
 #include <string>
@@ -184,6 +185,63 @@ TEST(BackendTestCase, LazyCaseCanUnloadAndRematerialize) {
 
   tc.unload();
   EXPECT_FALSE(tc.materialized());
+}
+
+TEST(BackendTestCase, CollectedCaseUnloadReleasesBuildState) {
+  auto build_state = std::make_shared<int>(1);
+  std::weak_ptr<int> weak_build_state = build_state;
+
+  TestCase tc("collected_case");
+  tc.build = [state = build_state](bool) {
+    BuiltCase built;
+    built.model.set_ir_version(*state);
+    return built;
+  };
+  tc.set_rebuild([](bool) {
+    BuiltCase built;
+    built.model.set_ir_version(2);
+    return built;
+  });
+  build_state.reset();
+
+  EXPECT_FALSE(weak_build_state.expired());
+  tc.unload();
+  EXPECT_TRUE(weak_build_state.expired());
+  EXPECT_FALSE(tc.materialized());
+  EXPECT_EQ(tc.model().ir_version(), 2);
+}
+
+TEST(BackendTestCase, RematerializedCaseKeepsBorrowedDataAlive) {
+  // Mirrors kernels such as ``Constant`` whose returning overload borrows the
+  // builder's captured tensor instead of copying it: the payload produced by a
+  // rebuild closure must keep that builder alive, otherwise the data sets view
+  // freed memory once the case is rematerialized.
+  TestCase tc("borrowing_case");
+  tc.set_rebuild([](bool) {
+    auto source = std::make_shared<TestCase>("borrowing_source");
+    source->build = [value = Tensor::FromFloat("y", {3}, {1.5f, 2.5f, 3.5f})](bool) {
+      BuiltCase inner;
+      inner.model.set_ir_version(9);
+      DataSet data_set;
+      data_set.outputs.push_back(
+          Tensor::Borrow("y", value.data_type, value.shape, value.bytes(), value.size_bytes()));
+      inner.data_sets.push_back(std::move(data_set));
+      return inner;
+    };
+    source->Materialize();
+    BuiltCase built = source->take_materialized();
+    built.retained = source;
+    return built;
+  });
+
+  ASSERT_TRUE(tc.data_sets()[0].outputs[0].is_borrowed());
+  EXPECT_EQ(tc.data_sets()[0].outputs[0].AsFloat()[0], 1.5f);
+  EXPECT_EQ(tc.data_sets()[0].outputs[0].AsFloat()[2], 3.5f);
+
+  tc.unload();
+  ASSERT_TRUE(tc.data_sets()[0].outputs[0].is_borrowed());
+  EXPECT_EQ(tc.data_sets()[0].outputs[0].AsFloat()[0], 1.5f);
+  EXPECT_EQ(tc.data_sets()[0].outputs[0].AsFloat()[2], 3.5f);
 }
 
 TEST(BackendTestCase, EagerCaseCannotUnload) {
@@ -771,7 +829,7 @@ TEST(BackendTestCase, BenchmarkModeCollectsAllCategories) {
   EXPECT_GT(benchmark_cases, 0u);
 }
 
-TEST(BackendTestCase, BenchmarkModeCasesAreLazyOrMaterializedForAllCategories) {
+TEST(BackendTestCase, BenchmarkModeCasesHaveValidSizingForAllCategories) {
   using core::backend_test::TestMode;
   const std::vector<
       std::pair<std::string, void (*)(std::vector<TestCase> &, const std::string &, TestMode)>>
@@ -806,7 +864,6 @@ TEST(BackendTestCase, BenchmarkModeCasesAreLazyOrMaterializedForAllCategories) {
       if (tc.name.find("_benchmark") == std::string::npos) {
         continue;
       }
-      EXPECT_TRUE(tc.is_lazy() || tc.materialized()) << "unbuildable benchmark case: " << tc.name;
       for (int64_t count : tc.declared_input_element_counts) {
         EXPECT_GE(count, 0) << "invalid input size: " << tc.name;
       }

@@ -10,6 +10,7 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/shape_inference/implementation.h"
+#include "test_case_utils.h"
 
 #include <gtest/gtest.h>
 
@@ -23,6 +24,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::CollectTestCases;
 using core::backend_test::DataSet;
 using core::backend_test::TestCase;
+using core::backend_test::TestCaseUnloadGuard;
 using DataTensor = core::runtime::Tensor;
 
 namespace Test {
@@ -313,6 +315,7 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
   ASSERT_FALSE(cases.empty());
 
   for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     SCOPED_TRACE(tc.name);
 
     // For ``kind == "model"`` cases the test model also records expected
@@ -477,6 +480,7 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPropagateSymbolicDims) {
   ASSERT_FALSE(cases.empty());
 
   for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     SCOPED_TRACE(tc.name);
     const auto expected = SnapshotAndStripOutputs(tc.model());
 
@@ -918,10 +922,11 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersInPlaceReuseOnBackendCase) {
 }
 
 TEST(BackendTestCaseShapeInference, OnnxOptimWritesPeakMemoryMetadataOnBackendCases) {
-  const std::vector<TestCase> cases = CollectTestCases("peak_memory");
+  std::vector<TestCase> cases = CollectTestCases("peak_memory");
   ASSERT_FALSE(cases.empty());
 
-  for (const TestCase &tc : cases) {
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     SCOPED_TRACE(tc.name);
 
     std::vector<MetadataMap> expected_node_meta;
@@ -2253,9 +2258,10 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagToOutputWhenOutputIsS
 // The second check catches fixtures that forget the expected shape tags on
 // inputs, outputs, or initializers (which would otherwise pass silently).
 TEST(BackendTestCaseShapeInference, OnnxOptimWritesValueTagOnEveryGraphValueInShapeTagCases) {
-  const std::vector<TestCase> cases = CollectTestCases("shape_tag");
+  std::vector<TestCase> cases = CollectTestCases("shape_tag");
   bool found = false;
-  for (const TestCase &tc : cases) {
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     found = true;
 
     ModelProto model_copy;
@@ -2377,9 +2383,10 @@ ModelProto DeepCopyModel(const ModelProto &src, const std::string &tc_name) {
 } // namespace
 
 TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
-  const std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
   bool found = false;
-  for (const TestCase &tc : cases) {
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     if (tc.name.find("_big_") == std::string::npos) {
       continue;
     }
@@ -2430,9 +2437,10 @@ TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
 }
 
 TEST(BackendTestCaseShapeInference, BigModelsReleaseInfo) {
-  const std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
   bool found = false;
-  for (const TestCase &tc : cases) {
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     if (tc.name.find("_big_") == std::string::npos) {
       continue;
     }
@@ -2451,9 +2459,10 @@ TEST(BackendTestCaseShapeInference, BigModelsReleaseInfo) {
 }
 
 TEST(BackendTestCaseShapeInference, BigModelsShapeTag) {
-  const std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
   bool found = false;
-  for (const TestCase &tc : cases) {
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     if (tc.name.find("_big_") == std::string::npos) {
       continue;
     }
@@ -2481,7 +2490,7 @@ TEST(BackendTestCaseShapeInference, BigModelsShapeTag) {
 }
 
 TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
-  const std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
   // Per-node metadata keys produced by the value-tag / in-place-reuse passes
   // that a big-model case may embed as a golden expectation.
   const std::array<const char *, 4> checked_node_keys = {
@@ -2500,7 +2509,8 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
 
   bool found = false;
   bool verified_expected = false;
-  for (const TestCase &tc : cases) {
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     if (tc.name.find("_big_") == std::string::npos) {
       continue;
     }

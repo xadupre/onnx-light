@@ -120,11 +120,42 @@ class TestCollectTestCasesByName(ExtTestCase):
         case.unload()
         self.assertFalse(case.materialized)
 
-    def test_eager_case_rejects_unload(self):
+    def test_manually_built_case_unloads_and_rematerializes(self):
         cases = bt.collect_test_cases_by_name(r"^test_cc_if_seq$")
         self.assertEqual(len(cases), 1)
-        with self.assertRaisesRegex(RuntimeError, "eager"):
-            cases[0].unload()
+        case = cases[0]
+        self.assertFalse(case.materialized)
+
+        self.assertEqual(case.model.graph.node[0].op_type, "If")
+        self.assertGreater(len(case.data_sets), 0)
+        case.unload()
+        self.assertFalse(case.materialized)
+
+        self.assertEqual(case.model.graph.node[0].op_type, "If")
+        self.assertGreater(len(case.data_sets), 0)
+        case.unload()
+        self.assertFalse(case.materialized)
+
+    def test_post_build_model_mutation_survives_unload(self):
+        cases = bt.collect_test_cases_by_name(r"^test_cc_optional$")
+        self.assertEqual(len(cases), 1)
+        case = cases[0]
+        for _ in range(2):
+            output_type = case.model.graph.output[0].type
+            self.assertTrue(output_type.has_optional_type())
+            self.assertFalse(output_type.has_tensor_type())
+            case.unload()
+            self.assertFalse(case.materialized)
+
+    def test_every_collected_case_is_unloadable(self):
+        for mode in (bt.TestMode.TEST, bt.TestMode.BENCHMARK):
+            with self.subTest(mode=mode):
+                cases = bt.collect_test_cases(include_big=True, mode=mode)
+                self.assertGreater(len(cases), 0)
+                for case in cases:
+                    self.assertFalse(case.materialized, case.name)
+                    case.unload()
+                    self.assertFalse(case.materialized, case.name)
 
 
 if __name__ == "__main__":

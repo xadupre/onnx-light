@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"
+#include "test_case_utils.h"
 
 #include <gtest/gtest.h>
 
@@ -18,6 +19,7 @@ using core::backend_test::CollectTestCases;
 using core::backend_test::DataSet;
 using core::backend_test::DefaultOpset;
 using core::backend_test::TestCase;
+using core::backend_test::TestCaseUnloadGuard;
 using core::runtime::Tensor;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::Split;
@@ -60,10 +62,11 @@ void ExpectTensorEqual(const Tensor &actual, const Tensor &expected) {
 } // namespace
 
 TEST(BackendKernels, SplitKernelRunsOnBackendTestCases) {
-  const std::vector<TestCase> cases = CollectTestCases("Split");
+  std::vector<TestCase> cases = CollectTestCases("Split");
   ASSERT_FALSE(cases.empty());
 
-  for (const TestCase &tc : cases) {
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     SCOPED_TRACE(tc.name);
     ASSERT_EQ(tc.model().ref_graph().ref_node().size(), 1u);
     const NodeProto &node = tc.model().ref_graph().ref_node()[0];

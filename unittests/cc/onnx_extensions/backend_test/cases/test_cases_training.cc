@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "../test_case_utils.h"
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_extensions/backend_test/cases/training/include_training_cases.h"
 #include "onnx_lib/shape_inference/implementation.h"
@@ -22,6 +23,7 @@ std::vector<core::backend_test::TestCase> CollectTestCases(const std::string &op
 }
 } // namespace
 using core::backend_test::TestCase;
+using core::backend_test::TestCaseUnloadGuard;
 using core::runtime::Tensor;
 
 namespace Test {
@@ -200,6 +202,7 @@ TEST(BackendTestCase, AdamCasesPassShapeInference) {
   ASSERT_FALSE(cases.empty());
 
   for (auto &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     SCOPED_TRACE(tc.name);
     ASSERT_NO_THROW(shape_inference::InferShapes(tc.model()));
   }
@@ -292,6 +295,7 @@ TEST(BackendTestCase, AdagradCasesPassShapeInference) {
   auto cases = CollectTestCases("Adagrad");
   ASSERT_FALSE(cases.empty());
   for (auto &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     SCOPED_TRACE(tc.name);
     ASSERT_NO_THROW(shape_inference::InferShapes(tc.model()));
   }
@@ -382,6 +386,7 @@ TEST(BackendTestCase, MomentumCasesPassShapeInference) {
   auto cases = CollectTestCases("Momentum");
   ASSERT_FALSE(cases.empty());
   for (auto &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     SCOPED_TRACE(tc.name);
     ASSERT_NO_THROW(shape_inference::InferShapes(tc.model()));
   }

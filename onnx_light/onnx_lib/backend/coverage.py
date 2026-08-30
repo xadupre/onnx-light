@@ -289,7 +289,7 @@ def _types_used_by_test_case(test_case: Any) -> list[tuple[str, str, set[str]]]:
 
 
 def compute_test_case_coverage(
-    test_cases: Mapping[str, Any] | Iterable[Any] | None = None,
+    test_cases: Mapping[str, Any] | Iterable[Any] | None = None, unload: bool = True
 ) -> CoverageReport:
     """Computes the backend test-case coverage report.
 
@@ -305,6 +305,8 @@ def compute_test_case_coverage(
         iterable of :class:`~onnx_light.backend.test.case.base.TestCase`
         objects. When ``None`` (the default) the test cases are collected via
         :func:`collect_test_case`.
+    :param unload: Releases each native-backed test case after processing it.
+        Defaults to ``True``.
     :returns: A :class:`CoverageReport` describing the coverage.
     """
     if test_cases is None:
@@ -321,14 +323,20 @@ def compute_test_case_coverage(
     # operator -> set of covered type strings
     covered_per_op: dict[tuple[str, str], set[str]] = {}
     for tc in cases_iter:
-        for domain, op_type, used in _types_used_by_test_case(tc):
-            key = (domain, op_type)
-            if key not in supported:
-                # Operator unknown to the light schema baseline (e.g. a private
-                # op exported from a downstream Base subclass). Skip it.
-                continue
-            bucket = covered_per_op.setdefault(key, set())
-            bucket.update(t for t in used if t in set(supported[key]))
+        try:
+            for domain, op_type, used in _types_used_by_test_case(tc):
+                key = (domain, op_type)
+                if key not in supported:
+                    # Operator unknown to the light schema baseline (e.g. a private
+                    # op exported from a downstream Base subclass). Skip it.
+                    continue
+                bucket = covered_per_op.setdefault(key, set())
+                bucket.update(t for t in used if t in set(supported[key]))
+        finally:
+            if unload:
+                unload_case = getattr(tc, "unload", None)
+                if unload_case is not None:
+                    unload_case()
 
     operator_coverages: list[OperatorCoverage] = []
     total_signatures = 0

@@ -14,6 +14,7 @@
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/builder/graph_builder.h"
 #include "onnx_op/operator_sets.h"
+#include "test_case_utils.h"
 
 #include <gtest/gtest.h>
 
@@ -26,6 +27,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::CollectTestCases;
 using core::backend_test::TestCase;
+using core::backend_test::TestCaseUnloadGuard;
 using core::builder::GraphBuilder;
 
 namespace Test {
@@ -174,6 +176,7 @@ TEST(BackendGraphBuilderRoundTrip, AllCollectedCasesAreStable) {
 
   std::size_t tested = 0;
   for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     if (ShouldSkip(tc.model())) {
       continue;
     }

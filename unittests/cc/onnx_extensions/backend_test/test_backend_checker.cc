@@ -6,6 +6,7 @@
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/shape_inference/implementation.h"
+#include "test_case_utils.h"
 
 #include <gtest/gtest.h>
 
@@ -17,6 +18,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::BuildSingleNodeCase;
 using core::backend_test::CollectTestCases;
 using core::backend_test::TestCase;
+using core::backend_test::TestCaseUnloadGuard;
 
 namespace Test {
 
@@ -33,6 +35,7 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPassChecker) {
   ASSERT_FALSE(cases.empty());
 
   for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     SCOPED_TRACE(tc.name);
     ASSERT_NO_THROW(checker::check_model(tc.model(), /*full_check=*/false)) << "case: " << tc.name;
   }

@@ -19,6 +19,7 @@
 // at single-node graphs), this exercises every collected case in a single loop,
 // including the multi-node control-flow / shape-inference models.
 
+#include "../backend_test/test_case_utils.h"
 #include "onnx_core/backend_test/expect.h"
 #include "onnx_core/builder/graph_builder.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
@@ -43,6 +44,7 @@ using core::backend_test::CollectTestCases;
 using core::backend_test::DataSet;
 using core::backend_test::DefaultOpset;
 using core::backend_test::TestCase;
+using core::backend_test::TestCaseUnloadGuard;
 using core::runtime::ExecutionPlan;
 using core::runtime::Map;
 using core::runtime::RegisterModelFunctions;
@@ -496,6 +498,7 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
   size_t executed = 0;
   size_t peak_checked = 0;
   for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     if (ExcludedCaseNames().count(tc.name) != 0 ||
         BitInexactOn32BitCaseNames().count(tc.name) != 0) {
       continue;

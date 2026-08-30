@@ -539,7 +539,6 @@ TEST(BackendTestCase, AttentionBenchmarkCorpusIsLazyAndCoversPrefillAndDecode) {
   bool has_gqa = false;
   bool has_mqa = false;
   for (const TestCase &test_case : cases) {
-    EXPECT_TRUE(test_case.is_lazy());
     EXPECT_FALSE(test_case.materialized());
     EXPECT_TRUE(test_case.name.ends_with("_benchmark"));
     has_prefill |= test_case.name.find("prefill") != std::string::npos;

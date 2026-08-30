@@ -63,16 +63,19 @@ void RegisterPadCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(21);
 
   if (mode == TestMode::BENCHMARK) {
-    const auto pad_kernel = MakeReferenceKernel<onnx_kernels::kernel::Pad>(opset);
+
     const std::vector<int64_t> shape = {2048, 2048};
     Expect(registry, MakePadNode({"x", "pads", "value"}, "constant"), "test_cc_pad_benchmark",
-           {opset}, {2048 * 2048, 4, 1}, {2050 * 2050}, [pad_kernel, shape]() -> IoData {
+           {opset}, {2048 * 2048, 4, 1}, {2050 * 2050}, [shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(21);
+
+             const KernelContext pad_kernel_ctx{opset};
+             const onnx_kernels::kernel::Pad pad_kernel{pad_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, shape, 2001);
              Tensor pads = MakeInt64Vector("pads", {1, 1, 1, 1});
              Tensor value = Tensor::FromFloat("value", {}, {0.0f});
-             Tensor y = pad_kernel.Invoke([&](const auto &kernel) {
-               return kernel(x, pads, &value, /*axes=*/nullptr, "constant");
-             });
+             Tensor y = pad_kernel(x, pads, &value, /*axes=*/nullptr, "constant");
              y.name = "y";
              return IoData{{std::move(x), std::move(pads), std::move(value)}, {std::move(y)}};
            });
@@ -84,7 +87,7 @@ void RegisterPadCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``test_constant_pad`` (data/node/test_constant_pad/test_data_set_0).
   {
     Expect(registry, MakePadNode({"x", "pads", "value"}, "constant"), "test_cc_constant_pad",
-           {opset}, [=]() -> IoData {
+           {opset}, []() -> IoData {
              const Tensor x = Tensor::FromFloat(
                  "x", {1, 3, 4, 5},
                  {1.764052391052246f,    0.40015721321105957f,  0.978738009929657f,
@@ -204,7 +207,7 @@ void RegisterPadCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``test_constant_pad_axes`` (data/node/test_constant_pad_axes/test_data_set_0).
   {
     Expect(registry, MakePadNode({"x", "pads", "value", "axes"}, "constant"),
-           "test_cc_constant_pad_axes", {opset}, [=]() -> IoData {
+           "test_cc_constant_pad_axes", {opset}, []() -> IoData {
              const Tensor x = Tensor::FromFloat(
                  "x", {1, 3, 4, 5},
                  {1.764052391052246f,    0.40015721321105957f,  0.978738009929657f,
@@ -291,7 +294,7 @@ void RegisterPadCases(std::vector<TestCase> &registry, TestMode mode) {
   // (data/node/test_constant_pad_negative_axes/test_data_set_0).
   {
     Expect(registry, MakePadNode({"x", "pads", "value", "axes"}, "constant"),
-           "test_cc_constant_pad_negative_axes", {opset}, [=]() -> IoData {
+           "test_cc_constant_pad_negative_axes", {opset}, []() -> IoData {
              const Tensor x = Tensor::FromFloat(
                  "x", {1, 3, 4, 5},
                  {1.764052391052246f,    0.40015721321105957f,  0.978738009929657f,
@@ -377,7 +380,7 @@ void RegisterPadCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``test_edge_pad`` (data/node/test_edge_pad/test_data_set_0).
   {
     Expect(registry, MakePadNode({"x", "pads"}, "edge"), "test_cc_edge_pad", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
              const Tensor x = Tensor::FromInt32(
                  "x", {1, 3, 4, 5},
                  {1,  0,  0,  2, 1, 0,  0,  0, 0,  0, 0, 1, 0, 0,  0, 0, 1, 0, 0, 0,
@@ -401,7 +404,7 @@ void RegisterPadCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``test_reflect_pad`` (data/node/test_reflect_pad/test_data_set_0).
   {
     Expect(registry, MakePadNode({"x", "pads"}, "reflect"), "test_cc_reflect_pad", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
              const Tensor x = Tensor::FromInt32(
                  "x", {1, 3, 4, 5},
                  {0,  0,  0,  -1, 0,  0, -1, 0, 0,  0, 0, 0, 1, -1, 0, 0, 0, 0, 0, 0,
@@ -425,7 +428,7 @@ void RegisterPadCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``test_wrap_pad`` (data/node/test_wrap_pad/test_data_set_0).
   {
     Expect(registry, MakePadNode({"x", "pads"}, "wrap"), "test_cc_wrap_pad", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
              const Tensor x = Tensor::FromInt32(
                  "x", {1, 3, 4, 5},
                  {0,  -1, 0, 1, 0,  0, 0,  1,  0,  0, 0, 0, 0, 0, 0,  0, 0, 0,  0,  -1,
@@ -451,7 +454,7 @@ void RegisterPadCases(std::vector<TestCase> &registry, TestMode mode) {
   // (they all provide an explicit ``value`` input).
   {
     Expect(registry, MakePadNode({"x", "pads"}, "constant"), "test_cc_constant_pad_default_value",
-           {opset}, [=]() -> IoData {
+           {opset}, []() -> IoData {
              const Tensor x = Tensor::FromFloat("x", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
              const Tensor pads = MakeInt64Vector("pads", {1, 1, 1, 1});
              const Tensor y = Tensor::FromFloat(

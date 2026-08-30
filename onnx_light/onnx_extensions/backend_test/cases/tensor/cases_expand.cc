@@ -42,16 +42,19 @@ Tensor MakeShapeTensor(const std::vector<int64_t> &dims) {
 
 void RegisterExpandCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const auto expand_kernel = MakeReferenceKernel<onnx_kernels::kernel::Expand>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeExpandNode();
     Expect(registry, std::move(node), "test_cc_expand_dim_changed_benchmark", {opset}, {4096, 3},
-           {2 * 4096 * 512}, [expand_kernel]() -> IoData {
+           {2 * 4096 * 512}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext expand_kernel_ctx{opset};
+             const onnx_kernels::kernel::Expand expand_kernel{expand_kernel_ctx};
+
              Tensor input = RandnTensor(DataType::FLOAT, {4096, 1}, 2001);
              Tensor shape = MakeShapeTensor({2, 4096, 512});
-             Tensor output =
-                 expand_kernel.Invoke([&](const auto &kernel) { return kernel(input, shape); });
+             Tensor output = expand_kernel(input, shape);
              return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
            });
     return;
@@ -62,11 +65,15 @@ void RegisterExpandCases(std::vector<TestCase> &registry, TestMode mode) {
   // shape: [2, 3, 6]
   // output: shape [2, 3, 6] — input is broadcast along axis 0 (new dim) and axis 2.
   {
-    Expect(registry, MakeExpandNode(), "test_cc_expand_dim_changed", {opset}, [=]() -> IoData {
+    Expect(registry, MakeExpandNode(), "test_cc_expand_dim_changed", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext expand_kernel_ctx{opset};
+      const onnx_kernels::kernel::Expand expand_kernel{expand_kernel_ctx};
+
       const Tensor input = Tensor::FromFloat("", {3, 1}, {1.0f, 2.0f, 3.0f});
       const Tensor shape = MakeShapeTensor({2, 3, 6});
-      const Tensor output =
-          expand_kernel.Invoke([&](const auto &kernel) { return kernel(input, shape); });
+      const Tensor output = expand_kernel(input, shape);
       return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
     });
   }
@@ -76,11 +83,15 @@ void RegisterExpandCases(std::vector<TestCase> &registry, TestMode mode) {
   // shape: [3, 4]
   // output: shape [3, 4] — input is broadcast along axis 1 only.
   {
-    Expect(registry, MakeExpandNode(), "test_cc_expand_dim_unchanged", {opset}, [=]() -> IoData {
+    Expect(registry, MakeExpandNode(), "test_cc_expand_dim_unchanged", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext expand_kernel_ctx{opset};
+      const onnx_kernels::kernel::Expand expand_kernel{expand_kernel_ctx};
+
       const Tensor input = Tensor::FromFloat("", {3, 1}, {1.0f, 2.0f, 3.0f});
       const Tensor shape = MakeShapeTensor({3, 4});
-      const Tensor output =
-          expand_kernel.Invoke([&](const auto &kernel) { return kernel(input, shape); });
+      const Tensor output = expand_kernel(input, shape);
       return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
     });
   }
@@ -90,11 +101,15 @@ void RegisterExpandCases(std::vector<TestCase> &registry, TestMode mode) {
   // shape: [3, 4]
   // output: shape [3, 4] — input is broadcast by adding a leading batch dim.
   {
-    Expect(registry, MakeExpandNode(), "test_cc_expand_1d_to_2d", {opset}, [=]() -> IoData {
+    Expect(registry, MakeExpandNode(), "test_cc_expand_1d_to_2d", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext expand_kernel_ctx{opset};
+      const onnx_kernels::kernel::Expand expand_kernel{expand_kernel_ctx};
+
       const Tensor input = Tensor::FromFloat("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
       const Tensor shape = MakeShapeTensor({3, 4});
-      const Tensor output =
-          expand_kernel.Invoke([&](const auto &kernel) { return kernel(input, shape); });
+      const Tensor output = expand_kernel(input, shape);
       return IoData{{std::move(input), std::move(shape)}, {std::move(output)}};
     });
   }

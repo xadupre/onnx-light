@@ -23,9 +23,14 @@ constexpr int64_t kDefaultIrVersion = 10;
 void RegisterFloorDivOffsetShapeInferenceCase(std::vector<TestCase> &registry) {
   const std::string name("test_cc_shape_inference_floordiv_offset_expression");
   const OpsetId opset = DefaultOpset(18);
-  const auto maxpool_kernel = MakeReferenceKernel<onnx_kernels::kernel::MaxPool>(opset);
+
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext maxpool_kernel_ctx{opset};
+    const onnx_kernels::kernel::MaxPool maxpool_kernel{maxpool_kernel_ctx};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
     ModelProto &model = tc.emplace_model();
     InitModel(model, kDefaultIrVersion, {opset});
@@ -43,9 +48,7 @@ void RegisterFloorDivOffsetShapeInferenceCase(std::vector<TestCase> &registry) {
     Tensor x = Tensor::FromFloat("X", {2, 1, 4},
                                  {1.0f, 0.0f, 2.0f, 0.0f, //
                                   0.0f, 3.0f, 0.0f, 4.0f});
-    Tensor y = maxpool_kernel.Invoke([&](const auto &kernel) {
-      return kernel(x, /*kernel_shape=*/{7}, /*strides=*/{5}, /*pads=*/{6, 6});
-    });
+    Tensor y = maxpool_kernel(x, /*kernel_shape=*/{7}, /*strides=*/{5}, /*pads=*/{6, 6});
     y.name = "Y";
     AppendDataSet(tc, {std::move(x)}, {std::move(y)});
     return tc.take_materialized();

@@ -32,16 +32,20 @@ NodeProto MakeSpaceToDepthNode(int64_t blocksize) {
 // ---------------------------------------------------------------------------
 void RegisterSpaceToDepthCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const auto s2d = MakeReferenceKernel<onnx_kernels::kernel::SpaceToDepth>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeSpaceToDepthNode(2);
     Expect(registry, std::move(node), "test_cc_spacetodepth_example_benchmark", {opset}, {4194304},
-           {4194304}, [s2d]() -> IoData {
+           {4194304}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext s2d_ctx{opset};
+             const onnx_kernels::kernel::SpaceToDepth s2d{s2d_ctx};
+
              Tensor input = RandnTensor(DataType::FLOAT, {1, 2, 1024, 2048}, 2001);
              onnx_kernels::kernel::SpaceToDepth::Attributes attrs;
              attrs.blocksize = 2;
-             Tensor output = s2d.Invoke([&](const auto &kernel) { return kernel(input, attrs); });
+             Tensor output = s2d(input, attrs);
              return IoData{{std::move(input)}, {std::move(output)}};
            });
     return;
@@ -52,7 +56,12 @@ void RegisterSpaceToDepthCases(std::vector<TestCase> &registry, TestMode mode) {
   // ordering can be inspected by hand.
   {
     Expect(registry, MakeSpaceToDepthNode(2), "test_cc_spacetodepth_example", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext s2d_ctx{opset};
+             const onnx_kernels::kernel::SpaceToDepth s2d{s2d_ctx};
+
              std::vector<float> values(16);
              for (int i = 0; i < 16; ++i) {
                values[static_cast<std::size_t>(i)] = static_cast<float>(i);
@@ -60,15 +69,19 @@ void RegisterSpaceToDepthCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor input = Tensor::FromFloat("", {1, 2, 2, 4}, values);
              onnx_kernels::kernel::SpaceToDepth::Attributes attrs;
              attrs.blocksize = 2;
-             const Tensor output =
-                 s2d.Invoke([&](const auto &kernel) { return kernel(input, attrs); });
+             const Tensor output = s2d(input, attrs);
              return IoData{{std::move(input)}, {std::move(output)}};
            });
   }
 
   // test_cc_spacetodepth — larger N=2, C=3, H=4, W=6 input with blocksize=2.
   {
-    Expect(registry, MakeSpaceToDepthNode(2), "test_cc_spacetodepth", {opset}, [=]() -> IoData {
+    Expect(registry, MakeSpaceToDepthNode(2), "test_cc_spacetodepth", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext s2d_ctx{opset};
+      const onnx_kernels::kernel::SpaceToDepth s2d{s2d_ctx};
+
       const int64_t total = 2 * 3 * 4 * 6;
       std::vector<float> values(static_cast<std::size_t>(total));
       for (int64_t i = 0; i < total; ++i) {
@@ -77,7 +90,7 @@ void RegisterSpaceToDepthCases(std::vector<TestCase> &registry, TestMode mode) {
       const Tensor input = Tensor::FromFloat("", {2, 3, 4, 6}, values);
       onnx_kernels::kernel::SpaceToDepth::Attributes attrs;
       attrs.blocksize = 2;
-      const Tensor output = s2d.Invoke([&](const auto &kernel) { return kernel(input, attrs); });
+      const Tensor output = s2d(input, attrs);
       return IoData{{std::move(input)}, {std::move(output)}};
     });
   }

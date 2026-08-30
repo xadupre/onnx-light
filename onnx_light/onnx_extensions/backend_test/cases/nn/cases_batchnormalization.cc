@@ -27,8 +27,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(15);
-  const auto batchnorm_kernel =
-      MakeReferenceKernel<onnx_kernels::kernel::BatchNormalization>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -46,15 +44,19 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode m
     constexpr int64_t W = 128;
     constexpr int64_t x_count = N * C * H * W;
     Expect(registry, std::move(node), "test_cc_batchnorm_example_benchmark", {opset},
-           {x_count, C, C, C, C}, {x_count}, [batchnorm_kernel]() -> IoData {
+           {x_count, C, C, C, C}, {x_count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(15);
+
+             const KernelContext batchnorm_kernel_ctx{opset};
+             const onnx_kernels::kernel::BatchNormalization batchnorm_kernel{batchnorm_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {N, C, H, W}, 1201);
              Tensor scale = RandnTensor(DataType::FLOAT, {C}, 1202);
              Tensor bias = RandnTensor(DataType::FLOAT, {C}, 1203);
              Tensor mean = RandnTensor(DataType::FLOAT, {C}, 1204);
              Tensor var =
                  Tensor::FromFloat("", {C}, std::vector<float>(static_cast<size_t>(C), 1.0f));
-             Tensor y = batchnorm_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(x, scale, bias, mean, var); });
+             Tensor y = batchnorm_kernel(x, scale, bias, mean, var);
              return IoData{
                  {std::move(x), std::move(scale), std::move(bias), std::move(mean), std::move(var)},
                  {std::move(y)}};
@@ -73,15 +75,19 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode m
     node.add_input("input_mean");
     node.add_input("input_var");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_batchnorm_example", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_batchnorm_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(15);
+
+      const KernelContext batchnorm_kernel_ctx{opset};
+      const onnx_kernels::kernel::BatchNormalization batchnorm_kernel{batchnorm_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
       Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
       Tensor bias = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
       Tensor mean = Tensor::FromFloat("", {2}, {0.0f, 3.0f});
       Tensor var = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
 
-      Tensor y = batchnorm_kernel.Invoke(
-          [&](const auto &kernel) { return kernel(x, scale, bias, mean, var); });
+      Tensor y = batchnorm_kernel(x, scale, bias, mean, var);
 
       return IoData{
           {std::move(x), std::move(scale), std::move(bias), std::move(mean), std::move(var)},
@@ -102,7 +108,12 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode m
     node.add_input("input_var");
     node.add_output("y");
     AddAttribute<float>(node, "epsilon", 1e-2f);
-    Expect(registry, std::move(node), "test_cc_batchnorm_epsilon", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_batchnorm_epsilon", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(15);
+
+      const KernelContext batchnorm_kernel_ctx{opset};
+      const onnx_kernels::kernel::BatchNormalization batchnorm_kernel{batchnorm_kernel_ctx};
+
       const int64_t N = 2;
       const int64_t C = 3;
       const int64_t H = 4;
@@ -120,8 +131,7 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode m
       Tensor mean = Tensor::FromFloat("", {C}, {0.5f, 1.0f, -0.25f});
       Tensor var = Tensor::FromFloat("", {C}, {0.25f, 0.5f, 1.0f});
 
-      Tensor y = batchnorm_kernel.Invoke(
-          [&](const auto &kernel) { return kernel(x, scale, bias, mean, var, /*epsilon=*/1e-2f); });
+      Tensor y = batchnorm_kernel(x, scale, bias, mean, var, /*epsilon=*/1e-2f);
 
       return IoData{
           {std::move(x), std::move(scale), std::move(bias), std::move(mean), std::move(var)},
@@ -146,16 +156,20 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode m
     node.add_output("output_var");
     AddAttribute<int64_t>(node, "training_mode", 1);
     Expect(registry, std::move(node), "test_cc_batchnorm_example_training_mode", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(15);
+
+             const KernelContext batchnorm_kernel_ctx{opset};
+             const onnx_kernels::kernel::BatchNormalization batchnorm_kernel{batchnorm_kernel_ctx};
+
              Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
              Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
              Tensor bias = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
              Tensor mean = Tensor::FromFloat("", {2}, {0.0f, 3.0f});
              Tensor var = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
 
-             auto [y, output_mean, output_var] = batchnorm_kernel.Invoke([&](const auto &kernel) {
-               return kernel.TrainingForward(x, scale, bias, mean, var);
-             });
+             auto [y, output_mean, output_var] =
+                 batchnorm_kernel.TrainingForward(x, scale, bias, mean, var);
 
              return IoData{
                  {std::move(x), std::move(scale), std::move(bias), std::move(mean), std::move(var)},
@@ -180,7 +194,12 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode m
     AddAttribute<float>(node, "epsilon", 1e-2f);
     AddAttribute<int64_t>(node, "training_mode", 1);
     Expect(registry, std::move(node), "test_cc_batchnorm_epsilon_training_mode", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(15);
+
+             const KernelContext batchnorm_kernel_ctx{opset};
+             const onnx_kernels::kernel::BatchNormalization batchnorm_kernel{batchnorm_kernel_ctx};
+
              const int64_t N = 2;
              const int64_t C = 3;
              const int64_t H = 4;
@@ -196,9 +215,8 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode m
              Tensor mean = Tensor::FromFloat("", {C}, {0.5f, 1.0f, -0.25f});
              Tensor var = Tensor::FromFloat("", {C}, {0.25f, 0.5f, 1.0f});
 
-             auto [y, output_mean, output_var] = batchnorm_kernel.Invoke([&](const auto &kernel) {
-               return kernel.TrainingForward(x, scale, bias, mean, var, /*epsilon=*/1e-2f);
-             });
+             auto [y, output_mean, output_var] =
+                 batchnorm_kernel.TrainingForward(x, scale, bias, mean, var, /*epsilon=*/1e-2f);
 
              return IoData{
                  {std::move(x), std::move(scale), std::move(bias), std::move(mean), std::move(var)},

@@ -35,12 +35,16 @@ void RegisterScatterCases(std::vector<TestCase> &registry, TestMode mode) {
   // cases pin the opset to 10. Use the same opset here so the generated
   // models are valid (Scatter is not registered in opset >= 11).
   const OpsetId opset = DefaultOpset(10);
-  const auto scatter_kernel = MakeReferenceKernel<onnx_kernels::kernel::Scatter>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeScatterNode(0, /*set_axis_attr=*/false);
     Expect(registry, std::move(node), "test_cc_scatter_without_axis_benchmark", {opset},
-           {4194304, 4194304, 4194304}, {4194304}, [scatter_kernel]() -> IoData {
+           {4194304, 4194304, 4194304}, {4194304}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext scatter_kernel_ctx{opset};
+             const onnx_kernels::kernel::Scatter scatter_kernel{scatter_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {4096, 1024},
                                              std::vector<float>(kBenchmarkElementwiseSize, 0.0f));
              std::vector<int64_t> index_values(kBenchmarkElementwiseSize);
@@ -50,8 +54,7 @@ void RegisterScatterCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor indices = Tensor::FromInt64("", {4096, 1024}, index_values);
              Tensor updates = RandnTensor(DataType::FLOAT, {4096, 1024}, 2001);
              onnx_kernels::kernel::Scatter::Attributes attrs;
-             Tensor output = scatter_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, indices, updates, attrs); });
+             Tensor output = scatter_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
            });
@@ -61,13 +64,17 @@ void RegisterScatterCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_scatter_without_axis — mirrors upstream ``test_scatter_without_axis``.
   {
     Expect(registry, MakeScatterNode(0, /*set_axis_attr=*/false), "test_cc_scatter_without_axis",
-           {opset}, [=]() -> IoData {
+           {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext scatter_kernel_ctx{opset};
+             const onnx_kernels::kernel::Scatter scatter_kernel{scatter_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {3, 3}, {0, 0, 0, 0, 0, 0, 0, 0, 0});
              Tensor indices = Tensor::FromInt64("", {2, 3}, {1, 0, 2, 0, 2, 1});
              Tensor updates = Tensor::FromFloat("", {2, 3}, {1.0f, 1.1f, 1.2f, 2.0f, 2.1f, 2.2f});
              onnx_kernels::kernel::Scatter::Attributes attrs;
-             Tensor output = scatter_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, indices, updates, attrs); });
+             Tensor output = scatter_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
            });
@@ -76,14 +83,18 @@ void RegisterScatterCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_scatter_with_axis — mirrors upstream ``test_scatter_with_axis``.
   {
     Expect(registry, MakeScatterNode(1, /*set_axis_attr=*/true), "test_cc_scatter_with_axis",
-           {opset}, [=]() -> IoData {
+           {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext scatter_kernel_ctx{opset};
+             const onnx_kernels::kernel::Scatter scatter_kernel{scatter_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor indices = Tensor::FromInt64("", {1, 2}, {1, 3});
              Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
              onnx_kernels::kernel::Scatter::Attributes attrs;
              attrs.axis = 1;
-             Tensor output = scatter_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, indices, updates, attrs); });
+             Tensor output = scatter_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
            });

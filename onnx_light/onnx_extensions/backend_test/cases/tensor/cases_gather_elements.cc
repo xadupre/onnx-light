@@ -30,21 +30,24 @@ NodeProto MakeGatherElementsNode(int64_t axis) {
 
 void RegisterGatherElementsCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const auto ge_kernel = MakeReferenceKernel<onnx_kernels::kernel::GatherElements>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeGatherElementsNode(1);
     Expect(registry, std::move(node), "test_cc_gather_elements_0_benchmark", {opset},
            {kBenchmarkElementwiseSize, kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
-           [ge_kernel]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext ge_kernel_ctx{opset};
+             const onnx_kernels::kernel::GatherElements ge_kernel{ge_kernel_ctx};
+
              Tensor data = RandnTensor(DataType::FLOAT, {4096, 1024}, 2001);
              std::vector<int64_t> index_values(kBenchmarkElementwiseSize);
              for (int64_t i = 0; i < kBenchmarkElementwiseSize; ++i) {
                index_values[static_cast<std::size_t>(i)] = i % 1024;
              }
              Tensor indices = Tensor::FromInt64("", {4096, 1024}, index_values);
-             Tensor output =
-                 ge_kernel.Invoke([&](const auto &kernel) { return kernel(data, indices, 1); });
+             Tensor output = ge_kernel(data, indices, 1);
              return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
            });
     return;
@@ -54,11 +57,15 @@ void RegisterGatherElementsCases(std::vector<TestCase> &registry, TestMode mode)
   // ``test_gather_elements_0`` (small 2x2 example).
   {
     Expect(registry, MakeGatherElementsNode(1), "test_cc_gather_elements_0", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext ge_kernel_ctx{opset};
+             const onnx_kernels::kernel::GatherElements ge_kernel{ge_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 0});
-             Tensor output =
-                 ge_kernel.Invoke([&](const auto &kernel) { return kernel(data, indices, 1); });
+             Tensor output = ge_kernel(data, indices, 1);
              return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
            });
   }
@@ -67,12 +74,16 @@ void RegisterGatherElementsCases(std::vector<TestCase> &registry, TestMode mode)
   // ``test_gather_elements_1`` (3x3 example).
   {
     Expect(
-        registry, MakeGatherElementsNode(0), "test_cc_gather_elements_1", {opset}, [=]() -> IoData {
+        registry, MakeGatherElementsNode(0), "test_cc_gather_elements_1", {opset}, []() -> IoData {
+          const OpsetId opset = DefaultOpset(13);
+
+          const KernelContext ge_kernel_ctx{opset};
+          const onnx_kernels::kernel::GatherElements ge_kernel{ge_kernel_ctx};
+
           Tensor data =
               Tensor::FromFloat("", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
           Tensor indices = Tensor::FromInt64("", {2, 3}, {1, 2, 0, 2, 0, 0});
-          Tensor output =
-              ge_kernel.Invoke([&](const auto &kernel) { return kernel(data, indices, 0); });
+          Tensor output = ge_kernel(data, indices, 0);
           return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
         });
   }
@@ -80,12 +91,16 @@ void RegisterGatherElementsCases(std::vector<TestCase> &registry, TestMode mode)
   // test_cc_gather_elements_negative_indices — negative indices wrap.
   {
     Expect(registry, MakeGatherElementsNode(0), "test_cc_gather_elements_negative_indices", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext ge_kernel_ctx{opset};
+             const onnx_kernels::kernel::GatherElements ge_kernel{ge_kernel_ctx};
+
              Tensor data = Tensor::FromFloat(
                  "", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
              Tensor indices = Tensor::FromInt64("", {2, 3}, {-1, -2, 0, -2, 0, 0});
-             Tensor output =
-                 ge_kernel.Invoke([&](const auto &kernel) { return kernel(data, indices, 0); });
+             Tensor output = ge_kernel(data, indices, 0);
              return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
            });
   }

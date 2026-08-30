@@ -26,7 +26,14 @@ void RegisterSliceSymbolicEndShapeInferenceCases(std::vector<TestCase> &registry
   const OpsetId opset = DefaultOpset(13);
   const std::string name("test_cc_shape_inference_slice_symbolic_end");
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(13);
+
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Slice kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Abs kernel_2{ctx_2};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
 
     ModelProto &model = tc.emplace_model();
@@ -57,10 +64,8 @@ void RegisterSliceSymbolicEndShapeInferenceCases(std::vector<TestCase> &registry
     const Tensor starts = Tensor::FromInt64("", {1}, {0});
     const Tensor ends = Tensor::FromInt64("", {1}, {-1});
     const Tensor axes = Tensor::FromInt64("", {1}, {2});
-    Tensor sliced = MakeReferenceKernel<onnx_kernels::kernel::Slice>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, starts, ends, &axes, nullptr); });
-    Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Abs>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(sliced); });
+    Tensor sliced = kernel_1(x, starts, ends, &axes, nullptr);
+    Tensor y = kernel_2(sliced);
     y.name = "Y";
     AppendDataSet(tc, {x}, {std::move(y)});
 

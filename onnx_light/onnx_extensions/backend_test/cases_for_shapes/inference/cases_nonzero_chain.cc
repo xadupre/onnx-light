@@ -37,7 +37,24 @@ enum class NonZeroOutputAnnotation { kAnonymousDims, kNamedDims };
 void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Abs kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Add kernel_2{ctx_2};
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::Mul kernel_3{ctx_3};
+    const KernelContext ctx_4{opset};
+    const onnx_kernels::kernel::NonZero kernel_4{ctx_4};
+    const KernelContext ctx_5{opset};
+    const onnx_kernels::kernel::Transpose kernel_5{ctx_5};
+    const KernelContext ctx_6{opset};
+    const onnx_kernels::kernel::Cast kernel_6{ctx_6};
+    const KernelContext ctx_7{opset};
+    const onnx_kernels::kernel::Abs kernel_7{ctx_7};
+
     // Input contains a deterministic mix of zero and positive entries so that
     // ``NonZero`` returns a non-trivial number of indices.
     const std::vector<int64_t> input_shape = {3, 4};
@@ -56,27 +73,18 @@ void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &re
     //   transposed_nz   = Transpose(nz)      shape (nnz, 2)
     //   nz_float_pre_abs= Cast(transposed_nz, FLOAT)
     //   nz_float        = Abs(nz_float_pre_abs)
-    Tensor abs_out = MakeReferenceKernel<onnx_kernels::kernel::Abs>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x); });
+    Tensor abs_out = kernel_1(x);
     Tensor relu_out = abs_out;
     relu_out.name = "";
-    Tensor double_out = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(relu_out, relu_out); });
-    Tensor mul_out = MakeReferenceKernel<onnx_kernels::kernel::Mul>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(double_out, relu_out); });
+    Tensor double_out = kernel_2(relu_out, relu_out);
+    Tensor mul_out = kernel_3(double_out, relu_out);
     // NonZero output is non-negative, so Abs is identity on it; reuse the same
     // tensor under the post-Abs name ``nz`` directly.
-    Tensor nz = MakeReferenceKernel<onnx_kernels::kernel::NonZero>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(mul_out); });
+    Tensor nz = kernel_4(mul_out);
     nz.name = "nz";
-    Tensor transposed_nz = MakeReferenceKernel<onnx_kernels::kernel::Transpose>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(nz, /*perm=*/{}); });
-    Tensor nz_float_pre_abs =
-        MakeReferenceKernel<onnx_kernels::kernel::Cast>(opset).Invoke([&](const auto &kernel) {
-          return kernel(transposed_nz, static_cast<int32_t>(DataType::FLOAT));
-        });
-    Tensor nz_float = MakeReferenceKernel<onnx_kernels::kernel::Abs>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(nz_float_pre_abs); });
+    Tensor transposed_nz = kernel_5(nz, /*perm=*/{});
+    Tensor nz_float_pre_abs = kernel_6(transposed_nz, static_cast<int32_t>(DataType::FLOAT));
+    Tensor nz_float = kernel_7(nz_float_pre_abs);
     nz_float.name = "nz_float";
 
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);

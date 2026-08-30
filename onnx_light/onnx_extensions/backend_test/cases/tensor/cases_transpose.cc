@@ -31,15 +31,18 @@ NodeProto MakeTransposeNode(const std::vector<int64_t> &perm = {}) {
 
 void RegisterTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const auto transpose_kernel = MakeReferenceKernel<onnx_kernels::kernel::Transpose>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeTransposeNode();
     Expect(registry, std::move(node), "test_cc_transpose_default_perm_benchmark", {opset},
-           {4194304}, {4194304}, [transpose_kernel]() -> IoData {
+           {4194304}, {4194304}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext transpose_kernel_ctx{opset};
+             const onnx_kernels::kernel::Transpose transpose_kernel{transpose_kernel_ctx};
+
              Tensor data = RandnTensor(DataType::FLOAT, {2048, 2048}, 2001);
-             Tensor transposed = transpose_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, /*perm=*/{}); });
+             Tensor transposed = transpose_kernel(data, /*perm=*/{});
              return IoData{{std::move(data)}, {std::move(transposed)}};
            });
     return;
@@ -48,10 +51,14 @@ void RegisterTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_transpose_default_perm
   {
     Expect(registry, MakeTransposeNode(), "test_cc_transpose_default_perm", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext transpose_kernel_ctx{opset};
+             const onnx_kernels::kernel::Transpose transpose_kernel{transpose_kernel_ctx};
+
              const Tensor data = Tensor::FromFloat("", {2, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-             const Tensor transposed = transpose_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, /*perm=*/{}); });
+             const Tensor transposed = transpose_kernel(data, /*perm=*/{});
              return IoData{{std::move(data)}, {std::move(transposed)}};
            });
   }
@@ -60,13 +67,17 @@ void RegisterTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const std::vector<int64_t> perm{1, 0, 2};
     Expect(registry, MakeTransposeNode(perm), "test_cc_transpose_permuted_axes", {opset},
-           [=]() -> IoData {
+           [perm]() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext transpose_kernel_ctx{opset};
+             const onnx_kernels::kernel::Transpose transpose_kernel{transpose_kernel_ctx};
+
              const Tensor data =
                  Tensor::FromFloat("", {2, 3, 4}, {0.f,  1.f,  2.f,  3.f,  4.f,  5.f,  6.f,  7.f,
                                                    8.f,  9.f,  10.f, 11.f, 12.f, 13.f, 14.f, 15.f,
                                                    16.f, 17.f, 18.f, 19.f, 20.f, 21.f, 22.f, 23.f});
-             const Tensor transposed =
-                 transpose_kernel.Invoke([&](const auto &kernel) { return kernel(data, perm); });
+             const Tensor transposed = transpose_kernel(data, perm);
              return IoData{{std::move(data)}, {std::move(transposed)}};
            });
   }
@@ -75,10 +86,14 @@ void RegisterTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     const std::vector<int64_t> perm{1, 2, 0};
     Expect(registry, MakeTransposeNode(perm), "test_cc_transpose_permuted_axes_2", {opset},
-           [=]() -> IoData {
+           [perm]() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext transpose_kernel_ctx{opset};
+             const onnx_kernels::kernel::Transpose transpose_kernel{transpose_kernel_ctx};
+
              const Tensor data = Tensor::FromFloat("", {1, 2, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-             const Tensor transposed =
-                 transpose_kernel.Invoke([&](const auto &kernel) { return kernel(data, perm); });
+             const Tensor transposed = transpose_kernel(data, perm);
              return IoData{{std::move(data)}, {std::move(transposed)}};
            });
   }
@@ -96,13 +111,16 @@ void RegisterTransposeCases(std::vector<TestCase> &registry, TestMode mode) {
     for (size_t i = 0; i < all_perms.size(); ++i) {
       const std::vector<int64_t> perm = all_perms[i];
       const std::string name = "test_cc_transpose_all_permutations_" + std::to_string(i);
-      Expect(registry, MakeTransposeNode(perm), name, {opset},
-             [transpose_kernel, shape, perm]() -> IoData {
-               Tensor data = RandnTensor(DataType::FLOAT, shape, /*seed=*/41);
-               Tensor transposed =
-                   transpose_kernel.Invoke([&](const auto &kernel) { return kernel(data, perm); });
-               return IoData{{std::move(data)}, {std::move(transposed)}};
-             });
+      Expect(registry, MakeTransposeNode(perm), name, {opset}, [shape, perm]() -> IoData {
+        const OpsetId opset = DefaultOpset(13);
+
+        const KernelContext transpose_kernel_ctx{opset};
+        const onnx_kernels::kernel::Transpose transpose_kernel{transpose_kernel_ctx};
+
+        Tensor data = RandnTensor(DataType::FLOAT, shape, /*seed=*/41);
+        Tensor transposed = transpose_kernel(data, perm);
+        return IoData{{std::move(data)}, {std::move(transposed)}};
+      });
     }
   }
 }

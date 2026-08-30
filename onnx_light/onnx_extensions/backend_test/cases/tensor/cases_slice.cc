@@ -58,19 +58,22 @@ Tensor MakeRangeTensor20x10x5() {
 
 void RegisterSliceCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const auto slice_kernel = MakeReferenceKernel<onnx_kernels::kernel::Slice>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeSliceNode(/*with_axes=*/true, /*with_steps=*/true);
     Expect(registry, std::move(node), "test_cc_slice_axes_steps_benchmark", {opset},
-           {16777216, 2, 2, 2, 2}, {4194304}, [slice_kernel]() -> IoData {
+           {16777216, 2, 2, 2, 2}, {4194304}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext slice_kernel_ctx{opset};
+             const onnx_kernels::kernel::Slice slice_kernel{slice_kernel_ctx};
+
              Tensor data = RandnTensor(DataType::FLOAT, {4096, 4096}, 2001);
              Tensor starts = MakeInt64VectorTensor({0, 0});
              Tensor ends = MakeInt64VectorTensor({4096, 2048});
              Tensor axes = MakeInt64VectorTensor({0, 1});
              Tensor steps = MakeInt64VectorTensor({1, 2});
-             Tensor output = slice_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, starts, ends, &axes, &steps); });
+             Tensor output = slice_kernel(data, starts, ends, &axes, &steps);
              return IoData{{std::move(data), std::move(starts), std::move(ends), std::move(axes),
                             std::move(steps)},
                            {std::move(output)}};
@@ -80,7 +83,12 @@ void RegisterSliceCases(std::vector<TestCase> &registry, TestMode mode) {
 
   {
     Expect(registry, MakeSliceNode(/*with_axes=*/true, /*with_steps=*/true),
-           "test_cc_slice_axes_steps", {opset}, [=]() -> IoData {
+           "test_cc_slice_axes_steps", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext slice_kernel_ctx{opset};
+             const onnx_kernels::kernel::Slice slice_kernel{slice_kernel_ctx};
+
              const Tensor data = Tensor::FromFloat("", {2, 4},
                                                    {
                                                        1.0f,
@@ -96,8 +104,7 @@ void RegisterSliceCases(std::vector<TestCase> &registry, TestMode mode) {
              const Tensor ends = MakeInt64VectorTensor({2, 3});
              const Tensor axes = MakeInt64VectorTensor({0, 1});
              const Tensor steps = MakeInt64VectorTensor({1, 2});
-             const Tensor output = slice_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, starts, ends, &axes, &steps); });
+             const Tensor output = slice_kernel(data, starts, ends, &axes, &steps);
              return IoData{{std::move(data), std::move(starts), std::move(ends), std::move(axes),
                             std::move(steps)},
                            {std::move(output)}};
@@ -105,40 +112,48 @@ void RegisterSliceCases(std::vector<TestCase> &registry, TestMode mode) {
   }
 
   {
-    Expect(
-        registry, MakeSliceNode(/*with_axes=*/false, /*with_steps=*/false),
-        "test_cc_slice_default_axes_steps", {opset}, [=]() -> IoData {
-          const Tensor data = Tensor::FromFloat("", {2, 4},
-                                                {
-                                                    1.0f,
-                                                    2.0f,
-                                                    3.0f,
-                                                    4.0f,
-                                                    5.0f,
-                                                    6.0f,
-                                                    7.0f,
-                                                    8.0f,
-                                                });
-          const Tensor starts = MakeInt64VectorTensor({0, 1});
-          const Tensor ends = MakeInt64VectorTensor({-1, 1000});
-          const Tensor output =
-              slice_kernel.Invoke([&](const auto &kernel) { return kernel(data, starts, ends); });
-          return IoData{{std::move(data), std::move(starts), std::move(ends)}, {std::move(output)}};
-        });
+    Expect(registry, MakeSliceNode(/*with_axes=*/false, /*with_steps=*/false),
+           "test_cc_slice_default_axes_steps", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext slice_kernel_ctx{opset};
+             const onnx_kernels::kernel::Slice slice_kernel{slice_kernel_ctx};
+
+             const Tensor data = Tensor::FromFloat("", {2, 4},
+                                                   {
+                                                       1.0f,
+                                                       2.0f,
+                                                       3.0f,
+                                                       4.0f,
+                                                       5.0f,
+                                                       6.0f,
+                                                       7.0f,
+                                                       8.0f,
+                                                   });
+             const Tensor starts = MakeInt64VectorTensor({0, 1});
+             const Tensor ends = MakeInt64VectorTensor({-1, 1000});
+             const Tensor output = slice_kernel(data, starts, ends);
+             return IoData{{std::move(data), std::move(starts), std::move(ends)},
+                           {std::move(output)}};
+           });
   }
 
   // Mirrors ONNX ``test_slice``: 2-D slice (axes=[0,1], steps=[1,1]) on the
   // first two dimensions of a 20x10x5 input.
   {
     Expect(registry, MakeSliceNode(/*with_axes=*/true, /*with_steps=*/true), "test_cc_slice",
-           {opset}, [=]() -> IoData {
+           {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext slice_kernel_ctx{opset};
+             const onnx_kernels::kernel::Slice slice_kernel{slice_kernel_ctx};
+
              const Tensor data = MakeRangeTensor20x10x5();
              const Tensor starts = MakeInt64VectorTensor({0, 0});
              const Tensor ends = MakeInt64VectorTensor({3, 10});
              const Tensor axes = MakeInt64VectorTensor({0, 1});
              const Tensor steps = MakeInt64VectorTensor({1, 1});
-             const Tensor output = slice_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, starts, ends, &axes, &steps); });
+             const Tensor output = slice_kernel(data, starts, ends, &axes, &steps);
              return IoData{{std::move(data), std::move(starts), std::move(ends), std::move(axes),
                             std::move(steps)},
                            {std::move(output)}};
@@ -148,14 +163,18 @@ void RegisterSliceCases(std::vector<TestCase> &registry, TestMode mode) {
   // Mirrors ONNX ``test_slice_neg``: slice axis 1 with a negative ``end``.
   {
     Expect(registry, MakeSliceNode(/*with_axes=*/true, /*with_steps=*/true), "test_cc_slice_neg",
-           {opset}, [=]() -> IoData {
+           {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext slice_kernel_ctx{opset};
+             const onnx_kernels::kernel::Slice slice_kernel{slice_kernel_ctx};
+
              const Tensor data = MakeRangeTensor20x10x5();
              const Tensor starts = MakeInt64VectorTensor({0});
              const Tensor ends = MakeInt64VectorTensor({-1});
              const Tensor axes = MakeInt64VectorTensor({1});
              const Tensor steps = MakeInt64VectorTensor({1});
-             const Tensor output = slice_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, starts, ends, &axes, &steps); });
+             const Tensor output = slice_kernel(data, starts, ends, &axes, &steps);
              return IoData{{std::move(data), std::move(starts), std::move(ends), std::move(axes),
                             std::move(steps)},
                            {std::move(output)}};
@@ -166,14 +185,18 @@ void RegisterSliceCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``end`` are far past the axis length, producing an empty slice.
   {
     Expect(registry, MakeSliceNode(/*with_axes=*/true, /*with_steps=*/true),
-           "test_cc_slice_start_out_of_bounds", {opset}, [=]() -> IoData {
+           "test_cc_slice_start_out_of_bounds", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext slice_kernel_ctx{opset};
+             const onnx_kernels::kernel::Slice slice_kernel{slice_kernel_ctx};
+
              const Tensor data = MakeRangeTensor20x10x5();
              const Tensor starts = MakeInt64VectorTensor({1000});
              const Tensor ends = MakeInt64VectorTensor({1000});
              const Tensor axes = MakeInt64VectorTensor({1});
              const Tensor steps = MakeInt64VectorTensor({1});
-             const Tensor output = slice_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, starts, ends, &axes, &steps); });
+             const Tensor output = slice_kernel(data, starts, ends, &axes, &steps);
              return IoData{{std::move(data), std::move(starts), std::move(ends), std::move(axes),
                             std::move(steps)},
                            {std::move(output)}};
@@ -184,14 +207,18 @@ void RegisterSliceCases(std::vector<TestCase> &registry, TestMode mode) {
   // length and is clamped to it.
   {
     Expect(registry, MakeSliceNode(/*with_axes=*/true, /*with_steps=*/true),
-           "test_cc_slice_end_out_of_bounds", {opset}, [=]() -> IoData {
+           "test_cc_slice_end_out_of_bounds", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext slice_kernel_ctx{opset};
+             const onnx_kernels::kernel::Slice slice_kernel{slice_kernel_ctx};
+
              const Tensor data = MakeRangeTensor20x10x5();
              const Tensor starts = MakeInt64VectorTensor({1});
              const Tensor ends = MakeInt64VectorTensor({1000});
              const Tensor axes = MakeInt64VectorTensor({1});
              const Tensor steps = MakeInt64VectorTensor({1});
-             const Tensor output = slice_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, starts, ends, &axes, &steps); });
+             const Tensor output = slice_kernel(data, starts, ends, &axes, &steps);
              return IoData{{std::move(data), std::move(starts), std::move(ends), std::move(axes),
                             std::move(steps)},
                            {std::move(output)}};
@@ -202,13 +229,17 @@ void RegisterSliceCases(std::vector<TestCase> &registry, TestMode mode) {
   // but no ``steps`` input (defaults to 1).
   {
     Expect(registry, MakeSliceNode(/*with_axes=*/true, /*with_steps=*/false),
-           "test_cc_slice_default_steps", {opset}, [=]() -> IoData {
+           "test_cc_slice_default_steps", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext slice_kernel_ctx{opset};
+             const onnx_kernels::kernel::Slice slice_kernel{slice_kernel_ctx};
+
              const Tensor data = MakeRangeTensor20x10x5();
              const Tensor starts = MakeInt64VectorTensor({0, 0, 3});
              const Tensor ends = MakeInt64VectorTensor({20, 10, 4});
              const Tensor axes = MakeInt64VectorTensor({0, 1, 2});
-             const Tensor output = slice_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, starts, ends, &axes); });
+             const Tensor output = slice_kernel(data, starts, ends, &axes);
              return IoData{{std::move(data), std::move(starts), std::move(ends), std::move(axes)},
                            {std::move(output)}};
            });
@@ -218,14 +249,18 @@ void RegisterSliceCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``steps`` on every axis.
   {
     Expect(registry, MakeSliceNode(/*with_axes=*/true, /*with_steps=*/true),
-           "test_cc_slice_neg_steps", {opset}, [=]() -> IoData {
+           "test_cc_slice_neg_steps", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext slice_kernel_ctx{opset};
+             const onnx_kernels::kernel::Slice slice_kernel{slice_kernel_ctx};
+
              const Tensor data = MakeRangeTensor20x10x5();
              const Tensor starts = MakeInt64VectorTensor({20, 10, 4});
              const Tensor ends = MakeInt64VectorTensor({0, 0, 1});
              const Tensor axes = MakeInt64VectorTensor({0, 1, 2});
              const Tensor steps = MakeInt64VectorTensor({-1, -3, -2});
-             const Tensor output = slice_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, starts, ends, &axes, &steps); });
+             const Tensor output = slice_kernel(data, starts, ends, &axes, &steps);
              return IoData{{std::move(data), std::move(starts), std::move(ends), std::move(axes),
                             std::move(steps)},
                            {std::move(output)}};
@@ -236,13 +271,17 @@ void RegisterSliceCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``axes`` values that count from the end of ``data``'s rank.
   {
     Expect(registry, MakeSliceNode(/*with_axes=*/true, /*with_steps=*/false),
-           "test_cc_slice_negative_axes", {opset}, [=]() -> IoData {
+           "test_cc_slice_negative_axes", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext slice_kernel_ctx{opset};
+             const onnx_kernels::kernel::Slice slice_kernel{slice_kernel_ctx};
+
              const Tensor data = MakeRangeTensor20x10x5();
              const Tensor starts = MakeInt64VectorTensor({0, 0, 3});
              const Tensor ends = MakeInt64VectorTensor({20, 10, 4});
              const Tensor axes = MakeInt64VectorTensor({0, -2, -1});
-             const Tensor output = slice_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, starts, ends, &axes); });
+             const Tensor output = slice_kernel(data, starts, ends, &axes);
              return IoData{{std::move(data), std::move(starts), std::move(ends), std::move(axes)},
                            {std::move(output)}};
            });

@@ -41,7 +41,14 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(18);
   const std::string name = "test_cc_shape_tag_shape_reshape";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Shape kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Reshape kernel_2{ctx_2};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -90,11 +97,9 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
 
     // Build the reference DataSet so the case is executable end-to-end.
     const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-    Tensor s = MakeReferenceKernel<onnx_kernels::kernel::Shape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, onnx_kernels::kernel::Shape::Attributes{}); });
+    Tensor s = kernel_1(x, onnx_kernels::kernel::Shape::Attributes{});
     s.name = "S";
-    Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, s); });
+    Tensor y = kernel_2(x, s);
     y.name = "Y";
 
     AppendDataSet(tc, {x}, {y});
@@ -126,7 +131,12 @@ void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry, TestMode /*
   const OpsetId opset = DefaultOpset(18);
   const std::string name = "test_cc_shape_tag_constant_reshape_ambiguous";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::Reshape kernel_3{ctx_3};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -193,8 +203,7 @@ void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry, TestMode /*
     // so only X appears in the DataSet inputs.
     const Tensor x = Tensor::FromFloat("X", {6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
     const Tensor s = Tensor::FromInt64("S", {2}, {2, 3});
-    Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, s); });
+    Tensor y = kernel_3(x, s);
     y.name = "Y";
 
     AppendDataSet(tc, {x}, {y});
@@ -233,7 +242,16 @@ void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &regist
   const OpsetId opset = DefaultOpset(18);
   const std::string name = "test_cc_shape_tag_constant_mul_concat_reshape";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_4{opset};
+    const onnx_kernels::kernel::Mul kernel_4{ctx_4};
+    const KernelContext ctx_5{opset};
+    const onnx_kernels::kernel::Concat kernel_5{ctx_5};
+    const KernelContext ctx_6{opset};
+    const onnx_kernels::kernel::Reshape kernel_6{ctx_6};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -364,19 +382,16 @@ void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &regist
     // so only X appears in the DataSet inputs.
     const Tensor s1 = Tensor::FromInt64("S1", {1}, {3});
     const Tensor two = Tensor::FromInt64("two", {1}, {2});
-    Tensor s2 = MakeReferenceKernel<onnx_kernels::kernel::Mul>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(s1, two); });
+    Tensor s2 = kernel_4(s1, two);
     s2.name = "S2";
-    Tensor s_full = MakeReferenceKernel<onnx_kernels::kernel::Concat>(opset).Invoke(
-        [&](const auto &kernel) { return kernel({s1, s2}, 0); });
+    Tensor s_full = kernel_5({s1, s2}, 0);
     s_full.name = "S_full";
 
     const std::vector<float> x_data = {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,
                                        7.0f,  8.0f,  9.0f,  10.0f, 11.0f, 12.0f,
                                        13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f};
     const Tensor x = Tensor::FromFloat("X", {18}, x_data);
-    Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, s_full); });
+    Tensor y = kernel_6(x, s_full);
     y.name = "Y";
 
     AppendDataSet(tc, {x}, {y});
@@ -404,7 +419,12 @@ void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry, TestMod
   const OpsetId opset = DefaultOpset(18);
   const std::string name = "test_cc_shape_tag_output_is_shape";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_7{opset};
+    const onnx_kernels::kernel::Shape kernel_7{ctx_7};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -442,8 +462,7 @@ void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry, TestMod
     // Build the reference DataSet so the case is executable end-to-end.
     // Y = Shape(X) = [2, 3].
     const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-    Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Shape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, onnx_kernels::kernel::Shape::Attributes{}); });
+    Tensor y = kernel_7(x, onnx_kernels::kernel::Shape::Attributes{});
     y.name = "Y";
 
     AppendDataSet(tc, {x}, {y});
@@ -471,7 +490,12 @@ void RegisterShapeTagConcatWeightWinsCases(std::vector<TestCase> &registry, Test
   const OpsetId opset = DefaultOpset(18);
   const std::string name = "test_cc_shape_tag_concat_weight_wins";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_8{opset};
+    const onnx_kernels::kernel::Concat kernel_8{ctx_8};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -526,8 +550,7 @@ void RegisterShapeTagConcatWeightWinsCases(std::vector<TestCase> &registry, Test
     const Tensor past =
         Tensor::FromFloat("PAST", {1, 2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
     const Tensor kh = Tensor::FromFloat("KH", {1, 3, 4}, kh_data);
-    Tensor c = MakeReferenceKernel<onnx_kernels::kernel::Concat>(opset).Invoke(
-        [&](const auto &kernel) { return kernel({past, kh}, /*axis=*/1); });
+    Tensor c = kernel_8({past, kh}, /*axis=*/1);
     c.name = "C";
 
     AppendDataSet(tc, {past}, {c});
@@ -554,7 +577,14 @@ void RegisterShapeTagCastBackwardCases(std::vector<TestCase> &registry, TestMode
   const OpsetId opset = DefaultOpset(18);
   const std::string name = "test_cc_shape_tag_cast_backward";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_9{opset};
+    const onnx_kernels::kernel::Cast kernel_9{ctx_9};
+    const KernelContext ctx_10{opset};
+    const onnx_kernels::kernel::Add kernel_10{ctx_10};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -621,11 +651,9 @@ void RegisterShapeTagCastBackwardCases(std::vector<TestCase> &registry, TestMode
     // Build the reference DataSet so the case is executable end-to-end.
     const Tensor x = Tensor::FromInt64("X", {4}, {1, 2, 3, 4});
     const Tensor w = Tensor::FromFloat("W", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
-    Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Cast>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, static_cast<int32_t>(DataType::FLOAT)); });
+    Tensor y = kernel_9(x, static_cast<int32_t>(DataType::FLOAT));
     y.name = "Y";
-    Tensor z = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(w, y); });
+    Tensor z = kernel_10(w, y);
     z.name = "Z";
 
     AppendDataSet(tc, {x}, {z});
@@ -654,7 +682,14 @@ void RegisterShapeTagReshapeBackwardCases(std::vector<TestCase> &registry, TestM
   const OpsetId opset = DefaultOpset(18);
   const std::string name = "test_cc_shape_tag_reshape_backward";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_11{opset};
+    const onnx_kernels::kernel::Reshape kernel_11{ctx_11};
+    const KernelContext ctx_12{opset};
+    const onnx_kernels::kernel::Add kernel_12{ctx_12};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -730,11 +765,9 @@ void RegisterShapeTagReshapeBackwardCases(std::vector<TestCase> &registry, TestM
     const Tensor x = Tensor::FromFloat("X", {6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
     const Tensor s = Tensor::FromInt64("S", {2}, {2, 3});
     const Tensor w = Tensor::FromFloat("W", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-    Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, s); });
+    Tensor y = kernel_11(x, s);
     y.name = "Y";
-    Tensor z = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(w, y); });
+    Tensor z = kernel_12(w, y);
     z.name = "Z";
 
     AppendDataSet(tc, {x}, {z});

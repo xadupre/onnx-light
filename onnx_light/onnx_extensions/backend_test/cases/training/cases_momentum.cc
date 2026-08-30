@@ -45,7 +45,6 @@ OpsetId TrainingOpset(int64_t version) { return OpsetId(kOnnxPreviewTrainingDoma
 void RegisterMomentumCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = TrainingOpset(1);
   const OpsetId default_opset = DefaultOpset(13);
-  const auto momentum = MakeReferenceKernel<onnx_kernels::kernel::Momentum>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -65,16 +64,19 @@ void RegisterMomentumCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry, std::move(node), "test_momentum_benchmark", {default_opset, opset},
            {1, 1, kBenchmarkElementwiseSize, kBenchmarkElementwiseSize, kBenchmarkElementwiseSize},
            {kBenchmarkElementwiseSize, kBenchmarkElementwiseSize},
-           [momentum, alpha, beta, norm_coefficient]() -> IoData {
+           [alpha, beta, norm_coefficient]() -> IoData {
+             const OpsetId opset = TrainingOpset(1);
+
+             const KernelContext momentum_ctx{opset};
+             const onnx_kernels::kernel::Momentum momentum{momentum_ctx};
+
              Tensor R = Tensor::FromFloat("", {}, {0.1f});
              Tensor T = Tensor::FromInt64("", {}, {0});
              Tensor X = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654321ULL);
              Tensor G = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654322ULL);
              Tensor V = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654323ULL);
-             std::vector<Tensor> outs = momentum.Invoke([&](const auto &kernel) {
-               return kernel(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient,
-                             onnx_kernels::kernel::Momentum::Mode::kStandard);
-             });
+             std::vector<Tensor> outs = momentum(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient,
+                                                 onnx_kernels::kernel::Momentum::Mode::kStandard);
              return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(V)},
                            {std::move(outs[0]), std::move(outs[1])}};
            });
@@ -96,20 +98,24 @@ void RegisterMomentumCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttribute(node, "alpha", alpha);
     AddFloatAttribute(node, "beta", beta);
     AddAttribute(node, "mode", std::string("standard"));
-    Expect(registry, std::move(node), "test_momentum", {default_opset, opset}, [=]() -> IoData {
-      Tensor R = Tensor::FromFloat("", {}, {0.1f});
-      Tensor T = Tensor::FromInt64("", {}, {0});
-      Tensor X = Tensor::FromFloat("", {2}, {1.2f, 2.8f});
-      Tensor G = Tensor::FromFloat("", {2}, {-0.94f, -2.5f});
-      Tensor V = Tensor::FromFloat("", {2}, {1.7f, 3.6f});
+    Expect(registry, std::move(node), "test_momentum", {default_opset, opset},
+           [alpha, beta, norm_coefficient]() -> IoData {
+             const OpsetId opset = TrainingOpset(1);
 
-      std::vector<Tensor> outs = momentum.Invoke([&](const auto &kernel) {
-        return kernel(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient,
-                      onnx_kernels::kernel::Momentum::Mode::kStandard);
-      });
-      return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(V)},
-                    {std::move(outs[0]), std::move(outs[1])}};
-    });
+             const KernelContext momentum_ctx{opset};
+             const onnx_kernels::kernel::Momentum momentum{momentum_ctx};
+
+             Tensor R = Tensor::FromFloat("", {}, {0.1f});
+             Tensor T = Tensor::FromInt64("", {}, {0});
+             Tensor X = Tensor::FromFloat("", {2}, {1.2f, 2.8f});
+             Tensor G = Tensor::FromFloat("", {2}, {-0.94f, -2.5f});
+             Tensor V = Tensor::FromFloat("", {2}, {1.7f, 3.6f});
+
+             std::vector<Tensor> outs = momentum(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient,
+                                                 onnx_kernels::kernel::Momentum::Mode::kStandard);
+             return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(V)},
+                           {std::move(outs[0]), std::move(outs[1])}};
+           });
   }
 
   // From Momentum.export_nesterov_momentum():
@@ -128,17 +134,20 @@ void RegisterMomentumCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttribute(node, "beta", beta);
     AddAttribute(node, "mode", std::string("nesterov"));
     Expect(registry, std::move(node), "test_nesterov_momentum", {default_opset, opset},
-           [=]() -> IoData {
+           [alpha, beta, norm_coefficient]() -> IoData {
+             const OpsetId opset = TrainingOpset(1);
+
+             const KernelContext momentum_ctx{opset};
+             const onnx_kernels::kernel::Momentum momentum{momentum_ctx};
+
              Tensor R = Tensor::FromFloat("", {}, {0.1f});
              Tensor T = Tensor::FromInt64("", {}, {0});
              Tensor X = Tensor::FromFloat("", {2}, {1.2f, 2.8f});
              Tensor G = Tensor::FromFloat("", {2}, {-0.94f, -2.5f});
              Tensor V = Tensor::FromFloat("", {2}, {1.7f, 3.6f});
 
-             std::vector<Tensor> outs = momentum.Invoke([&](const auto &kernel) {
-               return kernel(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient,
-                             onnx_kernels::kernel::Momentum::Mode::kNesterov);
-             });
+             std::vector<Tensor> outs = momentum(R, T, {X}, {G}, {V}, alpha, beta, norm_coefficient,
+                                                 onnx_kernels::kernel::Momentum::Mode::kNesterov);
              return IoData{{std::move(R), std::move(T), std::move(X), std::move(G), std::move(V)},
                            {std::move(outs[0]), std::move(outs[1])}};
            });
@@ -167,7 +176,12 @@ void RegisterMomentumCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttribute(node, "beta", beta);
     AddAttribute(node, "mode", std::string("standard"));
     Expect(registry, std::move(node), "test_momentum_multiple", {default_opset, opset},
-           [=]() -> IoData {
+           [alpha, beta, norm_coefficient]() -> IoData {
+             const OpsetId opset = TrainingOpset(1);
+
+             const KernelContext momentum_ctx{opset};
+             const onnx_kernels::kernel::Momentum momentum{momentum_ctx};
+
              Tensor R = Tensor::FromFloat("", {}, {0.1f});
              Tensor T = Tensor::FromInt64("", {}, {0});
              Tensor X1 = Tensor::FromFloat("", {1}, {1.0f});
@@ -177,10 +191,9 @@ void RegisterMomentumCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor V1 = Tensor::FromFloat("", {1}, {2.0f});
              Tensor V2 = Tensor::FromFloat("", {2}, {4.0f, 1.0f});
 
-             std::vector<Tensor> outs = momentum.Invoke([&](const auto &kernel) {
-               return kernel(R, T, {X1, X2}, {G1, G2}, {V1, V2}, alpha, beta, norm_coefficient,
-                             onnx_kernels::kernel::Momentum::Mode::kStandard);
-             });
+             std::vector<Tensor> outs =
+                 momentum(R, T, {X1, X2}, {G1, G2}, {V1, V2}, alpha, beta, norm_coefficient,
+                          onnx_kernels::kernel::Momentum::Mode::kStandard);
              return IoData{
                  {std::move(R), std::move(T), std::move(X1), std::move(X2), std::move(G1),
                   std::move(G2), std::move(V1), std::move(V2)},

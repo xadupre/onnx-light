@@ -14,7 +14,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 void RegisterSVMClassifierCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
-  const auto svm = MakeReferenceKernel<onnx_kernels::kernel::SVMClassifier>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -73,13 +72,14 @@ void RegisterSVMClassifierCases(std::vector<TestCase> &registry, TestMode mode) 
     labels->add_ints(static_cast<int64_t>(1));
 
     Expect(registry, std::move(node), "test_cc_svmclassifier_int64_binary_benchmark",
-           {default_opset, opset}, {16384}, {8192, 16384}, [svm]() -> IoData {
+           {default_opset, opset}, {16384}, {8192, 16384}, [opset]() -> IoData {
+             const KernelContext svm_ctx{opset};
+             const onnx_kernels::kernel::SVMClassifier svm{svm_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {8192, 2}, 2671);
-             auto [y, z] = svm.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, -1.0f},
-                                                        {0.0f}, {1, 1}, {0, 1}, "LINEAR", 0.0f,
-                                                        0.0f, 0.0f);
-             });
+             auto [y, z] =
+                 svm.template operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, -1.0f}, {0.0f},
+                                                {1, 1}, {0, 1}, "LINEAR", 0.0f, 0.0f, 0.0f);
              return IoData{{std::move(x)}, {std::move(y), std::move(z)}};
            });
     return;
@@ -141,13 +141,14 @@ void RegisterSVMClassifierCases(std::vector<TestCase> &registry, TestMode mode) 
   labels->add_ints(static_cast<int64_t>(1));
 
   Expect(registry, std::move(node), "test_cc_svmclassifier_int64_binary", {default_opset, opset},
-         [=]() -> IoData {
+         [opset]() -> IoData {
+           const KernelContext svm_ctx{opset};
+           const onnx_kernels::kernel::SVMClassifier svm{svm_ctx};
+
            Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 1.0f, 0.0f, 3.0f});
-           auto yz = svm.Invoke([&](const auto &kernel) {
-             return kernel.template operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, -1.0f},
-                                                      {0.0f}, {1, 1}, {0, 1}, "LINEAR", 0.0f, 0.0f,
-                                                      0.0f);
-           });
+           auto yz =
+               svm.template operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, -1.0f}, {0.0f},
+                                              {1, 1}, {0, 1}, "LINEAR", 0.0f, 0.0f, 0.0f);
            return IoData{{std::move(x)}, {std::move(yz.first), std::move(yz.second)}};
          });
 }

@@ -24,7 +24,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterLRNCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const auto kernel = MakeReferenceKernel<onnx_kernels::kernel::LRN>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -38,12 +37,15 @@ void RegisterLRNCases(std::vector<TestCase> &registry, TestMode mode) {
 
     constexpr int64_t count = 1 * 64 * 128 * 128;
     Expect(registry, std::move(node), "test_cc_lrn_benchmark", {opset}, {count}, {count},
-           [kernel]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext kernel_ctx{opset};
+             const onnx_kernels::kernel::LRN kernel{kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 64, 128, 128}, 2201);
-             Tensor y = kernel.Invoke([&](const auto &kernel) {
-               return kernel(x, /*size=*/3, /*alpha=*/0.0002f, /*beta=*/0.5f,
-                             /*bias=*/2.0f);
-             });
+             Tensor y = kernel(x, /*size=*/3, /*alpha=*/0.0002f, /*beta=*/0.5f,
+                               /*bias=*/2.0f);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -70,10 +72,15 @@ void RegisterLRNCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<float>(node, "beta", 0.5f);
     AddAttribute<float>(node, "bias", 2.0f);
     AddAttribute<int64_t>(node, "size", 3);
-    Expect(registry, std::move(node), "test_cc_lrn", {opset}, [=]() -> IoData {
-      Tensor y = kernel.Invoke([&](const auto &kernel) {
-        return kernel(x, /*size=*/3, /*alpha=*/0.0002f, /*beta=*/0.5f, /*bias=*/2.0f);
-      });
+    Expect(registry, std::move(node), "test_cc_lrn", {opset}, [x_data]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 4, 5, 5}, x_data);
+
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext kernel_ctx{opset};
+      const onnx_kernels::kernel::LRN kernel{kernel_ctx};
+
+      Tensor y = kernel(x, /*size=*/3, /*alpha=*/0.0002f, /*beta=*/0.5f, /*bias=*/2.0f);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -85,8 +92,15 @@ void RegisterLRNCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_output("y");
     AddAttribute<int64_t>(node, "size", 3);
-    Expect(registry, std::move(node), "test_cc_lrn_default", {opset}, [=]() -> IoData {
-      Tensor y = kernel.Invoke([&](const auto &kernel) { return kernel(x, /*size=*/3); });
+    Expect(registry, std::move(node), "test_cc_lrn_default", {opset}, [x_data]() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 4, 5, 5}, x_data);
+
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext kernel_ctx{opset};
+      const onnx_kernels::kernel::LRN kernel{kernel_ctx};
+
+      Tensor y = kernel(x, /*size=*/3);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

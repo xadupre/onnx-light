@@ -41,7 +41,6 @@ NodeProto MakeSTFTNode(bool with_window, bool with_frame_length, int64_t oneside
 // ---------------------------------------------------------------------------
 void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset_v17 = DefaultOpset(17);
-  const auto stft_v17 = MakeReferenceKernel<onnx_kernels::kernel::STFT>(opset_v17);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node =
@@ -50,19 +49,22 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
     const int64_t signal_count = 65536;
     const int64_t scalar_count = 1;
     const int64_t output_count = 1 * 127 * 513 * 2;
-    Expect(
-        registry, std::move(node), "test_cc_stft_benchmark", {opset_v17},
-        {signal_count, scalar_count, scalar_count}, {output_count}, [stft_v17, shape]() -> IoData {
-          Tensor signal_b = RandnTensor(DataType::FLOAT, shape, 446);
-          Tensor frame_step_b = Tensor::FromInt64("frame_step", {}, {512});
-          Tensor frame_length_b = Tensor::FromInt64("frame_length", {}, {1024});
-          Tensor y = stft_v17.Invoke([&](const auto &kernel) {
-            return kernel(signal_b, frame_step_b, /*window=*/nullptr, &frame_length_b,
-                          /*onesided=*/true);
-          });
-          return IoData{{std::move(signal_b), std::move(frame_step_b), std::move(frame_length_b)},
-                        {std::move(y)}};
-        });
+    Expect(registry, std::move(node), "test_cc_stft_benchmark", {opset_v17},
+           {signal_count, scalar_count, scalar_count}, {output_count}, [shape]() -> IoData {
+             const OpsetId opset_v17 = DefaultOpset(17);
+
+             const KernelContext stft_v17_ctx{opset_v17};
+             const onnx_kernels::kernel::STFT stft_v17{stft_v17_ctx};
+
+             Tensor signal_b = RandnTensor(DataType::FLOAT, shape, 446);
+             Tensor frame_step_b = Tensor::FromInt64("frame_step", {}, {512});
+             Tensor frame_length_b = Tensor::FromInt64("frame_length", {}, {1024});
+             Tensor y = stft_v17(signal_b, frame_step_b, /*window=*/nullptr, &frame_length_b,
+                                 /*onesided=*/true);
+             return IoData{
+                 {std::move(signal_b), std::move(frame_step_b), std::move(frame_length_b)},
+                 {std::move(y)}};
+           });
     return;
   }
 
@@ -77,27 +79,42 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
 
   // --- STFT with frame_length input, no window, onesided=1.
   {
-    Expect(
-        registry, MakeSTFTNode(/*with_window=*/false, /*with_frame_length=*/true, /*onesided=*/1),
-        "test_cc_stft", {opset_v17}, [=]() -> IoData {
-          Tensor y = stft_v17.Invoke([&](const auto &kernel) {
-            return kernel(signal, frame_step, /*window=*/nullptr, &frame_length, /*onesided=*/true);
-          });
-          return IoData{{std::move(signal), std::move(frame_step), std::move(frame_length)},
-                        {std::move(y)}};
-        });
+    Expect(registry,
+           MakeSTFTNode(/*with_window=*/false, /*with_frame_length=*/true, /*onesided=*/1),
+           "test_cc_stft", {opset_v17}, [samples]() -> IoData {
+             Tensor signal = Tensor::FromFloat("signal", {1, 16, 1}, samples);
+             Tensor frame_step = Tensor::FromInt64("frame_step", {}, {4});
+             Tensor frame_length = Tensor::FromInt64("frame_length", {}, {8});
+
+             const OpsetId opset_v17 = DefaultOpset(17);
+
+             const KernelContext stft_v17_ctx{opset_v17};
+             const onnx_kernels::kernel::STFT stft_v17{stft_v17_ctx};
+
+             Tensor y =
+                 stft_v17(signal, frame_step, /*window=*/nullptr, &frame_length, /*onesided=*/true);
+             return IoData{{std::move(signal), std::move(frame_step), std::move(frame_length)},
+                           {std::move(y)}};
+           });
     registry.back().atol = 1e-5;
   }
 
   // --- STFT with both window and frame_length, onesided=1.
   {
     Expect(registry, MakeSTFTNode(/*with_window=*/true, /*with_frame_length=*/true, /*onesided=*/1),
-           "test_cc_stft_with_window", {opset_v17}, [=]() -> IoData {
+           "test_cc_stft_with_window", {opset_v17}, [samples]() -> IoData {
+             Tensor signal = Tensor::FromFloat("signal", {1, 16, 1}, samples);
+             Tensor frame_step = Tensor::FromInt64("frame_step", {}, {4});
+             Tensor frame_length = Tensor::FromInt64("frame_length", {}, {8});
+
+             const OpsetId opset_v17 = DefaultOpset(17);
+
+             const KernelContext stft_v17_ctx{opset_v17};
+             const onnx_kernels::kernel::STFT stft_v17{stft_v17_ctx};
+
              Tensor window = Tensor::FromFloat(
                  "window", {8}, {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f}); // rectangular
-             Tensor y = stft_v17.Invoke([&](const auto &kernel) {
-               return kernel(signal, frame_step, &window, &frame_length, /*onesided=*/true);
-             });
+             Tensor y = stft_v17(signal, frame_step, &window, &frame_length, /*onesided=*/true);
              return IoData{{std::move(signal), std::move(frame_step), std::move(window),
                             std::move(frame_length)},
                            {std::move(y)}};
@@ -109,11 +126,18 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry,
            MakeSTFTNode(/*with_window=*/false, /*with_frame_length=*/true, /*onesided=*/0),
-           "test_cc_stft_twosided", {opset_v17}, [=]() -> IoData {
-             Tensor y = stft_v17.Invoke([&](const auto &kernel) {
-               return kernel(signal, frame_step, /*window=*/nullptr, &frame_length,
-                             /*onesided=*/false);
-             });
+           "test_cc_stft_twosided", {opset_v17}, [samples]() -> IoData {
+             Tensor signal = Tensor::FromFloat("signal", {1, 16, 1}, samples);
+             Tensor frame_step = Tensor::FromInt64("frame_step", {}, {4});
+             Tensor frame_length = Tensor::FromInt64("frame_length", {}, {8});
+
+             const OpsetId opset_v17 = DefaultOpset(17);
+
+             const KernelContext stft_v17_ctx{opset_v17};
+             const onnx_kernels::kernel::STFT stft_v17{stft_v17_ctx};
+
+             Tensor y = stft_v17(signal, frame_step, /*window=*/nullptr, &frame_length,
+                                 /*onesided=*/false);
              return IoData{{std::move(signal), std::move(frame_step), std::move(frame_length)},
                            {std::move(y)}};
            });
@@ -132,7 +156,12 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry,
            MakeSTFTNode(/*with_window=*/false, /*with_frame_length=*/true, /*onesided=*/0),
-           "test_cc_stft_complex_batched", {opset_v17}, [=]() -> IoData {
+           "test_cc_stft_complex_batched", {opset_v17}, []() -> IoData {
+             const OpsetId opset_v17 = DefaultOpset(17);
+
+             const KernelContext stft_v17_ctx{opset_v17};
+             const onnx_kernels::kernel::STFT stft_v17{stft_v17_ctx};
+
              constexpr int64_t batch_size = 2;
              constexpr int64_t signal_size = 128;
              constexpr int64_t signal_components = 2; // complex: real + imag
@@ -156,10 +185,9 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor frame_step_b = Tensor::FromInt64("frame_step", {}, {frame_step_v});
              Tensor frame_length_b = Tensor::FromInt64("frame_length", {}, {frame_length_v});
 
-             Tensor y_expected = stft_v17.Invoke([&](const auto &kernel) {
-               return kernel(signal_complex, frame_step_b, /*window=*/nullptr, &frame_length_b,
-                             /*onesided=*/false);
-             });
+             Tensor y_expected =
+                 stft_v17(signal_complex, frame_step_b, /*window=*/nullptr, &frame_length_b,
+                          /*onesided=*/false);
 
              // Sanity-check the kernel's output against the closed-form DFT of a
              // DC-only complex signal: the DC bin (k=0) of each frame must equal

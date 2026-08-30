@@ -20,8 +20,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const auto instancenorm_kernel =
-      MakeReferenceKernel<onnx_kernels::kernel::InstanceNormalization>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -37,12 +35,17 @@ void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry, TestMod
     constexpr int64_t W = 128;
     constexpr int64_t x_count = N * C * H * W;
     Expect(registry, std::move(node), "test_cc_instancenorm_example_benchmark", {opset},
-           {x_count, C, C}, {x_count}, [instancenorm_kernel]() -> IoData {
+           {x_count, C, C}, {x_count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext instancenorm_kernel_ctx{opset};
+             const onnx_kernels::kernel::InstanceNormalization instancenorm_kernel{
+                 instancenorm_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {N, C, H, W}, 2001);
              Tensor scale = RandnTensor(DataType::FLOAT, {C}, 2002);
              Tensor bias = RandnTensor(DataType::FLOAT, {C}, 2003);
-             Tensor y = instancenorm_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(x, scale, bias); });
+             Tensor y = instancenorm_kernel(x, scale, bias);
              return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
            });
     return;
@@ -57,13 +60,18 @@ void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry, TestMod
     node.add_input("s");
     node.add_input("bias");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_instancenorm_example", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_instancenorm_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext instancenorm_kernel_ctx{opset};
+      const onnx_kernels::kernel::InstanceNormalization instancenorm_kernel{
+          instancenorm_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
       Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
       Tensor bias = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
 
-      Tensor y =
-          instancenorm_kernel.Invoke([&](const auto &kernel) { return kernel(x, scale, bias); });
+      Tensor y = instancenorm_kernel(x, scale, bias);
 
       return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
     });
@@ -79,7 +87,13 @@ void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry, TestMod
     node.add_input("bias");
     node.add_output("y");
     AddAttribute<float>(node, "epsilon", 1e-2f);
-    Expect(registry, std::move(node), "test_cc_instancenorm_epsilon", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_instancenorm_epsilon", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext instancenorm_kernel_ctx{opset};
+      const onnx_kernels::kernel::InstanceNormalization instancenorm_kernel{
+          instancenorm_kernel_ctx};
+
       const int64_t N = 2;
       const int64_t C = 3;
       const int64_t H = 4;
@@ -93,8 +107,7 @@ void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry, TestMod
       Tensor scale = Tensor::FromFloat("", {C}, {0.5f, 1.0f, 1.5f});
       Tensor bias = Tensor::FromFloat("", {C}, {-0.25f, 0.25f, 0.75f});
 
-      Tensor y = instancenorm_kernel.Invoke(
-          [&](const auto &kernel) { return kernel(x, scale, bias, 1e-2f); });
+      Tensor y = instancenorm_kernel(x, scale, bias, 1e-2f);
 
       return IoData{{std::move(x), std::move(scale), std::move(bias)}, {std::move(y)}};
     });

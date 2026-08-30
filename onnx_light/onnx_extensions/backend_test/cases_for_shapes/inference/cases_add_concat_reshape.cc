@@ -48,7 +48,9 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
 
   const std::string name = "test_cc_shape_inference_add_concat_reshape";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -110,20 +112,15 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
     Tensor x = Tensor::FromFloat("X", data_shape, x_values);
     Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
     const Tensor new_shape = Tensor::FromInt64("", {3}, {0, 0, -1});
-    Tensor z_pre_abs =
-        MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset).Invoke([&](const auto &kernel) {
-          return kernel(MakeReferenceKernel<onnx_kernels::kernel::Concat>(opset).Invoke(
-                            [&](const auto &kernel) {
-                              return kernel(
-                                  {MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-                                       [&](const auto &kernel) { return kernel(x, y); }),
-                                   x},
-                                  /*axis=*/2);
-                            }),
-                        new_shape);
-        });
-    Tensor z = MakeReferenceKernel<onnx_kernels::kernel::Abs>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(z_pre_abs); });
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::Add add_kernel{ctx};
+    const onnx_kernels::kernel::Concat concat_kernel{ctx};
+    const onnx_kernels::kernel::Reshape reshape_kernel{ctx};
+    const onnx_kernels::kernel::Abs abs_kernel{ctx};
+    Tensor added = add_kernel(x, y);
+    Tensor concatenated = concat_kernel({added, x}, /*axis=*/2);
+    Tensor z_pre_abs = reshape_kernel(concatenated, new_shape);
+    Tensor z = abs_kernel(z_pre_abs);
     z.name = "Z";
 
     AppendDataSet(tc, {x, y}, {z});

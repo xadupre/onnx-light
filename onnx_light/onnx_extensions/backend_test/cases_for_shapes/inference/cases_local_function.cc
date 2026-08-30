@@ -53,7 +53,14 @@ void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry
   const OpsetId opset = DefaultOpset(18);
   const std::string name = "test_cc_shape_inference_local_function_add";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Add kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Abs kernel_2{ctx_2};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -115,10 +122,8 @@ void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry
     }
     Tensor x = Tensor::FromFloat("X", data_shape, x_values);
     Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
-    Tensor z_pre_abs = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, y); });
-    Tensor z = MakeReferenceKernel<onnx_kernels::kernel::Abs>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(z_pre_abs); });
+    Tensor z_pre_abs = kernel_1(x, y);
+    Tensor z = kernel_2(z_pre_abs);
     z.name = "Z";
 
     AppendDataSet(tc, {x, y}, {z});
@@ -166,7 +171,14 @@ void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &regist
   const OpsetId opset = DefaultOpset(18);
   const std::string name = "test_cc_shape_inference_local_function_range";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name, kRangeStart, kRangeDelta](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::Range kernel_3{ctx_3};
+    const KernelContext ctx_4{opset};
+    const onnx_kernels::kernel::Abs kernel_4{ctx_4};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -230,10 +242,8 @@ void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &regist
     Tensor limit_t = Tensor::FromInt64("", {}, {kRangeLimit});
     Tensor zero_t = Tensor::FromInt64("", {}, {kRangeStart});
     Tensor one_t = Tensor::FromInt64("", {}, {kRangeDelta});
-    Tensor r_t = MakeReferenceKernel<onnx_kernels::kernel::Range>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(zero_t, limit_t, one_t); });
-    Tensor out_t = MakeReferenceKernel<onnx_kernels::kernel::Abs>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(r_t); });
+    Tensor r_t = kernel_3(zero_t, limit_t, one_t);
+    Tensor out_t = kernel_4(r_t);
     out_t.name = "out";
 
     AppendDataSet(tc, {}, {out_t});

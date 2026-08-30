@@ -50,12 +50,16 @@ void RegisterOptionalCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(15);
 
   Expect(registry, std::move(node), case_name, {opset},
-         [=]() -> IoData {
+         [benchmark, shape]() -> IoData {
+           const OpsetId opset = DefaultOpset(15);
+
+           const KernelContext ctx_1{opset};
+           const onnx_kernels::kernel::Optional kernel_1{ctx_1};
+
            Tensor input =
                benchmark ? RandnTensor(DataType::FLOAT, shape, 4001)
                          : Tensor::FromFloat("", shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
-           Tensor output = MakeReferenceKernel<onnx_kernels::kernel::Optional>(opset).Invoke(
-               [&](const auto &kernel) { return kernel(input); });
+           Tensor output = kernel_1(input);
            return IoData{{std::move(input)}, {std::move(output)}};
          },
          "backend-test", TestCaseTag::NONE,

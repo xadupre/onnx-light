@@ -35,7 +35,7 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
     node.add_output("y");
     node.add_output("z");
 
-    auto add_ints = [&](const char *name, const std::vector<int64_t> &vals) {
+    auto add_ints = [&node](const char *name, const std::vector<int64_t> &vals) {
       AttributeProto *attr = node.add_attribute();
       attr->set_name(name);
       attr->set_type(AttributeProto::AttributeType::INTS);
@@ -43,7 +43,7 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
         attr->add_ints(v);
       }
     };
-    auto add_floats = [&](const char *name, const std::vector<float> &vals) {
+    auto add_floats = [&node](const char *name, const std::vector<float> &vals) {
       AttributeProto *attr = node.add_attribute();
       attr->set_name(name);
       attr->set_type(AttributeProto::AttributeType::FLOATS);
@@ -51,7 +51,7 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
         attr->add_floats(v);
       }
     };
-    auto add_strings = [&](const char *name, const std::vector<std::string> &vals) {
+    auto add_strings = [&node](const char *name, const std::vector<std::string> &vals) {
       AttributeProto *attr = node.add_attribute();
       attr->set_name(name);
       attr->set_type(AttributeProto::AttributeType::STRINGS);
@@ -59,7 +59,7 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
         *attr->add_strings() = utils::String(v);
       }
     };
-    auto add_string = [&](const char *name, const std::string &val) {
+    auto add_string = [&node](const char *name, const std::string &val) {
       AttributeProto *attr = node.add_attribute();
       attr->set_name(name);
       attr->set_type(AttributeProto::AttributeType::STRING);
@@ -94,25 +94,23 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
     const std::vector<int64_t> class_ids{0, 1};
     const std::vector<float> class_weights{1.0f, 1.0f};
 
-    const auto cls =
-        MakeReferenceKernel<onnx_kernels::kernel::TreeEnsembleClassifier, std::vector<int64_t>,
-                            std::vector<int64_t>, std::vector<int64_t>, std::vector<float>,
-                            ParamStrings, std::vector<int64_t>, std::vector<int64_t>,
-                            std::vector<int64_t>, std::vector<int64_t>, std::vector<int64_t>,
-                            std::vector<int64_t>, std::vector<float>>(
-            opset, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
-            nodes_truenodeids, nodes_falsenodeids, nodes_missing, class_treeids, class_nodeids,
-            class_ids, class_weights);
-
     Expect(registry, std::move(node), "test_cc_treeensembleclassifier_int64_binary_benchmark",
-           {default_opset, opset}, {8192}, {8192, 16384}, [cls]() -> IoData {
+           {default_opset, opset}, {8192}, {8192, 16384},
+           [opset, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
+            nodes_truenodeids, nodes_falsenodeids, nodes_missing, class_treeids, class_nodeids,
+            class_ids, class_weights]() -> IoData {
+             const KernelContext cls_ctx{opset};
+             const onnx_kernels::kernel::TreeEnsembleClassifier cls{
+                 cls_ctx,       nodes_treeids, nodes_nodeids,     nodes_featureids,
+                 nodes_values,  nodes_modes,   nodes_truenodeids, nodes_falsenodeids,
+                 nodes_missing, class_treeids, class_nodeids,     class_ids,
+                 class_weights};
+
              Tensor x = RandnTensor(DataType::FLOAT, {8192, 1}, 2721);
-             auto [y, z] = cls.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<float>(
-                   x,
-                   /*classlabels_int64s=*/std::vector<int64_t>{0, 1},
-                   /*base_values=*/{}, /*post_transform=*/"NONE");
-             });
+             auto [y, z] =
+                 cls.template operator()<float>(x,
+                                                /*classlabels_int64s=*/std::vector<int64_t>{0, 1},
+                                                /*base_values=*/{}, /*post_transform=*/"NONE");
              return IoData{{std::move(x)}, {std::move(y), std::move(z)}};
            });
     return;
@@ -125,7 +123,7 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
   node.add_output("y");
   node.add_output("z");
 
-  auto add_ints = [&](const char *name, const std::vector<int64_t> &vals) {
+  auto add_ints = [&node](const char *name, const std::vector<int64_t> &vals) {
     AttributeProto *attr = node.add_attribute();
     attr->set_name(name);
     attr->set_type(AttributeProto::AttributeType::INTS);
@@ -133,7 +131,7 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
       attr->add_ints(v);
     }
   };
-  auto add_floats = [&](const char *name, const std::vector<float> &vals) {
+  auto add_floats = [&node](const char *name, const std::vector<float> &vals) {
     AttributeProto *attr = node.add_attribute();
     attr->set_name(name);
     attr->set_type(AttributeProto::AttributeType::FLOATS);
@@ -141,7 +139,7 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
       attr->add_floats(v);
     }
   };
-  auto add_strings = [&](const char *name, const std::vector<std::string> &vals) {
+  auto add_strings = [&node](const char *name, const std::vector<std::string> &vals) {
     AttributeProto *attr = node.add_attribute();
     attr->set_name(name);
     attr->set_type(AttributeProto::AttributeType::STRINGS);
@@ -149,7 +147,7 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
       *attr->add_strings() = utils::String(v);
     }
   };
-  auto add_string = [&](const char *name, const std::string &val) {
+  auto add_string = [&node](const char *name, const std::string &val) {
     AttributeProto *attr = node.add_attribute();
     attr->set_name(name);
     attr->set_type(AttributeProto::AttributeType::STRING);
@@ -184,27 +182,24 @@ void RegisterTreeEnsembleClassifierCases(std::vector<TestCase> &registry, TestMo
   const std::vector<int64_t> class_ids{0, 1};
   const std::vector<float> class_weights{1.0f, 1.0f};
 
-  const auto cls =
-      MakeReferenceKernel<onnx_kernels::kernel::TreeEnsembleClassifier, std::vector<int64_t>,
-                          std::vector<int64_t>, std::vector<int64_t>, std::vector<float>,
-                          ParamStrings, std::vector<int64_t>, std::vector<int64_t>,
-                          std::vector<int64_t>, std::vector<int64_t>, std::vector<int64_t>,
-                          std::vector<int64_t>, std::vector<float>>(
-          opset, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
-          nodes_truenodeids, nodes_falsenodeids, nodes_missing, class_treeids, class_nodeids,
-          class_ids, class_weights);
+  Expect(
+      registry, std::move(node), "test_cc_treeensembleclassifier_int64_binary",
+      {default_opset, opset},
+      [opset, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
+       nodes_truenodeids, nodes_falsenodeids, nodes_missing, class_treeids, class_nodeids,
+       class_ids, class_weights]() -> IoData {
+        const KernelContext cls_ctx{opset};
+        const onnx_kernels::kernel::TreeEnsembleClassifier cls{
+            cls_ctx,       nodes_treeids,     nodes_nodeids,      nodes_featureids, nodes_values,
+            nodes_modes,   nodes_truenodeids, nodes_falsenodeids, nodes_missing,    class_treeids,
+            class_nodeids, class_ids,         class_weights};
 
-  Expect(registry, std::move(node), "test_cc_treeensembleclassifier_int64_binary",
-         {default_opset, opset}, [=]() -> IoData {
-           Tensor x = Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f});
-           auto yz = cls.Invoke([&](const auto &kernel) {
-             return kernel.template operator()<float>(
-                 x,
-                 /*classlabels_int64s=*/std::vector<int64_t>{0, 1},
-                 /*base_values=*/{}, /*post_transform=*/"NONE");
-           });
-           return IoData{{std::move(x)}, {std::move(yz.first), std::move(yz.second)}};
-         });
+        Tensor x = Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f});
+        auto yz = cls.template operator()<float>(x,
+                                                 /*classlabels_int64s=*/std::vector<int64_t>{0, 1},
+                                                 /*base_values=*/{}, /*post_transform=*/"NONE");
+        return IoData{{std::move(x)}, {std::move(yz.first), std::move(yz.second)}};
+      });
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

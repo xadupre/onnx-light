@@ -34,18 +34,21 @@ void RegisterSplitToSequenceCase(const std::string &name, const Tensor &input, c
   TestCase lazy_case(name, name);
   lazy_case.rtol = 1e-3;
   lazy_case.atol = 1e-7;
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [opset, has_split, split_value, input, axis, keepdims, name,
+                     elem_shape](bool) -> BuiltCase {
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::SplitToSequence kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::SequenceConstruct kernel_2{ctx_2};
+
     const Tensor *split = has_split ? &split_value : nullptr;
 
     // Compute the expected output sequence with the reference kernel.
-    const Sequence out_seq =
-        MakeReferenceKernel<onnx_kernels::kernel::SplitToSequence>(opset).Invoke(
-            [&](const auto &kernel) { return kernel(input, split, axis, keepdims); });
+    const Sequence out_seq = kernel_1(input, split, axis, keepdims);
 
     // Materialise the output sequence as a single stacked tensor.
     std::vector<Tensor> chunks(out_seq.values.begin(), out_seq.values.end());
-    Tensor stacked = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(chunks); });
+    Tensor stacked = kernel_2(chunks);
     stacked.name = "output_sequence";
 
     TestCase tc(name, name);

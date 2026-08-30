@@ -42,11 +42,13 @@ void RegisterOneBernoulli(const std::string &case_name, const Tensor &input, int
     attr->set_type(AttributeProto::AttributeType::INT);
     attr->set_i(static_cast<int64_t>(dtype));
   }
-  Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
+  Expect(registry, std::move(node), case_name, {opset}, [opset, input, seed, dtype]() -> IoData {
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Bernoulli kernel_1{ctx_1};
+
     Tensor input_named = input;
     input_named.name = "x";
-    Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Bernoulli>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(input_named, seed, dtype); });
+    Tensor y = kernel_1(input_named, seed, dtype);
 
     return IoData{{std::move(input_named)}, {std::move(y)}};
   });
@@ -77,15 +79,18 @@ void RegisterBernoulliCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Bernoulli");
     node.add_input("x");
     node.add_output("y");
-    const auto bernoulli_kernel = MakeReferenceKernel<onnx_kernels::kernel::Bernoulli>(opset);
+
     Expect(registry, std::move(node), "test_cc_bernoulli_benchmark", {opset},
-           {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize},
-           [bernoulli_kernel]() -> IoData {
+           {kBenchmarkElementwiseSize}, {kBenchmarkElementwiseSize}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext bernoulli_kernel_ctx{opset};
+             const onnx_kernels::kernel::Bernoulli bernoulli_kernel{bernoulli_kernel_ctx};
+
              Tensor x = Tensor::FromFloat("x", /*shape=*/{kBenchmarkElementwiseSize},
                                           std::vector<float>(kBenchmarkElementwiseSize, 0.5f));
-             Tensor y = bernoulli_kernel.Invoke([&](const auto &kernel) {
-               return kernel(x, onnx_kernels::kernel::Bernoulli::kNoSeed, /*dtype=*/0);
-             });
+             Tensor y = bernoulli_kernel(x, onnx_kernels::kernel::Bernoulli::kNoSeed,
+                                         /*dtype=*/0);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;

@@ -258,13 +258,17 @@ NodeProto MakeScanNodeWithBody(const std::vector<std::string> &inputs,
 // ---------------------------------------------------------------------------
 void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const auto scan_kernel = MakeReferenceKernel<Scan>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     const int64_t trip_count = 512;
     const int64_t row_len = 512;
     NodeProto node = MakeSimpleScanNode("X", "Y");
-    Expect(registry, std::move(node), "test_cc_scan_benchmark", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_scan_benchmark", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext scan_kernel_ctx{opset};
+      const Scan scan_kernel{scan_kernel_ctx};
+
       std::vector<float> x_values = Randn<float>({trip_count, row_len}, 4501);
       std::vector<Tensor> per_iter;
       per_iter.reserve(static_cast<std::size_t>(trip_count));
@@ -274,17 +278,21 @@ void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
         per_iter.push_back(Tensor("", DataType::FLOAT, {row_len}, FloatBytes(row)));
       }
       const Tensor x("", DataType::FLOAT, {trip_count, row_len}, FloatBytes(x_values));
-      std::vector<Tensor> out = scan_kernel.Invoke([&](const auto &kernel) {
-        return kernel(trip_count, /*initial_state=*/{}, /*final_state=*/{}, {per_iter});
-      });
+      std::vector<Tensor> out =
+          scan_kernel(trip_count, /*initial_state=*/{}, /*final_state=*/{}, {per_iter});
       return IoData{{std::move(x)}, std::move(out)};
     });
     return;
   }
 
-  auto register_case = [&](const std::string &test_name, int64_t trip_count) {
+  auto register_case = [&registry, &opset](const std::string &test_name, int64_t trip_count) {
     NodeProto node = MakeSimpleScanNode("X", "Y");
-    Expect(registry, std::move(node), test_name, {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), test_name, {opset}, [trip_count]() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext scan_kernel_ctx{opset};
+      const Scan scan_kernel{scan_kernel_ctx};
+
       // Build per-iteration FLOAT slices of shape [2] = [2*t, 2*t + 1].
       std::vector<Tensor> per_iter;
       per_iter.reserve(static_cast<std::size_t>(trip_count == 0 ? 1 : trip_count));
@@ -302,9 +310,8 @@ void RegisterScanCases(std::vector<TestCase> &registry, TestMode mode) {
       }
       const Tensor x("", DataType::FLOAT, {trip_count, 2}, FloatBytes(x_values));
 
-      std::vector<Tensor> out = scan_kernel.Invoke([&](const auto &kernel) {
-        return kernel(trip_count, /*initial_state=*/{}, /*final_state=*/{}, {per_iter});
-      });
+      std::vector<Tensor> out =
+          scan_kernel(trip_count, /*initial_state=*/{}, /*final_state=*/{}, {per_iter});
       return IoData{{std::move(x)}, std::move(out)};
     });
   };

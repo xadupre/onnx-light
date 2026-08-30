@@ -58,11 +58,13 @@ void RegisterOptionalInputCase(const std::string &name, const std::string &op_ty
   TestCase lazy_case(name, name);
   lazy_case.rtol = 1e-3;
   lazy_case.atol = 1e-7;
-  lazy_case.build = [=](bool) -> BuiltCase {
-    Tensor expected_output =
-        op_type == "OptionalGetElement"
-            ? MakeReferenceKernel<onnx_kernels::kernel::OptionalGetElement>(opset)(input)
-            : MakeReferenceKernel<onnx_kernels::kernel::OptionalHasElement>(opset)(input);
+  lazy_case.build = [opset, op_type, input, name, input_elem_type, input_shape](bool) -> BuiltCase {
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::OptionalGetElement kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::OptionalHasElement kernel_2{ctx_2};
+
+    Tensor expected_output = op_type == "OptionalGetElement" ? kernel_1(input) : kernel_2(input);
     TestCase tc(name, name);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -120,11 +122,13 @@ void RegisterTensorInputCase(const std::string &name, const std::string &op_type
   node.set_op_type(op_type);
   node.add_input("input");
   node.add_output("output");
-  Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
-    Tensor expected_output =
-        op_type == "OptionalGetElement"
-            ? MakeReferenceKernel<onnx_kernels::kernel::OptionalGetElement>(opset)(input)
-            : MakeReferenceKernel<onnx_kernels::kernel::OptionalHasElement>(opset)(input);
+  Expect(registry, std::move(node), name, {opset}, [opset, op_type, input]() -> IoData {
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::OptionalGetElement kernel_3{ctx_3};
+    const KernelContext ctx_4{opset};
+    const onnx_kernels::kernel::OptionalHasElement kernel_4{ctx_4};
+
+    Tensor expected_output = op_type == "OptionalGetElement" ? kernel_3(input) : kernel_4(input);
     return IoData{{std::move(input)}, {std::move(expected_output)}};
   });
 }
@@ -157,10 +161,12 @@ void RegisterOptionalGetElementSequenceCase(const std::string &name, bool with_o
   TestCase lazy_case(name, name);
   lazy_case.rtol = 1e-3;
   lazy_case.atol = 1e-7;
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [opset, inputs, name, with_optional, elem_type, elem_shape](bool) -> BuiltCase {
+    const KernelContext ctx_5{opset};
+    const onnx_kernels::kernel::SequenceConstruct kernel_5{ctx_5};
+
     // The expected sequence equals the constructed sequence (passthrough).
-    Tensor stacked = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(inputs); });
+    Tensor stacked = kernel_5(inputs);
     stacked.name = "output_sequence";
 
     TestCase tc(name, name);
@@ -257,9 +263,11 @@ void RegisterOptionalHasElementEmptyCase(const std::string &name, bool with_empt
   TestCase lazy_case(name, name);
   lazy_case.rtol = 1e-3;
   lazy_case.atol = 1e-7;
-  lazy_case.build = [=](bool) -> BuiltCase {
-    Tensor expected = MakeReferenceKernel<onnx_kernels::kernel::OptionalHasElement>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(); });
+  lazy_case.build = [opset, name, with_empty_input_name](bool) -> BuiltCase {
+    const KernelContext ctx_6{opset};
+    const onnx_kernels::kernel::OptionalHasElement kernel_6{ctx_6};
+
+    Tensor expected = kernel_6();
     expected.name = "output";
 
     TestCase tc(name, name);

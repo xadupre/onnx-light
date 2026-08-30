@@ -44,7 +44,6 @@ void AddIntAttr(NodeProto &node, const char *name, int64_t value) {
 void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
-  const auto cast_map = MakeReferenceKernel<onnx_kernels::kernel::CastMap>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     const int64_t count = 65536;
@@ -55,20 +54,22 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("y");
     AddStringAttr(node, "cast_to", "TO_FLOAT");
     AddStringAttr(node, "map_form", "DENSE");
-    Expect(
-        registry, std::move(node), "test_cc_cast_map_benchmark", {default_opset, opset},
-        [cast_map]() -> IoData {
-          std::vector<int64_t> keys(static_cast<size_t>(count));
-          for (int64_t i = 0; i < count; ++i) {
-            keys[static_cast<size_t>(i)] = i;
-          }
-          std::vector<float> values = Randn<float>({count}, 2001);
-          Map x("x", Tensor::FromInt64("", {count}, keys), Tensor::FromFloat("", {count}, values));
-          Tensor y = cast_map.Invoke([&](const auto &kernel) {
-            return kernel.template operator()<float, float>(keys, values, "TO_FLOAT", "DENSE", 0);
-          });
-          return IoData{{}, {std::move(y)}, {std::move(x)}};
-        });
+    Expect(registry, std::move(node), "test_cc_cast_map_benchmark", {default_opset, opset},
+           [opset]() -> IoData {
+             const KernelContext cast_map_ctx{opset};
+             const onnx_kernels::kernel::CastMap cast_map{cast_map_ctx};
+
+             std::vector<int64_t> keys(static_cast<size_t>(count));
+             for (int64_t i = 0; i < count; ++i) {
+               keys[static_cast<size_t>(i)] = i;
+             }
+             std::vector<float> values = Randn<float>({count}, 2001);
+             Map x("x", Tensor::FromInt64("", {count}, keys),
+                   Tensor::FromFloat("", {count}, values));
+             Tensor y =
+                 cast_map.template operator()<float, float>(keys, values, "TO_FLOAT", "DENSE", 0);
+             return IoData{{}, {std::move(y)}, {std::move(x)}};
+           });
     return;
   }
 
@@ -83,14 +84,15 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
     AddStringAttr(node, "cast_to", "TO_FLOAT");
     AddStringAttr(node, "map_form", "DENSE");
     Expect(registry, std::move(node), "test_cc_cast_map_int64_float_dense", {default_opset, opset},
-           [=]() -> IoData {
+           [opset]() -> IoData {
+             const KernelContext cast_map_ctx{opset};
+             const onnx_kernels::kernel::CastMap cast_map{cast_map_ctx};
+
              const std::vector<int64_t> keys{2, 0, 1};
              const std::vector<float> values{2.5f, 0.5f, 1.5f};
              Map x("x", Tensor::FromInt64("", {3}, keys), Tensor::FromFloat("", {3}, values));
-             Tensor y = cast_map.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<float, float>(keys, values, "TO_FLOAT", "DENSE",
-                                                               0);
-             });
+             Tensor y =
+                 cast_map.template operator()<float, float>(keys, values, "TO_FLOAT", "DENSE", 0);
              return IoData{{}, {std::move(y)}, {std::move(x)}};
            });
   }
@@ -106,14 +108,15 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
     AddStringAttr(node, "map_form", "SPARSE");
     AddIntAttr(node, "max_map", 5);
     Expect(registry, std::move(node), "test_cc_cast_map_int64_float_sparse", {default_opset, opset},
-           [=]() -> IoData {
+           [opset]() -> IoData {
+             const KernelContext cast_map_ctx{opset};
+             const onnx_kernels::kernel::CastMap cast_map{cast_map_ctx};
+
              const std::vector<int64_t> keys{1, 3};
              const std::vector<float> values{10.0f, 30.0f};
              Map x("x", Tensor::FromInt64("", {2}, keys), Tensor::FromFloat("", {2}, values));
-             Tensor y = cast_map.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<float, float>(keys, values, "TO_FLOAT", "SPARSE",
-                                                               5);
-             });
+             Tensor y =
+                 cast_map.template operator()<float, float>(keys, values, "TO_FLOAT", "SPARSE", 5);
              return IoData{{}, {std::move(y)}, {std::move(x)}};
            });
   }
@@ -128,14 +131,15 @@ void RegisterCastMapCases(std::vector<TestCase> &registry, TestMode mode) {
     AddStringAttr(node, "cast_to", "TO_STRING");
     AddStringAttr(node, "map_form", "DENSE");
     Expect(registry, std::move(node), "test_cc_cast_map_int64_string_dense", {default_opset, opset},
-           [=]() -> IoData {
+           [opset]() -> IoData {
+             const KernelContext cast_map_ctx{opset};
+             const onnx_kernels::kernel::CastMap cast_map{cast_map_ctx};
+
              const std::vector<int64_t> keys{1, 0};
              const std::vector<std::string> values{"b", "a"};
              Map x("x", Tensor::FromInt64("", {2}, keys), Tensor::FromStrings("", {2}, values));
-             Tensor y = cast_map.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<std::string, std::string>(keys, values,
-                                                                           "TO_STRING", "DENSE", 0);
-             });
+             Tensor y = cast_map.template operator()<std::string, std::string>(
+                 keys, values, "TO_STRING", "DENSE", 0);
              return IoData{{}, {std::move(y)}, {std::move(x)}};
            });
   }

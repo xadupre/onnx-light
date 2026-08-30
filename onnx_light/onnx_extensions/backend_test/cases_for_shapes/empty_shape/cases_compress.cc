@@ -37,7 +37,6 @@ NodeProto MakeCompressNode(std::optional<int64_t> axis) {
 // ---------------------------------------------------------------------------
 void RegisterCompressEmptyShapeCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(11);
-  const auto compress_kernel = MakeReferenceKernel<onnx_kernels::kernel::Compress>(opset);
 
   // test_cc_compress_empty_shape_no_axis_all_false — flatten mode, condition
   // selects nothing; output is a 1-D empty tensor with shape {0}.
@@ -47,9 +46,16 @@ void RegisterCompressEmptyShapeCases(std::vector<TestCase> &registry, TestMode /
     Expect(
         registry, MakeCompressNode(std::nullopt), "test_cc_compress_empty_shape_no_axis_all_false",
         {opset},
-        [=]() -> IoData {
-          Tensor output = compress_kernel.Invoke(
-              [&](const auto &kernel) { return kernel(input, condition, std::nullopt); });
+        []() -> IoData {
+          Tensor input = Tensor::FromFloat("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+          Tensor condition = Tensor::FromBool("condition", {6}, {0, 0, 0, 0, 0, 0});
+
+          const OpsetId opset = DefaultOpset(11);
+
+          const KernelContext compress_kernel_ctx{opset};
+          const onnx_kernels::kernel::Compress compress_kernel{compress_kernel_ctx};
+
+          Tensor output = compress_kernel(input, condition, std::nullopt);
           return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
         },
         "backend-test", TestCaseTag::EMPTY_SHAPE);
@@ -62,9 +68,16 @@ void RegisterCompressEmptyShapeCases(std::vector<TestCase> &registry, TestMode /
     Tensor condition = Tensor::FromBool("condition", {3}, {0, 0, 0});
     Expect(
         registry, MakeCompressNode(0), "test_cc_compress_empty_shape_axis0_all_false", {opset},
-        [=]() -> IoData {
-          Tensor output = compress_kernel.Invoke(
-              [&](const auto &kernel) { return kernel(input, condition, 0); });
+        []() -> IoData {
+          Tensor input = Tensor::FromFloat("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+          Tensor condition = Tensor::FromBool("condition", {3}, {0, 0, 0});
+
+          const OpsetId opset = DefaultOpset(11);
+
+          const KernelContext compress_kernel_ctx{opset};
+          const onnx_kernels::kernel::Compress compress_kernel{compress_kernel_ctx};
+
+          Tensor output = compress_kernel(input, condition, 0);
           return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
         },
         "backend-test", TestCaseTag::EMPTY_SHAPE);
@@ -78,9 +91,16 @@ void RegisterCompressEmptyShapeCases(std::vector<TestCase> &registry, TestMode /
     Tensor condition = Tensor::FromBool("condition", {0}, {});
     Expect(
         registry, MakeCompressNode(0), "test_cc_compress_empty_shape_input_zero_dim", {opset},
-        [=]() -> IoData {
-          Tensor output = compress_kernel.Invoke(
-              [&](const auto &kernel) { return kernel(input, condition, 0); });
+        []() -> IoData {
+          Tensor input = Tensor::FromFloat("input", {0, 2}, {});
+          Tensor condition = Tensor::FromBool("condition", {0}, {});
+
+          const OpsetId opset = DefaultOpset(11);
+
+          const KernelContext compress_kernel_ctx{opset};
+          const onnx_kernels::kernel::Compress compress_kernel{compress_kernel_ctx};
+
+          Tensor output = compress_kernel(input, condition, 0);
           return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
         },
         "backend-test", TestCaseTag::EMPTY_SHAPE);

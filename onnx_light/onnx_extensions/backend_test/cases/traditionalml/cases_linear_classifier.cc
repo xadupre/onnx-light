@@ -14,7 +14,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 void RegisterLinearClassifierCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
-  const auto cls = MakeReferenceKernel<onnx_kernels::kernel::LinearClassifier>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -52,12 +51,13 @@ void RegisterLinearClassifierCases(std::vector<TestCase> &registry, TestMode mod
     labels->add_ints(static_cast<int64_t>(1));
 
     Expect(registry, std::move(node), "test_cc_linearclassifier_int64_binary_benchmark",
-           {default_opset, opset}, {16384}, {8192, 16384}, [cls]() -> IoData {
+           {default_opset, opset}, {16384}, {8192, 16384}, [opset]() -> IoData {
+             const KernelContext cls_ctx{opset};
+             const onnx_kernels::kernel::LinearClassifier cls{cls_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {8192, 2}, 2651);
-             auto [y, z] = cls.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<float>(x, {1.0f, -1.0f}, {0.0f},
-                                                        std::vector<int64_t>{0, 1}, "NONE");
-             });
+             auto [y, z] = cls.template operator()<float>(x, {1.0f, -1.0f}, {0.0f},
+                                                          std::vector<int64_t>{0, 1}, "NONE");
              return IoData{{std::move(x)}, {std::move(y), std::move(z)}};
            });
     return;
@@ -98,12 +98,13 @@ void RegisterLinearClassifierCases(std::vector<TestCase> &registry, TestMode mod
   labels->add_ints(static_cast<int64_t>(1));
 
   Expect(registry, std::move(node), "test_cc_linearclassifier_int64_binary", {default_opset, opset},
-         [=]() -> IoData {
+         [opset]() -> IoData {
+           const KernelContext cls_ctx{opset};
+           const onnx_kernels::kernel::LinearClassifier cls{cls_ctx};
+
            Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 1.0f, 0.0f, 3.0f});
-           auto yz = cls.Invoke([&](const auto &kernel) {
-             return kernel.template operator()<float>(x, {1.0f, -1.0f}, {0.0f},
-                                                      std::vector<int64_t>{0, 1}, "NONE");
-           });
+           auto yz = cls.template operator()<float>(x, {1.0f, -1.0f}, {0.0f},
+                                                    std::vector<int64_t>{0, 1}, "NONE");
            return IoData{{std::move(x)}, {std::move(yz.first), std::move(yz.second)}};
          });
 }

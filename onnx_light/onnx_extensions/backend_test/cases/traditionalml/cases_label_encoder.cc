@@ -36,7 +36,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 4);
   const OpsetId default_opset = DefaultOpset(13);
-  const auto label_encoder = MakeReferenceKernel<onnx_kernels::kernel::LabelEncoder>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -70,11 +69,13 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
 
     Expect(registry, std::move(node), "test_cc_label_encoder_int64_to_float_benchmark",
            {default_opset, opset}, {8192}, {8192},
-           [label_encoder, keys, values, default_value]() -> IoData {
+           [opset, keys, values, default_value]() -> IoData {
+             const KernelContext label_encoder_ctx{opset};
+             const onnx_kernels::kernel::LabelEncoder label_encoder{label_encoder_ctx};
+
              Tensor x = RandnTensor(DataType::INT64, {8192}, 2641);
-             Tensor y = label_encoder.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<int64_t, float>(x, keys, values, default_value);
-             });
+             Tensor y =
+                 label_encoder.template operator()<int64_t, float>(x, keys, values, default_value);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -105,18 +106,19 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
     for (float v : values) {
       values_attr->floats().push_back(v);
     }
-
     AttributeProto *default_attr = node.add_attribute();
+    default_attr->set_name("default_float");
+    default_attr->set_type(AttributeProto::AttributeType::FLOAT);
+    default_attr->set_f(default_value);
+
     Expect(registry, std::move(node), "test_cc_label_encoder_int64_to_float",
-           {default_opset, opset}, [=]() -> IoData {
-             default_attr->set_name("default_float");
-             default_attr->set_type(AttributeProto::AttributeType::FLOAT);
-             default_attr->set_f(default_value);
+           {default_opset, opset}, [opset, default_value, keys, values]() -> IoData {
+             const KernelContext label_encoder_ctx{opset};
+             const onnx_kernels::kernel::LabelEncoder label_encoder{label_encoder_ctx};
 
              Tensor x = Tensor::FromInt64("", {4}, {0, 1, 2, 7});
-             Tensor y = label_encoder.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<int64_t, float>(x, keys, values, default_value);
-             });
+             Tensor y =
+                 label_encoder.template operator()<int64_t, float>(x, keys, values, default_value);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -147,18 +149,19 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
     for (int64_t v : values) {
       values_attr->ints().push_back(v);
     }
-
     AttributeProto *default_attr = node.add_attribute();
+    default_attr->set_name("default_int64");
+    default_attr->set_type(AttributeProto::AttributeType::INT);
+    default_attr->set_i(default_value);
+
     Expect(registry, std::move(node), "test_cc_label_encoder_float_to_int64",
-           {default_opset, opset}, [=]() -> IoData {
-             default_attr->set_name("default_int64");
-             default_attr->set_type(AttributeProto::AttributeType::INT);
-             default_attr->set_i(default_value);
+           {default_opset, opset}, [opset, keys, values, default_value]() -> IoData {
+             const KernelContext label_encoder_ctx{opset};
+             const onnx_kernels::kernel::LabelEncoder label_encoder{label_encoder_ctx};
 
              Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 9.0f});
-             Tensor y = label_encoder.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<float, int64_t>(x, keys, values, default_value);
-             });
+             Tensor y =
+                 label_encoder.template operator()<float, int64_t>(x, keys, values, default_value);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -190,19 +193,19 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
     for (int64_t v : values) {
       values_attr->ints().push_back(v);
     }
-
     AttributeProto *default_attr = node.add_attribute();
+    default_attr->set_name("default_int64");
+    default_attr->set_type(AttributeProto::AttributeType::INT);
+    default_attr->set_i(default_value);
+
     Expect(registry, std::move(node), "test_ai_onnx_ml_label_encoder_string_int",
-           {default_opset, opset}, [=]() -> IoData {
-             default_attr->set_name("default_int64");
-             default_attr->set_type(AttributeProto::AttributeType::INT);
-             default_attr->set_i(default_value);
+           {default_opset, opset}, [opset, keys, values, default_value]() -> IoData {
+             const KernelContext label_encoder_ctx{opset};
+             const onnx_kernels::kernel::LabelEncoder label_encoder{label_encoder_ctx};
 
              Tensor x = Tensor::FromStrings("", {5}, {"a", "b", "d", "c", "g"});
-             Tensor y = label_encoder.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<std::string, int64_t>(x, keys, values,
-                                                                       default_value);
-             });
+             Tensor y = label_encoder.template operator()<std::string, int64_t>(x, keys, values,
+                                                                                default_value);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -228,21 +231,20 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
     for (const std::string &v : keys) {
       keys_attr->strings().push_back(utils::String(v));
     }
-
     AttributeProto *values_attr = node.add_attribute();
+    values_attr->set_name("values_int64s");
+    values_attr->set_type(AttributeProto::AttributeType::INTS);
+    for (int64_t v : values) {
+      values_attr->ints().push_back(v);
+    }
     Expect(registry, std::move(node), "test_ai_onnx_ml_label_encoder_string_int_no_default",
-           {default_opset, opset}, [=]() -> IoData {
-             values_attr->set_name("values_int64s");
-             values_attr->set_type(AttributeProto::AttributeType::INTS);
-             for (int64_t v : values) {
-               values_attr->ints().push_back(v);
-             }
+           {default_opset, opset}, [opset, values, keys]() -> IoData {
+             const KernelContext label_encoder_ctx{opset};
+             const onnx_kernels::kernel::LabelEncoder label_encoder{label_encoder_ctx};
 
              Tensor x = Tensor::FromStrings("", {5}, {"a", "b", "d", "c", "g"});
-             Tensor y = label_encoder.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<std::string, int64_t>(x, keys, values,
-                                                                       default_value);
-             });
+             Tensor y = label_encoder.template operator()<std::string, int64_t>(x, keys, values,
+                                                                                default_value);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -282,26 +284,25 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
       std::memcpy(raw.data(), values.data(), raw.size());
       vt->set_raw_data(utils::ByteSpan(raw));
     }
-
     AttributeProto *default_attr = node.add_attribute();
+    default_attr->set_name("default_tensor");
+    default_attr->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *dt = default_attr->add_t();
+    dt->set_data_type(DataType::INT16);
+    dt->add_dims(1);
+    {
+      std::vector<uint8_t> raw(sizeof(int16_t));
+      std::memcpy(raw.data(), &default_value, raw.size());
+      dt->set_raw_data(utils::ByteSpan(raw));
+    }
     Expect(registry, std::move(node), "test_ai_onnx_ml_label_encoder_tensor_mapping",
-           {default_opset, opset}, [=]() -> IoData {
-             default_attr->set_name("default_tensor");
-             default_attr->set_type(AttributeProto::AttributeType::TENSOR);
-             TensorProto *dt = default_attr->add_t();
-             dt->set_data_type(DataType::INT16);
-             dt->add_dims(1);
-             {
-               std::vector<uint8_t> raw(sizeof(int16_t));
-               std::memcpy(raw.data(), &default_value, raw.size());
-               dt->set_raw_data(utils::ByteSpan(raw));
-             }
+           {default_opset, opset}, [opset, default_value, keys, values]() -> IoData {
+             const KernelContext label_encoder_ctx{opset};
+             const onnx_kernels::kernel::LabelEncoder label_encoder{label_encoder_ctx};
 
              Tensor x = Tensor::FromStrings("", {5}, {"a", "b", "d", "c", "g"});
-             Tensor y = label_encoder.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<std::string, int16_t>(x, keys, values,
-                                                                       default_value);
-             });
+             Tensor y = label_encoder.template operator()<std::string, int16_t>(x, keys, values,
+                                                                                default_value);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -338,26 +339,25 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
       std::memcpy(raw.data(), values.data(), raw.size());
       vt->set_raw_data(utils::ByteSpan(raw));
     }
-
     AttributeProto *default_attr = node.add_attribute();
+    default_attr->set_name("default_tensor");
+    default_attr->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *dt = default_attr->add_t();
+    dt->set_data_type(DataType::INT16);
+    dt->add_dims(1);
+    {
+      std::vector<uint8_t> raw(sizeof(int16_t));
+      std::memcpy(raw.data(), &default_value, raw.size());
+      dt->set_raw_data(utils::ByteSpan(raw));
+    }
     Expect(registry, std::move(node), "test_ai_onnx_ml_label_encoder_tensor_value_only_mapping",
-           {default_opset, opset}, [=]() -> IoData {
-             default_attr->set_name("default_tensor");
-             default_attr->set_type(AttributeProto::AttributeType::TENSOR);
-             TensorProto *dt = default_attr->add_t();
-             dt->set_data_type(DataType::INT16);
-             dt->add_dims(1);
-             {
-               std::vector<uint8_t> raw(sizeof(int16_t));
-               std::memcpy(raw.data(), &default_value, raw.size());
-               dt->set_raw_data(utils::ByteSpan(raw));
-             }
+           {default_opset, opset}, [opset, default_value, keys, values]() -> IoData {
+             const KernelContext label_encoder_ctx{opset};
+             const onnx_kernels::kernel::LabelEncoder label_encoder{label_encoder_ctx};
 
              Tensor x = Tensor::FromStrings("", {5}, {"a", "b", "d", "c", "g"});
-             Tensor y = label_encoder.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<std::string, int16_t>(x, keys, values,
-                                                                       default_value);
-             });
+             Tensor y = label_encoder.template operator()<std::string, int16_t>(x, keys, values,
+                                                                                default_value);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -395,12 +395,13 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
     default_attr->set_s(default_value);
 
     Expect(registry, std::move(node), "test_cc_label_encoder_int64_to_string",
-           {default_opset, opset}, [=]() -> IoData {
+           {default_opset, opset}, [opset, keys, values, default_value]() -> IoData {
+             const KernelContext label_encoder_ctx{opset};
+             const onnx_kernels::kernel::LabelEncoder label_encoder{label_encoder_ctx};
+
              Tensor x = Tensor::FromInt64("", {4}, {3, 1, 7, 2});
-             Tensor y = label_encoder.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<int64_t, std::string>(x, keys, values,
-                                                                       default_value);
-             });
+             Tensor y = label_encoder.template operator()<int64_t, std::string>(x, keys, values,
+                                                                                default_value);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }
@@ -446,12 +447,13 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
     dt->string_data().push_back(utils::String(default_value));
 
     Expect(registry, std::move(node), "test_cc_label_encoder_string_to_string_tensor_attributes",
-           {default_opset, opset}, [=]() -> IoData {
+           {default_opset, opset}, [opset, keys, values, default_value]() -> IoData {
+             const KernelContext label_encoder_ctx{opset};
+             const onnx_kernels::kernel::LabelEncoder label_encoder{label_encoder_ctx};
+
              Tensor x = Tensor::FromStrings("", {3}, {"b", "x", "a"});
-             Tensor y = label_encoder.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<std::string, std::string>(x, keys, values,
-                                                                           default_value);
-             });
+             Tensor y = label_encoder.template operator()<std::string, std::string>(x, keys, values,
+                                                                                    default_value);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }

@@ -19,7 +19,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
-  const auto string_normalizer = MakeReferenceKernel<onnx_kernels::kernel::StringNormalizer>(opset);
 
   using CaseChangeAction = onnx_kernels::kernel::StringNormalizer::CaseChangeAction;
 
@@ -32,16 +31,19 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
 
     constexpr int64_t count = 262144;
     Expect(registry, std::move(node), "test_cc_string_normalizer_lower_benchmark", {opset}, {count},
-           {count}, [string_normalizer]() -> IoData {
+           {count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext string_normalizer_ctx{opset};
+             const onnx_kernels::kernel::StringNormalizer string_normalizer{string_normalizer_ctx};
+
              std::vector<std::string> values(static_cast<size_t>(count));
              for (size_t i = 0; i < values.size(); ++i) {
                values[i] = (i % 3 == 0) ? "Hello" : ((i % 3 == 1) ? "World" : "FOO");
              }
              Tensor x = Tensor::FromStrings("", {count}, values);
-             Tensor y = string_normalizer.Invoke([&](const auto &kernel) {
-               return kernel(x, CaseChangeAction::kLower,
-                             /*is_case_sensitive=*/false, {});
-             });
+             Tensor y = string_normalizer(x, CaseChangeAction::kLower,
+                                          /*is_case_sensitive=*/false, {});
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -55,11 +57,14 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     node.add_input("x");
     node.add_output("y");
     AddAttribute(node, "case_change_action", std::string("LOWER"));
-    Expect(registry, std::move(node), "test_cc_string_normalizer_lower", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_string_normalizer_lower", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(10);
+
+      const KernelContext string_normalizer_ctx{opset};
+      const onnx_kernels::kernel::StringNormalizer string_normalizer{string_normalizer_ctx};
+
       Tensor x = Tensor::FromStrings("", {3}, {"Hello", "World", "FOO"});
-      Tensor y = string_normalizer.Invoke([&](const auto &kernel) {
-        return kernel(x, CaseChangeAction::kLower, /*is_case_sensitive=*/false, {});
-      });
+      Tensor y = string_normalizer(x, CaseChangeAction::kLower, /*is_case_sensitive=*/false, {});
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -74,11 +79,15 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     node.add_output("y");
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
     Expect(registry, std::move(node), "test_cc_string_normalizer_nostopwords_nochangecase", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext string_normalizer_ctx{opset};
+             const onnx_kernels::kernel::StringNormalizer string_normalizer{string_normalizer_ctx};
+
              Tensor x = Tensor::FromStrings("", {2}, {"monday", "tuesday"});
-             Tensor y = string_normalizer.Invoke([&](const auto &kernel) {
-               return kernel(x, CaseChangeAction::kNone, /*is_case_sensitive=*/true, {});
-             });
+             Tensor y =
+                 string_normalizer(x, CaseChangeAction::kNone, /*is_case_sensitive=*/true, {});
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -96,12 +105,16 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
     AddAttribute(node, "stopwords", std::vector<std::string>{"monday"});
     Expect(registry, std::move(node), "test_cc_string_normalizer_case_sensitive_lower", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext string_normalizer_ctx{opset};
+             const onnx_kernels::kernel::StringNormalizer string_normalizer{string_normalizer_ctx};
+
              Tensor x =
                  Tensor::FromStrings("", {4}, {"monday", "tuesday", "wednesday", "thursday"});
-             Tensor y = string_normalizer.Invoke([&](const auto &kernel) {
-               return kernel(x, CaseChangeAction::kLower, /*is_case_sensitive=*/true, {"monday"});
-             });
+             Tensor y = string_normalizer(x, CaseChangeAction::kLower, /*is_case_sensitive=*/true,
+                                          {"monday"});
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -117,11 +130,14 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     AddAttribute(node, "case_change_action", std::string("UPPER"));
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(0));
     AddAttribute(node, "stopwords", std::vector<std::string>{"a"});
-    Expect(registry, std::move(node), "test_cc_string_normalizer_upper", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_string_normalizer_upper", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(10);
+
+      const KernelContext string_normalizer_ctx{opset};
+      const onnx_kernels::kernel::StringNormalizer string_normalizer{string_normalizer_ctx};
+
       Tensor x = Tensor::FromStrings("", {1, 4}, {"A", "hello", "a", "world"});
-      Tensor y = string_normalizer.Invoke([&](const auto &kernel) {
-        return kernel(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/false, {"a"});
-      });
+      Tensor y = string_normalizer(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/false, {"a"});
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -137,12 +153,15 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
     AddAttribute(node, "stopwords", std::vector<std::string>{"the"});
     Expect(registry, std::move(node), "test_cc_string_normalizer_case_sensitive", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext string_normalizer_ctx{opset};
+             const onnx_kernels::kernel::StringNormalizer string_normalizer{string_normalizer_ctx};
+
              Tensor x = Tensor::FromStrings("", {3}, {"The", "the", "cat"});
-             Tensor y = string_normalizer.Invoke([&](const auto &kernel) {
-               return kernel(x, CaseChangeAction::kNone,
-                             /*is_case_sensitive=*/true, {"the"});
-             });
+             Tensor y = string_normalizer(x, CaseChangeAction::kNone,
+                                          /*is_case_sensitive=*/true, {"the"});
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -157,11 +176,15 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     node.add_output("y");
     AddAttribute(node, "stopwords", std::vector<std::string>{"a", "b"});
     Expect(registry, std::move(node), "test_cc_string_normalizer_all_dropped", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext string_normalizer_ctx{opset};
+             const onnx_kernels::kernel::StringNormalizer string_normalizer{string_normalizer_ctx};
+
              Tensor x = Tensor::FromStrings("", {2}, {"a", "b"});
-             Tensor y = string_normalizer.Invoke([&](const auto &kernel) {
-               return kernel(x, CaseChangeAction::kNone, /*is_case_sensitive=*/false, {"a", "b"});
-             });
+             Tensor y = string_normalizer(x, CaseChangeAction::kNone, /*is_case_sensitive=*/false,
+                                          {"a", "b"});
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -184,11 +207,15 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     node.add_output("y");
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
     Expect(registry, std::move(node), "test_cc_strnormalizer_nostopwords_nochangecase", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext string_normalizer_ctx{opset};
+             const onnx_kernels::kernel::StringNormalizer string_normalizer{string_normalizer_ctx};
+
              Tensor x = Tensor::FromStrings("", {2}, {"monday", "tuesday"});
-             Tensor y = string_normalizer.Invoke([&](const auto &kernel) {
-               return kernel(x, CaseChangeAction::kNone, /*is_case_sensitive=*/true, {});
-             });
+             Tensor y =
+                 string_normalizer(x, CaseChangeAction::kNone, /*is_case_sensitive=*/true, {});
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -203,17 +230,20 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     node.add_output("y");
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
     AddAttribute(node, "stopwords", std::vector<std::string>{"monday"});
-    Expect(registry, std::move(node),
-           "test_cc_strnormalizer_export_monday_casesensintive_nochangecase", {opset},
-           [=]() -> IoData {
-             Tensor x =
-                 Tensor::FromStrings("", {4}, {"monday", "tuesday", "wednesday", "thursday"});
-             Tensor y = string_normalizer.Invoke([&](const auto &kernel) {
-               return kernel(x, CaseChangeAction::kNone, /*is_case_sensitive=*/true, {"monday"});
-             });
+    Expect(
+        registry, std::move(node),
+        "test_cc_strnormalizer_export_monday_casesensintive_nochangecase", {opset}, []() -> IoData {
+          const OpsetId opset = DefaultOpset(10);
 
-             return IoData{{std::move(x)}, {std::move(y)}};
-           });
+          const KernelContext string_normalizer_ctx{opset};
+          const onnx_kernels::kernel::StringNormalizer string_normalizer{string_normalizer_ctx};
+
+          Tensor x = Tensor::FromStrings("", {4}, {"monday", "tuesday", "wednesday", "thursday"});
+          Tensor y =
+              string_normalizer(x, CaseChangeAction::kNone, /*is_case_sensitive=*/true, {"monday"});
+
+          return IoData{{std::move(x)}, {std::move(y)}};
+        });
   }
 
   // Mirrors ``test_strnormalizer_export_monday_casesensintive_lower``:
@@ -227,12 +257,16 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
     AddAttribute(node, "stopwords", std::vector<std::string>{"monday"});
     Expect(registry, std::move(node), "test_cc_strnormalizer_export_monday_casesensintive_lower",
-           {opset}, [=]() -> IoData {
+           {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext string_normalizer_ctx{opset};
+             const onnx_kernels::kernel::StringNormalizer string_normalizer{string_normalizer_ctx};
+
              Tensor x =
                  Tensor::FromStrings("", {4}, {"monday", "tuesday", "wednesday", "thursday"});
-             Tensor y = string_normalizer.Invoke([&](const auto &kernel) {
-               return kernel(x, CaseChangeAction::kLower, /*is_case_sensitive=*/true, {"monday"});
-             });
+             Tensor y = string_normalizer(x, CaseChangeAction::kLower, /*is_case_sensitive=*/true,
+                                          {"monday"});
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -249,12 +283,16 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
     AddAttribute(node, "stopwords", std::vector<std::string>{"monday"});
     Expect(registry, std::move(node), "test_cc_strnormalizer_export_monday_casesensintive_upper",
-           {opset}, [=]() -> IoData {
+           {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext string_normalizer_ctx{opset};
+             const onnx_kernels::kernel::StringNormalizer string_normalizer{string_normalizer_ctx};
+
              Tensor x =
                  Tensor::FromStrings("", {4}, {"monday", "tuesday", "wednesday", "thursday"});
-             Tensor y = string_normalizer.Invoke([&](const auto &kernel) {
-               return kernel(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/true, {"monday"});
-             });
+             Tensor y = string_normalizer(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/true,
+                                          {"monday"});
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -271,11 +309,15 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
     AddAttribute(node, "stopwords", std::vector<std::string>{"monday"});
     Expect(registry, std::move(node), "test_cc_strnormalizer_export_monday_empty_output", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext string_normalizer_ctx{opset};
+             const onnx_kernels::kernel::StringNormalizer string_normalizer{string_normalizer_ctx};
+
              Tensor x = Tensor::FromStrings("", {2}, {"monday", "monday"});
-             Tensor y = string_normalizer.Invoke([&](const auto &kernel) {
-               return kernel(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/true, {"monday"});
-             });
+             Tensor y = string_normalizer(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/true,
+                                          {"monday"});
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -292,12 +334,16 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry, TestMode mod
     AddAttribute(node, "stopwords", std::vector<std::string>{"monday"});
     Expect(registry, std::move(node),
            "test_cc_strnormalizer_export_monday_insensintive_upper_twodim", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext string_normalizer_ctx{opset};
+             const onnx_kernels::kernel::StringNormalizer string_normalizer{string_normalizer_ctx};
+
              Tensor x = Tensor::FromStrings(
                  "", {1, 6}, {"Monday", "tuesday", "wednesday", "Monday", "tuesday", "wednesday"});
-             Tensor y = string_normalizer.Invoke([&](const auto &kernel) {
-               return kernel(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/false, {"monday"});
-             });
+             Tensor y = string_normalizer(x, CaseChangeAction::kUpper, /*is_case_sensitive=*/false,
+                                          {"monday"});
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });

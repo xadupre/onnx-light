@@ -38,7 +38,7 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
     node.add_input("x");
     node.add_output("y");
 
-    auto add_ints = [&](const char *name, const std::vector<int64_t> &vals) {
+    auto add_ints = [&node](const char *name, const std::vector<int64_t> &vals) {
       AttributeProto *attr = node.add_attribute();
       attr->set_name(name);
       attr->set_type(AttributeProto::AttributeType::INTS);
@@ -46,7 +46,7 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
         attr->add_ints(v);
       }
     };
-    auto add_floats = [&](const char *name, const std::vector<float> &vals) {
+    auto add_floats = [&node](const char *name, const std::vector<float> &vals) {
       AttributeProto *attr = node.add_attribute();
       attr->set_name(name);
       attr->set_type(AttributeProto::AttributeType::FLOATS);
@@ -54,7 +54,7 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
         attr->add_floats(v);
       }
     };
-    auto add_string_list = [&](const char *name, const std::vector<std::string> &vals) {
+    auto add_string_list = [&node](const char *name, const std::vector<std::string> &vals) {
       AttributeProto *attr = node.add_attribute();
       attr->set_name(name);
       attr->set_type(AttributeProto::AttributeType::STRINGS);
@@ -62,13 +62,13 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
         *attr->add_strings() = utils::String(v);
       }
     };
-    auto add_int = [&](const char *name, int64_t val) {
+    auto add_int = [&node](const char *name, int64_t val) {
       AttributeProto *attr = node.add_attribute();
       attr->set_name(name);
       attr->set_type(AttributeProto::AttributeType::INT);
       attr->set_i(val);
     };
-    auto add_string = [&](const char *name, const std::string &val) {
+    auto add_string = [&node](const char *name, const std::string &val) {
       AttributeProto *attr = node.add_attribute();
       attr->set_name(name);
       attr->set_type(AttributeProto::AttributeType::STRING);
@@ -106,24 +106,22 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
     const std::vector<int64_t> target_ids{0, 0, 0, 0};
     const std::vector<float> target_weights{1.0f, 3.0f, 2.0f, 4.0f};
 
-    const auto reg =
-        MakeReferenceKernel<onnx_kernels::kernel::TreeEnsembleRegressor, std::vector<int64_t>,
-                            std::vector<int64_t>, std::vector<int64_t>, std::vector<float>,
-                            ParamStrings, std::vector<int64_t>, std::vector<int64_t>,
-                            std::vector<int64_t>, std::vector<int64_t>, std::vector<int64_t>,
-                            std::vector<int64_t>, std::vector<float>>(
-            opset, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
-            nodes_truenodeids, nodes_falsenodeids, nodes_missing, target_treeids, target_nodeids,
-            target_ids, target_weights);
-
     Expect(registry, std::move(node), "test_cc_treeensembleregressor_sum_single_target_benchmark",
-           {default_opset, opset}, {8192}, {8192}, [reg]() -> IoData {
+           {default_opset, opset}, {8192}, {8192},
+           [opset, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
+            nodes_truenodeids, nodes_falsenodeids, nodes_missing, target_treeids, target_nodeids,
+            target_ids, target_weights]() -> IoData {
+             const KernelContext reg_ctx{opset};
+             const onnx_kernels::kernel::TreeEnsembleRegressor reg{
+                 reg_ctx,       nodes_treeids,  nodes_nodeids,     nodes_featureids,
+                 nodes_values,  nodes_modes,    nodes_truenodeids, nodes_falsenodeids,
+                 nodes_missing, target_treeids, target_nodeids,    target_ids,
+                 target_weights};
+
              Tensor x = RandnTensor(DataType::FLOAT, {8192, 1}, 2731);
-             Tensor y = reg.Invoke([&](const auto &kernel) {
-               return kernel.template operator()<float>(
-                   x, /*n_targets=*/1, /*aggregate_function=*/"SUM",
-                   /*post_transform=*/"NONE", /*base_values=*/{});
-             });
+             Tensor y =
+                 reg.template operator()<float>(x, /*n_targets=*/1, /*aggregate_function=*/"SUM",
+                                                /*post_transform=*/"NONE", /*base_values=*/{});
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -135,7 +133,7 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
   node.add_input("x");
   node.add_output("y");
 
-  auto add_ints = [&](const char *name, const std::vector<int64_t> &vals) {
+  auto add_ints = [&node](const char *name, const std::vector<int64_t> &vals) {
     AttributeProto *attr = node.add_attribute();
     attr->set_name(name);
     attr->set_type(AttributeProto::AttributeType::INTS);
@@ -143,7 +141,7 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
       attr->add_ints(v);
     }
   };
-  auto add_floats = [&](const char *name, const std::vector<float> &vals) {
+  auto add_floats = [&node](const char *name, const std::vector<float> &vals) {
     AttributeProto *attr = node.add_attribute();
     attr->set_name(name);
     attr->set_type(AttributeProto::AttributeType::FLOATS);
@@ -151,7 +149,7 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
       attr->add_floats(v);
     }
   };
-  auto add_string_list = [&](const char *name, const std::vector<std::string> &vals) {
+  auto add_string_list = [&node](const char *name, const std::vector<std::string> &vals) {
     AttributeProto *attr = node.add_attribute();
     attr->set_name(name);
     attr->set_type(AttributeProto::AttributeType::STRINGS);
@@ -159,13 +157,13 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
       *attr->add_strings() = utils::String(v);
     }
   };
-  auto add_int = [&](const char *name, int64_t val) {
+  auto add_int = [&node](const char *name, int64_t val) {
     AttributeProto *attr = node.add_attribute();
     attr->set_name(name);
     attr->set_type(AttributeProto::AttributeType::INT);
     attr->set_i(val);
   };
-  auto add_string = [&](const char *name, const std::string &val) {
+  auto add_string = [&node](const char *name, const std::string &val) {
     AttributeProto *attr = node.add_attribute();
     attr->set_name(name);
     attr->set_type(AttributeProto::AttributeType::STRING);
@@ -203,26 +201,23 @@ void RegisterTreeEnsembleRegressorCases(std::vector<TestCase> &registry, TestMod
   const std::vector<int64_t> target_ids{0, 0, 0, 0};
   const std::vector<float> target_weights{1.0f, 3.0f, 2.0f, 4.0f};
 
-  const auto reg =
-      MakeReferenceKernel<onnx_kernels::kernel::TreeEnsembleRegressor, std::vector<int64_t>,
-                          std::vector<int64_t>, std::vector<int64_t>, std::vector<float>,
-                          ParamStrings, std::vector<int64_t>, std::vector<int64_t>,
-                          std::vector<int64_t>, std::vector<int64_t>, std::vector<int64_t>,
-                          std::vector<int64_t>, std::vector<float>>(
-          opset, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
-          nodes_truenodeids, nodes_falsenodeids, nodes_missing, target_treeids, target_nodeids,
-          target_ids, target_weights);
+  Expect(
+      registry, std::move(node), "test_cc_treeensembleregressor_sum_single_target",
+      {default_opset, opset},
+      [opset, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
+       nodes_truenodeids, nodes_falsenodeids, nodes_missing, target_treeids, target_nodeids,
+       target_ids, target_weights]() -> IoData {
+        const KernelContext reg_ctx{opset};
+        const onnx_kernels::kernel::TreeEnsembleRegressor reg{
+            reg_ctx,        nodes_treeids,     nodes_nodeids,      nodes_featureids, nodes_values,
+            nodes_modes,    nodes_truenodeids, nodes_falsenodeids, nodes_missing,    target_treeids,
+            target_nodeids, target_ids,        target_weights};
 
-  Expect(registry, std::move(node), "test_cc_treeensembleregressor_sum_single_target",
-         {default_opset, opset}, [=]() -> IoData {
-           Tensor x = Tensor::FromFloat("", {2, 1}, {0.5f, 3.0f});
-           Tensor y = reg.Invoke([&](const auto &kernel) {
-             return kernel.template operator()<float>(
-                 x, /*n_targets=*/1, /*aggregate_function=*/"SUM",
-                 /*post_transform=*/"NONE", /*base_values=*/{});
-           });
-           return IoData{{std::move(x)}, {std::move(y)}};
-         });
+        Tensor x = Tensor::FromFloat("", {2, 1}, {0.5f, 3.0f});
+        Tensor y = reg.template operator()<float>(x, /*n_targets=*/1, /*aggregate_function=*/"SUM",
+                                                  /*post_transform=*/"NONE", /*base_values=*/{});
+        return IoData{{std::move(x)}, {std::move(y)}};
+      });
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

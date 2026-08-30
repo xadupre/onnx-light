@@ -26,22 +26,26 @@ void RegisterSequenceInsertCase(const std::string &name, const std::vector<Tenso
   TestCase lazy_case(name, name);
   lazy_case.rtol = 1e-3;
   lazy_case.atol = 1e-7;
-  lazy_case.build = [=](bool) -> BuiltCase {
-    const Sequence seq = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) { return kernel.AsSequence(inputs); });
+  lazy_case.build = [opset, inputs, has_position, position, tensor_to_insert, name,
+                     elem_shape](bool) -> BuiltCase {
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::SequenceConstruct kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::SequenceInsert kernel_2{ctx_2};
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::SequenceConstruct kernel_3{ctx_3};
+
+    const Sequence seq = kernel_1.AsSequence(inputs);
     Tensor position_tensor;
     const Tensor *pos_ptr = nullptr;
     if (has_position) {
       position_tensor = Tensor::FromInt64("position", {}, {position});
       pos_ptr = &position_tensor;
     }
-    const Sequence out_seq =
-        MakeReferenceKernel<onnx_kernels::kernel::SequenceInsert>(opset).Invoke(
-            [&](const auto &kernel) { return kernel(seq, tensor_to_insert, pos_ptr); });
+    const Sequence out_seq = kernel_2(seq, tensor_to_insert, pos_ptr);
 
     std::vector<Tensor> out_values(out_seq.values.begin(), out_seq.values.end());
-    Tensor stacked = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(out_values); });
+    Tensor stacked = kernel_3(out_values);
     stacked.name = "output_sequence";
 
     TestCase tc(name, name);

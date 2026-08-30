@@ -45,16 +45,19 @@ Tensor MakeRepeatsTensor(const std::vector<int64_t> &repeats) {
 
 void RegisterTileCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const auto tile_kernel = MakeReferenceKernel<onnx_kernels::kernel::Tile>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeTileNode();
     Expect(registry, std::move(node), "test_cc_tile_precomputed_benchmark", {opset}, {1048576, 2},
-           {4194304}, [tile_kernel]() -> IoData {
+           {4194304}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext tile_kernel_ctx{opset};
+             const onnx_kernels::kernel::Tile tile_kernel{tile_kernel_ctx};
+
              Tensor input = RandnTensor(DataType::FLOAT, {1024, 1024}, 2001);
              Tensor repeats = MakeRepeatsTensor({2, 2});
-             Tensor output =
-                 tile_kernel.Invoke([&](const auto &kernel) { return kernel(input, repeats); });
+             Tensor output = tile_kernel(input, repeats);
              return IoData{{std::move(input), std::move(repeats)}, {std::move(output)}};
            });
     return;
@@ -70,11 +73,15 @@ void RegisterTileCases(std::vector<TestCase> &registry, TestMode mode) {
   //            [0, 1, 0, 1],
   //            [2, 3, 2, 3]]    (shape [4, 4])
   {
-    Expect(registry, MakeTileNode(), "test_cc_tile_precomputed", {opset}, [=]() -> IoData {
+    Expect(registry, MakeTileNode(), "test_cc_tile_precomputed", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext tile_kernel_ctx{opset};
+      const onnx_kernels::kernel::Tile tile_kernel{tile_kernel_ctx};
+
       const Tensor input = Tensor::FromFloat("", {2, 2}, {0.0f, 1.0f, 2.0f, 3.0f});
       const Tensor repeats = MakeRepeatsTensor({2, 2});
-      const Tensor output =
-          tile_kernel.Invoke([&](const auto &kernel) { return kernel(input, repeats); });
+      const Tensor output = tile_kernel(input, repeats);
       return IoData{{std::move(input), std::move(repeats)}, {std::move(output)}};
     });
   }
@@ -85,11 +92,15 @@ void RegisterTileCases(std::vector<TestCase> &registry, TestMode mode) {
   // repeats: [3]
   // output:  [1, 2, 3, 1, 2, 3, 1, 2, 3]
   {
-    Expect(registry, MakeTileNode(), "test_cc_tile_1d", {opset}, [=]() -> IoData {
+    Expect(registry, MakeTileNode(), "test_cc_tile_1d", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext tile_kernel_ctx{opset};
+      const onnx_kernels::kernel::Tile tile_kernel{tile_kernel_ctx};
+
       const Tensor input = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
       const Tensor repeats = MakeRepeatsTensor({3});
-      const Tensor output =
-          tile_kernel.Invoke([&](const auto &kernel) { return kernel(input, repeats); });
+      const Tensor output = tile_kernel(input, repeats);
       return IoData{{std::move(input), std::move(repeats)}, {std::move(output)}};
     });
   }
@@ -101,11 +112,15 @@ void RegisterTileCases(std::vector<TestCase> &registry, TestMode mode) {
   // repeats: [1, 1]
   // output:  same as input
   {
-    Expect(registry, MakeTileNode(), "test_cc_tile_repeats_one", {opset}, [=]() -> IoData {
+    Expect(registry, MakeTileNode(), "test_cc_tile_repeats_one", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext tile_kernel_ctx{opset};
+      const onnx_kernels::kernel::Tile tile_kernel{tile_kernel_ctx};
+
       const Tensor input = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       const Tensor repeats = MakeRepeatsTensor({1, 1});
-      const Tensor output =
-          tile_kernel.Invoke([&](const auto &kernel) { return kernel(input, repeats); });
+      const Tensor output = tile_kernel(input, repeats);
       return IoData{{std::move(input), std::move(repeats)}, {std::move(output)}};
     });
   }

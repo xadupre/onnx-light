@@ -37,23 +37,27 @@ void RegisterSequenceEraseCase(const std::string &name, const std::vector<Tensor
   TestCase lazy_case(name, name);
   lazy_case.rtol = 1e-3;
   lazy_case.atol = 1e-7;
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [opset, inputs, has_position, position, name, elem_shape](bool) -> BuiltCase {
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::SequenceConstruct kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::SequenceErase kernel_2{ctx_2};
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::SequenceConstruct kernel_3{ctx_3};
+
     // Compute the expected output sequence with the reference kernel.
-    const Sequence seq = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) { return kernel.AsSequence(inputs); });
+    const Sequence seq = kernel_1.AsSequence(inputs);
     Tensor position_tensor;
     const Tensor *pos_ptr = nullptr;
     if (has_position) {
       position_tensor = Tensor::FromInt64("position", {}, {position});
       pos_ptr = &position_tensor;
     }
-    const Sequence out_seq = MakeReferenceKernel<onnx_kernels::kernel::SequenceErase>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(seq, pos_ptr); });
+    const Sequence out_seq = kernel_2(seq, pos_ptr);
 
     // Materialise the output sequence as a stacked tensor.
     std::vector<Tensor> remaining(out_seq.values.begin(), out_seq.values.end());
-    Tensor stacked = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(remaining); });
+    Tensor stacked = kernel_3(remaining);
     stacked.name = "output_sequence";
 
     TestCase tc(name, name);

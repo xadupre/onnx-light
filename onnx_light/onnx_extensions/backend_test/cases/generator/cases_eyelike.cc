@@ -18,12 +18,16 @@ void RegisterEyeLikeCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("EyeLike");
     node.add_input("x");
     node.add_output("y");
-    const auto eye_like_kernel = MakeReferenceKernel<onnx_kernels::kernel::EyeLike>(opset);
+
     Expect(registry, std::move(node), "test_eyelike_without_dtype_benchmark", {opset},
-           {2048 * 2048}, {2048 * 2048}, [eye_like_kernel]() -> IoData {
+           {2048 * 2048}, {2048 * 2048}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext eye_like_kernel_ctx{opset};
+             const onnx_kernels::kernel::EyeLike eye_like_kernel{eye_like_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {2048, 2048}, 987654321ULL);
-             Tensor y = eye_like_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(x, /*k=*/0, /*dtype=*/0); });
+             Tensor y = eye_like_kernel(x, /*k=*/0, /*dtype=*/0);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -35,11 +39,15 @@ void RegisterEyeLikeCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("EyeLike");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_eyelike_without_dtype", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_eyelike_without_dtype", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext ctx_2{opset};
+      const onnx_kernels::kernel::EyeLike kernel_2{ctx_2};
+
       const Tensor x = Tensor::FromFloat(
           "x", {3, 4}, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f});
-      const Tensor y = MakeReferenceKernel<onnx_kernels::kernel::EyeLike>(opset).Invoke(
-          [&](const auto &kernel) { return kernel(x, /*k=*/0, /*dtype=*/0); });
+      const Tensor y = kernel_2(x, /*k=*/0, /*dtype=*/0);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -57,15 +65,17 @@ void RegisterEyeLikeCases(std::vector<TestCase> &registry, TestMode mode) {
     auto *dtype_attr = node.add_attribute();
     dtype_attr->set_name("dtype");
     dtype_attr->set_type(AttributeProto::AttributeType::INT);
-    Expect(registry, std::move(node), "test_eyelike_with_dtype", {opset}, [=]() -> IoData {
-      dtype_attr->set_i(static_cast<int64_t>(DataType::INT64));
+    dtype_attr->set_i(static_cast<int64_t>(DataType::INT64));
+
+    Expect(registry, std::move(node), "test_eyelike_with_dtype", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext ctx_3{opset};
+      const onnx_kernels::kernel::EyeLike kernel_3{ctx_3};
 
       const Tensor x =
           Tensor::FromFloat("x", {2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
-      const Tensor y =
-          MakeReferenceKernel<onnx_kernels::kernel::EyeLike>(opset).Invoke([&](const auto &kernel) {
-            return kernel(x, /*k=*/1, static_cast<int32_t>(DataType::INT64));
-          });
+      const Tensor y = kernel_3(x, /*k=*/1, static_cast<int32_t>(DataType::INT64));
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -83,17 +93,19 @@ void RegisterEyeLikeCases(std::vector<TestCase> &registry, TestMode mode) {
     auto *dtype_attr = node.add_attribute();
     dtype_attr->set_name("dtype");
     dtype_attr->set_type(AttributeProto::AttributeType::INT);
+    dtype_attr->set_i(static_cast<int64_t>(DataType::FLOAT));
+
     Expect(registry, std::move(node), "test_eyelike_populate_off_main_diagonal", {opset},
-           [=]() -> IoData {
-             dtype_attr->set_i(static_cast<int64_t>(DataType::FLOAT));
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext ctx_4{opset};
+             const onnx_kernels::kernel::EyeLike kernel_4{ctx_4};
 
              const Tensor x = Tensor::FromFloat(
                  "x", {4, 5}, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                                0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f});
-             const Tensor y = MakeReferenceKernel<onnx_kernels::kernel::EyeLike>(opset).Invoke(
-                 [&](const auto &kernel) {
-                   return kernel(x, /*k=*/1, static_cast<int32_t>(DataType::FLOAT));
-                 });
+             const Tensor y = kernel_4(x, /*k=*/1, static_cast<int32_t>(DataType::FLOAT));
              return IoData{{std::move(x)}, {std::move(y)}};
            });
   }

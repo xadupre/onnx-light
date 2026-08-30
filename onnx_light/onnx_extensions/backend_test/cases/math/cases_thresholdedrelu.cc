@@ -12,8 +12,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterThresholdedReluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(10);
-  const auto thresholdedrelu_kernel =
-      MakeReferenceKernel<onnx_kernels::kernel::ThresholdedRelu>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -26,10 +24,15 @@ void RegisterThresholdedReluCases(std::vector<TestCase> &registry, TestMode mode
     alpha->set_f(2.0f);
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_thresholdedrelu_benchmark", {opset}, {count},
-           {count}, [thresholdedrelu_kernel]() -> IoData {
+           {count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(10);
+
+             const KernelContext thresholdedrelu_kernel_ctx{opset};
+             const onnx_kernels::kernel::ThresholdedRelu thresholdedrelu_kernel{
+                 thresholdedrelu_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {kBenchmarkElementwiseSize}, 987654321ULL);
-             Tensor y =
-                 thresholdedrelu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 2.0f); });
+             Tensor y = thresholdedrelu_kernel(x, 2.0f);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -44,11 +47,17 @@ void RegisterThresholdedReluCases(std::vector<TestCase> &registry, TestMode mode
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    Expect(registry, std::move(node), "test_cc_thresholdedrelu_example", {opset}, [=]() -> IoData {
-      alpha->set_f(2.0f);
+    alpha->set_f(2.0f);
+
+    Expect(registry, std::move(node), "test_cc_thresholdedrelu_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(10);
+
+      const KernelContext thresholdedrelu_kernel_ctx{opset};
+      const onnx_kernels::kernel::ThresholdedRelu thresholdedrelu_kernel{
+          thresholdedrelu_kernel_ctx};
 
       Tensor x = Tensor::FromFloat("", {3, 4, 5}, std::vector<float>(60, 3.0f));
-      Tensor y = thresholdedrelu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 2.0f); });
+      Tensor y = thresholdedrelu_kernel(x, 2.0f);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -62,11 +71,17 @@ void RegisterThresholdedReluCases(std::vector<TestCase> &registry, TestMode mode
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    Expect(registry, std::move(node), "test_cc_thresholdedrelu", {opset}, [=]() -> IoData {
-      alpha->set_f(2.0f);
+    alpha->set_f(2.0f);
+
+    Expect(registry, std::move(node), "test_cc_thresholdedrelu", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(10);
+
+      const KernelContext thresholdedrelu_kernel_ctx{opset};
+      const onnx_kernels::kernel::ThresholdedRelu thresholdedrelu_kernel{
+          thresholdedrelu_kernel_ctx};
 
       Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 2.5f, 3.0f});
-      Tensor y = thresholdedrelu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 2.0f); });
+      Tensor y = thresholdedrelu_kernel(x, 2.0f);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -76,10 +91,16 @@ void RegisterThresholdedReluCases(std::vector<TestCase> &registry, TestMode mode
     node.set_op_type("ThresholdedRelu");
     node.add_input("X");
     node.add_output("Y");
-    Expect(registry, std::move(node), "test_cc_thresholdedrelu_default", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_thresholdedrelu_default", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(10);
+
+      const KernelContext thresholdedrelu_kernel_ctx{opset};
+      const onnx_kernels::kernel::ThresholdedRelu thresholdedrelu_kernel{
+          thresholdedrelu_kernel_ctx};
+
       // No alpha attribute: defaults to 1.0.
       Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 0.5f, 1.0f, 1.5f, 2.0f});
-      Tensor y = thresholdedrelu_kernel.Invoke([&](const auto &kernel) { return kernel(x, 1.0f); });
+      Tensor y = thresholdedrelu_kernel(x, 1.0f);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

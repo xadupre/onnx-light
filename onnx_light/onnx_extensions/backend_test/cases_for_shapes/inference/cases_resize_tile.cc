@@ -64,7 +64,14 @@ void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry, Test
 
   const std::string name = "test_cc_shape_inference_resize_tile";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(13);
+
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Resize kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Tile kernel_2{ctx_2};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
 
     ModelProto &model = tc.emplace_model();
@@ -129,21 +136,19 @@ void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry, Test
     onnx_kernels::kernel::Resize::Attributes resize_attrs;
     resize_attrs.mode = "nearest";
     resize_attrs.coordinate_transformation_mode = "asymmetric";
-    Tensor resized_out = MakeReferenceKernel<onnx_kernels::kernel::Resize>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, scales_tensor, resize_attrs); });
+    Tensor resized_out = kernel_1(x, scales_tensor, resize_attrs);
     resized_out.name = "resized_out";
 
     // Tile with repeats=[2, 2]:  [5, 3] → [10, 6].
     const Tensor repeats_tensor = Tensor::FromInt64("", {2}, {int64_t{2}, int64_t{2}});
-    Tensor tile_out = MakeReferenceKernel<onnx_kernels::kernel::Tile>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(resized_out, repeats_tensor); });
+    Tensor tile_out = kernel_2(resized_out, repeats_tensor);
     tile_out.name = "tile_out";
 
     // Max(tile_out, zeros_scalar): all x_values > 0 so Max is identity → [10, 6].
     const Tensor zeros_scalar = Tensor::FromFloat("zeros_scalar", {}, {0.0f});
-    const auto max_kernel = MakeReferenceKernel<onnx_kernels::kernel::Max>(opset);
-    Tensor output =
-        max_kernel.Invoke([&](const auto &kernel) { return kernel({tile_out, zeros_scalar}); });
+    const KernelContext max_kernel_ctx{opset};
+    const onnx_kernels::kernel::Max max_kernel{max_kernel_ctx};
+    Tensor output = max_kernel({tile_out, zeros_scalar});
     output.name = "output";
 
     AppendDataSet(tc, {std::move(x)}, {std::move(output)});

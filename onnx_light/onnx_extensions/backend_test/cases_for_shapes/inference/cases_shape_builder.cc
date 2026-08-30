@@ -74,7 +74,24 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry, Test
   const OpsetId opset = DefaultOpset(18);
   const std::string name = "test_cc_shape_inference_check_shape";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Unsqueeze kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Unsqueeze kernel_2{ctx_2};
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::Reshape kernel_3{ctx_3};
+    const KernelContext ctx_4{opset};
+    const onnx_kernels::kernel::Reshape kernel_4{ctx_4};
+    const KernelContext ctx_5{opset};
+    const onnx_kernels::kernel::Cast kernel_5{ctx_5};
+    const KernelContext ctx_6{opset};
+    const onnx_kernels::kernel::MatMul kernel_6{ctx_6};
+    const KernelContext ctx_7{opset};
+    const onnx_kernels::kernel::Reshape kernel_7{ctx_7};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -183,20 +200,13 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry, Test
     const Tensor shape1 = Tensor::FromInt64("", {3}, {1, kD32, kD64});
     const Tensor shape2 = Tensor::FromInt64("", {3}, {kBatch * kChannel, kD64, kD128});
     const Tensor shape3 = Tensor::FromInt64("", {4}, {kBatch, kChannel, kD64, kD64});
-    Tensor xu1 = MakeReferenceKernel<onnx_kernels::kernel::Unsqueeze>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, /*axes=*/{0}); });
-    Tensor xu2 = MakeReferenceKernel<onnx_kernels::kernel::Unsqueeze>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(xu1, /*axes=*/{1}); });
-    Tensor xm1 = MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(xu2, shape1); });
-    Tensor xm2c = MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(y, shape2); });
-    Tensor xm2 = MakeReferenceKernel<onnx_kernels::kernel::Cast>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(xm2c, static_cast<int32_t>(DataType::FLOAT)); });
-    Tensor xm = MakeReferenceKernel<onnx_kernels::kernel::MatMul>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(xm1, xm2); });
-    Tensor z = MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(xm, shape3); });
+    Tensor xu1 = kernel_1(x, /*axes=*/{0});
+    Tensor xu2 = kernel_2(xu1, /*axes=*/{1});
+    Tensor xm1 = kernel_3(xu2, shape1);
+    Tensor xm2c = kernel_4(y, shape2);
+    Tensor xm2 = kernel_5(xm2c, static_cast<int32_t>(DataType::FLOAT));
+    Tensor xm = kernel_6(xm1, xm2);
+    Tensor z = kernel_7(xm, shape3);
     z.name = "Z";
 
     AppendDataSet(tc, {std::move(x), std::move(y)}, {std::move(z)});
@@ -232,7 +242,16 @@ void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry, 
   const OpsetId opset = DefaultOpset(18);
   const std::string name = "test_cc_shape_inference_reshape_reshape";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_8{opset};
+    const onnx_kernels::kernel::Reshape kernel_8{ctx_8};
+    const KernelContext ctx_9{opset};
+    const onnx_kernels::kernel::Reshape kernel_9{ctx_9};
+    const KernelContext ctx_10{opset};
+    const onnx_kernels::kernel::Add kernel_10{ctx_10};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -268,12 +287,9 @@ void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry, 
     const Tensor shape1 = Tensor::FromInt64("", {4}, {0, 0, 2, -1});
     const Tensor shape2 = Tensor::FromInt64("", {3}, {0, 0, -1});
     const Tensor one = Tensor::FromFloat("", {1}, {1.0f});
-    Tensor xr = MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, shape1); });
-    Tensor xrr = MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(xr, shape2); });
-    Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(xrr, one); });
+    Tensor xr = kernel_8(x, shape1);
+    Tensor xrr = kernel_9(xr, shape2);
+    Tensor y = kernel_10(xrr, one);
     y.name = "Y";
 
     AppendDataSet(tc, {std::move(x)}, {std::move(y)});
@@ -311,7 +327,9 @@ void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &regis
   const OpsetId opset = DefaultOpset(18);
   const std::string name = "test_cc_shape_inference_value_as_shape_builder";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
     tc.rtol = 1e-3;
     tc.atol = 1e-5;
@@ -403,13 +421,18 @@ void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &regis
     Tensor c = Tensor::FromFloat("", {kK, kK}, c_values);
 
     const Tensor new_shape = Tensor::FromInt64("", {4}, {kBatch, kSeq, 32, 8});
-    auto build_branch = [&](const Tensor &mat, const std::string &out_name) {
-      Tensor m1 = MakeReferenceKernel<onnx_kernels::kernel::MatMul>(opset).Invoke(
-          [&](const auto &kernel) { return kernel(ids_weight, mat); });
-      Tensor reshaped = MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset).Invoke(
-          [&](const auto &kernel) { return kernel(m1, new_shape); });
-      Tensor t = MakeReferenceKernel<onnx_kernels::kernel::Transpose>(opset).Invoke(
-          [&](const auto &kernel) { return kernel(reshaped, /*perm=*/{0, 2, 1, 3}); });
+    auto build_branch = [&opset, &ids_weight, &new_shape](const Tensor &mat,
+                                                          const std::string &out_name) {
+      const KernelContext ctx_11{opset};
+      const onnx_kernels::kernel::MatMul kernel_11{ctx_11};
+      const KernelContext ctx_12{opset};
+      const onnx_kernels::kernel::Reshape kernel_12{ctx_12};
+      const KernelContext ctx_13{opset};
+      const onnx_kernels::kernel::Transpose kernel_13{ctx_13};
+
+      Tensor m1 = kernel_11(ids_weight, mat);
+      Tensor reshaped = kernel_12(m1, new_shape);
+      Tensor t = kernel_13(reshaped, /*perm=*/{0, 2, 1, 3});
       t.name = out_name;
       return t;
     };
@@ -452,7 +475,18 @@ void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, boo
   const std::string name = even ? "test_cc_shape_inference_concat_split_even"
                                 : "test_cc_shape_inference_concat_split_odd";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name, even](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_14{opset};
+    const onnx_kernels::kernel::Concat kernel_14{ctx_14};
+    const KernelContext ctx_15{opset};
+    const onnx_kernels::kernel::Split kernel_15{ctx_15};
+    const KernelContext ctx_16{opset};
+    const onnx_kernels::kernel::Concat kernel_16{ctx_16};
+    const KernelContext ctx_17{opset};
+    const onnx_kernels::kernel::Relu kernel_17{ctx_17};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -520,16 +554,10 @@ void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, boo
     Tensor x = Tensor::FromFloat("X", {kA, kB}, x_values);
     Tensor y = Tensor::FromFloat("Y", {kA, kC}, y_values);
 
-    Tensor xy = MakeReferenceKernel<onnx_kernels::kernel::Concat>(opset).Invoke(
-        [&](const auto &kernel) { return kernel({x, y}, /*axis=*/1); });
-    std::vector<Tensor> splits =
-        MakeReferenceKernel<onnx_kernels::kernel::Split>(opset).Invoke([&](const auto &kernel) {
-          return kernel(xy, /*axis=*/1, /*split=*/{}, /*num_outputs=*/2);
-        });
-    Tensor zs = MakeReferenceKernel<onnx_kernels::kernel::Concat>(opset).Invoke(
-        [&](const auto &kernel) { return kernel({splits[1], splits[0]}, /*axis=*/1); });
-    Tensor z = MakeReferenceKernel<onnx_kernels::kernel::Relu>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(zs); });
+    Tensor xy = kernel_14({x, y}, /*axis=*/1);
+    std::vector<Tensor> splits = kernel_15(xy, /*axis=*/1, /*split=*/{}, /*num_outputs=*/2);
+    Tensor zs = kernel_16({splits[1], splits[0]}, /*axis=*/1);
+    Tensor z = kernel_17(zs);
     z.name = "Z";
 
     AppendDataSet(tc, {std::move(x), std::move(y)}, {std::move(z)});

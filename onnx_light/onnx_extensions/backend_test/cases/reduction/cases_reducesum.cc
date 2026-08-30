@@ -16,8 +16,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 namespace {
 
-void EmitReduceSumOnnxCase(std::vector<TestCase> &registry, const auto &kernel,
-                           const std::string &case_name, const std::vector<int64_t> &data_shape,
+void EmitReduceSumOnnxCase(std::vector<TestCase> &registry, const std::string &case_name,
+                           const std::vector<int64_t> &data_shape,
                            const std::vector<float> &data_values,
                            const std::vector<int64_t> &axes_values, bool keepdims,
                            bool noop_with_empty_axes) {
@@ -32,13 +32,20 @@ void EmitReduceSumOnnxCase(std::vector<TestCase> &registry, const auto &kernel,
   if (noop_with_empty_axes) {
     AddAttribute<int64_t>(node, "noop_with_empty_axes", 1);
   }
-  Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
-    Tensor data = Tensor::FromFloat("", data_shape, data_values);
-    Tensor axes = Tensor::FromInt64("", {static_cast<int64_t>(axes_values.size())}, axes_values);
-    Tensor reduced = kernel(data, axes, keepdims, noop_with_empty_axes);
+  Expect(registry, std::move(node), case_name, {opset},
+         [data_shape, data_values, axes_values, keepdims, noop_with_empty_axes]() -> IoData {
+           const OpsetId opset = DefaultOpset(13);
 
-    return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
-  });
+           const KernelContext ctx{opset};
+           const onnx_kernels::kernel::ReduceSum kernel{ctx};
+
+           Tensor data = Tensor::FromFloat("", data_shape, data_values);
+           Tensor axes =
+               Tensor::FromInt64("", {static_cast<int64_t>(axes_values.size())}, axes_values);
+           Tensor reduced = kernel(data, axes, keepdims, noop_with_empty_axes);
+
+           return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+         });
 }
 
 // ---------------------------------------------------------------------------
@@ -49,7 +56,7 @@ void EmitReduceSumOnnxCase(std::vector<TestCase> &registry, const auto &kernel,
 // the reference kernel so the data does not need to bit-match the upstream
 // ``np.random.seed(0); np.random.uniform(-10, 10, ...)`` fixture.
 // ---------------------------------------------------------------------------
-void RegisterReduceSumOnnxCases(std::vector<TestCase> &registry, const auto &kernel) {
+void RegisterReduceSumOnnxCases(std::vector<TestCase> &registry) {
   const std::vector<int64_t> shape = {3, 2, 2};
   const std::vector<float> example_values = {1.0f, 2.0f, 3.0f, 4.0f,  5.0f,  6.0f,
                                              7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};
@@ -60,43 +67,43 @@ void RegisterReduceSumOnnxCases(std::vector<TestCase> &registry, const auto &ker
   };
 
   // keepdims (axis = 1, keepdims = 1)
-  EmitReduceSumOnnxCase(registry, kernel, "test_reduce_sum_keepdims_example", shape, example_values,
-                        {1}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
-  EmitReduceSumOnnxCase(registry, kernel, "test_reduce_sum_keepdims_random", shape, random_values,
-                        {1}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceSumOnnxCase(registry, "test_reduce_sum_keepdims_example", shape, example_values, {1},
+                        /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceSumOnnxCase(registry, "test_reduce_sum_keepdims_random", shape, random_values, {1},
+                        /*keepdims=*/true, /*noop_with_empty_axes=*/false);
 
   // do_not_keepdims (axis = 1, keepdims = 0)
-  EmitReduceSumOnnxCase(registry, kernel, "test_reduce_sum_do_not_keepdims_example", shape,
-                        example_values, {1}, /*keepdims=*/false, /*noop_with_empty_axes=*/false);
-  EmitReduceSumOnnxCase(registry, kernel, "test_reduce_sum_do_not_keepdims_random", shape,
-                        random_values, {1}, /*keepdims=*/false, /*noop_with_empty_axes=*/false);
+  EmitReduceSumOnnxCase(registry, "test_reduce_sum_do_not_keepdims_example", shape, example_values,
+                        {1}, /*keepdims=*/false, /*noop_with_empty_axes=*/false);
+  EmitReduceSumOnnxCase(registry, "test_reduce_sum_do_not_keepdims_random", shape, random_values,
+                        {1}, /*keepdims=*/false, /*noop_with_empty_axes=*/false);
 
   // default_axes_keepdims (empty axes -> reduce over all dims, keepdims = 1)
-  EmitReduceSumOnnxCase(registry, kernel, "test_reduce_sum_default_axes_keepdims_example", shape,
+  EmitReduceSumOnnxCase(registry, "test_reduce_sum_default_axes_keepdims_example", shape,
                         example_values, {}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
-  EmitReduceSumOnnxCase(registry, kernel, "test_reduce_sum_default_axes_keepdims_random", shape,
+  EmitReduceSumOnnxCase(registry, "test_reduce_sum_default_axes_keepdims_random", shape,
                         random_values, {}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
 
   // negative_axes_keepdims (axis = -2, keepdims = 1)
-  EmitReduceSumOnnxCase(registry, kernel, "test_reduce_sum_negative_axes_keepdims_example", shape,
+  EmitReduceSumOnnxCase(registry, "test_reduce_sum_negative_axes_keepdims_example", shape,
                         example_values, {-2}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
-  EmitReduceSumOnnxCase(registry, kernel, "test_reduce_sum_negative_axes_keepdims_random", shape,
+  EmitReduceSumOnnxCase(registry, "test_reduce_sum_negative_axes_keepdims_random", shape,
                         random_values, {-2}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
 
   // empty_axes_input_noop (empty axes + noop_with_empty_axes = 1 -> identity).
   // The ``_example`` name also covers the upstream ``test_reduce_sum_empty_axes_input_noop``
   // entry via the substring check (it is a prefix of ``_example``).
-  EmitReduceSumOnnxCase(registry, kernel, "test_reduce_sum_empty_axes_input_noop_example", shape,
+  EmitReduceSumOnnxCase(registry, "test_reduce_sum_empty_axes_input_noop_example", shape,
                         example_values, {}, /*keepdims=*/true, /*noop_with_empty_axes=*/true);
 
   // empty_set (data shape [2, 0, 4], axes = [1], keepdims = 1 -> zero-filled
   // [2, 1, 4]).
-  EmitReduceSumOnnxCase(registry, kernel, "test_reduce_sum_empty_set",
+  EmitReduceSumOnnxCase(registry, "test_reduce_sum_empty_set",
                         /*data_shape=*/{2, 0, 4}, /*data_values=*/{}, {1}, /*keepdims=*/true,
                         /*noop_with_empty_axes=*/false);
   // empty_set_non_reduced_axis_zero (data shape [2, 0, 4], axes = [2],
   // keepdims = 1 -> [2, 0, 1] with no elements).
-  EmitReduceSumOnnxCase(registry, kernel, "test_reduce_sum_empty_set_non_reduced_axis_zero",
+  EmitReduceSumOnnxCase(registry, "test_reduce_sum_empty_set_non_reduced_axis_zero",
                         /*data_shape=*/{2, 0, 4}, /*data_values=*/{}, {2}, /*keepdims=*/true,
                         /*noop_with_empty_axes=*/false);
 }
@@ -142,7 +149,6 @@ void RegisterReduceSumOnnxCases(std::vector<TestCase> &registry, const auto &ker
 // ---------------------------------------------------------------------------
 void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const auto reduce_sum_kernel = MakeReferenceKernel<onnx_kernels::kernel::ReduceSum>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -151,11 +157,15 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("reduced");
 
     Expect(registry, std::move(node), "test_cc_reducesum_default_axes_keepdims_benchmark", {opset},
-           {256 * 256 * 16}, {1}, [reduce_sum_kernel]() -> IoData {
+           {256 * 256 * 16}, {1}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext reduce_sum_kernel_ctx{opset};
+             const onnx_kernels::kernel::ReduceSum reduce_sum_kernel{reduce_sum_kernel_ctx};
+
              Tensor data = RandnTensor(DataType::FLOAT, {256, 256, 16}, /*seed=*/9701);
-             Tensor reduced = reduce_sum_kernel.Invoke([&](const auto &kernel) {
-               return kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
-             });
+             Tensor reduced =
+                 reduce_sum_kernel(data, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
              return IoData{{std::move(data)}, {std::move(reduced)}};
            });
     return;
@@ -175,12 +185,15 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data");
     node.add_output("reduced");
     Expect(registry, std::move(node), "test_cc_reducesum_default_axes_keepdims", {opset},
-           [=]() -> IoData {
+           [example_shape, example_values]() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext reduce_sum_kernel_ctx{opset};
+             const onnx_kernels::kernel::ReduceSum reduce_sum_kernel{reduce_sum_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", example_shape, example_values);
-             Tensor reduced = reduce_sum_kernel.Invoke([&](const auto &kernel) {
-               return kernel(data, /*keepdims=*/true,
-                             /*noop_with_empty_axes=*/false);
-             });
+             Tensor reduced = reduce_sum_kernel(data, /*keepdims=*/true,
+                                                /*noop_with_empty_axes=*/false);
 
              return IoData{{std::move(data)}, {std::move(reduced)}};
            });
@@ -194,16 +207,20 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data");
     node.add_input("axes");
     node.add_output("reduced");
-    Expect(registry, std::move(node), "test_cc_reducesum_keepdims", {opset}, [=]() -> IoData {
-      Tensor data = Tensor::FromFloat("", example_shape, example_values);
-      Tensor axes = Tensor::FromInt64("", {1}, {1});
-      Tensor reduced = reduce_sum_kernel.Invoke([&](const auto &kernel) {
-        return kernel(data, axes, /*keepdims=*/true,
-                      /*noop_with_empty_axes=*/false);
-      });
+    Expect(registry, std::move(node), "test_cc_reducesum_keepdims", {opset},
+           [example_shape, example_values]() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
 
-      return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
-    });
+             const KernelContext reduce_sum_kernel_ctx{opset};
+             const onnx_kernels::kernel::ReduceSum reduce_sum_kernel{reduce_sum_kernel_ctx};
+
+             Tensor data = Tensor::FromFloat("", example_shape, example_values);
+             Tensor axes = Tensor::FromInt64("", {1}, {1});
+             Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
+                                                /*noop_with_empty_axes=*/false);
+
+             return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
+           });
   }
 
   // Explicit ``axes = [1]`` with ``keepdims = 0``: reduced dim is dropped.
@@ -219,13 +236,16 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     attr->set_type(AttributeProto::AttributeType::INT);
     attr->set_i(0);
     Expect(registry, std::move(node), "test_cc_reducesum_do_not_keepdims", {opset},
-           [=]() -> IoData {
+           [example_shape, example_values]() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext reduce_sum_kernel_ctx{opset};
+             const onnx_kernels::kernel::ReduceSum reduce_sum_kernel{reduce_sum_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", example_shape, example_values);
              Tensor axes = Tensor::FromInt64("", {1}, {1});
-             Tensor reduced = reduce_sum_kernel.Invoke([&](const auto &kernel) {
-               return kernel(data, axes, /*keepdims=*/false,
-                             /*noop_with_empty_axes=*/false);
-             });
+             Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/false,
+                                                /*noop_with_empty_axes=*/false);
 
              return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
            });
@@ -239,13 +259,16 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("axes");
     node.add_output("reduced");
     Expect(registry, std::move(node), "test_cc_reducesum_negative_axes_keepdims", {opset},
-           [=]() -> IoData {
+           [example_shape, example_values]() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext reduce_sum_kernel_ctx{opset};
+             const onnx_kernels::kernel::ReduceSum reduce_sum_kernel{reduce_sum_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", example_shape, example_values);
              Tensor axes = Tensor::FromInt64("", {1}, {-2});
-             Tensor reduced = reduce_sum_kernel.Invoke([&](const auto &kernel) {
-               return kernel(data, axes, /*keepdims=*/true,
-                             /*noop_with_empty_axes=*/false);
-             });
+             Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
+                                                /*noop_with_empty_axes=*/false);
 
              return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
            });
@@ -265,13 +288,16 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     attr->set_type(AttributeProto::AttributeType::INT);
     attr->set_i(1);
     Expect(registry, std::move(node), "test_cc_reducesum_empty_axes_input_noop", {opset},
-           [=]() -> IoData {
+           [example_shape, example_values]() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext reduce_sum_kernel_ctx{opset};
+             const onnx_kernels::kernel::ReduceSum reduce_sum_kernel{reduce_sum_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", example_shape, example_values);
              Tensor axes = Tensor::FromInt64("", {0}, {});
-             Tensor reduced = reduce_sum_kernel.Invoke([&](const auto &kernel) {
-               return kernel(data, axes, /*keepdims=*/true,
-                             /*noop_with_empty_axes=*/true);
-             });
+             Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
+                                                /*noop_with_empty_axes=*/true);
 
              return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
            });
@@ -285,13 +311,16 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data");
     node.add_input("axes");
     node.add_output("reduced");
-    Expect(registry, std::move(node), "test_cc_reducesum_empty_set", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_reducesum_empty_set", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext reduce_sum_kernel_ctx{opset};
+      const onnx_kernels::kernel::ReduceSum reduce_sum_kernel{reduce_sum_kernel_ctx};
+
       Tensor data = Tensor::FromFloat("", {2, 0, 4}, {});
       Tensor axes = Tensor::FromInt64("", {1}, {1});
-      Tensor reduced = reduce_sum_kernel.Invoke([&](const auto &kernel) {
-        return kernel(data, axes, /*keepdims=*/true,
-                      /*noop_with_empty_axes=*/false);
-      });
+      Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
+                                         /*noop_with_empty_axes=*/false);
 
       return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
     });
@@ -306,19 +335,22 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("axes");
     node.add_output("reduced");
     Expect(registry, std::move(node), "test_cc_reducesum_empty_set_non_reduced_axis_zero", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext reduce_sum_kernel_ctx{opset};
+             const onnx_kernels::kernel::ReduceSum reduce_sum_kernel{reduce_sum_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {2, 0, 4}, {});
              Tensor axes = Tensor::FromInt64("", {1}, {2});
-             Tensor reduced = reduce_sum_kernel.Invoke([&](const auto &kernel) {
-               return kernel(data, axes, /*keepdims=*/true,
-                             /*noop_with_empty_axes=*/false);
-             });
+             Tensor reduced = reduce_sum_kernel(data, axes, /*keepdims=*/true,
+                                                /*noop_with_empty_axes=*/false);
 
              return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
            });
   }
 
-  RegisterReduceSumOnnxCases(registry, reduce_sum_kernel);
+  RegisterReduceSumOnnxCases(registry);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

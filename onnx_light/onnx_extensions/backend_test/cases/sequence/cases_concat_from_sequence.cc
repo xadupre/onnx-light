@@ -40,9 +40,11 @@ void RegisterConcatFromSequenceCase(const std::string &name,
   TestCase lazy_case(name, name);
   lazy_case.rtol = 1e-3;
   lazy_case.atol = 1e-7;
-  lazy_case.build = [=](bool) -> BuiltCase {
-    Tensor expected = MakeReferenceKernel<onnx_kernels::kernel::ConcatFromSequence>(opset).Invoke(
-        [&](const auto &kernel) { return kernel({a, b, c}, axis, new_axis); });
+  lazy_case.build = [opset, a, b, c, axis, new_axis, name](bool) -> BuiltCase {
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::ConcatFromSequence kernel_1{ctx_1};
+
+    Tensor expected = kernel_1({a, b, c}, axis, new_axis);
     expected.name = "concat_result";
 
     TestCase tc(name, name);

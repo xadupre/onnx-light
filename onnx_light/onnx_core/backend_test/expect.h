@@ -12,50 +12,9 @@
 #include <cstdint>
 #include <functional>
 #include <string>
-#include <tuple>
-#include <type_traits>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
-
-/**
- * Stores the lightweight constructor metadata for a reference kernel.
- *
- * The wrapper is safe to capture in a persistent ``TestCase::build`` closure:
- * it owns only an opset and optional constructor arguments. Every invocation
- * constructs a fresh ``KernelContext`` and kernel, invokes it, and destroys
- * both before returning the result.
- */
-template <typename Kernel, typename... ConstructorArgs> class ReferenceKernel {
-public:
-  explicit ReferenceKernel(OpsetId opset, ConstructorArgs... constructor_args)
-      : opset_(std::move(opset)), constructor_args_(std::move(constructor_args)...) {}
-
-  template <typename... Args> auto operator()(Args &&...args) const {
-    return Invoke([&](const Kernel &kernel) { return kernel(std::forward<Args>(args)...); });
-  }
-
-  template <typename Fn> auto Invoke(Fn &&fn) const {
-    const KernelContext ctx{opset_};
-    return std::apply(
-        [&](const auto &...constructor_args) {
-          const Kernel kernel{ctx, constructor_args...};
-          return std::forward<Fn>(fn)(kernel);
-        },
-        constructor_args_);
-  }
-
-private:
-  OpsetId opset_;
-  std::tuple<ConstructorArgs...> constructor_args_;
-};
-
-/// Creates lightweight metadata that constructs ``Kernel`` only when invoked.
-template <typename Kernel, typename... ConstructorArgs>
-auto MakeReferenceKernel(OpsetId opset, ConstructorArgs... constructor_args) {
-  return ReferenceKernel<Kernel, std::decay_t<ConstructorArgs>...>(std::move(opset),
-                                                                   std::move(constructor_args)...);
-}
 
 /**
  * Appends a *lazy* single-node :ref:`TestCase` built from ``node`` and the
@@ -219,7 +178,9 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const std::string &na
            IoData io{{std::move(x)}, {}};
            io.expected_outputs_generated = generate_outputs;
            if (generate_outputs) {
-             io.outputs.emplace_back(MakeReferenceKernel<Kernel>(opset)(io.inputs[0]));
+             const KernelContext ctx{opset};
+             const Kernel reference_kernel{ctx};
+             io.outputs.emplace_back(reference_kernel(io.inputs[0]));
            }
            return io;
          },
@@ -235,7 +196,9 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const std::string &na
              IoData io{{std::move(x)}, {}};
              io.expected_outputs_generated = generate_outputs;
              if (generate_outputs) {
-               io.outputs.emplace_back(MakeReferenceKernel<Kernel>(opset)(io.inputs[0]));
+               const KernelContext ctx{opset};
+               const Kernel reference_kernel{ctx};
+               io.outputs.emplace_back(reference_kernel(io.inputs[0]));
              }
              return io;
            },
@@ -252,7 +215,9 @@ void ExpectBenchmarkUnaryFloat(const std::string &op_type, const std::string &na
              IoData io{{std::move(x)}, {}};
              io.expected_outputs_generated = generate_outputs;
              if (generate_outputs) {
-               io.outputs.emplace_back(MakeReferenceKernel<Kernel>(opset)(io.inputs[0]));
+               const KernelContext ctx{opset};
+               const Kernel reference_kernel{ctx};
+               io.outputs.emplace_back(reference_kernel(io.inputs[0]));
              }
              return io;
            },
@@ -294,8 +259,9 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const std::string &n
            IoData io{{std::move(x), std::move(y)}, {}};
            io.expected_outputs_generated = generate_outputs;
            if (generate_outputs) {
-             io.outputs.emplace_back(
-                 MakeReferenceKernel<Kernel>(opset)(io.inputs[0], io.inputs[1]));
+             const KernelContext ctx{opset};
+             const Kernel reference_kernel{ctx};
+             io.outputs.emplace_back(reference_kernel(io.inputs[0], io.inputs[1]));
            }
            return io;
          },
@@ -313,8 +279,9 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const std::string &n
              IoData io{{std::move(x), std::move(y)}, {}};
              io.expected_outputs_generated = generate_outputs;
              if (generate_outputs) {
-               io.outputs.emplace_back(
-                   MakeReferenceKernel<Kernel>(opset)(io.inputs[0], io.inputs[1]));
+               const KernelContext ctx{opset};
+               const Kernel reference_kernel{ctx};
+               io.outputs.emplace_back(reference_kernel(io.inputs[0], io.inputs[1]));
              }
              return io;
            },
@@ -333,8 +300,9 @@ void ExpectBenchmarkBinaryFloat(const std::string &op_type, const std::string &n
              IoData io{{std::move(x), std::move(y)}, {}};
              io.expected_outputs_generated = generate_outputs;
              if (generate_outputs) {
-               io.outputs.emplace_back(
-                   MakeReferenceKernel<Kernel>(opset)(io.inputs[0], io.inputs[1]));
+               const KernelContext ctx{opset};
+               const Kernel reference_kernel{ctx};
+               io.outputs.emplace_back(reference_kernel(io.inputs[0], io.inputs[1]));
              }
              return io;
            },

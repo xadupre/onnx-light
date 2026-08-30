@@ -194,19 +194,19 @@ void RegisterSequenceMapIdentityCase(const std::string &name, const std::vector<
                                      const std::vector<int64_t> &elem_shape, int32_t elem_type,
                                      const OpsetId &opset, std::vector<TestCase> &registry) {
   TestCase lazy_case(name, name);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [opset, inputs, name, elem_type, elem_shape](bool) -> BuiltCase {
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::SequenceConstruct sequence_construct_kernel{ctx};
+    const onnx_kernels::kernel::SequenceMap sequence_map_kernel{ctx};
+
     // Build the input sequence and the body-output rows (identity → inputs).
-    const Sequence in_seq =
-        MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-            [&](const auto &kernel) { return kernel.AsSequence(inputs); });
+    const Sequence in_seq = sequence_construct_kernel.AsSequence(inputs);
     std::vector<Tensors> body_outputs_per_iter = {inputs};
-    Sequences out_seqs = MakeReferenceKernel<onnx_kernels::kernel::SequenceMap>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(in_seq, body_outputs_per_iter); });
+    Sequences out_seqs = sequence_map_kernel(in_seq, body_outputs_per_iter);
 
     // Materialise the (single) output sequence as a stacked tensor.
     std::vector<Tensor> stacked_in(out_seqs[0].values.begin(), out_seqs[0].values.end());
-    Tensor stacked = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(stacked_in); });
+    Tensor stacked = sequence_construct_kernel(stacked_in);
     stacked.name = "output_sequence";
 
     TestCase tc(name, name);
@@ -260,7 +260,11 @@ void RegisterSequenceMapIdentity2SequencesCase(const OpsetId &opset,
                                                std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_identity_2_sequences";
   TestCase lazy_case(name, name);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [opset, name](bool) -> BuiltCase {
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::SequenceConstruct sequence_construct_kernel{ctx};
+    const onnx_kernels::kernel::SequenceMap sequence_map_kernel{ctx};
+
     const std::vector<int64_t> shape0 = {3};
     const std::vector<int64_t> shape1 = {4};
 
@@ -279,23 +283,15 @@ void RegisterSequenceMapIdentity2SequencesCase(const OpsetId &opset,
 
     // Compose expected output sequences via the reference kernel.
     std::vector<Tensors> body_outputs_per_iter = {x0, x1};
-    Sequences out_seqs = MakeReferenceKernel<onnx_kernels::kernel::SequenceMap>(opset).Invoke(
-        [&](const auto &kernel) {
-          return kernel(MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-                            [&](const auto &kernel) { return kernel.AsSequence(x0); }),
-                        body_outputs_per_iter);
-        });
+    Sequences out_seqs =
+        sequence_map_kernel(sequence_construct_kernel.AsSequence(x0), body_outputs_per_iter);
 
     // Materialise both output sequences as stacked tensors.
-    Tensor stacked0 = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) {
-          return kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
-        });
+    Tensor stacked0 =
+        sequence_construct_kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
     stacked0.name = "y0";
-    Tensor stacked1 = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) {
-          return kernel({out_seqs[1].values.begin(), out_seqs[1].values.end()});
-        });
+    Tensor stacked1 =
+        sequence_construct_kernel({out_seqs[1].values.begin(), out_seqs[1].values.end()});
     stacked1.name = "y1";
 
     TestCase tc(name, name);
@@ -362,7 +358,11 @@ void RegisterSequenceMapIdentity2SequencesCase(const OpsetId &opset,
 void RegisterSequenceMapAdd2SequencesCase(const OpsetId &opset, std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_add_2_sequences";
   TestCase lazy_case(name, name);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [opset, name](bool) -> BuiltCase {
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::SequenceConstruct sequence_construct_kernel{ctx};
+    const onnx_kernels::kernel::SequenceMap sequence_map_kernel{ctx};
+
     const std::vector<int64_t> elem_shape = {4};
     const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);
 
@@ -392,16 +392,10 @@ void RegisterSequenceMapAdd2SequencesCase(const OpsetId &opset, std::vector<Test
 
     // Assemble through the reference kernel and stack into a single output.
     std::vector<Tensors> body_outputs_per_iter = {y_per_iter};
-    Sequences out_seqs = MakeReferenceKernel<onnx_kernels::kernel::SequenceMap>(opset).Invoke(
-        [&](const auto &kernel) {
-          return kernel(MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-                            [&](const auto &kernel) { return kernel.AsSequence(x0); }),
-                        body_outputs_per_iter);
-        });
-    Tensor stacked = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) {
-          return kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
-        });
+    Sequences out_seqs =
+        sequence_map_kernel(sequence_construct_kernel.AsSequence(x0), body_outputs_per_iter);
+    Tensor stacked =
+        sequence_construct_kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
     stacked.name = "y0";
 
     TestCase tc(name, name);
@@ -462,7 +456,11 @@ void RegisterSequenceMapAdd1Sequence1TensorCase(const OpsetId &opset,
                                                 std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_add_1_sequence_1_tensor";
   TestCase lazy_case(name, name);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [opset, name](bool) -> BuiltCase {
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::SequenceConstruct sequence_construct_kernel{ctx};
+    const onnx_kernels::kernel::SequenceMap sequence_map_kernel{ctx};
+
     const std::vector<int64_t> elem_shape = {4};
     const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);
 
@@ -487,16 +485,10 @@ void RegisterSequenceMapAdd1Sequence1TensorCase(const OpsetId &opset,
     }
 
     std::vector<Tensors> body_outputs_per_iter = {y_per_iter};
-    Sequences out_seqs = MakeReferenceKernel<onnx_kernels::kernel::SequenceMap>(opset).Invoke(
-        [&](const auto &kernel) {
-          return kernel(MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-                            [&](const auto &kernel) { return kernel.AsSequence(x0); }),
-                        body_outputs_per_iter);
-        });
-    Tensor stacked = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) {
-          return kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
-        });
+    Sequences out_seqs =
+        sequence_map_kernel(sequence_construct_kernel.AsSequence(x0), body_outputs_per_iter);
+    Tensor stacked =
+        sequence_construct_kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
     stacked.name = "y0";
 
     TestCase tc(name, name);
@@ -547,7 +539,11 @@ void RegisterSequenceMapAdd1Sequence1TensorCase(const OpsetId &opset,
 void RegisterSequenceMapExtractShapesCase(const OpsetId &opset, std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_extract_shapes";
   TestCase lazy_case(name, name);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [opset, name](bool) -> BuiltCase {
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::SequenceConstruct sequence_construct_kernel{ctx};
+    const onnx_kernels::kernel::SequenceMap sequence_map_kernel{ctx};
+
     const int32_t in_elem_type = static_cast<int32_t>(DataType::FLOAT);
     const int32_t out_elem_type = static_cast<int32_t>(DataType::INT64);
     const std::vector<int64_t> out_elem_shape = {3};
@@ -575,16 +571,10 @@ void RegisterSequenceMapExtractShapesCase(const OpsetId &opset, std::vector<Test
     }
 
     std::vector<Tensors> body_outputs_per_iter = {y_per_iter};
-    Sequences out_seqs = MakeReferenceKernel<onnx_kernels::kernel::SequenceMap>(opset).Invoke(
-        [&](const auto &kernel) {
-          return kernel(MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-                            [&](const auto &kernel) { return kernel.AsSequence(x); }),
-                        body_outputs_per_iter);
-        });
-    Tensor stacked = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) {
-          return kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
-        });
+    Sequences out_seqs =
+        sequence_map_kernel(sequence_construct_kernel.AsSequence(x), body_outputs_per_iter);
+    Tensor stacked =
+        sequence_construct_kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
     stacked.name = "shapes";
 
     TestCase tc(name, name);
@@ -636,7 +626,11 @@ void RegisterSequenceMapIdentity1Sequence1TensorCase(const OpsetId &opset,
                                                      std::vector<TestCase> &registry) {
   const std::string name = "test_cc_sequence_map_identity_1_sequence_1_tensor";
   TestCase lazy_case(name, name);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [opset, name](bool) -> BuiltCase {
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::SequenceConstruct sequence_construct_kernel{ctx};
+    const onnx_kernels::kernel::SequenceMap sequence_map_kernel{ctx};
+
     const std::vector<int64_t> seq_elem_shape = {5};
     const std::vector<int64_t> tensor_shape = {4};
     const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);
@@ -661,23 +655,15 @@ void RegisterSequenceMapIdentity1Sequence1TensorCase(const OpsetId &opset,
     }
 
     std::vector<Tensors> body_outputs_per_iter = {y0_per_iter, y1_per_iter};
-    Sequences out_seqs = MakeReferenceKernel<onnx_kernels::kernel::SequenceMap>(opset).Invoke(
-        [&](const auto &kernel) {
-          return kernel(MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-                            [&](const auto &kernel) { return kernel.AsSequence(x0); }),
-                        body_outputs_per_iter);
-        });
+    Sequences out_seqs =
+        sequence_map_kernel(sequence_construct_kernel.AsSequence(x0), body_outputs_per_iter);
 
     // Materialise both output sequences as stacked tensors.
-    Tensor stacked0 = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) {
-          return kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
-        });
+    Tensor stacked0 =
+        sequence_construct_kernel({out_seqs[0].values.begin(), out_seqs[0].values.end()});
     stacked0.name = "y0";
-    Tensor stacked1 = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) {
-          return kernel({out_seqs[1].values.begin(), out_seqs[1].values.end()});
-        });
+    Tensor stacked1 =
+        sequence_construct_kernel({out_seqs[1].values.begin(), out_seqs[1].values.end()});
     stacked1.name = "y1";
 
     TestCase tc(name, name);

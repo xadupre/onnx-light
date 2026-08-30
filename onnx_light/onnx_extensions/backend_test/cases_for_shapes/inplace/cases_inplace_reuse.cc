@@ -24,14 +24,15 @@ constexpr const char *kNotUsedAfterMetadataKey = "onnx_light.not_used_after";
 
 void RegisterInPlaceReuseCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   const OpsetId opset = DefaultOpset(14);
-  const auto abs_kernel = MakeReferenceKernel<onnx_kernels::kernel::Abs>(opset);
 
   const std::string name = "test_cc_shape_inference_inplace_reuse";
 
   TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INPLACE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
-  tc.build = [=](bool) -> BuiltCase {
+  tc.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(14);
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INPLACE);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -61,9 +62,9 @@ void RegisterInPlaceReuseCases(std::vector<TestCase> &registry, TestMode /*mode*
 
     const Tensor x = Tensor::FromFloat(
         "X", {3, 4}, {-3.0f, -2.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f, -5.0f, -6.0f, 7.0f, 8.0f});
-    Tensor y = abs_kernel.Invoke([&](const auto &kernel) {
-      return kernel(abs_kernel.Invoke([&](const auto &kernel) { return kernel(abs_kernel(x)); }));
-    });
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::Abs abs_kernel{ctx};
+    Tensor y = abs_kernel(abs_kernel(abs_kernel(x)));
     y.name = "Y";
 
     AppendDataSet(tc, {x}, {y});

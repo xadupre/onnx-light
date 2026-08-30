@@ -32,13 +32,16 @@ void RegisterSequenceAtCase(const std::string &name, const std::vector<Tensor> &
   TestCase lazy_case(name, name);
   lazy_case.rtol = 1e-3;
   lazy_case.atol = 1e-7;
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [opset, inputs, position, name](bool) -> BuiltCase {
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::SequenceConstruct kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::SequenceAt kernel_2{ctx_2};
+
     // Compute expected output with the reference kernel.
-    const Sequence seq = MakeReferenceKernel<onnx_kernels::kernel::SequenceConstruct>(opset).Invoke(
-        [&](const auto &kernel) { return kernel.AsSequence(inputs); });
+    const Sequence seq = kernel_1.AsSequence(inputs);
     Tensor position_tensor = Tensor::FromInt64("position", {}, {position});
-    Tensor expected = MakeReferenceKernel<onnx_kernels::kernel::SequenceAt>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(seq, position_tensor); });
+    Tensor expected = kernel_2(seq, position_tensor);
     expected.name = "output_tensor";
 
     TestCase tc(name, name);

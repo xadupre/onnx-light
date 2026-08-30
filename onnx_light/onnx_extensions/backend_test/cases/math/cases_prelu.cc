@@ -30,7 +30,6 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterPReluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
-  const auto prelu_kernel = MakeReferenceKernel<onnx_kernels::kernel::PRelu>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkBinaryFloat<onnx_kernels::kernel::PRelu>("PRelu", "test_cc_prelu_benchmark",
@@ -45,10 +44,15 @@ void RegisterPReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("slope");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_prelu", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_prelu", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
+
+      const KernelContext prelu_kernel_ctx{opset};
+      const onnx_kernels::kernel::PRelu prelu_kernel{prelu_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 3}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
       Tensor slope = Tensor::FromFloat("", {2, 3}, {0.25f, 0.5f, 0.75f, 0.1f, 0.2f, 0.3f});
-      Tensor y = prelu_kernel.Invoke([&](const auto &kernel) { return kernel(x, slope); });
+      Tensor y = prelu_kernel(x, slope);
 
       return IoData{{std::move(x), std::move(slope)}, {std::move(y)}};
     });
@@ -62,10 +66,15 @@ void RegisterPReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("slope");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_prelu_bcast", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_prelu_bcast", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
+
+      const KernelContext prelu_kernel_ctx{opset};
+      const onnx_kernels::kernel::PRelu prelu_kernel{prelu_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -2.0f, -3.0f, 1.0f, 2.0f, 3.0f});
       Tensor slope = Tensor::FromFloat("", {3}, {0.1f, 0.2f, 0.3f});
-      Tensor y = prelu_kernel.Invoke([&](const auto &kernel) { return kernel(x, slope); });
+      Tensor y = prelu_kernel(x, slope);
 
       return IoData{{std::move(x), std::move(slope)}, {std::move(y)}};
     });
@@ -84,12 +93,17 @@ void RegisterPReluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("slope");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_prelu_inf", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_prelu_inf", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
+
+      const KernelContext prelu_kernel_ctx{opset};
+      const onnx_kernels::kernel::PRelu prelu_kernel{prelu_kernel_ctx};
+
       const float pinf = std::numeric_limits<float>::infinity();
       const float ninf = -std::numeric_limits<float>::infinity();
       Tensor x = Tensor::FromFloat("", {4}, {pinf, ninf, 5e30f, -2.5f});
       Tensor slope = Tensor::FromFloat("", {4}, {0.25f, 0.5f, 0.25f, 0.25f});
-      Tensor y = prelu_kernel.Invoke([&](const auto &kernel) { return kernel(x, slope); });
+      Tensor y = prelu_kernel(x, slope);
 
       return IoData{{std::move(x), std::move(slope)}, {std::move(y)}};
     });
@@ -110,20 +124,28 @@ void RegisterPReluCases(std::vector<TestCase> &registry, TestMode mode) {
   const std::vector<std::pair<std::string, std::function<IoData()>>> cases = {
       // From PRelu.export():
       {"test_prelu_example",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext prelu_kernel_ctx{opset};
+         const onnx_kernels::kernel::PRelu prelu_kernel{prelu_kernel_ctx};
+
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/101);
          auto inputs_1 = RandnFloat({3, 4, 5}, /*seed=*/102);
-         Tensor y =
-             prelu_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
+         Tensor y = prelu_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(y)}};
        }},
       // From PRelu.export_prelu_broadcast():
       {"test_prelu_broadcast",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext prelu_kernel_ctx{opset};
+         const onnx_kernels::kernel::PRelu prelu_kernel{prelu_kernel_ctx};
+
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/103);
          auto inputs_1 = RandnFloat({5}, /*seed=*/104);
-         Tensor y =
-             prelu_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
+         Tensor y = prelu_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(y)}};
        }},
   };

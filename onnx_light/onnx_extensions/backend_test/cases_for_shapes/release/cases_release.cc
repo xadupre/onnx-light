@@ -59,7 +59,14 @@ void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   {
     const std::string name = "test_cc_release_shape_reshape";
     TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
-    lazy_case.build = [=](bool) -> BuiltCase {
+    lazy_case.build = [name](bool) -> BuiltCase {
+      const OpsetId opset = DefaultOpset(18);
+
+      const KernelContext ctx_1{opset};
+      const onnx_kernels::kernel::Shape kernel_1{ctx_1};
+      const KernelContext ctx_2{opset};
+      const onnx_kernels::kernel::Reshape kernel_2{ctx_2};
+
       TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
       tc.rtol = 1e-3;
       tc.atol = 1e-7;
@@ -90,11 +97,9 @@ void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
 
       // Build the reference DataSet so the case is executable end-to-end.
       const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
-      Tensor s = MakeReferenceKernel<onnx_kernels::kernel::Shape>(opset).Invoke(
-          [&](const auto &kernel) { return kernel(x, onnx_kernels::kernel::Shape::Attributes{}); });
+      Tensor s = kernel_1(x, onnx_kernels::kernel::Shape::Attributes{});
       s.name = "S";
-      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset).Invoke(
-          [&](const auto &kernel) { return kernel(x, s); });
+      Tensor y = kernel_2(x, s);
       y.name = "Y";
 
       AppendDataSet(tc, {x}, {y});
@@ -108,7 +113,14 @@ void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
   {
     const std::string name = "test_cc_release_initializer_add";
     TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
-    lazy_case.build = [=](bool) -> BuiltCase {
+    lazy_case.build = [name](bool) -> BuiltCase {
+      const OpsetId opset = DefaultOpset(18);
+
+      const KernelContext ctx_3{opset};
+      const onnx_kernels::kernel::Add kernel_3{ctx_3};
+      const KernelContext ctx_4{opset};
+      const onnx_kernels::kernel::Relu kernel_4{ctx_4};
+
       TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
       tc.rtol = 1e-3;
       tc.atol = 1e-7;
@@ -139,11 +151,9 @@ void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
       // Build the reference DataSet so the case is executable end-to-end.
       const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, -5.0f, -6.0f});
       const Tensor w = Tensor::FromFloat("W", {2, 3}, {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f});
-      Tensor t = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-          [&](const auto &kernel) { return kernel(x, w); });
+      Tensor t = kernel_3(x, w);
       t.name = "T";
-      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Relu>(opset).Invoke(
-          [&](const auto &kernel) { return kernel(t); });
+      Tensor y = kernel_4(t);
       y.name = "Y";
 
       AppendDataSet(tc, {x}, {y});

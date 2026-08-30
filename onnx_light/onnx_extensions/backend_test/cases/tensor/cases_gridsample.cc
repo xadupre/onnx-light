@@ -110,7 +110,7 @@ void AddCase(std::vector<TestCase> &registry, const OpsetId &opset, const std::s
   if (align_corners != 0) {
     AddAttribute<int64_t>(node, "align_corners", align_corners);
   }
-  Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
+  Expect(registry, std::move(node), name, {opset}, [y_shape, y_values, X, Grid]() -> IoData {
     Tensor Y = Tensor::FromFloat("Y", y_shape, y_values);
     return IoData{{std::move(X), std::move(Grid)}, {std::move(Y)}};
   });
@@ -128,7 +128,7 @@ void RegisterGridSampleCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
 
   if (mode == TestMode::BENCHMARK) {
-    const auto gridsample_kernel = MakeReferenceKernel<onnx_kernels::kernel::GridSample>(opset);
+
     const std::vector<int64_t> x_shape = {1, 16, 256, 256};
     const std::vector<int64_t> grid_shape = {1, 256, 256, 2};
     NodeProto node;
@@ -139,13 +139,17 @@ void RegisterGridSampleCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::string>(node, "mode", "linear");
     Expect(registry, std::move(node), "test_cc_gridsample_benchmark", {opset},
            {1 * 16 * 256 * 256, 1 * 256 * 256 * 2}, {1 * 16 * 256 * 256},
-           [gridsample_kernel, x_shape, grid_shape]() -> IoData {
+           [x_shape, grid_shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
+
+             const KernelContext gridsample_kernel_ctx{opset};
+             const onnx_kernels::kernel::GridSample gridsample_kernel{gridsample_kernel_ctx};
+
              Tensor X = RandnTensor(DataType::FLOAT, x_shape, 2001);
              Tensor Grid = RandnTensor(DataType::FLOAT, grid_shape, 2002);
              onnx_kernels::kernel::GridSample::Attributes attrs;
              attrs.mode = "linear";
-             Tensor Y = gridsample_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(X, Grid, attrs); });
+             Tensor Y = gridsample_kernel(X, Grid, attrs);
              Y.name = "Y";
              return IoData{{std::move(X), std::move(Grid)}, {std::move(Y)}};
            });

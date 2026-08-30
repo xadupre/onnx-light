@@ -16,7 +16,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 void RegisterBlackmanWindowCases(std::vector<TestCase> &registry, TestMode mode) {
   constexpr int32_t kSize = 10;
   const OpsetId opset = DefaultOpset(17);
-  const auto blackman_kernel = MakeReferenceKernel<onnx_kernels::kernel::BlackmanWindow>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -25,10 +24,14 @@ void RegisterBlackmanWindowCases(std::vector<TestCase> &registry, TestMode mode)
     node.add_output("y");
     constexpr int32_t size = 1 << 22;
     Expect(registry, std::move(node), "test_cc_blackmanwindow_benchmark", {opset}, {1}, {size},
-           [blackman_kernel, size]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(17);
+
+             const KernelContext blackman_kernel_ctx{opset};
+             const onnx_kernels::kernel::BlackmanWindow blackman_kernel{blackman_kernel_ctx};
+
              Tensor x = Tensor::FromInt32("", {}, {size});
-             Tensor y = blackman_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(x, /*periodic=*/true); });
+             Tensor y = blackman_kernel(x, /*periodic=*/true);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -40,10 +43,14 @@ void RegisterBlackmanWindowCases(std::vector<TestCase> &registry, TestMode mode)
     node.set_op_type("BlackmanWindow");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_blackmanwindow", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_blackmanwindow", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(17);
+
+      const KernelContext blackman_kernel_ctx{opset};
+      const onnx_kernels::kernel::BlackmanWindow blackman_kernel{blackman_kernel_ctx};
+
       Tensor x = Tensor::FromInt32("", {}, {kSize});
-      Tensor y =
-          blackman_kernel.Invoke([&](const auto &kernel) { return kernel(x, /*periodic=*/true); });
+      Tensor y = blackman_kernel(x, /*periodic=*/true);
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -60,10 +67,14 @@ void RegisterBlackmanWindowCases(std::vector<TestCase> &registry, TestMode mode)
     attr->set_name("periodic");
     attr->set_type(AttributeProto::AttributeType::INT);
     attr->set_i(0);
-    Expect(registry, std::move(node), "test_cc_blackmanwindow_symmetric", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_blackmanwindow_symmetric", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(17);
+
+      const KernelContext blackman_kernel_ctx{opset};
+      const onnx_kernels::kernel::BlackmanWindow blackman_kernel{blackman_kernel_ctx};
+
       Tensor x = Tensor::FromInt32("", {}, {kSize});
-      Tensor y =
-          blackman_kernel.Invoke([&](const auto &kernel) { return kernel(x, /*periodic=*/false); });
+      Tensor y = blackman_kernel(x, /*periodic=*/false);
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });

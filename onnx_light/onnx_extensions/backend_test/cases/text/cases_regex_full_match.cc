@@ -19,7 +19,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterRegexFullMatchCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
-  const auto regex_full_match = MakeReferenceKernel<onnx_kernels::kernel::RegexFullMatch>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -31,15 +30,19 @@ void RegisterRegexFullMatchCases(std::vector<TestCase> &registry, TestMode mode)
 
     constexpr int64_t count = 262144;
     Expect(registry, std::move(node), "test_cc_regex_full_match_basic_benchmark", {opset}, {count},
-           {count}, [regex_full_match, pattern]() -> IoData {
+           {count}, [pattern]() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
+
+             const KernelContext regex_full_match_ctx{opset};
+             const onnx_kernels::kernel::RegexFullMatch regex_full_match{regex_full_match_ctx};
+
              std::vector<std::string> values(static_cast<size_t>(count));
              for (size_t i = 0; i < values.size(); ++i) {
                values[i] = (i % 3 == 0) ? "www.google.com"
                                         : ((i % 3 == 1) ? "www.facebook.com" : "www.bbc.co.uk");
              }
              Tensor x = Tensor::FromStrings("", {count}, values);
-             Tensor y =
-                 regex_full_match.Invoke([&](const auto &kernel) { return kernel(x, pattern); });
+             Tensor y = regex_full_match(x, pattern);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -54,13 +57,19 @@ void RegisterRegexFullMatchCases(std::vector<TestCase> &registry, TestMode mode)
     node.add_output("y");
     const std::string pattern = "www\\.[\\w.-]+\\.\\bcom\\b";
     AddAttribute(node, "pattern", pattern);
-    Expect(registry, std::move(node), "test_cc_regex_full_match_basic", {opset}, [=]() -> IoData {
-      Tensor x =
-          Tensor::FromStrings("", {3}, {"www.google.com", "www.facebook.com", "www.bbc.co.uk"});
-      Tensor y = regex_full_match.Invoke([&](const auto &kernel) { return kernel(x, pattern); });
+    Expect(registry, std::move(node), "test_cc_regex_full_match_basic", {opset},
+           [pattern]() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
 
-      return IoData{{std::move(x)}, {std::move(y)}};
-    });
+             const KernelContext regex_full_match_ctx{opset};
+             const onnx_kernels::kernel::RegexFullMatch regex_full_match{regex_full_match_ctx};
+
+             Tensor x = Tensor::FromStrings(
+                 "", {3}, {"www.google.com", "www.facebook.com", "www.bbc.co.uk"});
+             Tensor y = regex_full_match(x, pattern);
+
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // Email-like pattern on a 2-D ``[2, 2]`` input exercising True/False
@@ -72,13 +81,19 @@ void RegisterRegexFullMatchCases(std::vector<TestCase> &registry, TestMode mode)
     node.add_output("y");
     const std::string pattern = "[A-Za-z0-9_.+-]+@[A-Za-z0-9-]+\\.[A-Za-z0-9-.]+";
     AddAttribute(node, "pattern", pattern);
-    Expect(registry, std::move(node), "test_cc_regex_full_match_email", {opset}, [=]() -> IoData {
-      Tensor x =
-          Tensor::FromStrings("", {2, 2}, {"account@gmail.com", "not_an_email", "x@y.z", "@nope"});
-      Tensor y = regex_full_match.Invoke([&](const auto &kernel) { return kernel(x, pattern); });
+    Expect(registry, std::move(node), "test_cc_regex_full_match_email", {opset},
+           [pattern]() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
 
-      return IoData{{std::move(x)}, {std::move(y)}};
-    });
+             const KernelContext regex_full_match_ctx{opset};
+             const onnx_kernels::kernel::RegexFullMatch regex_full_match{regex_full_match_ctx};
+
+             Tensor x = Tensor::FromStrings(
+                 "", {2, 2}, {"account@gmail.com", "not_an_email", "x@y.z", "@nope"});
+             Tensor y = regex_full_match(x, pattern);
+
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // Email-domain pattern mirroring upstream onnx
@@ -92,12 +107,16 @@ void RegisterRegexFullMatchCases(std::vector<TestCase> &registry, TestMode mode)
     const std::string pattern = "(\\W|^)[\\w.\\-]{0,25}@(yahoo|gmail)\\.com(\\W|$)";
     AddAttribute(node, "pattern", pattern);
     Expect(registry, std::move(node), "test_cc_regex_full_match_email_domain", {opset},
-           [=]() -> IoData {
+           [pattern]() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
+
+             const KernelContext regex_full_match_ctx{opset};
+             const onnx_kernels::kernel::RegexFullMatch regex_full_match{regex_full_match_ctx};
+
              Tensor x = Tensor::FromStrings(
                  "", {2, 2},
                  {"account@gmail.com", "account@hotmail.com", "not email", "account2@yahoo.com"});
-             Tensor y =
-                 regex_full_match.Invoke([&](const auto &kernel) { return kernel(x, pattern); });
+             Tensor y = regex_full_match(x, pattern);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -112,12 +131,18 @@ void RegisterRegexFullMatchCases(std::vector<TestCase> &registry, TestMode mode)
     node.add_output("y");
     const std::string pattern = "abc";
     AddAttribute(node, "pattern", pattern);
-    Expect(registry, std::move(node), "test_cc_regex_full_match_empty", {opset}, [=]() -> IoData {
-      Tensor x = Tensor::FromStrings("", {0}, std::vector<std::string>{});
-      Tensor y = regex_full_match.Invoke([&](const auto &kernel) { return kernel(x, pattern); });
+    Expect(registry, std::move(node), "test_cc_regex_full_match_empty", {opset},
+           [pattern]() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
 
-      return IoData{{std::move(x)}, {std::move(y)}};
-    });
+             const KernelContext regex_full_match_ctx{opset};
+             const onnx_kernels::kernel::RegexFullMatch regex_full_match{regex_full_match_ctx};
+
+             Tensor x = Tensor::FromStrings("", {0}, std::vector<std::string>{});
+             Tensor y = regex_full_match(x, pattern);
+
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 }
 

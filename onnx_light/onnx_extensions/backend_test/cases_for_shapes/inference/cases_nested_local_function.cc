@@ -55,7 +55,14 @@ void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &re
 
   const std::string name = "test_cc_shape_inference_nested_local_function_add";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Add kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Abs kernel_2{ctx_2};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -136,10 +143,8 @@ void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &re
     }
     Tensor x = Tensor::FromFloat("X", data_shape, x_values);
     Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
-    Tensor z_pre_abs = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, y); });
-    Tensor z = MakeReferenceKernel<onnx_kernels::kernel::Abs>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(z_pre_abs); });
+    Tensor z_pre_abs = kernel_1(x, y);
+    Tensor z = kernel_2(z_pre_abs);
     z.name = "Z";
 
     AppendDataSet(tc, {x, y}, {z});

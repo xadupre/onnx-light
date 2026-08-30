@@ -54,7 +54,24 @@ void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry, Te
 
   const std::string name = "test_cc_shape_inference_value_as_shape";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(20);
+
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Expand kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Add kernel_2{ctx_2};
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::Add kernel_3{ctx_3};
+    const KernelContext ctx_4{opset};
+    const onnx_kernels::kernel::Add kernel_4{ctx_4};
+    const KernelContext ctx_5{opset};
+    const onnx_kernels::kernel::Add kernel_5{ctx_5};
+    const KernelContext ctx_6{opset};
+    const onnx_kernels::kernel::Add kernel_6{ctx_6};
+    const KernelContext ctx_7{opset};
+    const onnx_kernels::kernel::Abs kernel_7{ctx_7};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
 
     ModelProto &model = tc.emplace_model();
@@ -147,20 +164,13 @@ void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry, Te
 
     // shape2 evaluates to [N, 1] = [3, 1].
     const Tensor shape2 = Tensor::FromInt64("", {2}, {kN, 1});
-    Tensor expanded = MakeReferenceKernel<onnx_kernels::kernel::Expand>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, shape2); });
-    Tensor z1 = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(expanded, y1); });
-    Tensor z2 = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(expanded, y2); });
-    Tensor z3 = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(expanded, y3); });
-    Tensor z12 = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(z1, z2); });
-    Tensor z_pre_abs = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(z12, z3); });
-    Tensor z = MakeReferenceKernel<onnx_kernels::kernel::Abs>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(z_pre_abs); });
+    Tensor expanded = kernel_1(x, shape2);
+    Tensor z1 = kernel_2(expanded, y1);
+    Tensor z2 = kernel_3(expanded, y2);
+    Tensor z3 = kernel_4(expanded, y3);
+    Tensor z12 = kernel_5(z1, z2);
+    Tensor z_pre_abs = kernel_6(z12, z3);
+    Tensor z = kernel_7(z_pre_abs);
     z.name = "z";
 
     AppendDataSet(tc, {std::move(x), std::move(y1), std::move(y2), std::move(y3)}, {std::move(z)});

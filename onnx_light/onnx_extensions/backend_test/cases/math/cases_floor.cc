@@ -21,7 +21,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterFloorCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const auto floor_kernel = MakeReferenceKernel<onnx_kernels::kernel::Floor>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Floor>("Floor", "test_cc_floor_benchmark",
@@ -34,9 +33,14 @@ void RegisterFloorCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Floor");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_floor", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_floor", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext floor_kernel_ctx{opset};
+      const onnx_kernels::kernel::Floor floor_kernel{floor_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 3}, {-1.5f, -0.5f, 0.0f, 0.5f, 1.2f, 2.0f});
-      Tensor y = floor_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
+      Tensor y = floor_kernel(x);
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -51,9 +55,14 @@ void RegisterFloorCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Floor");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_floor_example", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_floor_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext floor_kernel_ctx{opset};
+      const onnx_kernels::kernel::Floor floor_kernel{floor_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {3}, {-1.5f, 1.2f, 2.0f});
-      Tensor y = floor_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
+      Tensor y = floor_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -63,10 +72,15 @@ void RegisterFloorCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Floor");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_floor", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_floor", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext floor_kernel_ctx{opset};
+      const onnx_kernels::kernel::Floor floor_kernel{floor_kernel_ctx};
+
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/1);
-      Tensor y = floor_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
+      Tensor y = floor_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -76,9 +90,14 @@ void RegisterFloorCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Floor");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_floor_float16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_floor_float16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext floor_kernel_ctx{opset};
+      const onnx_kernels::kernel::Floor floor_kernel{floor_kernel_ctx};
+
       Tensor x = MakeFloat16Tensor("", {2, 3}, {-1.5f, -0.5f, 0.0f, 0.5f, 1.5f, 2.7f});
-      Tensor y = floor_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
+      Tensor y = floor_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -89,14 +108,19 @@ void RegisterFloorCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Floor");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_floor_bfloat16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_floor_bfloat16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext floor_kernel_ctx{opset};
+      const onnx_kernels::kernel::Floor floor_kernel{floor_kernel_ctx};
+
       std::vector<float> vals = {-1.5f, -0.5f, 0.0f, 0.5f, 1.5f, 2.7f};
       std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
       auto *dst = reinterpret_cast<uint16_t *>(raw.data());
       for (size_t i = 0; i < vals.size(); ++i)
         dst[i] = FloatToBfloat16Bits(vals[i]);
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-      Tensor y = floor_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
+      Tensor y = floor_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

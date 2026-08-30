@@ -38,7 +38,6 @@ Tensor PositiveRandFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterReciprocalCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const auto reciprocal_kernel = MakeReferenceKernel<onnx_kernels::kernel::Reciprocal>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Reciprocal>(
@@ -51,9 +50,14 @@ void RegisterReciprocalCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Reciprocal");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_reciprocal", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_reciprocal", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext reciprocal_kernel_ctx{opset};
+      const onnx_kernels::kernel::Reciprocal reciprocal_kernel{reciprocal_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -0.5f, 0.25f, 1.0f, 2.0f, 4.0f});
-      Tensor y = reciprocal_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
+      Tensor y = reciprocal_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -64,9 +68,14 @@ void RegisterReciprocalCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Reciprocal");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_reciprocal_example", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_reciprocal_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext reciprocal_kernel_ctx{opset};
+      const onnx_kernels::kernel::Reciprocal reciprocal_kernel{reciprocal_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2}, {-4.0f, 2.0f});
-      Tensor y = reciprocal_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
+      Tensor y = reciprocal_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -77,9 +86,14 @@ void RegisterReciprocalCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Reciprocal");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_reciprocal", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_reciprocal", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext reciprocal_kernel_ctx{opset};
+      const onnx_kernels::kernel::Reciprocal reciprocal_kernel{reciprocal_kernel_ctx};
+
       Tensor x = PositiveRandFloat({3, 4, 5}, /*seed=*/1);
-      Tensor y = reciprocal_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
+      Tensor y = reciprocal_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -89,9 +103,14 @@ void RegisterReciprocalCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Reciprocal");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_reciprocal_float16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_reciprocal_float16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext reciprocal_kernel_ctx{opset};
+      const onnx_kernels::kernel::Reciprocal reciprocal_kernel{reciprocal_kernel_ctx};
+
       Tensor x = MakeFloat16Tensor("", {2, 3}, {0.5f, 1.0f, 2.0f, 4.0f, 0.25f, 8.0f});
-      Tensor y = reciprocal_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
+      Tensor y = reciprocal_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }
@@ -102,14 +121,19 @@ void RegisterReciprocalCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Reciprocal");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_reciprocal_bfloat16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_reciprocal_bfloat16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext reciprocal_kernel_ctx{opset};
+      const onnx_kernels::kernel::Reciprocal reciprocal_kernel{reciprocal_kernel_ctx};
+
       std::vector<float> vals = {0.5f, 1.0f, 2.0f, 4.0f, 0.25f, 8.0f};
       std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
       auto *dst = reinterpret_cast<uint16_t *>(raw.data());
       for (size_t i = 0; i < vals.size(); ++i)
         dst[i] = FloatToBfloat16Bits(vals[i]);
       Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
-      Tensor y = reciprocal_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
+      Tensor y = reciprocal_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
     });
   }

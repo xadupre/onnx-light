@@ -75,7 +75,18 @@ void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry,
 
   const std::string name = "test_cc_shape_inference_pad_canny_average";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Pad kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Conv kernel_2{ctx_2};
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::ReduceMean kernel_3{ctx_3};
+    const KernelContext ctx_4{opset};
+    const onnx_kernels::kernel::Sub kernel_4{ctx_4};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
 
     ModelProto &model = tc.emplace_model();
@@ -148,11 +159,8 @@ void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry,
     const Tensor pads_tensor = Tensor::FromInt64("", {8},
                                                  {int64_t{0}, int64_t{0}, int64_t{1}, int64_t{1},
                                                   int64_t{0}, int64_t{0}, int64_t{1}, int64_t{1}});
-    Tensor padded =
-        MakeReferenceKernel<onnx_kernels::kernel::Pad>(opset).Invoke([&](const auto &kernel) {
-          return kernel(x_tensor, pads_tensor, /*constant_value=*/nullptr,
-                        /*axes=*/nullptr, "reflect");
-        });
+    Tensor padded = kernel_1(x_tensor, pads_tensor, /*constant_value=*/nullptr,
+                             /*axes=*/nullptr, "reflect");
     padded.name = "padded";
 
     // Conv with the 3×3 Laplacian kernel, no padding: [2, 1, 7, 9] → [2, 1, 5, 7].
@@ -162,23 +170,18 @@ void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry,
     onnx_kernels::kernel::Conv::Attributes conv_attrs;
     conv_attrs.kernel_shape = {3, 3};
     conv_attrs.pads = {0, 0, 0, 0};
-    Tensor filtered = MakeReferenceKernel<onnx_kernels::kernel::Conv>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(padded, w_tensor, bias, conv_attrs); });
+    Tensor filtered = kernel_2(padded, w_tensor, bias, conv_attrs);
     filtered.name = "filtered";
 
     // ReduceMean over every axis (keepdims): [2, 1, 5, 7] → [1, 1, 1, 1].
     const Tensor axes_tensor =
         Tensor::FromInt64("", {4}, {int64_t{0}, int64_t{1}, int64_t{2}, int64_t{3}});
-    Tensor avg = MakeReferenceKernel<onnx_kernels::kernel::ReduceMean>(opset).Invoke(
-        [&](const auto &kernel) {
-          return kernel(filtered, axes_tensor, /*keepdims=*/true,
-                        /*noop_with_empty_axes=*/false);
-        });
+    Tensor avg = kernel_3(filtered, axes_tensor, /*keepdims=*/true,
+                          /*noop_with_empty_axes=*/false);
     avg.name = "avg";
 
     // Sub(filtered, avg): broadcasts the scalar mean back to the filtered shape.
-    Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Sub>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(filtered, avg); });
+    Tensor y = kernel_4(filtered, avg);
     y.name = "Y";
 
     AppendDataSet(tc, {std::move(x_tensor)}, {std::move(y)});

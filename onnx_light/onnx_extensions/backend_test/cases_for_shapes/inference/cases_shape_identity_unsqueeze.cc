@@ -65,7 +65,16 @@ void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &re
 
   const std::string name = "test_cc_shape_inference_shape_identity_unsqueeze";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name, input_shape, axes_values](bool) -> BuiltCase {
+    const Tensor axes_tensor = Tensor::FromInt64("unsq_axes", {kAxisCount}, axes_values);
+
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Shape kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Unsqueeze kernel_2{ctx_2};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
@@ -136,16 +145,12 @@ void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &re
     Tensor input_tensor = Tensor::FromFloat("input", input_shape, input_values);
 
     // Shape(input) -> [1, 1, ..., 1] (kAxisCount INT64 entries)
-    Tensor shape_out =
-        MakeReferenceKernel<onnx_kernels::kernel::Shape>(opset).Invoke([&](const auto &kernel) {
-          return kernel(input_tensor, onnx_kernels::kernel::Shape::Attributes{});
-        });
+    Tensor shape_out = kernel_1(input_tensor, onnx_kernels::kernel::Shape::Attributes{});
     // Identity is a no-op other than renaming the output.
     Tensor identity_out = shape_out;
     identity_out.name = "identity_out";
     // Unsqueeze along all axes => shape becomes ``[1] * kAxisCount + [kAxisCount]``.
-    Tensor output_tensor = MakeReferenceKernel<onnx_kernels::kernel::Unsqueeze>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(identity_out, axes_values); });
+    Tensor output_tensor = kernel_2(identity_out, axes_values);
     output_tensor.name = "output";
 
     AppendDataSet(tc, {input_tensor}, {output_tensor});

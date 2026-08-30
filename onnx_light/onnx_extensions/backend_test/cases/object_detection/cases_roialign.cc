@@ -80,7 +80,6 @@ Tensor MakeUpstreamFeatureMap() {
 // ---------------------------------------------------------------------------
 void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
-  const auto roialign_kernel = MakeReferenceKernel<onnx_kernels::kernel::RoiAlign>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -117,8 +116,12 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
 
     const int64_t roi_count = 4096;
     Expect(registry, std::move(node), "test_cc_roialign_benchmark", {opset},
-           {1 * 1 * 64 * 64, roi_count * 4, roi_count}, {roi_count * 1 * 5 * 5},
-           [roialign_kernel, roi_count]() -> IoData {
+           {1 * 1 * 64 * 64, roi_count * 4, roi_count}, {roi_count * 1 * 5 * 5}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(16);
+
+             const KernelContext roialign_kernel_ctx{opset};
+             const onnx_kernels::kernel::RoiAlign roialign_kernel{roialign_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 1, 64, 64}, 987654321ULL);
              std::vector<float> rois_values;
              rois_values.reserve(static_cast<size_t>(roi_count * 4));
@@ -138,8 +141,7 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
              attrs.sampling_ratio = 2;
              attrs.spatial_scale = 1.0f;
              attrs.coordinate_transformation_mode = "half_pixel";
-             Tensor y = roialign_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(x, rois, batch_indices, attrs); });
+             Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
              return IoData{{std::move(x), std::move(rois), std::move(batch_indices)},
                            {std::move(y)}};
            });
@@ -186,25 +188,31 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *ss = node.add_attribute();
     ss->set_name("spatial_scale");
     ss->set_type(AttributeProto::AttributeType::FLOAT);
-    Expect(registry, std::move(node), "test_cc_roialign", {opset}, [=]() -> IoData {
-      ss->set_f(1.0f);
+    ss->set_f(1.0f);
 
-      Tensor x = MakeFeatureMap();
-      Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
-      Tensor batch_indices = Tensor::FromInt64("", {2}, batch_indices_values);
+    Expect(registry, std::move(node), "test_cc_roialign", {opset},
+           [rois_shape, rois_values, batch_indices_values]() -> IoData {
+             const OpsetId opset = DefaultOpset(16);
 
-      onnx_kernels::kernel::RoiAlign::Attributes attrs;
-      attrs.mode = "avg";
-      attrs.output_height = 5;
-      attrs.output_width = 5;
-      attrs.sampling_ratio = 2;
-      attrs.spatial_scale = 1.0f;
-      attrs.coordinate_transformation_mode = "half_pixel";
-      Tensor y = roialign_kernel.Invoke(
-          [&](const auto &kernel) { return kernel(x, rois, batch_indices, attrs); });
+             const KernelContext roialign_kernel_ctx{opset};
+             const onnx_kernels::kernel::RoiAlign roialign_kernel{roialign_kernel_ctx};
 
-      return IoData{{std::move(x), std::move(rois), std::move(batch_indices)}, {std::move(y)}};
-    });
+             Tensor x = MakeFeatureMap();
+             Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
+             Tensor batch_indices = Tensor::FromInt64("", {2}, batch_indices_values);
+
+             onnx_kernels::kernel::RoiAlign::Attributes attrs;
+             attrs.mode = "avg";
+             attrs.output_height = 5;
+             attrs.output_width = 5;
+             attrs.sampling_ratio = 2;
+             attrs.spatial_scale = 1.0f;
+             attrs.coordinate_transformation_mode = "half_pixel";
+             Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
+
+             return IoData{{std::move(x), std::move(rois), std::move(batch_indices)},
+                           {std::move(y)}};
+           });
   }
 
   // Case 2: max mode with output_half_pixel (legacy opset-10 behaviour).
@@ -244,25 +252,31 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *ss = node.add_attribute();
     ss->set_name("spatial_scale");
     ss->set_type(AttributeProto::AttributeType::FLOAT);
-    Expect(registry, std::move(node), "test_cc_roialign_max", {opset}, [=]() -> IoData {
-      ss->set_f(1.0f);
+    ss->set_f(1.0f);
 
-      Tensor x = MakeFeatureMap();
-      Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
-      Tensor batch_indices = Tensor::FromInt64("", {2}, batch_indices_values);
+    Expect(registry, std::move(node), "test_cc_roialign_max", {opset},
+           [rois_shape, rois_values, batch_indices_values]() -> IoData {
+             const OpsetId opset = DefaultOpset(16);
 
-      onnx_kernels::kernel::RoiAlign::Attributes attrs;
-      attrs.mode = "max";
-      attrs.output_height = 5;
-      attrs.output_width = 5;
-      attrs.sampling_ratio = 2;
-      attrs.spatial_scale = 1.0f;
-      attrs.coordinate_transformation_mode = "output_half_pixel";
-      Tensor y = roialign_kernel.Invoke(
-          [&](const auto &kernel) { return kernel(x, rois, batch_indices, attrs); });
+             const KernelContext roialign_kernel_ctx{opset};
+             const onnx_kernels::kernel::RoiAlign roialign_kernel{roialign_kernel_ctx};
 
-      return IoData{{std::move(x), std::move(rois), std::move(batch_indices)}, {std::move(y)}};
-    });
+             Tensor x = MakeFeatureMap();
+             Tensor rois = Tensor::FromFloat("", rois_shape, rois_values);
+             Tensor batch_indices = Tensor::FromInt64("", {2}, batch_indices_values);
+
+             onnx_kernels::kernel::RoiAlign::Attributes attrs;
+             attrs.mode = "max";
+             attrs.output_height = 5;
+             attrs.output_width = 5;
+             attrs.sampling_ratio = 2;
+             attrs.spatial_scale = 1.0f;
+             attrs.coordinate_transformation_mode = "output_half_pixel";
+             Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
+
+             return IoData{{std::move(x), std::move(rois), std::move(batch_indices)},
+                           {std::move(y)}};
+           });
   }
 
   // Inputs shared by the three upstream ``test_roialign_*`` cases (see
@@ -279,42 +293,49 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry, TestMode mode) {
   // Helper lambda that registers one upstream case. Builds the node with the
   // requested attributes, computes the expected output using the reference
   // kernel, and emits it under ``case_name``.
-  auto register_upstream = [&](const std::string &case_name, const std::string &mode,
-                               const std::string &coordinate_transformation_mode) {
-    NodeProto node;
-    node.set_op_type("RoiAlign");
-    node.add_input("X");
-    node.add_input("rois");
-    node.add_input("batch_indices");
-    node.add_output("Y");
+  auto register_upstream =
+      [&registry, &opset, &upstream_rois_shape, &upstream_rois_values,
+       &upstream_batch_indices_values](const std::string &case_name, const std::string &mode,
+                                       const std::string &coordinate_transformation_mode) {
+        NodeProto node;
+        node.set_op_type("RoiAlign");
+        node.add_input("X");
+        node.add_input("rois");
+        node.add_input("batch_indices");
+        node.add_output("Y");
 
-    if (!mode.empty()) {
-      AddAttribute<std::string>(node, "mode", mode);
-    }
-    AddAttribute<std::string>(node, "coordinate_transformation_mode",
-                              coordinate_transformation_mode);
-    AddAttribute<int64_t>(node, "output_height", 5);
-    AddAttribute<int64_t>(node, "output_width", 5);
-    AddAttribute<int64_t>(node, "sampling_ratio", 2);
-    AddAttribute<float>(node, "spatial_scale", 1.0f);
-    Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
-      Tensor x = MakeUpstreamFeatureMap();
-      Tensor rois = Tensor::FromFloat("", upstream_rois_shape, upstream_rois_values);
-      Tensor batch_indices = Tensor::FromInt64("", {3}, upstream_batch_indices_values);
+        if (!mode.empty()) {
+          AddAttribute<std::string>(node, "mode", mode);
+        }
+        AddAttribute<std::string>(node, "coordinate_transformation_mode",
+                                  coordinate_transformation_mode);
+        AddAttribute<int64_t>(node, "output_height", 5);
+        AddAttribute<int64_t>(node, "output_width", 5);
+        AddAttribute<int64_t>(node, "sampling_ratio", 2);
+        AddAttribute<float>(node, "spatial_scale", 1.0f);
+        Expect(registry, std::move(node), case_name, {opset},
+               [opset, upstream_rois_shape, upstream_rois_values, upstream_batch_indices_values,
+                mode, coordinate_transformation_mode]() -> IoData {
+                 const KernelContext roialign_kernel_ctx{opset};
+                 const onnx_kernels::kernel::RoiAlign roialign_kernel{roialign_kernel_ctx};
 
-      onnx_kernels::kernel::RoiAlign::Attributes attrs;
-      attrs.mode = mode.empty() ? "avg" : mode;
-      attrs.output_height = 5;
-      attrs.output_width = 5;
-      attrs.sampling_ratio = 2;
-      attrs.spatial_scale = 1.0f;
-      attrs.coordinate_transformation_mode = coordinate_transformation_mode;
-      Tensor y = roialign_kernel.Invoke(
-          [&](const auto &kernel) { return kernel(x, rois, batch_indices, attrs); });
+                 Tensor x = MakeUpstreamFeatureMap();
+                 Tensor rois = Tensor::FromFloat("", upstream_rois_shape, upstream_rois_values);
+                 Tensor batch_indices = Tensor::FromInt64("", {3}, upstream_batch_indices_values);
 
-      return IoData{{std::move(x), std::move(rois), std::move(batch_indices)}, {std::move(y)}};
-    });
-  };
+                 onnx_kernels::kernel::RoiAlign::Attributes attrs;
+                 attrs.mode = mode.empty() ? "avg" : mode;
+                 attrs.output_height = 5;
+                 attrs.output_width = 5;
+                 attrs.sampling_ratio = 2;
+                 attrs.spatial_scale = 1.0f;
+                 attrs.coordinate_transformation_mode = coordinate_transformation_mode;
+                 Tensor y = roialign_kernel(x, rois, batch_indices, attrs);
+
+                 return IoData{{std::move(x), std::move(rois), std::move(batch_indices)},
+                               {std::move(y)}};
+               });
+      };
 
   // Upstream ``test_roialign_aligned_false``: avg mode (default) with
   // ``coordinate_transformation_mode = "output_half_pixel"``.

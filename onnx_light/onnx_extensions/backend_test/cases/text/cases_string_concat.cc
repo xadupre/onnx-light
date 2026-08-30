@@ -19,7 +19,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
-  const auto string_concat = MakeReferenceKernel<onnx_kernels::kernel::StringConcat>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -30,7 +29,12 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
 
     constexpr int64_t count = 262144;
     Expect(registry, std::move(node), "test_cc_string_concat_benchmark", {opset}, {count, count},
-           {count}, [string_concat]() -> IoData {
+           {count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
+
+             const KernelContext string_concat_ctx{opset};
+             const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
              std::vector<std::string> x_values(static_cast<size_t>(count));
              std::vector<std::string> y_values(static_cast<size_t>(count));
              for (size_t i = 0; i < x_values.size(); ++i) {
@@ -39,7 +43,7 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
              }
              Tensor x = Tensor::FromStrings("", {count}, x_values);
              Tensor y = Tensor::FromStrings("", {count}, y_values);
-             Tensor z = string_concat.Invoke([&](const auto &kernel) { return kernel(x, y); });
+             Tensor z = string_concat(x, y);
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
     return;
@@ -53,10 +57,15 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_string_concat", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_string_concat", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(20);
+
+      const KernelContext string_concat_ctx{opset};
+      const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
       Tensor x = Tensor::FromStrings("", {3}, {"abc", "", "hello "});
       Tensor y = Tensor::FromStrings("", {3}, {"def", "xyz", "world"});
-      Tensor z = string_concat.Invoke([&](const auto &kernel) { return kernel(x, y); });
+      Tensor z = string_concat(x, y);
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -69,10 +78,15 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_string_concat_bcast", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_string_concat_bcast", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(20);
+
+      const KernelContext string_concat_ctx{opset};
+      const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
       Tensor x = Tensor::FromStrings("", {2, 2}, {"a", "b", "c", "d"});
       Tensor y = Tensor::FromStrings("", {}, {"!"});
-      Tensor z = string_concat.Invoke([&](const auto &kernel) { return kernel(x, y); });
+      Tensor z = string_concat(x, y);
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -87,10 +101,15 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y");
     node.add_output("z");
     Expect(registry, std::move(node), "test_cc_string_concat_zero_dimensional", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
+
+             const KernelContext string_concat_ctx{opset};
+             const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
              Tensor x = Tensor::FromStrings("", {}, {"cat"});
              Tensor y = Tensor::FromStrings("", {}, {"s"});
-             Tensor z = string_concat.Invoke([&](const auto &kernel) { return kernel(x, y); });
+             Tensor z = string_concat(x, y);
 
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
@@ -104,10 +123,15 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_string_concat_utf8", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_string_concat_utf8", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(20);
+
+      const KernelContext string_concat_ctx{opset};
+      const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
       Tensor x = Tensor::FromStrings("", {2}, {"\xe7\x9a\x84", "\xe4\xb8\xad"});
       Tensor y = Tensor::FromStrings("", {2}, {"\xe7\x9a\x84", "\xe4\xb8\xad"});
-      Tensor z = string_concat.Invoke([&](const auto &kernel) { return kernel(x, y); });
+      Tensor z = string_concat(x, y);
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -123,10 +147,15 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y");
     node.add_output("z");
     Expect(registry, std::move(node), "test_cc_string_concat_broadcasting", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
+
+             const KernelContext string_concat_ctx{opset};
+             const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
              Tensor x = Tensor::FromStrings("", {3}, {"cat", "dog", "snake"});
              Tensor y = Tensor::FromStrings("", {1}, {"s"});
-             Tensor z = string_concat.Invoke([&](const auto &kernel) { return kernel(x, y); });
+             Tensor z = string_concat(x, y);
 
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
@@ -142,10 +171,15 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y");
     node.add_output("z");
     Expect(registry, std::move(node), "test_cc_string_concat_empty_string", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
+
+             const KernelContext string_concat_ctx{opset};
+             const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
              Tensor x = Tensor::FromStrings("", {2}, {"abc", ""});
              Tensor y = Tensor::FromStrings("", {2}, {"", "abc"});
-             Tensor z = string_concat.Invoke([&](const auto &kernel) { return kernel(x, y); });
+             Tensor z = string_concat(x, y);
 
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
@@ -159,7 +193,12 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     TestCase tc(name, name);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
-    tc.build = [=](bool) -> BuiltCase {
+    tc.build = [name](bool) -> BuiltCase {
+      const OpsetId opset = DefaultOpset(20);
+
+      const KernelContext string_concat_ctx{opset};
+      const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
       TestCase tc(name, name);
       tc.rtol = 1e-3;
       tc.atol = 1e-7;
@@ -191,9 +230,9 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor x = Tensor::FromStrings("x", {3}, {"abc", "def", "ghi"});
       Tensor y = Tensor::FromStrings("y", {3}, {"-", "/", "."});
       Tensor z = Tensor::FromStrings("z", {3}, {"123", "456", "789"});
-      Tensor tmp = string_concat.Invoke([&](const auto &kernel) { return kernel(x, y); });
+      Tensor tmp = string_concat(x, y);
       tmp.name = "tmp";
-      Tensor w = string_concat.Invoke([&](const auto &kernel) { return kernel(tmp, z); });
+      Tensor w = string_concat(tmp, z);
       w.name = "w";
 
       FillValueInfo(x, *graph->add_input());

@@ -33,16 +33,18 @@ void RegisterSequenceEmptyCase(const std::string &name, bool has_dtype, int64_t 
   TestCase lazy_case(name, name);
   lazy_case.rtol = 1e-3;
   lazy_case.atol = 1e-7;
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [opset, has_dtype, dtype, name](bool) -> BuiltCase {
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::SequenceEmpty kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::SequenceEmpty kernel_2{ctx_2};
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::SequenceLength kernel_3{ctx_3};
+
     // Compute the expected output: SequenceLength of an empty sequence
     // is always 0.
-    const Sequence empty_seq =
-        has_dtype ? MakeReferenceKernel<onnx_kernels::kernel::SequenceEmpty>(opset).Invoke(
-                        [&](const auto &kernel) { return kernel(static_cast<int32_t>(dtype)); })
-                  : MakeReferenceKernel<onnx_kernels::kernel::SequenceEmpty>(opset).Invoke(
-                        [&](const auto &kernel) { return kernel(); });
-    Tensor expected = MakeReferenceKernel<onnx_kernels::kernel::SequenceLength>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(empty_seq); });
+    const Sequence empty_seq = has_dtype ? kernel_1(static_cast<int32_t>(dtype)) : kernel_2();
+    Tensor expected = kernel_3(empty_seq);
     expected.name = "length";
 
     TestCase tc(name, name);

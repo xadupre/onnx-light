@@ -45,7 +45,6 @@ template <typename Kernel>
 void RegisterBinaryNanInf(std::vector<TestCase> &registry, const char *op_type, int opset_version,
                           const std::string &test_name_stem) {
   const OpsetId opset = DefaultOpset(opset_version);
-  const auto kk = MakeReferenceKernel<Kernel>(opset);
 
   // Element-wise case using the shared NaN/Inf operand vectors.
   {
@@ -56,8 +55,14 @@ void RegisterBinaryNanInf(std::vector<TestCase> &registry, const char *op_type, 
     const std::string name = "test_cc_" + test_name_stem + "_nan_inf";
     Expect(
         registry, std::move(node), name, {opset},
-        [=]() -> IoData {
-          Tensor z = kk.Invoke([&](const auto &kernel) { return kernel(x, y); });
+        [opset]() -> IoData {
+          Tensor x = Tensor::FromFloat("x", kBinaryShape, kXValues);
+          Tensor y = Tensor::FromFloat("y", kBinaryShape, kYValues);
+
+          const KernelContext kk_ctx{opset};
+          const Kernel kk{kk_ctx};
+
+          Tensor z = kk(x, y);
           return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
         },
         "backend-test", TestCaseTag::NAN_INF);
@@ -73,8 +78,14 @@ void RegisterBinaryNanInf(std::vector<TestCase> &registry, const char *op_type, 
     const std::string name = "test_cc_" + test_name_stem + "_nan_inf_bcast_nan_scalar";
     Expect(
         registry, std::move(node), name, {opset},
-        [=]() -> IoData {
-          Tensor z = kk.Invoke([&](const auto &kernel) { return kernel(x, y); });
+        [opset]() -> IoData {
+          Tensor x = Tensor::FromFloat("x", {4}, {1.0f, -1.0f, 2.0f, -2.0f});
+          Tensor y = Tensor::FromFloat("y", {}, {kNan});
+
+          const KernelContext kk_ctx{opset};
+          const Kernel kk{kk_ctx};
+
+          Tensor z = kk(x, y);
           return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
         },
         "backend-test", TestCaseTag::NAN_INF);
@@ -91,8 +102,14 @@ void RegisterBinaryNanInf(std::vector<TestCase> &registry, const char *op_type, 
     const std::string name = "test_cc_" + test_name_stem + "_nan_inf_bcast_inf_scalar";
     Expect(
         registry, std::move(node), name, {opset},
-        [=]() -> IoData {
-          Tensor z = kk.Invoke([&](const auto &kernel) { return kernel(x, y); });
+        [opset]() -> IoData {
+          Tensor x = Tensor::FromFloat("x", {4}, {1.0f, -1.0f, 2.0f, -2.0f});
+          Tensor y = Tensor::FromFloat("y", {}, {kPosInf});
+
+          const KernelContext kk_ctx{opset};
+          const Kernel kk{kk_ctx};
+
+          Tensor z = kk(x, y);
           return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
         },
         "backend-test", TestCaseTag::NAN_INF);

@@ -28,7 +28,6 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const auto sum_kernel = MakeReferenceKernel<onnx_kernels::kernel::Sum>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -39,10 +38,15 @@ void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
     const std::vector<int64_t> shape = {kBenchmarkElementwiseSize};
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_sum_benchmark", {opset}, {count, count}, {count},
-           [sum_kernel, shape]() -> IoData {
+           [shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext sum_kernel_ctx{opset};
+             const onnx_kernels::kernel::Sum sum_kernel{sum_kernel_ctx};
+
              Tensor x0 = RandnTensor(DataType::FLOAT, shape, 423);
              Tensor x1 = RandnTensor(DataType::FLOAT, shape, 424);
-             Tensor z = sum_kernel.Invoke([&](const auto &kernel) { return kernel({x0, x1}); });
+             Tensor z = sum_kernel({x0, x1});
              return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
            });
     return;
@@ -54,9 +58,14 @@ void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Sum");
     node.add_input("data_0");
     node.add_output("sum");
-    Expect(registry, std::move(node), "test_cc_sum_one_input", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sum_one_input", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sum_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sum sum_kernel{sum_kernel_ctx};
+
       Tensor x0 = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
-      Tensor z = sum_kernel.Invoke([&](const auto &kernel) { return kernel({x0}); });
+      Tensor z = sum_kernel({x0});
 
       return IoData{{std::move(x0)}, {std::move(z)}};
     });
@@ -69,10 +78,15 @@ void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_0");
     node.add_input("data_1");
     node.add_output("sum");
-    Expect(registry, std::move(node), "test_cc_sum_two_inputs", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sum_two_inputs", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sum_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sum sum_kernel{sum_kernel_ctx};
+
       Tensor x0 = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       Tensor x1 = Tensor::FromFloat("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
-      Tensor z = sum_kernel.Invoke([&](const auto &kernel) { return kernel({x0, x1}); });
+      Tensor z = sum_kernel({x0, x1});
 
       return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
     });
@@ -86,11 +100,16 @@ void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_1");
     node.add_input("data_2");
     node.add_output("sum");
-    Expect(registry, std::move(node), "test_cc_sum_example", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sum_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sum_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sum sum_kernel{sum_kernel_ctx};
+
       Tensor x0 = Tensor::FromFloat("", {3}, {1.0f, 0.0f, 1.0f});
       Tensor x1 = Tensor::FromFloat("", {3}, {3.0f, 4.0f, 5.0f});
       Tensor x2 = Tensor::FromFloat("", {3}, {6.0f, 0.0f, 5.0f});
-      Tensor z = sum_kernel.Invoke([&](const auto &kernel) { return kernel({x0, x1, x2}); });
+      Tensor z = sum_kernel({x0, x1, x2});
 
       return IoData{{std::move(x0), std::move(x1), std::move(x2)}, {std::move(z)}};
     });
@@ -103,10 +122,15 @@ void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_0");
     node.add_input("data_1");
     node.add_output("sum");
-    Expect(registry, std::move(node), "test_cc_sum_bcast", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_sum_bcast", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sum_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sum sum_kernel{sum_kernel_ctx};
+
       Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor x1 = Tensor::FromFloat("", {}, {10.0f});
-      Tensor z = sum_kernel.Invoke([&](const auto &kernel) { return kernel({x0, x1}); });
+      Tensor z = sum_kernel({x0, x1});
 
       return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
     });
@@ -121,12 +145,17 @@ void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("data_1");
     node.add_input("data_2");
     node.add_output("sum");
-    Expect(registry, std::move(node), "test_sum_example", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_sum_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext sum_kernel_ctx{opset};
+      const onnx_kernels::kernel::Sum sum_kernel{sum_kernel_ctx};
+
       const std::vector<int64_t> shape = {3, 4, 5};
       Tensor x0 = RandnFloat(shape, /*seed=*/61);
       Tensor x1 = RandnFloat(shape, /*seed=*/62);
       Tensor x2 = RandnFloat(shape, /*seed=*/63);
-      Tensor z = sum_kernel.Invoke([&](const auto &kernel) { return kernel({x0, x1, x2}); });
+      Tensor z = sum_kernel({x0, x1, x2});
 
       return IoData{{std::move(x0), std::move(x1), std::move(x2)}, {std::move(z)}};
     });

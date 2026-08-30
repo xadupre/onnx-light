@@ -35,12 +35,16 @@ NodeProto MakeScatterElementsNode(int64_t axis, const std::string &reduction, bo
 
 void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const auto se_kernel = MakeReferenceKernel<onnx_kernels::kernel::ScatterElements>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeScatterElementsNode(0, "none", /*set_axis_attr=*/false);
     Expect(registry, std::move(node), "test_cc_scatter_elements_without_axis_benchmark", {opset},
-           {4194304, 4194304, 4194304}, {4194304}, [se_kernel]() -> IoData {
+           {4194304, 4194304, 4194304}, {4194304}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext se_kernel_ctx{opset};
+             const onnx_kernels::kernel::ScatterElements se_kernel{se_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {4096, 1024},
                                              std::vector<float>(kBenchmarkElementwiseSize, 0.0f));
              std::vector<int64_t> index_values(kBenchmarkElementwiseSize);
@@ -50,8 +54,7 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
              Tensor indices = Tensor::FromInt64("", {4096, 1024}, index_values);
              Tensor updates = RandnTensor(DataType::FLOAT, {4096, 1024}, 2001);
              onnx_kernels::kernel::ScatterElements::Attributes attrs;
-             Tensor output = se_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, indices, updates, attrs); });
+             Tensor output = se_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
            });
@@ -62,13 +65,17 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
   // ``test_scatter_elements_without_axis``.
   {
     Expect(registry, MakeScatterElementsNode(0, "none", /*set_axis_attr=*/false),
-           "test_cc_scatter_elements_without_axis", {opset}, [=]() -> IoData {
+           "test_cc_scatter_elements_without_axis", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext se_kernel_ctx{opset};
+             const onnx_kernels::kernel::ScatterElements se_kernel{se_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {3, 3}, {0, 0, 0, 0, 0, 0, 0, 0, 0});
              Tensor indices = Tensor::FromInt64("", {2, 3}, {1, 0, 2, 0, 2, 1});
              Tensor updates = Tensor::FromFloat("", {2, 3}, {1.0f, 1.1f, 1.2f, 2.0f, 2.1f, 2.2f});
              onnx_kernels::kernel::ScatterElements::Attributes attrs;
-             Tensor output = se_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, indices, updates, attrs); });
+             Tensor output = se_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
            });
@@ -78,14 +85,18 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
   // ``test_scatter_elements_with_axis``.
   {
     Expect(registry, MakeScatterElementsNode(1, "none", /*set_axis_attr=*/true),
-           "test_cc_scatter_elements_with_axis", {opset}, [=]() -> IoData {
+           "test_cc_scatter_elements_with_axis", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext se_kernel_ctx{opset};
+             const onnx_kernels::kernel::ScatterElements se_kernel{se_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor indices = Tensor::FromInt64("", {1, 2}, {1, 3});
              Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
              onnx_kernels::kernel::ScatterElements::Attributes attrs;
              attrs.axis = 1;
-             Tensor output = se_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, indices, updates, attrs); });
+             Tensor output = se_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
            });
@@ -95,14 +106,18 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
   // ``test_scatter_elements_with_negative_indices``.
   {
     Expect(registry, MakeScatterElementsNode(1, "none", /*set_axis_attr=*/true),
-           "test_cc_scatter_elements_with_negative_indices", {opset}, [=]() -> IoData {
+           "test_cc_scatter_elements_with_negative_indices", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext se_kernel_ctx{opset};
+             const onnx_kernels::kernel::ScatterElements se_kernel{se_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor indices = Tensor::FromInt64("", {1, 2}, {1, -3});
              Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
              onnx_kernels::kernel::ScatterElements::Attributes attrs;
              attrs.axis = 1;
-             Tensor output = se_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, indices, updates, attrs); });
+             Tensor output = se_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
            });
@@ -112,15 +127,19 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
   // ``test_scatter_elements_with_duplicate_indices``.
   {
     Expect(registry, MakeScatterElementsNode(1, "add", /*set_axis_attr=*/true),
-           "test_cc_scatter_elements_with_duplicate_indices", {opset}, [=]() -> IoData {
+           "test_cc_scatter_elements_with_duplicate_indices", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext se_kernel_ctx{opset};
+             const onnx_kernels::kernel::ScatterElements se_kernel{se_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor indices = Tensor::FromInt64("", {1, 2}, {1, 1});
              Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
              onnx_kernels::kernel::ScatterElements::Attributes attrs;
              attrs.axis = 1;
              attrs.reduction = "add";
-             Tensor output = se_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, indices, updates, attrs); });
+             Tensor output = se_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
            });
@@ -130,15 +149,19 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
   // ``test_scatter_elements_with_reduction_max``.
   {
     Expect(registry, MakeScatterElementsNode(1, "max", /*set_axis_attr=*/true),
-           "test_cc_scatter_elements_with_reduction_max", {opset}, [=]() -> IoData {
+           "test_cc_scatter_elements_with_reduction_max", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext se_kernel_ctx{opset};
+             const onnx_kernels::kernel::ScatterElements se_kernel{se_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor indices = Tensor::FromInt64("", {1, 2}, {1, 1});
              Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
              onnx_kernels::kernel::ScatterElements::Attributes attrs;
              attrs.axis = 1;
              attrs.reduction = "max";
-             Tensor output = se_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, indices, updates, attrs); });
+             Tensor output = se_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
            });
@@ -148,15 +171,19 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
   // ``test_scatter_elements_with_reduction_min``.
   {
     Expect(registry, MakeScatterElementsNode(1, "min", /*set_axis_attr=*/true),
-           "test_cc_scatter_elements_with_reduction_min", {opset}, [=]() -> IoData {
+           "test_cc_scatter_elements_with_reduction_min", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext se_kernel_ctx{opset};
+             const onnx_kernels::kernel::ScatterElements se_kernel{se_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor indices = Tensor::FromInt64("", {1, 2}, {1, 1});
              Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
              onnx_kernels::kernel::ScatterElements::Attributes attrs;
              attrs.axis = 1;
              attrs.reduction = "min";
-             Tensor output = se_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, indices, updates, attrs); });
+             Tensor output = se_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
            });
@@ -166,15 +193,19 @@ void RegisterScatterElementsCases(std::vector<TestCase> &registry, TestMode mode
   // ``mul`` reduction (no upstream equivalent at the time of writing).
   {
     Expect(registry, MakeScatterElementsNode(1, "mul", /*set_axis_attr=*/true),
-           "test_cc_scatter_elements_with_reduction_mul", {opset}, [=]() -> IoData {
+           "test_cc_scatter_elements_with_reduction_mul", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext se_kernel_ctx{opset};
+             const onnx_kernels::kernel::ScatterElements se_kernel{se_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
              Tensor indices = Tensor::FromInt64("", {1, 2}, {1, 1});
              Tensor updates = Tensor::FromFloat("", {1, 2}, {1.1f, 2.1f});
              onnx_kernels::kernel::ScatterElements::Attributes attrs;
              attrs.axis = 1;
              attrs.reduction = "mul";
-             Tensor output = se_kernel.Invoke(
-                 [&](const auto &kernel) { return kernel(data, indices, updates, attrs); });
+             Tensor output = se_kernel(data, indices, updates, attrs);
              return IoData{{std::move(data), std::move(indices), std::move(updates)},
                            {std::move(output)}};
            });

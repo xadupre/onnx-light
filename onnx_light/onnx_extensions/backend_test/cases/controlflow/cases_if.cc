@@ -76,7 +76,6 @@ void BuildConstantBranch(GraphProto &g, const std::string &graph_name,
 // ---------------------------------------------------------------------------
 void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const auto if_kernel = MakeReferenceKernel<If>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     const std::vector<int64_t> big_shape = {512, 512};
@@ -98,10 +97,17 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
     else_attr->set_type(AttributeProto::AttributeType::GRAPH);
     BuildConstantBranch(*else_attr->add_g(), "else_graph", "else_out", else_value);
 
-    Expect(registry, std::move(node), "test_cc_if_benchmark", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_if_benchmark", {opset}, [big_shape]() -> IoData {
+      const Tensor then_value = RandnTensor(DataType::FLOAT, big_shape, 4301);
+      const Tensor else_value = RandnTensor(DataType::FLOAT, big_shape, 4302);
+
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext if_kernel_ctx{opset};
+      const If if_kernel{if_kernel_ctx};
+
       Tensor cond("", DataType::BOOL, {}, {1});
-      Tensor res = if_kernel.Invoke(
-          [&](const auto &kernel) { return kernel(cond, then_value, else_value); });
+      Tensor res = if_kernel(cond, then_value, else_value);
       return IoData{{std::move(cond)}, {std::move(res)}};
     });
     return;
@@ -110,7 +116,7 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
   const Tensor then_value = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   const Tensor else_value = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
 
-  auto make_node = [&]() {
+  auto make_node = [&then_value, &else_value]() {
     NodeProto node;
     node.set_op_type("If");
     node.add_input("cond");
@@ -132,10 +138,17 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
   // cond = true → output is the then-branch value.
   {
     NodeProto node = make_node();
-    Expect(registry, std::move(node), "test_cc_if", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_if", {opset}, []() -> IoData {
+      const Tensor then_value = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+      const Tensor else_value = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
+
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext if_kernel_ctx{opset};
+      const If if_kernel{if_kernel_ctx};
+
       Tensor cond("", DataType::BOOL, {}, {1});
-      Tensor res = if_kernel.Invoke(
-          [&](const auto &kernel) { return kernel(cond, then_value, else_value); });
+      Tensor res = if_kernel(cond, then_value, else_value);
       return IoData{{std::move(cond)}, {std::move(res)}};
     });
   }
@@ -143,10 +156,17 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
   // cond = false → output is the else-branch value.
   {
     NodeProto node = make_node();
-    Expect(registry, std::move(node), "test_cc_if_else", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_if_else", {opset}, []() -> IoData {
+      const Tensor then_value = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+      const Tensor else_value = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
+
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext if_kernel_ctx{opset};
+      const If if_kernel{if_kernel_ctx};
+
       Tensor cond("", DataType::BOOL, {}, {0});
-      Tensor res = if_kernel.Invoke(
-          [&](const auto &kernel) { return kernel(cond, then_value, else_value); });
+      Tensor res = if_kernel(cond, then_value, else_value);
       return IoData{{std::move(cond)}, {std::move(res)}};
     });
   }
@@ -244,8 +264,12 @@ void RegisterIfCases(std::vector<TestCase> &registry, TestMode mode) {
 
     Tensor cond("", DataType::BOOL, {}, {1});
     // cond = true → outputs come from the then-branch.
-    Expect(registry, std::move(node), "test_cc_if_multi_output", {opset},
-           [cond, then_a, then_b]() -> IoData { return IoData{{cond}, {then_a, then_b}}; });
+    Expect(registry, std::move(node), "test_cc_if_multi_output", {opset}, []() -> IoData {
+      const Tensor then_a = Tensor::From<int64_t>("", {3}, {1, 2, 3});
+      const Tensor then_b = Tensor::FromFloat("", {2, 2}, {0.1f, 0.2f, 0.3f, 0.4f});
+      Tensor cond("", DataType::BOOL, {}, {1});
+      return IoData{{cond}, {then_a, then_b}};
+    });
   }
 
   // -------------------------------------------------------------------------

@@ -60,7 +60,28 @@ void RegisterUnsqueezeVasReshapeShapeInferenceCases(std::vector<TestCase> &regis
 
   const std::string name = "test_cc_shape_inference_unsqueeze_vas_reshape";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(18);
+
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Shape kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Shape kernel_2{ctx_2};
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::Gather kernel_3{ctx_3};
+    const KernelContext ctx_4{opset};
+    const onnx_kernels::kernel::Gather kernel_4{ctx_4};
+    const KernelContext ctx_5{opset};
+    const onnx_kernels::kernel::Unsqueeze kernel_5{ctx_5};
+    const KernelContext ctx_6{opset};
+    const onnx_kernels::kernel::Unsqueeze kernel_6{ctx_6};
+    const KernelContext ctx_7{opset};
+    const onnx_kernels::kernel::Concat kernel_7{ctx_7};
+    const KernelContext ctx_8{opset};
+    const onnx_kernels::kernel::Reshape kernel_8{ctx_8};
+    const KernelContext ctx_9{opset};
+    const onnx_kernels::kernel::Abs kernel_9{ctx_9};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
 
     ModelProto &model = tc.emplace_model();
@@ -151,40 +172,31 @@ void RegisterUnsqueezeVasReshapeShapeInferenceCases(std::vector<TestCase> &regis
     const Tensor idx_t = Tensor::FromInt64("idx", {}, {int64_t{1}});
     const std::vector<int64_t> axes0 = {0};
 
-    Tensor shape_y = MakeReferenceKernel<onnx_kernels::kernel::Shape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(y, onnx_kernels::kernel::Shape::Attributes{}); });
+    Tensor shape_y = kernel_1(y, onnx_kernels::kernel::Shape::Attributes{});
     shape_y.name = "shape_y";
 
-    Tensor shape_z = MakeReferenceKernel<onnx_kernels::kernel::Shape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(z, onnx_kernels::kernel::Shape::Attributes{}); });
+    Tensor shape_z = kernel_2(z, onnx_kernels::kernel::Shape::Attributes{});
     shape_z.name = "shape_z";
 
-    Tensor d1 = MakeReferenceKernel<onnx_kernels::kernel::Gather>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(shape_y, idx_t, 0); });
+    Tensor d1 = kernel_3(shape_y, idx_t, 0);
     d1.name = "d1";
 
-    Tensor d2 = MakeReferenceKernel<onnx_kernels::kernel::Gather>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(shape_z, idx_t, 0); });
+    Tensor d2 = kernel_4(shape_z, idx_t, 0);
     d2.name = "d2";
 
-    Tensor u1 = MakeReferenceKernel<onnx_kernels::kernel::Unsqueeze>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(d1, axes0); });
+    Tensor u1 = kernel_5(d1, axes0);
     u1.name = "u1";
 
-    Tensor u2 = MakeReferenceKernel<onnx_kernels::kernel::Unsqueeze>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(d2, axes0); });
+    Tensor u2 = kernel_6(d2, axes0);
     u2.name = "u2";
 
-    Tensor new_shape_t = MakeReferenceKernel<onnx_kernels::kernel::Concat>(opset).Invoke(
-        [&](const auto &kernel) { return kernel({u1, u2}, 0); });
+    Tensor new_shape_t = kernel_7({u1, u2}, 0);
     new_shape_t.name = "new_shape";
 
-    Tensor reshaped = MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, new_shape_t); });
+    Tensor reshaped = kernel_8(x, new_shape_t);
     reshaped.name = "reshaped";
 
-    Tensor out = MakeReferenceKernel<onnx_kernels::kernel::Abs>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(reshaped); });
+    Tensor out = kernel_9(reshaped);
     out.name = "out";
 
     AppendDataSet(tc, {std::move(x), std::move(y), std::move(z)}, {std::move(out)});

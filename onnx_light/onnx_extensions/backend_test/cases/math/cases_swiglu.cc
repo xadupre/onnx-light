@@ -18,7 +18,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(28);
-  const auto swiglu_kernel = MakeReferenceKernel<onnx_kernels::kernel::SwiGLU>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     ExpectBenchmarkBinaryFloat<onnx_kernels::kernel::SwiGLU>("SwiGLU", "test_cc_swiglu_benchmark",
@@ -32,11 +31,16 @@ void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("A");
     node.add_input("B");
     node.add_output("Y");
-    Expect(registry, std::move(node), "test_cc_swiglu", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_swiglu", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(28);
+
+      const KernelContext swiglu_kernel_ctx{opset};
+      const onnx_kernels::kernel::SwiGLU swiglu_kernel{swiglu_kernel_ctx};
+
       // No alpha attribute: defaults to 1.0.
       Tensor a = Tensor::FromFloat("", {2, 4}, {1.0f, -2.0f, 3.0f, 4.0f, -1.0f, 2.0f, -3.0f, 0.5f});
       Tensor b = Tensor::FromFloat("", {2, 4}, {0.5f, 1.0f, -1.0f, 2.0f, 2.0f, -1.0f, 0.5f, 1.0f});
-      Tensor y = swiglu_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
+      Tensor y = swiglu_kernel(a, b);
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
@@ -51,12 +55,17 @@ void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    Expect(registry, std::move(node), "test_cc_swiglu_alpha", {opset}, [=]() -> IoData {
-      alpha->set_f(0.5f);
+    alpha->set_f(0.5f);
+
+    Expect(registry, std::move(node), "test_cc_swiglu_alpha", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(28);
+
+      const KernelContext swiglu_kernel_ctx{opset};
+      const onnx_kernels::kernel::SwiGLU swiglu_kernel{swiglu_kernel_ctx};
 
       Tensor a = Tensor::FromFloat("", {2, 4}, {1.0f, -2.0f, 3.0f, 4.0f, -1.0f, 2.0f, -3.0f, 0.5f});
       Tensor b = Tensor::FromFloat("", {2, 4}, {0.5f, 1.0f, -1.0f, 2.0f, 2.0f, -1.0f, 0.5f, 1.0f});
-      Tensor y = swiglu_kernel.Invoke([&](const auto &kernel) { return kernel(a, b, 0.5f); });
+      Tensor y = swiglu_kernel(a, b, 0.5f);
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
@@ -68,11 +77,16 @@ void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("A");
     node.add_input("B");
     node.add_output("Y");
-    Expect(registry, std::move(node), "test_cc_swiglu_float16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_swiglu_float16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(28);
+
+      const KernelContext swiglu_kernel_ctx{opset};
+      const onnx_kernels::kernel::SwiGLU swiglu_kernel{swiglu_kernel_ctx};
+
       // No alpha attribute: defaults to 1.0.
       Tensor a = MakeFloat16Tensor("", {2, 4}, {1.0f, -2.0f, 3.0f, 4.0f, -1.0f, 2.0f, -3.0f, 0.5f});
       Tensor b = MakeFloat16Tensor("", {2, 4}, {0.5f, 1.0f, -1.0f, 2.0f, 2.0f, -1.0f, 0.5f, 1.0f});
-      Tensor y = swiglu_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
+      Tensor y = swiglu_kernel(a, b);
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }
@@ -84,12 +98,17 @@ void RegisterSwiGLUCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("A");
     node.add_input("B");
     node.add_output("Y");
-    Expect(registry, std::move(node), "test_cc_swiglu_bfloat16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_swiglu_bfloat16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(28);
+
+      const KernelContext swiglu_kernel_ctx{opset};
+      const onnx_kernels::kernel::SwiGLU swiglu_kernel{swiglu_kernel_ctx};
+
       // No alpha attribute: defaults to 1.0.
       Tensor a =
           MakeBfloat16Tensor("", {2, 4}, {1.0f, -2.0f, 3.0f, 4.0f, -1.0f, 2.0f, -3.0f, 0.5f});
       Tensor b = MakeBfloat16Tensor("", {2, 4}, {0.5f, 1.0f, -1.0f, 2.0f, 2.0f, -1.0f, 0.5f, 1.0f});
-      Tensor y = swiglu_kernel.Invoke([&](const auto &kernel) { return kernel(a, b); });
+      Tensor y = swiglu_kernel(a, b);
       return IoData{{std::move(a), std::move(b)}, {std::move(y)}};
     });
   }

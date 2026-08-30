@@ -17,12 +17,14 @@ namespace {
 
 // Registers one ``test_not*`` upstream-ONNX case: x and y = NOT x.
 void RegisterNotOnnxCase(const std::string &name, const std::vector<int64_t> &shape, uint64_t seed,
-                         const auto &not_kernel, const OpsetId &opset,
-                         std::vector<TestCase> &registry) {
+                         const OpsetId &opset, std::vector<TestCase> &registry) {
   NodeProto node = MakeNode("Not", {"x"}, {"not"});
-  Expect(registry, std::move(node), name, {opset}, [=]() -> IoData {
+  Expect(registry, std::move(node), name, {opset}, [opset, shape, seed]() -> IoData {
+    const KernelContext ctx{opset};
+    const onnx_kernels::kernel::Not not_kernel{ctx};
+
     Tensor x = RandBool(shape, seed);
-    Tensor y = not_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
+    Tensor y = not_kernel(x);
 
     return IoData{{std::move(x)}, {std::move(y)}};
   });
@@ -38,7 +40,6 @@ void RegisterNotOnnxCase(const std::string &name, const std::vector<int64_t> &sh
 // ---------------------------------------------------------------------------
 void RegisterNotCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(1);
-  const auto not_kernel = MakeReferenceKernel<onnx_kernels::kernel::Not>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("Not", {"x"}, {"y"});
@@ -46,9 +47,14 @@ void RegisterNotCases(std::vector<TestCase> &registry, TestMode mode) {
     const std::vector<int64_t> shape = {1024, 4096};
     const int64_t count = 1024 * 4096;
     Expect(registry, std::move(node), "test_cc_not_benchmark", {opset}, {count}, {count},
-           [not_kernel, shape]() -> IoData {
+           [shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(1);
+
+             const KernelContext not_kernel_ctx{opset};
+             const onnx_kernels::kernel::Not not_kernel{not_kernel_ctx};
+
              Tensor x = RandBool(shape, /*seed=*/9103);
-             Tensor y = not_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
+             Tensor y = not_kernel(x);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -56,9 +62,14 @@ void RegisterNotCases(std::vector<TestCase> &registry, TestMode mode) {
 
   {
     NodeProto node = MakeNode("Not", {"x"}, {"y"});
-    Expect(registry, std::move(node), "test_cc_not", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_not", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(1);
+
+      const KernelContext not_kernel_ctx{opset};
+      const onnx_kernels::kernel::Not not_kernel{not_kernel_ctx};
+
       Tensor x("", DataType::BOOL, {2, 2}, {1, 0, 1, 0});
-      Tensor y = not_kernel.Invoke([&](const auto &kernel) { return kernel(x); });
+      Tensor y = not_kernel(x);
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
@@ -69,9 +80,9 @@ void RegisterNotCases(std::vector<TestCase> &registry, TestMode mode) {
   // generated deterministically through the seeded ``RandBool`` helper to
   // match the upstream ``(randn(...) > 0).astype(bool)`` pattern; expected
   // outputs are computed by ``kernel::Not``.
-  RegisterNotOnnxCase("test_not_2d", {3, 4}, 101, not_kernel, opset, registry);
-  RegisterNotOnnxCase("test_not_3d", {3, 4, 5}, 102, not_kernel, opset, registry);
-  RegisterNotOnnxCase("test_not_4d", {3, 4, 5, 6}, 103, not_kernel, opset, registry);
+  RegisterNotOnnxCase("test_not_2d", {3, 4}, 101, opset, registry);
+  RegisterNotOnnxCase("test_not_3d", {3, 4, 5}, 102, opset, registry);
+  RegisterNotOnnxCase("test_not_4d", {3, 4, 5, 6}, 103, opset, registry);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

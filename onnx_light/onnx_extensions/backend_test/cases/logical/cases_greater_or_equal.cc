@@ -29,7 +29,6 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(16);
-  const auto ge_kernel = MakeReferenceKernel<onnx_kernels::kernel::GreaterOrEqual>(opset);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -41,10 +40,15 @@ void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry, TestMode mode)
     const std::vector<int64_t> shape = {1024, 4096};
     const int64_t count = 1024 * 4096;
     Expect(registry, std::move(node), "test_cc_greater_or_equal_benchmark", {opset}, {count, count},
-           {count}, [ge_kernel, shape]() -> IoData {
+           {count}, [shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(16);
+
+             const KernelContext ge_kernel_ctx{opset};
+             const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/9201);
              Tensor y = RandnTensor(DataType::FLOAT, shape, /*seed=*/9202);
-             Tensor z = ge_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
+             Tensor z = ge_kernel(x, y);
              return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
            });
     return;
@@ -57,10 +61,15 @@ void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry, TestMode mode)
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_greater_or_equal", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_greater_or_equal", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
+
+      const KernelContext ge_kernel_ctx{opset};
+      const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
-      Tensor z = ge_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
+      Tensor z = ge_kernel(x, y);
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -73,10 +82,15 @@ void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry, TestMode mode)
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_greater_or_equal_bcast", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_greater_or_equal_bcast", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
+
+      const KernelContext ge_kernel_ctx{opset};
+      const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = Tensor::FromFloat("", {}, {2.5f});
-      Tensor z = ge_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
+      Tensor z = ge_kernel(x, y);
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -89,10 +103,15 @@ void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry, TestMode mode)
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_greater_or_equal_float16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_greater_or_equal_float16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
+
+      const KernelContext ge_kernel_ctx{opset};
+      const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
       Tensor x = MakeFloat16Tensor("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = MakeFloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
-      Tensor z = ge_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
+      Tensor z = ge_kernel(x, y);
 
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
@@ -105,14 +124,18 @@ void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry, TestMode mode)
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_greater_or_equal_bfloat16", {opset},
-           [=]() -> IoData {
-             Tensor x = MakeBfloat16Tensor("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
-             Tensor y = MakeBfloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
-             Tensor z = ge_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
+    Expect(registry, std::move(node), "test_cc_greater_or_equal_bfloat16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
 
-             return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
-           });
+      const KernelContext ge_kernel_ctx{opset};
+      const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
+      Tensor x = MakeBfloat16Tensor("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
+      Tensor y = MakeBfloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
+      Tensor z = ge_kernel(x, y);
+
+      return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
+    });
   }
 
   // Upstream ONNX backend test cases for the ``GreaterOrEqual`` operator
@@ -136,76 +159,108 @@ void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry, TestMode mode)
   const std::vector<std::pair<std::string, std::function<IoData()>>> cases = {
       // From Greater.export() in greater_equal.py:
       {"test_greater_equal",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext ge_kernel_ctx{opset};
+         const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/121);
          auto inputs_1 = RandnFloat({3, 4, 5}, /*seed=*/122);
-         Tensor z =
-             ge_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
+         Tensor z = ge_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_greater_equal_int8",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext ge_kernel_ctx{opset};
+         const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
          auto inputs_0 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/131);
          auto inputs_1 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/132);
-         Tensor z =
-             ge_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
+         Tensor z = ge_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_greater_equal_int16",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext ge_kernel_ctx{opset};
+         const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
          auto inputs_0 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/133);
          auto inputs_1 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/134);
-         Tensor z =
-             ge_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
+         Tensor z = ge_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_greater_equal_uint8",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext ge_kernel_ctx{opset};
+         const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/135));
          auto inputs_1 =
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/136));
-         Tensor z =
-             ge_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
+         Tensor z = ge_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_greater_equal_uint16",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext ge_kernel_ctx{opset};
+         const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/137));
          auto inputs_1 =
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/138));
-         Tensor z =
-             ge_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
+         Tensor z = ge_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_greater_equal_uint32",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext ge_kernel_ctx{opset};
+         const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/139));
          auto inputs_1 =
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/140));
-         Tensor z =
-             ge_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
+         Tensor z = ge_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_greater_equal_uint64",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext ge_kernel_ctx{opset};
+         const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/141));
          auto inputs_1 =
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/142));
-         Tensor z =
-             ge_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
+         Tensor z = ge_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       // From Greater.export_greater_broadcast() in greater_equal.py:
       {"test_greater_equal_bcast",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(16);
+
+         const KernelContext ge_kernel_ctx{opset};
+         const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/123);
          auto inputs_1 = RandnFloat({5}, /*seed=*/124);
-         Tensor z =
-             ge_kernel.Invoke([&](const auto &kernel) { return kernel(inputs_0, inputs_1); });
+         Tensor z = ge_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
   };
@@ -221,10 +276,15 @@ void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry, TestMode mode)
     n16.add_input("x");
     n16.add_input("y");
     n16.add_output("z");
-    Expect(registry, std::move(n16), "test_cc_greater_or_equal_float16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(n16), "test_cc_greater_or_equal_float16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
+
+      const KernelContext ge_kernel_ctx{opset};
+      const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
       Tensor x = MakeFloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
       Tensor y = MakeFloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
-      Tensor z = ge_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
+      Tensor z = ge_kernel(x, y);
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }
@@ -236,10 +296,15 @@ void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry, TestMode mode)
     nbf.add_input("x");
     nbf.add_input("y");
     nbf.add_output("z");
-    Expect(registry, std::move(nbf), "test_cc_greater_or_equal_bfloat16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(nbf), "test_cc_greater_or_equal_bfloat16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(16);
+
+      const KernelContext ge_kernel_ctx{opset};
+      const onnx_kernels::kernel::GreaterOrEqual ge_kernel{ge_kernel_ctx};
+
       Tensor x = MakeBfloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
       Tensor y = MakeBfloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
-      Tensor z = ge_kernel.Invoke([&](const auto &kernel) { return kernel(x, y); });
+      Tensor z = ge_kernel(x, y);
       return IoData{{std::move(x), std::move(y)}, {std::move(z)}};
     });
   }

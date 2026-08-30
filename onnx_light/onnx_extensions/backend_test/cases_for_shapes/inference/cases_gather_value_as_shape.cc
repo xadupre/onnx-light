@@ -47,7 +47,18 @@ void RegisterGatherValueAsShapeShapeInferenceCases(std::vector<TestCase> &regist
 
   const std::string name = "test_cc_shape_inference_gather_value_as_shape";
   TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
-  lazy_case.build = [=](bool) -> BuiltCase {
+  lazy_case.build = [name](bool) -> BuiltCase {
+    const OpsetId opset = DefaultOpset(20);
+
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::Shape kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::Gather kernel_2{ctx_2};
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::Expand kernel_3{ctx_3};
+    const KernelContext ctx_4{opset};
+    const onnx_kernels::kernel::Abs kernel_4{ctx_4};
+
     TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE, 1e-7, 1e-3);
 
     ModelProto &model = tc.emplace_model();
@@ -101,23 +112,19 @@ void RegisterGatherValueAsShapeShapeInferenceCases(std::vector<TestCase> &regist
     const Tensor idx = Tensor::FromInt64("idx", {1}, {0});
 
     // shape_x = Shape(x) = [3, 4]
-    Tensor shape_x = MakeReferenceKernel<onnx_kernels::kernel::Shape>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(x, onnx_kernels::kernel::Shape::Attributes{}); });
+    Tensor shape_x = kernel_1(x, onnx_kernels::kernel::Shape::Attributes{});
     shape_x.name = "shape_x";
 
     // n_vec = Gather(shape_x, idx, axis=0) = int64[1] = [3]
-    Tensor n_vec = MakeReferenceKernel<onnx_kernels::kernel::Gather>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(shape_x, idx, 0); });
+    Tensor n_vec = kernel_2(shape_x, idx, 0);
     n_vec.name = "n_vec";
 
     // expanded = Expand(y, n_vec) = float[3] = [2.0, 2.0, 2.0]
-    Tensor expanded = MakeReferenceKernel<onnx_kernels::kernel::Expand>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(y, n_vec); });
+    Tensor expanded = kernel_3(y, n_vec);
     expanded.name = "expanded";
 
     // z = Abs(expanded) = float[3] = [2.0, 2.0, 2.0]
-    Tensor z = MakeReferenceKernel<onnx_kernels::kernel::Abs>(opset).Invoke(
-        [&](const auto &kernel) { return kernel(expanded); });
+    Tensor z = kernel_4(expanded);
     z.name = "z";
 
     AppendDataSet(tc, {std::move(x), std::move(y)}, {std::move(z)});

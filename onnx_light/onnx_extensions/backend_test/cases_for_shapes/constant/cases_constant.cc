@@ -47,7 +47,14 @@ void RegisterConstantInfoCases(std::vector<TestCase> &registry, TestMode /*mode*
   {
     const std::string name = "test_cc_constant_add_chain";
     TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::CONSTANT);
-    lazy_case.build = [=](bool) -> BuiltCase {
+    lazy_case.build = [name](bool) -> BuiltCase {
+      const OpsetId opset = DefaultOpset(18);
+
+      const KernelContext ctx_1{opset};
+      const onnx_kernels::kernel::Add kernel_1{ctx_1};
+      const KernelContext ctx_2{opset};
+      const onnx_kernels::kernel::Add kernel_2{ctx_2};
+
       TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::CONSTANT);
       tc.rtol = 1e-3;
       tc.atol = 1e-7;
@@ -75,11 +82,9 @@ void RegisterConstantInfoCases(std::vector<TestCase> &registry, TestMode /*mode*
 
       const Tensor c = Tensor::FromFloat("C", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
       const Tensor x = Tensor::FromFloat("X", {2, 3}, {-1.0f, -2.0f, -3.0f, 0.5f, 1.5f, 2.5f});
-      Tensor d = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-          [&](const auto &kernel) { return kernel(c, c); });
+      Tensor d = kernel_1(c, c);
       d.name = "D";
-      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-          [&](const auto &kernel) { return kernel(x, d); });
+      Tensor y = kernel_2(x, d);
       y.name = "Y";
 
       AppendDataSet(tc, {x}, {y});
@@ -93,7 +98,12 @@ void RegisterConstantInfoCases(std::vector<TestCase> &registry, TestMode /*mode*
   {
     const std::string name = "test_cc_constant_node_source";
     TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::CONSTANT);
-    lazy_case.build = [=](bool) -> BuiltCase {
+    lazy_case.build = [name](bool) -> BuiltCase {
+      const OpsetId opset = DefaultOpset(18);
+
+      const KernelContext ctx_3{opset};
+      const onnx_kernels::kernel::Add kernel_3{ctx_3};
+
       TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::CONSTANT);
       tc.rtol = 1e-3;
       tc.atol = 1e-7;
@@ -133,8 +143,7 @@ void RegisterConstantInfoCases(std::vector<TestCase> &registry, TestMode /*mode*
       const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 1.0f, 1.0f, -1.0f, -1.0f, -1.0f});
       Tensor k = k_value;
       k.name = "K";
-      Tensor y = MakeReferenceKernel<onnx_kernels::kernel::Add>(opset).Invoke(
-          [&](const auto &kernel) { return kernel(x, k); });
+      Tensor y = kernel_3(x, k);
       y.name = "Y";
 
       AppendDataSet(tc, {x}, {y});

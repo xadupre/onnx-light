@@ -43,48 +43,58 @@ Tensor MakeShapeTensor(const std::vector<int64_t> &dims) {
 
 void RegisterReshapeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset13 = DefaultOpset(13);
-  const auto reshape_kernel13 = MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset13);
+
   const OpsetId opset14 = DefaultOpset(14);
-  const auto reshape_kernel14 = MakeReferenceKernel<onnx_kernels::kernel::Reshape>(opset14);
+
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeReshapeNode();
     Expect(registry, std::move(node), "test_cc_reshape_reordered_benchmark", {opset13},
-           {kBenchmarkElementwiseSize, 2}, {kBenchmarkElementwiseSize},
-           [reshape_kernel13]() -> IoData {
+           {kBenchmarkElementwiseSize, 2}, {kBenchmarkElementwiseSize}, []() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext reshape_kernel13_ctx{opset13};
+             const onnx_kernels::kernel::Reshape reshape_kernel13{reshape_kernel13_ctx};
+
              Tensor data = RandnTensor(DataType::FLOAT, {2048, 2048}, 2001);
              Tensor shape = MakeShapeTensor({4096, 1024});
-             Tensor output =
-                 reshape_kernel13.Invoke([&](const auto &kernel) { return kernel(data, shape); });
+             Tensor output = reshape_kernel13(data, shape);
              return IoData{{std::move(data), std::move(shape)}, {std::move(output)}};
            });
     return;
   }
   {
-    Expect(registry, MakeReshapeNode(), "test_cc_reshape_reordered", {opset13},
-           [reshape_kernel13]() -> IoData {
-             const Tensor data = Tensor::FromFloat("", {2, 3},
-                                                   {
-                                                       1.0f,
-                                                       2.0f,
-                                                       3.0f,
-                                                       4.0f,
-                                                       5.0f,
-                                                       6.0f,
-                                                   });
-             const Tensor shape = MakeShapeTensor({3, 2});
-             const Tensor output =
-                 reshape_kernel13.Invoke([&](const auto &kernel) { return kernel(data, shape); });
-             return IoData{{std::move(data), std::move(shape)}, {std::move(output)}};
-           });
+    Expect(registry, MakeReshapeNode(), "test_cc_reshape_reordered", {opset13}, []() -> IoData {
+      const OpsetId opset13 = DefaultOpset(13);
+
+      const KernelContext reshape_kernel13_ctx{opset13};
+      const onnx_kernels::kernel::Reshape reshape_kernel13{reshape_kernel13_ctx};
+
+      const Tensor data = Tensor::FromFloat("", {2, 3},
+                                            {
+                                                1.0f,
+                                                2.0f,
+                                                3.0f,
+                                                4.0f,
+                                                5.0f,
+                                                6.0f,
+                                            });
+      const Tensor shape = MakeShapeTensor({3, 2});
+      const Tensor output = reshape_kernel13(data, shape);
+      return IoData{{std::move(data), std::move(shape)}, {std::move(output)}};
+    });
   }
 
   {
     Expect(registry, MakeReshapeNode(/*allowzero=*/1), "test_cc_reshape_allowzero_literal_zero",
-           {opset14}, [reshape_kernel14]() -> IoData {
+           {opset14}, []() -> IoData {
+             const OpsetId opset14 = DefaultOpset(14);
+
+             const KernelContext reshape_kernel14_ctx{opset14};
+             const onnx_kernels::kernel::Reshape reshape_kernel14{reshape_kernel14_ctx};
+
              const Tensor data = Tensor::FromFloat("", {0, 2}, {});
              const Tensor shape = MakeShapeTensor({0, 2});
-             const Tensor output = reshape_kernel14.Invoke(
-                 [&](const auto &kernel) { return kernel(data, shape, /*allowzero=*/1); });
+             const Tensor output = reshape_kernel14(data, shape, /*allowzero=*/1);
              return IoData{{std::move(data), std::move(shape)}, {std::move(output)}};
            });
   }
@@ -105,15 +115,19 @@ void RegisterReshapeCases(std::vector<TestCase> &registry, TestMode mode) {
     };
     for (const auto &c : cases) {
       Expect(registry, MakeReshapeNode(), "test_cc_reshape_" + c.first, {opset14},
-             [reshape_kernel14, shape_vec = c.second]() -> IoData {
+             [shape_vec = c.second]() -> IoData {
+               const OpsetId opset14 = DefaultOpset(14);
+
+               const KernelContext reshape_kernel14_ctx{opset14};
+               const onnx_kernels::kernel::Reshape reshape_kernel14{reshape_kernel14_ctx};
+
                std::vector<float> values(24);
                for (size_t i = 0; i < values.size(); ++i) {
                  values[i] = static_cast<float>(i);
                }
                Tensor data = Tensor::FromFloat("", {2, 3, 4}, values);
                Tensor shape = MakeShapeTensor(shape_vec);
-               Tensor output =
-                   reshape_kernel14.Invoke([&](const auto &kernel) { return kernel(data, shape); });
+               Tensor output = reshape_kernel14(data, shape);
                return IoData{{std::move(data), std::move(shape)}, {std::move(output)}};
              });
     }
@@ -121,11 +135,15 @@ void RegisterReshapeCases(std::vector<TestCase> &registry, TestMode mode) {
 
   {
     Expect(registry, MakeReshapeNode(/*allowzero=*/1), "test_cc_reshape_allowzero_reordered",
-           {opset14}, [reshape_kernel14]() -> IoData {
+           {opset14}, []() -> IoData {
+             const OpsetId opset14 = DefaultOpset(14);
+
+             const KernelContext reshape_kernel14_ctx{opset14};
+             const onnx_kernels::kernel::Reshape reshape_kernel14{reshape_kernel14_ctx};
+
              const Tensor data = Tensor::FromFloat("", {0, 3, 4}, {});
              const Tensor shape = MakeShapeTensor({3, 4, 0});
-             const Tensor output = reshape_kernel14.Invoke(
-                 [&](const auto &kernel) { return kernel(data, shape, /*allowzero=*/1); });
+             const Tensor output = reshape_kernel14(data, shape, /*allowzero=*/1);
              return IoData{{std::move(data), std::move(shape)}, {std::move(output)}};
            });
   }

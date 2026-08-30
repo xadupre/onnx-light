@@ -48,6 +48,12 @@ class TestKernelTuningBindings(ExtTestCase):
                 "Abs", element_types=[int(TensorProto.FLOAT)], device=0, save=False
             )
 
+    def test_calibration_reports_unknown_device_value(self):
+        with self.assertRaisesRegex(ValueError, "Unknown kernel tuning device value 8192"):
+            rt.calibrate_kernel_tuning(
+                "Abs", element_types=[int(TensorProto.FLOAT)], device=8192, save=False
+            )
+
     def test_calibration_exposes_bounded_parallel_diagnostics(self):
         report = rt.calibrate_kernel_tuning(
             "Abs",

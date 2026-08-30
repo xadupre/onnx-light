@@ -52,7 +52,8 @@ std::string LoadStatusName(rt::KernelTuningCacheLoadStatus status) {
   case rt::KernelTuningCacheLoadStatus::kMalformed:
     return "malformed";
   }
-  throw std::invalid_argument("Unknown kernel tuning cache load status.");
+  throw std::invalid_argument("Unknown kernel tuning cache load status " +
+                              std::to_string(static_cast<int>(status)) + ".");
 }
 
 std::string UpdateStatusName(rt::KernelTuningCacheUpdateStatus status) {
@@ -68,7 +69,8 @@ std::string UpdateStatusName(rt::KernelTuningCacheUpdateStatus status) {
   case rt::KernelTuningCacheUpdateStatus::kWriteFailed:
     return "write_failed";
   }
-  throw std::invalid_argument("Unknown kernel tuning cache update status.");
+  throw std::invalid_argument("Unknown kernel tuning cache update status " +
+                              std::to_string(static_cast<int>(status)) + ".");
 }
 
 nb::object TuningValueToPython(const rt::TuningValue &value) {
@@ -217,7 +219,8 @@ rt::KernelCalibrationSelection MakeSelection(const std::optional<std::string> &k
   if (device.has_value()) {
     const auto selected_device = static_cast<rt::Device>(*device);
     if (symbolic::DeviceName(selected_device) == "Unknown") {
-      throw std::invalid_argument("Unknown kernel tuning device value.");
+      throw std::invalid_argument("Unknown kernel tuning device value " + std::to_string(*device) +
+                                  ".");
     }
     selection.device = selected_device;
   }

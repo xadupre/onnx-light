@@ -248,6 +248,16 @@ TEST(KernelTuningLatency, RejectsInvalidRowsAndReportsMissingRows) {
   EXPECT_FALSE(unavailable_speedup.selected_index.has_value());
 }
 
+TEST(KernelTuningCriterion, ReportsUnknownCriterionValue) {
+  constexpr auto unknown = static_cast<KernelTuningCriterion>(-1);
+  try {
+    KernelTuningCriterionName(unknown);
+    FAIL() << "Expected an invalid criterion to throw.";
+  } catch (const std::invalid_argument &error) {
+    EXPECT_STREQ(error.what(), "Unknown kernel tuning criterion -1.");
+  }
+}
+
 TEST(KernelTuningSchema, AcceptsCompleteParametersAndRunsValidationHook) {
   KernelTuningSchema schema(KernelTuningSchema::WithQueryValidation(
       MakeDefaults(), [](const KernelTuningParameters &parameters) -> std::optional<std::string> {

@@ -18,6 +18,7 @@
 #include <mutex>
 #include <numeric>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <unordered_set>
 #include <utility>
@@ -48,7 +49,8 @@ double CriterionValue(const KernelTuningLatencyMetrics &metrics, KernelTuningCri
   case KernelTuningCriterion::kMaxLatency:
     return metrics.max_latency;
   }
-  throw std::invalid_argument("Unknown kernel tuning criterion.");
+  throw std::invalid_argument("Unknown kernel tuning criterion " +
+                              std::to_string(static_cast<int>(criterion)) + ".");
 }
 
 bool Maximizes(KernelTuningCriterion criterion) {
@@ -309,7 +311,8 @@ std::string_view KernelTuningCriterionName(KernelTuningCriterion criterion) {
   case KernelTuningCriterion::kMaxLatency:
     return "max-latency";
   }
-  throw std::invalid_argument("Unknown kernel tuning criterion.");
+  throw std::invalid_argument("Unknown kernel tuning criterion " +
+                              std::to_string(static_cast<int>(criterion)) + ".");
 }
 
 KernelTuningLatencyReport

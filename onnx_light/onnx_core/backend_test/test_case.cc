@@ -6,6 +6,7 @@
 #include "onnx_core/backend_test/test_case_registry.h"
 
 #include <stdexcept>
+#include <string>
 
 namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
 
@@ -48,7 +49,8 @@ std::string_view TestCaseKindName(TestCaseKind kind) {
   case TestCaseKind::MODEL:
     return "model";
   }
-  throw std::invalid_argument("Unknown TestCaseKind value.");
+  throw std::invalid_argument("Unknown TestCaseKind value " +
+                              std::to_string(static_cast<int>(kind)) + ".");
 }
 
 std::string_view TestCaseTagName(TestCaseTag tag) {
@@ -82,7 +84,8 @@ std::string_view TestCaseTagName(TestCaseTag tag) {
   case TestCaseTag::SHAPE_TAG:
     return "shape_tag";
   }
-  throw std::invalid_argument("Unknown TestCaseTag value.");
+  throw std::invalid_argument("Unknown TestCaseTag value " + std::to_string(static_cast<int>(tag)) +
+                              ".");
 }
 
 TestCase::TestCase(TestCase &&other) noexcept

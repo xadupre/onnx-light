@@ -284,11 +284,15 @@ class ExtTestCase(unittest.TestCase):
             expected = np.array(expected)
         if not isinstance(value, np.ndarray):
             value = np.array(value).astype(expected.dtype)
-        try:
-            self.assertEqual(expected.dtype, value.dtype)
-            self.assertEqual(expected.shape, value.shape)
-            self.assertAlmostEqual(expected, value, places, delta=delta, atol=atol, rtol=rtol)
-        except AssertionError:
+        if expected.dtype != value.dtype or expected.shape != value.shape:
+            return
+        if delta is not None:
+            if atol is not None:
+                raise TypeError("specify delta or atol, not both")
+            atol = delta
+        if atol is None:
+            atol = 0 if rtol else 0.5 * 10 ** (-places)
+        if not np.allclose(expected, value, atol=atol, rtol=rtol, equal_nan=True):
             return
         self.fail(msg or f"{expected!r} and {value!r} are unexpectedly almost equal.")
 

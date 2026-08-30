@@ -1040,7 +1040,7 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     NodeProto node = make_node();
     AddGraphAttribute(node, "score_mod", BuildScoreModBias(modifier_shape, kBias));
     Expect(registry, std::move(node), "test_cc_flexattention_score_mod", {default_opset, opset},
-           [default_scale]() -> IoData {
+           [default_scale, kBias]() -> IoData {
              Tensor Q = Tensor::FromFloat("", {1, 2, 2, 2},
                                           {1.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.5f, 1.0f, -1.0f});
              Tensor K = Tensor::FromFloat("", {1, 2, 2, 2},
@@ -1110,7 +1110,7 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry, TestMode mode) 
     NodeProto node = make_node();
     AddGraphAttribute(node, "score_mod", BuildScoreModSoftCap(modifier_shape, kCap));
     Expect(registry, std::move(node), "test_cc_flexattention_soft_cap", {default_opset, opset},
-           [default_scale]() -> IoData {
+           [default_scale, kCap]() -> IoData {
              Tensor Q = Tensor::FromFloat("", {1, 2, 2, 2},
                                           {1.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.5f, 1.0f, -1.0f});
              Tensor K = Tensor::FromFloat("", {1, 2, 2, 2},

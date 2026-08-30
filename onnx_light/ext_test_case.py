@@ -249,6 +249,7 @@ class ExtTestCase(unittest.TestCase):
         atol: Optional[float] = None,
         rtol: float = 0,
     ):
+        """Compares scalars with unittest semantics and arrays with NumPy tolerances."""
         if not isinstance(expected, np.ndarray) and not isinstance(value, np.ndarray):
             if atol is None and rtol == 0:
                 return super().assertAlmostEqual(expected, value, places, msg, delta)
@@ -261,7 +262,7 @@ class ExtTestCase(unittest.TestCase):
                 raise TypeError("specify delta or atol, not both")
             atol = delta
         if atol is None:
-            atol = 0.5 * 10 ** (-places)
+            atol = 0 if rtol else 0.5 * 10 ** (-places)
         self.assertEqualArray(expected, value, atol=atol, rtol=rtol, msg=msg)
 
     def assertNotAlmostEqual(
@@ -275,6 +276,7 @@ class ExtTestCase(unittest.TestCase):
         atol: Optional[float] = None,
         rtol: float = 0,
     ):
+        """Verifies scalars or arrays differ according to the requested tolerances."""
         if not isinstance(expected, np.ndarray) and not isinstance(value, np.ndarray):
             if atol is None and rtol == 0:
                 return super().assertNotAlmostEqual(expected, value, places, msg, delta)

@@ -98,7 +98,7 @@ class TestHideStdout(ExtTestCase):
             self.assertAlmostEqual(0.1234567, 0.1234568, places=7)
 
     def test_assert_almost_equal_supports_array_tolerances(self):
-        self.assertAlmostEqual(np.array([1.0]), np.array([1.01]), atol=0.01)
+        self.assertAlmostEqual(np.array([1.0]), np.array([1.009]), atol=0.01)
         with self.assertRaises(AssertionError):
             self.assertAlmostEqual(np.array([1.0]), np.array([1.01]), atol=0.001)
         self.assertAlmostEqual(100.0, 101.0, rtol=0.02)

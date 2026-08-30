@@ -28,6 +28,8 @@ from dataclasses import dataclass, field
 from functools import cache
 from typing import Iterable
 
+from ...onnx_py._onnxpybackend import backend_test as _backend_test_cc  # type: ignore
+
 import numpy as np
 
 from ... import onnx as onnxl
@@ -504,7 +506,7 @@ def compute_runtime_coverage(
                 name=tc.name,
                 op_type=op_type,
                 domain=domain,
-                tag=getattr(tc, "tag", ""),
+                tag=(_backend_test_cc.test_case_tag_name(tc.tag) if hasattr(tc, "tag") else ""),
                 onnxruntime_cpu=ort_diff,
                 onnxruntime_ok=ort_ok,
                 onnxruntime_error=ort_err,

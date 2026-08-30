@@ -1,5 +1,7 @@
 from .base import (
     Base,
+    TestCaseKind,
+    TestCaseTag,
     collect_test_case,
     expect,
     get_test_case,

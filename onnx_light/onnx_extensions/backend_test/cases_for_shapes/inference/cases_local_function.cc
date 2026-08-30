@@ -55,7 +55,7 @@ void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry
 
   const std::string name = "test_cc_shape_inference_local_function_add";
 
-  TestCase tc(name, name, "model", "inference");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -165,7 +165,7 @@ void RegisterLocalFunctionRangeShapeInferenceCases(std::vector<TestCase> &regist
 
   const std::string name = "test_cc_shape_inference_local_function_range";
 
-  TestCase tc(name, name, "model", "inference");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

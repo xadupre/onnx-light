@@ -48,7 +48,7 @@ void RegisterCompressEmptyShapeCases(std::vector<TestCase> &registry, TestMode /
     Tensor output = compress_kernel(input, condition, std::nullopt);
     Expect(MakeCompressNode(std::nullopt), {input, condition}, {output},
            "test_cc_compress_empty_shape_no_axis_all_false", {opset}, "backend-test", registry,
-           "empty_shape");
+           TestCaseTag::EMPTY_SHAPE);
   }
 
   // test_cc_compress_empty_shape_axis0_all_false — axis mode, condition
@@ -59,7 +59,7 @@ void RegisterCompressEmptyShapeCases(std::vector<TestCase> &registry, TestMode /
     Tensor output = compress_kernel(input, condition, 0);
     Expect(MakeCompressNode(0), {input, condition}, {output},
            "test_cc_compress_empty_shape_axis0_all_false", {opset}, "backend-test", registry,
-           "empty_shape");
+           TestCaseTag::EMPTY_SHAPE);
   }
 
   // test_cc_compress_empty_shape_input_zero_dim — input itself already has a
@@ -71,7 +71,7 @@ void RegisterCompressEmptyShapeCases(std::vector<TestCase> &registry, TestMode /
     Tensor output = compress_kernel(input, condition, 0);
     Expect(MakeCompressNode(0), {input, condition}, {output},
            "test_cc_compress_empty_shape_input_zero_dim", {opset}, "backend-test", registry,
-           "empty_shape");
+           TestCaseTag::EMPTY_SHAPE);
   }
 }
 

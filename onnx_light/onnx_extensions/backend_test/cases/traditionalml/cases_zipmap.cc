@@ -43,7 +43,7 @@ void RegisterZipMapCases(std::vector<TestCase> &registry, TestMode mode) {
              Tensor z = zipmap(x, class_labels);
              return IoData{{std::move(x)}, {std::move(z)}};
            },
-           "backend-test", "",
+           "backend-test", TestCaseTag::NONE,
            {SequenceTypeSpec(MapTypeSpec(static_cast<int32_t>(DataType::INT64),
                                          TensorTypeSpec(static_cast<int32_t>(DataType::FLOAT))))});
     return;
@@ -70,7 +70,7 @@ void RegisterZipMapCases(std::vector<TestCase> &registry, TestMode mode) {
 
              return IoData{{std::move(x)}, {std::move(z)}};
            },
-           "backend-test", "",
+           "backend-test", TestCaseTag::NONE,
            {SequenceTypeSpec(MapTypeSpec(static_cast<int32_t>(DataType::INT64),
                                          TensorTypeSpec(static_cast<int32_t>(DataType::FLOAT))))});
   }
@@ -96,7 +96,7 @@ void RegisterZipMapCases(std::vector<TestCase> &registry, TestMode mode) {
 
              return IoData{{std::move(x)}, {std::move(z)}};
            },
-           "backend-test", "",
+           "backend-test", TestCaseTag::NONE,
            {SequenceTypeSpec(MapTypeSpec(static_cast<int32_t>(DataType::STRING),
                                          TensorTypeSpec(static_cast<int32_t>(DataType::FLOAT))))});
   }

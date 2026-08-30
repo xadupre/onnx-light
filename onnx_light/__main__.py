@@ -575,6 +575,7 @@ def _measure_backend_test_cases_with_timeout(
     """Measures backend cases in a worker that is replaced after a timeout."""
     import multiprocessing
 
+    from .onnx_py._onnxpybackend import backend_test  # type: ignore
     from ._backend_cli import (
         backend_test_worker_ready,
         initialize_backend_test_worker,
@@ -623,8 +624,8 @@ def _measure_backend_test_cases_with_timeout(
                 reports.append(
                     {
                         "name": case.name,
-                        "kind": case.kind,
-                        "tag": case.tag,
+                        "kind": backend_test.test_case_kind_name(case.kind),
+                        "tag": backend_test.test_case_tag_name(case.tag),
                         "status": "timeout",
                         "timed_out": True,
                         "error": f"exceeded {timeout_seconds:g} seconds",

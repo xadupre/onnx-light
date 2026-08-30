@@ -51,6 +51,8 @@ using core::backend_test::IoData;
 using core::backend_test::OpsetId;
 using core::backend_test::TensorTypeSpec;
 using core::backend_test::TestCase;
+using core::backend_test::TestCaseKind;
+using core::backend_test::TestCaseTag;
 using core::runtime::Tensor;
 
 namespace Test {
@@ -140,8 +142,8 @@ TEST(BackendTestCase, ExpectBuildsSingleNodeModel) {
   ASSERT_EQ(registry.size(), 1u);
   const TestCase &tc = registry[0];
   EXPECT_EQ(tc.name, "test_dummy_add");
-  EXPECT_EQ(tc.kind, "node");
-  EXPECT_EQ(tc.tag, "");
+  EXPECT_EQ(tc.kind, TestCaseKind::NODE);
+  EXPECT_EQ(tc.tag, TestCaseTag::NONE);
   EXPECT_EQ(tc.data_sets().size(), 1u);
   EXPECT_EQ(tc.data_sets()[0].inputs.size(), 2u);
   EXPECT_EQ(tc.data_sets()[0].outputs.size(), 1u);
@@ -280,7 +282,7 @@ TEST(BackendTestCase, TagDefaultsToEmptyForOrdinaryCases) {
   onnx_backend_test::CollectMathTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
-    EXPECT_EQ(tc.tag, "") << "case: " << tc.name;
+    EXPECT_EQ(tc.tag, TestCaseTag::NONE) << "case: " << tc.name;
   }
 }
 
@@ -289,7 +291,7 @@ TEST(BackendTestCase, TagIsEmptyShapeForEmptyShapeCases) {
   onnx_backend_test::CollectEmptyShapeTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
-    EXPECT_EQ(tc.tag, "empty_shape") << "case: " << tc.name;
+    EXPECT_EQ(tc.tag, TestCaseTag::EMPTY_SHAPE) << "case: " << tc.name;
   }
 }
 
@@ -298,7 +300,7 @@ TEST(BackendTestCase, TagIsNanInfForNanInfCases) {
   onnx_backend_test::CollectNanInfTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
-    EXPECT_EQ(tc.tag, "nan_inf") << "case: " << tc.name;
+    EXPECT_EQ(tc.tag, TestCaseTag::NAN_INF) << "case: " << tc.name;
   }
 }
 
@@ -307,7 +309,7 @@ TEST(BackendTestCase, TagIsInferenceForShapeInferenceCases) {
   onnx_backend_test::CollectShapeInferenceTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
-    EXPECT_EQ(tc.tag, "inference") << "case: " << tc.name;
+    EXPECT_EQ(tc.tag, TestCaseTag::INFERENCE) << "case: " << tc.name;
   }
 }
 
@@ -316,7 +318,7 @@ TEST(BackendTestCase, TagIsInPlaceForInPlaceCases) {
   onnx_backend_test::CollectInPlaceTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
-    EXPECT_EQ(tc.tag, "inplace") << "case: " << tc.name;
+    EXPECT_EQ(tc.tag, TestCaseTag::INPLACE) << "case: " << tc.name;
   }
 }
 
@@ -325,7 +327,7 @@ TEST(BackendTestCase, TagIsReleaseForReleaseCases) {
   onnx_backend_test::CollectReleaseTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
-    EXPECT_EQ(tc.tag, "release") << "case: " << tc.name;
+    EXPECT_EQ(tc.tag, TestCaseTag::RELEASE) << "case: " << tc.name;
   }
 }
 
@@ -334,7 +336,7 @@ TEST(BackendTestCase, TagIsShapeTagForShapeTagCases) {
   onnx_backend_test::CollectShapeTagTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
-    EXPECT_EQ(tc.tag, "shape_tag") << "case: " << tc.name;
+    EXPECT_EQ(tc.tag, TestCaseTag::SHAPE_TAG) << "case: " << tc.name;
   }
 }
 
@@ -356,7 +358,7 @@ TEST(BackendTestCase, TagDefaultsToDomainForNonDefaultDomainNode) {
          {OpsetId("ai.onnx.ml", 1)}, "backend-test", registry);
 
   ASSERT_EQ(registry.size(), 1u);
-  EXPECT_EQ(registry[0].tag, "ai.onnx.ml");
+  EXPECT_EQ(registry[0].tag, TestCaseTag::AI_ONNX_ML);
 }
 
 TEST(BackendTestCase, TagStaysEmptyForDefaultDomainNode) {
@@ -373,7 +375,7 @@ TEST(BackendTestCase, TagStaysEmptyForDefaultDomainNode) {
          "backend-test", registry);
 
   ASSERT_EQ(registry.size(), 1u);
-  EXPECT_EQ(registry[0].tag, "");
+  EXPECT_EQ(registry[0].tag, TestCaseTag::NONE);
 }
 
 TEST(BackendTestCase, InputOnlyLazyCaseSkipsExpectedOutputOracle) {
@@ -394,7 +396,7 @@ TEST(BackendTestCase, InputOnlyLazyCaseSkipsExpectedOutputOracle) {
            }
            return io;
          },
-         "backend-test", "", {TensorTypeSpec(TensorProto::FLOAT, {2})});
+         "backend-test", TestCaseTag::NONE, {TensorTypeSpec(TensorProto::FLOAT, {2})});
 
   ASSERT_EQ(registry.size(), 1u);
   registry[0].set_expected_outputs_generated(false);
@@ -418,10 +420,10 @@ TEST(BackendTestCase, ExplicitTagOverridesDomainDefault) {
   std::vector<TestCase> registry;
   Expect(node, {Tensor::FromFloat("x", {2}, {1.0f, 2.0f})},
          {Tensor::FromFloat("y", {2}, {0.0f, 1.0f})}, "test_cc_explicit_tag",
-         {OpsetId("ai.onnx.ml", 1)}, "backend-test", registry, "inference");
+         {OpsetId("ai.onnx.ml", 1)}, "backend-test", registry, TestCaseTag::INFERENCE);
 
   ASSERT_EQ(registry.size(), 1u);
-  EXPECT_EQ(registry[0].tag, "inference");
+  EXPECT_EQ(registry[0].tag, TestCaseTag::INFERENCE);
 }
 
 TEST(BackendTestCase, CollectReturnsExpectedNames) {

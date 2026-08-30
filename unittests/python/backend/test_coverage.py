@@ -14,6 +14,7 @@ compute_test_case_coverage = _coverage.compute_test_case_coverage
 _case_base = import_or_skip("onnx_light.onnx_lib.backend.test.case.base")
 ALL_TESTS = _case_base.ALL_TESTS
 TestCase = _case_base.TestCase
+TestCaseKind = _case_base.TestCaseKind
 
 
 def _make_test_case(
@@ -56,7 +57,7 @@ def _make_test_case(
         model_dir=None,
         model=model,
         data_sets=[(list(inputs), list(outputs))],
-        kind="node",
+        kind=TestCaseKind.NODE,
         atol=1e-7,
         rtol=1e-3,
     )
@@ -176,7 +177,7 @@ class TestCoverage(ExtTestCase):
             model_dir=None,
             model=model,
             data_sets=[([a], [np.abs(a)])],
-            kind="node",
+            kind=TestCaseKind.NODE,
             atol=1e-7,
             rtol=1e-3,
         )

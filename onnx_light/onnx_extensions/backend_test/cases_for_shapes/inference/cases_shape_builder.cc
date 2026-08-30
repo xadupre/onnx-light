@@ -76,7 +76,7 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry, Test
 
   const std::string name = "test_cc_shape_inference_check_shape";
 
-  TestCase tc(name, name, "model", "inference");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -226,7 +226,7 @@ void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry, 
 
   const std::string name = "test_cc_shape_inference_reshape_reshape";
 
-  TestCase tc(name, name, "model", "inference");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -300,7 +300,7 @@ void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &regis
 
   const std::string name = "test_cc_shape_inference_value_as_shape_builder";
 
-  TestCase tc(name, name, "model", "inference");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
   tc.rtol = 1e-3;
   tc.atol = 1e-5;
 
@@ -437,7 +437,7 @@ void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, boo
   const std::string name = even ? "test_cc_shape_inference_concat_split_even"
                                 : "test_cc_shape_inference_concat_split_odd";
 
-  TestCase tc(name, name, "model", "inference");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

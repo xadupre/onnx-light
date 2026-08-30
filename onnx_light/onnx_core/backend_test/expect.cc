@@ -146,24 +146,36 @@ std::function<BuiltCase(bool)> MakeLazyBuild(std::shared_ptr<LazyCaseState> stat
 }
 
 // Resolves the grouping tag for a node the same way :func:`Expect` does.
-std::string ResolveTag(const NodeProto &node, const std::string &tag) {
-  if (!tag.empty()) {
+TestCaseTag ResolveTag(const NodeProto &node, TestCaseTag tag) {
+  if (tag != TestCaseTag::NONE) {
     return tag;
   }
   const std::string node_domain = node.domain();
-  if (!node_domain.empty() && node_domain != "ai.onnx") {
-    return node_domain;
+  if (node_domain == "ai.onnx.ml") {
+    return TestCaseTag::AI_ONNX_ML;
   }
-  return "";
+  if (node_domain == "ai.onnx.preview") {
+    return TestCaseTag::AI_ONNX_PREVIEW;
+  }
+  if (node_domain == "ai.onnx.preview.training") {
+    return TestCaseTag::AI_ONNX_PREVIEW_TRAINING;
+  }
+  if (node_domain == "ai.rt") {
+    return TestCaseTag::AI_RT;
+  }
+  if (!node_domain.empty() && node_domain != "ai.onnx") {
+    throw std::invalid_argument("Unsupported backend test node domain '" + node_domain + "'.");
+  }
+  return TestCaseTag::NONE;
 }
 
 } // namespace
 
 void Expect(const NodeProto &node, const Tensors &inputs, const Tensors &outputs,
             const std::string &name, const std::vector<OpsetId> &opset_imports,
-            const std::string &producer_name, std::vector<TestCase> &registry,
-            const std::string &tag, const std::vector<TypeSpec> &output_types) {
-  const std::string resolved_tag = ResolveTag(node, tag);
+            const std::string &producer_name, std::vector<TestCase> &registry, TestCaseTag tag,
+            const std::vector<TypeSpec> &output_types) {
+  const TestCaseTag resolved_tag = ResolveTag(node, tag);
 
   // Validate arity eagerly so callers still get an immediate error at
   // registration time even though the model/data set are built lazily.
@@ -177,7 +189,7 @@ void Expect(const NodeProto &node, const Tensors &inputs, const Tensors &outputs
       output_types.empty() || output_types.size() == outputs.size(),
       "Expect: output_types, when provided, must have one entry per output tensor.");
 
-  TestCase tc(name, name, "node", resolved_tag);
+  TestCase tc(name, name, TestCaseKind::NODE, resolved_tag);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
   for (const auto &t : inputs) {
@@ -203,8 +215,8 @@ void Expect(const NodeProto &node, const Tensors &inputs, const Tensors &outputs
 void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
             std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
             std::vector<int64_t> out_counts, std::function<IoData()> make_io,
-            std::string producer_name, std::string tag, std::vector<TypeSpec> output_types) {
-  const std::string resolved_tag = ResolveTag(node, tag);
+            std::string producer_name, TestCaseTag tag, std::vector<TypeSpec> output_types) {
+  const TestCaseTag resolved_tag = ResolveTag(node, tag);
 
   auto state = std::make_shared<LazyCaseState>();
   state->node = std::move(node);
@@ -214,7 +226,7 @@ void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
   state->output_types = std::move(output_types);
   state->make_io = [make_io = std::move(make_io)](bool) mutable { return make_io(); };
 
-  TestCase tc(name, name, "node", resolved_tag);
+  TestCase tc(name, name, TestCaseKind::NODE, resolved_tag);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
   tc.declared_input_element_counts = std::move(in_counts);
@@ -227,8 +239,8 @@ void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
 void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
             std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
             std::vector<int64_t> out_counts, std::function<IoData(bool)> make_io,
-            std::string producer_name, std::string tag, std::vector<TypeSpec> output_types) {
-  const std::string resolved_tag = ResolveTag(node, tag);
+            std::string producer_name, TestCaseTag tag, std::vector<TypeSpec> output_types) {
+  const TestCaseTag resolved_tag = ResolveTag(node, tag);
 
   auto state = std::make_shared<LazyCaseState>();
   state->node = std::move(node);
@@ -238,7 +250,7 @@ void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
   state->output_types = std::move(output_types);
   state->make_io = std::move(make_io);
 
-  TestCase tc(name, name, "node", resolved_tag);
+  TestCase tc(name, name, TestCaseKind::NODE, resolved_tag);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
   tc.declared_input_element_counts = std::move(in_counts);

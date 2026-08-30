@@ -43,7 +43,7 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
 
   const std::string name = "test_cc_shape_tag_shape_reshape";
 
-  TestCase tc(name, name, "model", "shape_tag");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -125,7 +125,7 @@ void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry, TestMode /*
 
   const std::string name = "test_cc_shape_tag_constant_reshape_ambiguous";
 
-  TestCase tc(name, name, "model", "shape_tag");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -230,7 +230,7 @@ void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &regist
 
   const std::string name = "test_cc_shape_tag_constant_mul_concat_reshape";
 
-  TestCase tc(name, name, "model", "shape_tag");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -396,7 +396,7 @@ void RegisterShapeTagOutputAsShapeCases(std::vector<TestCase> &registry, TestMod
 
   const std::string name = "test_cc_shape_tag_output_is_shape";
 
-  TestCase tc(name, name, "model", "shape_tag");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -461,7 +461,7 @@ void RegisterShapeTagConcatWeightWinsCases(std::vector<TestCase> &registry, Test
 
   const std::string name = "test_cc_shape_tag_concat_weight_wins";
 
-  TestCase tc(name, name, "model", "shape_tag");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -541,7 +541,7 @@ void RegisterShapeTagCastBackwardCases(std::vector<TestCase> &registry, TestMode
 
   const std::string name = "test_cc_shape_tag_cast_backward";
 
-  TestCase tc(name, name, "model", "shape_tag");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -638,7 +638,7 @@ void RegisterShapeTagReshapeBackwardCases(std::vector<TestCase> &registry, TestM
 
   const std::string name = "test_cc_shape_tag_reshape_backward";
 
-  TestCase tc(name, name, "model", "shape_tag");
+  TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::SHAPE_TAG);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

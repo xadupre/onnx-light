@@ -128,6 +128,12 @@ or
 python setup.py build_ext --inplace
 ```
 
+The `setup.py build_ext --inplace` command refuses to run when an editable
+`onnx-light` installation is active, because its import hook can hide the
+extensions built in the source tree. Uninstall it first with
+`python -m pip uninstall onnx-light`; the error reports any remaining hook that
+must be removed.
+
 `setup.py build_ext` configures CMake with `-DCMAKE_BUILD_TYPE=Release` by
 default (unless `CMAKE_ARGS` already sets `CMAKE_BUILD_TYPE`).
 ``--cpp-tests`` can be used to build the C++ unit tests and run them with

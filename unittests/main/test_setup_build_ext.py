@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -23,6 +24,34 @@ skip_test = has_setuptool()
 
 
 class TestSetupBuildExt(ExtTestCase):
+    def test_setup_build_ext_inplace_rejects_editable_install(self):
+        """Verifies that an existing editable hook blocks an inplace build."""
+        root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            hook = Path(temporary_directory) / "_editable_skbc_onnx_light.pth"
+            hook.touch()
+            env = dict(os.environ)
+            python_path = env.get("PYTHONPATH")
+            env["PYTHONPATH"] = (
+                f"{temporary_directory}{os.pathsep}{python_path}"
+                if python_path
+                else temporary_directory
+            )
+            proc = subprocess.run(
+                [sys.executable, "setup.py", "build_ext", "--inplace"],
+                cwd=root,
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertNotEqual(proc.returncode, 0)
+        output = f"{proc.stdout}\n{proc.stderr}"
+        self.assertIn("editable onnx-light installation is active", output)
+        self.assertIn(str(hook), output)
+        self.assertNotIn("cmake -S", output)
+
     def test_cpp_build_info_uses_python_runtime_library(self):
         info = get_cpp_build_info()
         library_dir = Path(_onnxpyprotoop.__file__).resolve().parent

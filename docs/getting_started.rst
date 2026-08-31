@@ -13,6 +13,12 @@ or
 
     python setup.py build_ext --inplace
 
+The ``setup.py build_ext --inplace`` command refuses to run when an editable
+``onnx-light`` installation is active, because its import hook can hide the
+extensions built in the source tree. Uninstall it first with
+``python -m pip uninstall onnx-light``; the error reports any remaining hook
+that must be removed.
+
 To speed up compilation with multiple threads, pass ``--parallel`` (or ``-j``)
 with the number of jobs:
 

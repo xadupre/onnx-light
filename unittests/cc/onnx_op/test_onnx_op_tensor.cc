@@ -116,7 +116,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 133u);
+  EXPECT_EQ(schemas.size(), 134u);
 
   const core::schema::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const core::schema::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -127,6 +127,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const core::schema::LightOpSchema *const cast_v23 = FindByVersion(cast_schemas, 23);
   const core::schema::LightOpSchema *const cast_v24 = FindByVersion(cast_schemas, 24);
   const core::schema::LightOpSchema *const cast_v25 = FindByVersion(cast_schemas, 25);
+  const core::schema::LightOpSchema *const cast_v28 = FindByVersion(cast_schemas, 28);
   ASSERT_NE(nullptr, cast_v1);
   ASSERT_NE(nullptr, cast_v6);
   ASSERT_NE(nullptr, cast_v9);
@@ -136,6 +137,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, cast_v23);
   ASSERT_NE(nullptr, cast_v24);
   ASSERT_NE(nullptr, cast_v25);
+  ASSERT_NE(nullptr, cast_v28);
   EXPECT_EQ(cast_v25->domain(), "ai.onnx");
   EXPECT_EQ(cast_v25->inputs().size(), 1u);
   EXPECT_EQ(cast_v25->outputs().size(), 1u);
@@ -149,6 +151,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   EXPECT_EQ(cast_v23->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer23());
   EXPECT_EQ(cast_v24->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer24());
   EXPECT_EQ(cast_v25->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer25());
+  EXPECT_EQ(cast_v28->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer28());
   EXPECT_NE(cast_v1->type_constraints()[0].allowed_type_strs,
             cast_v9->type_constraints()[0].allowed_type_strs);
   EXPECT_NE(cast_v19->type_constraints()[0].allowed_type_strs,

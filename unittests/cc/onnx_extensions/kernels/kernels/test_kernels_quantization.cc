@@ -99,6 +99,26 @@ TEST(KernelClass, QuantizeLinearInt8WithZeroPoint) {
   EXPECT_EQ(static_cast<int>(py[3]), 127); // 300/2 + (-10) = 140 -> saturates at INT8 max
 }
 
+TEST(KernelClass, QuantizeAndDequantizeLinearFloat6) {
+  const KernelContext ctx{DefaultOpset(28)};
+  QuantizeLinear quantize{ctx};
+  DequantizeLinear dequantize{ctx};
+  Tensor x = Tensor::FromFloat("", {5}, {-1.0f, -0.5f, 0.0f, 1.0f, 2.0f});
+  Tensor scale = Tensor::FromFloat("", {}, {1.0f});
+
+  for (const auto &[dtype, expected] :
+       std::vector<std::pair<core::runtime::DataType, std::vector<uint8_t>>>{
+           {core::runtime::DataType::FLOAT6E2M3, {40, 9, 32, 16}},
+           {core::runtime::DataType::FLOAT6E3M2, {44, 10, 48, 16}}}) {
+    const Tensor zero_point("", static_cast<int32_t>(dtype), {1}, {0});
+    Tensor quantized = quantize(x, scale, zero_point);
+    EXPECT_EQ(quantized.data, expected);
+    Tensor restored = dequantize(quantized, scale, zero_point);
+    for (int64_t i = 0; i < x.element_count(); ++i)
+      EXPECT_FLOAT_EQ(restored.AsFloat()[i], x.AsFloat()[i]);
+  }
+}
+
 TEST(KernelClass, QuantizeLinearUint16WithZeroPoint) {
   const KernelContext ctx{DefaultOpset(13)};
   QuantizeLinear q{ctx};

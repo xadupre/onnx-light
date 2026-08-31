@@ -72,6 +72,12 @@ def run_model_backend(model: onnxl.ModelProto, *inputs: np.ndarray) -> list[np.n
     outputs: list[np.ndarray] = []
     for vi in model.graph.output:
         t = ctx.get(vi.name)
+        if int(t.data_type) in {
+            int(onnxl.TensorProto.FLOAT6E2M3),
+            int(onnxl.TensorProto.FLOAT6E3M2),
+        }:
+            outputs.append(onh.to_array(rt.tensor_to_proto(t)))
+            continue
         dtype_map = {
             int(onnxl.TensorProto.FLOAT): np.float32,
             int(onnxl.TensorProto.DOUBLE): np.float64,

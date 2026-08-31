@@ -1985,6 +1985,8 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .value("FLOAT8E8M0", TensorProto::DataType::FLOAT8E8M0)
       .value("UINT2", TensorProto::DataType::UINT2)
       .value("INT2", TensorProto::DataType::INT2)
+      .value("FLOAT6E2M3", TensorProto::DataType::FLOAT6E2M3)
+      .value("FLOAT6E3M2", TensorProto::DataType::FLOAT6E3M2)
       .export_values();
   nb::enum_<TensorProto::DataLocation>(nb_TensorProto, "DataLocation", nb::is_arithmetic())
       .value("DEFAULT", TensorProto::DataLocation::DEFAULT)
@@ -2017,6 +2019,8 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .SHORTEN_CODE(TensorProto::DataType, FLOAT8E8M0)
       .SHORTEN_CODE(TensorProto::DataType, UINT2)
       .SHORTEN_CODE(TensorProto::DataType, INT2)
+      .SHORTEN_CODE(TensorProto::DataType, FLOAT6E2M3)
+      .SHORTEN_CODE(TensorProto::DataType, FLOAT6E3M2)
       .PYFIELD(TensorProto, dims)
       .def_prop_rw(
           "data_type",

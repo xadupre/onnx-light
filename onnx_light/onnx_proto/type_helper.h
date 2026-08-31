@@ -63,6 +63,8 @@ enum class TensorType : uint8_t {
   kInt4,
   kUint2,
   kInt2,
+  kFloat6e2m3,
+  kFloat6e3m2,
   kComplex64,
   kComplex128,
   kSeqBool,
@@ -178,6 +180,10 @@ inline constexpr const char *ToTypeString(TensorType type) {
     return "tensor(uint2)";
   case TensorType::kInt2:
     return "tensor(int2)";
+  case TensorType::kFloat6e2m3:
+    return "tensor(float6e2m3)";
+  case TensorType::kFloat6e3m2:
+    return "tensor(float6e3m2)";
   case TensorType::kComplex64:
     return "tensor(complex64)";
   case TensorType::kComplex128:

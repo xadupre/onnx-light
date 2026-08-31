@@ -235,6 +235,8 @@ class TestOnnxLightHelper(ExtTestCase):
             (onnxl.TensorProto.FLOAT4E2M1, [0, 1, 2, 1, 0]),
             (onnxl.TensorProto.INT2, [0, 1, -2, 1, 0]),
             (onnxl.TensorProto.UINT2, [0, 1, 2, 1, 0]),
+            (onnxl.TensorProto.FLOAT6E2M3, [0, 1, 2, 1, 0]),
+            (onnxl.TensorProto.FLOAT6E3M2, [0, 1, 2, 1, 0]),
         ]
         for data_type, expected in cases:
             with self.subTest(data_type=int(data_type)):

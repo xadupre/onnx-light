@@ -482,12 +482,15 @@ nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
         static_cast<uint8_t *>(OnnxLightNumpyArrayData(OnnxLightNumpyArrayCast(array.ptr())));
     const uint8_t *packed = tensor.bytes();
     const int64_t element_count = tensor.element_count();
-    const bool two_bit =
-        static_cast<TensorProto::DataType>(tensor.data_type) == TensorProto::INT2 ||
-        static_cast<TensorProto::DataType>(tensor.data_type) == TensorProto::UINT2;
-    for (int64_t index = 0; index < element_count; ++index)
-      data[index] = two_bit ? core::runtime::Read2BitElement(packed, index)
-                            : core::runtime::Read4BitElement(packed, index);
+    const auto tensor_type = static_cast<TensorProto::DataType>(tensor.data_type);
+    for (int64_t index = 0; index < element_count; ++index) {
+      if (tensor_type == TensorProto::INT2 || tensor_type == TensorProto::UINT2)
+        data[index] = core::runtime::Read2BitElement(packed, index);
+      else if (tensor_type == TensorProto::FLOAT6E2M3 || tensor_type == TensorProto::FLOAT6E3M2)
+        data[index] = core::runtime::Read6BitElement(packed, index);
+      else
+        data[index] = core::runtime::Read4BitElement(packed, index);
+    }
     return array;
   }
 

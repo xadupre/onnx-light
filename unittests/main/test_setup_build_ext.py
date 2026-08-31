@@ -28,14 +28,16 @@ class TestSetupBuildExt(ExtTestCase):
         """Verifies that an existing editable hook blocks an inplace build."""
         root = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as temporary_directory:
-            hook = Path(temporary_directory) / "_editable_skbc_onnx_light.pth"
+            # setup.py reports resolved paths, Windows temporary directories use 8.3 short names.
+            hook_directory = Path(temporary_directory).resolve()
+            hook = hook_directory / "_editable_skbc_onnx_light.pth"
             hook.touch()
             env = dict(os.environ)
             python_path = env.get("PYTHONPATH")
             env["PYTHONPATH"] = (
-                f"{temporary_directory}{os.pathsep}{python_path}"
+                f"{hook_directory}{os.pathsep}{python_path}"
                 if python_path
-                else temporary_directory
+                else str(hook_directory)
             )
             proc = subprocess.run(
                 [sys.executable, "setup.py", "build_ext", "--inplace"],

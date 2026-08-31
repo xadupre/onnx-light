@@ -205,6 +205,9 @@ size_t PackedByteSize(int32_t dtype, int64_t element_count) {
   case DataType::UINT2:
     // Four 2-bit elements packed per byte (least significant pair first).
     return static_cast<size_t>((element_count + 3) / 4);
+  case DataType::FLOAT6E2M3:
+  case DataType::FLOAT6E3M2:
+    return static_cast<size_t>(element_count / 4 * 3 + (element_count % 4 * 6 + 7) / 8);
   default:
     return static_cast<size_t>(element_count) * ElementSize(dtype);
   }
@@ -515,6 +518,24 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
     uint8_t *dst = make(i32.size());
     for (size_t i = 0; i < i32.size(); ++i) {
       dst[i] = static_cast<uint8_t>(static_cast<uint32_t>(i32[i]));
+    }
+    break;
+  }
+  case TensorProto::DataType::FLOAT6E2M3:
+  case TensorProto::DataType::FLOAT6E3M2: {
+    const auto &i32 = tp.int32_data().values();
+    const size_t packed_size = PackedByteSize(dtype, static_cast<int64_t>(i32.size()));
+    uint8_t *dst = make(packed_size);
+    std::fill_n(dst, packed_size, uint8_t{0});
+    for (size_t i = 0; i < i32.size(); ++i) {
+      const auto value = static_cast<uint8_t>(i32[i]) & 0x3F;
+      const size_t bit_offset = i * 6;
+      const size_t byte_offset = bit_offset / 8;
+      const int shift = static_cast<int>(bit_offset % 8);
+      dst[byte_offset] |= static_cast<uint8_t>(value << shift);
+      if (shift > 2) {
+        dst[byte_offset + 1] |= static_cast<uint8_t>(value >> (8 - shift));
+      }
     }
     break;
   }

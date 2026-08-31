@@ -62,6 +62,8 @@ _TENSOR_PROTO_TO_TYPE_STRING: dict[int, str] = {
     int(_TP.INT4): "tensor(int4)",
     int(_TP.UINT2): "tensor(uint2)",
     int(_TP.INT2): "tensor(int2)",
+    int(_TP.FLOAT6E2M3): "tensor(float6e2m3)",
+    int(_TP.FLOAT6E3M2): "tensor(float6e3m2)",
 }
 
 

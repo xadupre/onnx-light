@@ -61,6 +61,8 @@ void AddOnnxPyOp(nb::module_ &m) {
       .value("kInt4", onnx_proto::TensorType::kInt4)
       .value("kUint2", onnx_proto::TensorType::kUint2)
       .value("kInt2", onnx_proto::TensorType::kInt2)
+      .value("kFloat6e2m3", onnx_proto::TensorType::kFloat6e2m3)
+      .value("kFloat6e3m2", onnx_proto::TensorType::kFloat6e3m2)
       .value("kComplex64", onnx_proto::TensorType::kComplex64)
       .value("kComplex128", onnx_proto::TensorType::kComplex128)
       .value("kSeqBool", onnx_proto::TensorType::kSeqBool)

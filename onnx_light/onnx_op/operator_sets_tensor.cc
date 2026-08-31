@@ -1821,7 +1821,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
              MakeCastSchema(9, CastTypesVer9()),     MakeCastSchema(13, CastTypesVer13()),
              MakeCastSchema(19, CastTypesVer19()),   MakeCastSchema(21, CastTypesVer21()),
              MakeCastSchema(23, CastTypesVer23()),   MakeCastSchema(24, CastTypesVer24()),
-             MakeCastSchema(25, CastTypesVer25()),
+             MakeCastSchema(25, CastTypesVer25()),   MakeCastSchema(28, CastTypesVer28()),
          };
        }},
       {"CastLike",

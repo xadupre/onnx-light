@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -25,6 +26,22 @@ std::vector<core::backend_test::TestCase> CollectTestCases(const std::string &op
 using core::backend_test::TestCase;
 
 namespace Test {
+
+TEST(BackendTestCase, Float6QuantizeAndDequantizeLinearCasesArePresent) {
+  for (const auto &[op_type, names] : std::vector<std::pair<std::string, std::vector<std::string>>>{
+           {"QuantizeLinear", {"test_quantizelinear_float6e2m3", "test_quantizelinear_float6e3m2"}},
+           {"DequantizeLinear",
+            {"test_dequantizelinear_float6e2m3", "test_dequantizelinear_float6e3m2"}}}) {
+    const auto cases = CollectTestCases(op_type);
+    for (const auto &name : names) {
+      const auto found = std::find_if(cases.begin(), cases.end(),
+                                      [&name](const TestCase &c) { return c.name == name; });
+      ASSERT_NE(found, cases.end()) << "missing backend test case: " << name;
+      ASSERT_EQ(found->data_sets().size(), 1u);
+      EXPECT_EQ(found->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{5}));
+    }
+  }
+}
 
 TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
   auto cases = CollectTestCases("QuantizeLinear");

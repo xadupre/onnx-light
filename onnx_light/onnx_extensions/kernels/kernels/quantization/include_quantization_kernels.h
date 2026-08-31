@@ -48,7 +48,8 @@ using ::onnx_light::core::runtime::OpsetId;
 // per-axis (vector ``y_scale``/``y_zero_point``) quantization of a FLOAT
 // input ``x`` to an output ``y`` whose element type is taken from
 // ``y_zero_point`` (UINT8, INT8, UINT16, INT16, FLOAT8E4M3FN, FLOAT8E5M2,
-// INT4, UINT4, INT2, UINT2, or FLOAT4E2M1). When ``y_zero_point`` is omitted
+// INT4, UINT4, INT2, UINT2, FLOAT4E2M1, FLOAT6E2M3, or FLOAT6E3M2). When
+// ``y_zero_point`` is omitted
 // the output defaults to UINT8 with a zero point of 0, matching the ONNX
 // default. The kernel implements the saturating round-half-to-even rule used
 // by ONNX: ``y = saturate(round(x / y_scale) + y_zero_point)``.
@@ -73,7 +74,8 @@ using ::onnx_light::core::runtime::OpsetId;
 /// Per-tensor and per-axis linear quantization of a FLOAT input ``x`` to an
 /// integer or sub-byte output. The output element type is taken from
 /// ``y_zero_point`` (UINT8, INT8, UINT16, INT16, FLOAT8E4M3FN, FLOAT8E5M2,
-/// INT4, UINT4, INT2, UINT2, or FLOAT4E2M1); if ``y_zero_point`` is omitted
+/// INT4, UINT4, INT2, UINT2, FLOAT4E2M1, FLOAT6E2M3, or FLOAT6E3M2); if
+/// ``y_zero_point`` is omitted
 /// the output defaults to UINT8 with a zero point of 0.
 class QuantizeLinear : public KernelBase {
 public:

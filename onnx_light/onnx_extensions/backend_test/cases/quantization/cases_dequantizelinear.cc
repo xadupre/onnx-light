@@ -83,6 +83,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
   const OpsetId opset_v21 = DefaultOpset(25);
   const OpsetId opset_v23 = DefaultOpset(25);
   const OpsetId opset_v25 = DefaultOpset(25);
+  const OpsetId opset_v28 = DefaultOpset(28);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -107,6 +108,29 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
              return IoData{{std::move(x), std::move(x_scale)}, {std::move(y)}};
            });
     return;
+  }
+
+  for (const auto dtype : {DataType::FLOAT6E2M3, DataType::FLOAT6E3M2}) {
+    NodeProto float6_node;
+    float6_node.set_op_type("DequantizeLinear");
+    float6_node.add_input("x");
+    float6_node.add_input("x_scale");
+    float6_node.add_input("x_zero_point");
+    float6_node.add_output("y");
+    const std::string name = dtype == DataType::FLOAT6E2M3 ? "test_dequantizelinear_float6e2m3"
+                                                           : "test_dequantizelinear_float6e3m2";
+    Expect(registry, std::move(float6_node), name, {opset_v28}, [dtype]() -> IoData {
+      const KernelContext kernel_ctx{DefaultOpset(28)};
+      const onnx_kernels::kernel::DequantizeLinear dequantize_kernel{kernel_ctx};
+      const std::vector<uint8_t> packed = dtype == DataType::FLOAT6E2M3
+                                              ? std::vector<uint8_t>{40, 9, 32, 16}
+                                              : std::vector<uint8_t>{44, 10, 48, 16};
+      Tensor x("", static_cast<int32_t>(dtype), {5}, packed);
+      Tensor scale = Tensor::FromFloat("", {}, {1.0f});
+      const Tensor zero_point("", static_cast<int32_t>(dtype), {1}, {0});
+      Tensor y = dequantize_kernel(x, scale, zero_point);
+      return IoData{{std::move(x), std::move(scale), std::move(zero_point)}, {std::move(y)}};
+    });
   }
 
   // Default UINT8 input, x_zero_point omitted.

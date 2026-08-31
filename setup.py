@@ -1,8 +1,89 @@
+import json
 import os
+import re
 import shlex
 import subprocess
 import sys
+from importlib import metadata
 from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import url2pathname
+
+_EDITABLE_HOOK_PATTERNS = ("_editable_skbc_onnx_light.pth", "__editable__.onnx_light-*.pth")
+
+
+def _find_onnx_light_editable_installs(root):
+    """Returns editable onnx-light locations conflicting with an inplace build.
+
+    An editable installation of *root* itself is not a conflict: its import hook
+    points at the very source tree receiving the extensions. Editable
+    installations of another checkout, and hooks left behind by a removed
+    installation, are reported because they redirect imports elsewhere.
+
+    Args:
+        root: The source directory holding ``setup.py``.
+
+    Returns:
+        list[pathlib.Path]: Sorted conflicting source directories and hook files.
+    """
+    locations = set()
+    hook_directories = set()
+
+    for distribution in metadata.distributions():
+        name = distribution.metadata.get("Name", "")
+        if re.sub(r"[-_.]+", "-", name).lower() != "onnx-light":
+            continue
+        direct_url_text = distribution.read_text("direct_url.json")
+        if not direct_url_text:
+            continue
+        try:
+            direct_url = json.loads(direct_url_text)
+        except json.JSONDecodeError:
+            continue
+        if not direct_url.get("dir_info", {}).get("editable", False):
+            continue
+        parsed_url = urlparse(direct_url.get("url", ""))
+        site_directory = Path(distribution.locate_file("")).resolve()
+        if parsed_url.scheme == "file":
+            source = Path(url2pathname(parsed_url.path)).resolve()
+        else:
+            source = site_directory
+        if source == root:
+            hook_directories.add(site_directory)
+        else:
+            locations.add(source)
+
+    for entry in sys.path:
+        if not entry:
+            continue
+        directory = Path(entry)
+        if not directory.is_dir():
+            continue
+        if directory.resolve() in hook_directories:
+            continue
+        for pattern in _EDITABLE_HOOK_PATTERNS:
+            locations.update(path.resolve() for path in directory.glob(pattern))
+
+    return sorted(locations)
+
+
+def _check_no_onnx_light_editable_install(root):
+    """Raises when an editable onnx-light installation could intercept imports.
+
+    Args:
+        root: The source directory holding ``setup.py``.
+    """
+    locations = _find_onnx_light_editable_installs(root)
+    if not locations:
+        return
+    formatted_locations = "\n".join(f"  - {location}" for location in locations)
+    raise RuntimeError(
+        "Cannot run 'setup.py build_ext --inplace' while an editable onnx-light "
+        "installation pointing to another source tree is active. Uninstall it "
+        "first with 'python -m pip uninstall onnx-light' and remove any leftover "
+        "import hook. Detected at:\n"
+        f"{formatted_locations}"
+    )
 
 
 def _cmake_args_from_env():
@@ -156,6 +237,8 @@ except ModuleNotFoundError:
                 i += 1
 
             root = Path(__file__).resolve().parent
+            if inplace:
+                _check_no_onnx_light_editable_install(root)
             build_temp_path = Path(build_temp).resolve()
             build_temp_path.mkdir(parents=True, exist_ok=True)
             if parallel is None:
@@ -328,6 +411,9 @@ class BuildExt(Command):
     def run(self):
         """Runs CMake configure, build, and install commands."""
         root = Path(__file__).resolve().parent
+        if self.inplace:
+            _check_no_onnx_light_editable_install(root)
+
         build_temp = Path(self.build_temp).resolve()
         build_temp.mkdir(parents=True, exist_ok=True)
 

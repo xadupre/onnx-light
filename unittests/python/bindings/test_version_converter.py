@@ -2073,6 +2073,25 @@ class TestVersionConverter(ExtTestCase):
         assert converted_model.graph.node[0].attribute[0].i == 2
         assert converted_model.opset_import[0].version == 12
 
+    def test_softmax_13_12_rejects_reshape_without_output(self) -> None:
+        graph = oh.make_graph(
+            [
+                oh.make_node("Softmax", ["X"], ["Y"], axis=-1),
+                oh.make_node("Reshape", ["Y"], [], domain="local.test"),
+            ],
+            "test_softmax_13_12_rejects_reshape_without_output",
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, (1, 2))],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, (1, 2))],
+        )
+        model = oh.make_model(
+            graph,
+            opset_imports=[oh.make_operatorsetid("", 13), oh.make_operatorsetid("local.test", 1)],
+        )
+        checker.check_model(model)
+
+        with self.assertRaisesRegex(RuntimeError, "Reshape node must have at least 1 output"):
+            version_converter.convert_version(model, 12)
+
     # Test rejects_missing_required_inputs (expanded from parameterized)
     def test_rejects_missing_required_inputs_cast_9_8(self) -> None:
         def test() -> None:

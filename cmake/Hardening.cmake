@@ -190,7 +190,7 @@ else()
   # case; otherwise use level 3 when available, falling back to 2.
   execute_process(
       COMMAND "${CMAKE_CXX_COMPILER}" -dM -E -x c++ -
-      INPUT_FILE /dev/null
+      INPUT_FILE "${CMAKE_NULL_DEVICE}"
       OUTPUT_VARIABLE _onnx_light_cxx_predefines
       ERROR_QUIET)
   if(NOT _onnx_light_cxx_predefines MATCHES "#define _FORTIFY_SOURCE [0-9]+")

@@ -450,6 +450,7 @@ std::vector<TensorType> CastTypesVer23();
 std::vector<TensorType> CastTypesVer24();
 /// Returns the Cast input/output types valid from opset version 25.
 std::vector<TensorType> CastTypesVer25();
+std::vector<TensorType> CastTypesVer28();
 /// Returns the Equal input types valid for opset versions 1 and 7.
 std::vector<TensorType> EqualTypesV1V7();
 /// Returns the Equal input types valid from opset version 11.

@@ -655,6 +655,8 @@ Common::Status OnnxParser::Parse(TensorProto &tensorProto, const TypeProto &tens
         case TensorProto::DataType::FLOAT8E4M3FNUZ:
         case TensorProto::DataType::FLOAT8E5M2:
         case TensorProto::DataType::FLOAT8E5M2FNUZ:
+        case TensorProto::DataType::FLOAT6E2M3:
+        case TensorProto::DataType::FLOAT6E3M2:
         case TensorProto::DataType::FLOAT8E8M0:
         case TensorProto::DataType::BOOL:
         case TensorProto::DataType::FLOAT4E2M1:

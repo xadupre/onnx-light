@@ -83,6 +83,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
   const OpsetId opset_v21 = DefaultOpset(25);
   const OpsetId opset_v23 = DefaultOpset(25);
   const OpsetId opset_v25 = DefaultOpset(25);
+  const OpsetId opset_v28 = DefaultOpset(28);
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -107,6 +108,31 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
              return IoData{{std::move(x), std::move(x_scale)}, {std::move(y)}};
            });
     return;
+  }
+
+  for (const auto dtype : {DataType::FLOAT6E2M3, DataType::FLOAT6E3M2}) {
+    NodeProto float6_node;
+    float6_node.set_op_type("DequantizeLinear");
+    float6_node.add_input("x");
+    float6_node.add_input("x_scale");
+    float6_node.add_output("y");
+    AddAttribute<int64_t>(float6_node, "output_dtype", static_cast<int64_t>(DataType::FLOAT));
+    const std::string name = dtype == DataType::FLOAT6E2M3 ? "test_dequantizelinear_float6e2m3"
+                                                           : "test_dequantizelinear_float6e3m2";
+    Expect(registry, std::move(float6_node), name, {opset_v28}, [dtype]() -> IoData {
+      const std::vector<uint8_t> packed = dtype == DataType::FLOAT6E2M3
+                                              ? std::vector<uint8_t>{0, 24, 32, 223, 7}
+                                              : std::vector<uint8_t>{0, 40, 48, 216, 7};
+      Tensor x("", static_cast<int32_t>(dtype), {6}, packed);
+      Tensor scale = Tensor::FromFloat("", {}, {1.0f});
+      // The final input saturates to each format's maximum finite value.
+      Tensor y =
+          Tensor::FromFloat("", {6},
+                            dtype == DataType::FLOAT6E2M3
+                                ? std::vector<float>{0.0f, -0.0f, 0.125f, 1.0f, 7.5f, 7.5f}
+                                : std::vector<float>{0.0f, -0.0f, 0.125f, 1.0f, 8.0f, 28.0f});
+      return IoData{{std::move(x), std::move(scale)}, {std::move(y)}};
+    });
   }
 
   // Default UINT8 input, x_zero_point omitted.

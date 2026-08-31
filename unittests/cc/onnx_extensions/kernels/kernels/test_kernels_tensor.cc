@@ -224,6 +224,23 @@ TEST(KernelClass, CastClassFloatToInt32TruncatesTowardZero) {
   EXPECT_EQ(py[3], 4);
 }
 
+TEST(KernelClass, CastClassFloat6RoundTripsPackedValues) {
+  const KernelContext ctx{DefaultOpset(28)};
+  Cast cast_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {5}, {-1.0f, -0.5f, 0.0f, 1.0f, 2.0f});
+
+  for (const auto &[dtype, expected_bytes] :
+       std::vector<std::pair<core::runtime::DataType, std::vector<uint8_t>>>{
+           {core::runtime::DataType::FLOAT6E2M3, {40, 9, 32, 16}},
+           {core::runtime::DataType::FLOAT6E3M2, {44, 10, 48, 16}}}) {
+    Tensor packed = cast_kernel(x, static_cast<int32_t>(dtype));
+    EXPECT_EQ(packed.data, expected_bytes);
+    Tensor unpacked = cast_kernel(packed, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+    for (int64_t i = 0; i < x.element_count(); ++i)
+      EXPECT_FLOAT_EQ(unpacked.AsFloat()[i], x.AsFloat()[i]);
+  }
+}
+
 // FLOAT16 subnormals must decode to their true tiny magnitudes (value =
 // mantissa * 2^-24), not to spurious larger values. A miscomputed
 // subnormal exponent previously made FLOAT16 -> FLOAT8* casts of values in

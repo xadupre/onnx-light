@@ -214,6 +214,19 @@ void QuantizeAxisFloat4E2M1Loop(const Tensor &x, const float *scales, const std:
   }
 }
 
+void QuantizeAxisFloat6Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
+                            int64_t inner_stride, int64_t axis_size, Tensor &output) {
+  const float *px = x.AsFloat();
+  std::uint8_t *py = output.mutable_bytes();
+  const auto dtype = static_cast<DataType>(output.data_type);
+  std::memset(py, 0, output.size_bytes());
+  for (int64_t i = 0; i < x.element_count(); ++i) {
+    const int64_t axis_idx = (i / inner_stride) % axis_size;
+    const float zp = Float6BitsToFloat(Read6BitElement(zp_bytes, axis_idx), dtype);
+    Write6BitElement(py, i, FloatToFloat6Bits(px[i] / scales[axis_idx] + zp, dtype));
+  }
+}
+
 // Per-axis quantization for float8 byte-per-element output.
 void QuantizeAxisFloat8Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
                             int32_t out_dtype, int64_t inner_stride, int64_t axis_size,
@@ -377,6 +390,19 @@ void QuantizeBlockFloat4E2M1Loop(const Tensor &x, const float *scales, const std
   }
 }
 
+void QuantizeBlockFloat6Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
+                             const int64_t *scale_index, Tensor &output) {
+  const float *px = x.AsFloat();
+  std::uint8_t *py = output.mutable_bytes();
+  const auto dtype = static_cast<DataType>(output.data_type);
+  std::memset(py, 0, output.size_bytes());
+  for (int64_t i = 0; i < x.element_count(); ++i) {
+    const int64_t si = scale_index[i];
+    const float zp = Float6BitsToFloat(Read6BitElement(zp_bytes, si), dtype);
+    Write6BitElement(py, i, FloatToFloat6Bits(px[i] / scales[si] + zp, dtype));
+  }
+}
+
 // Per-block quantization for INT4/UINT4 packed output.
 void QuantizeBlockInt4Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
                            int32_t out_dtype, const int64_t *scale_index, Tensor &output) {
@@ -461,6 +487,15 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, Tensor &
     for (int64_t i = 0; i < n; ++i) {
       Write4BitElement(py, i, FloatRoundToFloat4E2M1Nibble(pxf[i] / scale));
     }
+    break;
+  }
+  case static_cast<int32_t>(DataType::FLOAT6E2M3):
+  case static_cast<int32_t>(DataType::FLOAT6E3M2): {
+    const auto dtype = static_cast<DataType>(output.data_type);
+    const float *px = x.AsFloat();
+    std::memset(output.mutable_bytes(), 0, output.size_bytes());
+    for (int64_t i = 0; i < x.element_count(); ++i)
+      Write6BitElement(output.mutable_bytes(), i, FloatToFloat6Bits(px[i] / scale, dtype));
     break;
   }
   default:
@@ -572,6 +607,16 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
     for (int64_t i = 0; i < n; ++i) {
       Write4BitElement(py, i, FloatRoundToFloat4E2M1Nibble(pxf[i] / scale + zp));
     }
+    break;
+  }
+  case static_cast<int32_t>(DataType::FLOAT6E2M3):
+  case static_cast<int32_t>(DataType::FLOAT6E3M2): {
+    const auto dtype = static_cast<DataType>(output.data_type);
+    const float zp = Float6BitsToFloat(Read6BitElement(y_zero_point.bytes(), 0), dtype);
+    const float *px = x.AsFloat();
+    std::memset(output.mutable_bytes(), 0, output.size_bytes());
+    for (int64_t i = 0; i < x.element_count(); ++i)
+      Write6BitElement(output.mutable_bytes(), i, FloatToFloat6Bits(px[i] / scale + zp, dtype));
     break;
   }
   default:
@@ -692,6 +737,10 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
     case static_cast<int32_t>(DataType::FLOAT4E2M1):
       QuantizeAxisFloat4E2M1Loop(x, scales, zp_bytes, inner_stride, axis_size, output);
       return;
+    case static_cast<int32_t>(DataType::FLOAT6E2M3):
+    case static_cast<int32_t>(DataType::FLOAT6E3M2):
+      QuantizeAxisFloat6Loop(x, scales, zp_bytes, inner_stride, axis_size, output);
+      return;
     default:
       EXT_THROW_INVALID("unsupported data type ", output.data_type, ", ",
                         "kernel::QuantizeLinear (per-axis): unsupported output dtype.");
@@ -746,6 +795,10 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
     break;
   case static_cast<int32_t>(DataType::FLOAT4E2M1):
     QuantizeBlockFloat4E2M1Loop(x, scales, zp_bytes, idx, output);
+    break;
+  case static_cast<int32_t>(DataType::FLOAT6E2M3):
+  case static_cast<int32_t>(DataType::FLOAT6E3M2):
+    QuantizeBlockFloat6Loop(x, scales, zp_bytes, idx, output);
     break;
   default:
     EXT_THROW_INVALID("unsupported data type ", output.data_type, ", ",

@@ -8,6 +8,7 @@
 #include "onnx_core/compute/execute_action.h"
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/cast_sub_byte.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/kernels/random.h"
@@ -157,6 +158,10 @@ int32_t OnnxTypeFromNumpyDtype(OnnxLightNumpyDtype *dtype) {
     return static_cast<int32_t>(TensorProto::INT2);
   if (dtype_name == "uint2")
     return static_cast<int32_t>(TensorProto::UINT2);
+  if (dtype_name == "float6_e2m3fn")
+    return static_cast<int32_t>(TensorProto::FLOAT6E2M3);
+  if (dtype_name == "float6_e3m2fn")
+    return static_cast<int32_t>(TensorProto::FLOAT6E3M2);
   return static_cast<int32_t>(TensorProto::UNDEFINED);
 }
 
@@ -167,6 +172,8 @@ bool IsSubByteType(int32_t data_type) {
   case TensorProto::FLOAT4E2M1:
   case TensorProto::INT2:
   case TensorProto::UINT2:
+  case TensorProto::FLOAT6E2M3:
+  case TensorProto::FLOAT6E3M2:
     return true;
   default:
     return false;
@@ -225,13 +232,18 @@ Tensor TensorFromNumpy(const std::string &name, nb::handle value, std::vector<nb
   if (IsSubByteType(data_type)) {
     core::runtime::RawByteBuffer packed(core::runtime::PackedByteSize(data_type, element_count),
                                         uint8_t{0});
-    const int bits = static_cast<TensorProto::DataType>(data_type) == TensorProto::INT2 ||
-                             static_cast<TensorProto::DataType>(data_type) == TensorProto::UINT2
-                         ? 2
-                         : 4;
+    const auto tensor_type = static_cast<TensorProto::DataType>(data_type);
+    const int bits =
+        tensor_type == TensorProto::INT2 || tensor_type == TensorProto::UINT2
+            ? 2
+            : (tensor_type == TensorProto::FLOAT6E2M3 || tensor_type == TensorProto::FLOAT6E3M2
+                   ? 6
+                   : 4);
     for (int64_t index = 0; index < element_count; ++index) {
       if (bits == 2)
         core::runtime::Write2BitElement(packed.data(), index, data[index]);
+      else if (bits == 6)
+        core::runtime::Write6BitElement(packed.data(), index, data[index]);
       else
         core::runtime::Write4BitElement(packed.data(), index, data[index]);
     }
@@ -352,6 +364,10 @@ const char *NumpyDtypeName(int32_t data_type) {
     return "int2";
   case TensorProto::UINT2:
     return "uint2";
+  case TensorProto::FLOAT6E2M3:
+    return "float6_e2m3fn";
+  case TensorProto::FLOAT6E3M2:
+    return "float6_e3m2fn";
   default:
     return nullptr;
   }
@@ -466,12 +482,15 @@ nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
         static_cast<uint8_t *>(OnnxLightNumpyArrayData(OnnxLightNumpyArrayCast(array.ptr())));
     const uint8_t *packed = tensor.bytes();
     const int64_t element_count = tensor.element_count();
-    const bool two_bit =
-        static_cast<TensorProto::DataType>(tensor.data_type) == TensorProto::INT2 ||
-        static_cast<TensorProto::DataType>(tensor.data_type) == TensorProto::UINT2;
-    for (int64_t index = 0; index < element_count; ++index)
-      data[index] = two_bit ? core::runtime::Read2BitElement(packed, index)
-                            : core::runtime::Read4BitElement(packed, index);
+    const auto tensor_type = static_cast<TensorProto::DataType>(tensor.data_type);
+    for (int64_t index = 0; index < element_count; ++index) {
+      if (tensor_type == TensorProto::INT2 || tensor_type == TensorProto::UINT2)
+        data[index] = core::runtime::Read2BitElement(packed, index);
+      else if (tensor_type == TensorProto::FLOAT6E2M3 || tensor_type == TensorProto::FLOAT6E3M2)
+        data[index] = core::runtime::Read6BitElement(packed, index);
+      else
+        data[index] = core::runtime::Read4BitElement(packed, index);
+    }
     return array;
   }
 

@@ -21,7 +21,7 @@ scikit-build-core = ">=0.3.3"
 pip = "*"
 
 [pypi-dependencies]
-nanobind = ">=3.0.0"
+nanobind = ">=3.0.1"
 
 [feature.dev-no-onnx.dependencies]
 black = "==26.5.1"

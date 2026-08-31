@@ -48,7 +48,8 @@ class TestSetupBuildExt(ExtTestCase):
 
         self.assertNotEqual(proc.returncode, 0)
         output = f"{proc.stdout}\n{proc.stderr}"
-        self.assertIn("editable onnx-light installation is active", output)
+        self.assertIn("editable onnx-light", output)
+        self.assertIn("another source tree", output)
         self.assertIn(str(hook), output)
         self.assertNotIn("cmake -S", output)
 

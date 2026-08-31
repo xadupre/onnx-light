@@ -3446,7 +3446,7 @@ ONNX_OPERATOR_SET_SCHEMA(
             builder.Add("CausalOffsetPerBatch = Sub(nonpad_kv_seqlen, QSeqLen)");
           }
 
-          if (!AttentionAppendFunctionCausalMask(ctx, builder, true, schema.SinceVersion() >= 25))
+          if (!AttentionAppendFunctionCausalMask(ctx, builder, true, true))
             return false;
 
           if (left_window_size >= 0 || right_window_size >= 0) {
@@ -3513,10 +3513,11 @@ ONNX_OPERATOR_SET_SCHEMA(
                 .Add(
                     "PaddingMaskFloat = Where(PaddingMaskBool, ScalarZero, FloatNegInf)") // [batch_size,
                                                                                           // KVSeqLen]
-                .Add("PaddingMask3D = Unsqueeze(PaddingMaskFloat, One1D)") // [batch_size, 1,
-                                                                           // KVSeqLen]
-                .Add("PaddingMask4D = Unsqueeze(PaddingMask3D, One1D)")    // [batch_size, 1, 1,
-                                                                           // KVSeqLen]
+                .Add("PaddingMask3D = Unsqueeze(PaddingMaskFloat, One1D)")   // [batch_size, 1,
+                                                                             // KVSeqLen]
+                .Add("PaddingMask4DFloat = Unsqueeze(PaddingMask3D, One1D)") // [batch_size, 1, 1,
+                                                                             // KVSeqLen]
+                .Add("PaddingMask4D = CastLike(PaddingMask4DFloat, AttnBiasCausalWindow)")
                 .Add("AttnBiasCausalPad = Add(AttnBiasCausalWindow, PaddingMask4D)");
           } else {
             builder.Add("AttnBiasCausalPad = Identity(AttnBiasCausalWindow)");

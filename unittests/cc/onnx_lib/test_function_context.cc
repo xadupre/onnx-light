@@ -416,4 +416,87 @@ TEST_F(FunctionContextTest, BuildContextDependentFunctionBodyGeluTest) {
   EXPECT_FALSE(has_node_with_op_type(tanh_fn_proto, "Erf"));
 }
 
+TEST(FunctionContextStandaloneTest, AttentionCausalMasksMatchBiasType) {
+  auto has_node = [](const FunctionProto &function_proto, const std::string &op_type,
+                     const std::vector<std::string> &inputs,
+                     const std::vector<std::string> &outputs) {
+    for (const auto &node : function_proto.ref_node()) {
+      if (node.ref_op_type() == op_type &&
+          std::vector<std::string>(node.ref_input().begin(), node.ref_input().end()) == inputs &&
+          std::vector<std::string>(node.ref_output().begin(), node.ref_output().end()) == outputs) {
+        return true;
+      }
+    }
+    return false;
+  };
+  auto bfloat16_type = [] {
+    TypeProto type;
+    type.ref_tensor_type().set_elem_type(TensorProto::DataType::BFLOAT16);
+    return type;
+  };
+
+  for (int version : {23, 24}) {
+    const auto *const schema = OpSchemaRegistry::Schema("Attention", version, ONNX_DOMAIN);
+    ASSERT_NE(schema, nullptr);
+
+    NodeProto node;
+    node.set_op_type("Attention");
+    *node.add_input() = "Q";
+    *node.add_input() = "K";
+    *node.add_input() = "V";
+    *node.add_output() = "Y";
+    auto *const is_causal = node.add_attribute();
+    is_causal->set_name("is_causal");
+    is_causal->set_type(AttributeProto::AttributeType::INT);
+    is_causal->set_i(1);
+
+    FunctionBodyBuildContextImpl ctx(
+        node, std::vector<TypeProto>{bfloat16_type(), bfloat16_type(), bfloat16_type()});
+    FunctionProto function_proto;
+    schema->BuildContextDependentFunction(ctx, function_proto);
+    EXPECT_TRUE(has_node(function_proto, "CastLike", {"MaskTriFloat", "AttnBias"}, {"MaskTri"}));
+  }
+}
+
+TEST(FunctionContextStandaloneTest, AttentionPaddingMaskMatchesBiasType) {
+  const auto *const schema = OpSchemaRegistry::Schema("Attention", 24, ONNX_DOMAIN);
+  ASSERT_NE(schema, nullptr);
+
+  NodeProto node;
+  node.set_op_type("Attention");
+  *node.add_input() = "Q";
+  *node.add_input() = "K";
+  *node.add_input() = "V";
+  *node.add_input() = "";
+  *node.add_input() = "";
+  *node.add_input() = "";
+  *node.add_input() = "nonpad_kv_seqlen";
+  *node.add_output() = "Y";
+
+  TypeProto bfloat16_type;
+  bfloat16_type.ref_tensor_type().set_elem_type(TensorProto::DataType::BFLOAT16);
+  TypeProto int64_type;
+  int64_type.ref_tensor_type().set_elem_type(TensorProto::DataType::INT64);
+  FunctionBodyBuildContextImpl ctx(
+      node, std::vector<TypeProto>{bfloat16_type, bfloat16_type, bfloat16_type, TypeProto{},
+                                   TypeProto{}, TypeProto{}, int64_type});
+  FunctionProto function_proto;
+  schema->BuildContextDependentFunction(ctx, function_proto);
+
+  bool has_padding_cast = false;
+  for (const auto &function_node : function_proto.ref_node()) {
+    if (function_node.ref_op_type() == "CastLike" &&
+        std::vector<std::string>(function_node.ref_input().begin(),
+                                 function_node.ref_input().end()) ==
+            std::vector<std::string>{"PaddingMask4DFloat", "AttnBiasCausalWindow"} &&
+        std::vector<std::string>(function_node.ref_output().begin(),
+                                 function_node.ref_output().end()) ==
+            std::vector<std::string>{"PaddingMask4D"}) {
+      has_padding_cast = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(has_padding_cast);
+}
+
 } // namespace Test

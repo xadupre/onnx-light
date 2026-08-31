@@ -3827,7 +3827,7 @@ ONNX_OPERATOR_SET_SCHEMA(
             builder.Add("present_value = Identity (PresentValue)");
           }
 
-          if (!AttentionAppendFunctionCausalMask(ctx, builder, false))
+          if (!AttentionAppendFunctionCausalMask(ctx, builder, false, true))
             return false;
           builder.Add("AttnBiasT = Cast (AttnBiasCausalOrNot)", "to", T1);
 

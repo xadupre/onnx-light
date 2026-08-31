@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 
+import ml_dtypes
 import numpy as np
 
 from onnx_light.ext_test_case import ExtTestCase
@@ -11,6 +12,8 @@ from onnx_light.onnx_proto._numpy_helper import (
     _unpack_4bit,
     _pack_4bitx2,
     _pack_2bitx4,
+    _pack_6bit,
+    _unpack_6bit,
     to_float8e8m0,
     tobytes_little_endian,
 )
@@ -20,6 +23,20 @@ import onnx_light.onnx.numpy_helper as onh
 
 
 class TestNumpyHelper(ExtTestCase):
+    def test_float6_pack_unpack(self) -> None:
+        values = np.array([1, 2, 3, 4, 63], dtype=np.uint8)
+        packed = _pack_6bit(values)
+        np.testing.assert_array_equal(packed, np.array([0x81, 0x30, 0x10, 0x3F], dtype=np.uint8))
+        np.testing.assert_array_equal(_unpack_6bit(packed, [5]), values)
+
+    def test_float6_array_round_trip(self) -> None:
+        for dtype in (ml_dtypes.float6_e2m3fn, ml_dtypes.float6_e3m2fn):
+            with self.subTest(dtype=dtype):
+                values = np.array([-3.0, -0.0, 0.0, 1.5, 3.0], dtype=dtype)
+                tensor = onh.from_array(values)
+                self.assertEqual(len(tensor.raw_data), 4)
+                np.testing.assert_array_equal(onh.to_array(tensor), values)
+
     def test_to_array_float(self) -> None:
         tensor = oh.make_tensor(
             "x", onnxl.TensorProto.FLOAT, [2, 3], [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]

@@ -147,6 +147,16 @@ TEST(BackendTestCase, CastStringToInt32ParsesDecimal) {
   EXPECT_EQ(py[3], 42);
 }
 
+TEST(BackendTestCase, CastFloat6CasesRegistered) {
+  const auto cases = CollectTestCases("Cast");
+  CheckCastCasePresent(cases, "test_cc_cast_FLOAT_to_FLOAT6E2M3",
+                       core::runtime::DataType::FLOAT6E2M3);
+  CheckCastCasePresent(cases, "test_cc_cast_FLOAT6E2M3_to_FLOAT", core::runtime::DataType::FLOAT);
+  CheckCastCasePresent(cases, "test_cc_cast_FLOAT_to_FLOAT6E3M2",
+                       core::runtime::DataType::FLOAT6E3M2);
+  CheckCastCasePresent(cases, "test_cc_cast_FLOAT6E3M2_to_FLOAT", core::runtime::DataType::FLOAT);
+}
+
 // ---------------------------------------------------------------------------
 // CastLike — backend test case registration tests.
 //

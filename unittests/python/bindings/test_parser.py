@@ -4,11 +4,22 @@ import locale
 import platform
 import unittest
 
-from onnx_light.onnx import parser
+from onnx_light.onnx import TensorProto, parser
 from onnx_light.ext_test_case import ExtTestCase
 
 
 class TestParser(ExtTestCase):
+    def test_parse_float6_types(self):
+        model = parser.parse_model("""
+            <ir_version: 14, opset_import: ["": 28]>
+            agraph (float6e2m3[N] x, float6e3m2[N] y)
+                => (float6e2m3[N] z) {
+                z = Identity(x)
+            }
+        """)
+        self.assertEqual(model.graph.input[0].type.tensor_type.elem_type, TensorProto.FLOAT6E2M3)
+        self.assertEqual(model.graph.input[1].type.tensor_type.elem_type, TensorProto.FLOAT6E3M2)
+
     def test_parse_model_ok(self):
         model = parser.parse_model("""
             <ir_version: 7, opset_import: ["": 17]>

@@ -137,6 +137,14 @@ void DequantizeFloat4E2M1Loop(const Tensor &x, float x_scale, float zp, Tensor &
   }
 }
 
+void DequantizeFloat6Loop(const Tensor &x, float x_scale, float zp, Tensor &output) {
+  const std::uint8_t *px = x.bytes();
+  float *py = output.AsFloat();
+  const auto dtype = static_cast<DataType>(x.data_type);
+  for (int64_t i = 0; i < x.element_count(); ++i)
+    py[i] = (Float6BitsToFloat(Read6BitElement(px, i), dtype) - zp) * x_scale;
+}
+
 // Reads the zero-point nibble from a sub-byte packed tensor (ZP has 1 element).
 inline float ReadSubByteScalarZP(const Tensor &x_zero_point) {
   const int32_t dtype = x_zero_point.data_type;
@@ -150,6 +158,10 @@ inline float ReadSubByteScalarZP(const Tensor &x_zero_point) {
     return static_cast<float>(Uint2BitsToUint8(Read2BitElement(x_zero_point.bytes(), 0)));
   } else if (dtype == static_cast<int32_t>(DataType::FLOAT4E2M1)) {
     return Float4E2M1NibbleToFloat(Read4BitElement(x_zero_point.bytes(), 0));
+  } else if (dtype == static_cast<int32_t>(DataType::FLOAT6E2M3) ||
+             dtype == static_cast<int32_t>(DataType::FLOAT6E3M2)) {
+    return Float6BitsToFloat(Read6BitElement(x_zero_point.bytes(), 0),
+                             static_cast<DataType>(dtype));
   }
   return 0.0f;
 }
@@ -294,6 +306,18 @@ void DequantizeBlockFloat4E2M1Loop(const Tensor &x, const float *scales,
   }
 }
 
+void DequantizeBlockFloat6Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
+                               const int64_t *scale_index, Tensor &output) {
+  const std::uint8_t *px = x.bytes();
+  float *py = output.AsFloat();
+  const auto dtype = static_cast<DataType>(x.data_type);
+  for (int64_t i = 0; i < x.element_count(); ++i) {
+    const int64_t si = scale_index[i];
+    const float zp = Float6BitsToFloat(Read6BitElement(zp_bytes, si), dtype);
+    py[i] = (Float6BitsToFloat(Read6BitElement(px, i), dtype) - zp) * scales[si];
+  }
+}
+
 } // namespace
 
 Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
@@ -362,6 +386,10 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, Tensor
     break;
   case static_cast<int32_t>(DataType::FLOAT4E2M1):
     DequantizeFloat4E2M1Loop(x, scale, /*zp=*/0.0f, output);
+    break;
+  case static_cast<int32_t>(DataType::FLOAT6E2M3):
+  case static_cast<int32_t>(DataType::FLOAT6E3M2):
+    DequantizeFloat6Loop(x, scale, /*zp=*/0.0f, output);
     break;
   default:
     EXT_THROW_INVALID(
@@ -450,6 +478,10 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
     break;
   case static_cast<int32_t>(DataType::FLOAT4E2M1):
     DequantizeFloat4E2M1Loop(x, scale, ReadSubByteScalarZP(x_zero_point), output);
+    break;
+  case static_cast<int32_t>(DataType::FLOAT6E2M3):
+  case static_cast<int32_t>(DataType::FLOAT6E3M2):
+    DequantizeFloat6Loop(x, scale, ReadSubByteScalarZP(x_zero_point), output);
     break;
   default:
     EXT_THROW_INVALID(
@@ -587,6 +619,10 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
     break;
   case static_cast<int32_t>(DataType::FLOAT4E2M1):
     DequantizeBlockFloat4E2M1Loop(x, scales, zp_bytes, idx, output);
+    break;
+  case static_cast<int32_t>(DataType::FLOAT6E2M3):
+  case static_cast<int32_t>(DataType::FLOAT6E3M2):
+    DequantizeBlockFloat6Loop(x, scales, zp_bytes, idx, output);
     break;
   default:
     EXT_THROW_INVALID(

@@ -61,6 +61,18 @@ float Float4E2M1NibbleToFloat(std::uint8_t nibble) noexcept;
 // ``[-6, 6]`` are saturated to ``+/-6``; ``NaN`` maps to ``+0``.
 std::uint8_t FloatRoundToFloat4E2M1Nibble(float v) noexcept;
 
+// Decodes a FLOAT6 code of the specified element type to float32.
+float Float6BitsToFloat(std::uint8_t bits, DataType dtype);
+
+// Encodes a float32 value to the nearest FLOAT6 code of the specified element type.
+std::uint8_t FloatToFloat6Bits(float value, DataType dtype);
+
+// Reads a FLOAT6 code from an LSB-first packed buffer.
+std::uint8_t Read6BitElement(const std::uint8_t *src, int64_t index);
+
+// Writes a FLOAT6 code to an LSB-first packed buffer.
+void Write6BitElement(std::uint8_t *dst, int64_t index, std::uint8_t value);
+
 // Packs ``values`` (one element per ``int8_t`` entry, range checked by the
 // caller) into a 4-bit-per-element little-endian buffer matching the ONNX
 // sub-byte layout (low nibble first per byte, trailing slot zero-padded).

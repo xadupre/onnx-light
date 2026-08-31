@@ -250,6 +250,8 @@ END_PROTO()
 //     FLOAT8E8M0 = 24;
 //     UINT2 = 25;
 //     INT2 = 26;
+//     FLOAT6E2M3 = 27;
+//     FLOAT6E3M2 = 28;
 //   }
 //   repeated int64 dims = 1;
 //   optional int32 data_type = 2;
@@ -331,6 +333,10 @@ enum DataType : int32_t {
   UINT2 = 25, // Unsigned integer in range [0, 3]
   INT2 = 26,  // Signed integer in range [-2, 1], using two's complement representation
 
+  // 6-bit floating point data types based on OCP MX spec
+  FLOAT6E2M3 = 27, // 1 sign, 2 exponent, 3 mantissa
+  FLOAT6E3M2 = 28, // 1 sign, 3 exponent, 2 mantissa
+
   // Flat protobuf-style enumerator aliases (drop-in compatibility with the
   // protobuf-generated header, which exposes names such as
   // TensorProto_DataType_FLOAT both at namespace scope and as members of the
@@ -362,12 +368,14 @@ enum DataType : int32_t {
   TensorProto_DataType_FLOAT8E8M0 = 24,
   TensorProto_DataType_UINT2 = 25,
   TensorProto_DataType_INT2 = 26,
+  TensorProto_DataType_FLOAT6E2M3 = 27,
+  TensorProto_DataType_FLOAT6E3M2 = 28,
 
   // Future extensions go here.
 };
 
 // A value is considered valid only if it falls within the contiguous range of enum literals
-// declared above (UNDEFINED(0) .. INT2(26)); this matches the range-checking semantics of the
+// declared above (UNDEFINED(0) .. FLOAT6E3M2(28)); this matches the range-checking semantics of the
 // switch statement real protobuf generates for TensorProto_DataType_IsValid. The previous
 // implementation only rejected the single value UNDEFINED(0) and accepted *any* other int,
 // including out-of-range/garbage values such as -100 coming from a corrupted or malicious
@@ -376,7 +384,7 @@ enum DataType : int32_t {
 // DataTypeUtils::ToDataTypeString, which throws an uncaught exception for out-of-range values).
 inline static constexpr bool DataType_IsValid(DataType t) {
   return static_cast<int32_t>(t) >= static_cast<int32_t>(DataType::UNDEFINED) &&
-         static_cast<int32_t>(t) <= static_cast<int32_t>(DataType::INT2);
+         static_cast<int32_t>(t) <= static_cast<int32_t>(DataType::FLOAT6E3M2);
 }
 /** Overload accepting int for protobuf compatibility. */
 inline static constexpr bool DataType_IsValid(int t) {
@@ -436,6 +444,10 @@ inline static constexpr const char *DataType_Name(DataType t) {
     return "UINT2";
   case INT2:
     return "INT2";
+  case FLOAT6E2M3:
+    return "FLOAT6E2M3";
+  case FLOAT6E3M2:
+    return "FLOAT6E3M2";
   case UNDEFINED:
   default:
     return "UNDEFINED";
@@ -484,17 +496,20 @@ FIELD_REPEATED_PACKED(
     "present, the data_type field MUST be FLOAT or COMPLEX64.")
 FIELD_REPEATED_PACKED(
     int32_t, int32_data, 5,
-    "For int32, uint8, int8, uint16, int16, uint4, int4, bool, (b)float16, float8, and "
-    "float4: - (b)float16 and float8 values MUST be converted bit-wise into an unsigned "
+    "For int32, uint8, int8, uint16, int16, uint4, int4, bool, (b)float16, float8, float6, "
+    "and float4: - (b)float16 and float8 values MUST be converted bit-wise into an unsigned "
     "integer representation before being written to the buffer. - Each pair of uint4, int4, "
     "and float4 values MUST be packed as two 4-bit elements into a single byte. The first "
     "element is stored in the 4 least significant bits (LSB), and the second element is "
     "stored in the 4 most significant bits (MSB). Consequently: - For data types with a "
     "bit-width of 8 or greater, each `int32_data` stores one element. - For 4-bit data "
-    "types, each `int32_data` stores two elements. When this field is present, the data_type "
+    "types, each `int32_data` stores two elements. For FLOAT6E2M3 and FLOAT6E3M2, each "
+    "`int32_data` stores one element's unsigned 6-bit encoding in bits 0-5; bits 6-31 MUST be "
+    "zero. Producers SHOULD use packed `raw_data` when compact serialization is desired. When "
+    "this field is present, the data_type "
     "field MUST be INT32, INT16, INT8, INT4, UINT16, UINT8, UINT4, BOOL, FLOAT16, BFLOAT16, "
     "FLOAT8E4M3FN, FLOAT8E4M3FNUZ, FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, "
-    "UINT2, INT2")
+    "UINT2, INT2, FLOAT6E2M3, FLOAT6E3M2")
 FIELD_REPEATED_STR(utils::String, string_data, 6,
                    "For strings. Each element of string_data is a UTF-8 encoded Unicode string. No "
                    "trailing null, no leading BOM. The 'string' scalar type is not used to match "
@@ -514,7 +529,10 @@ FIELD_BYTES(
     "two consecutive DOUBLE values, real component first. Boolean type MUST be written one "
     "byte per tensor element (00000001 for true, 00000000 for false). uint4 and int4 values "
     "must be packed to 4bitx2, the first element is stored in the 4 LSB and the second "
-    "element is stored in the 4 MSB. Note: the advantage of specific field rather than the "
+    "element is stored in the 4 MSB. uint2 and int2 values are packed four per byte from LSB "
+    "to MSB. float6e2m3 and float6e3m2 values are packed four at a time into three bytes as a "
+    "contiguous LSB-first bitstream. A partial final group is zero-padded and the byte length "
+    "is ceil(6 * num_elements / 8). Note: the advantage of specific field rather than the "
     "raw_data field is that in some cases (e.g. int data), protobuf does a better packing "
     "via variable length storage, and may lead to smaller binary footprint. When this field "
     "is present, the data_type field MUST NOT be STRING or UNDEFINED.")

@@ -109,6 +109,7 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset_v21 = DefaultOpset(21); // For FLOAT8, INT4, UINT4
   const OpsetId opset_v23 = DefaultOpset(23); // For FLOAT4E2M1
   const OpsetId opset_v25 = DefaultOpset(25); // For INT2, UINT2
+  const OpsetId opset_v28 = DefaultOpset(28); // For FLOAT6
 
   if (mode == TestMode::BENCHMARK) {
     const int64_t to_attr = static_cast<int64_t>(DataType::DOUBLE);
@@ -537,6 +538,36 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
 
                Tensor input = make_packed_input();
                Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(input)}, {std::move(output)}};
+             });
+    }
+  }
+
+  // FLOAT6E2M3/FLOAT6E3M2 cases — FLOAT ↔ FLOAT6.
+  const std::vector<int64_t> f6_shape = {5};
+  const std::vector<float> f6_values = {-1.0f, -0.5f, 0.0f, 1.0f, 2.0f};
+  for (const auto dtype : {DataType::FLOAT6E2M3, DataType::FLOAT6E3M2}) {
+    const std::string dtype_name = dtype == DataType::FLOAT6E2M3 ? "FLOAT6E2M3" : "FLOAT6E3M2";
+    {
+      const int64_t to_attr = static_cast<int64_t>(dtype);
+      Expect(registry, MakeCastNode(to_attr), "test_cc_cast_FLOAT_to_" + dtype_name, {opset_v28},
+             [f6_shape, f6_values, to_attr]() -> IoData {
+               const KernelContext cast_kernel_ctx{DefaultOpset(28)};
+               const onnx_kernels::kernel::Cast cast_kernel{cast_kernel_ctx};
+               Tensor input = Tensor::FromFloat("", f6_shape, f6_values);
+               Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(input)}, {std::move(output)}};
+             });
+    }
+    {
+      const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT);
+      Expect(registry, MakeCastNode(to_attr), "test_cc_cast_" + dtype_name + "_to_FLOAT",
+             {opset_v28}, [f6_shape, f6_values, dtype]() -> IoData {
+               const KernelContext cast_kernel_ctx{DefaultOpset(28)};
+               const onnx_kernels::kernel::Cast cast_kernel{cast_kernel_ctx};
+               Tensor source = Tensor::FromFloat("", f6_shape, f6_values);
+               Tensor input = cast_kernel(source, static_cast<int32_t>(dtype));
+               Tensor output = cast_kernel(input, static_cast<int32_t>(DataType::FLOAT));
                return IoData{{std::move(input)}, {std::move(output)}};
              });
     }

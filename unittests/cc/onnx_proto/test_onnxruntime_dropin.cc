@@ -150,7 +150,7 @@ struct ProviderHostLike {
 
 TEST(onnxruntime_dropin, DataTypeIsValidAcceptsDeclaredEnumerators) {
   for (int i = static_cast<int>(TensorProto::DataType::UNDEFINED);
-       i <= static_cast<int>(TensorProto::DataType::INT2); ++i) {
+       i <= static_cast<int>(TensorProto::DataType::FLOAT6E3M2); ++i) {
     EXPECT_TRUE(TensorProto::DataType_IsValid(i)) << "value " << i << " must be valid";
     EXPECT_TRUE(TensorProto_DataType_IsValid(i)) << "value " << i << " must be valid";
   }
@@ -159,7 +159,7 @@ TEST(onnxruntime_dropin, DataTypeIsValidAcceptsDeclaredEnumerators) {
 }
 
 TEST(onnxruntime_dropin, DataTypeIsValidRejectsOutOfRangeValues) {
-  const int first_invalid = static_cast<int>(TensorProto::DataType::INT2) + 1;
+  const int first_invalid = static_cast<int>(TensorProto::DataType::FLOAT6E3M2) + 1;
   for (int value : {-100, -1, first_invalid, first_invalid + 1, 1000}) {
     EXPECT_FALSE(TensorProto::DataType_IsValid(value)) << "value " << value << " must be invalid";
     EXPECT_FALSE(TensorProto_DataType_IsValid(value)) << "value " << value << " must be invalid";

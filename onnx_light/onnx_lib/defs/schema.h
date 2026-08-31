@@ -590,6 +590,12 @@ public:
 
   ONNX_API static const std::vector<std::string> &all_non_string_tensor_types_ir13();
 
+  ONNX_API static const std::vector<std::string> &all_tensor_types_ir14();
+
+  ONNX_API static const std::vector<std::string> &all_non_complex_tensor_types_ir14();
+
+  ONNX_API static const std::vector<std::string> &all_non_string_tensor_types_ir14();
+
   ONNX_API static const std::vector<std::string> &all_tensor_sequence_types();
 
   ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir4();
@@ -603,6 +609,8 @@ public:
   ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir12();
 
   ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir13();
+
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir14();
 
   ONNX_API static const std::vector<std::string> &all_optional_types();
 

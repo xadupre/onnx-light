@@ -450,6 +450,14 @@ def _unpack_float4_e2m1(raw: bytes, shape):
     return nibbles.view(_ml_dtypes.float4_e2m1fn).reshape(tuple(int(d) for d in shape))
 
 
+def _unpack_float6(raw: bytes, shape, dtype):
+    """Unpacks FLOAT6 values from raw bytes into a numpy array."""
+    from .....onnx.numpy_helper import _unpack_6bit
+
+    codes = _unpack_6bit(np.frombuffer(raw, dtype=np.uint8), shape)
+    return codes.view(dtype)
+
+
 def _tensor_to_np(t):
     """Converts a C++ backend-test ``Tensor`` to a numpy array."""
     if int(t.data_type) == int(onnx.TensorProto.STRING):
@@ -463,6 +471,14 @@ def _tensor_to_np(t):
         return _unpack_sub_byte(t.raw_data(), t.shape, dtype, bits, signed)
     if int(t.data_type) == int(onnx.TensorProto.FLOAT4E2M1):
         return _unpack_float4_e2m1(t.raw_data(), t.shape)
+    if int(t.data_type) == int(onnx.TensorProto.FLOAT6E2M3):
+        import ml_dtypes as _ml_dtypes
+
+        return _unpack_float6(t.raw_data(), t.shape, _ml_dtypes.float6_e2m3fn)
+    if int(t.data_type) == int(onnx.TensorProto.FLOAT6E3M2):
+        import ml_dtypes as _ml_dtypes
+
+        return _unpack_float6(t.raw_data(), t.shape, _ml_dtypes.float6_e3m2fn)
     dtype = dtype_to_np.get(int(t.data_type))
     if dtype is None:
         raise NotImplementedError(

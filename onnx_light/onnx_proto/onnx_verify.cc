@@ -134,6 +134,19 @@ void VerifyTensor(const TensorProto &tensor) {
     case TensorProto::INT2:
       expected_bytes = (nelem + 3) / 4; // 4 elements per byte, ceiling division
       break;
+    case TensorProto::FLOAT6E2M3:
+    case TensorProto::FLOAT6E3M2:
+      expected_bytes = nelem / 4 * 3 + (nelem % 4 * 6 + 7) / 8;
+      if (expected_bytes > 0 && static_cast<int64_t>(tensor.raw_data().size()) >= expected_bytes) {
+        const auto used_bits = static_cast<uint8_t>((nelem % 4 * 6) % 8);
+        if (used_bits != 0) {
+          const auto last_byte = static_cast<uint8_t>(tensor.raw_data()[expected_bytes - 1]);
+          const auto unused_bits_mask = static_cast<uint8_t>(0xFFU << used_bits);
+          EXT_ENFORCE_INVALID((last_byte & unused_bits_mask) == 0, "TensorProto '", tensor.name(),
+                              "' has non-zero padding bits in its packed FLOAT6 raw_data.");
+        }
+      }
+      break;
     default:
       break;
     }
@@ -185,6 +198,8 @@ void VerifyTensor(const TensorProto &tensor) {
   case TensorProto::FLOAT8E5M2:
   case TensorProto::FLOAT8E5M2FNUZ:
   case TensorProto::FLOAT8E8M0:
+  case TensorProto::FLOAT6E2M3:
+  case TensorProto::FLOAT6E3M2:
     EXT_ENFORCE_INVALID(has_int32, "TensorProto '", tensor.name(),
                         "' data_type requires data to be stored in 'int32_data'.");
     // These types are not packed: each element occupies one int32_data entry.
@@ -192,6 +207,13 @@ void VerifyTensor(const TensorProto &tensor) {
                         tensor.name(), "' int32_data size (", tensor.int32_data().size(),
                         ") is too small for the declared shape (", nelem,
                         " int32 values required).");
+    if (tensor.data_type() == TensorProto::FLOAT6E2M3 ||
+        tensor.data_type() == TensorProto::FLOAT6E3M2) {
+      for (const auto value : tensor.int32_data()) {
+        EXT_ENFORCE_INVALID(value >= 0 && value <= 0x3F, "TensorProto '", tensor.name(),
+                            "' FLOAT6 int32_data values must use only bits 0-5.");
+      }
+    }
     break;
   case TensorProto::UINT4:
   case TensorProto::INT4:

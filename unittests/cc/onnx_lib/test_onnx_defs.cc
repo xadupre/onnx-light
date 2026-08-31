@@ -346,7 +346,8 @@ TEST(onnx_defs, TensorProto_DataType_IsValid_AcceptsInRangeValues) {
   EXPECT_TRUE(TensorProto::DataType_IsValid(TensorProto::DataType::UNDEFINED));
   EXPECT_TRUE(TensorProto::DataType_IsValid(TensorProto::DataType::FLOAT));
   EXPECT_TRUE(TensorProto::DataType_IsValid(TensorProto::DataType::BOOL));
-  EXPECT_TRUE(TensorProto::DataType_IsValid(TensorProto::DataType::INT2)); // last valid value (26)
+  EXPECT_TRUE(
+      TensorProto::DataType_IsValid(TensorProto::DataType::FLOAT6E3M2)); // last valid value (28)
 }
 
 TEST(onnx_defs, TensorProto_DataType_IsValid_RejectsOutOfRangeValues) {

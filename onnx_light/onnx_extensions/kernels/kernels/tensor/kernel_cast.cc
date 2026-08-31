@@ -88,8 +88,14 @@ bool IsFloat4CastDtype(int32_t dtype) {
   return static_cast<DataType>(dtype) == DataType::FLOAT4E2M1;
 }
 
+bool IsFloat6CastDtype(int32_t dtype) {
+  return static_cast<DataType>(dtype) == DataType::FLOAT6E2M3 ||
+         static_cast<DataType>(dtype) == DataType::FLOAT6E3M2;
+}
+
 bool IsSubByteCastDtype(int32_t dtype) {
-  return IsInt4CastDtype(dtype) || IsInt2CastDtype(dtype) || IsFloat4CastDtype(dtype);
+  return IsInt4CastDtype(dtype) || IsInt2CastDtype(dtype) || IsFloat4CastDtype(dtype) ||
+         IsFloat6CastDtype(dtype);
 }
 
 bool IsSupportedCastDtype(int32_t dtype) {
@@ -182,6 +188,70 @@ bool IsSupportedSubBytePair(int32_t from, int32_t to) {
   default:
     return false;
   }
+}
+
+float Float6BitsToFloat(std::uint8_t bits, DataType dtype) {
+  const int mantissa_bits = dtype == DataType::FLOAT6E2M3 ? 3 : 2;
+  const int exponent_bits = 5 - mantissa_bits;
+  const int exponent_bias = (1 << (exponent_bits - 1)) - 1;
+  const int mantissa_mask = (1 << mantissa_bits) - 1;
+  const int exponent = (bits >> mantissa_bits) & ((1 << exponent_bits) - 1);
+  const int mantissa = bits & mantissa_mask;
+  float value;
+  if (exponent == 0) {
+    value = std::ldexp(static_cast<float>(mantissa), 1 - exponent_bias - mantissa_bits);
+  } else {
+    value = std::ldexp(1.0f + static_cast<float>(mantissa) / (1 << mantissa_bits),
+                       exponent - exponent_bias);
+  }
+  return (bits & 0x20u) != 0 ? -value : value;
+}
+
+std::uint8_t FloatToFloat6Bits(float value, DataType dtype) {
+  if (std::isnan(value))
+    return 0;
+  const bool negative = std::signbit(value);
+  // FLOAT6 has no infinity encoding; saturate to its all-ones maximum finite code.
+  if (std::isinf(value))
+    return static_cast<std::uint8_t>(0x1Fu | (negative ? 0x20u : 0u));
+  const float magnitude = std::abs(value);
+  static constexpr std::uint8_t kMagnitudeCodes[32] = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10,
+                                                       11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                                                       22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
+  const auto upper = std::lower_bound(
+      std::begin(kMagnitudeCodes), std::end(kMagnitudeCodes), magnitude,
+      [dtype](std::uint8_t bits, float target) { return Float6BitsToFloat(bits, dtype) < target; });
+  std::uint8_t best = upper == std::end(kMagnitudeCodes) ? 0x1Fu : *upper;
+  if (upper != std::begin(kMagnitudeCodes) && upper != std::end(kMagnitudeCodes)) {
+    const std::uint8_t lower = *(upper - 1);
+    const float lower_distance = magnitude - Float6BitsToFloat(lower, dtype);
+    const float upper_distance = Float6BitsToFloat(*upper, dtype) - magnitude;
+    // The raw-code LSB is the mantissa LSB, so preferring zero implements ties-to-even.
+    if (lower_distance < upper_distance ||
+        (lower_distance == upper_distance && (lower & 1u) == 0u)) {
+      best = lower;
+    }
+  }
+  return static_cast<std::uint8_t>(best | (negative ? 0x20u : 0u));
+}
+
+std::uint8_t Read6BitElement(const std::uint8_t *src, int64_t index) {
+  const size_t bit_offset = static_cast<size_t>(index) * 6;
+  const size_t byte_offset = bit_offset / 8;
+  const int shift = static_cast<int>(bit_offset % 8);
+  std::uint16_t value = static_cast<std::uint16_t>(src[byte_offset]) >> shift;
+  if (shift > 2)
+    value |= static_cast<std::uint16_t>(src[byte_offset + 1]) << (8 - shift);
+  return static_cast<std::uint8_t>(value & 0x3Fu);
+}
+
+void Write6BitElement(std::uint8_t *dst, int64_t index, std::uint8_t value) {
+  const size_t bit_offset = static_cast<size_t>(index) * 6;
+  const size_t byte_offset = bit_offset / 8;
+  const int shift = static_cast<int>(bit_offset % 8);
+  dst[byte_offset] |= static_cast<std::uint8_t>((value & 0x3Fu) << shift);
+  if (shift > 2)
+    dst[byte_offset + 1] |= static_cast<std::uint8_t>((value & 0x3Fu) >> (8 - shift));
 }
 
 // Returns true for FLOAT, FLOAT16 and BFLOAT16 — the floating-point partner
@@ -383,7 +453,8 @@ Tensor Cast::operator()(const Tensor &x, int32_t to, bool saturate, RuntimeConte
       IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ", std::to_string(to),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
       "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, INT4, UINT4, INT2, UINT2).");
+      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, FLOAT6E2M3, FLOAT6E3M2, "
+      "INT4, UINT4, INT2, UINT2).");
   if (static_cast<DataType>(to) == DataType::STRING) {
     // ``STRING`` elements live in ``string_data`` rather than the raw byte
     // buffer, so the allocator-backed buffer carries zero bytes; routing it
@@ -413,12 +484,14 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
       std::to_string(x.data_type),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
       "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, INT4, UINT4, INT2, UINT2).");
+      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, FLOAT6E2M3, FLOAT6E3M2, "
+      "INT4, UINT4, INT2, UINT2).");
   EXT_ENFORCE_INVALID(
       IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ", std::to_string(to),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
       "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, INT4, UINT4, INT2, UINT2).");
+      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, FLOAT6E2M3, FLOAT6E3M2, "
+      "INT4, UINT4, INT2, UINT2).");
   EXT_ENFORCE_INVALID(output.data_type == to,
                       "kernel::Cast preallocated output dtype must match 'to'.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
@@ -480,6 +553,11 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
             v = FloatRoundToFloat4E2M1Nibble(src_v);
             Write4BitElement(dst, i, v);
             break;
+          case DataType::FLOAT6E2M3:
+          case DataType::FLOAT6E3M2:
+            v = FloatToFloat6Bits(src_v, to_dt);
+            Write6BitElement(dst, i, v);
+            break;
           default:
             EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'to' dtype.");
           }
@@ -519,9 +597,11 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
       const auto to_dt = static_cast<DataType>(to);
       // FLOAT4E2M1 decodes to a non-integer real value; route through a
       // separate float path so 0.5/1.5/etc. survive the conversion.
-      if (from_dt == DataType::FLOAT4E2M1) {
+      if (from_dt == DataType::FLOAT4E2M1 || IsFloat6CastDtype(x.data_type)) {
         for (int64_t i = 0; i < n; ++i) {
-          const float fv = Float4E2M1NibbleToFloat(Read4BitElement(src, i));
+          const float fv = from_dt == DataType::FLOAT4E2M1
+                               ? Float4E2M1NibbleToFloat(Read4BitElement(src, i))
+                               : Float6BitsToFloat(Read6BitElement(src, i), from_dt);
           switch (to_dt) {
           case DataType::FLOAT:
             output.AsFloat()[i] = fv;

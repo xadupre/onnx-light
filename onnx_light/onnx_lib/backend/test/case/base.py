@@ -452,10 +452,28 @@ def _unpack_float4_e2m1(raw: bytes, shape):
 
 def _unpack_float6(raw: bytes, shape, dtype):
     """Unpacks FLOAT6 values from raw bytes into a numpy array."""
-    from .....onnx.numpy_helper import _unpack_6bit
-
-    codes = _unpack_6bit(np.frombuffer(raw, dtype=np.uint8), shape)
-    return codes.view(dtype)
+    original_size = int(np.prod(shape))
+    num_groups = -(-original_size // 4)
+    data = np.frombuffer(raw, dtype=np.uint8)
+    bulk_bytes = min(data.size, num_groups * 3) // 3 * 3
+    bulk_groups = bulk_bytes // 3
+    unpacked = np.empty((num_groups, 4), dtype=np.uint8)
+    b0, b1, b2 = data[0:bulk_bytes:3], data[1:bulk_bytes:3], data[2:bulk_bytes:3]
+    unpacked[:bulk_groups, 0] = b0 & 0x3F
+    unpacked[:bulk_groups, 1] = ((b0 >> 6) & 0x03) | ((b1 & 0x0F) << 2)
+    unpacked[:bulk_groups, 2] = ((b1 >> 4) & 0x0F) | ((b2 & 0x03) << 4)
+    unpacked[:bulk_groups, 3] = (b2 >> 2) & 0x3F
+    if bulk_groups < num_groups:
+        tail = np.zeros(3, dtype=np.uint8)
+        rest = data[bulk_bytes:]
+        tail[: rest.size] = rest
+        t0, t1, t2 = tail
+        unpacked[bulk_groups, 0] = t0 & 0x3F
+        unpacked[bulk_groups, 1] = ((t0 >> 6) & 0x03) | ((t1 & 0x0F) << 2)
+        unpacked[bulk_groups, 2] = ((t1 >> 4) & 0x0F) | ((t2 & 0x03) << 4)
+        unpacked[bulk_groups, 3] = (t2 >> 2) & 0x3F
+    codes = unpacked.reshape(-1)[:original_size]
+    return codes.view(dtype).reshape(tuple(int(d) for d in shape))
 
 
 def _tensor_to_np(t):

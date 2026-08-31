@@ -125,6 +125,152 @@ Let :math:`P` be the set of execution sites. A site may represent a NUMA node,
 a cache-sharing core group, a worker-local packed buffer, or another level at
 which data residency is meaningful.
 
+Memory-hierarchy transport network
+++++++++++++++++++++++++++++++++++
+
+An execution site alone is too coarse to predict latency. For a CPU, expand it
+into a directed graph :math:`G=(V,E)`. A typical input path is
+
+.. math::
+
+    \text{RAM} \rightarrow \text{L3} \rightarrow \text{L2}
+    \rightarrow \text{L1} \rightarrow \text{register}
+    \rightarrow \text{ALU},
+
+and an output follows the reverse path. Shared caches and links appear only
+once in the graph, so traffic from different cores competes for the same
+resources. Separate directed edges allow read and write bandwidths to differ.
+
+For every hierarchy edge :math:`e`, define:
+
+* :math:`\ell_e`, the transfer granularity in bytes, such as a cache line;
+* :math:`q_e`, the maximum payload of one transfer transaction in bytes;
+* :math:`n_e`, the maximum number of transactions in flight;
+* :math:`B_e`, the sustainable bandwidth in bytes per second;
+* :math:`L_e`, the unloaded latency of one transaction.
+
+For a scalar type of size :math:`b` bytes, one transaction transports at most
+
+.. math::
+
+    N^{\mathrm{transaction}}_e =
+    \left\lfloor \frac{q_e}{b} \right\rfloor
+
+elements, while at most
+
+.. math::
+
+    N^{\mathrm{flight}}_e =
+    n_e N^{\mathrm{transaction}}_e
+
+elements are simultaneously in flight on the edge. Its ideal sustained scalar
+rate is :math:`B_e/b` elements per second. These are different limits: payload
+answers "how many at once", whereas bandwidth answers "how many per second".
+Measured :math:`B_e` already includes protocol overhead; otherwise only the
+payload fraction of each transaction may be counted.
+
+Each storage node :math:`v` has a usable residency capacity :math:`K_v` in
+bytes. In particular, :math:`K_{\mathrm{L1}}`,
+:math:`K_{\mathrm{L2}}`, and :math:`K_{\mathrm{L3}}` constrain the live input,
+output, and temporary tiles at those levels. A cache can hold at most
+
+.. math::
+
+    N^{\mathrm{resident}}_v =
+    \left\lfloor \frac{K_v}{b} \right\rfloor
+
+scalars of size :math:`b` when no other data occupies it. A binary operation
+with two same-sized inputs and one output has a smaller ideal live working-set
+bound, :math:`\lfloor K_v/(3b) \rfloor` output elements, before accounting for
+cache lines, associativity, code, and unrelated data.
+
+An ALU node additionally has a service rate :math:`R_v` in scalar operations
+per second, and a core has a finite number :math:`h_v` of hardware-thread
+contexts. The abstraction may assign one output element to one software
+thread, one thread to one context, and one context to one core, but it must
+enforce :math:`h_v`; creating more software threads does not create more
+simultaneous processors.
+
+Contiguous elements are cheaper because a hierarchy normally transfers whole
+cache lines. For a set :math:`U` of scalar addresses crossing edge :math:`e`,
+the charged byte count is
+
+.. math::
+
+    D_e(U) =
+    \ell_e
+    \left|
+      \left\{
+        \left\lfloor \frac{\operatorname{addr}(u)}{\ell_e} \right\rfloor
+        : u \in U
+      \right\}
+    \right|.
+
+Adjacent elements in one line therefore share a transaction. Strided elements
+may each require a different line even when the useful scalar byte count is
+the same. This definition also prevents broadcast reuse from being charged
+again while the line remains resident; an eviction followed by a reload is a
+new transfer.
+
+For a simultaneous execution wave of duration :math:`\Delta`, let
+:math:`F_{e,k}` be the bytes sent over edge :math:`e` during interval
+:math:`k`. Feasibility requires
+
+.. math::
+
+    F_{e,k} \le B_e \Delta
+    \qquad \forall e,k,
+
+and the number of outstanding transactions cannot exceed :math:`n_e`.
+Residency at every instant similarly requires
+
+.. math::
+
+    \sum_u \operatorname{bytes}(u) \rho_{u,v,k} \le K_v
+    \qquad \forall v,k,
+
+where :math:`\rho_{u,v,k}` states that tile or cache line :math:`u` is resident
+at node :math:`v` during interval :math:`k`. These time-indexed constraints
+make contention explicit: calculations may start together, but transfers that
+share a saturated L3 or RAM link cannot all complete at their unloaded rate.
+
+For a single stream whose path is :math:`P_{\mathrm{mem}}`, the steady-state
+upper bound is the bottleneck
+
+.. math::
+
+    R_{\mathrm{stream}} \le
+    \min\left(
+      R_{\mathrm{ALU}},
+      \min_{e \in P_{\mathrm{mem}}}
+      \frac{B_e}{d_e}
+    \right),
+
+where :math:`d_e` is the charged number of bytes crossing edge :math:`e` per
+output element, including both operands and the result. For example,
+:math:`d_e=3b` only when two input scalars and one output scalar really cross
+that edge for every operation; cache reuse and write policies change it.
+Unloaded end-to-end latency is at least the sum of stage latencies on the
+critical dependency path, while long streams approach the bottleneck rate
+after the pipeline fills.
+
+For a charged volume :math:`D_e`, the isolated time model for one hierarchy
+stage is
+
+.. math::
+
+    T_e(D_e) =
+    \mathbb{1}_{D_e>0} L_e + \frac{D_e}{B_e}.
+
+The first term charges pipeline startup and the second charges sustained
+transfer. When transactions cannot overlap, replace the first term by
+:math:`\lceil D_e/q_e \rceil L_e`. When stages pipeline, their byte-transfer
+times must not all be added: the bottleneck determines steady-state throughput,
+and only non-overlapped latency on the critical path is added. The parameters
+:math:`K_v`, :math:`q_e`, :math:`n_e`, :math:`B_e`, and :math:`L_e` are
+hardware-specific and should come from cache topology plus aligned,
+strided, read, write, and mixed read/write microbenchmarks.
+
 Decision variables
 ++++++++++++++++++
 
@@ -186,7 +332,8 @@ If :math:`d(t)` is the required destination of output tile :math:`t`, then
 
 Let :math:`m^X_a`, :math:`m^Y_b`, and :math:`m^Z_t` be tile sizes in bytes,
 and let :math:`M_p` be the usable residency capacity at site :math:`p`.
-A simple capacity constraint is
+When a site is not expanded into hierarchy nodes, a simple capacity constraint
+is
 
 .. math::
 
@@ -195,31 +342,68 @@ A simple capacity constraint is
     + \sum_t m^Z_t z_{t,p}
     \le M_p.
 
-This is a static residency bound. A temporally scheduled implementation would
-replace it with one constraint per execution interval.
+This is a static residency bound. The :math:`K_v` constraints above replace it
+when the hierarchy and execution intervals are modeled explicitly.
 
 Objective
 +++++++++
 
 Let :math:`s_X(a)` and :math:`s_Y(b)` denote the initial storage sites, and let
-:math:`c_{u,v}` be the measured or estimated cost per byte transferred from
-site :math:`u` to site :math:`v`. The transport cost is
+:math:`P(u,v)` be the hierarchy path from site :math:`u` to site :math:`v`.
+For edge :math:`e`, a linear monetary or energy cost
+:math:`c^{\mathrm{byte}}_e` may be charged per transferred byte and
+:math:`c^{\mathrm{transaction}}_e` per transaction. Thus every step has both
+the time cost :math:`T_e(D_e)` defined above and the optimization cost
 
 .. math::
 
     C_{\mathrm{move}} =
-      \sum_{a,p} c_{s_X(a),p} m^X_a r^X_{a,p}
-      + \sum_{b,p} c_{s_Y(b),p} m^Y_b r^Y_{b,p}
-      + \sum_{t,p} c_{p,d(t)} m^Z_t w_{t,p}.
+    \sum_e \left(
+      c^{\mathrm{byte}}_e D_e
+      + c^{\mathrm{transaction}}_e
+        \left\lceil \frac{D_e}{q_e} \right\rceil
+    \right),
 
-Pure byte minimization can assign all work to one site. To represent execution
-time, introduce a makespan bound :math:`H` and per-tile compute estimates
-:math:`\tau_{t,p}`:
+where :math:`D_e` is derived from selected materializations, cache-line
+coverage, evictions, and result writes whose paths contain :math:`e`. This
+edge sum replaces an opaque direct-site cost such as
 
 .. math::
 
-    \sum_t \tau_{t,p} z_{t,p} \le H
-    \qquad \forall p \in P.
+    c_{u,v}m =
+    \sum_{e \in P(u,v)} c^{\mathrm{byte}}_e m,
+
+which remains useful as a simplified model when topology details are unknown.
+Costs on shared edges must be charged once to the aggregate cache-line traffic,
+not independently to every element, or the model loses both spatial locality
+and broadcast reuse.
+
+Pure movement-cost minimization can assign all work to one site. To represent
+execution time, introduce a makespan bound :math:`H`. It must be no smaller
+than the work divided by the rate of every shared resource:
+
+.. math::
+
+    H \ge \frac{D_e}{B_e}
+    \qquad \forall e \in E,
+
+.. math::
+
+    H \ge
+    \frac{\sum_t o_t z_{t,p}}{R_p}
+    \qquad \forall p \in P,
+
+where :math:`o_t` is the scalar-operation count of tile :math:`t`. Dependency
+paths add their non-overlapped transaction latencies :math:`L_e`; bandwidth
+terms model the overlapped steady state. A time-indexed solver can determine
+that overlap directly. A coarser solver may use the safe approximation
+
+.. math::
+
+    H \ge
+    \max_e \frac{D_e}{B_e}
+    + L_{\mathrm{critical}}
+    + \max_p \frac{\sum_t o_t z_{t,p}}{R_p}.
 
 The complete first objective is
 
@@ -228,9 +412,9 @@ The complete first objective is
     \min \quad C_{\mathrm{move}} + \lambda H,
 
 where :math:`\lambda` converts execution time to the same optimization scale
-as movement cost. Further terms may represent packing, conversion, contention,
-or eviction, but each term must correspond to a measurable implementation
-cost.
+as movement cost. Capacity and throughput are constraints, not arbitrary
+penalties. Further terms may represent packing, conversion, or energy, but
+each term must correspond to a measurable implementation cost.
 
 The operational integer model is a capacitated facility-location problem that
 generalizes transport: assigning a task to a site opens the required operand

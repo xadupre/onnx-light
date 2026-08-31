@@ -55,6 +55,8 @@ static Tensor tensorProtoToTensor(const TensorProto &tp) {
   case TensorProto::DataType::FLOAT8E5M2:
   case TensorProto::DataType::FLOAT8E5M2FNUZ:
   case TensorProto::DataType::FLOAT8E8M0:
+  case TensorProto::DataType::FLOAT6E2M3:
+  case TensorProto::DataType::FLOAT6E3M2:
   case TensorProto::DataType::FLOAT4E2M1: {
     ret.int32s().reserve(tp.int32_data().size());
     for (int i = 0; i < static_cast<int>(tp.int32_data().size()); i++) {
@@ -499,7 +501,9 @@ static void encodeTensor(TensorProto &p, const Tensor &tensor) {
   case TensorProto::DataType::INT16:
   case TensorProto::DataType::INT32:
   case TensorProto::DataType::UINT8:
-  case TensorProto::DataType::UINT16: {
+  case TensorProto::DataType::UINT16:
+  case TensorProto::DataType::FLOAT6E2M3:
+  case TensorProto::DataType::FLOAT6E3M2: {
     for (int32_t x : tensor.int32s()) {
       p.int32_data().push_back(int32_t(x));
     }

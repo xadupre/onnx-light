@@ -1224,6 +1224,36 @@ const std::vector<std::string> &OpSchema::all_non_string_tensor_types_ir13() {
   return all_non_string_tensor_types_ir13;
 }
 
+const std::vector<std::string> &OpSchema::all_tensor_types_ir14() {
+  static const auto types = [] {
+    auto result = all_tensor_types_ir13();
+    result.emplace_back("tensor(float6e2m3)");
+    result.emplace_back("tensor(float6e3m2)");
+    return result;
+  }();
+  return types;
+}
+
+const std::vector<std::string> &OpSchema::all_non_complex_tensor_types_ir14() {
+  static const auto types = [] {
+    auto result = all_non_complex_tensor_types_ir13();
+    result.emplace_back("tensor(float6e2m3)");
+    result.emplace_back("tensor(float6e3m2)");
+    return result;
+  }();
+  return types;
+}
+
+const std::vector<std::string> &OpSchema::all_non_string_tensor_types_ir14() {
+  static const auto types = [] {
+    auto result = all_non_string_tensor_types_ir13();
+    result.emplace_back("tensor(float6e2m3)");
+    result.emplace_back("tensor(float6e3m2)");
+    return result;
+  }();
+  return types;
+}
+
 const std::vector<std::string> &OpSchema::all_tensor_sequence_types() {
   static const std::vector<std::string> all_tensor_sequence_types = {
       "seq(tensor(uint8))",  "seq(tensor(uint16))",    "seq(tensor(uint32))",
@@ -1312,6 +1342,17 @@ const std::vector<std::string> &OpSchema::all_tensor_sequence_types_ir13() {
       "seq(tensor(float4e2m1))",   "seq(tensor(float8e8m0))",
       "seq(tensor(uint2))",        "seq(tensor(int2))"};
   return all_tensor_sequence_types_ir13;
+}
+
+const std::vector<std::string> &OpSchema::all_tensor_sequence_types_ir14() {
+  static const auto types = [] {
+    std::vector<std::string> result;
+    for (const auto &type : all_tensor_types_ir14()) {
+      result.emplace_back("seq(" + type + ")");
+    }
+    return result;
+  }();
+  return types;
 }
 
 const std::vector<std::string> &OpSchema::all_optional_types() {

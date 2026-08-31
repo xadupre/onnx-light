@@ -118,6 +118,10 @@ constexpr TensorType DataTypeToTensorType(TensorProto::DataType dtype) {
     return TensorType::kUint2;
   case TensorProto::DataType::INT2:
     return TensorType::kInt2;
+  case TensorProto::DataType::FLOAT6E2M3:
+    return TensorType::kFloat6e2m3;
+  case TensorProto::DataType::FLOAT6E3M2:
+    return TensorType::kFloat6e3m2;
   default:
     return TensorType::kUndefined;
   }
@@ -189,6 +193,10 @@ constexpr TensorProto::DataType TensorTypeToDataType(TensorType t) {
     return TensorProto::DataType::UINT2;
   case TensorType::kInt2:
     return TensorProto::DataType::INT2;
+  case TensorType::kFloat6e2m3:
+    return TensorProto::DataType::FLOAT6E2M3;
+  case TensorType::kFloat6e3m2:
+    return TensorProto::DataType::FLOAT6E3M2;
   default:
     return TensorProto::DataType::UNDEFINED;
   }

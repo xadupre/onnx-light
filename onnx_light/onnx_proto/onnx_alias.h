@@ -92,11 +92,13 @@ inline constexpr TensorProto::DataType TensorProto_DataType_FLOAT4E2M1 = TensorP
 inline constexpr TensorProto::DataType TensorProto_DataType_FLOAT8E8M0 = TensorProto::FLOAT8E8M0;
 inline constexpr TensorProto::DataType TensorProto_DataType_UINT2 = TensorProto::UINT2;
 inline constexpr TensorProto::DataType TensorProto_DataType_INT2 = TensorProto::INT2;
+inline constexpr TensorProto::DataType TensorProto_DataType_FLOAT6E2M3 = TensorProto::FLOAT6E2M3;
+inline constexpr TensorProto::DataType TensorProto_DataType_FLOAT6E3M2 = TensorProto::FLOAT6E3M2;
 
 // protobuf sentinel constants for the DataType enum range.
 inline constexpr int TensorProto_DataType_DataType_MIN = 0;
-inline constexpr int TensorProto_DataType_DataType_MAX = 26;
-inline constexpr int TensorProto_DataType_DataType_ARRAYSIZE = 27;
+inline constexpr int TensorProto_DataType_DataType_MAX = 28;
+inline constexpr int TensorProto_DataType_DataType_ARRAYSIZE = 29;
 
 inline constexpr TensorProto::DataLocation TensorProto_DataLocation_DEFAULT = TensorProto::DEFAULT;
 inline constexpr TensorProto::DataLocation TensorProto_DataLocation_EXTERNAL =

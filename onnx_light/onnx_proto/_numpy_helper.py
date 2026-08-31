@@ -191,6 +191,53 @@ def _pack_2bitx4(array: np.ndarray) -> npt.NDArray[np.uint8]:
     return array_flat[0::4] | array_flat[1::4] | array_flat[2::4] | array_flat[3::4]
 
 
+def _pack_6bit(values: np.ndarray) -> npt.NDArray[np.uint8]:
+    """Packs 6-bit codes four at a time into three bytes in LSB-first order."""
+    flat = values.astype(np.uint8, copy=False).ravel() & 0x3F
+    packed_size = -(-flat.size * 6 // 8)
+    pad = -flat.size % 4
+    if pad:
+        flat = np.concatenate([flat, np.zeros(pad, dtype=np.uint8)])
+    v0, v1, v2, v3 = flat[0::4], flat[1::4], flat[2::4], flat[3::4]
+    packed = np.empty((v0.size, 3), dtype=np.uint8)
+    packed[:, 0] = v0 | ((v1 & 0x03) << 6)
+    packed[:, 1] = (v1 >> 2) | ((v2 & 0x0F) << 4)
+    packed[:, 2] = (v2 >> 4) | (v3 << 2)
+    return packed.reshape(-1)[:packed_size]
+
+
+def _unpack_6bit(data: np.ndarray, dims: Sequence[int]) -> npt.NDArray[np.uint8]:
+    """Unpacks an LSB-first packed 6-bit buffer into an array with the requested shape."""
+    original_size = math.prod(dims)
+    num_groups = -(-original_size // 4)
+    needed_bytes = num_groups * 3
+    min_bytes = -(-original_size * 6 // 8)
+    data = data.astype(np.uint8, copy=False)
+    if data.size < min_bytes:
+        raise ValueError(
+            f"Packed 6-bit data ({data.size} bytes) is too small for the declared "
+            f"shape {list(dims)} ({min_bytes} bytes required)."
+        )
+    bulk_bytes = min(data.size, needed_bytes) // 3 * 3
+    bulk_groups = bulk_bytes // 3
+    unpacked = np.empty((num_groups, 4), dtype=np.uint8)
+    b0, b1, b2 = data[0:bulk_bytes:3], data[1:bulk_bytes:3], data[2:bulk_bytes:3]
+    unpacked[:bulk_groups, 0] = b0 & 0x3F
+    unpacked[:bulk_groups, 1] = ((b0 >> 6) & 0x03) | ((b1 & 0x0F) << 2)
+    unpacked[:bulk_groups, 2] = ((b1 >> 4) & 0x0F) | ((b2 & 0x03) << 4)
+    unpacked[:bulk_groups, 3] = (b2 >> 2) & 0x3F
+    if bulk_groups < num_groups:
+        tail = np.zeros(3, dtype=np.uint8)
+        rest = data[bulk_bytes:]
+        tail[: rest.size] = rest
+        t0, t1, t2 = tail
+        unpacked[bulk_groups, 0] = t0 & 0x3F
+        unpacked[bulk_groups, 1] = ((t0 >> 6) & 0x03) | ((t1 & 0x0F) << 2)
+        unpacked[bulk_groups, 2] = ((t1 >> 4) & 0x0F) | ((t2 & 0x03) << 4)
+        unpacked[bulk_groups, 3] = (t2 >> 2) & 0x3F
+    return unpacked.reshape(-1)[:original_size].reshape(dims)
+
+
 def _load_external_data_for_tensor(tensor: TensorProto, base_dir: str) -> None:
     """Loads data from an external file into tensor.raw_data.
 
@@ -304,6 +351,10 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
             data = np.frombuffer(raw_data, dtype=np.uint8)
             return _unpack_2bit(data, dims).view(np_dtype)
 
+        if tensor_dtype in {TensorProto.FLOAT6E2M3, TensorProto.FLOAT6E3M2}:
+            data = np.frombuffer(raw_data, dtype=np.uint8)
+            return _unpack_6bit(data, dims).view(np_dtype)
+
         return np.frombuffer(raw_data, dtype=np_dtype).reshape(dims)
 
     if tensor_dtype in {
@@ -332,6 +383,13 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
             np.array(tensor.int32_data, dtype=np.int32)
             .view(np.uint32)
             .astype(np.uint8)
+            .view(np_dtype)
+            .reshape(dims)
+        )
+
+    if tensor_dtype in {TensorProto.FLOAT6E2M3, TensorProto.FLOAT6E3M2}:
+        return (
+            (np.array(tensor.int32_data, dtype=np.int32).view(np.uint32).astype(np.uint8) & 0x3F)
             .view(np_dtype)
             .reshape(dims)
         )
@@ -407,6 +465,9 @@ def from_array(array: np.ndarray, /, name: str | None = None) -> TensorProto:
     if dtype in {TensorProto.UINT2, TensorProto.INT2}:
         # Pack the array into int2
         array = _pack_2bitx4(array)
+
+    if dtype in {TensorProto.FLOAT6E2M3, TensorProto.FLOAT6E3M2}:
+        array = _pack_6bit(array.view(np.uint8))
 
     tensor.raw_data = tobytes_little_endian(array)
     tensor.data_type = dtype  # type: ignore[assignment]

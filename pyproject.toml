@@ -1,10 +1,10 @@
 [build-system]
-requires = ["scikit-build-core>=0.3.3", "nanobind>=3.0.0", "numpy>=2.2"]
+requires = ["scikit-build-core>=0.3.3", "nanobind>=3.0.1", "numpy>=2.2"]
 build-backend = "scikit_build_core.build"
 
 [project]
 name = "onnx-light"
-version = "0.1.21"
+version = "0.1.22"
 description = "onnx without protobuf"
 readme = "README.md"
 license = "Apache-2.0"

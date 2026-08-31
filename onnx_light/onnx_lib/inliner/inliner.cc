@@ -392,7 +392,7 @@ using ConstNodeMap = std::unordered_map<std::string, const NodeProto *>;
 ConstNodeMap FindConstantNodes(const GraphProto &graph) {
   ConstNodeMap result;
   for (const NodeProto &node : graph.node()) {
-    if (IsOnnxDomain(node.domain()) && (node.op_type() == "Constant")) {
+    if (IsOnnxDomain(node.domain()) && (node.op_type() == "Constant") && !node.output().empty()) {
       result[node.output()[0]] = &node;
     }
   }

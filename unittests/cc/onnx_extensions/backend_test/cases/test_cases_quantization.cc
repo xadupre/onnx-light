@@ -38,7 +38,11 @@ TEST(BackendTestCase, Float6QuantizeAndDequantizeLinearCasesArePresent) {
                                       [&name](const TestCase &c) { return c.name == name; });
       ASSERT_NE(found, cases.end()) << "missing backend test case: " << name;
       ASSERT_EQ(found->data_sets().size(), 1u);
-      EXPECT_EQ(found->data_sets()[0].outputs[0].shape, (std::vector<int64_t>{5}));
+      const auto &data = found->data_sets()[0];
+      EXPECT_EQ(data.inputs.size(), 2u);
+      EXPECT_EQ(data.outputs[0].shape, (std::vector<int64_t>{6}));
+      const auto &node = found->model().ref_graph().ref_node()[0];
+      EXPECT_EQ(node.ref_attribute().size(), op_type == "QuantizeLinear" ? 2u : 1u);
     }
   }
 }

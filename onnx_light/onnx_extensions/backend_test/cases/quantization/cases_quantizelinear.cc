@@ -100,18 +100,20 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
     float6_node.set_op_type("QuantizeLinear");
     float6_node.add_input("x");
     float6_node.add_input("y_scale");
-    float6_node.add_input("y_zero_point");
     float6_node.add_output("y");
+    AddAttribute<int64_t>(float6_node, "saturate", 1);
+    AddAttribute<int64_t>(float6_node, "output_dtype", static_cast<int64_t>(dtype));
     const std::string name = dtype == DataType::FLOAT6E2M3 ? "test_quantizelinear_float6e2m3"
                                                            : "test_quantizelinear_float6e3m2";
     Expect(registry, std::move(float6_node), name, {opset_v28}, [dtype]() -> IoData {
-      const KernelContext kernel_ctx{DefaultOpset(28)};
-      const onnx_kernels::kernel::QuantizeLinear quantize_kernel{kernel_ctx};
-      Tensor x = Tensor::FromFloat("", {5}, {-1.0f, -0.5f, 0.0f, 1.0f, 2.0f});
+      Tensor x = Tensor::FromFloat("", {6}, {0.0f, -0.0f, 0.125f, 1.0f, 8.0f, 1000.0f});
       Tensor scale = Tensor::FromFloat("", {}, {1.0f});
-      const Tensor zero_point("", static_cast<int32_t>(dtype), {1}, {0});
-      Tensor y = quantize_kernel(x, scale, zero_point);
-      return IoData{{std::move(x), std::move(scale), std::move(zero_point)}, {std::move(y)}};
+      // Six 6-bit values occupy five LSB-first packed bytes.
+      const std::vector<uint8_t> packed = dtype == DataType::FLOAT6E2M3
+                                              ? std::vector<uint8_t>{0, 24, 32, 223, 7}
+                                              : std::vector<uint8_t>{0, 40, 48, 216, 7};
+      Tensor y("", static_cast<int32_t>(dtype), {6}, packed);
+      return IoData{{std::move(x), std::move(scale)}, {std::move(y)}};
     });
   }
 

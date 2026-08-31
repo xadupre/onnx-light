@@ -14,3 +14,11 @@
 image_decoder_decode_jpeg2k_rgb
 image_decoder_decode_tiff_rgb
 image_decoder_decode_webp_rgb
+
+# --- Attention: new bfloat16 and causal variants ---
+attention_3d_causal_bf16
+attention_4d_attn_mask_causal_bf16
+attention_4d_causal_bf16
+attention_4d_causal_fp16
+attention_4d_causal_padded_kv_bf16
+attention_4d_padded_kv_bf16

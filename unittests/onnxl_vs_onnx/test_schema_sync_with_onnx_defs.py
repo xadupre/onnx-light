@@ -10,6 +10,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
     # domain string is the default ai.onnx domain used by the registered schemas.
     SWIGLU_KEY = ("", "SwiGLU", 28)
     ATTENTION_25_KEY = ("", "Attention", 25)
+    ONNX_28_KEYS = {("", "Cast", 28), ("", "DequantizeLinear", 28), ("", "QuantizeLinear", 28)}
 
     @classmethod
     def setUpClass(cls):
@@ -39,6 +40,9 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             onnx_light_schema_keys.discard(self.SWIGLU_KEY)
         if self.ATTENTION_25_KEY not in onnx_schema_keys:
             onnx_light_schema_keys.discard(self.ATTENTION_25_KEY)
+        for key in self.ONNX_28_KEYS:
+            if key not in onnx_light_schema_keys:
+                onnx_schema_keys.discard(key)
 
         self.assertEqual(onnx_light_schema_keys, onnx_schema_keys)
 
@@ -51,6 +55,9 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             light_dict.pop(self.SWIGLU_KEY, None)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
+        for key in self.ONNX_28_KEYS:
+            if key not in light_dict:
+                onnx_dict.pop(key, None)
         self.assertEqual(set(light_dict), set(onnx_dict))
         for key, schema in light_dict.items():
             with self.subTest(key=key):
@@ -82,6 +89,9 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             light_dict.pop(self.SWIGLU_KEY, None)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
+        for key in self.ONNX_28_KEYS:
+            if key not in light_dict:
+                onnx_dict.pop(key, None)
         self.assertEqual(set(light_dict), set(onnx_dict))
 
         def _normalize(text):
@@ -115,6 +125,9 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             light_dict.pop(self.SWIGLU_KEY, None)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
+        for key in self.ONNX_28_KEYS:
+            if key not in light_dict:
+                onnx_dict.pop(key, None)
         self.assertEqual(set(light_dict), set(onnx_dict))
         for key, lights in light_dict.items():
             schema = onnx_dict[key]

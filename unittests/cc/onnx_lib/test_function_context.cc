@@ -416,7 +416,7 @@ TEST_F(FunctionContextTest, BuildContextDependentFunctionBodyGeluTest) {
   EXPECT_FALSE(has_node_with_op_type(tanh_fn_proto, "Erf"));
 }
 
-TEST(FunctionContextStandaloneTest, AttentionCausalMasksMatchBiasType) {
+TEST(FunctionContextStandaloneTest, AttentionCausalMasksMatchExplicitBiasType) {
   auto has_node = [](const FunctionProto &function_proto, const std::string &op_type,
                      const std::vector<std::string> &inputs,
                      const std::vector<std::string> &outputs) {
@@ -444,6 +444,7 @@ TEST(FunctionContextStandaloneTest, AttentionCausalMasksMatchBiasType) {
     *node.add_input() = "Q";
     *node.add_input() = "K";
     *node.add_input() = "V";
+    *node.add_input() = "attn_mask";
     *node.add_output() = "Y";
     auto *const is_causal = node.add_attribute();
     is_causal->set_name("is_causal");
@@ -451,14 +452,15 @@ TEST(FunctionContextStandaloneTest, AttentionCausalMasksMatchBiasType) {
     is_causal->set_i(1);
 
     FunctionBodyBuildContextImpl ctx(
-        node, std::vector<TypeProto>{bfloat16_type(), bfloat16_type(), bfloat16_type()});
+        node,
+        std::vector<TypeProto>{bfloat16_type(), bfloat16_type(), bfloat16_type(), bfloat16_type()});
     FunctionProto function_proto;
     schema->BuildContextDependentFunction(ctx, function_proto);
     EXPECT_TRUE(has_node(function_proto, "CastLike", {"MaskTriFloat", "AttnBias"}, {"MaskTri"}));
   }
 }
 
-TEST(FunctionContextStandaloneTest, AttentionPaddingMaskMatchesBiasType) {
+TEST(FunctionContextStandaloneTest, AttentionPaddingMasksMatchBiasType) {
   const auto *const schema = OpSchemaRegistry::Schema("Attention", 24, ONNX_DOMAIN);
   ASSERT_NE(schema, nullptr);
 

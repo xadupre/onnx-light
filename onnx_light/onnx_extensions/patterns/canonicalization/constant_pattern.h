@@ -13,17 +13,17 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *                     +----------+
- *   value=tensor ---> | Constant | ---> cst
- *                     +----------+
+ *                     ┌──────────┐
+ *   value=tensor ────→│ Constant │────→ cst
+ *                     └──────────┘
  *
  * After:
  *   tensor initializer
- *           |
- *           v
- *      +----------+
- *      | Identity | ---> cst
- *      +----------+
+ *           │
+ *           ↓
+ *      ┌──────────┐
+ *      │ Identity │────→ cst
+ *      └──────────┘
  * @endcode
  *
  * The rewrite applies only when the Constant value can be materialised as a

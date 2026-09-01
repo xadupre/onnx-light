@@ -14,58 +14,59 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before (regressor):
- *          +-----------------------+
- *   x ---> | TreeEnsembleRegressor | ---> y
- *          +-----------------------+
+ *          ┌───────────────────────┐
+ *   x ────→│ TreeEnsembleRegressor │────→ y
+ *          └───────────────────────┘
  *
  * After (regressor):
- *          +--------------+
- *   x ---> | TreeEnsemble | ---> y
- *          +--------------+
+ *          ┌──────────────┐
+ *   x ────→│ TreeEnsemble │────→ y
+ *          └──────────────┘
  *
  * After (regressor with base values):
- *          +--------------+
- *   x ---> | TreeEnsemble | ---> tree scores
- *          +--------------+
- *
- *                              +-----+
- *   tree scores, base values -> | Add | ---> y
- *                              +-----+
+ *           ┌──────────────┐
+ *    x ────→│ TreeEnsemble │
+ *           └──────────────┘
+ *                   │
+ *                   ↓
+ *                  ┌─────┐
+ *    base values ─→│ Add │────→ y
+ *                  └─────┘
  *
  * Before (classifier):
- *          +------------------------+
- *   x ---> | TreeEnsembleClassifier | ---> labels, scores
- *          +------------------------+
+ *          ┌────────────────────────┐
+ *   x ────→│ TreeEnsembleClassifier │────→ labels, scores
+ *          └────────────────────────┘
  *
  * After (classifier with integer labels):
- *          +--------------+
- *   x ---> | TreeEnsemble | ---> scores
- *          +--------------+
- *                    |
- *                    v
- *               +--------+
- *               | ArgMax | ---> indices
- *               +--------+
- *                    |
- *                    v
- *               +--------+
- *   labels ---> | Gather | ---> labels output
- *               +--------+
+ *          ┌──────────────┐
+ *   x ────→│ TreeEnsemble │────→ scores
+ *          └──────────────┘
+ *                    │
+ *                    ↓
+ *               ┌────────┐
+ *               │ ArgMax │────→ indices
+ *               └────────┘
+ *                    │
+ *                    ↓
+ *               ┌────────┐
+ *   labels ────→│ Gather │────→ labels output
+ *               └────────┘
  *
  * After (classifier with string labels):
- *          +--------------+
- *   x ---> | TreeEnsemble | ---> scores
- *          +--------------+
- *                    |
- *                    v
- *               +--------+
- *               | ArgMax | ---> indices
- *               +--------+
- *                    |
- *                    v
- *             +--------------+
- *             | LabelEncoder | ---> labels output
- *             +--------------+
+ *          ┌──────────────┐
+ *   x ────→│ TreeEnsemble │────→ scores
+ *          └──────────────┘
+ *                    │
+ *                    ↓
+ *               ┌────────┐
+ *               │ ArgMax │────→ indices
+ *               └────────┘
+ *                    │
+ *                    ↓
+ *             ┌──────────────┐
+ *             │ LabelEncoder │────→ labels output
+ *             └──────────────┘
  *
  * @endcode
  *

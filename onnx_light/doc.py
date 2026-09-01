@@ -1101,11 +1101,8 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
     lines: list[str] = ["Examples", "--------", ""]
     for name in sorted(matches):
         tc = matches[name]
-        try:
-            model = tc.model
-            data_sets = tc.data_sets or []
-        finally:
-            tc.unload()
+        model = tc.model
+        data_sets = tc.data_sets or []
         lines.append(f"**{name}**")
         lines.append("")
 
@@ -1171,6 +1168,7 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
                 for ln in formatted.splitlines():
                     lines.append(f"        {ln}")
             lines.append("")
+        tc.unload()
 
     return lines
 

@@ -240,7 +240,7 @@ class TestBackendFunction(ExtTestCase):
         self.assertFalse(tc.materialized)
 
     def test_assert_allclose_can_keep_payload(self):
-        """Runtime comparisons retain payloads when unloading is disabled."""
+        """Retains payloads after runtime comparisons when unloading is disabled."""
         tc = collect_test_case()["test_cc_abs"]
 
         tc.assert_allclose(lambda model, *inputs: None, unload=False)

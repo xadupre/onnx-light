@@ -35,6 +35,8 @@ where:
 * ``Y`` has shape ``[batch, out_features]`` and the same dtype as ``X``
 """
 
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/shape_inference_custom_op.png"
+
 from __future__ import annotations
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs

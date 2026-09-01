@@ -15,6 +15,8 @@ including the subgraphs nested inside control flow operators such as ``If``,
 ``Loop`` and ``Scan``.
 """
 
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/node_callback.png"
+
 import numpy as np
 
 import onnx_light.onnx.helper as oh

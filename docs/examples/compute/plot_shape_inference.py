@@ -46,6 +46,8 @@ For systematic testing of shape inference across many test cases using
 :func:`make_test_class`, see :ref:`l-example-plot-backend-test-case`.
 """
 
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/shape_inference.png"
+
 from __future__ import annotations
 
 import onnx_light.onnx as onnxl

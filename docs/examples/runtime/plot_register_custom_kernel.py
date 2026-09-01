@@ -25,6 +25,8 @@ It also prints the custom kernel's ``"<library>:<device>:<domain>:<op_type>"``
 identifier next to the official built-in one and checks the two differ.
 """
 
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/register_custom_kernel.png"
+
 from __future__ import annotations
 
 import numpy as np

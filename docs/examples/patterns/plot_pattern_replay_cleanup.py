@@ -10,6 +10,8 @@ records replay identity removal, dead-end removal, and initializer
 deduplication without running cleanup again.
 """
 
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/pattern_replay_cleanup.png"
+
 from __future__ import annotations
 
 from onnx_light.onnx import TensorProto

@@ -37,7 +37,7 @@ from ...onnx_proto import _helper as onnxl_helper
 from ..defs import onnx_ir_version, onnx_opset_version
 from ...onnx_lib.shape_inference import infer_shapes
 from .test.case import collect_test_case
-from .test.case.base import TestCase, _unload_test_case
+from .test.case.base import TestCase
 
 
 @dataclass
@@ -531,7 +531,8 @@ def compute_runtime_coverage(
                 summary.dynamic_shapes_ok += 1
                 report.overall.dynamic_shapes_ok += 1
         finally:
-            _unload_test_case(tc, unload)
+            if unload:
+                tc.unload()
 
     # Sort statuses by (group, op_type, name) so the rendered table is stable.
     report.statuses.sort(key=lambda s: (s.group, s.op_type, s.name))

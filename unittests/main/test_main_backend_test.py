@@ -69,7 +69,7 @@ class TestMainBackendTest(ExtTestCase):
 
     def test_times_one_benchmark_case(self):
         report = _run_backend_test_timing(
-            name_regex=r"^test_cc_abs_benchmark$", mode="benchmark", repeat=1
+            name_regex=r"^test_cc_abs_benchmark$", mode="benchmark", repeat=1, timeout_seconds=30
         )
         self.assertEqual(report["mode"], "benchmark")
         self.assertEqual(report["selected"], 1)

@@ -14,22 +14,22 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *               +------+
- *   x, min ---> | Clip | ---> t
- *               +------+
- *                  |
- *                  v
- *               +------+
- *               | Clip | <--- max
- *               +------+
- *                  |
- *                  v
+ *               ┌──────┐
+ *   x, min ───▶ │ Clip │ ───▶ t
+ *               └──────┘
+ *                  │
+ *                  ▼
+ *               ┌──────┐
+ *               │ Clip │ ◀─── max
+ *               └──────┘
+ *                  │
+ *                  ▼
  *                  y
  *
  * After:
- *                    +------+
- *   x, min, max ---> | Clip | ---> y
- *                    +------+
+ *                    ┌──────┐
+ *   x, min, max ───▶ │ Clip │ ───▶ y
+ *                    └──────┘
  * @endcode
  *
  * The rewrite requires exactly one of the two Clip nodes to supply the minimum

@@ -13,26 +13,26 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *              +---------+
- *   a, c1 ---> | LeftOp  | ---> l
- *              +---------+
+ *              ┌─────────┐
+ *   a, c1 ───▶ │ LeftOp  │ ───▶ l
+ *              └─────────┘
  *
- *              +---------+
- *   b, c2 ---> | RightOp | ---> r
- *              +---------+
+ *              ┌─────────┐
+ *   b, c2 ───▶ │ RightOp │ ───▶ r
+ *              └─────────┘
  *
- *            +---------+
- *   l, r --> | OuterOp | ---> y
- *            +---------+
+ *            ┌─────────┐
+ *   l, r ──▶ │ OuterOp │ ───▶ y
+ *            └─────────┘
  *
  * After:
- *             +---------+
- *   a, b ---> | OuterOp | ---> t
- *             +---------+
+ *             ┌─────────┐
+ *   a, b ───▶ │ OuterOp │ ───▶ t
+ *             └─────────┘
  *
- *                          +---------+
- *   t, combined scalar --> | Mul/Div | ---> y
- *                          +---------+
+ *                          ┌─────────┐
+ *   t, combined scalar ──▶ │ Mul/Div │ ───▶ y
+ *                          └─────────┘
  * @endcode
  *
  * ``c1`` and ``c2`` are scalar or one-element constants. The replacement
@@ -58,29 +58,29 @@ public:
  *
  * @code
  * Before:
- *             +---------+
- *   b, c ---> | Add/Mul | ---> t
- *             +---------+
- *                  |
- *                  v
- *            +---------+
- *            | Add/Mul | <--- a
- *            +---------+
- *                  |
- *                  v
+ *             ┌─────────┐
+ *   b, c ───▶ │ Add/Mul │ ───▶ t
+ *             └─────────┘
+ *                  │
+ *                  ▼
+ *            ┌─────────┐
+ *            │ Add/Mul │ ◀─── a
+ *            └─────────┘
+ *                  │
+ *                  ▼
  *                  y
  *
  * After:
- *             +---------+
- *   b, a ---> | Add/Mul | ---> t2
- *             +---------+
- *                  |
- *                  v
- *            +---------+
- *            | Add/Mul | <--- c
- *            +---------+
- *                  |
- *                  v
+ *             ┌─────────┐
+ *   b, a ───▶ │ Add/Mul │ ───▶ t2
+ *             └─────────┘
+ *                  │
+ *                  ▼
+ *            ┌─────────┐
+ *            │ Add/Mul │ ◀─── c
+ *            └─────────┘
+ *                  │
+ *                  ▼
  *                  y
  *
  * Alternative matched forms may group (c, a), or place the inner node on the

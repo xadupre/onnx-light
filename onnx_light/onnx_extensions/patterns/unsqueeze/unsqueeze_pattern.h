@@ -13,22 +13,22 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *                    +-----------+
- *   x, axes=[1] ---> | Unsqueeze | ---> t
- *                    +-----------+
- *                          |
- *                          v
- *                   +-----------+
- *                   | Unsqueeze | <--- axes=[0]
- *                   +-----------+
- *                          |
- *                          v
+ *                    ┌───────────┐
+ *   x, axes=[1] ───▶ │ Unsqueeze │ ───▶ t
+ *                    └───────────┘
+ *                          │
+ *                          ▼
+ *                   ┌───────────┐
+ *                   │ Unsqueeze │ ◀─── axes=[0]
+ *                   └───────────┘
+ *                          │
+ *                          ▼
  *                          y
  *
  * After:
- *                      +-----------+
- *   x, axes=[0,2] ---> | Unsqueeze | ---> y
- *                      +-----------+
+ *                      ┌───────────┐
+ *   x, axes=[0,2] ───▶ │ Unsqueeze │ ───▶ y
+ *                      └───────────┘
  * @endcode
  *
  * Both ``axes`` inputs must be scalar or one-dimensional non-negative
@@ -60,27 +60,27 @@ public:
  *
  * @code
  * Before:
- *                    +-----------+
- *   x, axes=[1] ---> | Unsqueeze | ---> t
- *                    +-----------+
- *                          |
- *                          v
- *                     +---------+
- *                     | Squeeze | <--- axes=[1]
- *                     +---------+
- *                          |
- *                          v
+ *                    ┌───────────┐
+ *   x, axes=[1] ───▶ │ Unsqueeze │ ───▶ t
+ *                    └───────────┘
+ *                          │
+ *                          ▼
+ *                     ┌─────────┐
+ *                     │ Squeeze │ ◀─── axes=[1]
+ *                     └─────────┘
+ *                          │
+ *                          ▼
  *                          y
  *
  * After (matching axes):
- *          +----------+
- *   x ---> | Identity | ---> y
- *          +----------+
+ *          ┌──────────┐
+ *   x ───▶ │ Identity │ ───▶ y
+ *          └──────────┘
  *
  * After (the following Squeeze removes additional axes):
- *                         +---------+
- *   x, adjusted axes ---> | Squeeze | ---> y
- *                         +---------+
+ *                         ┌─────────┐
+ *   x, adjusted axes ───▶ │ Squeeze │ ───▶ y
+ *                         └─────────┘
  *
  * The inverse Squeeze-then-Unsqueeze order is also matched.
  * @endcode

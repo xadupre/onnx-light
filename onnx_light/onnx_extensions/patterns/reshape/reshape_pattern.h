@@ -13,22 +13,22 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *                                    +--------+
- *   constant, dynamic, Shape dims -> | Concat | ---> target
- *                                    +--------+
+ *                                    ┌────────┐
+ *   constant, dynamic, Shape dims ─▶ │ Concat │ ───▶ target
+ *                                    └────────┘
  *
- *                 +---------+
- *   x, target --> | Reshape | ---> y
- *                 +---------+
+ *                 ┌─────────┐
+ *   x, target ──▶ │ Reshape │ ───▶ y
+ *                 └─────────┘
  *
  * After:
- *                                 +--------+
- *   constant, [-1], Shape dims -> | Concat | ---> target2
- *                                 +--------+
+ *                                 ┌────────┐
+ *   constant, [-1], Shape dims ─▶ │ Concat │ ───▶ target2
+ *                                 └────────┘
  *
- *                  +---------+
- *   x, target2 --> | Reshape | ---> y
- *                  +---------+
+ *                  ┌─────────┐
+ *   x, target2 ──▶ │ Reshape │ ───▶ y
+ *                  └─────────┘
  * @endcode
  *
  * Every non-``Shape`` dynamic slot is replaced by ``[-1]``; when all dynamic
@@ -53,14 +53,14 @@ public:
  *
  * @code
  * Before:
- *                    +---------+
- *   x, target=S ---> | Reshape | ---> y
- *                    +---------+
+ *                    ┌─────────┐
+ *   x, target=S ───▶ │ Reshape │ ───▶ y
+ *                    └─────────┘
  *
  * After:
- *                  +----------+
- *   x -----------> | Identity | ---> y
- *                  +----------+
+ *                  ┌──────────┐
+ *   x ───────────▶ │ Identity │ ───▶ y
+ *                  └──────────┘
  * @endcode
  *
  * The input shape must be fully static and match every rank and dimension of
@@ -82,22 +82,22 @@ public:
  *
  * @code
  * Before:
- *                +-------------------+
- *   x, axes ---> | Reduce keepdims=1 | ---> t
- *                +-------------------+
- *                          |
- *                          v
- *                     +---------+
- *                     | Reshape | <--- target without reduced axes
- *                     +---------+
- *                          |
- *                          v
+ *                ┌───────────────────┐
+ *   x, axes ───▶ │ Reduce keepdims=1 │ ───▶ t
+ *                └───────────────────┘
+ *                          │
+ *                          ▼
+ *                     ┌─────────┐
+ *                     │ Reshape │ ◀─── target without reduced axes
+ *                     └─────────┘
+ *                          │
+ *                          ▼
  *                          y
  *
  * After:
- *                +-------------------+
- *   x, axes ---> | Reduce keepdims=0 | ---> y
- *                +-------------------+
+ *                ┌───────────────────┐
+ *   x, axes ───▶ │ Reduce keepdims=0 │ ───▶ y
+ *                └───────────────────┘
  * @endcode
  *
  * The reduction output must be unshared, and the final shape must equal the
@@ -120,42 +120,42 @@ public:
  *
  * @code
  * Before:
- *          +----------+
- *   x ---> | Reshape? | ---> rx
- *          +----------+
+ *          ┌──────────┐
+ *   x ───▶ │ Reshape? │ ───▶ rx
+ *          └──────────┘
  *
- *          +----------+
- *   z ---> | Reshape? | ---> rz
- *          +----------+
+ *          ┌──────────┐
+ *   z ───▶ │ Reshape? │ ───▶ rz
+ *          └──────────┘
  *
- *               +--------+
- *   rx, rz ---> | Binary | ---> b
- *               +--------+
- *                   |
- *                   v
- *              +----------+
- *              | Reshape? | ---> y
- *              +----------+
+ *               ┌────────┐
+ *   rx, rz ───▶ │ Binary │ ───▶ b
+ *               └────────┘
+ *                   │
+ *                   ▼
+ *              ┌──────────┐
+ *              │ Reshape? │ ───▶ y
+ *              └──────────┘
  *
  * At least two of the three optional Reshape nodes are present.
  *
  * After:
- *          +-------------------+
- *   x ---> | Reshape if needed | ---> rx
- *          +-------------------+
+ *          ┌───────────────────┐
+ *   x ───▶ │ Reshape if needed │ ───▶ rx
+ *          └───────────────────┘
  *
- *          +-------------------+
- *   z ---> | Reshape if needed | ---> rz
- *          +-------------------+
+ *          ┌───────────────────┐
+ *   z ───▶ │ Reshape if needed │ ───▶ rz
+ *          └───────────────────┘
  *
- *               +--------+
- *   rx, rz ---> | Binary | ---> t
- *               +--------+
- *                   |
- *                   v
- *           +-------------------+
- *           | Reshape if needed | ---> y
- *           +-------------------+
+ *               ┌────────┐
+ *   rx, rz ───▶ │ Binary │ ───▶ t
+ *               └────────┘
+ *                   │
+ *                   ▼
+ *           ┌───────────────────┐
+ *           │ Reshape if needed │ ───▶ y
+ *           └───────────────────┘
  * @endcode
  *
  * The binary operation must not broadcast, and the available source/final
@@ -180,29 +180,29 @@ public:
  *
  * @code
  * Before:
- *                    +---------+
- *   x, target=s ---> | Reshape | ---> rx
- *                    +---------+
+ *                    ┌─────────┐
+ *   x, target=s ───▶ │ Reshape │ ───▶ rx
+ *                    └─────────┘
  *
- *                    +---------+
- *   z, target=s ---> | Reshape | ---> rz
- *                    +---------+
+ *                    ┌─────────┐
+ *   z, target=s ───▶ │ Reshape │ ───▶ rz
+ *                    └─────────┘
  *
- *              +--------+
- *   rx, rz --> | Binary | ---> y
- *              +--------+
+ *              ┌────────┐
+ *   rx, rz ──▶ │ Binary │ ───▶ y
+ *              └────────┘
  *
  * After:
- *             +--------+
- *   x, z ---> | Binary | ---> t
- *             +--------+
- *                 |
- *                 v
- *            +---------+
- *            | Reshape | <--- target=s
- *            +---------+
- *                 |
- *                 v
+ *             ┌────────┐
+ *   x, z ───▶ │ Binary │ ───▶ t
+ *             └────────┘
+ *                 │
+ *                 ▼
+ *            ┌─────────┐
+ *            │ Reshape │ ◀─── target=s
+ *            └─────────┘
+ *                 │
+ *                 ▼
  *                 y
  * @endcode
  *
@@ -226,22 +226,22 @@ public:
  *
  * @code
  * Before:
- *                     +---------+
- *   x, target=s1 ---> | Reshape | ---> t
- *                     +---------+
- *                          |
- *                          v
- *                     +---------+
- *                     | Reshape | <--- target=s2
- *                     +---------+
- *                          |
- *                          v
+ *                     ┌─────────┐
+ *   x, target=s1 ───▶ │ Reshape │ ───▶ t
+ *                     └─────────┘
+ *                          │
+ *                          ▼
+ *                     ┌─────────┐
+ *                     │ Reshape │ ◀─── target=s2
+ *                     └─────────┘
+ *                          │
+ *                          ▼
  *                          y
  *
  * After:
- *                     +---------+
- *   x, target=s2' --> | Reshape | ---> y
- *                     +---------+
+ *                     ┌─────────┐
+ *   x, target=s2' ──▶ │ Reshape │ ───▶ y
+ *                     └─────────┘
  * @endcode
  *
  * The first output must be unshared. The replacement normally uses ``s2``;
@@ -265,22 +265,22 @@ public:
  *
  * @code
  * Before:
- *                              +---------+
- *   x, target=[...,1,...] ---> | Reshape | ---> t
- *                              +---------+
- *                                   |
- *                                   v
- *                              +---------+
- *                              | Squeeze | <--- axes=a
- *                              +---------+
- *                                   |
- *                                   v
+ *                              ┌─────────┐
+ *   x, target=[...,1,...] ───▶ │ Reshape │ ───▶ t
+ *                              └─────────┘
+ *                                   │
+ *                                   ▼
+ *                              ┌─────────┐
+ *                              │ Squeeze │ ◀─── axes=a
+ *                              └─────────┘
+ *                                   │
+ *                                   ▼
  *                                   y
  *
  * After:
- *                               +---------+
- *   x, target without axes ---> | Reshape | ---> y
- *                               +---------+
+ *                               ┌─────────┐
+ *   x, target without axes ───▶ │ Reshape │ ───▶ y
+ *                               └─────────┘
  * @endcode
  *
  * Every explicit Squeeze axis must select a unit target dimension. Removed
@@ -304,22 +304,22 @@ public:
  *
  * @code
  * Before:
- *                     +--------+
- *   shape pieces ---> | Concat | ---> target
- *                     +--------+
- *                          |
- *                          v
- *                     +---------+
- *                     | Reshape | <--- x
- *                     +---------+
- *                          |
- *                          v
+ *                     ┌────────┐
+ *   shape pieces ───▶ │ Concat │ ───▶ target
+ *                     └────────┘
+ *                          │
+ *                          ▼
+ *                     ┌─────────┐
+ *                     │ Reshape │ ◀─── x
+ *                     └─────────┘
+ *                          │
+ *                          ▼
  *                          y
  *
  * After:
- *                                      +---------+
- *   x, aligned target initializer ---> | Reshape | ---> y
- *                                      +---------+
+ *                                      ┌─────────┐
+ *   x, aligned target initializer ───▶ │ Reshape │ ───▶ y
+ *                                      └─────────┘
  * @endcode
  *
  * Input and output dimensions must admit an unambiguous alignment with at most
@@ -343,19 +343,19 @@ public:
  *
  * @code
  * Before:
- *                  +----------------+
- *   x, target ---> | Reshape/Expand | ---> y
- *                  +----------------+
+ *                  ┌────────────────┐
+ *   x, target ───▶ │ Reshape/Expand │ ───▶ y
+ *                  └────────────────┘
  *
  * After (unit dimensions are removed):
- *                  +---------+
- *   x, axes=a ---> | Squeeze | ---> y
- *                  +---------+
+ *                  ┌─────────┐
+ *   x, axes=a ───▶ │ Squeeze │ ───▶ y
+ *                  └─────────┘
  *
  * After (unit dimensions are inserted):
- *                  +-----------+
- *   x, axes=a ---> | Unsqueeze | ---> y
- *                  +-----------+
+ *                  ┌───────────┐
+ *   x, axes=a ───▶ │ Unsqueeze │ ───▶ y
+ *                  └───────────┘
  * @endcode
  *
  * Known input and output shapes must differ only by dimensions of size one.
@@ -379,14 +379,14 @@ public:
  *
  * @code
  * Before:
- *                       +---------+
- *   x, [0,...,0,d] ---> | Reshape | ---> y
- *                       +---------+
+ *                       ┌─────────┐
+ *   x, [0,...,0,d] ───▶ │ Reshape │ ───▶ y
+ *                       └─────────┘
  *
  * After:
- *                      +----------+
- *   x ---------------> | Identity | ---> y
- *                      +----------+
+ *                      ┌──────────┐
+ *   x ───────────────▶ │ Identity │ ───▶ y
+ *                      └──────────┘
  * @endcode
  *
  * The target must be constant, non-empty, have the input rank, contain only
@@ -409,22 +409,22 @@ public:
  *
  * @code
  * Before:
- *                                 +--------+
- *   constant dims, dynamic dim -> | Concat | ---> target
- *                                 +--------+
+ *                                 ┌────────┐
+ *   constant dims, dynamic dim ─▶ │ Concat │ ───▶ target
+ *                                 └────────┘
  *
- *                 +---------+
- *   x, target --> | Reshape | ---> y
- *                 +---------+
+ *                 ┌─────────┐
+ *   x, target ──▶ │ Reshape │ ───▶ y
+ *                 └─────────┘
  *
  * After:
- *                          +--------+
- *   constant dims, [-1] -> | Concat | ---> target2
- *                          +--------+
+ *                          ┌────────┐
+ *   constant dims, [-1] ─▶ │ Concat │ ───▶ target2
+ *                          └────────┘
  *
- *                  +---------+
- *   x, target2 --> | Reshape | ---> y
- *                  +---------+
+ *                  ┌─────────┐
+ *   x, target2 ──▶ │ Reshape │ ───▶ y
+ *                  └─────────┘
  * @endcode
  *
  * Constants may not already contain ``-1`` and exactly one dynamic input must
@@ -448,22 +448,22 @@ public:
  *
  * @code
  * Before:
- *                  +-------------------+
- *   x, axes=a ---> | Squeeze/Unsqueeze | ---> t
- *                  +-------------------+
- *                            |
- *                            v
- *                       +---------+
- *                       | Reshape | <--- target
- *                       +---------+
- *                            |
- *                            v
+ *                  ┌───────────────────┐
+ *   x, axes=a ───▶ │ Squeeze/Unsqueeze │ ───▶ t
+ *                  └───────────────────┘
+ *                            │
+ *                            ▼
+ *                       ┌─────────┐
+ *                       │ Reshape │ ◀─── target
+ *                       └─────────┘
+ *                            │
+ *                            ▼
  *                            y
  *
  * After:
- *                  +---------+
- *   x, target ---> | Reshape | ---> y
- *                  +---------+
+ *                  ┌─────────┐
+ *   x, target ───▶ │ Reshape │ ───▶ y
+ *                  └─────────┘
  * @endcode
  *
  * The intermediate value must be unshared. If the constant Reshape target uses
@@ -487,22 +487,22 @@ public:
  *
  * @code
  * Before:
- *                    +-----------+
- *   x, axes=[2] ---> | Unsqueeze | ---> t
- *                    +-----------+
- *                          |
- *                          v
- *                     +---------+
- *                     | Reshape | <--- [0,1,-1,0]
- *                     +---------+
- *                          |
- *                          v
+ *                    ┌───────────┐
+ *   x, axes=[2] ───▶ │ Unsqueeze │ ───▶ t
+ *                    └───────────┘
+ *                          │
+ *                          ▼
+ *                     ┌─────────┐
+ *                     │ Reshape │ ◀─── [0,1,-1,0]
+ *                     └─────────┘
+ *                          │
+ *                          ▼
  *                          y
  *
  * After:
- *                    +-----------+
- *   x, axes=[1] ---> | Unsqueeze | ---> y
- *                    +-----------+
+ *                    ┌───────────┐
+ *   x, axes=[1] ───▶ │ Unsqueeze │ ───▶ y
+ *                    └───────────┘
  * @endcode
  *
  * The source rank must be three and the intermediate Unsqueeze output must be

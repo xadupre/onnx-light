@@ -16,35 +16,35 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *               +-----+
- *   x, three -->| Pow |----> powered
- *               +-----+
- *                                +-----+
- *   powered, cubic coefficient ->| Mul |----> cubic
- *                                +-----+
- *               +-----+
- *   x, cubic -->| Add |----> polynomial
- *               +-----+
- *                            +-----+
- *   polynomial, tanh scale ->| Mul |----> scaled polynomial
- *                            +-----+
- *                         +------+
- *   scaled polynomial --->| Tanh |----> tanh value
- *                         +------+
- *                     +-----+
- *   tanh value, one ->| Add |----> tanh term
- *                     +-----+
- *                   +-----+
- *   x, one half --->| Mul |----> half input
- *                   +-----+
- *                           +-----+
- *   half input, tanh term ->| Mul |----> y
- *                           +-----+
+ *               ┌─────┐
+ *   x, three ──▶│ Pow │────▶ powered
+ *               └─────┘
+ *                                ┌─────┐
+ *   powered, cubic coefficient ─▶│ Mul │────▶ cubic
+ *                                └─────┘
+ *               ┌─────┐
+ *   x, cubic ──▶│ Add │────▶ polynomial
+ *               └─────┘
+ *                            ┌─────┐
+ *   polynomial, tanh scale ─▶│ Mul │────▶ scaled polynomial
+ *                            └─────┘
+ *                         ┌──────┐
+ *   scaled polynomial ───▶│ Tanh │────▶ tanh value
+ *                         └──────┘
+ *                     ┌─────┐
+ *   tanh value, one ─▶│ Add │────▶ tanh term
+ *                     └─────┘
+ *                   ┌─────┐
+ *   x, one half ───▶│ Mul │────▶ half input
+ *                   └─────┘
+ *                           ┌─────┐
+ *   half input, tanh term ─▶│ Mul │────▶ y
+ *                           └─────┘
  *
  * After:
- *          +------+
- *   x ---->| Gelu |----> y
- *          +------+
+ *          ┌──────┐
+ *   x ────▶│ Gelu │────▶ y
+ *          └──────┘
  * @endcode
  *
  * The replacement uses ``approximate="tanh"``. The cubic coefficient may also
@@ -76,22 +76,22 @@ private:
  *
  * @code
  * Before:
- *              +---------+
- *   x, zero -> | Greater | ---> condition
- *              +---------+
+ *              ┌─────────┐
+ *   x, zero ─▶ │ Greater │ ───▶ condition
+ *              └─────────┘
  *
- *               +-----+
- *   x, alpha -> | Mul | ---> scaled x
- *               +-----+
+ *               ┌─────┐
+ *   x, alpha ─▶ │ Mul │ ───▶ scaled x
+ *               └─────┘
  *
- *                             +-------+
- *   condition, x, scaled x -> | Where | ---> y
- *                             +-------+
+ *                             ┌───────┐
+ *   condition, x, scaled x ─▶ │ Where │ ───▶ y
+ *                             └───────┘
  *
  * After:
- *          +-----------+
- *   x ---> | LeakyRelu | ---> y
- *          +-----------+
+ *          ┌───────────┐
+ *   x ───▶ │ LeakyRelu │ ───▶ y
+ *          └───────────┘
  * @endcode
  *
  * The comparison threshold must be exactly zero, the slope must be scalar,
@@ -118,47 +118,47 @@ private:
  *
  * @code
  * Before:
- *                    +-------+       +-----+
- *   labels, -100 --->| Equal |------>| Not |----> valid
- *                    +-------+       +-----+
+ *                    ┌───────┐       ┌─────┐
+ *   labels, -100 ───▶│ Equal │──────▶│ Not │────▶ valid
+ *                    └───────┘       └─────┘
  *
- *                               +-------+       +-----------+
- *   valid, labels, zero_i64 --->| Where |------>| Unsqueeze |----> gather indices
- *                               +-------+       +-----------+
+ *                               ┌───────┐       ┌───────────┐
+ *   valid, labels, zero_i64 ───▶│ Where │──────▶│ Unsqueeze │────▶ gather indices
+ *                               └───────┘       └───────────┘
  *
- *              +------------+
- *   scores --->| LogSoftmax |----> log probabilities
- *              +------------+
+ *              ┌────────────┐
+ *   scores ───▶│ LogSoftmax │────▶ log probabilities
+ *              └────────────┘
  *
- *                                       +----------------+       +---------+
- *   log probabilities, gather indices ->| GatherElements |------>| Squeeze |
- *                                       +----------------+       +---------+
- *                                                                    |
- *                                                                    v
- *                                                                 +-----+
- *                                                                 | Neg |---> losses
- *                                                                 +-----+
+ *                                       ┌────────────────┐       ┌─────────┐
+ *   log probabilities, gather indices ─▶│ GatherElements │──────▶│ Squeeze │
+ *                                       └────────────────┘       └─────────┘
+ *                                                                    │
+ *                                                                    ▼
+ *                                                                 ┌─────┐
+ *                                                                 │ Neg │───▶ losses
+ *                                                                 └─────┘
  *
- *                             +-------+
- *   valid, losses, zero_f16 ->| Where |----> masked losses
- *                             +-------+
+ *                             ┌───────┐
+ *   valid, losses, zero_f16 ─▶│ Where │────▶ masked losses
+ *                             └───────┘
  *
- *                     +------+       +-----------+       +------+
- *   masked losses --->| Cast |------>| ReduceSum |------>| Cast |----> numerator
- *                     +------+       +-----------+       +------+
+ *                     ┌──────┐       ┌───────────┐       ┌──────┐
+ *   masked losses ───▶│ Cast │──────▶│ ReduceSum │──────▶│ Cast │────▶ numerator
+ *                     └──────┘       └───────────┘       └──────┘
  *
- *              +------+       +-----------+       +------+
- *   valid ---->| Cast |------>| ReduceSum |------>| Cast |----> denominator
- *              +------+       +-----------+       +------+
+ *              ┌──────┐       ┌───────────┐       ┌──────┐
+ *   valid ────▶│ Cast │──────▶│ ReduceSum │──────▶│ Cast │────▶ denominator
+ *              └──────┘       └───────────┘       └──────┘
  *
- *                            +-----+
- *   numerator, denominator ->| Div |----> loss
- *                            +-----+
+ *                            ┌─────┐
+ *   numerator, denominator ─▶│ Div │────▶ loss
+ *                            └─────┘
  *
  * After:
- *                     +-------------------------+
- *   scores, labels -->| SoftmaxCrossEntropyLoss |----> loss
- *                     +-------------------------+
+ *                     ┌─────────────────────────┐
+ *   scores, labels ──▶│ SoftmaxCrossEntropyLoss │────▶ loss
+ *                     └─────────────────────────┘
  * @endcode
  *
  * LogSoftmax, GatherElements, Unsqueeze, and Squeeze use axis one. Scores,
@@ -191,14 +191,14 @@ private:
  *
  * @code
  * Before:
- *              +-----+
- *   x, zero -->| Max |----> y
- *              +-----+
+ *              ┌─────┐
+ *   x, zero ──▶│ Max │────▶ y
+ *              └─────┘
  *
  * After:
- *          +------+
- *   x ---->| Relu |----> y
- *          +------+
+ *          ┌──────┐
+ *   x ────▶│ Relu │────▶ y
+ *          └──────┘
  * @endcode
  *
  * Exactly one Max input must be scalar zero. Supported element types are

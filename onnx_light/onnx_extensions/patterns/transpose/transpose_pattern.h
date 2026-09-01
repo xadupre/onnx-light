@@ -13,24 +13,24 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *          +-------------------+
- *   x ---> | Transpose [1,0,2] | ---> t
- *          +-------------------+
- *                     |
- *                     v
- *              +-------------------+
- *              | Transpose [0,2,1] | ---> y
- *              +-------------------+
+ *          ┌───────────────────┐
+ *   x ───▶ │ Transpose [1,0,2] │ ───▶ t
+ *          └───────────────────┘
+ *                     │
+ *                     ▼
+ *              ┌───────────────────┐
+ *              │ Transpose [0,2,1] │ ───▶ y
+ *              └───────────────────┘
  *
  * After:
- *          +-------------------+
- *   x ---> | Transpose [1,2,0] | ---> y
- *          +-------------------+
+ *          ┌───────────────────┐
+ *   x ───▶ │ Transpose [1,2,0] │ ───▶ y
+ *          └───────────────────┘
  *
  * After (identity composed permutation):
- *          +----------+
- *   x ---> | Identity | ---> y
- *          +----------+
+ *          ┌──────────┐
+ *   x ───▶ │ Identity │ ───▶ y
+ *          └──────────┘
  * @endcode
  *
  * When the composed permutation is the identity the pair is replaced by an
@@ -62,32 +62,32 @@ public:
  *
  * @code
  * Before:
- *          +-------------------+
- *   x ---> | Transpose [2,0,1] | ---> t
- *          +-------------------+
- *                     |
- *                     v
- *              +--------------+
- *              | Gather axis0 | <--- scalar k
- *              +--------------+
- *                     |
- *                     v
+ *          ┌───────────────────┐
+ *   x ───▶ │ Transpose [2,0,1] │ ───▶ t
+ *          └───────────────────┘
+ *                     │
+ *                     ▼
+ *              ┌──────────────┐
+ *              │ Gather axis0 │ ◀─── scalar k
+ *              └──────────────┘
+ *                     │
+ *                     ▼
  *                     y
  *
  * After (remaining permutation is sorted):
- *                    +--------------+
- *   x, scalar k ---> | Gather axis2 | ---> y
- *                    +--------------+
+ *                    ┌──────────────┐
+ *   x, scalar k ───▶ │ Gather axis2 │ ───▶ y
+ *                    └──────────────┘
  *
  * After (remaining permutation is not sorted):
- *                    +--------------+
- *   x, scalar k ---> | Gather axis2 | ---> g
- *                    +--------------+
- *                           |
- *                           v
- *                  +-----------------+
- *                  | Transpose [1,0] | ---> y
- *                  +-----------------+
+ *                    ┌──────────────┐
+ *   x, scalar k ───▶ │ Gather axis2 │ ───▶ g
+ *                    └──────────────┘
+ *                           │
+ *                           ▼
+ *                  ┌─────────────────┐
+ *                  │ Transpose [1,0] │ ───▶ y
+ *                  └─────────────────┘
  * @endcode
  *
  * When the remaining permutation is no longer sorted the rewrite gathers on the

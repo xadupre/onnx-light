@@ -18,22 +18,22 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *                  +--------------+
- *   c0, X, c1 ---> | Concat axis0 | ---> t
- *                  +--------------+
- *                         |
- *                         v
- *                    +--------------+
- *                    | Gather axis0 | <--- indices=[2,4]
- *                    +--------------+
- *                         |
- *                         v
+ *                  ┌──────────────┐
+ *   c0, X, c1 ───▶ │ Concat axis0 │ ───▶ t
+ *                  └──────────────┘
+ *                         │
+ *                         ▼
+ *                    ┌──────────────┐
+ *                    │ Gather axis0 │ ◀─── indices=[2,4]
+ *                    └──────────────┘
+ *                         │
+ *                         ▼
  *                         y
  *
  * After:
- *                         +--------------+
- *   X, indices=[0,2] ---> | Gather axis0 | ---> y
- *                         +--------------+
+ *                         ┌──────────────┐
+ *   X, indices=[0,2] ───▶ │ Gather axis0 │ ───▶ y
+ *                         └──────────────┘
  * @endcode
  *
  * If ``t`` has another consumer, the original ``Concat`` is retained.
@@ -68,27 +68,27 @@ public:
  * @code
  * Before:
  *   x, [4,1,7]
- *         |
- *         v
- *   +--------------+
- *   | Gather axis0 | ---> t
- *   +--------------+
- *                           |
- *                           v
- *                      +--------------+
- *                      | Gather axis0 | <--- [2,0]
- *                      +--------------+
- *                           |
- *                           v
+ *         │
+ *         ▼
+ *   ┌──────────────┐
+ *   │ Gather axis0 │ ───▶ t
+ *   └──────────────┘
+ *                           │
+ *                           ▼
+ *                      ┌──────────────┐
+ *                      │ Gather axis0 │ ◀─── [2,0]
+ *                      └──────────────┘
+ *                           │
+ *                           ▼
  *                           y
  *
  * After:
  *   x, [7,4]
- *       |
- *       v
- *   +--------------+
- *   | Gather axis0 | ---> y
- *   +--------------+
+ *       │
+ *       ▼
+ *   ┌──────────────┐
+ *   │ Gather axis0 │ ───▶ y
+ *   └──────────────┘
  * @endcode
  *
  * If ``t`` has another consumer, the inner ``Gather`` is retained.

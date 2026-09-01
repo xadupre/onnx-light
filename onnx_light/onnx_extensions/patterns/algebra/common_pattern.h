@@ -18,25 +18,25 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *                    +----+                       +------+
- *            +-----> | Op | ---> a ------------> | Next | ---> p
- *            |       +----+                       +------+
- *            |
- *   x, c ----+
- *            |
- *            |       +----+                       +------+
- *            +-----> | Op | ---> b ------------> | Next | ---> q
- *                    +----+                       +------+
+ *                    ┌────┐                      ┌──────┐
+ *            ┌─────▶ │ Op │ ───▶ a ────────────▶ │ Next │ ───▶ p
+ *            │       └────┘                      └──────┘
+ *            │
+ *   x, c ────┤
+ *            │
+ *            │       ┌────┐                      ┌──────┐
+ *            └─────▶ │ Op │ ───▶ b ────────────▶ │ Next │ ───▶ q
+ *                    └────┘                      └──────┘
  *
  * After:
- *             +----+             +------+
- *   x, c ---> | Op | ---> a ---> | Next | ---> p
- *             +----+      |      +------+      |
- *                         |                    |
- *                         v                    v
- *                    +----------+         +----------+
- *                    | Identity | ---> b  | Identity | ---> q
- *                    +----------+         +----------+
+ *             ┌────┐             ┌──────┐
+ *   x, c ───▶ │ Op │ ───▶ a ───▶ │ Next │ ───▶ p
+ *             └────┘      │      └──────┘      │
+ *                         │                    │
+ *                         ▼                    ▼
+ *                    ┌──────────┐         ┌──────────┐
+ *                    │ Identity │ ───▶ b  │ Identity │ ───▶ q
+ *                    └──────────┘         └──────────┘
  * @endcode
  *
  * One copy of every equivalent node is retained. Identity nodes preserve all
@@ -69,23 +69,23 @@ protected:
  *
  * @code
  * Before:
- *                         +---------+
- *   graph_input, c -----> | Op      | -----> a
- *                         +---------+
+ *                         ┌─────────┐
+ *   graph_input, c ─────▶ │ Op      │ ─────▶ a
+ *                         └─────────┘
  *
- *                         +---------+
- *   graph_input, c -----> | Op      | -----> b
- *                         +---------+
+ *                         ┌─────────┐
+ *   graph_input, c ─────▶ │ Op      │ ─────▶ b
+ *                         └─────────┘
  *
  * After:
- *                         +---------+
- *   graph_input, c -----> | Op      | -----> a
- *                         +---------+
- *                               |
- *                               v
- *                        +----------+
- *                        | Identity | -----> b
- *                        +----------+
+ *                         ┌─────────┐
+ *   graph_input, c ─────▶ │ Op      │ ─────▶ a
+ *                         └─────────┘
+ *                               │
+ *                               ▼
+ *                        ┌──────────┐
+ *                        │ Identity │ ─────▶ b
+ *                        └──────────┘
  * @endcode
  *
  * It uses the same replacement as SameChildrenPattern, retaining one node and
@@ -105,23 +105,23 @@ public:
  *
  * @code
  * Before:
- *                    +---------+
- *   x, shape1 -----> | Reshape | -----> a
- *                    +---------+
+ *                    ┌─────────┐
+ *   x, shape1 ─────▶ │ Reshape │ ─────▶ a
+ *                    └─────────┘
  *
- *                    +---------+
- *   x, shape2 -----> | Reshape | -----> b
- *                    +---------+
+ *                    ┌─────────┐
+ *   x, shape2 ─────▶ │ Reshape │ ─────▶ b
+ *                    └─────────┘
  *
  * After:
- *                    +---------+
- *   x, shape1 -----> | Reshape | -----> a
- *                    +---------+
- *                          |
- *                          v
- *                   +----------+
- *                   | Identity | -----> b
- *                   +----------+
+ *                    ┌─────────┐
+ *   x, shape1 ─────▶ │ Reshape │ ─────▶ a
+ *                    └─────────┘
+ *                          │
+ *                          ▼
+ *                   ┌──────────┐
+ *                   │ Identity │ ─────▶ b
+ *                   └──────────┘
  * @endcode
  *
  * The inferred shapes of ``a`` and ``b`` must be equal, although the shape
@@ -147,19 +147,19 @@ public:
  * @code
  * Before:
  *   x, starts, ends, axes, steps=1
- *                |
- *                v
- *         +---------+
- *         | Slice   |
- *         +---------+
- *                |
- *                v
+ *                │
+ *                ▼
+ *         ┌─────────┐
+ *         │ Slice   │
+ *         └─────────┘
+ *                │
+ *                ▼
  *                y
  *
  * After:
- *          +----------+
- *   x ---> | Identity | ---> y
- *          +----------+
+ *          ┌──────────┐
+ *   x ───▶ │ Identity │ ───▶ y
+ *          └──────────┘
  * @endcode
  *
  * The rewrite requires equal inferred input and output shapes. When the
@@ -184,31 +184,31 @@ public:
  * @code
  * Before:
  *   x, perm/shape
- *         |
- *         v
- *   +-------------------+
- *   | Transpose/Reshape |
- *   +-------------------+
- *         |
- *         v
- *   +---------+
- *   | Unary   | <--- extra inputs
- *   +---------+
- *         |
- *         v
+ *         │
+ *         ▼
+ *   ┌───────────────────┐
+ *   │ Transpose/Reshape │
+ *   └───────────────────┘
+ *         │
+ *         ▼
+ *   ┌─────────┐
+ *   │ Unary   │ ◀─── extra inputs
+ *   └─────────┘
+ *         │
+ *         ▼
  *         y
  *
  * After:
- *          +---------+
- *   x ---> | Unary   | <--- extra inputs
- *          +---------+
- *               |
- *               v
- *        +-------------------+
- *        | Transpose/Reshape | <--- perm/shape
- *        +-------------------+
- *               |
- *               v
+ *          ┌─────────┐
+ *   x ───▶ │ Unary   │ ◀─── extra inputs
+ *          └─────────┘
+ *               │
+ *               ▼
+ *        ┌───────────────────┐
+ *        │ Transpose/Reshape │ ◀─── perm/shape
+ *        └───────────────────┘
+ *               │
+ *               ▼
  *               y
  * @endcode
  *

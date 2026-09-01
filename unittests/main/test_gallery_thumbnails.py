@@ -38,7 +38,7 @@ def test_explicit_gallery_thumbnail_selection():
         matches = _THUMBNAIL_RE.findall(example_path.read_text(encoding="utf-8"))
         assert len(matches) <= 1, example_path
         if matches:
-            selected[str(example_path.relative_to(_DOCS / "examples"))] = matches[0]
+            selected[example_path.relative_to(_DOCS / "examples").as_posix()] = matches[0]
 
     assert selected == expected
     assert len(set(selected.values())) == len(selected)

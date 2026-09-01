@@ -1078,7 +1078,7 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
     ``.. code-block:: text`` block.  When no backend test exists for the
     operator/opset, an empty list is returned and no section is emitted.
     """
-    from .onnx_lib.backend.test.case.base import _unload_test_case, get_test_cases_for_op
+    from .onnx_lib.backend.test.case.base import get_test_cases_for_op
 
     all_tests = _load_backend_test_cases()
     if not all_tests:
@@ -1105,7 +1105,7 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
             model = tc.model
             data_sets = tc.data_sets or []
         finally:
-            _unload_test_case(tc, True)
+            tc.unload()
         lines.append(f"**{name}**")
         lines.append("")
 
@@ -1861,8 +1861,6 @@ def compute_inference_coverage(unload: bool = True) -> InferenceCoverageReport:
     :param unload: Releases each native-backed case after processing it.
         Defaults to ``True``.
     """
-    from .onnx_lib.backend.test.case.base import _unload_test_case
-
     report = InferenceCoverageReport()
 
     for tc in _iter_inference_cases():
@@ -1936,7 +1934,8 @@ def compute_inference_coverage(unload: bool = True) -> InferenceCoverageReport:
                 )
             )
         finally:
-            _unload_test_case(tc, unload)
+            if unload:
+                tc.unload()
 
     return report
 

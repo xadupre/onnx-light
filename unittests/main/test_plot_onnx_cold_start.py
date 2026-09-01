@@ -31,6 +31,28 @@ def _load_example_helpers():
 
 
 class TestPlotOnnxColdStart(ExtTestCase):
+    def test_plot_results_creates_timing_graph(self):
+        """Verifies collected cold-start timings produce a graph."""
+        results = [
+            {"implementation": "onnx", "end_to_end_ms": 20.0, "first_load_after_imports_ms": 8.0},
+            {
+                "implementation": "onnx_light",
+                "end_to_end_ms": 12.0,
+                "first_load_after_imports_ms": 3.0,
+            },
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            graph_path = pathlib.Path(directory) / "cold_start.png"
+            axis = _load_example_helpers()._plot_results(results, str(graph_path))
+
+            self.assertTrue(graph_path.exists())
+            self.assertEqual(axis.get_ylabel(), "milliseconds")
+            self.assertEqual(
+                [tick.get_text() for tick in axis.get_xticklabels()], ["onnx", "onnx_light"]
+            )
+            self.assertEqual(len(axis.patches), 4)
+            axis.figure.clear()
+
     def test_onnx_light_sample_uses_fresh_process_protocol(self):
         """Verifies a sample reports separate startup and post-import load timing."""
         graph = oh.make_graph(

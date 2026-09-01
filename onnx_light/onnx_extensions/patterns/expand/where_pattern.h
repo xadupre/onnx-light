@@ -13,18 +13,19 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *          +-----+
- *   c ---> | Not | ---> condition
- *          +-----+
- *
- *                       +-------+
- *   condition, x, y --> | Where | ---> z
- *                       +-------+
+ *           ┌─────┐
+ *    c ────→│ Not │
+ *           └─────┘
+ *              │
+ *              ↓
+ *            ┌───────┐
+ *    x, y ──→│ Where │────→ z
+ *            └───────┘
  *
  * After:
- *              +-------+
- *   c, y, x -> | Where | ---> z
- *              +-------+
+ *              ┌───────┐
+ *   c, y, x ──→│ Where │────→ z
+ *              └───────┘
  * @endcode
  *
  * The two branches are swapped. A shared ``Not`` is preserved for its other
@@ -54,49 +55,46 @@ public:
  *
  * @code
  * Before (upstream form):
- *                    +-----------+
- *   x, axes=a -----> | Unsqueeze | ---> ux
- *                    +-----------+
+ *                    ┌───────────┐
+ *   x, axes=a ──────→│ Unsqueeze │────→ ux
+ *                    └───────────┘
  *
- *             +-------+
- *   x, c ---> | Equal | ---> q
- *             +-------+
- *                  |
- *                  v
- *             +-----------+
- *   axes=a -> | Unsqueeze | ---> z
- *             +-----------+
+ *             ┌───────┐
+ *   x, c ────→│ Equal │────→ q
+ *             └───────┘
+ *                  │
+ *                  ↓
+ *             ┌───────────┐
+ *   axes=a ──→│ Unsqueeze │────→ z
+ *             └───────────┘
  *
  * After (upstream form):
- *                    +-----------+
- *   x, axes=a -----> | Unsqueeze | ---> ux
- *                    +-----------+
+ *                    ┌───────────┐
+ *   x, axes=a ──────→│ Unsqueeze │────→ ux
+ *                    └───────────┘
  *
- *             +-------+
- *   ux, c --> | Equal | ---> z
- *             +-------+
+ *             ┌───────┐
+ *   ux, c ───→│ Equal │────→ z
+ *             └───────┘
  *
  * Before (local form):
- *                    +-----------+
- *   x, axes=a -----> | Unsqueeze | ---> ux
- *                    +-----------+
- *
- *                    +-----------+
- *   y, axes=a -----> | Unsqueeze | ---> uy
- *                    +-----------+
- *
- *              +-------+
- *   ux, uy --> | Equal | ---> z
- *              +-------+
+ *                    ┌───────────┐
+ *    x, axes=a ─────→│ Unsqueeze │──┐
+ *                    └───────────┘  │
+ *                                   │
+ *                    ┌───────────┐  │    ┌───────┐
+ *    y, axes=a ─────→│ Unsqueeze │──┴───→│ Equal │────→ z
+ *                    └───────────┘       └───────┘
  *
  * After (local form):
- *             +-------+
- *   x, y ---> | Equal | ---> q
- *             +-------+
- *
- *                  +-----------+
- *   q, axes=a ---> | Unsqueeze | ---> z
- *                  +-----------+
+ *              ┌───────┐
+ *    x, y ────→│ Equal │
+ *              └───────┘
+ *                  │
+ *                  ↓
+ *               ┌───────────┐
+ *    axes=a ───→│ Unsqueeze │────→ z
+ *               └───────────┘
  * @endcode
  *
  * All axes are equal constant tensors. The upstream form requires a rank-zero
@@ -128,40 +126,41 @@ public:
  *
  * @code
  * Before (mask form):
- *                  +-------+
- *   c, 0, -inf --> | Where | ---> w
- *                  +-------+
- *
- *             +-----+
- *   w, k ---> | Add | ---> y
- *             +-----+
+ *                  ┌───────┐
+ *    c, 0, -inf ──→│ Where │
+ *                  └───────┘
+ *                      │
+ *                      ↓
+ *                   ┌─────┐
+ *    k ────────────→│ Add │────→ y
+ *                   └─────┘
  *
  * After (mask form):
- *                   +-------+
- *   c, k, -inf ---> | Where | ---> y
- *                   +-------+
+ *                   ┌───────┐
+ *   c, k, -inf ────→│ Where │────→ y
+ *                   └───────┘
  *
  * Before (factoring form):
- *             +-----+
- *   a, z ---> | Add | ---> then
- *             +-----+
- *
- *             +-----+
- *   b, z ---> | Add | ---> else
- *             +-----+
- *
- *                     +-------+
- *   c, then, else --> | Where | ---> y
- *                     +-------+
+ *                               c
+ *                               │
+ *                               │
+ *              ┌─────┐          │
+ *    a, z ────→│ Add │──┐       │
+ *              └─────┘  │       │
+ *                       │       ↓
+ *              ┌─────┐  │    ┌───────┐
+ *    b, z ────→│ Add │──┴───→│ Where │────→ y
+ *              └─────┘       └───────┘
  *
  * After (factoring form):
- *                +-------+
- *   c, a, b ---> | Where | ---> w
- *                +-------+
- *
- *             +-----+
- *   w, z ---> | Add | ---> y
- *             +-----+
+ *                ┌───────┐
+ *    c, a, b ───→│ Where │
+ *                └───────┘
+ *                    │
+ *                    ↓
+ *                 ┌─────┐
+ *    z ──────────→│ Add │────→ y
+ *                 └─────┘
  * @endcode
  *
  * The mask form requires an unshared ``Where`` output and accepts either

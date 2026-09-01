@@ -239,6 +239,14 @@ class TestBackendFunction(ExtTestCase):
             tc.assert_allclose(fail_runtime)
         self.assertFalse(tc.materialized)
 
+    def test_assert_allclose_can_keep_payload(self):
+        """Retains payloads after runtime comparisons when unloading is disabled."""
+        tc = collect_test_case()["test_cc_abs"]
+
+        tc.assert_allclose(lambda model, *inputs: None, unload=False)
+
+        self.assertTrue(tc.materialized)
+
     def test_collect_test_case_finds_blackmanwindow_tests(self):
         """Tests that collect_test_case finds BlackmanWindow test cases (from C++)."""
         result = collect_test_case()

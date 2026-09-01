@@ -16,35 +16,53 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *               +-----+
- *   x, three -->| Pow |----> powered
- *               +-----+
- *                                +-----+
- *   powered, cubic coefficient ->| Mul |----> cubic
- *                                +-----+
- *               +-----+
- *   x, cubic -->| Add |----> polynomial
- *               +-----+
- *                            +-----+
- *   polynomial, tanh scale ->| Mul |----> scaled polynomial
- *                            +-----+
- *                         +------+
- *   scaled polynomial --->| Tanh |----> tanh value
- *                         +------+
- *                     +-----+
- *   tanh value, one ->| Add |----> tanh term
- *                     +-----+
- *                   +-----+
- *   x, one half --->| Mul |----> half input
- *                   +-----+
- *                           +-----+
- *   half input, tanh term ->| Mul |----> y
- *                           +-----+
+ *    x, three
+ *       │
+ *       ↓
+ *    ┌─────┐
+ *    │ Pow │
+ *    └─────┘
+ *       │ powered
+ *       ↓
+ *    ┌─────┐
+ *    │ Mul │←──── cubic coefficient
+ *    └─────┘
+ *       │ cubic
+ *    x  │
+ *    │  │
+ *    ↓  ↓
+ *    ┌─────┐
+ *    │ Add │
+ *    └─────┘
+ *       │ polynomial
+ *       ↓
+ *    ┌─────┐
+ *    │ Mul │←──── tanh scale
+ *    └─────┘
+ *       │ scaled polynomial
+ *       ↓
+ *    ┌──────┐
+ *    │ Tanh │
+ *    └──────┘
+ *       │ tanh value
+ *       ↓
+ *    ┌─────┐
+ *    │ Add │←──── one
+ *    └─────┘
+ *       │ tanh term          ┌─────┐
+ *       │  x, one half ─────→│ Mul │────→ half input
+ *       │                    └─────┘
+ *       │                      │
+ *       └──────────┬───────────┘
+ *                  ↓
+ *               ┌─────┐
+ *               │ Mul │────→ y
+ *               └─────┘
  *
  * After:
- *          +------+
- *   x ---->| Gelu |----> y
- *          +------+
+ *          ┌──────┐
+ *   x ────→│ Gelu │────→ y
+ *          └──────┘
  * @endcode
  *
  * The replacement uses ``approximate="tanh"``. The cubic coefficient may also
@@ -76,22 +94,21 @@ private:
  *
  * @code
  * Before:
- *              +---------+
- *   x, zero -> | Greater | ---> condition
- *              +---------+
- *
- *               +-----+
- *   x, alpha -> | Mul | ---> scaled x
- *               +-----+
- *
- *                             +-------+
- *   condition, x, scaled x -> | Where | ---> y
- *                             +-------+
+ *                                    x
+ *                                    │
+ *                                    │
+ *               ┌─────────┐          │
+ *    x, zero ──→│ Greater │──┐       │
+ *               └─────────┘  │       │
+ *                            │       ↓
+ *               ┌─────┐      │    ┌───────┐
+ *    x, alpha ─→│ Mul │──────┴───→│ Where │────→ y
+ *               └─────┘           └───────┘
  *
  * After:
- *          +-----------+
- *   x ---> | LeakyRelu | ---> y
- *          +-----------+
+ *          ┌───────────┐
+ *   x ────→│ LeakyRelu │────→ y
+ *          └───────────┘
  * @endcode
  *
  * The comparison threshold must be exactly zero, the slope must be scalar,
@@ -118,47 +135,84 @@ private:
  *
  * @code
  * Before:
- *                    +-------+       +-----+
- *   labels, -100 --->| Equal |------>| Not |----> valid
- *                    +-------+       +-----+
- *
- *                               +-------+       +-----------+
- *   valid, labels, zero_i64 --->| Where |------>| Unsqueeze |----> gather indices
- *                               +-------+       +-----------+
- *
- *              +------------+
- *   scores --->| LogSoftmax |----> log probabilities
- *              +------------+
- *
- *                                       +----------------+       +---------+
- *   log probabilities, gather indices ->| GatherElements |------>| Squeeze |
- *                                       +----------------+       +---------+
- *                                                                    |
- *                                                                    v
- *                                                                 +-----+
- *                                                                 | Neg |---> losses
- *                                                                 +-----+
- *
- *                             +-------+
- *   valid, losses, zero_f16 ->| Where |----> masked losses
- *                             +-------+
- *
- *                     +------+       +-----------+       +------+
- *   masked losses --->| Cast |------>| ReduceSum |------>| Cast |----> numerator
- *                     +------+       +-----------+       +------+
- *
- *              +------+       +-----------+       +------+
- *   valid ---->| Cast |------>| ReduceSum |------>| Cast |----> denominator
- *              +------+       +-----------+       +------+
- *
- *                            +-----+
- *   numerator, denominator ->| Div |----> loss
- *                            +-----+
+ *                  ┌───────┐  ┌─────┐
+ *    labels, -100 →│ Equal │─→│ Not │
+ *                  └───────┘  └─────┘
+ *                               │ valid
+ *                               │
+ *                               │
+ *                               ├── valid, labels, zero_i64 ──→┌───────┐  ┌───────────┐
+ *                               │                              │ Where │─→│ Unsqueeze │
+ *                               │                              └───────┘  └───────────┘
+ *                               │                                               │
+ *                               │                                               │ gather indices
+ *                               │                                               │
+ *                               │               ┌────────────┐                  │
+ *                               │     scores ──→│ LogSoftmax │                  │
+ *                               │               └────────────┘                  │
+ *                               │                      │                        │
+ *                               │                      ↓                        ↓
+ *                               │                   ┌───────────────────────────┐
+ *                               │                   │      GatherElements       │
+ *                               │                   └───────────────────────────┘
+ *                               │                                 │
+ *                               │                                 ↓
+ *                               │                            ┌─────────┐
+ *                               │                            │ Squeeze │
+ *                               │                            └─────────┘
+ *                               │                                 │
+ *                               │                                 ↓
+ *                               │                              ┌─────┐
+ *                               │                              │ Neg │
+ *                               │                              └─────┘
+ *                               │                                 │ losses
+ *                               │                                 │
+ *                               │                                 ↓
+ *                               ├── valid, zero_f16 ──→┌────────────┐
+ *                               │                      │   Where    │────→ masked losses
+ *                               │                      └────────────┘
+ *                               │                                             │
+ *                               │                                             ↓
+ *                               │                                          ┌──────┐
+ *                               │                                          │ Cast │
+ *                               │                                          └──────┘
+ *                               │                                             │
+ *                               │                                             ↓
+ *                               │                                       ┌───────────┐
+ *                               │                                       │ ReduceSum │
+ *                               │                                       └───────────┘
+ *                               │                                             │
+ *                               │                                             ↓
+ *                               │                                         ┌──────┐
+ *                               │                                         │ Cast │
+ *                               │                                         └──────┘
+ *                               │                                            │ numerator
+ *                               │                                            ↓
+ *                               └── valid ──→┌──────┐                        │
+ *                                            │ Cast │                        │
+ *                                            └──────┘                        │
+ *                                               │                            │
+ *                                               ↓                            │
+ *                                         ┌───────────┐                      │
+ *                                         │ ReduceSum │                      │
+ *                                         └───────────┘                      │
+ *                                               │                            │
+ *                                               ↓                            │
+ *                                           ┌──────┐                         │
+ *                                           │ Cast │                         │
+ *                                           └──────┘                         │
+ *                                              │ denominator                 │
+ *                                              ↓                             │
+ *                                              └──────────────┬──────────────┘
+ *                                                             ↓
+ *                                                          ┌─────┐
+ *                                                          │ Div │─────→ loss
+ *                                                          └─────┘
  *
  * After:
- *                     +-------------------------+
- *   scores, labels -->| SoftmaxCrossEntropyLoss |----> loss
- *                     +-------------------------+
+ *                     ┌─────────────────────────┐
+ *   scores, labels ──→│ SoftmaxCrossEntropyLoss │────→ loss
+ *                     └─────────────────────────┘
  * @endcode
  *
  * LogSoftmax, GatherElements, Unsqueeze, and Squeeze use axis one. Scores,
@@ -191,14 +245,14 @@ private:
  *
  * @code
  * Before:
- *              +-----+
- *   x, zero -->| Max |----> y
- *              +-----+
+ *              ┌─────┐
+ *   x, zero ──→│ Max │────→ y
+ *              └─────┘
  *
  * After:
- *          +------+
- *   x ---->| Relu |----> y
- *          +------+
+ *          ┌──────┐
+ *   x ────→│ Relu │────→ y
+ *          └──────┘
  * @endcode
  *
  * Exactly one Max input must be scalar zero. Supported element types are

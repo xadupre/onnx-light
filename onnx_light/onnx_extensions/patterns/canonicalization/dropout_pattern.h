@@ -13,14 +13,14 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *          +---------+
- *   x ---> | Dropout | ---> y
- *          +---------+
+ *          ┌─────────┐
+ *   x ────→│ Dropout │────→ y
+ *          └─────────┘
  *
  * After:
- *          +----------+
- *   x ---> | Identity | ---> y
- *          +----------+
+ *          ┌──────────┐
+ *   x ────→│ Identity │────→ y
+ *          └──────────┘
  * @endcode
  *
  * The rewrite applies only when the optional mask output is unused and the

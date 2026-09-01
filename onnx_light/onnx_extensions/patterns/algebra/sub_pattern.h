@@ -13,27 +13,27 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *               +-----+
- *   one, x ---> | Sub | ---> d
- *               +-----+
- *                  |
- *                  v
- *               +-----+
- *               | Mul | <--- z
- *               +-----+
- *                  |
- *                  v
+ *               ┌─────┐
+ *   one, x ────→│ Sub │────→ d
+ *               └─────┘
+ *                  │
+ *                  ↓
+ *               ┌─────┐
+ *               │ Mul │←──── z
+ *               └─────┘
+ *                  │
+ *                  ↓
  *                  y
  *
  * After:
- *             +-----+
- *   x, z ---> | Mul | ---> p
- *             +-----+
- *                |
- *                v
- *             +-----+
- *   z ------> | Sub | ---> y
- *             +-----+
+ *             ┌─────┐
+ *   x, z ────→│ Mul │────→ p
+ *             └─────┘
+ *                │
+ *                ↓
+ *             ┌─────┐
+ *   z ───────→│ Sub │────→ y
+ *             └─────┘
  * @endcode
  *
  * The symmetric Mul input order is supported. ``one`` may come from an

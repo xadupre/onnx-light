@@ -19,26 +19,26 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *               +-------------------+
- *   x0, x1 ---> | SequenceConstruct | ---> s
- *               +-------------------+
- *                    |         |
- *                    v         v
- *           +------------+   +------------+
- *           | SequenceAt |   | SequenceAt |
- *           +------------+   +------------+
- *                | index=0        | index=1
- *                v                v
+ *               ┌───────────────────┐
+ *   x0, x1 ────→│ SequenceConstruct │────→ s
+ *               └───────────────────┘
+ *                    │         │
+ *                    ↓         ↓
+ *           ┌────────────┐   ┌────────────┐
+ *           │ SequenceAt │   │ SequenceAt │
+ *           └────────────┘   └────────────┘
+ *                │ index=0        │ index=1
+ *                ↓                ↓
  *                y0               y1
  *
  * After:
- *           +----------+
- *   x0 ---> | Identity | ---> y0
- *           +----------+
+ *           ┌──────────┐
+ *   x0 ────→│ Identity │────→ y0
+ *           └──────────┘
  *
- *           +----------+
- *   x1 ---> | Identity | ---> y1
- *           +----------+
+ *           ┌──────────┐
+ *   x1 ────→│ Identity │────→ y1
+ *           └──────────┘
  * @endcode
  */
 class SequenceConstructAtPattern final : public core::builder::PatternOptimization {
@@ -73,34 +73,34 @@ public:
  *
  * @code
  * Before:
- *          +-----------------+
- *   x ---> | SplitToSequence | ---> s
- *          +-----------------+
- *               |       |
- *               v       v
- *        +------------+ +------------+
- *        | SequenceAt | | SequenceAt |
- *        +------------+ +------------+
- *           | index=0     | index=1
- *           v             v
+ *          ┌─────────────────┐
+ *   x ────→│ SplitToSequence │────→ s
+ *          └─────────────────┘
+ *               │       │
+ *               ↓       ↓
+ *        ┌────────────┐ ┌────────────┐
+ *        │ SequenceAt │ │ SequenceAt │
+ *        └────────────┘ └────────────┘
+ *           │ index=0     │ index=1
+ *           ↓             ↓
  *           y0            y1
  *
  * After (keepdims=0):
- *          +-------+
- *   x ---> | Split | ---> t0, t1
- *          +-------+
- *
- *                     +---------+
- *   t0, axes=[1] ---> | Squeeze | ---> y0
- *                     +---------+
- *                     +---------+
- *   t1, axes=[1] ---> | Squeeze | ---> y1
- *                     +---------+
+ *          ┌───────┐
+ *   x ────→│ Split │
+ *          └───────┘
+ *              │
+ *              │                   ┌─────────┐
+ *              ├── t0, axes=[1] ──→│ Squeeze │────→ y0
+ *              │                   ├─────────┤
+ *              │                   ├─────────┤
+ *              └── t1, axes=[1] ──→│ Squeeze │────→ y1
+ *                                  └─────────┘
  *
  * After (keepdims=1):
- *          +-------+
- *   x ---> | Split | ---> y0, y1
- *          +-------+
+ *          ┌───────┐
+ *   x ────→│ Split │────→ y0, y1
+ *          └───────┘
  * @endcode
  *
  * With ``keepdims=1``, the ``Split`` writes the ``SequenceAt`` outputs

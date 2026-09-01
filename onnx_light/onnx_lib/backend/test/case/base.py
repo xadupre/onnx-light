@@ -191,7 +191,8 @@ class TestCase(_backend_test_cc.TestCase):
         try:
             self._assert_allclose(rt, atol=atol, rtol=rtol)
         finally:
-            _unload_test_case(self, unload)
+            if unload:
+                self.unload()
 
     def _assert_allclose(
         self, rt: Callable, atol: float | None = None, rtol: float | None = None

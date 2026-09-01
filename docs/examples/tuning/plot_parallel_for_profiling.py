@@ -16,7 +16,7 @@ platforms and denied counters retain portable timing; ``None`` is distinct from
 a valid zero.
 """
 
-# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/tuning.png"
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/parallel_for_profiling.png"
 
 from __future__ import annotations
 

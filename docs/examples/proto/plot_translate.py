@@ -24,7 +24,7 @@ runnable Python snippet.  The example below builds a small model, prints
 both flavours and then executes the generated code to rebuild the model.
 """
 
-# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/proto.png"
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/translate.png"
 
 from __future__ import annotations
 

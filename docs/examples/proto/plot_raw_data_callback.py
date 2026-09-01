@@ -18,7 +18,7 @@ memory.  Returning ``None`` leaves the tensor's ownership unchanged, which makes
 the callback equally usable as a read-only inspection hook.
 """
 
-# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/proto.png"
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/raw_data_callback.png"
 
 import numpy as np
 

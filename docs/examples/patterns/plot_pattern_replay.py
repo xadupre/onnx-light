@@ -10,7 +10,7 @@ records can reconstruct the optimized graph from the original model without
 running pattern matching again.
 """
 
-# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/patterns.png"
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/pattern_replay.png"
 
 from __future__ import annotations
 

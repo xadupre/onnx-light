@@ -35,7 +35,7 @@ Graph structure
    Z  = Reshape(B, S)  → float[4, N] or float[N, 4] after inference
 """
 
-# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/proto.png"
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/pretty_onnx.png"
 
 from __future__ import annotations
 

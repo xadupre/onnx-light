@@ -28,7 +28,7 @@ given batch size, sequence length, hidden dimension, etc., without
 actually running the model.
 """
 
-# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/compute.png"
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/evaluate_shapes.png"
 
 from __future__ import annotations
 

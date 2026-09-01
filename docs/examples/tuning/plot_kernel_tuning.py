@@ -12,7 +12,7 @@ The example writes only to a temporary cache. Real applications may omit
 ``path`` to use :func:`~onnx_light.kernel_tuning.default_kernel_tuning_cache_path`.
 """
 
-# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/tuning.png"
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/kernel_tuning.png"
 
 from __future__ import annotations
 

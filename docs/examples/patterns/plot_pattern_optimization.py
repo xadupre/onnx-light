@@ -23,7 +23,7 @@ in both Python and C++. :ref:`l-example-plot-pattern-replay` demonstrates how
 to capture and replay the applied modifications separately.
 """
 
-# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/patterns.png"
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/pattern_optimization.png"
 
 from __future__ import annotations
 

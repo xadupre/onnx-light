@@ -107,9 +107,9 @@ Taking ownership of tensor data while parsing
 
 :cpp:struct:`~onnx_light::ParseOptions` exposes a ``raw_data_callback`` hook that is
 invoked for every :class:`~onnx_light.onnx_lib.TensorProto` that has ``raw_data`` once
-that data has been parsed (inline or external).  The callback receives the freshly parsed tensor and
-returns a deleter (a zero-argument callable); when the returned deleter is non-empty it is
-attached to the tensor's ``raw_data`` via
+that data has been parsed (inline or external).  The callback receives the freshly
+parsed tensor and returns a deleter (a zero-argument callable); when the returned
+deleter is non-empty it is attached to the tensor's ``raw_data`` via
 :cpp:func:`~onnx_light::utils::ByteSpan::attach_deleter`, so it fires once when the buffer
 is released.  Return an empty ``std::function`` to leave ownership unchanged.
 

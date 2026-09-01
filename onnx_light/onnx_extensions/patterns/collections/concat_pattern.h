@@ -137,11 +137,13 @@ public:
  * After:
  *          ┌───────┐
  *   x ────→│ Unary │────→ u
- *          └───────┘
- *
- *           ┌────────┐
- *   u, u ──→│ Concat │────→ y
- *           └────────┘
+ *          └───────┘      │
+ *                       ┌─┴─┐
+ *                       │   │
+ *                       ↓   ↓
+ *                      ┌────────┐
+ *                      │ Concat │────→ y
+ *                      └────────┘
  * @endcode
  *
  * If ``t`` has another consumer, ``Concat(x, x)`` is retained for it.

@@ -24,13 +24,14 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *          └──────────────┘
  *
  * After (regressor with base values):
- *          ┌──────────────┐
- *   x ────→│ TreeEnsemble │────→ tree scores
- *          └──────────────┘
- *
- *                               ┌─────┐
- *   tree scores, base values ──→│ Add │────→ y
- *                               └─────┘
+ *           ┌──────────────┐
+ *    x ────→│ TreeEnsemble │
+ *           └──────────────┘
+ *                   │
+ *                   ↓
+ *                  ┌─────┐
+ *    base values ─→│ Add │────→ y
+ *                  └─────┘
  *
  * Before (classifier):
  *          ┌────────────────────────┐

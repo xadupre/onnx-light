@@ -13,34 +13,56 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *          ┌────────────┐
- *   x ────→│ ReduceMean │────→ mean
- *          └────────────┘
- *
- *               ┌─────┐
- *   x, mean ───→│ Sub │────→ centered
- *               └─────┘
- *                   ┌─────┐
- *   centered, two ─→│ Pow │────→ squared
- *                   └─────┘
- *             ┌────────────┐
- *   squared ─→│ ReduceMean │────→ variance
- *             └────────────┘
- *                       ┌─────┐       ┌──────┐
- *   variance, epsilon ─→│ Add │──────→│ Sqrt │────→ deviation
- *                       └─────┘       └──────┘
- *
- *                           ┌─────┐
- *   centered, deviation ───→│ Div │────→ y
- *                           └─────┘
+ *    x
+ *    │
+ *    ├──────────────┐
+ *    │              ↓
+ *    │        ┌────────────┐
+ *    │        │ ReduceMean │────→ mean
+ *    │        └────────────┘
+ *    ↓              ↓
+ *   ┌────────────────┐
+ *   │      Sub       │────→ centered
+ *   └────────────────┘
+ *           │
+ *           ├────────────────────────────────────────────┐
+ *           │                                            │
+ *           │                                            │
+ *           ↓                                            │
+ *          ┌─────┐                                       │
+ *          │ Pow │←──── two                              │
+ *          └─────┘                                       │
+ *             │ squared                                  │
+ *             ↓                                          │
+ *            ┌────────────┐                              │
+ *            │ ReduceMean │────→ variance                │
+ *            └────────────┘                              │
+ *                  │                                     │
+ *                  │  epsilon                            │
+ *                  ↓  │                                  │
+ *                 ┌─────┐  ┌──────┐                      │
+ *                 │ Add │─→│ Sqrt │────→ deviation       │
+ *                 └─────┘  └──────┘                      │
+ *                             │                          │
+ *                             ↓                          ↓
+ *                             └────────────┬─────────────┘
+ *                                          ↓
+ *                                       ┌─────┐
+ *                                       │ Div │────→ y
+ *                                       └─────┘
  *
  *   Alternate final path:
- *                ┌────────────┐
- *   deviation ──→│ Reciprocal │────→ inverse
- *                └────────────┘
- *                            ┌─────┐
- *   centered, inverse ──────→│ Mul │────→ y
- *                            └─────┘
+ *                 ┌────────────┐
+ *    deviation ──→│ Reciprocal │──┐
+ *                 └────────────┘  │
+ *                                 │ inverse
+ *                                 ↓
+ *                              ┌─────┐
+ *                              │ Mul │────→ y
+ *                              └─────┘
+ *                                 ↑
+ *                                 │
+ *                             centered
  *
  * After:
  *          ┌───────┐
@@ -48,15 +70,15 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *          └───────┘
  *
  *                       ┌─────────────────┐
- *   normalized shape ──→│ ConstantOfShape │────→ scale
- *                       ├─────────────────┤
- *                       ├─────────────────┤
- *   normalized shape ──→│ ConstantOfShape │────→ bias
- *                       └─────────────────┘
- *
- *                      ┌────────────────────┐
- *   x, scale, bias ───→│ LayerNormalization │────→ y
- *                      └────────────────────┘
+ *   normalized shape ──→│ ConstantOfShape │─────── scale ┐
+ *                       ├─────────────────┤              │
+ *                       ├─────────────────┤              │
+ *   normalized shape ──→│ ConstantOfShape │──────── bias ┤
+ *                       └─────────────────┘              │
+ *                                                        ↓
+ *                                                  ┌────────────────────┐
+ *   x ────────────────────────────────────────────→│ LayerNormalization │────→ y
+ *                                                  └────────────────────┘
  * @endcode
  *
  * Both means must keep dimensions and reduce the same trailing axes. All
@@ -82,32 +104,36 @@ public:
  *
  * @code
  * Before:
- *                     ┌────────────────────┐
- *   x, scale, bias ──→│ LayerNormalization │────→ normalized
- *                     └────────────────────┘
- *
- *                               ┌─────┐                       ┌─────┐
- *   normalized, extra scale ───→│ Mul │────→ scaled ─────────→│ Add │────→ y
- *                               └─────┘                       └─────┘
- *                                                                ↑
- *                                                                │
- *                                                           extra bias
+ *                      ┌────────────────────┐
+ *    x, scale, bias ──→│ LayerNormalization │
+ *                      └────────────────────┘
+ *                                │
+ *                                ↓
+ *                             ┌─────┐                ┌─────┐
+ *    extra scale ────────────→│ Mul │────→ scaled ──→│ Add │────→ y
+ *                             └─────┘                └─────┘
+ *                                                       ↑
+ *                                                       │
+ *                                                  extra bias
  *
  * After:
  *                           ┌─────┐
- *   scale, extra scale ────→│ Mul │────→ new scale
- *                           └─────┘
- *
- *                           ┌─────┐                    ┌─────┐
- *   bias, extra scale ─────→│ Mul │────→ scaled bias ─→│ Add │────→ new bias
- *                           └─────┘                    └─────┘
- *                                                          ↑
- *                                                          │
- *                                                     extra bias
- *
- *                            ┌────────────────────┐
- *   x, new scale, new bias ─→│ LayerNormalization │────→ y
- *                            └────────────────────┘
+ *    scale, extra scale ───→│ Mul │──────────────────────────────────────────┐
+ *                           └─────┘                                          │
+ *                                                                            │ new scale
+ *                                                                            │
+ *                           ┌─────┐                     ┌─────┐              │
+ *    bias, extra scale ────→│ Mul │────→ scaled bias ──→│ Add │              │
+ *                           └─────┘                     └─────┘              │
+ *                                                         ↑ │                │
+ *                                                         │ │                │
+ *                                              extra bias   │                │
+ *                                                           ↓                ↓
+ *                                                           └───────┬────────┘
+ *                                                                   ↓
+ *                                                    ┌────────────────────┐
+ *    x ─────────────────────────────────────────────→│ LayerNormalization │────→ y
+ *                                                    └────────────────────┘
  * @endcode
  *
  * The extra scale, optional bias, and original scale must have equal shapes.
@@ -142,12 +168,13 @@ public:
  *
  * After:
  *                       ┌──────┐
- *   scale, bias, ... ──→│ Cast │────→ converted parameters
+ *    scale, bias, ... ─→│ Cast │
  *                       └──────┘
- *
- *                             ┌───────────────┐
- *   x, converted parameters ─→│ Normalization │────→ y
- *                             └───────────────┘
+ *                           │ converted parameters
+ *                           ↓
+ *                        ┌───────────────┐
+ *    x ─────────────────→│ Normalization │────→ y
+ *                        └───────────────┘
  * @endcode
  *
  * The normalization may be GroupNormalization, LayerNormalization,
@@ -211,40 +238,72 @@ public:
  *                                                    └────────────────────┘
  *
  * After:
- *          ┌────────────┐
- *   x ────→│ ReduceMean │────→ mean
- *          └────────────┘
- *               ┌─────┐
- *   x, mean ───→│ Sub │────→ centered
- *               └─────┘
- *                          ┌─────┐       ┌────────────┐
- *   centered, centered ───→│ Mul │──────→│ ReduceMean │────→ variance
- *                          └─────┘       └────────────┘
- *                                             │
- *                                             ↓
- *                                  ┌─────┐       ┌──────┐
- *                       epsilon ──→│ Add │──────→│ Sqrt │────→ deviation
- *                                  └─────┘       └──────┘
- *                                     ↑
- *                                     │
- *                                 variance
- *
- *                           ┌─────┐
- *   centered, deviation ───→│ Div │────→ normalized
- *                           └─────┘
- *
- *            ┌─────────┐
- *   scale ──→│ Reshape │────→ broadcast scale
- *            └─────────┘
- *                                 ┌─────┐
- *   normalized, broadcast scale ─→│ Mul │────→ scaled
- *                                 └─────┘
- *           ┌─────────┐
- *   bias ──→│ Reshape │────→ broadcast bias
- *           └─────────┘
- *                            ┌─────┐
- *   scaled, broadcast bias ─→│ Add │────→ y
- *                            └─────┘
+ *    x
+ *    │
+ *    ├──────────────┐
+ *    │              ↓
+ *    │        ┌────────────┐
+ *    │        │ ReduceMean │────→ mean
+ *    │        └────────────┘
+ *    ↓              ↓
+ *   ┌────────────────┐
+ *   │      Sub       │────→ centered
+ *   └────────────────┘
+ *           │
+ *           ├──────────────────────────────────────────────────────┐
+ *           │                                                      │
+ *         ┌─┴─┐                                                    │
+ *         │   │                                                    │
+ *         ↓   ↓                                                    │
+ *         ┌───┐                                                    │
+ *         │Mul│                                                    │
+ *         └───┘                                                    │
+ *           │                                                      │
+ *           ↓                                                      │
+ *          ┌────────────┐                                          │
+ *          │ ReduceMean │────→ variance                            │
+ *          └────────────┘                                          │
+ *                │                                                 │
+ *                │  epsilon                                        │
+ *                ↓  │                                              │
+ *               ┌─────┐  ┌──────┐                                  │
+ *               │ Add │─→│ Sqrt │────→ deviation                   │
+ *               └─────┘  └──────┘                                  │
+ *                  ↑                                               │
+ *                  │                                               │
+ *              variance                                            │
+ *                           │                                      │
+ *                           ↓                                      ↓
+ *                           └──────────────────┬───────────────────┘
+ *                                              ↓
+ *                                           ┌─────┐
+ *                                           │ Div │────→ normalized
+ *                                           └─────┘
+ *                                                 │
+ *                                                 │
+ *             ┌─────────┐                         │
+ *    scale ──→│ Reshape │──┐                      │
+ *             └─────────┘  │                      │
+ *                          │ broadcast scale      │
+ *                          ↓                      ↓
+ *                          └──────────┬───────────┘
+ *                                     ↓
+ *                                  ┌─────┐
+ *                                  │ Mul │────→ scaled
+ *                                  └─────┘
+ *                                     │ scaled
+ *                                     └──────────────────┐
+ *                                                        │
+ *             ┌─────────┐                                │
+ *    bias ───→│ Reshape │──┐                             │
+ *             └─────────┘  │                             │
+ *                          │ broadcast bias              │
+ *                          ↓                             ↓
+ *                          └──────────────┬──────────────┘
+ *                                         ↓
+ *                                      ┌─────┐
+ *                                      │ Add │────→ y
+ *                                      └─────┘
  * @endcode
  *
  * The rewrite requires opset 18, a known input rank of at least two, known
@@ -275,28 +334,43 @@ public:
  *   x ────→│ Cast │────→ z
  *          └──────┘
  *
- *            ┌─────┐
- *   z, two ─→│ Pow │────→ squared
- *            └─────┘
- *             ┌────────────┐
- *   squared ─→│ ReduceMean │────→ mean square
- *             └────────────┘
- *                            ┌─────┐       ┌──────┐
- *   mean square, epsilon ───→│ Add │──────→│ Sqrt │────→ deviation
- *                            └─────┘       └──────┘
- *
- *                ┌────────────┐
- *   deviation ──→│ Reciprocal │────→ inverse
- *                └────────────┘
+ *    z
+ *    │
+ *    ├────────────────────────────────────────────┐
+ *    │                                            │
+ *    │                                            │
+ *    ↓                                            │
+ *   ┌─────┐                                       │
+ *   │ Pow │←──── two                              │
+ *   └─────┘                                       │
+ *      │ squared                                  │
+ *      ↓                                          │
+ *     ┌────────────┐                              │
+ *     │ ReduceMean │────→ mean square             │
+ *     └────────────┘                              │
+ *           │                                     │
+ *           │  epsilon                            │
+ *           ↓  │                                  │
+ *          ┌─────┐  ┌──────┐                      │
+ *          │ Add │─→│ Sqrt │────→ deviation       │
+ *          └─────┘  └──────┘                      │
+ *                      │                          │
+ *                      ↓                          │
+ *                ┌────────────┐                   │
+ *                │ Reciprocal │────→ inverse      │
+ *                └────────────┘                   │
+ *                                │                │
+ *                                ↓                ↓
+ *                                └───────┬────────┘
+ *                                        ↓
+ *                                     ┌─────┐
+ *                                     │ Mul │────→ normalized
+ *                                     └─────┘
  *
  *   Alternate inverse path:
  *                      ┌─────┐
  *   one, deviation ───→│ Div │────→ inverse
  *                      └─────┘
- *
- *                ┌─────┐
- *   z, inverse ─→│ Mul │────→ normalized
- *                └─────┘
  *
  *   Optional output conversion:
  *                ┌──────┐
@@ -336,12 +410,14 @@ public:
  *
  * @code
  * Before:
- *                ┌──────────────────┐
- *   x, scale1 ──→│ RMSNormalization │────→ normalized
- *                └──────────────────┘
- *                              ┌─────┐
- *   normalized, scale2 ───────→│ Mul │────→ y
- *                              └─────┘
+ *                 ┌──────────────────┐
+ *    x, scale1 ──→│ RMSNormalization │
+ *                 └──────────────────┘
+ *                           │
+ *                           ↓
+ *                       ┌─────┐
+ *    scale2 ───────────→│ Mul │────→ y
+ *                       └─────┘
  *
  * After:
  *                       ┌──────────────────┐

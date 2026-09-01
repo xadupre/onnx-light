@@ -14,25 +14,22 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *                  ┌─────────┐
- *   x, axes=a ────→│ Squeeze │────→ sx
- *                  └─────────┘
- *
- *                  ┌─────────┐
- *   z, axes=a ────→│ Squeeze │────→ sz
- *                  └─────────┘
- *
- *              ┌─────┐
- *   sx, sz ───→│ Add │────→ y
- *              └─────┘
+ *    x, axes=a ───→│ Squeeze │──┐
+ *                  └─────────┘  │
+ *                               │
+ *                  ┌─────────┐  │    ┌─────┐
+ *    z, axes=a ───→│ Squeeze │──┴───→│ Add │────→ y
+ *                  └─────────┘       └─────┘
  *
  * After:
- *             ┌─────┐
- *   x, z ────→│ Add │────→ t
- *             └─────┘
- *
- *                  ┌─────────┐
- *   t, axes=a ────→│ Squeeze │────→ y
- *                  └─────────┘
+ *              ┌─────┐
+ *    x, z ────→│ Add │
+ *              └─────┘
+ *                 │
+ *                 ↓
+ *            ┌─────────┐
+ *    axes=a →│ Squeeze │────→ y
+ *            └─────────┘
  * @endcode
  *
  * The axes must be equal constants (or inferred axis ``0`` for a ``[1]``
@@ -56,25 +53,22 @@ public:
  * @code
  * Before:
  *                  ┌───────────┐
- *   x, axes=a ────→│ Unsqueeze │────→ ux
- *                  └───────────┘
- *
- *                  ┌───────────┐
- *   z, axes=a ────→│ Unsqueeze │────→ uz
- *                  └───────────┘
- *
- *              ┌─────┐
- *   ux, uz ───→│ Mul │────→ y
- *              └─────┘
+ *    x, axes=a ───→│ Unsqueeze │──┐
+ *                  └───────────┘  │
+ *                                 │
+ *                  ┌───────────┐  │    ┌─────┐
+ *    z, axes=a ───→│ Unsqueeze │──┴───→│ Mul │────→ y
+ *                  └───────────┘       └─────┘
  *
  * After:
- *             ┌─────┐
- *   x, z ────→│ Mul │────→ t
- *             └─────┘
- *
- *                  ┌───────────┐
- *   t, axes=a ────→│ Unsqueeze │────→ y
- *                  └───────────┘
+ *              ┌─────┐
+ *    x, z ────→│ Mul │
+ *              └─────┘
+ *                 │
+ *                 ↓
+ *            ┌───────────┐
+ *    axes=a →│ Unsqueeze │────→ y
+ *            └───────────┘
  * @endcode
  */
 class MulUnsqueezeUnsqueezePattern final : public core::builder::PatternOptimization {

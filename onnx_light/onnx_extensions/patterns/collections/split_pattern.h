@@ -15,11 +15,19 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *          ┌───────┐
- *   x ────→│ Split │────→ s0, s1
+ *   x ────→│ Split │
  *          └───────┘
- *
+ *                  │
+ *             ┌────┴────┐
+ *             │         │
+ *             ↓         ↓
+ *             s0        s1
+ *             │         │
+ *             ↓         ↓
+ *             └────┬────┘
+ *                  ↓
  *              ┌────────┐
- *   s0, s1 ───→│ Concat │────→ y
+ *              │ Concat │────→ y
  *              └────────┘
  *
  * After:
@@ -72,18 +80,18 @@ public:
  *
  * After:
  *          ┌───────┐
- *   x ────→│ Split │────→ t0, t1, t2
+ *   x ────→│ Split │
  *          └───────┘
- *
- *                     ┌─────────┐
- *   t0, axes=[1] ────→│ Squeeze │────→ y0
- *                     ├─────────┤
- *                     ├─────────┤
- *   t1, axes=[1] ────→│ Squeeze │────→ y1
- *                     ├─────────┤
- *                     ├─────────┤
- *   t2, axes=[1] ────→│ Squeeze │────→ y2
- *                     └─────────┘
+ *              │
+ *              │                   ┌─────────┐
+ *              ├── t0, axes=[1] ──→│ Squeeze │────→ y0
+ *              │                   ├─────────┤
+ *              │                   ├─────────┤
+ *              ├── t1, axes=[1] ──→│ Squeeze │────→ y1
+ *              │                   ├─────────┤
+ *              │                   ├─────────┤
+ *              └── t2, axes=[1] ──→│ Squeeze │────→ y2
+ *                                  └─────────┘
  *
  * After (single-element vector indices):
  *          ┌───────┐
@@ -133,9 +141,9 @@ public:
  *                               └───────┘
  *
  * After:
- *   x, splits=[2,3,1] ───→ ┌───────┐ ───→ y0
- *                          │ Split │────→ y1
- *                          └───────┘ ───→ y2
+ *   x, splits=[2,3,1] ───→┌───────┐────→ y0
+ *                         │ Split │────→ y1
+ *                         └───────┘────→ y2
  * @endcode
  */
 class SlicesSplitPattern final : public core::builder::PatternOptimization {

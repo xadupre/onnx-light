@@ -13,22 +13,24 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *                                    ┌────────┐
- *   constant, dynamic, Shape dims ──→│ Concat │────→ target
- *                                    └────────┘
- *
- *                 ┌─────────┐
- *   x, target ───→│ Reshape │────→ y
- *                 └─────────┘
+ *                                   ┌────────┐
+ *    constant, dynamic, Shape dims →│ Concat │
+ *                                   └────────┘
+ *                                        │
+ *                                        ↓
+ *                                    ┌─────────┐
+ *    x ─────────────────────────────→│ Reshape │────→ y
+ *                                    └─────────┘
  *
  * After:
  *                                 ┌────────┐
- *   constant, [-1], Shape dims ──→│ Concat │────→ target2
+ *    constant, [-1], Shape dims ─→│ Concat │
  *                                 └────────┘
- *
- *                  ┌─────────┐
- *   x, target2 ───→│ Reshape │────→ y
- *                  └─────────┘
+ *                                      │
+ *                                      ↓
+ *                                  ┌─────────┐
+ *    x ───────────────────────────→│ Reshape │────→ y
+ *                                  └─────────┘
  * @endcode
  *
  * Every non-``Shape`` dynamic slot is replaced by ``[-1]``; when all dynamic
@@ -120,42 +122,34 @@ public:
  *
  * @code
  * Before:
- *          ┌──────────┐
- *   x ────→│ Reshape? │────→ rx
- *          └──────────┘
- *
- *          ┌──────────┐
- *   z ────→│ Reshape? │────→ rz
- *          └──────────┘
- *
- *               ┌────────┐
- *   rx, rz ────→│ Binary │────→ b
- *               └────────┘
- *                   │
- *                   ↓
- *              ┌──────────┐
- *              │ Reshape? │────→ y
- *              └──────────┘
+ *                  ┌──────────┐
+ *    x ───────────→│ Reshape? │──┐
+ *                  └──────────┘  │
+ *                                │
+ *                  ┌──────────┐  │    ┌────────┐
+ *    z ───────────→│ Reshape? │──┴───→│ Binary │────→ b
+ *                  └──────────┘       └────────┘
+ *                                         │
+ *                                         ↓
+ *                                ┌──────────┐
+ *                                │ Reshape? │────→ y
+ *                                └──────────┘
  *
  * At least two of the three optional Reshape nodes are present.
  *
  * After:
- *          ┌───────────────────┐
- *   x ────→│ Reshape if needed │────→ rx
- *          └───────────────────┘
- *
- *          ┌───────────────────┐
- *   z ────→│ Reshape if needed │────→ rz
- *          └───────────────────┘
- *
- *               ┌────────┐
- *   rx, rz ────→│ Binary │────→ t
- *               └────────┘
- *                   │
- *                   ↓
- *           ┌───────────────────┐
- *           │ Reshape if needed │────→ y
- *           └───────────────────┘
+ *                  ┌───────────────────┐
+ *    x ───────────→│ Reshape if needed │──┐
+ *                  └───────────────────┘  │
+ *                                         │
+ *                  ┌───────────────────┐  │    ┌────────┐
+ *    z ───────────→│ Reshape if needed │──┴───→│ Binary │────→ t
+ *                  └───────────────────┘       └────────┘
+ *                                                  │
+ *                                                  ↓
+ *                                        ┌───────────────────┐
+ *                                        │ Reshape if needed │────→ y
+ *                                        └───────────────────┘
  * @endcode
  *
  * The binary operation must not broadcast, and the available source/final
@@ -180,17 +174,13 @@ public:
  *
  * @code
  * Before:
- *                    ┌─────────┐
- *   x, target=s ────→│ Reshape │────→ rx
- *                    └─────────┘
- *
- *                    ┌─────────┐
- *   z, target=s ────→│ Reshape │────→ rz
- *                    └─────────┘
- *
- *              ┌────────┐
- *   rx, rz ───→│ Binary │────→ y
- *              └────────┘
+ *                  ┌─────────┐
+ *    x, target=s ─→│ Reshape │──┐
+ *                  └─────────┘  │
+ *                               │
+ *                  ┌─────────┐  │    ┌────────┐
+ *    z, target=s ─→│ Reshape │──┴───→│ Binary │────→ y
+ *                  └─────────┘       └────────┘
  *
  * After:
  *             ┌────────┐
@@ -410,21 +400,23 @@ public:
  * @code
  * Before:
  *                                 ┌────────┐
- *   constant dims, dynamic dim ──→│ Concat │────→ target
+ *    constant dims, dynamic dim ─→│ Concat │
  *                                 └────────┘
- *
- *                 ┌─────────┐
- *   x, target ───→│ Reshape │────→ y
- *                 └─────────┘
+ *                                      │
+ *                                      ↓
+ *                                  ┌─────────┐
+ *    x ───────────────────────────→│ Reshape │────→ y
+ *                                  └─────────┘
  *
  * After:
  *                          ┌────────┐
- *   constant dims, [-1] ──→│ Concat │────→ target2
+ *    constant dims, [-1] ─→│ Concat │
  *                          └────────┘
- *
- *                  ┌─────────┐
- *   x, target2 ───→│ Reshape │────→ y
- *                  └─────────┘
+ *                               │
+ *                               ↓
+ *                           ┌─────────┐
+ *    x ────────────────────→│ Reshape │────→ y
+ *                           └─────────┘
  * @endcode
  *
  * Constants may not already contain ``-1`` and exactly one dynamic input must

@@ -164,9 +164,9 @@ diagnostics, and priority selection.
 API reference
 -------------
 
-* **Python API**: :mod:`onnx_light.onnx_core.optimization`; the runtime
-  list of registered patterns is available through
-  :func:`~onnx_light.onnx_core.optimization.standard_pattern_names`.
+* **Python API and registered pattern list**:
+  :doc:`/api/python/onnx_core/optimization`; the runtime list is available
+  through :func:`~onnx_light.onnx_core.optimization.standard_pattern_names`.
 * **C++ API**: :doc:`/api/cpp/onnx_core/builder/index`.
 
 Examples

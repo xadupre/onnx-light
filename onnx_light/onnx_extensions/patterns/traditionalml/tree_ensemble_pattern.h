@@ -15,56 +15,56 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before (regressor):
  *          ┌───────────────────────┐
- *   x ───▶ │ TreeEnsembleRegressor │ ───▶ y
+ *   x ────▶│ TreeEnsembleRegressor │────▶ y
  *          └───────────────────────┘
  *
  * After (regressor):
  *          ┌──────────────┐
- *   x ───▶ │ TreeEnsemble │ ───▶ y
+ *   x ────▶│ TreeEnsemble │────▶ y
  *          └──────────────┘
  *
  * After (regressor with base values):
  *          ┌──────────────┐
- *   x ───▶ │ TreeEnsemble │ ───▶ tree scores
+ *   x ────▶│ TreeEnsemble │────▶ tree scores
  *          └──────────────┘
  *
  *                               ┌─────┐
- *   tree scores, base values ─▶ │ Add │ ───▶ y
+ *   tree scores, base values ──▶│ Add │────▶ y
  *                               └─────┘
  *
  * Before (classifier):
  *          ┌────────────────────────┐
- *   x ───▶ │ TreeEnsembleClassifier │ ───▶ labels, scores
+ *   x ────▶│ TreeEnsembleClassifier │────▶ labels, scores
  *          └────────────────────────┘
  *
  * After (classifier with integer labels):
  *          ┌──────────────┐
- *   x ───▶ │ TreeEnsemble │ ───▶ scores
+ *   x ────▶│ TreeEnsemble │────▶ scores
  *          └──────────────┘
  *                    │
  *                    ▼
  *               ┌────────┐
- *               │ ArgMax │ ───▶ indices
+ *               │ ArgMax │────▶ indices
  *               └────────┘
  *                    │
  *                    ▼
  *               ┌────────┐
- *   labels ───▶ │ Gather │ ───▶ labels output
+ *   labels ────▶│ Gather │────▶ labels output
  *               └────────┘
  *
  * After (classifier with string labels):
  *          ┌──────────────┐
- *   x ───▶ │ TreeEnsemble │ ───▶ scores
+ *   x ────▶│ TreeEnsemble │────▶ scores
  *          └──────────────┘
  *                    │
  *                    ▼
  *               ┌────────┐
- *               │ ArgMax │ ───▶ indices
+ *               │ ArgMax │────▶ indices
  *               └────────┘
  *                    │
  *                    ▼
  *             ┌──────────────┐
- *             │ LabelEncoder │ ───▶ labels output
+ *             │ LabelEncoder │────▶ labels output
  *             └──────────────┘
  *
  * @endcode

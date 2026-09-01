@@ -14,12 +14,12 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *                    ┌───────────┐
- *   x, axes=[1] ───▶ │ Unsqueeze │ ───▶ t
+ *   x, axes=[1] ────▶│ Unsqueeze │────▶ t
  *                    └───────────┘
  *                          │
  *                          ▼
  *                   ┌───────────┐
- *                   │ Unsqueeze │ ◀─── axes=[0]
+ *                   │ Unsqueeze │◀──── axes=[0]
  *                   └───────────┘
  *                          │
  *                          ▼
@@ -27,7 +27,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * After:
  *                      ┌───────────┐
- *   x, axes=[0,2] ───▶ │ Unsqueeze │ ───▶ y
+ *   x, axes=[0,2] ────▶│ Unsqueeze │────▶ y
  *                      └───────────┘
  * @endcode
  *
@@ -61,12 +61,12 @@ public:
  * @code
  * Before:
  *                    ┌───────────┐
- *   x, axes=[1] ───▶ │ Unsqueeze │ ───▶ t
+ *   x, axes=[1] ────▶│ Unsqueeze │────▶ t
  *                    └───────────┘
  *                          │
  *                          ▼
  *                     ┌─────────┐
- *                     │ Squeeze │ ◀─── axes=[1]
+ *                     │ Squeeze │◀──── axes=[1]
  *                     └─────────┘
  *                          │
  *                          ▼
@@ -74,12 +74,12 @@ public:
  *
  * After (matching axes):
  *          ┌──────────┐
- *   x ───▶ │ Identity │ ───▶ y
+ *   x ────▶│ Identity │────▶ y
  *          └──────────┘
  *
  * After (the following Squeeze removes additional axes):
  *                         ┌─────────┐
- *   x, adjusted axes ───▶ │ Squeeze │ ───▶ y
+ *   x, adjusted axes ────▶│ Squeeze │────▶ y
  *                         └─────────┘
  *
  * The inverse Squeeze-then-Unsqueeze order is also matched.

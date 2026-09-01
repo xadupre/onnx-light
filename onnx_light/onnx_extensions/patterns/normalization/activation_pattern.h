@@ -77,20 +77,20 @@ private:
  * @code
  * Before:
  *              ┌─────────┐
- *   x, zero ─▶ │ Greater │ ───▶ condition
+ *   x, zero ──▶│ Greater │────▶ condition
  *              └─────────┘
  *
  *               ┌─────┐
- *   x, alpha ─▶ │ Mul │ ───▶ scaled x
+ *   x, alpha ──▶│ Mul │────▶ scaled x
  *               └─────┘
  *
  *                             ┌───────┐
- *   condition, x, scaled x ─▶ │ Where │ ───▶ y
+ *   condition, x, scaled x ──▶│ Where │────▶ y
  *                             └───────┘
  *
  * After:
  *          ┌───────────┐
- *   x ───▶ │ LeakyRelu │ ───▶ y
+ *   x ────▶│ LeakyRelu │────▶ y
  *          └───────────┘
  * @endcode
  *

@@ -19,23 +19,23 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *                    ┌────┐                      ┌──────┐
- *            ┌─────▶ │ Op │ ───▶ a ────────────▶ │ Next │ ───▶ p
+ *            ┌──────▶│ Op │────▶ a ─────────────▶│ Next │────▶ p
  *            │       └────┘                      └──────┘
  *            │
  *   x, c ────┤
  *            │
  *            │       ┌────┐                      ┌──────┐
- *            └─────▶ │ Op │ ───▶ b ────────────▶ │ Next │ ───▶ q
+ *            └──────▶│ Op │────▶ b ─────────────▶│ Next │────▶ q
  *                    └────┘                      └──────┘
  *
  * After:
  *             ┌────┐             ┌──────┐
- *   x, c ───▶ │ Op │ ───▶ a ───▶ │ Next │ ───▶ p
+ *   x, c ────▶│ Op │────▶ a ────▶│ Next │────▶ p
  *             └────┘      │      └──────┘      │
  *                         │                    │
  *                         ▼                    ▼
  *                    ┌──────────┐         ┌──────────┐
- *                    │ Identity │ ───▶ b  │ Identity │ ───▶ q
+ *                    │ Identity │────▶ b  │ Identity │────▶ q
  *                    └──────────┘         └──────────┘
  * @endcode
  *
@@ -70,21 +70,21 @@ protected:
  * @code
  * Before:
  *                         ┌─────────┐
- *   graph_input, c ─────▶ │ Op      │ ─────▶ a
+ *   graph_input, c ──────▶│ Op      │──────▶ a
  *                         └─────────┘
  *
  *                         ┌─────────┐
- *   graph_input, c ─────▶ │ Op      │ ─────▶ b
+ *   graph_input, c ──────▶│ Op      │──────▶ b
  *                         └─────────┘
  *
  * After:
  *                         ┌─────────┐
- *   graph_input, c ─────▶ │ Op      │ ─────▶ a
+ *   graph_input, c ──────▶│ Op      │──────▶ a
  *                         └─────────┘
  *                               │
  *                               ▼
  *                        ┌──────────┐
- *                        │ Identity │ ─────▶ b
+ *                        │ Identity │──────▶ b
  *                        └──────────┘
  * @endcode
  *
@@ -106,21 +106,21 @@ public:
  * @code
  * Before:
  *                    ┌─────────┐
- *   x, shape1 ─────▶ │ Reshape │ ─────▶ a
+ *   x, shape1 ──────▶│ Reshape │──────▶ a
  *                    └─────────┘
  *
  *                    ┌─────────┐
- *   x, shape2 ─────▶ │ Reshape │ ─────▶ b
+ *   x, shape2 ──────▶│ Reshape │──────▶ b
  *                    └─────────┘
  *
  * After:
  *                    ┌─────────┐
- *   x, shape1 ─────▶ │ Reshape │ ─────▶ a
+ *   x, shape1 ──────▶│ Reshape │──────▶ a
  *                    └─────────┘
  *                          │
  *                          ▼
  *                   ┌──────────┐
- *                   │ Identity │ ─────▶ b
+ *                   │ Identity │──────▶ b
  *                   └──────────┘
  * @endcode
  *
@@ -158,7 +158,7 @@ public:
  *
  * After:
  *          ┌──────────┐
- *   x ───▶ │ Identity │ ───▶ y
+ *   x ────▶│ Identity │────▶ y
  *          └──────────┘
  * @endcode
  *
@@ -192,7 +192,7 @@ public:
  *         │
  *         ▼
  *   ┌─────────┐
- *   │ Unary   │ ◀─── extra inputs
+ *   │ Unary   │◀──── extra inputs
  *   └─────────┘
  *         │
  *         ▼
@@ -200,12 +200,12 @@ public:
  *
  * After:
  *          ┌─────────┐
- *   x ───▶ │ Unary   │ ◀─── extra inputs
+ *   x ────▶│ Unary   │◀──── extra inputs
  *          └─────────┘
  *               │
  *               ▼
  *        ┌───────────────────┐
- *        │ Transpose/Reshape │ ◀─── perm/shape
+ *        │ Transpose/Reshape │◀──── perm/shape
  *        └───────────────────┘
  *               │
  *               ▼

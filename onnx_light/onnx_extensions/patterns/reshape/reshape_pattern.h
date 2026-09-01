@@ -14,20 +14,20 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *                                    ┌────────┐
- *   constant, dynamic, Shape dims ─▶ │ Concat │ ───▶ target
+ *   constant, dynamic, Shape dims ──▶│ Concat │────▶ target
  *                                    └────────┘
  *
  *                 ┌─────────┐
- *   x, target ──▶ │ Reshape │ ───▶ y
+ *   x, target ───▶│ Reshape │────▶ y
  *                 └─────────┘
  *
  * After:
  *                                 ┌────────┐
- *   constant, [-1], Shape dims ─▶ │ Concat │ ───▶ target2
+ *   constant, [-1], Shape dims ──▶│ Concat │────▶ target2
  *                                 └────────┘
  *
  *                  ┌─────────┐
- *   x, target2 ──▶ │ Reshape │ ───▶ y
+ *   x, target2 ───▶│ Reshape │────▶ y
  *                  └─────────┘
  * @endcode
  *
@@ -54,12 +54,12 @@ public:
  * @code
  * Before:
  *                    ┌─────────┐
- *   x, target=S ───▶ │ Reshape │ ───▶ y
+ *   x, target=S ────▶│ Reshape │────▶ y
  *                    └─────────┘
  *
  * After:
  *                  ┌──────────┐
- *   x ───────────▶ │ Identity │ ───▶ y
+ *   x ────────────▶│ Identity │────▶ y
  *                  └──────────┘
  * @endcode
  *
@@ -83,12 +83,12 @@ public:
  * @code
  * Before:
  *                ┌───────────────────┐
- *   x, axes ───▶ │ Reduce keepdims=1 │ ───▶ t
+ *   x, axes ────▶│ Reduce keepdims=1 │────▶ t
  *                └───────────────────┘
  *                          │
  *                          ▼
  *                     ┌─────────┐
- *                     │ Reshape │ ◀─── target without reduced axes
+ *                     │ Reshape │◀──── target without reduced axes
  *                     └─────────┘
  *                          │
  *                          ▼
@@ -96,7 +96,7 @@ public:
  *
  * After:
  *                ┌───────────────────┐
- *   x, axes ───▶ │ Reduce keepdims=0 │ ───▶ y
+ *   x, axes ────▶│ Reduce keepdims=0 │────▶ y
  *                └───────────────────┘
  * @endcode
  *
@@ -121,40 +121,40 @@ public:
  * @code
  * Before:
  *          ┌──────────┐
- *   x ───▶ │ Reshape? │ ───▶ rx
+ *   x ────▶│ Reshape? │────▶ rx
  *          └──────────┘
  *
  *          ┌──────────┐
- *   z ───▶ │ Reshape? │ ───▶ rz
+ *   z ────▶│ Reshape? │────▶ rz
  *          └──────────┘
  *
  *               ┌────────┐
- *   rx, rz ───▶ │ Binary │ ───▶ b
+ *   rx, rz ────▶│ Binary │────▶ b
  *               └────────┘
  *                   │
  *                   ▼
  *              ┌──────────┐
- *              │ Reshape? │ ───▶ y
+ *              │ Reshape? │────▶ y
  *              └──────────┘
  *
  * At least two of the three optional Reshape nodes are present.
  *
  * After:
  *          ┌───────────────────┐
- *   x ───▶ │ Reshape if needed │ ───▶ rx
+ *   x ────▶│ Reshape if needed │────▶ rx
  *          └───────────────────┘
  *
  *          ┌───────────────────┐
- *   z ───▶ │ Reshape if needed │ ───▶ rz
+ *   z ────▶│ Reshape if needed │────▶ rz
  *          └───────────────────┘
  *
  *               ┌────────┐
- *   rx, rz ───▶ │ Binary │ ───▶ t
+ *   rx, rz ────▶│ Binary │────▶ t
  *               └────────┘
  *                   │
  *                   ▼
  *           ┌───────────────────┐
- *           │ Reshape if needed │ ───▶ y
+ *           │ Reshape if needed │────▶ y
  *           └───────────────────┘
  * @endcode
  *
@@ -181,25 +181,25 @@ public:
  * @code
  * Before:
  *                    ┌─────────┐
- *   x, target=s ───▶ │ Reshape │ ───▶ rx
+ *   x, target=s ────▶│ Reshape │────▶ rx
  *                    └─────────┘
  *
  *                    ┌─────────┐
- *   z, target=s ───▶ │ Reshape │ ───▶ rz
+ *   z, target=s ────▶│ Reshape │────▶ rz
  *                    └─────────┘
  *
  *              ┌────────┐
- *   rx, rz ──▶ │ Binary │ ───▶ y
+ *   rx, rz ───▶│ Binary │────▶ y
  *              └────────┘
  *
  * After:
  *             ┌────────┐
- *   x, z ───▶ │ Binary │ ───▶ t
+ *   x, z ────▶│ Binary │────▶ t
  *             └────────┘
  *                 │
  *                 ▼
  *            ┌─────────┐
- *            │ Reshape │ ◀─── target=s
+ *            │ Reshape │◀──── target=s
  *            └─────────┘
  *                 │
  *                 ▼
@@ -227,12 +227,12 @@ public:
  * @code
  * Before:
  *                     ┌─────────┐
- *   x, target=s1 ───▶ │ Reshape │ ───▶ t
+ *   x, target=s1 ────▶│ Reshape │────▶ t
  *                     └─────────┘
  *                          │
  *                          ▼
  *                     ┌─────────┐
- *                     │ Reshape │ ◀─── target=s2
+ *                     │ Reshape │◀──── target=s2
  *                     └─────────┘
  *                          │
  *                          ▼
@@ -240,7 +240,7 @@ public:
  *
  * After:
  *                     ┌─────────┐
- *   x, target=s2' ──▶ │ Reshape │ ───▶ y
+ *   x, target=s2' ───▶│ Reshape │────▶ y
  *                     └─────────┘
  * @endcode
  *
@@ -266,12 +266,12 @@ public:
  * @code
  * Before:
  *                              ┌─────────┐
- *   x, target=[...,1,...] ───▶ │ Reshape │ ───▶ t
+ *   x, target=[...,1,...] ────▶│ Reshape │────▶ t
  *                              └─────────┘
  *                                   │
  *                                   ▼
  *                              ┌─────────┐
- *                              │ Squeeze │ ◀─── axes=a
+ *                              │ Squeeze │◀──── axes=a
  *                              └─────────┘
  *                                   │
  *                                   ▼
@@ -279,7 +279,7 @@ public:
  *
  * After:
  *                               ┌─────────┐
- *   x, target without axes ───▶ │ Reshape │ ───▶ y
+ *   x, target without axes ────▶│ Reshape │────▶ y
  *                               └─────────┘
  * @endcode
  *
@@ -305,12 +305,12 @@ public:
  * @code
  * Before:
  *                     ┌────────┐
- *   shape pieces ───▶ │ Concat │ ───▶ target
+ *   shape pieces ────▶│ Concat │────▶ target
  *                     └────────┘
  *                          │
  *                          ▼
  *                     ┌─────────┐
- *                     │ Reshape │ ◀─── x
+ *                     │ Reshape │◀──── x
  *                     └─────────┘
  *                          │
  *                          ▼
@@ -318,7 +318,7 @@ public:
  *
  * After:
  *                                      ┌─────────┐
- *   x, aligned target initializer ───▶ │ Reshape │ ───▶ y
+ *   x, aligned target initializer ────▶│ Reshape │────▶ y
  *                                      └─────────┘
  * @endcode
  *
@@ -344,17 +344,17 @@ public:
  * @code
  * Before:
  *                  ┌────────────────┐
- *   x, target ───▶ │ Reshape/Expand │ ───▶ y
+ *   x, target ────▶│ Reshape/Expand │────▶ y
  *                  └────────────────┘
  *
  * After (unit dimensions are removed):
  *                  ┌─────────┐
- *   x, axes=a ───▶ │ Squeeze │ ───▶ y
+ *   x, axes=a ────▶│ Squeeze │────▶ y
  *                  └─────────┘
  *
  * After (unit dimensions are inserted):
  *                  ┌───────────┐
- *   x, axes=a ───▶ │ Unsqueeze │ ───▶ y
+ *   x, axes=a ────▶│ Unsqueeze │────▶ y
  *                  └───────────┘
  * @endcode
  *
@@ -380,12 +380,12 @@ public:
  * @code
  * Before:
  *                       ┌─────────┐
- *   x, [0,...,0,d] ───▶ │ Reshape │ ───▶ y
+ *   x, [0,...,0,d] ────▶│ Reshape │────▶ y
  *                       └─────────┘
  *
  * After:
  *                      ┌──────────┐
- *   x ───────────────▶ │ Identity │ ───▶ y
+ *   x ────────────────▶│ Identity │────▶ y
  *                      └──────────┘
  * @endcode
  *
@@ -410,20 +410,20 @@ public:
  * @code
  * Before:
  *                                 ┌────────┐
- *   constant dims, dynamic dim ─▶ │ Concat │ ───▶ target
+ *   constant dims, dynamic dim ──▶│ Concat │────▶ target
  *                                 └────────┘
  *
  *                 ┌─────────┐
- *   x, target ──▶ │ Reshape │ ───▶ y
+ *   x, target ───▶│ Reshape │────▶ y
  *                 └─────────┘
  *
  * After:
  *                          ┌────────┐
- *   constant dims, [-1] ─▶ │ Concat │ ───▶ target2
+ *   constant dims, [-1] ──▶│ Concat │────▶ target2
  *                          └────────┘
  *
  *                  ┌─────────┐
- *   x, target2 ──▶ │ Reshape │ ───▶ y
+ *   x, target2 ───▶│ Reshape │────▶ y
  *                  └─────────┘
  * @endcode
  *
@@ -449,12 +449,12 @@ public:
  * @code
  * Before:
  *                  ┌───────────────────┐
- *   x, axes=a ───▶ │ Squeeze/Unsqueeze │ ───▶ t
+ *   x, axes=a ────▶│ Squeeze/Unsqueeze │────▶ t
  *                  └───────────────────┘
  *                            │
  *                            ▼
  *                       ┌─────────┐
- *                       │ Reshape │ ◀─── target
+ *                       │ Reshape │◀──── target
  *                       └─────────┘
  *                            │
  *                            ▼
@@ -462,7 +462,7 @@ public:
  *
  * After:
  *                  ┌─────────┐
- *   x, target ───▶ │ Reshape │ ───▶ y
+ *   x, target ────▶│ Reshape │────▶ y
  *                  └─────────┘
  * @endcode
  *
@@ -488,12 +488,12 @@ public:
  * @code
  * Before:
  *                    ┌───────────┐
- *   x, axes=[2] ───▶ │ Unsqueeze │ ───▶ t
+ *   x, axes=[2] ────▶│ Unsqueeze │────▶ t
  *                    └───────────┘
  *                          │
  *                          ▼
  *                     ┌─────────┐
- *                     │ Reshape │ ◀─── [0,1,-1,0]
+ *                     │ Reshape │◀──── [0,1,-1,0]
  *                     └─────────┘
  *                          │
  *                          ▼
@@ -501,7 +501,7 @@ public:
  *
  * After:
  *                    ┌───────────┐
- *   x, axes=[1] ───▶ │ Unsqueeze │ ───▶ y
+ *   x, axes=[1] ────▶│ Unsqueeze │────▶ y
  *                    └───────────┘
  * @endcode
  *

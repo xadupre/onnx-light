@@ -182,7 +182,7 @@ public:
  *                       │                                             │
  *                       ▼                                             ▼
  *                   ┌───────┐                                     ┌───────┐
- * 0, mid, axis ───▶ │ Slice │                 mid, dim, axis ───▶ │ Slice │
+ * 0, mid, axis ────▶│ Slice │                 mid, dim, axis ────▶│ Slice │
  *                   └───────┘                                     └───────┘
  *                       │                                             │
  *                       │ first                                       │ second

@@ -19,12 +19,12 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *                  ┌──────────────┐
- *   c0, X, c1 ───▶ │ Concat axis0 │ ───▶ t
+ *   c0, X, c1 ────▶│ Concat axis0 │────▶ t
  *                  └──────────────┘
  *                         │
  *                         ▼
  *                    ┌──────────────┐
- *                    │ Gather axis0 │ ◀─── indices=[2,4]
+ *                    │ Gather axis0 │◀──── indices=[2,4]
  *                    └──────────────┘
  *                         │
  *                         ▼
@@ -32,7 +32,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * After:
  *                         ┌──────────────┐
- *   X, indices=[0,2] ───▶ │ Gather axis0 │ ───▶ y
+ *   X, indices=[0,2] ────▶│ Gather axis0 │────▶ y
  *                         └──────────────┘
  * @endcode
  *
@@ -71,12 +71,12 @@ public:
  *         │
  *         ▼
  *   ┌──────────────┐
- *   │ Gather axis0 │ ───▶ t
+ *   │ Gather axis0 │────▶ t
  *   └──────────────┘
  *                           │
  *                           ▼
  *                      ┌──────────────┐
- *                      │ Gather axis0 │ ◀─── [2,0]
+ *                      │ Gather axis0 │◀──── [2,0]
  *                      └──────────────┘
  *                           │
  *                           ▼
@@ -87,7 +87,7 @@ public:
  *       │
  *       ▼
  *   ┌──────────────┐
- *   │ Gather axis0 │ ───▶ y
+ *   │ Gather axis0 │────▶ y
  *   └──────────────┘
  * @endcode
  *

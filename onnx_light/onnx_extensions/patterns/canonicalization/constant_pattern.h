@@ -14,7 +14,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *                     ┌──────────┐
- *   value=tensor ───▶ │ Constant │ ───▶ cst
+ *   value=tensor ────▶│ Constant │────▶ cst
  *                     └──────────┘
  *
  * After:
@@ -22,7 +22,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *           │
  *           ▼
  *      ┌──────────┐
- *      │ Identity │ ───▶ cst
+ *      │ Identity │────▶ cst
  *      └──────────┘
  * @endcode
  *

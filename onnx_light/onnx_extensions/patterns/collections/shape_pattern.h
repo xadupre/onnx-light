@@ -21,12 +21,12 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *          ┌─────────────────────┐
- *   x ───▶ │ Shape start=1 end=5 │ ───▶ s
+ *   x ────▶│ Shape start=1 end=5 │────▶ s
  *          └─────────────────────┘
  *                     │
  *                     ▼
  *              ┌──────────────┐
- *              │ Gather axis0 │ ◀─── indices=[1,2]
+ *              │ Gather axis0 │◀──── indices=[1,2]
  *              └──────────────┘
  *                     │
  *                     ▼
@@ -34,17 +34,17 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * After:
  *          ┌─────────────────────┐
- *   x ───▶ │ Shape start=2 end=4 │ ───▶ y
+ *   x ────▶│ Shape start=2 end=4 │────▶ y
  *          └─────────────────────┘
  *
  * After (scalar index):
  *          ┌─────────────────────┐
- *   x ───▶ │ Shape start=2 end=3 │ ───▶ s
+ *   x ────▶│ Shape start=2 end=3 │────▶ s
  *          └─────────────────────┘
  *                    │
  *                    ▼
  *               ┌─────────┐
- *               │ Squeeze │ ◀─── axes=[0]
+ *               │ Squeeze │◀──── axes=[0]
  *               └─────────┘
  *                    │
  *                    ▼
@@ -80,22 +80,22 @@ public:
  * @code
  * Before:
  *          ┌────────────────────────┐
- *   x ───▶ │ Transpose perm=[2,0,1] │ ───▶ t
+ *   x ────▶│ Transpose perm=[2,0,1] │────▶ t
  *          └────────────────────────┘
  *                     │
  *                     ▼
  *              ┌─────────────────────┐
- *              │ Shape start=1 end=3 │ ───▶ y
+ *              │ Shape start=1 end=3 │────▶ y
  *              └─────────────────────┘
  *
  * After:
  *          ┌───────┐
- *   x ───▶ │ Shape │ ───▶ sx
+ *   x ────▶│ Shape │────▶ sx
  *          └───────┘
  *              │
  *              ▼
  *        ┌──────────────┐
- *        │ Gather axis0 │ ◀─── indices=[0,1]
+ *        │ Gather axis0 │◀──── indices=[0,1]
  *        └──────────────┘
  *              │
  *              ▼
@@ -137,28 +137,28 @@ public:
  *        │
  *        ▼
  *   ┌───────────┐
- *   │ Unsqueeze │ ───▶ u
+ *   │ Unsqueeze │────▶ u
  *   └───────────┘
  *        │
  *        ▼
  *   ┌───────┐
- *   │ Shape │ ───▶ y
+ *   │ Shape │────▶ y
  *   └───────┘
  *
  * After:
  *          ┌─────────────────────┐
- *   x ───▶ │ Shape start=0 end=1 │ ───▶ s0
+ *   x ────▶│ Shape start=0 end=1 │────▶ s0
  *          └─────────────────────┘
  *
  *          ┌─────────────────────┐
- *   x ───▶ │ Shape start=1 end=3 │ ───▶ s1
+ *   x ────▶│ Shape start=1 end=3 │────▶ s1
  *          └─────────────────────┘
  *
  *   s0, [1], s1
  *        │
  *        ▼
  *   ┌────────┐
- *   │ Concat │ ───▶ y
+ *   │ Concat │────▶ y
  *   └────────┘
  * @endcode
  *

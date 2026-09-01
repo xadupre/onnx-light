@@ -22,12 +22,12 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *               ┌─────┐
- *   x, zero ──▶ │ Add │ ───▶ y
+ *   x, zero ───▶│ Add │────▶ y
  *               └─────┘
  *
  * After:
  *          ┌──────────┐
- *   x ───▶ │ Identity │ ───▶ y
+ *   x ────▶│ Identity │────▶ y
  *          └──────────┘
  * @endcode
  *

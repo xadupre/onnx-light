@@ -19,17 +19,17 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *              ┌──────────────┐
- *   x, e, z ─▶ │ Concat axis0 │ ───▶ y
+ *   x, e, z ──▶│ Concat axis0 │────▶ y
  *              └──────────────┘
  *
  * After:
  *           ┌──────────────┐
- *   x, z ─▶ │ Concat axis0 │ ───▶ y
+ *   x, z ──▶│ Concat axis0 │────▶ y
  *           └──────────────┘
  *
  * After (one non-empty input remains):
  *          ┌──────────┐
- *   x ───▶ │ Identity │ ───▶ y
+ *   x ────▶│ Identity │────▶ y
  *          └──────────┘
  * @endcode
  *
@@ -66,12 +66,12 @@ public:
  * @code
  * Before:
  *                ┌──────────────┐
- *   a, b, c ───▶ │ Concat axis0 │ ───▶ t
+ *   a, b, c ────▶│ Concat axis0 │────▶ t
  *                └──────────────┘
  *                       │
  *                       ▼
  *                  ┌──────────────┐
- *                  │ Gather axis0 │ ◀─── index=[3]
+ *                  │ Gather axis0 │◀──── index=[3]
  *                  └──────────────┘
  *                       │
  *                       ▼
@@ -79,17 +79,17 @@ public:
  *
  * After:
  *                     ┌──────────────┐
- *   b, index=[1] ───▶ │ Gather axis0 │ ───▶ y
+ *   b, index=[1] ────▶│ Gather axis0 │────▶ y
  *                     └──────────────┘
  *
  * After (the selected input has one element):
  *          ┌──────────┐
- *   b ───▶ │ Identity │ ───▶ y
+ *   b ────▶│ Identity │────▶ y
  *          └──────────┘
  *
  * After (the selected input is produced by Shape):
  *          ┌─────────────────────────┐
- *   x ───▶ │ Shape adjusted interval │ ───▶ y
+ *   x ────▶│ Shape adjusted interval │────▶ y
  *          └─────────────────────────┘
  * @endcode
  *
@@ -127,20 +127,20 @@ public:
  * @code
  * Before:
  *           ┌────────┐
- *   x, x ─▶ │ Concat │ ───▶ t
+ *   x, x ──▶│ Concat │────▶ t
  *           └────────┘
  *
  *          ┌───────┐
- *   t ───▶ │ Unary │ ───▶ y
+ *   t ────▶│ Unary │────▶ y
  *          └───────┘
  *
  * After:
  *          ┌───────┐
- *   x ───▶ │ Unary │ ───▶ u
+ *   x ────▶│ Unary │────▶ u
  *          └───────┘
  *
  *           ┌────────┐
- *   u, u ─▶ │ Concat │ ───▶ y
+ *   u, u ──▶│ Concat │────▶ y
  *           └────────┘
  * @endcode
  *

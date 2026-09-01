@@ -14,16 +14,16 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *          ┌─────┐
- *   c ───▶ │ Not │ ───▶ condition
+ *   c ────▶│ Not │────▶ condition
  *          └─────┘
  *
  *                       ┌───────┐
- *   condition, x, y ──▶ │ Where │ ───▶ z
+ *   condition, x, y ───▶│ Where │────▶ z
  *                       └───────┘
  *
  * After:
  *              ┌───────┐
- *   c, y, x ─▶ │ Where │ ───▶ z
+ *   c, y, x ──▶│ Where │────▶ z
  *              └───────┘
  * @endcode
  *
@@ -55,47 +55,47 @@ public:
  * @code
  * Before (upstream form):
  *                    ┌───────────┐
- *   x, axes=a ─────▶ │ Unsqueeze │ ───▶ ux
+ *   x, axes=a ──────▶│ Unsqueeze │────▶ ux
  *                    └───────────┘
  *
  *             ┌───────┐
- *   x, c ───▶ │ Equal │ ───▶ q
+ *   x, c ────▶│ Equal │────▶ q
  *             └───────┘
  *                  │
  *                  ▼
  *             ┌───────────┐
- *   axes=a ─▶ │ Unsqueeze │ ───▶ z
+ *   axes=a ──▶│ Unsqueeze │────▶ z
  *             └───────────┘
  *
  * After (upstream form):
  *                    ┌───────────┐
- *   x, axes=a ─────▶ │ Unsqueeze │ ───▶ ux
+ *   x, axes=a ──────▶│ Unsqueeze │────▶ ux
  *                    └───────────┘
  *
  *             ┌───────┐
- *   ux, c ──▶ │ Equal │ ───▶ z
+ *   ux, c ───▶│ Equal │────▶ z
  *             └───────┘
  *
  * Before (local form):
  *                    ┌───────────┐
- *   x, axes=a ─────▶ │ Unsqueeze │ ───▶ ux
+ *   x, axes=a ──────▶│ Unsqueeze │────▶ ux
  *                    └───────────┘
  *
  *                    ┌───────────┐
- *   y, axes=a ─────▶ │ Unsqueeze │ ───▶ uy
+ *   y, axes=a ──────▶│ Unsqueeze │────▶ uy
  *                    └───────────┘
  *
  *              ┌───────┐
- *   ux, uy ──▶ │ Equal │ ───▶ z
+ *   ux, uy ───▶│ Equal │────▶ z
  *              └───────┘
  *
  * After (local form):
  *             ┌───────┐
- *   x, y ───▶ │ Equal │ ───▶ q
+ *   x, y ────▶│ Equal │────▶ q
  *             └───────┘
  *
  *                  ┌───────────┐
- *   q, axes=a ───▶ │ Unsqueeze │ ───▶ z
+ *   q, axes=a ────▶│ Unsqueeze │────▶ z
  *                  └───────────┘
  * @endcode
  *
@@ -129,38 +129,38 @@ public:
  * @code
  * Before (mask form):
  *                  ┌───────┐
- *   c, 0, -inf ──▶ │ Where │ ───▶ w
+ *   c, 0, -inf ───▶│ Where │────▶ w
  *                  └───────┘
  *
  *             ┌─────┐
- *   w, k ───▶ │ Add │ ───▶ y
+ *   w, k ────▶│ Add │────▶ y
  *             └─────┘
  *
  * After (mask form):
  *                   ┌───────┐
- *   c, k, -inf ───▶ │ Where │ ───▶ y
+ *   c, k, -inf ────▶│ Where │────▶ y
  *                   └───────┘
  *
  * Before (factoring form):
  *             ┌─────┐
- *   a, z ───▶ │ Add │ ───▶ then
+ *   a, z ────▶│ Add │────▶ then
  *             └─────┘
  *
  *             ┌─────┐
- *   b, z ───▶ │ Add │ ───▶ else
+ *   b, z ────▶│ Add │────▶ else
  *             └─────┘
  *
  *                     ┌───────┐
- *   c, then, else ──▶ │ Where │ ───▶ y
+ *   c, then, else ───▶│ Where │────▶ y
  *                     └───────┘
  *
  * After (factoring form):
  *                ┌───────┐
- *   c, a, b ───▶ │ Where │ ───▶ w
+ *   c, a, b ────▶│ Where │────▶ w
  *                └───────┘
  *
  *             ┌─────┐
- *   w, z ───▶ │ Add │ ───▶ y
+ *   w, z ────▶│ Add │────▶ y
  *             └─────┘
  * @endcode
  *

@@ -15,16 +15,16 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *          ┌───────┐
- *   x ───▶ │ Split │ ───▶ s0, s1
+ *   x ────▶│ Split │────▶ s0, s1
  *          └───────┘
  *
  *              ┌────────┐
- *   s0, s1 ──▶ │ Concat │ ───▶ y
+ *   s0, s1 ───▶│ Concat │────▶ y
  *              └────────┘
  *
  * After:
  *          ┌──────────┐
- *   x ───▶ │ Identity │ ───▶ y
+ *   x ────▶│ Identity │────▶ y
  *          └──────────┘
  * @endcode
  *
@@ -61,33 +61,33 @@ public:
  * @code
  * Before:
  *                   ┌──────────────┐
- *   x, index=0 ───▶ │ Gather axis1 │ ───▶ y0
+ *   x, index=0 ────▶│ Gather axis1 │────▶ y0
  *                   ├──────────────┤
  *                   ├──────────────┤
- *   x, index=1 ───▶ │ Gather axis1 │ ───▶ y1
+ *   x, index=1 ────▶│ Gather axis1 │────▶ y1
  *                   ├──────────────┤
  *                   ├──────────────┤
- *   x, index=2 ───▶ │ Gather axis1 │ ───▶ y2
+ *   x, index=2 ────▶│ Gather axis1 │────▶ y2
  *                   └──────────────┘
  *
  * After:
  *          ┌───────┐
- *   x ───▶ │ Split │ ───▶ t0, t1, t2
+ *   x ────▶│ Split │────▶ t0, t1, t2
  *          └───────┘
  *
  *                     ┌─────────┐
- *   t0, axes=[1] ───▶ │ Squeeze │ ───▶ y0
+ *   t0, axes=[1] ────▶│ Squeeze │────▶ y0
  *                     ├─────────┤
  *                     ├─────────┤
- *   t1, axes=[1] ───▶ │ Squeeze │ ───▶ y1
+ *   t1, axes=[1] ────▶│ Squeeze │────▶ y1
  *                     ├─────────┤
  *                     ├─────────┤
- *   t2, axes=[1] ───▶ │ Squeeze │ ───▶ y2
+ *   t2, axes=[1] ────▶│ Squeeze │────▶ y2
  *                     └─────────┘
  *
  * After (single-element vector indices):
  *          ┌───────┐
- *   x ───▶ │ Split │ ───▶ y0, y1, y2
+ *   x ────▶│ Split │────▶ y0, y1, y2
  *          └───────┘
  * @endcode
  *
@@ -123,18 +123,18 @@ public:
  * @code
  * Before:
  *                               ┌───────┐
- *   x, [0], [2], [0] ─────────▶ │ Slice │ ───▶ y0
+ *   x, [0], [2], [0] ──────────▶│ Slice │────▶ y0
  *                               ├───────┤
  *                               ├───────┤
- *   x, [2], [5], [0] ─────────▶ │ Slice │ ───▶ y1
+ *   x, [2], [5], [0] ──────────▶│ Slice │────▶ y1
  *                               ├───────┤
  *                               ├───────┤
- *   x, [5], [INT64_MAX], [0] ─▶ │ Slice │ ───▶ y2
+ *   x, [5], [INT64_MAX], [0] ──▶│ Slice │────▶ y2
  *                               └───────┘
  *
  * After:
  *   x, splits=[2,3,1] ───▶ ┌───────┐ ───▶ y0
- *                          │ Split │ ───▶ y1
+ *                          │ Split │────▶ y1
  *                          └───────┘ ───▶ y2
  * @endcode
  */

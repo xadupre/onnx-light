@@ -78,12 +78,95 @@ interface, a ``match`` step that returns a
 :class:`~onnx_light.onnx_core.optimization.MatchResult` and an ``apply``
 step that produces the replacement nodes.
 
+Custom pattern example
+----------------------
+
+The following pattern replaces two consecutive ``Neg`` nodes with an
+``Identity``. It restricts candidate nodes to ``Neg``, checks the producer of
+the candidate's input, and returns the replacement from ``apply`` / ``Apply``.
+
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
+
+          import onnx_light.onnx.helper as oh
+          from onnx_light.onnx_core.optimization import GraphGraph, PatternOptimization
+
+          class NegNegPattern(PatternOptimization):
+              def __init__(self):
+                  super().__init__(priority=1, name="NegNeg")
+
+              def fast_op_type(self):
+                  return {"Neg"}
+
+              def match(self, graph, node):
+                  previous = graph.node_before(node.input[0])
+                  if previous is None or previous.op_type != "Neg":
+                      return self.no_match(node, "the input is not produced by Neg")
+                  return self.result([previous, node], insert_at=node)
+
+              def apply(self, graph, nodes):
+                  previous, node = nodes
+                  return [
+                      oh.make_node("Identity", [previous.input[0]], list(node.output))
+                  ]
+
+          graph = GraphGraph(builder, [NegNegPattern()])
+          graph.optimize()
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
+
+          #include "onnx_core/builder/graph_graph.h"
+          #include "onnx_core/builder/pattern_optimization.h"
+
+          namespace builder = onnx_light::core::builder;
+
+          class NegNegPattern final : public builder::PatternOptimization {
+          public:
+            NegNegPattern() : PatternOptimization(/*priority=*/1, "NegNeg") {}
+
+            std::set<std::string> FastOpType() const override { return {"Neg"}; }
+
+            builder::MatchResult Match(builder::GraphGraph &graph,
+                                       const onnx_light::NodeProto &candidate) const override {
+              const auto *previous = graph.NodeBefore(candidate.input()[0].value());
+              if (previous == nullptr || previous->op_type().value() != "Neg") {
+                return NoMatch(candidate, "the input is not produced by Neg");
+              }
+              return builder::MatchResult{this, {previous, &candidate}, &candidate};
+            }
+
+            onnx_light::utils::RepeatedProtoField<onnx_light::NodeProto>
+            Apply(builder::GraphGraph &,
+                  const std::vector<const onnx_light::NodeProto *> &nodes) const override {
+              onnx_light::utils::RepeatedProtoField<onnx_light::NodeProto> replacements;
+              replacements.push_back(onnx_light::MakeNode(
+                  "Identity", {nodes[0]->input()[0].value()}, {nodes[1]->output()[0].value()}));
+              return replacements;
+            }
+          };
+
+          std::vector<std::unique_ptr<builder::PatternOptimization>> patterns;
+          patterns.push_back(std::make_unique<NegNegPattern>());
+          builder::GraphGraph graph(graph_builder, std::move(patterns));
+          graph.Optimize();
+
+The pattern is local to this optimizer. See
+:ref:`l-howto-add-custom-pattern` for global and builder registration,
+diagnostics, and priority selection.
+
 API reference
 -------------
 
-* **Python API**: :mod:`onnx_light.onnx_core.optimization`; the runtime
-  list of registered patterns is available through
-  :func:`~onnx_light.onnx_core.optimization.standard_pattern_names`.
+* **Python API and registered pattern list**:
+  :doc:`/api/python/onnx_core/optimization`; the runtime list is available
+  through :func:`~onnx_light.onnx_core.optimization.standard_pattern_names`.
 * **C++ API**: :doc:`/api/cpp/onnx_core/builder/index`.
 
 Examples

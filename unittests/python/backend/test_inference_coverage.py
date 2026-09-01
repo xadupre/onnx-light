@@ -1,10 +1,12 @@
 """Tests for the shape-inference coverage helpers in :mod:`onnx_light.doc`."""
 
 import unittest
+from unittest.mock import patch
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 import_or_skip("onnx_light.onnx_lib.backend.test.case")
+base = import_or_skip("onnx_light.onnx_lib.backend.test.case.base")
 doc = import_or_skip("onnx_light.doc")
 InferenceCaseReport = doc.InferenceCaseReport
 InferenceCoverageReport = doc.InferenceCoverageReport
@@ -38,6 +40,17 @@ class TestInferenceCoverage(ExtTestCase):
     def test_known_case_present(self):
         names = {c.name for c in self.report.cases}
         self.assertIn("test_cc_shape_inference_add_concat_reshape", names)
+
+    def test_unload_uses_test_case_method(self):
+        case = next(doc._iter_inference_cases())
+        with (
+            patch.object(doc, "_iter_inference_cases", return_value=[case]),
+            patch.object(base, "_unload_test_case", side_effect=AssertionError),
+            patch.object(case, "unload", wraps=case.unload) as unload,
+        ):
+            report = compute_inference_coverage()
+        self.assertEqual(report.total, 1)
+        unload.assert_called_once_with()
 
     def test_value_comparison_match_semantics(self):
         cmp = ValueComparison(

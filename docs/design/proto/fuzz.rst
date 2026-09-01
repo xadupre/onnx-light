@@ -46,6 +46,10 @@ Harnesses
     * - ``fuzz/fuzz_version_converter.cc``
       - :cpp:func:`onnx_light::version_conversion::ConvertVersion`
       - Raw bytes → protobuf parser
+    * - ``fuzz/fuzz_compose.cc``
+      - ``MergeModels`` / ``MergeGraphs`` / ``AddPrefix`` /
+        ``CheckOverlappingNames`` / ``ExpandOutDim``
+      - Length-prefixed bytes → two protobuf models
     * - ``fuzz/fuzz_ort_flatbuffers.cc``
       - ``ModelProto::ParseFromString`` with ``SerializeFormat::kOrtFlatbuffers``
       - Raw bytes → ORT flatbuffer parser
@@ -70,7 +74,7 @@ because libFuzzer (``-fsanitize=fuzzer,...``) ships with Clang.
 The build produces one executable per ``fuzz/fuzz_*.cc`` source file
 (``fuzz_checker``, ``fuzz_model_loader``, ``fuzz_parser``,
 ``fuzz_shape_inference``, ``fuzz_optim_shape_inference``,
-``fuzz_version_converter``, ``fuzz_ort_flatbuffers``) plus the
+``fuzz_version_converter``, ``fuzz_compose``, ``fuzz_ort_flatbuffers``) plus the
 ``make_seed_corpus`` helper.
 
 The default sanitizer set is ``address`` (so the actual link line is
@@ -92,6 +96,7 @@ To run a short smoke campaign:
     ./build-fuzz/fuzz_shape_inference -runs=1000
     ./build-fuzz/fuzz_optim_shape_inference -runs=1000
     ./build-fuzz/fuzz_version_converter -runs=1000
+    ./build-fuzz/fuzz_compose -runs=1000
     ./build-fuzz/fuzz_ort_flatbuffers -runs=1000
 
 To generate the seed corpora that OSS-Fuzz uses as starting inputs:
@@ -127,14 +132,14 @@ The OSS-Fuzz ``build.sh`` should:
 Continuous fuzzing in CI
 ++++++++++++++++++++++++
 
-The ``.github/workflows/fuzz.yml`` workflow builds the harnesses with
+The ``.github/workflows/cq_fuzz.yml`` workflow builds the harnesses with
 Clang + libFuzzer and runs a short smoke campaign (``-runs=2000``
-per harness) on a weekly schedule (Mondays at 06:00 UTC), on manual
-``workflow_dispatch``, and on pull requests that touch ``fuzz/**``,
-``.github/workflows/fuzz.yml`` or ``CMakeLists.txt``. It is meant to
-catch regressions in the harnesses themselves and obvious shallow
-bugs; long-running coverage-guided campaigns are still expected to be
-driven by OSS-Fuzz.
+per harness) on a daily schedule (06:00 UTC, skipped if there is no
+recent commit), on manual ``workflow_dispatch``, and on pushes or pull
+requests that touch ``fuzz/**``, ``.github/workflows/cq_fuzz.yml``, or
+``CMakeLists.txt``. It is meant to catch regressions in the harnesses
+themselves and obvious shallow bugs; long-running coverage-guided
+campaigns are still expected to be driven by OSS-Fuzz.
 
 Design notes
 ++++++++++++

@@ -1862,78 +1862,76 @@ def compute_inference_coverage(unload: bool = True) -> InferenceCoverageReport:
     report = InferenceCoverageReport()
 
     for tc in _iter_inference_cases():
-        try:
-            original = tc.model
-            if original is None:  # pragma: no cover - defensive
-                continue
-            try:
-                model_str = pretty_onnx(original)
-            except Exception as exc:  # pragma: no cover - defensive only
-                model_str = f"pretty_onnx failed: {exc}"
-
-            # Snapshot expected shapes from the original (untouched) model so
-            # that we can compare them against the shapes produced by shape
-            # inference on the stripped clone.
-            expected_inputs = {vi.name: _extract_value_shape(vi) for vi in original.graph.input}
-            expected_value_info = {
-                vi.name: _extract_value_shape(vi) for vi in original.graph.value_info
-            }
-            expected_outputs = {vi.name: _extract_value_shape(vi) for vi in original.graph.output}
-
-            clone = _clone_model(original)
-            _strip_value_info(clone)
-            error: str | None = None
-            try:
-                infer_shapes_model(clone)
-            except Exception as exc:  # capture shape-inference failures
-                error = str(exc)
-
-            comparisons: list[ValueComparison] = []
-            if error is None:
-                computed_inputs = {vi.name: _extract_value_shape(vi) for vi in clone.graph.input}
-                computed_value_info = {
-                    vi.name: _extract_value_shape(vi) for vi in clone.graph.value_info
-                }
-                computed_outputs = {
-                    vi.name: _extract_value_shape(vi) for vi in clone.graph.output
-                }
-
-                for name, expected in expected_inputs.items():
-                    comparisons.append(
-                        ValueComparison(
-                            name=name,
-                            role="input",
-                            expected=expected,
-                            computed=computed_inputs.get(name),
-                        )
-                    )
-                for name, expected in expected_value_info.items():
-                    comparisons.append(
-                        ValueComparison(
-                            name=name,
-                            role="value_info",
-                            expected=expected,
-                            computed=computed_value_info.get(name),
-                        )
-                    )
-                for name, expected in expected_outputs.items():
-                    comparisons.append(
-                        ValueComparison(
-                            name=name,
-                            role="output",
-                            expected=expected,
-                            computed=computed_outputs.get(name),
-                        )
-                    )
-
-            report.cases.append(
-                InferenceCaseReport(
-                    name=tc.name, model_str=model_str, error=error, comparisons=comparisons
-                )
-            )
-        finally:
+        original = tc.model
+        if original is None:  # pragma: no cover - defensive
             if unload:
                 tc.unload()
+            continue
+        try:
+            model_str = pretty_onnx(original)
+        except Exception as exc:  # pragma: no cover - defensive only
+            model_str = f"pretty_onnx failed: {exc}"
+
+        # Snapshot expected shapes from the original (untouched) model so
+        # that we can compare them against the shapes produced by shape
+        # inference on the stripped clone.
+        expected_inputs = {vi.name: _extract_value_shape(vi) for vi in original.graph.input}
+        expected_value_info = {
+            vi.name: _extract_value_shape(vi) for vi in original.graph.value_info
+        }
+        expected_outputs = {vi.name: _extract_value_shape(vi) for vi in original.graph.output}
+
+        clone = _clone_model(original)
+        _strip_value_info(clone)
+        error: str | None = None
+        try:
+            infer_shapes_model(clone)
+        except Exception as exc:  # capture shape-inference failures
+            error = str(exc)
+
+        comparisons: list[ValueComparison] = []
+        if error is None:
+            computed_inputs = {vi.name: _extract_value_shape(vi) for vi in clone.graph.input}
+            computed_value_info = {
+                vi.name: _extract_value_shape(vi) for vi in clone.graph.value_info
+            }
+            computed_outputs = {vi.name: _extract_value_shape(vi) for vi in clone.graph.output}
+
+            for name, expected in expected_inputs.items():
+                comparisons.append(
+                    ValueComparison(
+                        name=name,
+                        role="input",
+                        expected=expected,
+                        computed=computed_inputs.get(name),
+                    )
+                )
+            for name, expected in expected_value_info.items():
+                comparisons.append(
+                    ValueComparison(
+                        name=name,
+                        role="value_info",
+                        expected=expected,
+                        computed=computed_value_info.get(name),
+                    )
+                )
+            for name, expected in expected_outputs.items():
+                comparisons.append(
+                    ValueComparison(
+                        name=name,
+                        role="output",
+                        expected=expected,
+                        computed=computed_outputs.get(name),
+                    )
+                )
+
+        report.cases.append(
+            InferenceCaseReport(
+                name=tc.name, model_str=model_str, error=error, comparisons=comparisons
+            )
+        )
+        if unload:
+            tc.unload()
 
     return report
 

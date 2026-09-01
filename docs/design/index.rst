@@ -10,7 +10,7 @@ examples and links to its Python and C++ APIs.
 .. toctree::
     :maxdepth: 1
 
-    intro/index
+    proto/intro/index
     proto/index
     link/index
     expressions/index

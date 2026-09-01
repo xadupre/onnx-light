@@ -14,25 +14,25 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *               ┌─────┐
- *   one, x ────▶│ Sub │────▶ d
+ *   one, x ────→│ Sub │────→ d
  *               └─────┘
  *                  │
- *                  ▼
+ *                  ↓
  *               ┌─────┐
- *               │ Mul │◀──── z
+ *               │ Mul │←──── z
  *               └─────┘
  *                  │
- *                  ▼
+ *                  ↓
  *                  y
  *
  * After:
  *             ┌─────┐
- *   x, z ────▶│ Mul │────▶ p
+ *   x, z ────→│ Mul │────→ p
  *             └─────┘
  *                │
- *                ▼
+ *                ↓
  *             ┌─────┐
- *   z ───────▶│ Sub │────▶ y
+ *   z ───────→│ Sub │────→ y
  *             └─────┘
  * @endcode
  *

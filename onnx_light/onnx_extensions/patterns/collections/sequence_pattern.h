@@ -20,24 +20,24 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *               ┌───────────────────┐
- *   x0, x1 ────▶│ SequenceConstruct │────▶ s
+ *   x0, x1 ────→│ SequenceConstruct │────→ s
  *               └───────────────────┘
  *                    │         │
- *                    ▼         ▼
+ *                    ↓         ↓
  *           ┌────────────┐   ┌────────────┐
  *           │ SequenceAt │   │ SequenceAt │
  *           └────────────┘   └────────────┘
  *                │ index=0        │ index=1
- *                ▼                ▼
+ *                ↓                ↓
  *                y0               y1
  *
  * After:
  *           ┌──────────┐
- *   x0 ────▶│ Identity │────▶ y0
+ *   x0 ────→│ Identity │────→ y0
  *           └──────────┘
  *
  *           ┌──────────┐
- *   x1 ────▶│ Identity │────▶ y1
+ *   x1 ────→│ Identity │────→ y1
  *           └──────────┘
  * @endcode
  */
@@ -74,32 +74,32 @@ public:
  * @code
  * Before:
  *          ┌─────────────────┐
- *   x ────▶│ SplitToSequence │────▶ s
+ *   x ────→│ SplitToSequence │────→ s
  *          └─────────────────┘
  *               │       │
- *               ▼       ▼
+ *               ↓       ↓
  *        ┌────────────┐ ├────────────┐
  *        │ SequenceAt │ │ SequenceAt │
  *        └────────────┘ └────────────┘
  *           │ index=0     │ index=1
- *           ▼             ▼
+ *           ↓             ↓
  *           y0            y1
  *
  * After (keepdims=0):
  *          ┌───────┐
- *   x ────▶│ Split │────▶ t0, t1
+ *   x ────→│ Split │────→ t0, t1
  *          └───────┘
  *
  *                     ┌─────────┐
- *   t0, axes=[1] ────▶│ Squeeze │────▶ y0
+ *   t0, axes=[1] ────→│ Squeeze │────→ y0
  *                     ├─────────┤
  *                     ├─────────┤
- *   t1, axes=[1] ────▶│ Squeeze │────▶ y1
+ *   t1, axes=[1] ────→│ Squeeze │────→ y1
  *                     └─────────┘
  *
  * After (keepdims=1):
  *          ┌───────┐
- *   x ────▶│ Split │────▶ y0, y1
+ *   x ────→│ Split │────→ y0, y1
  *          └───────┘
  * @endcode
  *

@@ -14,24 +14,24 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *                  ┌─────────┐
- *   x, axes=a ────▶│ Squeeze │────▶ sx
+ *   x, axes=a ────→│ Squeeze │────→ sx
  *                  └─────────┘
  *
  *                  ┌─────────┐
- *   z, axes=a ────▶│ Squeeze │────▶ sz
+ *   z, axes=a ────→│ Squeeze │────→ sz
  *                  └─────────┘
  *
  *              ┌─────┐
- *   sx, sz ───▶│ Add │────▶ y
+ *   sx, sz ───→│ Add │────→ y
  *              └─────┘
  *
  * After:
  *             ┌─────┐
- *   x, z ────▶│ Add │────▶ t
+ *   x, z ────→│ Add │────→ t
  *             └─────┘
  *
  *                  ┌─────────┐
- *   t, axes=a ────▶│ Squeeze │────▶ y
+ *   t, axes=a ────→│ Squeeze │────→ y
  *                  └─────────┘
  * @endcode
  *
@@ -56,24 +56,24 @@ public:
  * @code
  * Before:
  *                  ┌───────────┐
- *   x, axes=a ────▶│ Unsqueeze │────▶ ux
+ *   x, axes=a ────→│ Unsqueeze │────→ ux
  *                  └───────────┘
  *
  *                  ┌───────────┐
- *   z, axes=a ────▶│ Unsqueeze │────▶ uz
+ *   z, axes=a ────→│ Unsqueeze │────→ uz
  *                  └───────────┘
  *
  *              ┌─────┐
- *   ux, uz ───▶│ Mul │────▶ y
+ *   ux, uz ───→│ Mul │────→ y
  *              └─────┘
  *
  * After:
  *             ┌─────┐
- *   x, z ────▶│ Mul │────▶ t
+ *   x, z ────→│ Mul │────→ t
  *             └─────┘
  *
  *                  ┌───────────┐
- *   t, axes=a ────▶│ Unsqueeze │────▶ y
+ *   t, axes=a ────→│ Unsqueeze │────→ y
  *                  └───────────┘
  * @endcode
  */
@@ -97,30 +97,30 @@ public:
  * @code
  * Before:
  *          ┌─────────┐
- *   x ────▶│ Squeeze │────▶ s
+ *   x ────→│ Squeeze │────→ s
  *          └─────────┘
  *               │
- *               ▼
+ *               ↓
  *          ┌────────┐
- *          │ Binary │◀──── c
+ *          │ Binary │←──── c
  *          └────────┘
  *               │
- *               ▼
+ *               ↓
  *        ┌───────────┐
- *        │ Unsqueeze │◀──── axes=[0]
+ *        │ Unsqueeze │←──── axes=[0]
  *        └───────────┘
  *               │
- *               ▼
+ *               ↓
  *               y
  *
  * After:
  *                    ┌───────────┐
- *   c, axes=[0] ────▶│ Unsqueeze │────▶ uc
+ *   c, axes=[0] ────→│ Unsqueeze │────→ uc
  *                    └───────────┘
  *                          │
- *                          ▼
+ *                          ↓
  *                       ┌────────┐
- *   x ─────────────────▶│ Binary │────▶ y
+ *   x ─────────────────→│ Binary │────→ y
  *                       └────────┘
  * @endcode
  *
@@ -148,25 +148,25 @@ public:
  * @code
  * Before:
  *                    ┌───────────┐
- *   x, axes=[1] ────▶│ Unsqueeze │────▶ u
+ *   x, axes=[1] ────→│ Unsqueeze │────→ u
  *                    └───────────┘
  *                          │
- *                          ▼
+ *                          ↓
  *               ┌───────────────────┐
- *               │ Transpose [0,2,1] │────▶ y
+ *               │ Transpose [0,2,1] │────→ y
  *               └───────────────────┘
  *
  * After:
  *          ┌───────────────────┐
- *   x ────▶│ Transpose [0,1]   │────▶ t
+ *   x ────→│ Transpose [0,1]   │────→ t
  *          └───────────────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *              ┌───────────┐
- *              │ Unsqueeze │◀──── axes=[2]
+ *              │ Unsqueeze │←──── axes=[2]
  *              └───────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *                     y
  * @endcode
  */
@@ -190,15 +190,15 @@ public:
  * @code
  * Before:
  *          ┌──────────────────────┐
- *   x ────▶│ Transpose [0,2,1,3]  │────▶ y
+ *   x ────→│ Transpose [0,2,1,3]  │────→ y
  *          └──────────────────────┘
  *
  * After:
  *   x, [0,3,1,0]
  *         │
- *         ▼
+ *         ↓
  *    ┌─────────┐
- *    │ Reshape │────▶ y
+ *    │ Reshape │────→ y
  *    └─────────┘
  *
  * Both graphs produce shape [2,3,1,1] from input shape [2,1,3,1].
@@ -225,60 +225,60 @@ public:
  * @code
  * Before:
  *          ┌───────────────────┐
- *   x ────▶│ Transpose [1,0,2] │────▶ t0
+ *   x ────→│ Transpose [1,0,2] │────→ t0
  *          └───────────────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *                ┌─────────┐
- *                │ Reshape │◀──── [6,4]
+ *                │ Reshape │←──── [6,4]
  *                └─────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *              ┌─────────────────┐
- *              │ Transpose [1,0] │────▶ y
+ *              │ Transpose [1,0] │────→ y
  *              └─────────────────┘
  *
  * After:
  *          ┌───────────────────┐
- *   x ────▶│ Transpose [1,0,2] │────▶ t0
+ *   x ────→│ Transpose [1,0,2] │────→ t0
  *          └───────────────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *              ┌───────────────────┐
- *              │ Transpose [2,0,1] │────▶ t1
+ *              │ Transpose [2,0,1] │────→ t1
  *              └───────────────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *                ┌─────────┐
- *                │ Reshape │◀──── [4,6]
+ *                │ Reshape │←──── [4,6]
  *                └─────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *                     y
  *
  * Before (dual rank-expanding form):
  *          ┌───────────┐
- *   x ────▶│ Transpose │────▶ t0
+ *   x ────→│ Transpose │────→ t0
  *          └───────────┘
  *                │
- *                ▼
+ *                ↓
  *           ┌─────────┐
- *           │ Reshape │────▶ r
+ *           │ Reshape │────→ r
  *           └─────────┘
  *                │
- *                ▼
+ *                ↓
  *          ┌───────────┐
- *          │ Transpose │────▶ y
+ *          │ Transpose │────→ y
  *          └───────────┘
  *
  * After (dual rank-expanding form):
  *                  ┌─────────┐
- *   x, target ────▶│ Reshape │────▶ r
+ *   x, target ────→│ Reshape │────→ r
  *                  └─────────┘
  *                       │
- *                       ▼
+ *                       ↓
  *                ┌────────────────────┐
- *                │ Remapped Transpose │────▶ y
+ *                │ Remapped Transpose │────→ y
  *                └────────────────────┘
  * @endcode
  *

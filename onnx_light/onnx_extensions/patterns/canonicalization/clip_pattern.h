@@ -15,20 +15,20 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *               ┌──────┐
- *   x, min ────▶│ Clip │────▶ t
+ *   x, min ────→│ Clip │────→ t
  *               └──────┘
  *                  │
- *                  ▼
+ *                  ↓
  *               ┌──────┐
- *               │ Clip │◀──── max
+ *               │ Clip │←──── max
  *               └──────┘
  *                  │
- *                  ▼
+ *                  ↓
  *                  y
  *
  * After:
  *                    ┌──────┐
- *   x, min, max ────▶│ Clip │────▶ y
+ *   x, min, max ────→│ Clip │────→ y
  *                    └──────┘
  * @endcode
  *

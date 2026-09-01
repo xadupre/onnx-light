@@ -21,38 +21,38 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Before:
  *   x, s0, e0, a0, st0
  *            │
- *            ▼
+ *            ↓
  *       ┌───────┐
- *       │ Slice │────▶ t
+ *       │ Slice │────→ t
  *       └───────┘
  *                                │
- *                                ▼
+ *                                ↓
  *                          ┌───────┐
- *                          │ Slice │◀──── s1, e1, a1, st1
+ *                          │ Slice │←──── s1, e1, a1, st1
  *                          └───────┘
  *                                │
- *                                ▼
+ *                                ↓
  *                                y
  *
  * After:
  *               ┌────────┐
- *   s0, s1 ────▶│ Concat │────▶ s
+ *   s0, s1 ────→│ Concat │────→ s
  *               ├────────┤
  *               ├────────┤
- *   e0, e1 ────▶│ Concat │────▶ e
+ *   e0, e1 ────→│ Concat │────→ e
  *               ├────────┤
  *               ├────────┤
- *   a0, a1 ────▶│ Concat │────▶ a
+ *   a0, a1 ────→│ Concat │────→ a
  *               ├────────┤
  *               ├────────┤
- *   st0,st1 ───▶│ Concat │────▶ st
+ *   st0,st1 ───→│ Concat │────→ st
  *               └────────┘
  *
  *   x, s, e, a, st
  *          │
- *          ▼
+ *          ↓
  *     ┌───────┐
- *     │ Slice │────▶ y
+ *     │ Slice │────→ y
  *     └───────┘
  * @endcode
  */

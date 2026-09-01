@@ -14,12 +14,12 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *                             ┌────────┐
- *   x, shape=[D0,...,Dn] ────▶│ Expand │────▶ y
+ *   x, shape=[D0,...,Dn] ────→│ Expand │────→ y
  *                             └────────┘
  *
  * After:
  *                            ┌──────────┐
- *   x ──────────────────────▶│ Identity │────▶ y
+ *   x ──────────────────────→│ Identity │────→ y
  *                            └──────────┘
  * @endcode
  *
@@ -50,16 +50,16 @@ public:
  * @code
  * Before:
  *             ┌────────┐
- *   x, S ────▶│ Expand │────▶ e
+ *   x, S ────→│ Expand │────→ e
  *             └────────┘
  *
  *            ┌────────┐
- *   e, z ───▶│ Binary │────▶ y
+ *   e, z ───→│ Binary │────→ y
  *            └────────┘
  *
  * After:
  *            ┌────────┐
- *   x, z ───▶│ Binary │────▶ y
+ *   x, z ───→│ Binary │────→ y
  *            └────────┘
  * @endcode
  *
@@ -92,28 +92,28 @@ public:
  * @code
  * Before:
  *                         ┌────────┐
- *   p0,...,pk,...,pn ────▶│ Concat │────▶ s
+ *   p0,...,pk,...,pn ────→│ Concat │────→ s
  *                         └────────┘
  *                             │
- *                             ▼
+ *                             ↓
  *                        ┌────────┐
- *                        │ Expand │◀──── x
+ *                        │ Expand │←──── x
  *                        └────────┘
  *                             │
- *                             ▼
+ *                             ↓
  *                             y
  *
  * After:
  *                         ┌────────┐
- *   [1],...,pk,...,[1] ──▶│ Concat │────▶ s2
+ *   [1],...,pk,...,[1] ──→│ Concat │────→ s2
  *                         └────────┘
  *                             │
- *                             ▼
+ *                             ↓
  *                        ┌────────┐
- *                        │ Expand │◀──── x
+ *                        │ Expand │←──── x
  *                        └────────┘
  *                             │
- *                             ▼
+ *                             ↓
  *                             y
  * @endcode
  *
@@ -146,20 +146,20 @@ public:
  * @code
  * Before:
  *              ┌────────┐
- *   a, sa ────▶│ Expand │────▶ ea
+ *   a, sa ────→│ Expand │────→ ea
  *              └────────┘
  *
  *              ┌────────┐
- *   b, sb ────▶│ Expand │────▶ eb
+ *   b, sb ────→│ Expand │────→ eb
  *              └────────┘
  *
  *              ┌────────┐
- *   ea, eb ───▶│ Binary │────▶ y
+ *   ea, eb ───→│ Binary │────→ y
  *              └────────┘
  *
  * After:
  *            ┌────────┐
- *   a, b ───▶│ Binary │────▶ y
+ *   a, b ───→│ Binary │────→ y
  *            └────────┘
  *
  * Either input may already be unexpanded.
@@ -195,20 +195,20 @@ public:
  * @code
  * Before:
  *              ┌────────┐
- *   a, sa ────▶│ Expand │────▶ ea
+ *   a, sa ────→│ Expand │────→ ea
  *              └────────┘
  *
  *              ┌────────┐
- *   b, sb ────▶│ Expand │────▶ eb
+ *   b, sb ────→│ Expand │────→ eb
  *              └────────┘
  *
  *              ┌────────┐
- *   ea, eb ───▶│ MatMul │────▶ y
+ *   ea, eb ───→│ MatMul │────→ y
  *              └────────┘
  *
  * After:
  *            ┌────────┐
- *   a, b ───▶│ MatMul │────▶ y
+ *   a, b ───→│ MatMul │────→ y
  *            └────────┘
  *
  * Either input may already be unexpanded.
@@ -243,12 +243,12 @@ public:
  * @code
  * Before:
  *                               ┌────────┐
- *   x, dynamic shape graph ────▶│ Expand │────▶ y
+ *   x, dynamic shape graph ────→│ Expand │────→ y
  *                               └────────┘
  *
  * After:
  *                               ┌────────┐
- *   x, constant [1,M,1] ───────▶│ Expand │────▶ y
+ *   x, constant [1,M,1] ───────→│ Expand │────→ y
  *                               └────────┘
  * @endcode
  *
@@ -281,24 +281,24 @@ public:
  * @code
  * Before:
  *             ┌────────┐
- *   a, S ────▶│ Expand │────▶ ea
+ *   a, S ────→│ Expand │────→ ea
  *             └────────┘
  *
  *             ┌────────┐
- *   b, S ────▶│ Expand │────▶ eb
+ *   b, S ────→│ Expand │────→ eb
  *             └────────┘
  *
  *              ┌────────┐
- *   ea, eb ───▶│ Binary │────▶ y
+ *   ea, eb ───→│ Binary │────→ y
  *              └────────┘
  *
  * After:
  *             ┌────────┐
- *   a, b ────▶│ Binary │────▶ t
+ *   a, b ────→│ Binary │────→ t
  *             └────────┘
  *
  *            ┌────────┐
- *   t, S ───▶│ Expand │────▶ y
+ *   t, S ───→│ Expand │────→ y
  *            └────────┘
  *
  * Either input may already be unexpanded.
@@ -334,34 +334,34 @@ public:
  * @code
  * Before:
  *             ┌────────┐                  ┌──────┐
- *   x, S ────▶│ Expand │────▶ e ───┬─────▶│ Cast │────▶ condition
+ *   x, S ────→│ Expand │────→ e ───┬─────→│ Cast │────→ condition
  *             └────────┘           │      └──────┘
  *                                  │
  *                                  └────────────────────┐
  *                                                       │
- *                                                       ▼
+ *                                                       ↓
  *                                                    ┌───────┐
- *   z ──────────────────────────────────────────────▶│ Where │────▶ y
+ *   z ──────────────────────────────────────────────→│ Where │────→ y
  *                                                    └───────┘
  *
  * After:
  *          ┌──────┐
- *   x ────▶│ Cast │────▶ condition
+ *   x ────→│ Cast │────→ condition
  *          └──────┘
  *              │
  *              └──────────────────────────┐
  *                                         │
- *                                         ▼
+ *                                         ↓
  *                                     ┌───────┐
- *   z ───────────────────────────────▶│ Where │────▶ w
+ *   z ───────────────────────────────→│ Where │────→ w
  *                                     └───────┘
  *                                         │
- *                                         ▼
+ *                                         ↓
  *                                    ┌────────┐
- *                                    │ Expand │◀──── S
+ *                                    │ Expand │←──── S
  *                                    └────────┘
  *                                         │
- *                                         ▼
+ *                                         ↓
  *                                         y
  *
  * The expanded value may occupy either Where branch.
@@ -396,28 +396,28 @@ public:
  * @code
  * Before:
  *             ┌────────┐
- *   x, S ────▶│ Expand │────▶ e
+ *   x, S ────→│ Expand │────→ e
  *             └────────┘
  *                  │
- *                  ▼
+ *                  ↓
  *             ┌──────────┐
- *             │ UnaryOp  │◀──── optional inputs
+ *             │ UnaryOp  │←──── optional inputs
  *             └──────────┘
  *                  │
- *                  ▼
+ *                  ↓
  *                  y
  *
  * After:
  *          ┌──────────┐
- *   x ────▶│ UnaryOp  │◀──── optional inputs
+ *   x ────→│ UnaryOp  │←──── optional inputs
  *          └──────────┘
  *               │
- *               ▼
+ *               ↓
  *          ┌────────┐
- *          │ Expand │◀──── S
+ *          │ Expand │←──── S
  *          └────────┘
  *               │
- *               ▼
+ *               ↓
  *               y
  * @endcode
  *
@@ -449,28 +449,28 @@ public:
  * @code
  * Before:
  *                 ┌────────┐
- *   x, [A,B] ────▶│ Expand │────▶ e
+ *   x, [A,B] ────→│ Expand │────→ e
  *                 └────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *               ┌───────────┐
- *               │ Unsqueeze │◀──── axes=[1]
+ *               │ Unsqueeze │←──── axes=[1]
  *               └───────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *                     y
  *
  * After:
  *                    ┌───────────┐
- *   x, axes=[1] ────▶│ Unsqueeze │────▶ u
+ *   x, axes=[1] ────→│ Unsqueeze │────→ u
  *                    └───────────┘
  *                          │
- *                          ▼
+ *                          ↓
  *                     ┌────────┐
- *                     │ Expand │◀──── [A,1,B]
+ *                     │ Expand │←──── [A,1,B]
  *                     └────────┘
  *                          │
- *                          ▼
+ *                          ↓
  *                          y
  * @endcode
  *
@@ -504,33 +504,33 @@ public:
  * @code
  * Before:
  *                 ┌────────┐
- *   x, [2,3] ────▶│ Expand │────▶ e1
+ *   x, [2,3] ────→│ Expand │────→ e1
  *                 └────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *               ┌───────────┐
- *               │ Unsqueeze │◀──── axes=[1]
+ *               │ Unsqueeze │←──── axes=[1]
  *               └───────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *                 ┌────────┐
- *                 │ Expand │◀──── [1,4,3]
+ *                 │ Expand │←──── [1,4,3]
  *                 └────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *                     y
  *
  * After:
  *                    ┌───────────┐
- *   x, axes=[1] ────▶│ Unsqueeze │────▶ u2
+ *   x, axes=[1] ────→│ Unsqueeze │────→ u2
  *                    └───────────┘
  *                          │
- *                          ▼
+ *                          ↓
  *                     ┌────────┐
- *                     │ Expand │◀──── [2,4,3]
+ *                     │ Expand │←──── [2,4,3]
  *                     └────────┘
  *                          │
- *                          ▼
+ *                          ↓
  *                          y
  * @endcode
  *
@@ -563,28 +563,28 @@ public:
  * @code
  * Before:
  *                     ┌────────┐
- *   x, S=[D,1,1] ────▶│ Expand │────▶ e
+ *   x, S=[D,1,1] ────→│ Expand │────→ e
  *                     └────────┘
  *                         │
- *                         ▼
+ *                         ↓
  *                    ┌─────────┐
- *                    │ Reshape │◀──── [0,1,-1]
+ *                    │ Reshape │←──── [0,1,-1]
  *                    └─────────┘
  *                         │
- *                         ▼
+ *                         ↓
  *                         y
  *
  * After:
  *                    ┌─────────┐
- *   x, [0,1,-1] ────▶│ Reshape │────▶ r
+ *   x, [0,1,-1] ────→│ Reshape │────→ r
  *                    └─────────┘
  *                         │
- *                         ▼
+ *                         ↓
  *                    ┌────────┐
- *                    │ Expand │◀──── S=[D,1,1]
+ *                    │ Expand │←──── S=[D,1,1]
  *                    └────────┘
  *                         │
- *                         ▼
+ *                         ↓
  *                         y
  * @endcode
  *

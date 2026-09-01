@@ -14,41 +14,41 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *                    ┌───────────────┐
- *            ┌──────▶│ ReduceMax/Min │────▶ values
+ *            ┌──────→│ ReduceMax/Min │────→ values
  *            │       └───────────────┘
  *            │
  *   x ───────┤
  *            │
  *            │       ┌────────────┐
- *            └──────▶│ ArgMax/Min │────▶ indices
+ *            └──────→│ ArgMax/Min │────→ indices
  *                    └────────────┘
  *
  * After:
  *                 ┌──────┐
- *   x, K=[1] ────▶│ TopK │
+ *   x, K=[1] ────→│ TopK │
  *                 └──────┘
  *                    │
  *              ┌─────┴─────┐
  *              │           │
- *              ▼           ▼
+ *              ↓           ↓
  *           values      indices
  *
  * After (keepdims=0):
  *                 ┌──────┐
- *   x, K=[1] ────▶│ TopK │
+ *   x, K=[1] ────→│ TopK │
  *                 └──────┘
  *                    │
  *              ┌─────┴─────┐
  *              │           │
- *              ▼           ▼
+ *              ↓           ↓
  *      temporary values  temporary indices
  *              │           │
- *              ▼           ▼
+ *              ↓           ↓
  *           ┌─────────┐  ┌─────────┐
- *   axes ──▶│ Squeeze │  │ Squeeze │◀── axes
+ *   axes ──→│ Squeeze │  │ Squeeze │←── axes
  *           └─────────┘  └─────────┘
  *              │           │
- *              ▼           ▼
+ *              ↓           ↓
  *           values      indices
  * @endcode
  *
@@ -75,45 +75,45 @@ public:
  * @code
  * Before:
  *          ┌──────┐
- *   x ────▶│ Cast │────▶ xc
+ *   x ────→│ Cast │────→ xc
  *          └──────┘
  *             │
- *             ▼
+ *             ↓
  *       ┌───────────┐
- *       │ ReduceSum │◀──── axes
+ *       │ ReduceSum │←──── axes
  *       └───────────┘
  *             │
- *             ▼
+ *             ↓
  *          ┌─────┐
- *          │ Mul │◀──── scale
+ *          │ Mul │←──── scale
  *          └─────┘
  *             │
- *             ▼
+ *             ↓
  *          ┌─────┐
- *          │ Sub │◀──── xc (or axes)
+ *          │ Sub │←──── xc (or axes)
  *          └─────┘
  *             │
- *             ▼
+ *             ↓
  *          ┌──────┐
- *          │ Cast │────▶ y
+ *          │ Cast │────→ y
  *          └──────┘
  *
  * After:
  *          ┌───────────┐
- *   x ────▶│ ReduceSum │◀──── axes
+ *   x ────→│ ReduceSum │←──── axes
  *          └───────────┘
  *               │
- *               ▼
+ *               ↓
  *            ┌─────┐      ┌──────┐
- *            │ Mul │◀──── │ Cast │◀──── scale
+ *            │ Mul │←──── │ Cast │←──── scale
  *            └─────┘      └──────┘
  *               │
- *               ▼
+ *               ↓
  *            ┌─────┐
- *            │ Sub │◀──── x
+ *            │ Sub │←──── x
  *            └─────┘
  *               │
- *               ▼
+ *               ↓
  *               y
  * @endcode
  *

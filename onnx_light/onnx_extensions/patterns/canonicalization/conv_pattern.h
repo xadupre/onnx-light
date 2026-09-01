@@ -14,12 +14,12 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *                  ┌──────┐
- *   X, W, B=0 ────▶│ Conv │────▶ Y
+ *   X, W, B=0 ────→│ Conv │────→ Y
  *                  └──────┘
  *
  * After:
  *                ┌──────┐
- *   X, W ───────▶│ Conv │────▶ Y
+ *   X, W ───────→│ Conv │────→ Y
  *                └──────┘
  * @endcode
  *
@@ -51,20 +51,20 @@ public:
  * @code
  * Before:
  *                         ┌─────┐
- *   X, pads, value=0 ────▶│ Pad │────▶ p
+ *   X, pads, value=0 ────→│ Pad │────→ p
  *                         └─────┘
  *                            │
- *                            ▼
+ *                            ↓
  *                     ┌──────┤
- *                     │ Conv │◀──── W, B
+ *                     │ Conv │←──── W, B
  *                     └──────┤
  *                            │
- *                            ▼
+ *                            ↓
  *                            Y
  *
  * After:
  *                ┌────────────────────┐
- *   X, W, B ────▶│ Conv with new pads │────▶ Y
+ *   X, W, B ────→│ Conv with new pads │────→ Y
  *                └────────────────────┘
  * @endcode
  *

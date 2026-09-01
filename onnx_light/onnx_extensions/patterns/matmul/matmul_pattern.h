@@ -14,16 +14,16 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *                                  ┌───────────────┐
- *   A, B constant, optional C ────▶│ Gemm transB=0 │────▶ y
+ *   A, B constant, optional C ────→│ Gemm transB=0 │────→ y
  *                                  └───────────────┘
  *
  * After:
  *          ┌─────────────────┐
- *   B ────▶│ Transpose [1,0] │────▶ Bt
+ *   B ────→│ Transpose [1,0] │────→ Bt
  *          └─────────────────┘
  *
  *                        ┌───────────────┐
- *   A, Bt, optional C ──▶│ Gemm transB=1 │────▶ y
+ *   A, Bt, optional C ──→│ Gemm transB=1 │────→ y
  *                        └───────────────┘
  * @endcode
  *
@@ -48,39 +48,39 @@ public:
  * @code
  * Before:
  *                         ┌─────────────┐
- *   A, B, optional C ────▶│ MatMul/Gemm │────▶ m
+ *   A, B, optional C ────→│ MatMul/Gemm │────→ m
  *                         └─────────────┘
  *
  *               ┌─────┐
- *   m, bias ───▶│ Add │────▶ y
+ *   m, bias ───→│ Add │────→ y
  *               └─────┘
  *
  * After (rank-two A):
  *                       ┌─────┐
- *   optional C, bias ──▶│ Add │────▶ combined bias
+ *   optional C, bias ──→│ Add │────→ combined bias
  *                       └─────┘
  *
  *                          ┌──────┐
- *   A, B, combined bias ──▶│ Gemm │────▶ y
+ *   A, B, combined bias ──→│ Gemm │────→ y
  *                          └──────┘
  *
  * Without C, bias feeds the boxed Gemm directly.
  *
  * After (higher-rank A):
  *          ┌───────────────────┐
- *   A ────▶│ Reshape to rank 2 │────▶ Ar
+ *   A ────→│ Reshape to rank 2 │────→ Ar
  *          └───────────────────┘
  *
  *            ┌───────────────────┐
- *   bias ───▶│ Reshape if needed │────▶ gemm bias
+ *   bias ───→│ Reshape if needed │────→ gemm bias
  *            └───────────────────┘
  *
  *                       ┌──────┐
- *   Ar, B, gemm bias ──▶│ Gemm │────▶ t
+ *   Ar, B, gemm bias ──→│ Gemm │────→ t
  *                       └──────┘
  *
  *               ┌───────────────────────┐
- *   t, shape ──▶│ Reshape to final rank │────▶ y
+ *   t, shape ──→│ Reshape to final rank │────→ y
  *               └───────────────────────┘
  * @endcode
  *
@@ -109,35 +109,35 @@ private:
  * @code
  * Before:
  *          ┌──────────┐
- *   A ────▶│ Reshape? │────▶ rA
+ *   A ────→│ Reshape? │────→ rA
  *          └──────────┘
  *
  *          ┌──────────┐
- *   B ────▶│ Reshape? │────▶ rB
+ *   B ────→│ Reshape? │────→ rB
  *          └──────────┘
  *
  *               ┌────────────────────┐
- *   rA, rB ────▶│ MatMul/FusedMatMul │────▶ m
+ *   rA, rB ────→│ MatMul/FusedMatMul │────→ m
  *               └────────────────────┘
  *                          │
- *                          ▼
+ *                          ↓
  *                     ┌──────────┐
- *                     │ Reshape? │────▶ y
+ *                     │ Reshape? │────→ y
  *                     └──────────┘
  *
  * At least two of the three optional Reshape nodes are present.
  *
  * After:
  *          ┌───────────────────┐
- *   A ────▶│ Reshape if needed │────▶ rA
+ *   A ────→│ Reshape if needed │────→ rA
  *          └───────────────────┘
  *
  *          ┌───────────────────┐
- *   B ────▶│ Reshape if needed │────▶ rB
+ *   B ────→│ Reshape if needed │────→ rB
  *          └───────────────────┘
  *
  *               ┌────────────────────┐
- *   rA, rB ────▶│ MatMul/FusedMatMul │────▶ y
+ *   rA, rB ────→│ MatMul/FusedMatMul │────→ y
  *               └────────────────────┘
  *
  * A boxed restoring Reshape is emitted when the intermediate MatMul shape is
@@ -167,24 +167,24 @@ public:
  * @code
  * Before:
  *              ┌─────┐
- *   x, c1 ────▶│ Mul │────▶ mx
+ *   x, c1 ────→│ Mul │────→ mx
  *              └─────┘
  *
  *              ┌─────┐
- *   z, c2 ────▶│ Mul │────▶ mz
+ *   z, c2 ────→│ Mul │────→ mz
  *              └─────┘
  *
  *              ┌────────┐
- *   mx, mz ───▶│ MatMul │────▶ y
+ *   mx, mz ───→│ MatMul │────→ y
  *              └────────┘
  *
  * After:
  *             ┌────────┐
- *   x, z ────▶│ MatMul │────▶ t
+ *   x, z ────→│ MatMul │────→ t
  *             └────────┘
  *
  *                          ┌─────┐
- *   t, combined scalar ───▶│ Mul │────▶ y
+ *   t, combined scalar ───→│ Mul │────→ y
  *                          └─────┘
  * @endcode
  *
@@ -208,30 +208,30 @@ public:
  * @code
  * Before:
  *          ┌───────────────────┐
- *   A ────▶│ Reshape to rank 3 │────▶ rA
+ *   A ────→│ Reshape to rank 3 │────→ rA
  *          └───────────────────┘
  *
  *          ┌───────────────────┐
- *   B ────▶│ Reshape to rank 3 │────▶ rB
+ *   B ────→│ Reshape to rank 3 │────→ rB
  *          └───────────────────┘
  *
  *               ┌────────┐
- *   rA, rB ────▶│ MatMul │────▶ m
+ *   rA, rB ────→│ MatMul │────→ m
  *               └────────┘
  *                   │
- *                   ▼
+ *                   ↓
  *           ┌──────────────────────────┐
- *           │ Reshape to original rank │────▶ y
+ *           │ Reshape to original rank │────→ y
  *           └──────────────────────────┘
  *
  * After:
  *   A ─────────────────────┐
  *                          │
- *                          ▼
+ *                          ↓
  *                      ┌────────┐
- *                      │ MatMul │────▶ y
+ *                      │ MatMul │────→ y
  *                      └────────┘
- *                          ▲
+ *                          ↑
  *   B ─────────────────────┘
  * @endcode
  *
@@ -258,31 +258,31 @@ public:
  * @code
  * Before:
  *             ┌───────────────────────┐
- *   A, B ────▶│ MatMul unit reduction │────▶ m
+ *   A, B ────→│ MatMul unit reduction │────→ m
  *             └───────────────────────┘
  *                   │
- *                   ▼
+ *                   ↓
  *           ┌──────────────────────┐
- *           │ Optional Transpose   │────▶ y
+ *           │ Optional Transpose   │────→ y
  *           │ swapping last 2 axes │
  *           └──────────────────────┘
  *
  * After (no Transpose):
  *             ┌─────┐
- *   A, B ────▶│ Mul │────▶ y
+ *   A, B ────→│ Mul │────→ y
  *             └─────┘
  *
  * After (last-two Transpose present):
  *          ┌──────────────────┐
- *   A ────▶│ Reshape ...,1,-1 │────▶ rA
+ *   A ────→│ Reshape ...,1,-1 │────→ rA
  *          └──────────────────┘
  *
  *          ┌──────────────────┐
- *   B ────▶│ Reshape ...,-1,1 │────▶ rB
+ *   B ────→│ Reshape ...,-1,1 │────→ rB
  *          └──────────────────┘
  *
  *              ┌─────┐
- *   rA, rB ───▶│ Mul │────▶ y
+ *   rA, rB ───→│ Mul │────→ y
  *              └─────┘
  * @endcode
  *
@@ -308,32 +308,32 @@ public:
  * @code
  * Before:
  *             ┌─────────────┐
- *   A, B ────▶│ MatMul/Gemm │────▶ m
+ *   A, B ────→│ MatMul/Gemm │────→ m
  *             └─────────────┘
  *                   │
- *                   ▼
+ *                   ↓
  *           ┌───────────────────┐
- *           │ Reshape/Transpose │────▶ l
+ *           │ Reshape/Transpose │────→ l
  *           └───────────────────┘
  *                   │
- *                   ▼
+ *                   ↓
  *              ┌────────────┐
- *              │ Activation │────▶ y
+ *              │ Activation │────→ y
  *              └────────────┘
  *
  * After:
  *             ┌─────────────┐
- *   A, B ────▶│ MatMul/Gemm │────▶ m
+ *   A, B ────→│ MatMul/Gemm │────→ m
  *             └─────────────┘
  *                   │
- *                   ▼
+ *                   ↓
  *              ┌────────────┐
- *              │ Activation │────▶ a
+ *              │ Activation │────→ a
  *              └────────────┘
  *                   │
- *                   ▼
+ *                   ↓
  *           ┌───────────────────┐
- *           │ Reshape/Transpose │────▶ y
+ *           │ Reshape/Transpose │────→ y
  *           └───────────────────┘
  * @endcode
  *
@@ -359,22 +359,22 @@ public:
  * @code
  * Before:
  *          ┌────────────────────────┐
- *   A ────▶│ Optional Transpose 1,0 │────▶ At
+ *   A ────→│ Optional Transpose 1,0 │────→ At
  *          └────────────────────────┘
  *
  *          ┌────────────────────────┐
- *   B ────▶│ Optional Transpose 1,0 │────▶ Bt
+ *   B ────→│ Optional Transpose 1,0 │────→ Bt
  *          └────────────────────────┘
  *
  *                                   ┌─────────────┐
- *   A or At, B or Bt, optional C ──▶│ MatMul/Gemm │────▶ y
+ *   A or At, B or Bt, optional C ──→│ MatMul/Gemm │────→ y
  *                                   └─────────────┘
  *
  * At least one boxed Transpose is present.
  *
  * After:
  *                         ┌────────────────────────┐
- *   A, B, optional C ────▶│ Gemm toggled transA/B  │────▶ y
+ *   A, B, optional C ────→│ Gemm toggled transA/B  │────→ y
  *                         └────────────────────────┘
  * @endcode
  *
@@ -400,36 +400,36 @@ public:
  * @code
  * Before:
  *          ┌───────────────────────┐
- *   A ────▶│ Transpose last 2 axes │────▶ t
+ *   A ────→│ Transpose last 2 axes │────→ t
  *          └───────────────────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *                ┌─────────┐
- *                │ Reshape │◀──── matrix-preserving target
+ *                │ Reshape │←──── matrix-preserving target
  *                └─────────┘
  *                     │
  *                     └───────────────────────┐
  *                                             │
- *                                             ▼
+ *                                             ↓
  *                                          ┌────────┐
- *   B ────────────────────────────────────▶│ MatMul │────▶ y
+ *   B ────────────────────────────────────→│ MatMul │────→ y
  *                                          └────────┘
  *
  * After:
  *          ┌────────────────────────┐
- *   A ────▶│ Reshape swapped target │────▶ r
+ *   A ────→│ Reshape swapped target │────→ r
  *          └────────────────────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *              ┌───────────────────────┐
  *              │ Transpose last 2 axes │
  *              └───────────────────────┘
  *                     │
  *                     └───────────────────────┐
  *                                             │
- *                                             ▼
+ *                                             ↓
  *                                          ┌────────┐
- *   B ────────────────────────────────────▶│ MatMul │────▶ y
+ *   B ────────────────────────────────────→│ MatMul │────→ y
  *                                          └────────┘
  *
  * The same rewrite may be applied to the right MatMul input.

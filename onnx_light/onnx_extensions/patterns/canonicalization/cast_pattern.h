@@ -15,12 +15,12 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * @code
  * Before:
  *            ┌───────────┐
- *   x:T ────▶│ Cast to T │────▶ y:T
+ *   x:T ────→│ Cast to T │────→ y:T
  *            └───────────┘
  *
  * After:
  *            ┌──────────┐
- *   x:T ────▶│ Identity │────▶ y:T
+ *   x:T ────→│ Identity │────→ y:T
  *            └──────────┘
  * @endcode
  */
@@ -48,26 +48,26 @@ public:
  * @code
  * Before:
  *            ┌───────────┐               ┌───────────┐
- *   x:A ────▶│ Cast to B │────▶ m:B ────▶│ Cast to C │────▶ y:C
+ *   x:A ────→│ Cast to B │────→ m:B ────→│ Cast to C │────→ y:C
  *            └───────────┘               └───────────┘
  *
  * After:
  *            ┌────────────┐
- *   x:A ────▶│ Cast to C* │────▶ y:C
+ *   x:A ────→│ Cast to C* │────→ y:C
  *            └────────────┘
  *
  * After (no conversion is needed):
  *            ┌──────────┐
- *   x:A ────▶│ Identity │────▶ y:C
+ *   x:A ────→│ Identity │────→ y:C
  *            └──────────┘
  *
  * After (the intermediate m:B is shared):
  *            ┌───────────┐
- *   x:A ────▶│ Cast to B │────▶ m:B ───▶ other consumer
+ *   x:A ────→│ Cast to B │────→ m:B ───→ other consumer
  *            └───────────┘
  *
  *            ┌────────────┐
- *   x:A ────▶│ Cast to C* │────▶ y:C
+ *   x:A ────→│ Cast to C* │────→ y:C
  *            └────────────┘
  * @endcode
  *
@@ -105,25 +105,25 @@ private:
  * @code
  * Before:
  *            ┌───────────┐
- *   x:A ────▶│ Cast to B │────▶ xb:B
+ *   x:A ────→│ Cast to B │────→ xb:B
  *            └───────────┘
  *
  *            ┌───────────┐
- *   y:A ────▶│ Cast to B │────▶ yb:B
+ *   y:A ────→│ Cast to B │────→ yb:B
  *            └───────────┘
  *
  *                 ┌────────┐
- *   xb:B, yb:B ──▶│ Binary │────▶ z:B
+ *   xb:B, yb:B ──→│ Binary │────→ z:B
  *                 └────────┘
  *
  * After:
  *                ┌────────┐
- *   x:A, y:A ───▶│ Binary │────▶ t:A
+ *   x:A, y:A ───→│ Binary │────→ t:A
  *                └────────┘
  *                     │
- *                     ▼
+ *                     ↓
  *                ┌───────────┐
- *                │ Cast to B │────▶ z:B
+ *                │ Cast to B │────→ z:B
  *                └───────────┘
  * @endcode
  */
@@ -152,30 +152,30 @@ public:
  * @code
  * Before:
  *            ┌───────────┐
- *   y:R ────▶│ Cast to C │────▶ yc:C
+ *   y:R ────→│ Cast to C │────→ yc:C
  *            └───────────┘
  *
  *                 ┌────┐
- *   x:C, yc:C ───▶│ Op │────▶ t:C
+ *   x:C, yc:C ───→│ Op │────→ t:C
  *                 └────┘
  *                    │
- *                    ▼
+ *                    ↓
  *              ┌───────────┐
- *              │ Cast to R │────▶ z:R
+ *              │ Cast to R │────→ z:R
  *              └───────────┘
  *
  * After:
  *            ┌───────────┐
- *   x:C ────▶│ Cast to R │────▶ xr:R
+ *   x:C ────→│ Cast to R │────→ xr:R
  *            └───────────┘
  *
  *                ┌────┐
- *   xr:R, y:R ──▶│ Op │────▶ z:R
+ *   xr:R, y:R ──→│ Op │────→ z:R
  *                └────┘
  *
  * After (the original Op output t:C is shared):
  *            ┌───────────┐
- *   z:R ────▶│ Cast to C │────▶ t:C
+ *   z:R ────→│ Cast to C │────→ t:C
  *            └───────────┘
  *
  * The unary form uses the same rewrite with one input.

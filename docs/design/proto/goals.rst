@@ -1,32 +1,48 @@
-Uncompromising Objective
-========================
+Goals
+=====
 
-**No protobuf**
+``onnx-light`` provides a protobuf-free, ONNX-compatible model representation
+and a modular C++ runtime. The reference kernels, shape inference, graph
+transformations, and backend tests now provide the foundation for four current
+goals.
 
-`onnx-light` replaces :epkg:`protobuf` by a custom implementation
-but keeps the same ONNX format to make it fully compatible. It offers
-more freedom to implement any custom loading, parsing scenario
-and speed up this first step (see :ref:`l-how-to` section).
+Tune and parallelize kernels
+++++++++++++++++++++++++++++
 
-**Compile only what you need**
+Kernel implementations must scale across processors and machines without
+hard-coded, machine-specific decisions. Parallel kernels share the session CPU
+executor and expose thresholds, grain sizes, algorithms, and participant limits
+through the processor-aware tuning API. Conservative compiled defaults keep
+every kernel usable when no calibrated machine profile is available. See
+:ref:`l-next-steps-kernel-parallelization` and
+:ref:`l-next-steps-processor-aware-kernel-tuning`.
 
-`onnx-light` is intentionally split into several small C++ libraries
-(``lib_onnx_proto``, ``lib_onnx_op``, ``lib_onnx_lib``,
-``lib_onnx_shape``, ``lib_onnx_kernels``, ``lib_onnx_backend_test``)
-so that any downstream
-project can link **only** the assembly it actually needs — from a bare
-proto parser up to the full schema / shape-inference / runtime stack.
-See :ref:`l-design-library-split` for the detailed breakdown.
+Parallelize model startup
++++++++++++++++++++++++++
 
-**C++ Backend Test and Kernels**
+Loading a large model must overlap independent parsing, reading, tensor
+preparation, and kernel creation while keeping CPU, I/O, and memory use bounded.
+The implementation first establishes reliable model resolution and ownership,
+then schedules prepared execution and overlaps useful work with the first
+inference. See :ref:`l-next-steps-fast-loading-sequence` and
+:ref:`l-next-steps-prepared-execution`.
 
-Backend Tests are implemented in C++. They cannot contain any large tensor
-and any output is generated through a C++ kernel implemented in C++.
-The kernels themselves form a self-contained **reference implementation**
-of the ONNX operator set, shipped as the ``lib_onnx_kernels`` static
-library: it provides a runtime ``struct Tensor``, ``RunGraph`` /
-``RunFunction`` / ``RunModel`` entry points and a per-operator kernel
-under ``onnx_light/onnx_extensions/kernels/kernels/``.  The same kernels are used
-both to compute the expected outputs of every backend test case and to
-evaluate arbitrary models in C++ without pulling in a third-party
-runtime (see :doc:`../runtime/runtime_coverage`).
+Integrate with ONNX Runtime
++++++++++++++++++++++++++++
+
+ONNX Runtime can build against ``onnx-light`` instead of protobuf. The next
+integration step is to carry the native ownership and prepared-payload contracts
+into ONNX Runtime so mapped tensors, parallel loading, and first-token overlap
+retain their benefits at the consumer boundary. See
+:ref:`l-next-steps-ort-onnx-light` and :ref:`l-next-steps-model-loading`.
+
+Persist reusable runtime state
+++++++++++++++++++++++++++++++
+
+Repeated sessions and inference steps should reuse expensive state instead of
+copying or rebuilding it. This includes packed weights, bounded reusable arenas,
+and mutable KV-caches with guaranteed in-place updates and explicit ownership.
+Persistent state must remain compatible with model identity, processor
+capabilities, and execution policy. See
+:ref:`l-next-steps-buffer-reuse-arena` and
+:ref:`l-next-steps-mutable-cache`.

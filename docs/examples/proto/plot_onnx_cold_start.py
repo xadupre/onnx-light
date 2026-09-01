@@ -17,7 +17,8 @@ during startup and loading.
 A fresh process is not necessarily a cold filesystem cache: the operating
 system may retain model files and shared libraries in its page cache. Dropping
 that cache requires privileged, platform-specific operations, and is not done
-by this benchmark.
+by this benchmark. The graph compares the average end-to-end and post-import
+load times; its error bars show the population standard deviation.
 
 Use ``--model <path>`` to measure a supplied ONNX model. Without it, the
 example creates the same synthetic Gemm-chain model used by
@@ -29,6 +30,7 @@ import argparse
 import json
 import os
 import pathlib
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -204,6 +206,57 @@ def _parse_args(args: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(args)
 
 
+def _plot_results(results: list[dict], png_path: str = "plot_onnx_cold_start.png"):
+    """Plots average cold-start timings and saves the graph."""
+    import matplotlib.pyplot as plt
+
+    implementations = list(dict.fromkeys(result["implementation"] for result in results))
+    end_to_end = [
+        [
+            result["end_to_end_ms"]
+            for result in results
+            if result["implementation"] == implementation
+        ]
+        for implementation in implementations
+    ]
+    first_load = [
+        [
+            result["first_load_after_imports_ms"]
+            for result in results
+            if result["implementation"] == implementation
+        ]
+        for implementation in implementations
+    ]
+    positions = range(len(implementations))
+    width = 0.35
+    _, axis = plt.subplots(figsize=(10, 6))
+    axis.bar(
+        [position - width / 2 for position in positions],
+        [statistics.fmean(values) for values in end_to_end],
+        width,
+        yerr=[statistics.pstdev(values) for values in end_to_end],
+        label="end to end",
+    )
+    axis.bar(
+        [position + width / 2 for position in positions],
+        [statistics.fmean(values) for values in first_load],
+        width,
+        yerr=[statistics.pstdev(values) for values in first_load],
+        label="first load after imports",
+    )
+    axis.set(
+        title="Fresh-process ONNX cold start (lower is better)",
+        ylabel="milliseconds",
+        xticks=list(positions),
+        xticklabels=implementations,
+    )
+    axis.legend()
+    axis.grid(axis="y")
+    axis.figure.tight_layout()
+    axis.figure.savefig(png_path)
+    return axis
+
+
 def main(args: list[str] | None = None) -> None:
     """Runs the cold-start benchmark."""
     parsed = _parse_args(args)
@@ -221,10 +274,13 @@ def main(args: list[str] | None = None) -> None:
         print("Fresh-process cold start (filesystem page cache may still be warm)")
         print("end_to_end_ms includes interpreter startup, imports, and one model load.")
         print("first_load_after_imports_ms includes only one load after imports.")
+        results = []
         for implementation in parsed.implementations:
             for sample in range(parsed.samples):
                 result = _run_sample(implementation, model_path)
+                results.append(result)
                 print(f"sample={sample + 1} {json.dumps(result, sort_keys=True)}")
+        _plot_results(results)
 
 
 if __name__ == "__main__":

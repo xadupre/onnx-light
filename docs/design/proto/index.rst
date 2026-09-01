@@ -7,7 +7,6 @@ formats, model ownership, loading and validation.
 .. toctree::
     :maxdepth: 1
 
-    intro/index
     goals
     differences
     protobuf_format

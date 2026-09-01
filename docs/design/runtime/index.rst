@@ -53,8 +53,6 @@ nested oversubscription. See :ref:`l-next-steps-prepared-execution`,
 .. toctree::
     :maxdepth: 1
 
-    library_split
-    cplusplus_linking
     arenas
     test_coverage
     runtime_coverage

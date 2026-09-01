@@ -10,11 +10,13 @@ examples and links to its Python and C++ APIs.
 .. toctree::
     :maxdepth: 1
 
+    intro/index
     proto/index
+    link/index
+    expressions/index
+    compute/index
     patterns/index
     gradient/index
     runtime/index
     tuning/index
-    compute/index
-    expressions/index
     technical/index

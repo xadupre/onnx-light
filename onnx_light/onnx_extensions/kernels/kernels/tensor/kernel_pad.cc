@@ -7,8 +7,10 @@
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/memory/temporary_buffer.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -101,50 +103,66 @@ onnx_kernels::Shape RowMajorStrides(const onnx_kernels::Shape &shape) {
   return strides;
 }
 
+int64_t CheckedAdd(int64_t left, int64_t right) {
+  EXT_ENFORCE_INVALID(
+      (right <= 0 || left <= std::numeric_limits<int64_t>::max() - right) &&
+          (right >= 0 || left >= std::numeric_limits<int64_t>::min() - right),
+      "kernel::Pad: padding results in an output dimension outside the int64 range.");
+  return left + right;
+}
+
+int64_t ComputeOutputDim(int64_t input_dim, int64_t pad_begin, int64_t pad_end) {
+  const int64_t output_dim = CheckedAdd(CheckedAdd(input_dim, pad_begin), pad_end);
+  EXT_ENFORCE_INVALID(output_dim >= 0,
+                      "kernel::Pad: padding results in a negative output dimension.");
+  return output_dim;
+}
+
 // Maps an output coordinate on a padded axis to the corresponding input
-// coordinate. ``input_dim`` is the input dimension on that axis. Returns
-// ``-1`` when the output position falls inside the padded ``constant`` region.
-int64_t MapCoord(int64_t out_coord, int64_t pad_begin, int64_t input_dim, const std::string &mode) {
-  const int64_t inside = out_coord - pad_begin;
+// coordinate after cropping. Returns ``-1`` when the output position falls
+// inside the padded ``constant`` region.
+int64_t MapCoord(int64_t out_coord, int64_t positive_pad_begin, int64_t crop_begin,
+                 int64_t cropped_dim, const std::string &mode) {
+  const int64_t inside = out_coord - positive_pad_begin;
   if (mode == "constant") {
-    if (inside < 0 || inside >= input_dim) {
+    if (inside < 0 || inside >= cropped_dim) {
       return -1;
     }
-    return inside;
+    return crop_begin + inside;
   }
   if (mode == "wrap") {
-    EXT_ENFORCE_INVALID(input_dim > 0,
+    EXT_ENFORCE_INVALID(cropped_dim > 0,
                         "kernel::Pad: 'wrap' mode requires positive input dimension.");
-    int64_t m = inside % input_dim;
+    int64_t m = inside % cropped_dim;
     if (m < 0) {
-      m += input_dim;
+      m += cropped_dim;
     }
-    return m;
+    return crop_begin + m;
   }
   if (mode == "edge") {
     if (inside < 0) {
-      return 0;
+      return crop_begin;
     }
-    if (inside >= input_dim) {
-      return input_dim - 1;
+    if (inside >= cropped_dim) {
+      return crop_begin + cropped_dim - 1;
     }
-    return inside;
+    return crop_begin + inside;
   }
   if (mode == "reflect") {
-    EXT_ENFORCE_INVALID(input_dim > 0,
+    EXT_ENFORCE_INVALID(cropped_dim > 0,
                         "kernel::Pad: 'reflect' mode requires positive input dimension.");
-    if (input_dim == 1) {
-      return 0;
+    if (cropped_dim == 1) {
+      return crop_begin;
     }
-    const int64_t period = 2 * (input_dim - 1);
+    const int64_t period = 2 * (cropped_dim - 1);
     int64_t m = inside % period;
     if (m < 0) {
       m += period;
     }
-    if (m >= input_dim) {
+    if (m >= cropped_dim) {
       m = period - m;
     }
-    return m;
+    return crop_begin + m;
   }
   EXT_THROW_INVALID("kernel::Pad: unsupported mode '", mode, "'.");
 }
@@ -161,10 +179,6 @@ void PadInto(const Tensor &data, const Tensor &pads, const Tensor *constant_valu
   const std::size_t num_axes = axes_vec.size();
   EXT_ENFORCE_INVALID(pads_vec.size() == 2 * num_axes,
                       "kernel::Pad: 'pads' must have length 2 * num_axes.");
-  for (int64_t p : pads_vec) {
-    EXT_ENFORCE_INVALID(
-        p >= 0, "kernel::Pad: negative padding (cropping) is not supported by this kernel.");
-  }
 
   onnx_kernels::Shape pad_begin;
   pad_begin.assign(rank, 0);
@@ -177,8 +191,31 @@ void PadInto(const Tensor &data, const Tensor &pads, const Tensor *constant_valu
   }
   onnx_kernels::Shape expected_shape;
   expected_shape.assign(rank, 0);
+  onnx_kernels::Shape crop_begin;
+  crop_begin.assign(rank, 0);
+  onnx_kernels::Shape cropped_shape;
+  cropped_shape.assign(rank, 0);
   for (std::size_t i = 0; i < rank; ++i) {
-    expected_shape[i] = data.shape[i] + pad_begin[i] + pad_end[i];
+    expected_shape[i] = ComputeOutputDim(data.shape[i], pad_begin[i], pad_end[i]);
+    EXT_ENFORCE_INVALID(pad_begin[i] != std::numeric_limits<int64_t>::min() &&
+                            pad_end[i] != std::numeric_limits<int64_t>::min(),
+                        "kernel::Pad: padding values must be greater than INT64_MIN.");
+    crop_begin[i] = std::max(-pad_begin[i], int64_t{0});
+    const int64_t crop_end = std::max(-pad_end[i], int64_t{0});
+    const bool overcropped =
+        crop_begin[i] > data.shape[i] || crop_end > data.shape[i] - crop_begin[i];
+    EXT_ENFORCE_INVALID(!overcropped || mode == "constant", "kernel::Pad: mode '", mode,
+                        "' cannot pad an overcropped input.");
+    cropped_shape[i] = overcropped ? 0 : data.shape[i] - crop_begin[i] - crop_end;
+    const int64_t positive_begin = std::max(pad_begin[i], int64_t{0});
+    const int64_t positive_end = std::max(pad_end[i], int64_t{0});
+    EXT_ENFORCE_INVALID(mode == "constant" || cropped_shape[i] > 0 || expected_shape[i] == 0,
+                        "kernel::Pad: mode '", mode, "' cannot pad an empty cropped input.");
+    EXT_ENFORCE_INVALID(
+        mode != "reflect" || (positive_begin == 0 && positive_end == 0) ||
+            (cropped_shape[i] >= 2 && positive_begin < cropped_shape[i] &&
+             positive_end < cropped_shape[i]),
+        "kernel::Pad: reflect padding cannot exceed the cropped axis length minus 1.");
   }
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::Pad: preallocated output dtype must match input dtype.");
@@ -211,7 +248,8 @@ void PadInto(const Tensor &data, const Tensor &pads, const Tensor *constant_valu
     bool is_pad = false;
     int64_t in_idx = 0;
     for (std::size_t k = 0; k < rank; ++k) {
-      const int64_t mapped = MapCoord(out_coord[k], pad_begin[k], data.shape[k], mode);
+      const int64_t mapped = MapCoord(out_coord[k], std::max(pad_begin[k], int64_t{0}),
+                                      crop_begin[k], cropped_shape[k], mode);
       if (mapped < 0) {
         is_pad = true;
         break;
@@ -237,10 +275,6 @@ Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *con
   const std::size_t num_axes = axes_vec.size();
   EXT_ENFORCE_INVALID(pads_vec.size() == 2 * num_axes,
                       "kernel::Pad: 'pads' must have length 2 * num_axes.");
-  for (int64_t p : pads_vec) {
-    EXT_ENFORCE_INVALID(
-        p >= 0, "kernel::Pad: negative padding (cropping) is not supported by this kernel.");
-  }
 
   // Per-axis pad_begin/pad_end (indexed by data axis).
   onnx_kernels::Shape pad_begin;
@@ -255,7 +289,7 @@ Tensor Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *con
   onnx_kernels::Shape out_shape;
   out_shape.assign(rank, 0);
   for (std::size_t i = 0; i < rank; ++i) {
-    out_shape[i] = data.shape[i] + pad_begin[i] + pad_end[i];
+    out_shape[i] = ComputeOutputDim(data.shape[i], pad_begin[i], pad_end[i]);
   }
 
   const std::size_t elem_size = ElementSize(data.data_type);

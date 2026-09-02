@@ -23,7 +23,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ``unittests/onnxl_vs_onnx/test_backend_test_names_onnx_vs_onnxlight.py``
 // against the corresponding ONNX node-test names (``test_constant_pad``,
 // ``test_constant_pad_axes``, ``test_constant_pad_negative_axes``,
-// ``test_edge_pad``, ``test_reflect_pad``, ``test_wrap_pad``).
+// ``test_constant_pad_negative_pads``, ``test_constant_pad_to_empty``,
+// ``test_negative_pad_axes``, ``test_negative_pad_reflect``,
+// ``test_negative_pad_wrap``, ``test_edge_pad``, ``test_reflect_pad``,
+// ``test_wrap_pad``).
 //
 // The inputs and the expected outputs are taken verbatim from the upstream
 // ``onnx/backend/test/data/node/test_*_pad*/test_data_set_0`` ``.pb`` files
@@ -55,6 +58,15 @@ Tensor MakeInt64Vector(const std::string &name, const std::vector<int64_t> &valu
     std::memcpy(bytes.data(), values.data(), bytes.size());
   }
   return Tensor(name, DataType::INT64, shape, std::move(bytes));
+}
+
+Tensor MakeInt32Vector(const std::string &name, const std::vector<int32_t> &values) {
+  const std::vector<int64_t> shape = {static_cast<int64_t>(values.size())};
+  std::vector<uint8_t> bytes(values.size() * sizeof(int32_t));
+  if (!values.empty()) {
+    std::memcpy(bytes.data(), values.data(), bytes.size());
+  }
+  return Tensor(name, DataType::INT32, shape, std::move(bytes));
 }
 
 } // namespace
@@ -443,6 +455,58 @@ void RegisterPadCases(std::vector<TestCase> &registry, TestMode mode) {
                   0,  0, 1, 0,  0,  0,  0, 0,  0,  1,  -1, -1, 0,  0,  2,  -1, 0,  0,  0,  2,  -1,
                   0,  0, 0, 0,  0,  0,  0, -1, 0,  1,  0,  0,  -1, 0,  0,  0,  -1, -1, 1,  0,  0,
                   -1, 0, 0, 0,  0,  -1, 0, 0,  0,  0,  0,  0,  0,  0,  -1, 0,  1,  0,  0,  -1, 0});
+             return IoData{{std::move(x), std::move(pads)}, {std::move(y)}};
+           });
+  }
+
+  {
+    Expect(registry, MakePadNode({"x", "pads", "value"}, "constant"),
+           "test_cc_constant_pad_negative_pads", {opset}, []() -> IoData {
+             Tensor x = Tensor::FromInt32("x", {3}, {1, 2, 3});
+             Tensor pads = MakeInt64Vector("pads", {-4, 2});
+             Tensor value = Tensor::FromInt32("value", {}, {-1});
+             Tensor y = Tensor::FromInt32("y", {1}, {-1});
+             return IoData{{std::move(x), std::move(pads), std::move(value)}, {std::move(y)}};
+           });
+  }
+
+  {
+    Expect(registry, MakePadNode({"x", "pads"}, "constant"), "test_cc_constant_pad_to_empty",
+           {opset}, []() -> IoData {
+             Tensor x = Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f});
+             Tensor pads = MakeInt64Vector("pads", {-3, 0});
+             Tensor y = Tensor::FromFloat("y", {0}, {});
+             return IoData{{std::move(x), std::move(pads)}, {std::move(y)}};
+           });
+  }
+
+  {
+    Expect(registry, MakePadNode({"x", "pads", "", "axes"}, "edge"), "test_cc_negative_pad_axes",
+           {opset}, []() -> IoData {
+             Tensor x = Tensor::FromInt64("x", {2, 4}, {0, 1, 2, 3, 4, 5, 6, 7});
+             Tensor pads = MakeInt64Vector("pads", {-1, 2});
+             Tensor axes = MakeInt32Vector("axes", {-1});
+             Tensor y = Tensor::FromInt64("y", {2, 5}, {1, 2, 3, 3, 3, 5, 6, 7, 7, 7});
+             return IoData{{std::move(x), std::move(pads), std::move(axes)}, {std::move(y)}};
+           });
+  }
+
+  {
+    Expect(registry, MakePadNode({"x", "pads"}, "reflect"), "test_cc_negative_pad_reflect", {opset},
+           []() -> IoData {
+             Tensor x = Tensor::FromFloat("x", {4}, {0.0f, 1.0f, 2.0f, 3.0f});
+             Tensor pads = MakeInt64Vector("pads", {-1, 2});
+             Tensor y = Tensor::FromFloat("y", {5}, {1.0f, 2.0f, 3.0f, 2.0f, 1.0f});
+             return IoData{{std::move(x), std::move(pads)}, {std::move(y)}};
+           });
+  }
+
+  {
+    Expect(registry, MakePadNode({"x", "pads"}, "wrap"), "test_cc_negative_pad_wrap", {opset},
+           []() -> IoData {
+             Tensor x = Tensor::FromFloat("x", {4}, {0.0f, 1.0f, 2.0f, 3.0f});
+             Tensor pads = MakeInt64Vector("pads", {-1, 2});
+             Tensor y = Tensor::FromFloat("y", {5}, {1.0f, 2.0f, 3.0f, 1.0f, 2.0f});
              return IoData{{std::move(x), std::move(pads)}, {std::move(y)}};
            });
   }

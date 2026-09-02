@@ -916,7 +916,16 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSTFTSchemaWithoutShapeInference) {
   ASSERT_EQ(stft_v17->attributes().size(), 1u);
   EXPECT_EQ(stft_v17->attributes()[0].name, "onesided");
   EXPECT_EQ(stft_v17->attributes()[0].type, core::schema::AttributeType::INT);
-  EXPECT_FALSE(stft_v17->doc().empty());
+  EXPECT_NE(stft_v17->doc().find("frames = floor((signal_length - frame_length) / frame_step) + 1"),
+            std::string::npos);
+  EXPECT_NE(stft_v17->inputs()[0].description.find("rank 3"), std::string::npos);
+  EXPECT_NE(stft_v17->inputs()[1].description.find("scalar"), std::string::npos);
+  EXPECT_NE(stft_v17->inputs()[2].description.find("rectangular (all-ones) window"),
+            std::string::npos);
+  EXPECT_NE(stft_v17->inputs()[3].description.find("defaults to `signal_length`"),
+            std::string::npos);
+  EXPECT_NE(stft_v17->outputs()[0].description.find("real and imaginary parts"), std::string::npos);
+  EXPECT_EQ(stft_v17->attributes()[0].description.find("X[m,w]="), std::string::npos);
 }
 
 TEST(OnnxOpMathRegistrationTest, ReturnsLeakyReluSchemaWithoutShapeInference) {

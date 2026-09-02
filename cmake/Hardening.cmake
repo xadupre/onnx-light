@@ -195,7 +195,7 @@ else()
       OUTPUT_VARIABLE _onnx_light_cxx_predefines
       ERROR_VARIABLE _onnx_light_cxx_predefines_error
       RESULT_VARIABLE _onnx_light_cxx_predefines_result
-      TIMEOUT 10)
+      TIMEOUT 30)
   file(REMOVE "${_onnx_light_empty_source}")
   if(NOT _onnx_light_cxx_predefines_result STREQUAL "0")
     message(FATAL_ERROR

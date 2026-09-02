@@ -750,6 +750,8 @@ TEST(onnx_defs, DocStrings_ContainExpectedContent) {
   // four worked examples (one per supported mode).
   EXPECT_NE(strstr(kDoc_Pad_ver24, "Example 1 (`constant` mode)"), nullptr);
   EXPECT_NE(strstr(kDoc_Pad_ver24, "Example 2 (`reflect` mode)"), nullptr);
+  EXPECT_NE(strstr(kDoc_Pad_ver24, "pads = [0, 1, 0, 1]"), nullptr);
+  EXPECT_NE(strstr(kDoc_Pad_ver24, "[1.2, 1.0, 1.2, 1.0]"), nullptr);
   EXPECT_NE(strstr(kDoc_Pad_ver24, "Example 3 (`edge` mode)"), nullptr);
   EXPECT_NE(strstr(kDoc_Pad_ver24, "Example 4 (`wrap` mode)"), nullptr);
 }

@@ -29,6 +29,7 @@ using onnx_kernels::kernel::Cast;
 using onnx_kernels::kernel::CastLike;
 using onnx_kernels::kernel::Concat;
 using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::Pad;
 using onnx_kernels::kernel::Reshape;
 using onnx_kernels::kernel::Slice;
 using onnx_kernels::kernel::Squeeze;
@@ -79,6 +80,75 @@ TEST(KernelClass, ConcatClassRejectsScalar) {
   Concat concat_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {}, {1.0f});
   EXPECT_THROW((void)concat_kernel({x}, /*axis=*/0), std::invalid_argument);
+}
+
+TEST(KernelClass, PadCropsBeforeApplyingConstantPadding) {
+  const KernelContext ctx{DefaultOpset(21)};
+  const Pad pad{ctx};
+  const Tensor x = Tensor::FromFloat(
+      "", {4, 5}, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19});
+  const Tensor value = Tensor::FromFloat("", {}, {-5});
+
+  const Tensor crop_pads = Tensor::FromInt64("", {4}, {-1, -1, -1, -2});
+  const Tensor cropped = pad(x, crop_pads, &value);
+  EXPECT_EQ(cropped.shape, (std::vector<int64_t>{2, 2}));
+  ASSERT_EQ(cropped.element_count(), 4);
+  EXPECT_FLOAT_EQ(cropped.AsFloat()[0], 6);
+  EXPECT_FLOAT_EQ(cropped.AsFloat()[1], 7);
+  EXPECT_FLOAT_EQ(cropped.AsFloat()[2], 11);
+  EXPECT_FLOAT_EQ(cropped.AsFloat()[3], 12);
+
+  const Tensor pads = Tensor::FromInt64("", {4}, {-2, 1, 1, -1});
+  const Tensor y = pad(x, pads, &value);
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 5}));
+  const std::vector<float> expected{-5, 10, 11, 12, 13, -5, 15, 16, 17, 18, -5, -5, -5, -5, -5};
+  ASSERT_EQ(y.element_count(), static_cast<int64_t>(expected.size()));
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(y.AsFloat()[i], expected[i]);
+  }
+}
+
+TEST(KernelClass, PadRejectsReflectPaddingBeyondCroppedAxis) {
+  const KernelContext ctx{DefaultOpset(21)};
+  const Pad pad{ctx};
+  const Tensor x = Tensor::FromFloat("", {4}, {0, 1, 2, 3});
+  const Tensor pads = Tensor::FromInt64("", {2}, {-2, 2});
+
+  EXPECT_THROW((void)pad(x, pads, nullptr, nullptr, "reflect"), std::invalid_argument);
+}
+
+TEST(KernelClass, PadRejectsNegativeOutputDimension) {
+  const KernelContext ctx{DefaultOpset(21)};
+  const Pad pad{ctx};
+  const Tensor x = Tensor::FromFloat("", {3}, {0, 1, 2});
+  const Tensor pads = Tensor::FromInt64("", {2}, {-4, 0});
+
+  EXPECT_THROW((void)pad(x, pads), std::invalid_argument);
+}
+
+TEST(KernelClass, PadRejectsNonConstantOvercrop) {
+  const KernelContext ctx{DefaultOpset(21)};
+  const Pad pad{ctx};
+  const Tensor x = Tensor::FromFloat("", {3}, {0, 1, 2});
+  const Tensor pads = Tensor::FromInt64("", {2}, {-4, 2});
+
+  EXPECT_THROW((void)pad(x, pads, nullptr, nullptr, "edge"), std::invalid_argument);
+}
+
+TEST(KernelClass, PadAcceptsCancellingExtremePads) {
+  const KernelContext ctx{DefaultOpset(21)};
+  const Pad pad{ctx};
+  const Tensor x = Tensor::FromFloat("", {3}, {0, 1, 2});
+  const Tensor pads = Tensor::FromInt64(
+      "", {2}, {std::numeric_limits<int64_t>::max(), -std::numeric_limits<int64_t>::max()});
+  const Tensor value = Tensor::FromFloat("", {}, {-5});
+
+  const Tensor y = pad(x, pads, &value);
+
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3}));
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], -5);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], -5);
+  EXPECT_FLOAT_EQ(y.AsFloat()[2], -5);
 }
 
 TEST(KernelClass, ConcatInPlaceWritesToPreallocatedOutput) {

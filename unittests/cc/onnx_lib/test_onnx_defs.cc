@@ -232,6 +232,37 @@ TEST(onnx_defs, STFTDocumentation) {
             std::string::npos);
 }
 
+TEST(onnx_defs, OptionalOpsSupportAllIr14TypesAtOpset28) {
+  const OpSchema *optional = OpSchemaRegistry::Schema("Optional", 28, ONNX_DOMAIN);
+  const OpSchema *has_element = OpSchemaRegistry::Schema("OptionalHasElement", 28, ONNX_DOMAIN);
+  const OpSchema *get_element = OpSchemaRegistry::Schema("OptionalGetElement", 28, ONNX_DOMAIN);
+  ASSERT_NE(optional, nullptr);
+  ASSERT_NE(has_element, nullptr);
+  ASSERT_NE(get_element, nullptr);
+
+  const auto &optional_constraints = optional->typeConstraintMap();
+  const auto &has_constraints = has_element->typeConstraintMap();
+  const auto &get_constraints = get_element->typeConstraintMap();
+  EXPECT_EQ(optional_constraints.at("V").first.size(), 56u);
+  EXPECT_EQ(optional_constraints.at("O").first.size(), 56u);
+  EXPECT_EQ(has_constraints.at("O").first.size(), 112u);
+  EXPECT_EQ(get_constraints.at("O").first.size(), 112u);
+  EXPECT_EQ(get_constraints.at("V").first.size(), 56u);
+
+  const auto contains = [](const auto &types, const std::string &type) {
+    for (const auto *candidate : types.first) {
+      if (*candidate == type) {
+        return true;
+      }
+    }
+    return false;
+  };
+  EXPECT_TRUE(contains(optional_constraints.at("V"), "seq(tensor(float6e2m3))"));
+  EXPECT_TRUE(contains(optional_constraints.at("O"), "optional(seq(tensor(float6e2m3)))"));
+  EXPECT_TRUE(contains(has_constraints.at("O"), "optional(tensor(bfloat16))"));
+  EXPECT_TRUE(contains(get_constraints.at("V"), "tensor(float6e3m2)"));
+}
+
 TEST(onnx_defs, DataTypeAndParserMaps) {
   EXPECT_TRUE((std::is_same<DataType, const std::string *>::value));
   EXPECT_EQ(PrimitiveTypeNameMap::Lookup("float"),

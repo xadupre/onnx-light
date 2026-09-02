@@ -397,6 +397,52 @@ TEST(onnx_shape_inference, InferShapesImpl_ModelGraph) {
   EXPECT_EQ(dims[1].ref_dim_value(), kExpectedDim1);
 }
 
+TEST(onnx_shape_inference, OptionalOpsInferIr14SequenceTypesAtOpset28) {
+  ModelProto model;
+  model.set_ir_version(14);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(28);
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("optional_ir14_sequence");
+  ValueInfoProto *input = graph->add_input();
+  input->set_name("sequence_input");
+  auto *element_tensor =
+      input->mutable_type()->mutable_sequence_type()->mutable_elem_type()->mutable_tensor_type();
+  element_tensor->set_elem_type(TensorProto::FLOAT6E2M3);
+  element_tensor->mutable_shape()->add_dim()->set_dim_value(2);
+  element_tensor->mutable_shape()->add_dim()->set_dim_value(3);
+
+  graph->add_output()->set_name("has_element");
+  graph->add_output()->set_name("sequence_output");
+
+  NodeProto *optional = graph->add_node();
+  optional->set_op_type("Optional");
+  *optional->add_input() = "sequence_input";
+  *optional->add_output() = "optional_value";
+  NodeProto *has_element = graph->add_node();
+  has_element->set_op_type("OptionalHasElement");
+  *has_element->add_input() = "optional_value";
+  *has_element->add_output() = "has_element";
+  NodeProto *get_element = graph->add_node();
+  get_element->set_op_type("OptionalGetElement");
+  *get_element->add_input() = "optional_value";
+  *get_element->add_output() = "sequence_output";
+
+  shape_inference::InferShapes(model);
+
+  const auto &outputs = model.ref_graph().ref_output();
+  ASSERT_EQ(outputs.size(), 2u);
+  ASSERT_TRUE(outputs[0].ref_type().has_tensor_type());
+  EXPECT_EQ(outputs[0].ref_type().ref_tensor_type().ref_elem_type(), TensorProto::BOOL);
+  ASSERT_TRUE(outputs[1].ref_type().has_sequence_type());
+  const auto &inferred_element = outputs[1].ref_type().ref_sequence_type().ref_elem_type();
+  ASSERT_TRUE(inferred_element.has_tensor_type());
+  EXPECT_EQ(inferred_element.ref_tensor_type().ref_elem_type(), TensorProto::FLOAT6E2M3);
+  ASSERT_EQ(inferred_element.ref_tensor_type().ref_shape().ref_dim().size(), 2u);
+}
+
 TEST(onnx_shape_inference, InferShapesImpl_STFTPartialShapeWithDynamicSignalLength) {
   ModelProto model;
   model.set_ir_version(IR_VERSION);

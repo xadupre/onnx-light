@@ -163,9 +163,12 @@ TEST(SessionExecutor, ExplicitPolicyOverridesParameters) {
 }
 
 TEST(SessionExecutor, CompatibleSessionsShareOneExecutor) {
+  CpuExecutionPolicy request;
+  request.num_threads = 2;
+  request.affinity_policy = CpuAffinityPolicy::kNone;
   ExecutionPlan plan;
-  RuntimeSession first(plan, RuntimeSessionOptions{.parameters = RuntimeParameters(2)});
-  RuntimeSession second(plan, RuntimeSessionOptions{.parameters = RuntimeParameters(2)});
+  RuntimeSession first(plan, RuntimeSessionOptions{.cpu_execution = request});
+  RuntimeSession second(plan, RuntimeSessionOptions{.cpu_execution = request});
   EXPECT_EQ(first.cpu_executor().get(), second.cpu_executor().get());
 }
 

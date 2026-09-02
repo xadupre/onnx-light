@@ -314,7 +314,7 @@ def render_rst_pattern_catalog(patterns_root: str | pathlib.Path | None = None) 
             the headers located beside the installed ``onnx_light`` package.
 
     Returns:
-        A reST ``list-table`` linking each pattern's C++ and Python classes
+        A reST ``list-table`` linking each pattern to its C++ and Python classes
         and displaying its summary.
     """
     from .onnx_core import optimization
@@ -355,13 +355,15 @@ def render_rst_pattern_catalog(patterns_root: str | pathlib.Path | None = None) 
         lines.extend(
             [
                 f"    * - {index}",
-                f"      - **{name}** (``{family}``)",
                 (
-                    f"        :cpp:class:`C++ <onnx_light::onnx_patterns::{class_name}>`"
-                    " / "
-                    f":class:`Python <onnx_light.onnx_core.optimization.{class_name}>`"
+                    f"      - :cpp:class:`{name} "
+                    f"<onnx_light::onnx_patterns::{class_name}>` (``{family}``)"
                 ),
-                f"      - {item.summary}",
+                (
+                    "      - "
+                    f":class:`Python <onnx_light.onnx_core.optimization.{class_name}>`"
+                    f" — {item.summary}"
+                ),
             ]
         )
     return "\n".join(lines) + "\n"

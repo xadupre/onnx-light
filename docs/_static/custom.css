@@ -38,6 +38,10 @@ div.pst-scrollable-table-container:has(> table.howto-side-by-side) {
     table-layout: fixed;
 }
 
+.pattern-catalog {
+    font-size: 0.8rem;
+}
+
 .pattern-catalog td,
 .pattern-catalog th,
 .memory-peak-catalog td,

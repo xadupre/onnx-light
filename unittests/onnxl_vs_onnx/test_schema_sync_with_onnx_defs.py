@@ -33,7 +33,10 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
     @classmethod
     def _remove_optional_28_if_onnx_is_outdated(cls, light_dict, onnx_dict):
         for key in cls.OPTIONAL_28_KEYS - set(onnx_dict):
-            light_dict.pop(key)
+            if isinstance(light_dict, set):
+                light_dict.discard(key)
+            else:
+                light_dict.pop(key, None)
 
     def test_onnx_light_ir_and_opset_versions_match_onnx(self):
         self.assertEqual(onnx_light.onnx.defs.onnx_ir_version(), onnx.IR_VERSION)

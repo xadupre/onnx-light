@@ -946,6 +946,74 @@ class TestShapeInference(ExtTestCase):
         with self.assertRaisesRegex(shape_inference.InferenceError, "missing from the inputs"):
             shape_inference.infer_shapes(model, strict_mode=True)
 
+    def test_einsum_ellipsis_mismatched_rank_raises(self) -> None:
+        """Checks that mismatched ellipsis ranks raise InferenceError."""
+        cases = [
+            (
+                [],
+                [2, 3],
+                "...,...->...",
+                (
+                    "Ellipsis for input 1 represents 2 dimensions, "
+                    "but ellipsis for input 0 represents 0 dimensions."
+                ),
+            ),
+            (
+                [2, 3],
+                [],
+                "...,...->...",
+                (
+                    "Ellipsis for input 1 represents 0 dimensions, "
+                    "but ellipsis for input 0 represents 2 dimensions."
+                ),
+            ),
+            (
+                [3, 4],
+                [2, 3, 4],
+                "...ij,...ij->...ij",
+                (
+                    "Ellipsis for input 1 represents 1 dimensions, "
+                    "but ellipsis for input 0 represents 0 dimensions."
+                ),
+            ),
+            (
+                [],
+                [2, 3],
+                "...,...",
+                (
+                    "Ellipsis for input 1 represents 2 dimensions, "
+                    "but ellipsis for input 0 represents 0 dimensions."
+                ),
+            ),
+        ]
+        for shape_x, shape_y, equation, error_message in cases:
+            with (
+                self.subTest(shape_x=shape_x, shape_y=shape_y, equation=equation),
+                self.assertRaisesRegex(shape_inference.InferenceError, error_message),
+            ):
+                self._infer_output(
+                    "Einsum",
+                    {
+                        "x": oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, shape_x),
+                        "y": oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, shape_y),
+                    },
+                    equation=equation,
+                )
+
+    def test_einsum_ellipsis_matching_rank_zero(self) -> None:
+        """Checks that matching zero-rank ellipses infer a scalar."""
+        result = self._infer_output(
+            "Einsum",
+            {
+                "x": oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, []),
+                "y": oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, []),
+            },
+            equation="...,...->...",
+        )
+
+        self.assertEqual(result.tensor_type.elem_type, onnxl.TensorProto.FLOAT)
+        self.assertEqual(len(result.tensor_type.shape.dim), 0)
+
     def test_hann_window_output_datatype_out_of_range(self) -> None:
         """Window ops must reject an output_datatype that does not fit in int32.
 

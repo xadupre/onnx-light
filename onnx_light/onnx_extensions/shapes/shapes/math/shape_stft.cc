@@ -113,10 +113,8 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
     frame_length_known = true;
   }
 
-  const bool has_window =
-      node.input_size() >= 3 && !node.input(2).empty() && ctx.Has(node.input(2));
-  const bool has_frame_length =
-      node.input_size() >= 4 && !node.input(3).empty() && ctx.Has(node.input(3));
+  const bool has_window = node.input_size() >= 3 && !node.input(2).empty();
+  const bool has_frame_length = node.input_size() >= 4 && !node.input(3).empty();
   const bool frame_length_defaults_to_signal = !has_window && !has_frame_length;
   if (frame_length_defaults_to_signal && in_shape[1].IsInt()) {
     frame_length_value = in_shape[1].AsInt();

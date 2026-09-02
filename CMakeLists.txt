@@ -860,7 +860,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
     list(APPEND _onnxpy_rpath_targets lib_onnx_proto)
   endif()
   if(_onnx_light_lib_type STREQUAL "SHARED")
-    list(APPEND _onnxpy_rpath_targets lib_onnx_lib lib_onnx_manipulations lib_onnx_op
+    list(APPEND _onnxpy_rpath_targets lib_onnx_core lib_onnx_lib lib_onnx_manipulations lib_onnx_op
         lib_onnx_shape lib_onnx_patterns)
     if(ONNX_LIGHT_BUILD_KERNELS)
       list(APPEND _onnxpy_rpath_targets lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient)

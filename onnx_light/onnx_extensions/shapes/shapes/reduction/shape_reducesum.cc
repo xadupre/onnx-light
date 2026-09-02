@@ -56,10 +56,12 @@ void ComputeShapeReduceCommon(ShapesContext &ctx, const NodeProto &node, const c
   const bool keepdims = GetAttributeOr<int64_t>(node, "keepdims", 1) != 0;
   const bool noop_with_empty_axes = GetAttributeOr<int64_t>(node, "noop_with_empty_axes", 0) != 0;
 
-  // Determine the opset version to decide where ``axes`` comes from. Default
-  // to v13 (input form) when no opset has been recorded.
-  const int opset = ctx.HasOpsetVersion(kOnnxDomain) ? ctx.OpsetVersion(kOnnxDomain) : 13;
-  const bool axes_is_input = opset >= 13;
+  // ReduceSum moved ``axes`` to an input in opset 13. The other reduction
+  // operators made the same change in opset 18.
+  const int axes_input_opset = op == "ReduceSum" ? 13 : 18;
+  const int opset =
+      ctx.HasOpsetVersion(kOnnxDomain) ? ctx.OpsetVersion(kOnnxDomain) : axes_input_opset;
+  const bool axes_is_input = opset >= axes_input_opset;
 
   std::vector<bool> is_reduced(static_cast<std::size_t>(rank), false);
   bool axes_known = false;
@@ -97,9 +99,11 @@ void ComputeShapeReduceCommon(ShapesContext &ctx, const NodeProto &node, const c
         if (as.Rank() == 1 && as[0].IsInt()) {
           axes_count_known = true;
           axes_count = as[0].AsInt();
-          if (axes_count == 0 && !noop_with_empty_axes) {
+          if (axes_count == 0) {
             axes_known = true;
-            std::fill(is_reduced.begin(), is_reduced.end(), true);
+            if (!noop_with_empty_axes) {
+              std::fill(is_reduced.begin(), is_reduced.end(), true);
+            }
           }
         }
       }

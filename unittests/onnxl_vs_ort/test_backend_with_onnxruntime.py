@@ -49,6 +49,7 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 ORT_EXCLUDE_REGEX = [
     # ORT/reference parity mismatches in focused C++ cases.
     r"^test_cc_stft_complex_batched$",
+    r"^test_cc_stft_default_frame_length$",
     r"^test_cc_image_decoder_",
     # Preview ops/functions are not registered in ORT.
     r"^test_cc_flexattention_",

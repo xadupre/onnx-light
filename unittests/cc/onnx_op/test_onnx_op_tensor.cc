@@ -110,6 +110,18 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsGridSampleSchemasForAllVersions) {
   EXPECT_EQ(std::get<std::string>(s20->attributes()[0].default_value), "linear");
 }
 
+TEST(OnnxOpTensorRegistrationTest, PadReflectExamplesAreValid) {
+  const std::vector<core::schema::LightOpSchema> schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Pad");
+
+  for (int version : {11, 13, 18, 19, 21, 23, 24, 25}) {
+    const core::schema::LightOpSchema *const schema = FindByVersion(schemas, version);
+    ASSERT_NE(schema, nullptr) << "missing Pad schema for version " << version;
+    EXPECT_NE(schema->doc().find("pads = [0, 1, 0, 1]"), std::string::npos) << version;
+    EXPECT_NE(schema->doc().find("[1.2, 1.0, 1.2, 1.0]"), std::string::npos) << version;
+  }
+}
+
 TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();

@@ -798,10 +798,10 @@ TEST(OnnxOptimValueInfo, FromValueInfoReadsMinMaxMetadata) {
       MakeTensorValueInfo("x", TensorProto::DataType::FLOAT, {core::symbolic::SymDim(4)});
   auto *min_entry = vi.add_metadata_props();
   min_entry->set_key(core::symbolic::kValueInfoMinMetadataKey);
-  min_entry->set_value("-3.25");
+  min_entry->set_value("  -3.25");
   auto *max_entry = vi.add_metadata_props();
   max_entry->set_key(core::symbolic::kValueInfoMaxMetadataKey);
-  max_entry->set_value("4.75");
+  max_entry->set_value("+4.75");
   core::symbolic::SymTensor t;
   ASSERT_TRUE(core::symbolic::SymTensorFromValueInfo(vi, t));
   ASSERT_TRUE(t.HasMin());

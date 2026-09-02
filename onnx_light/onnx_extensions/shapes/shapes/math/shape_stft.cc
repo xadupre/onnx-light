@@ -48,59 +48,93 @@ void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   const SymTensor &signal = ctx.Get(node.input(0));
   const TensorType dtype = signal.Dtype();
   const SymShape &in_shape = signal.Shape();
+  EXT_ENFORCE_INVALID(in_shape.Rank() == 3, "ComputeShapeSTFT: signal must have rank 3.");
+  if (in_shape[2].IsInt()) {
+    EXT_ENFORCE_INVALID(in_shape[2].AsInt() == 1 || in_shape[2].AsInt() == 2,
+                        "ComputeShapeSTFT: signal's last dimension must have size 1 or 2.");
+  }
 
   const AttributeProto *onesided_attr = FindAttribute(node, "onesided");
-  // STFT spec: default for onesided is 1 (real input).
-  const bool onesided = (onesided_attr == nullptr) || onesided_attr->ref_i() != 0;
+  const int64_t onesided_value = onesided_attr == nullptr ? 1 : onesided_attr->ref_i();
+  EXT_ENFORCE_INVALID(onesided_value == 0 || onesided_value == 1,
+                      "ComputeShapeSTFT: onesided must be 0 or 1.");
+  const bool onesided = onesided_value == 1;
+  EXT_ENFORCE_INVALID(!onesided || !in_shape[2].IsInt() || in_shape[2].AsInt() == 1,
+                      "ComputeShapeSTFT: one-sided STFT requires real input.");
 
   // Try to read frame_step as a known constant.
   bool frame_step_known = false;
   int64_t frame_step_value = 0;
   if (!node.input(1).empty() && ctx.Has(node.input(1))) {
+    const SymTensor &frame_step = ctx.Get(node.input(1));
+    EXT_ENFORCE_INVALID(
+        frame_step.Shape().Rank() == 0 ||
+            (frame_step.Shape().Rank() == 1 &&
+             (!frame_step.Shape()[0].IsInt() || frame_step.Shape()[0].AsInt() == 1)),
+        "ComputeShapeSTFT: frame_step must be a scalar or a single-element vector.");
     int64_t v = 0;
-    if (ReadScalarInt(ctx.Get(node.input(1)), v)) {
+    if (ReadScalarInt(frame_step, v)) {
+      EXT_ENFORCE_INVALID(v > 0, "ComputeShapeSTFT: frame_step must be greater than 0.");
       frame_step_value = v;
       frame_step_known = true;
     }
   }
 
-  // Determine frame_length from the optional ``window`` (input 2) and
-  // ``frame_length`` (input 3) inputs. ``frame_length`` is preferred when
-  // known as a constant.
+  bool window_length_known = false;
+  int64_t window_length = 0;
+  if (node.input_size() >= 3 && !node.input(2).empty() && ctx.Has(node.input(2))) {
+    const SymTensor &window = ctx.Get(node.input(2));
+    EXT_ENFORCE_INVALID(window.Shape().Rank() == 1, "ComputeShapeSTFT: window must have rank 1.");
+    if (window.Shape()[0].IsInt()) {
+      window_length = window.Shape()[0].AsInt();
+      EXT_ENFORCE_INVALID(window_length > 0,
+                          "ComputeShapeSTFT: window must have a positive length.");
+      window_length_known = true;
+    }
+  }
+
   bool frame_length_known = false;
   int64_t frame_length_value = 0;
   if (node.input_size() >= 4 && !node.input(3).empty() && ctx.Has(node.input(3))) {
+    const SymTensor &frame_length = ctx.Get(node.input(3));
+    EXT_ENFORCE_INVALID(frame_length.Shape().Rank() == 0,
+                        "ComputeShapeSTFT: frame_length must be a scalar.");
     int64_t v = 0;
-    if (ReadScalarInt(ctx.Get(node.input(3)), v)) {
+    if (ReadScalarInt(frame_length, v)) {
+      EXT_ENFORCE_INVALID(v > 0, "ComputeShapeSTFT: frame_length must be greater than 0.");
+      EXT_ENFORCE_INVALID(!window_length_known || window_length == v,
+                          "ComputeShapeSTFT: window length must match frame_length.");
       frame_length_value = v;
       frame_length_known = true;
     }
   }
-  if (!frame_length_known && node.input_size() >= 3 && !node.input(2).empty() &&
-      ctx.Has(node.input(2))) {
-    const SymTensor &window = ctx.Get(node.input(2));
-    if (window.Shape().Rank() == 1 && window.Shape()[0].IsInt()) {
-      frame_length_value = window.Shape()[0].AsInt();
-      frame_length_known = true;
-    }
+  if (!frame_length_known && window_length_known) {
+    frame_length_value = window_length;
+    frame_length_known = true;
+  }
+
+  const bool has_window = node.input_size() >= 3 && !node.input(2).empty();
+  const bool has_frame_length = node.input_size() >= 4 && !node.input(3).empty();
+  const bool frame_length_defaults_to_signal = !has_window && !has_frame_length;
+  if (frame_length_defaults_to_signal && in_shape[1].IsInt()) {
+    frame_length_value = in_shape[1].AsInt();
+    frame_length_known = true;
   }
 
   // Compute output shape: [batch_size, n_frames, dft_unique_bins, 2].
   const std::string sym = "STFT_" + node.output(0);
   SymShape out_shape;
-  // batch_size from signal input.
-  if (in_shape.Rank() >= 1) {
-    out_shape.PushBack(in_shape[0]);
-  } else {
-    out_shape.PushBack(SymDim(sym + "_batch"));
-  }
+  out_shape.PushBack(in_shape[0]);
 
   // n_frames: derive from signal_length, frame_length, frame_step when known.
   bool n_frames_known = false;
   int64_t n_frames_value = 0;
-  if (frame_length_known && frame_step_known && in_shape.Rank() >= 2 && in_shape[1].IsInt()) {
+  if (frame_length_defaults_to_signal) {
+    n_frames_value = 1;
+    n_frames_known = true;
+  } else if (frame_length_known && frame_step_known && in_shape[1].IsInt()) {
     const int64_t signal_length = in_shape[1].AsInt();
-    if (frame_step_value > 0 && frame_length_value > 0 && signal_length >= frame_length_value) {
+    if (signal_length >= frame_length_value) {
       n_frames_value = (signal_length - frame_length_value) / frame_step_value + 1;
       n_frames_known = true;
     }

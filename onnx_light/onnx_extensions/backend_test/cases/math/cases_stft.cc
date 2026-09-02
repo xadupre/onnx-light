@@ -77,6 +77,25 @@ void RegisterSTFTCases(std::vector<TestCase> &registry, TestMode mode) {
   Tensor frame_step = Tensor::FromInt64("frame_step", {}, {4});
   Tensor frame_length = Tensor::FromInt64("frame_length", {}, {8});
 
+  // --- STFT with frame_length defaulting to the signal length.
+  {
+    Expect(registry,
+           MakeSTFTNode(/*with_window=*/false, /*with_frame_length=*/false, /*onesided=*/1),
+           "test_cc_stft_default_frame_length", {opset_v17}, [samples]() -> IoData {
+             Tensor signal = Tensor::FromFloat("signal", {1, 16, 1}, samples);
+             Tensor frame_step = Tensor::FromInt64("frame_step", {}, {4});
+
+             const OpsetId opset_v17 = DefaultOpset(17);
+             const KernelContext stft_v17_ctx{opset_v17};
+             const onnx_kernels::kernel::STFT stft_v17{stft_v17_ctx};
+
+             Tensor y = stft_v17(signal, frame_step, /*window=*/nullptr,
+                                 /*frame_length=*/nullptr, /*onesided=*/true);
+             return IoData{{std::move(signal), std::move(frame_step)}, {std::move(y)}};
+           });
+    registry.back().atol = 1e-5;
+  }
+
   // --- STFT with frame_length input, no window, onesided=1.
   {
     Expect(registry,

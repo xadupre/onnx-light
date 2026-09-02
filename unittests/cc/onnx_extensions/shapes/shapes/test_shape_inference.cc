@@ -64,6 +64,63 @@ TEST(OnnxOptimShapeInference, SupportsUtilsStringLookupForNodeOutput) {
             core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 }
 
+TEST(OnnxOptimShapeInference, InfersPartialSTFTShapeWithDynamicSignalLength) {
+  NodeProto node = MakeNode("STFT", {"signal", "frame_step", "window"}, {"output"});
+  core::shapes::ShapesContext ctx;
+  int64_t frame_step = 2;
+  ctx.Set("signal", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                              {core::symbolic::SymDim("batch"),
+                                               core::symbolic::SymDim("signal_length"),
+                                               core::symbolic::SymDim(1)}));
+  ctx.Set("frame_step",
+          core::symbolic::SymTensor(&frame_step, core::symbolic::TensorType::kInt64, {}));
+  ctx.Set("window", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                              {core::symbolic::SymDim(5)}));
+
+  ctx.ComputeShapeNode(node);
+
+  ASSERT_TRUE(ctx.Has("output"));
+  const core::symbolic::SymShape &shape = ctx.Get("output").Shape();
+  ASSERT_EQ(shape.Rank(), 4);
+  EXPECT_EQ(shape[0], core::symbolic::SymDim("batch"));
+  EXPECT_FALSE(shape[1].IsInt());
+  EXPECT_EQ(shape[2], core::symbolic::SymDim(3));
+  EXPECT_EQ(shape[3], core::symbolic::SymDim(2));
+}
+
+TEST(OnnxOptimShapeInference, STFTDefaultsFrameLengthToDynamicSignalLength) {
+  NodeProto node = MakeNode("STFT", {"signal", "frame_step"}, {"output"});
+  core::shapes::ShapesContext ctx;
+  int64_t frame_step = 2;
+  ctx.Set("signal", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                              {core::symbolic::SymDim("batch"),
+                                               core::symbolic::SymDim("signal_length"),
+                                               core::symbolic::SymDim(1)}));
+  ctx.Set("frame_step",
+          core::symbolic::SymTensor(&frame_step, core::symbolic::TensorType::kInt64, {}));
+
+  ctx.ComputeShapeNode(node);
+
+  const core::symbolic::SymShape &shape = ctx.Get("output").Shape();
+  ASSERT_EQ(shape.Rank(), 4);
+  EXPECT_EQ(shape[0], core::symbolic::SymDim("batch"));
+  EXPECT_EQ(shape[1], core::symbolic::SymDim(1));
+  EXPECT_FALSE(shape[2].IsInt());
+  EXPECT_EQ(shape[3], core::symbolic::SymDim(2));
+}
+
+TEST(OnnxOptimShapeInference, STFTRejectsOneSidedComplexSignal) {
+  NodeProto node = MakeNode("STFT", {"signal", "frame_step"}, {"output"});
+  core::shapes::ShapesContext ctx;
+  ctx.Set("signal",
+          core::symbolic::SymTensor(
+              nullptr, core::symbolic::TensorType::kFloat,
+              {core::symbolic::SymDim(1), core::symbolic::SymDim(10), core::symbolic::SymDim(2)}));
+  ctx.Set("frame_step", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64, {}));
+
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+}
+
 TEST(OnnxOptimShapeInference, DispatchesAddWithBroadcast) {
   NodeProto node = MakeNode("Add", {"A", "B"}, {"C"});
   core::shapes::ShapesContext ctx;

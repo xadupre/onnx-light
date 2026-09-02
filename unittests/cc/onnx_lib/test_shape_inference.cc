@@ -397,6 +397,54 @@ TEST(onnx_shape_inference, InferShapesImpl_ModelGraph) {
   EXPECT_EQ(dims[1].ref_dim_value(), kExpectedDim1);
 }
 
+TEST(onnx_shape_inference, InferShapesImpl_STFTPartialShapeWithDynamicSignalLength) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(17);
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("stft_graph");
+  ValueInfoProto *signal = graph->add_input();
+  signal->set_name("signal");
+  TypeProto::Tensor *signal_type = signal->mutable_type()->mutable_tensor_type();
+  signal_type->set_elem_type(TensorProto::FLOAT);
+  TensorShapeProto *signal_shape = signal_type->mutable_shape();
+  signal_shape->add_dim()->set_dim_param("batch");
+  signal_shape->add_dim()->set_dim_param("signal_length");
+  signal_shape->add_dim()->set_dim_value(1);
+
+  TensorProto *frame_step = graph->add_initializer();
+  frame_step->set_name("frame_step");
+  frame_step->set_data_type(TensorProto::INT64);
+  frame_step->add_int64_data(2);
+  TensorProto *window = graph->add_initializer();
+  window->set_name("window");
+  window->set_data_type(TensorProto::FLOAT);
+  window->add_dims(5);
+
+  ValueInfoProto *output = graph->add_output();
+  output->set_name("output");
+  output->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  NodeProto *node = graph->add_node();
+  node->set_op_type("STFT");
+  *node->add_input() = "signal";
+  *node->add_input() = "frame_step";
+  *node->add_input() = "window";
+  *node->add_output() = "output";
+
+  shape_inference::InferShapes(model);
+
+  const auto &dims =
+      model.ref_graph().ref_output()[0].ref_type().ref_tensor_type().ref_shape().ref_dim();
+  ASSERT_EQ(dims.size(), 4);
+  EXPECT_EQ(dims[0].ref_dim_param(), "batch");
+  EXPECT_FALSE(dims[1].has_dim_value());
+  EXPECT_EQ(dims[2].ref_dim_value(), 3);
+  EXPECT_EQ(dims[3].ref_dim_value(), 2);
+}
+
 TEST(onnx_shape_inference, InferShapesImpl_SplitToSequenceRejectsZeroScalarSplit) {
   for (const int64_t version : {int64_t{11}, int64_t{24}}) {
     ModelProto model;

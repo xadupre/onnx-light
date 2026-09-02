@@ -15,17 +15,21 @@ def test_render_rst_pattern_catalog_lists_registered_patterns():
     patterns = standard_patterns()
 
     assert catalogue.count("    * - ") == len(patterns) + 1
-    positions = [catalogue.index(f"**{name}**") for name in sorted(p.name for p in patterns)]
+    positions = [
+        catalogue.index(f":cpp:class:`{name} ") for name in sorted(p.name for p in patterns)
+    ]
     assert positions == sorted(positions)
     for pattern in patterns:
         class_name = type(pattern).__name__
-        assert f"**{pattern.name}**" in catalogue
-        assert f"onnx_light::onnx_patterns::{class_name}" in catalogue
-        assert f"onnx_light.onnx_core.optimization.{class_name}" in catalogue
+        assert (
+            f":cpp:class:`{pattern.name} <onnx_light::onnx_patterns::{class_name}>`" in catalogue
+        )
+        python_link = f":class:`Python <onnx_light.onnx_core.optimization.{class_name}>` — "
+        assert python_link in catalogue
     assert "    * - #" in catalogue
     assert ":class: sphinx-datatable pattern-catalog" in catalogue
-    assert ":cpp:class:`C++" in catalogue
     assert ":class:`Python" in catalogue
+    assert ":cpp:class:`C++" not in catalogue
     assert "Before:" not in catalogue
     assert "After:" not in catalogue
 

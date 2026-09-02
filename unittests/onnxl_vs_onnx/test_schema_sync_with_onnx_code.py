@@ -306,6 +306,9 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
             onnx_light_schemas.pop("BitShift", None)
         elif onnx_schemas["BitShift"][0] < 28:
             onnx_light_schemas["BitShift"] = onnx_schemas["BitShift"]
+        for op_name in ("Optional", "OptionalGetElement", "OptionalHasElement"):
+            if onnx_schemas[op_name][0] < 28:
+                onnx_light_schemas[op_name] = onnx_schemas[op_name]
         if "DynamicQuantizeLinear" not in onnx_schemas:
             onnx_light_schemas.pop("DynamicQuantizeLinear", None)
 

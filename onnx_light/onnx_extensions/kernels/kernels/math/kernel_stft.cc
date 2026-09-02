@@ -117,8 +117,10 @@ Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Te
                           ": window length must match frame_length when both are given.");
     }
   }
-  EXT_ENFORCE_INVALID(frame_length_value > 0, kSTFTName,
-                      ": at least one of window or frame_length must be provided.");
+  if (frame_length_value < 0) {
+    frame_length_value = signal_length;
+  }
+  EXT_ENFORCE_INVALID(frame_length_value > 0, kSTFTName, ": frame_length must be positive.");
   EXT_ENFORCE_INVALID(frame_length_value <= signal_length, kSTFTName,
                       ": frame_length must not exceed signal_length.");
 

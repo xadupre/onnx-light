@@ -218,6 +218,20 @@ TEST(onnx_defs, MathOpDataPropagator_InvalidBroadcastRank) {
   EXPECT_TRUE(ctx.output_data_.empty());
 }
 
+TEST(onnx_defs, STFTDocumentation) {
+  const OpSchema *stft_schema = OpSchemaRegistry::Schema("STFT", 17, ONNX_DOMAIN);
+  ASSERT_NE(stft_schema, nullptr);
+
+  EXPECT_NE(std::string(stft_schema->doc())
+                .find("frames = floor((signal_length - frame_length) / frame_step) + 1"),
+            std::string::npos);
+  EXPECT_NE(stft_schema->inputs()[0].GetDescription().find("rank 3"), std::string::npos);
+  EXPECT_NE(stft_schema->inputs()[2].GetDescription().find("rectangular (all-ones) window"),
+            std::string::npos);
+  EXPECT_NE(stft_schema->outputs()[0].GetDescription().find("real and imaginary parts"),
+            std::string::npos);
+}
+
 TEST(onnx_defs, DataTypeAndParserMaps) {
   EXPECT_TRUE((std::is_same<DataType, const std::string *>::value));
   EXPECT_EQ(PrimitiveTypeNameMap::Lookup("float"),

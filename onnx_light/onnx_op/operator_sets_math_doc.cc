@@ -369,7 +369,24 @@ Reference: https://docs.scipy.org/doc/scipy/tutorial/fft.html
 }
 
 std::string MakeSTFTDoc(int /*since_version*/) {
-  return R"DOC(Computes the Short-time Fourier Transform of the signal.)DOC";
+  return R"DOC(Computes the Short-time Fourier Transform of the signal.
+
+The STFT is computed by sliding a window of length `frame_length` over the signal with a
+step size of `frame_step`, computing a DFT of each windowed frame.
+
+The number of frames in the output is computed as:
+
+  `frames = floor((signal_length - frame_length) / frame_step) + 1`
+
+Constraints on inputs:
+- `frame_step` must be a scalar.
+- `frame_length` must be a scalar. When omitted and `window` is provided, `frame_length`
+  is inferred from `window.shape[0]`. When both `window` and `frame_length` are omitted,
+  `frame_length` defaults to `signal_length`.
+- `window` must be a 1-D tensor. When omitted, a rectangular (all-ones) window of length
+  `frame_length` is used. When both `window` and `frame_length` are provided, the length
+  of the `window` tensor must equal `frame_length`.
+)DOC";
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_op::math

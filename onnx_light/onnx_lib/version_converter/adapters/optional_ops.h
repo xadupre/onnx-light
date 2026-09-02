@@ -47,29 +47,30 @@ public:
                    static_cast<int64_t>(target_version().version()));
       tensor_element_type = node->input()->elemType();
     } else {
-      ONNX_ASSERTM(
-          (allow_optional_input_ && optional_or_element_type->has_optional_type()) ||
-              (allow_nonoptional_input_ && !optional_or_element_type->has_optional_type()),
-          "Specified type of Input of operator '", name(), "' is unallowed for Opset Version ",
-          static_cast<int64_t>(target_version().version()));
+      ONNX_ASSERTM((allow_optional_input_ && optional_or_element_type->has_optional_type()) ||
+                       (allow_nonoptional_input_ && !optional_or_element_type->has_optional_type()),
+                   "Specified type of Input of operator '", name(),
+                   "' is unallowed for Opset Version ",
+                   static_cast<int64_t>(target_version().version()));
       const TypeProto &element_type = optional_or_element_type->has_optional_type()
                                           ? optional_or_element_type->optional_type().elem_type()
                                           : *optional_or_element_type;
       ONNX_ASSERT(element_type.has_tensor_type() || element_type.has_sequence_type() ||
                   element_type.has_sparse_tensor_type());
-      const TypeProto &tensor_type =
-          element_type.has_sequence_type() ? element_type.sequence_type().elem_type() : element_type;
+      const TypeProto &tensor_type = element_type.has_sequence_type()
+                                         ? element_type.sequence_type().elem_type()
+                                         : element_type;
       ONNX_ASSERT(tensor_type.has_tensor_type() || tensor_type.has_sparse_tensor_type());
       tensor_element_type = tensor_type.has_tensor_type()
                                 ? tensor_type.tensor_type().elem_type()
                                 : tensor_type.sparse_tensor_type().elem_type();
     }
 
-    ONNX_ASSERTM(
-        std::find(unallowed_types_.begin(), unallowed_types_.end(), tensor_element_type) ==
-            unallowed_types_.end(),
-        "DataType (", tensor_element_type, ") of Input of operator '", name(),
-        "' is unallowed for Opset Version ", static_cast<int64_t>(target_version().version()));
+    ONNX_ASSERTM(std::find(unallowed_types_.begin(), unallowed_types_.end(), tensor_element_type) ==
+                     unallowed_types_.end(),
+                 "DataType (", tensor_element_type, ") of Input of operator '", name(),
+                 "' is unallowed for Opset Version ",
+                 static_cast<int64_t>(target_version().version()));
     return node;
   }
 

@@ -99,9 +99,11 @@ void ComputeShapeReduceCommon(ShapesContext &ctx, const NodeProto &node, const c
         if (as.Rank() == 1 && as[0].IsInt()) {
           axes_count_known = true;
           axes_count = as[0].AsInt();
-          if (axes_count == 0 && !noop_with_empty_axes) {
+          if (axes_count == 0) {
             axes_known = true;
-            std::fill(is_reduced.begin(), is_reduced.end(), true);
+            if (!noop_with_empty_axes) {
+              std::fill(is_reduced.begin(), is_reduced.end(), true);
+            }
           }
         }
       }

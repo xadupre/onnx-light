@@ -15,6 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Made `setup.py build_ext --inplace` reject editable installs that redirect imports to
   another source tree while continuing to allow editable installs of the current tree.
 - Required nanobind 3.0.1 or newer.
+- Improved `STFT` shape inference for dynamic inputs, added validation for optional inputs,
+  and aligned the runtime default for omitted frame lengths with the schema.
+- Aligned reduction shape inference with the opset transitions for input-based axes and
+  empty-axis semantics.
+- Used the public `TestCase.unload()` API directly when processing backend test cases.
 
 ### Fixes
 
@@ -22,10 +27,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   version conversion, and node-level shape inference.
 - Preserved the input type when propagating `Attention` masks for low-precision inputs.
 - Avoided redefining toolchain-provided `_FORTIFY_SOURCE` settings in release wheel builds.
+- Fixed subprocess cleanup in the ONNX cold-start gallery example.
 
 ### Documentation & CI
 
 - Bumped the release version to `0.1.24`.
+- Reduced the release wheel matrix while retaining CPython 3.12–3.14 coverage.
+- Refreshed the project goals, fuzzing, pattern optimization, and no-copy ownership
+  documentation.
+- Improved generated pattern diagrams and catalog links, restored ONNX introduction
+  navigation, added gallery thumbnails, and graphed ONNX cold-start timings.
+- Corrected `Pad` reflect-mode examples and expanded the `STFT` operator documentation.
+- Added C++ backend coverage for 3D `GlobalMaxPool` and stabilized the backend benchmark
+  timing test on loaded CI runners.
 
 ## [0.1.21] – 2026-08-30
 

@@ -112,7 +112,7 @@ static bool IsNegativeZeroIntegerLiteral(const std::string &s) {
   return std::all_of(s.begin() + 1, s.end(), [](char c) { return c == '0'; });
 }
 
-#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
+#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L && !defined(__APPLE__)
 
 float LocaleIndependentStof(const std::string &s) {
   float val = 0.0f;

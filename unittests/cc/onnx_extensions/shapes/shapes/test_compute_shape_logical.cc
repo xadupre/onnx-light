@@ -644,6 +644,21 @@ TEST(OnnxOptimShapesLogicalBitwiseOr, BroadcastsShapes) {
   EXPECT_EQ(ctx.Get("C").Shape(), expected);
 }
 
+TEST(OnnxOptimShapesLogicalBitShift, BroadcastsSignedIntegerShapes) {
+  NodeProto node = MakeBinaryBitwiseNode("BitShift");
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
+                                   core::symbolic::SymDim(1)};
+  core::symbolic::SymShape shape_b{core::symbolic::SymDim(1)};
+  ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32, shape_a));
+  ctx.Set("B", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt32, shape_b));
+
+  onnx_shapes::shapes::logical::ComputeShapeBitShift(ctx, node, "A", "B");
+
+  EXPECT_EQ(ctx.Get("C").Dtype(), core::symbolic::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("C").Shape(), shape_a);
+}
+
 TEST(OnnxOptimShapesLogicalBitwiseXor, ThrowsOnIncompatibleShapes) {
   NodeProto node = MakeBinaryBitwiseNode("BitwiseXor");
   core::shapes::ShapesContext ctx;

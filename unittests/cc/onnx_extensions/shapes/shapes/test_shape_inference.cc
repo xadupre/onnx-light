@@ -717,6 +717,74 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelSeedsInitializerAsShape) {
             (core::symbolic::SymShape{core::symbolic::SymDim(6), core::symbolic::SymDim(2)}));
 }
 
+TEST(OnnxOptimShapeInference, ComputeShapeModelReductionOpset18AxesInitializer) {
+  const std::vector<std::string> op_types = {
+      "ReduceL1",  "ReduceL2",  "ReduceLogSum", "ReduceLogSumExp",
+      "ReduceMax", "ReduceMin", "ReduceProd",   "ReduceSumSquare",
+  };
+  for (const std::string &op_type : op_types) {
+    SCOPED_TRACE(op_type);
+    ModelProto model;
+    model.set_ir_version(8);
+    model.add_opset_import()->set_version(18);
+    GraphProto *graph = model.add_graph();
+    graph->set_name("g");
+    ValueInfoProto *input = graph->add_input();
+    input->set_name("X");
+    SetValueInfoTensorType(*input, TensorProto::DataType::FLOAT, {2, 3, 4});
+    graph->add_output()->set_name("Y");
+    TensorProto *axes = graph->add_initializer();
+    axes->set_name("axes");
+    axes->set_data_type(TensorProto::DataType::INT64);
+    axes->add_dims(1);
+    axes->add_int64_data(1);
+    NodeProto reduce = MakeNode(op_type, {"X", "axes"}, {"temp"});
+    AddAttribute<int64_t>(reduce, "keepdims", 0);
+    *graph->add_node() = std::move(reduce);
+    *graph->add_node() = MakeNode("Identity", {"temp"}, {"Y"});
+
+    core::shapes::ShapesContext ctx;
+    ctx.ComputeShapeModel(model);
+
+    const core::symbolic::SymShape expected{core::symbolic::SymDim(2), core::symbolic::SymDim(4)};
+    EXPECT_EQ(ctx.Get("temp").Shape(), expected);
+    EXPECT_EQ(ctx.Get("Y").Shape(), expected);
+  }
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeModelReduceSumEmptyAxesInitializer) {
+  for (const int64_t noop_with_empty_axes : {int64_t{0}, int64_t{1}}) {
+    SCOPED_TRACE(noop_with_empty_axes);
+    ModelProto model;
+    model.set_ir_version(8);
+    model.add_opset_import()->set_version(18);
+    GraphProto *graph = model.add_graph();
+    graph->set_name("g");
+    ValueInfoProto *input = graph->add_input();
+    input->set_name("X");
+    SetValueInfoTensorType(*input, TensorProto::DataType::FLOAT, {2, 3, 4});
+    graph->add_output()->set_name("Y");
+    TensorProto *axes = graph->add_initializer();
+    axes->set_name("axes");
+    axes->set_data_type(TensorProto::DataType::INT64);
+    axes->add_dims(0);
+    NodeProto reduce = MakeNode("ReduceSum", {"X", "axes"}, {"Y"});
+    AddAttribute<int64_t>(reduce, "keepdims", 0);
+    AddAttribute<int64_t>(reduce, "noop_with_empty_axes", noop_with_empty_axes);
+    *graph->add_node() = std::move(reduce);
+
+    core::shapes::ShapesContext ctx;
+    ctx.ComputeShapeModel(model);
+
+    const core::symbolic::SymShape expected =
+        noop_with_empty_axes == 0
+            ? core::symbolic::SymShape{}
+            : core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
+                                       core::symbolic::SymDim(4)};
+    EXPECT_EQ(ctx.Get("Y").Shape(), expected);
+  }
+}
+
 TEST(OnnxOptimShapeInference, ComputeShapeModelRejectsModelWithoutGraph) {
   ModelProto model;
   core::shapes::ShapesContext ctx;

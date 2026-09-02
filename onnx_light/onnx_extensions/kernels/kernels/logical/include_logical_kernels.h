@@ -331,8 +331,8 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
-/// Element-wise ``BitShift`` on unsigned integer tensors (opset 11). Both
-/// inputs must share the same dtype (UINT8, UINT16, UINT32 or UINT64); the
+/// Element-wise ``BitShift`` on integer tensors (opset 11 and 28). Both
+/// inputs must share the same integer dtype; the
 /// output has the same dtype. Multidirectional (Numpy-style) broadcasting
 /// is supported. The required ``direction`` attribute selects ``"LEFT"`` or
 /// ``"RIGHT"`` and is passed to ``operator()``. Mirrors the upstream

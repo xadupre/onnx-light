@@ -48,7 +48,7 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::logical::LightOpSchema> isinf_schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("IsInf");
 
-  EXPECT_EQ(schemas.size(), 36u);
+  EXPECT_EQ(schemas.size(), 37u);
 
   // IsNaN: v9, v13, v20.
   ASSERT_EQ(isnan_schemas.size(), 3u);
@@ -260,6 +260,21 @@ TEST(OnnxOpLogicalRegistrationTest, BitwiseSchemasArePresent) {
   EXPECT_EQ(bw_not->type_constraints()[0].allowed_type_strs.size(), 8u);
   EXPECT_EQ(bw_not->type_constraints()[0].description,
             "Constrain input/output to integer tensors.");
+}
+
+TEST(OnnxOpLogicalRegistrationTest, BitShift28SupportsSignedIntegerTypes) {
+  const auto schemas = onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("BitShift");
+  const auto *const bitshift_v28 = FindByVersion(schemas, 28);
+  const auto *const bitshift_v11 = FindByVersion(schemas, 11);
+  ASSERT_NE(nullptr, bitshift_v28);
+  ASSERT_NE(nullptr, bitshift_v11);
+  ASSERT_EQ(bitshift_v28->type_constraints().size(), 1u);
+  ASSERT_EQ(bitshift_v11->type_constraints().size(), 1u);
+  EXPECT_EQ(bitshift_v28->type_constraints()[0].allowed_type_strs.size(), 8u);
+  EXPECT_EQ(bitshift_v11->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_NE(bitshift_v28->doc().find("right shift is an arithmetic shift"), std::string::npos);
+  EXPECT_NE(bitshift_v28->doc().find("Y is negative"), std::string::npos);
+  EXPECT_NE(bitshift_v11->doc().find("effectively decreased"), std::string::npos);
 }
 
 } // namespace Test

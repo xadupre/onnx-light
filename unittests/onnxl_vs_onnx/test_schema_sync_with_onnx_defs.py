@@ -9,6 +9,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
     # SwiGLU (onnx#8202) may not yet be present in the installed onnx; the empty
     # domain string is the default ai.onnx domain used by the registered schemas.
     SWIGLU_KEY = ("", "SwiGLU", 28)
+    BITSHIFT_28_KEY = ("", "BitShift", 28)
     ATTENTION_25_KEY = ("", "Attention", 25)
     STFT_KEY = ("", "STFT", 17)
     STFT_DOC_MARKER = "frames = floor((signal_length - frame_length) / frame_step) + 1"
@@ -45,6 +46,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             onnx_light_schema_keys.discard(flex_attention_key)
         if self.SWIGLU_KEY not in onnx_schema_keys:
             onnx_light_schema_keys.discard(self.SWIGLU_KEY)
+        if self.BITSHIFT_28_KEY not in onnx_schema_keys:
+            onnx_light_schema_keys.discard(self.BITSHIFT_28_KEY)
         if self.ATTENTION_25_KEY not in onnx_schema_keys:
             onnx_light_schema_keys.discard(self.ATTENTION_25_KEY)
 
@@ -57,6 +60,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
         if self.SWIGLU_KEY not in onnx_dict:
             light_dict.pop(self.SWIGLU_KEY, None)
+        if self.BITSHIFT_28_KEY not in onnx_dict:
+            light_dict.pop(self.BITSHIFT_28_KEY, None)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
         self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)
@@ -89,6 +94,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
         if self.SWIGLU_KEY not in onnx_dict:
             light_dict.pop(self.SWIGLU_KEY, None)
+        if self.BITSHIFT_28_KEY not in onnx_dict:
+            light_dict.pop(self.BITSHIFT_28_KEY, None)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
         self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)
@@ -123,6 +130,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
         if self.SWIGLU_KEY not in onnx_dict:
             light_dict.pop(self.SWIGLU_KEY, None)
+        if self.BITSHIFT_28_KEY not in onnx_dict:
+            light_dict.pop(self.BITSHIFT_28_KEY, None)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
         self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)

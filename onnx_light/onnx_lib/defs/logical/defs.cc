@@ -117,24 +117,31 @@ ONNX_OPERATOR_SET_SCHEMA(Not, 1,
                                              "Constrain input/output to boolean tensors.")
                              .TypeAndShapeInferenceFunction(unaryLogicalOpInference));
 
-static constexpr const char *BitShift_ver11_doc = R"DOC(
+static constexpr const char *BitShift_ver28_doc = R"DOC(
 Bitwise shift operator performs element-wise operation. For each input element, if the
 attribute "direction" is "RIGHT", this operator moves its binary representation toward
-the right side so that the input value is effectively decreased. If the attribute "direction"
-is "LEFT", bits of binary representation moves toward the left side, which results the
-increase of its actual value. The input X is the tensor to be shifted and another input
-Y specifies the amounts of shifting. For example, if "direction" is "Right", X is [1, 4],
-and S is [1, 1], the corresponding output Z would be [0, 2]. If "direction" is "LEFT" with
-X=[1, 2] and S=[1, 2], the corresponding output Y would be [2, 8].
+the right side. If the attribute "direction" is "LEFT", bits of binary representation
+move toward the left side. The input X is the tensor to be shifted and another
+input Y specifies the amounts of shifting. For example, if "direction" is
+"RIGHT", X is [1, 4], and Y is [1, 1], the corresponding output Z would be
+[0, 2]. If "direction" is "LEFT" with X=[1, 2] and Y=[1, 2], the corresponding
+output Z would be [2, 8].
 
-Because this operator supports Numpy-style broadcasting, X's and Y's shapes are
-not necessarily identical.
+For a signed T the right shift is an arithmetic shift (sign-extending). The
+vacated high bits are filled with copies of the sign bit, so a negative X stays
+negative. For a signed T a left shift can move bits into and past the sign bit,
+and bits shifted past the sign bit are discarded.
+
+If Y is negative, or is greater than or equal to the number of bits of T, then
+the result is whatever the sign bit extension alone produces: -1 for a right
+shift on a negative X, where the fill is a sign bit of 1, and 0 in every other
+case.
 )DOC";
 
 ONNX_OPERATOR_SET_SCHEMA(
-    BitShift, 11,
+    BitShift, 28,
     OpSchema()
-        .SetDoc(GET_OP_DOC_STR(std::string(BitShift_ver11_doc) + GenerateBroadcastingDocMul()))
+        .SetDoc(GET_OP_DOC_STR(std::string(BitShift_ver28_doc) + GenerateBroadcastingDocMul()))
         .Input(0, "X", "First operand, input to be shifted.", "T", OpSchema::Single, true, 1,
                OpSchema::NonDifferentiable)
         .Input(1, "Y", "Second operand, amounts of shift.", "T", OpSchema::Single, true, 1,
@@ -142,7 +149,8 @@ ONNX_OPERATOR_SET_SCHEMA(
         .Output(0, "Z", "Output tensor", "T", OpSchema::Single, true, 1,
                 OpSchema::NonDifferentiable)
         .TypeConstraint("T",
-                        {"tensor(uint8)", "tensor(uint16)", "tensor(uint32)", "tensor(uint64)"},
+                        {"tensor(uint8)", "tensor(uint16)", "tensor(uint32)", "tensor(uint64)",
+                         "tensor(int8)", "tensor(int16)", "tensor(int32)", "tensor(int64)"},
                         "Constrain input and output types to integer tensors.")
         .Attr("direction",
               "Direction of moving bits. It can be either \"RIGHT\" (for right shift) "

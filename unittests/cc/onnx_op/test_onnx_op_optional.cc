@@ -109,7 +109,7 @@ TEST(OnnxOpOptionalRegistrationTest, ReturnsOptionalSchemasWithoutShapeInference
       "seq(tensor(float6e3m2))");
   EXPECT_STREQ(
       core::schema::ToTypeString(optional_v28->type_constraints()[1].allowed_type_strs.back()),
-      "optional(tensor(float6e3m2))");
+      "optional(seq(tensor(float6e3m2)))");
 
   EXPECT_EQ(has_v28->type_constraints()[0].allowed_type_strs.size(), 112u);
   EXPECT_EQ(get_v28->type_constraints()[0].allowed_type_strs.size(), 112u);

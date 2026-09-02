@@ -11,9 +11,14 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_op::optional {
 
 namespace {
 
-std::vector<TensorType> OptionalExtendedTypes() {
+std::vector<TensorType> OptionalTensorTypesIr14() {
   return {
-      TensorType::kBfloat16,   TensorType::kFloat8e4m3fn,   TensorType::kFloat8e4m3fnuz,
+      TensorType::kUint8,      TensorType::kUint16,         TensorType::kUint32,
+      TensorType::kUint64,     TensorType::kInt8,           TensorType::kInt16,
+      TensorType::kInt32,      TensorType::kInt64,          TensorType::kBfloat16,
+      TensorType::kFloat16,    TensorType::kFloat,          TensorType::kDouble,
+      TensorType::kString,     TensorType::kBool,           TensorType::kComplex64,
+      TensorType::kComplex128, TensorType::kFloat8e4m3fn,   TensorType::kFloat8e4m3fnuz,
       TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz, TensorType::kUint4,
       TensorType::kInt4,       TensorType::kFloat4e2m1,     TensorType::kFloat8e8m0,
       TensorType::kUint2,      TensorType::kInt2,           TensorType::kFloat6e2m3,
@@ -29,23 +34,23 @@ std::vector<TensorType> OptionalInputTypes() {
 }
 
 std::vector<TensorType> OptionalInputTypesIr14() {
-  std::vector<TensorType> types = OptionalInputTypes();
-  const auto extended_types = OptionalExtendedTypes();
-  types.reserve(types.size() + 2 * extended_types.size());
-  types.insert(types.end(), extended_types.begin(), extended_types.end());
-  for (const auto type : extended_types) {
+  std::vector<TensorType> types = OptionalTensorTypesIr14();
+  const auto tensor_types = types;
+  types.reserve(2 * tensor_types.size());
+  for (const auto type : tensor_types) {
     types.push_back(onnx_proto::SeqTypeOf(type));
   }
   return types;
 }
 
 std::vector<TensorType> OptionalTypesIr14() {
-  std::vector<TensorType> types = AllOptionalTypes();
-  const auto extended_types = OptionalExtendedTypes();
-  types.reserve(types.size() + 2 * extended_types.size());
-  for (const auto type : extended_types) {
-    types.push_back(onnx_proto::OptSeqTypeOf(type));
+  std::vector<TensorType> types;
+  types.reserve(2 * OptionalTensorTypesIr14().size());
+  for (const auto type : OptionalTensorTypesIr14()) {
     types.push_back(onnx_proto::OptTypeOf(type));
+  }
+  for (const auto type : OptionalTensorTypesIr14()) {
+    types.push_back(onnx_proto::OptSeqTypeOf(type));
   }
   return types;
 }
@@ -90,7 +95,9 @@ LightOpSchema MakeOptionalHasElementSchema(int since_version) {
       },
       {
           {"O", input_types,
-           "Constrain input type to optional tensor and optional sequence types."},
+           since_version >= 18 ? "Constrain input type to optional, tensor and sequence types."
+                               : "Constrain input type to optional tensor and optional sequence "
+                                 "types."},
           {"B", {TensorType::kBool}, "Constrain output to a boolean tensor."},
       });
 }
@@ -110,7 +117,9 @@ LightOpSchema MakeOptionalGetElementSchema(int since_version) {
       },
       {
           {"O", input_types,
-           "Constrain input type to optional tensor and optional sequence types."},
+           since_version >= 18 ? "Constrain input type to optional, tensor and sequence types."
+                               : "Constrain input type to optional tensor and optional sequence "
+                                 "types."},
           {"V", output_types, "Constrain output type to all tensor or sequence types."},
       });
 }

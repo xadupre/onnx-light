@@ -11,6 +11,12 @@ name: Weekly Wheel Build Check
 # rather than a (potentially cancelled) scheduled run.
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/build_release_wheel.yml"
+      - ".github/workflows/build_weekly_wheels.yml"
+      - "cmake/Hardening.cmake"
+      - "CMakeLists.txt"
   schedule:
     # Run every Monday at 08:00 UTC (after build_reduced_wheel.yml at 06:00
     # and build_release_cpp.yml at 07:00).

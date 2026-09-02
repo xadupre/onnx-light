@@ -135,6 +135,22 @@ TEST(KernelClass, PadRejectsNonConstantOvercrop) {
   EXPECT_THROW((void)pad(x, pads, nullptr, nullptr, "edge"), std::invalid_argument);
 }
 
+TEST(KernelClass, PadAcceptsCancellingExtremePads) {
+  const KernelContext ctx{DefaultOpset(21)};
+  const Pad pad{ctx};
+  const Tensor x = Tensor::FromFloat("", {3}, {0, 1, 2});
+  const Tensor pads = Tensor::FromInt64(
+      "", {2}, {std::numeric_limits<int64_t>::max(), -std::numeric_limits<int64_t>::max()});
+  const Tensor value = Tensor::FromFloat("", {}, {-5});
+
+  const Tensor y = pad(x, pads, &value);
+
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3}));
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], -5);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], -5);
+  EXPECT_FLOAT_EQ(y.AsFloat()[2], -5);
+}
+
 TEST(KernelClass, ConcatInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   Concat concat_kernel{ctx};

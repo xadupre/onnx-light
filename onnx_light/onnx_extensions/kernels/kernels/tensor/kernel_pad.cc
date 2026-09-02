@@ -112,7 +112,11 @@ int64_t CheckedAdd(int64_t left, int64_t right) {
 }
 
 int64_t ComputeOutputDim(int64_t input_dim, int64_t pad_begin, int64_t pad_end) {
-  const int64_t output_dim = CheckedAdd(CheckedAdd(input_dim, pad_begin), pad_end);
+  const bool pads_have_opposite_signs =
+      (pad_begin < 0 && pad_end > 0) || (pad_begin > 0 && pad_end < 0);
+  const int64_t output_dim = pads_have_opposite_signs
+                                 ? CheckedAdd(input_dim, CheckedAdd(pad_begin, pad_end))
+                                 : CheckedAdd(CheckedAdd(input_dim, pad_begin), pad_end);
   EXT_ENFORCE_INVALID(output_dim >= 0,
                       "kernel::Pad: padding results in a negative output dimension.");
   return output_dim;

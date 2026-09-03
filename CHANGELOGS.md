@@ -20,6 +20,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Aligned reduction shape inference with the opset transitions for input-based axes and
   empty-axis semantics.
 - Used the public `TestCase.unload()` API directly when processing backend test cases.
+- Added negative-padding support to the `Pad` kernel.
+- Added signed-integer support for `BitShift` in opset 28.
+- Extended the `Optional` operators to all IR version 14 types and propagated ONNX opset 29
+  metadata.
 
 ### Fixes
 
@@ -28,6 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Preserved the input type when propagating `Attention` masks for low-precision inputs.
 - Avoided redefining toolchain-provided `_FORTIFY_SOURCE` settings in release wheel builds.
 - Fixed subprocess cleanup in the ONNX cold-start gallery example.
+- Prevented `Einsum` shape inference crashes for inputs with mismatched ellipsis ranks.
+- Added input validation to `GroupNormalization` shape inference.
+- Restricted opset 28 `ReduceLogSum` to floating-point types and added version conversion
+  support.
 
 ### Documentation & CI
 

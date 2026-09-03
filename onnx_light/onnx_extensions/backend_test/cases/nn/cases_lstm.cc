@@ -232,6 +232,7 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
   // re-permute the outputs to the batchwise layout:
   //   * ``Y``   : [seq, 1, batch, hidden]  -> [batch, seq, 1, hidden]
   //   * ``Y_h`` : [1, batch, hidden]       -> [batch, 1, hidden]
+  //   * ``Y_c`` : [1, batch, hidden]       -> [batch, 1, hidden]
   {
     NodeProto node;
     node.set_op_type("LSTM");
@@ -240,6 +241,7 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("R");
     node.add_output("Y");
     node.add_output("Y_h");
+    node.add_output("Y_c");
     AddAttribute<int64_t>(node, "hidden_size", 7);
     AddAttribute<int64_t>(node, "layout", 1);
     Expect(registry, std::move(node), "test_cc_lstm_batchwise", {opset}, []() -> IoData {
@@ -283,7 +285,6 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor r = Tensor::FromFloat("", {1, kNumGates * hidden_size, hidden_size}, r_data);
 
       auto [y_layout0, y_h_layout0, y_c_layout0] = lstm_kernel(x_layout0, w, r);
-      (void)y_c_layout0;
 
       // Permute Y: [seq, 1, batch, hidden] -> [batch, seq, 1, hidden].
       std::vector<float> y_batchwise_data(
@@ -310,8 +311,15 @@ void RegisterLSTMCases(std::vector<TestCase> &registry, TestMode mode) {
       Tensor y_h_batchwise =
           Tensor::FromFloat("", {batch_size, 1, hidden_size}, y_h_batchwise_data);
 
+      // Y_c has the same layout transformation as Y_h.
+      const float *pyc0 = y_c_layout0.AsFloat();
+      std::vector<float> y_c_batchwise_data(pyc0,
+                                            pyc0 + static_cast<size_t>(batch_size * hidden_size));
+      Tensor y_c_batchwise =
+          Tensor::FromFloat("", {batch_size, 1, hidden_size}, y_c_batchwise_data);
+
       return IoData{{std::move(x_batchwise), std::move(w), std::move(r)},
-                    {std::move(y_batchwise), std::move(y_h_batchwise)}};
+                    {std::move(y_batchwise), std::move(y_h_batchwise), std::move(y_c_batchwise)}};
     });
   }
 

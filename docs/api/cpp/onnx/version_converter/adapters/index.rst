@@ -27,6 +27,7 @@ adapters
     no_previous_version
     pad_10_11
     q_dq_21_20
+    reduce_log_sum_27_28
     remove_consumed_inputs
     reshape_4_5
     reshape_5_4

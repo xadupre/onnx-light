@@ -1489,6 +1489,8 @@ class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 28, DequantizeLinear);
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 28, Optional);
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 28, OptionalHasElement);
 class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 28, OptionalGetElement);
+class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 28, ReduceLogSum);
+class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 28, ReduceLogSumExp);
 
 // Iterate over schema from ai.onnx version 28
 class OpSet_Onnx_ver28 {
@@ -1503,6 +1505,8 @@ public:
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 28, Optional)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 28, OptionalHasElement)>());
     fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 28, OptionalGetElement)>());
+    fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 28, ReduceLogSum)>());
+    fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 28, ReduceLogSumExp)>());
   }
 };
 

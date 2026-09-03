@@ -40,6 +40,7 @@
 #include "onnx_lib/version_converter/adapters/optional_ops.h"
 #include "onnx_lib/version_converter/adapters/pad_10_11.h"
 #include "onnx_lib/version_converter/adapters/q_dq_21_20.h"
+#include "onnx_lib/version_converter/adapters/reduce_log_sum_27_28.h"
 #include "onnx_lib/version_converter/adapters/reshape_4_5.h"
 #include "onnx_lib/version_converter/adapters/reshape_5_4.h"
 #include "onnx_lib/version_converter/adapters/resize_10_11.h"
@@ -1154,6 +1155,13 @@ public:
         std::make_unique<CompatibleAdapter>("OptionalHasElement", OpSetID(27), OpSetID(28)));
     registerAdapter(
         std::make_unique<CompatibleAdapter>("OptionalGetElement", OpSetID(27), OpSetID(28)));
+    const std::vector<TensorProto_DataType> reduce_log_sum_28_unallowed_types = {
+        TensorProto_DataType_UINT32, TensorProto_DataType_UINT64, TensorProto_DataType_INT32,
+        TensorProto_DataType_INT64};
+    registerAdapter(
+        std::make_unique<ReduceLogSum_27_28>("ReduceLogSum", reduce_log_sum_28_unallowed_types));
+    registerAdapter(
+        std::make_unique<ReduceLogSum_27_28>("ReduceLogSumExp", reduce_log_sum_28_unallowed_types));
 
     /******** 28 -> 27 ********/
     const std::vector<TensorProto_DataType> optional_28_unallowed_types = {
@@ -1171,6 +1179,9 @@ public:
                                                          true, true, true));
     registerAdapter(std::make_unique<OptionalOpsAdapter>("OptionalGetElement", OpSetID(28),
                                                          OpSetID(27), optional_28_unallowed_types));
+    registerAdapter(std::make_unique<CompatibleAdapter>("ReduceLogSum", OpSetID(28), OpSetID(27)));
+    registerAdapter(
+        std::make_unique<CompatibleAdapter>("ReduceLogSumExp", OpSetID(28), OpSetID(27)));
   }
 
   ModelProto convert_version(const ModelProto &mp_in, const OpSetID &initial_version,

@@ -309,6 +309,9 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
         for op_name in ("Optional", "OptionalGetElement", "OptionalHasElement"):
             if onnx_schemas[op_name][0] < 28:
                 onnx_light_schemas[op_name] = onnx_schemas[op_name]
+        for op_name in ("ReduceLogSum", "ReduceLogSumExp"):
+            if onnx_schemas[op_name][0] < 28:
+                onnx_light_schemas[op_name] = onnx_schemas[op_name]
         if "DynamicQuantizeLinear" not in onnx_schemas:
             onnx_light_schemas.pop("DynamicQuantizeLinear", None)
 

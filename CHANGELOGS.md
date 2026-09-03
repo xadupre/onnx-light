@@ -3,7 +3,7 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.1.24] – Unreleased
+## [0.1.25] – Unreleased
 
 ### New Features
 
@@ -39,7 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Documentation & CI
 
-- Bumped the release version to `0.1.24`.
+- Bumped the release version to `0.1.25`.
 - Reduced the release wheel matrix while retaining CPython 3.12–3.14 coverage.
 - Refreshed the project goals, fuzzing, pattern optimization, and no-copy ownership
   documentation.

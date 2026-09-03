@@ -509,6 +509,15 @@ TEST(onnx_defs, Schema_DomainToVersionRange_CustomDomain) {
   EXPECT_EQ(ranges.LastReleaseVersionMap().at(domain), 4);
 }
 
+TEST(onnx_defs, Schema_DomainToVersionRange_OnnxDomain) {
+  const auto &ranges = OpSchemaRegistry::DomainToVersionRange::Instance();
+
+  ASSERT_EQ(ranges.Map().count(ONNX_DOMAIN), 1u);
+  EXPECT_EQ(ranges.Map().at(ONNX_DOMAIN), std::make_pair(1, 29));
+  ASSERT_EQ(ranges.LastReleaseVersionMap().count(ONNX_DOMAIN), 1u);
+  EXPECT_EQ(ranges.LastReleaseVersionMap().at(ONNX_DOMAIN), 28);
+}
+
 TEST(onnx_defs, Schema_PreviewFlexAttentionDefinition) {
   const OpSchema schema =
       GetOpSchema<ONNX_PREVIEW_OPERATOR_SET_SCHEMA_CLASS_NAME(1, FlexAttention)>();

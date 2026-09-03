@@ -80,6 +80,19 @@ enum class TensorType : uint8_t {
   kSeqFloat16,
   kSeqFloat,
   kSeqDouble,
+  kSeqBfloat16,
+  kSeqFloat8e4m3fn,
+  kSeqFloat8e4m3fnuz,
+  kSeqFloat8e5m2,
+  kSeqFloat8e5m2fnuz,
+  kSeqFloat8e8m0,
+  kSeqFloat4e2m1,
+  kSeqUint4,
+  kSeqInt4,
+  kSeqUint2,
+  kSeqInt2,
+  kSeqFloat6e2m3,
+  kSeqFloat6e3m2,
   kSeqComplex64,
   kSeqComplex128,
   kSeqMapStringFloat,
@@ -103,6 +116,19 @@ enum class TensorType : uint8_t {
   kOptSeqFloat16,
   kOptSeqFloat,
   kOptSeqDouble,
+  kOptSeqBfloat16,
+  kOptSeqFloat8e4m3fn,
+  kOptSeqFloat8e4m3fnuz,
+  kOptSeqFloat8e5m2,
+  kOptSeqFloat8e5m2fnuz,
+  kOptSeqFloat8e8m0,
+  kOptSeqFloat4e2m1,
+  kOptSeqUint4,
+  kOptSeqInt4,
+  kOptSeqUint2,
+  kOptSeqInt2,
+  kOptSeqFloat6e2m3,
+  kOptSeqFloat6e3m2,
   kOptSeqComplex64,
   kOptSeqComplex128,
   kOptBool,
@@ -118,6 +144,19 @@ enum class TensorType : uint8_t {
   kOptFloat16,
   kOptFloat,
   kOptDouble,
+  kOptBfloat16,
+  kOptFloat8e4m3fn,
+  kOptFloat8e4m3fnuz,
+  kOptFloat8e5m2,
+  kOptFloat8e5m2fnuz,
+  kOptFloat8e8m0,
+  kOptFloat4e2m1,
+  kOptUint4,
+  kOptInt4,
+  kOptUint2,
+  kOptInt2,
+  kOptFloat6e2m3,
+  kOptFloat6e3m2,
   kOptComplex64,
   kOptComplex128,
   kUndefined,
@@ -214,6 +253,32 @@ inline constexpr const char *ToTypeString(TensorType type) {
     return "seq(tensor(float))";
   case TensorType::kSeqDouble:
     return "seq(tensor(double))";
+  case TensorType::kSeqBfloat16:
+    return "seq(tensor(bfloat16))";
+  case TensorType::kSeqFloat8e4m3fn:
+    return "seq(tensor(float8e4m3fn))";
+  case TensorType::kSeqFloat8e4m3fnuz:
+    return "seq(tensor(float8e4m3fnuz))";
+  case TensorType::kSeqFloat8e5m2:
+    return "seq(tensor(float8e5m2))";
+  case TensorType::kSeqFloat8e5m2fnuz:
+    return "seq(tensor(float8e5m2fnuz))";
+  case TensorType::kSeqFloat8e8m0:
+    return "seq(tensor(float8e8m0))";
+  case TensorType::kSeqFloat4e2m1:
+    return "seq(tensor(float4e2m1))";
+  case TensorType::kSeqUint4:
+    return "seq(tensor(uint4))";
+  case TensorType::kSeqInt4:
+    return "seq(tensor(int4))";
+  case TensorType::kSeqUint2:
+    return "seq(tensor(uint2))";
+  case TensorType::kSeqInt2:
+    return "seq(tensor(int2))";
+  case TensorType::kSeqFloat6e2m3:
+    return "seq(tensor(float6e2m3))";
+  case TensorType::kSeqFloat6e3m2:
+    return "seq(tensor(float6e3m2))";
   case TensorType::kSeqComplex64:
     return "seq(tensor(complex64))";
   case TensorType::kSeqComplex128:
@@ -260,6 +325,32 @@ inline constexpr const char *ToTypeString(TensorType type) {
     return "optional(seq(tensor(float)))";
   case TensorType::kOptSeqDouble:
     return "optional(seq(tensor(double)))";
+  case TensorType::kOptSeqBfloat16:
+    return "optional(seq(tensor(bfloat16)))";
+  case TensorType::kOptSeqFloat8e4m3fn:
+    return "optional(seq(tensor(float8e4m3fn)))";
+  case TensorType::kOptSeqFloat8e4m3fnuz:
+    return "optional(seq(tensor(float8e4m3fnuz)))";
+  case TensorType::kOptSeqFloat8e5m2:
+    return "optional(seq(tensor(float8e5m2)))";
+  case TensorType::kOptSeqFloat8e5m2fnuz:
+    return "optional(seq(tensor(float8e5m2fnuz)))";
+  case TensorType::kOptSeqFloat8e8m0:
+    return "optional(seq(tensor(float8e8m0)))";
+  case TensorType::kOptSeqFloat4e2m1:
+    return "optional(seq(tensor(float4e2m1)))";
+  case TensorType::kOptSeqUint4:
+    return "optional(seq(tensor(uint4)))";
+  case TensorType::kOptSeqInt4:
+    return "optional(seq(tensor(int4)))";
+  case TensorType::kOptSeqUint2:
+    return "optional(seq(tensor(uint2)))";
+  case TensorType::kOptSeqInt2:
+    return "optional(seq(tensor(int2)))";
+  case TensorType::kOptSeqFloat6e2m3:
+    return "optional(seq(tensor(float6e2m3)))";
+  case TensorType::kOptSeqFloat6e3m2:
+    return "optional(seq(tensor(float6e3m2)))";
   case TensorType::kOptSeqComplex64:
     return "optional(seq(tensor(complex64)))";
   case TensorType::kOptSeqComplex128:
@@ -290,6 +381,32 @@ inline constexpr const char *ToTypeString(TensorType type) {
     return "optional(tensor(float))";
   case TensorType::kOptDouble:
     return "optional(tensor(double))";
+  case TensorType::kOptBfloat16:
+    return "optional(tensor(bfloat16))";
+  case TensorType::kOptFloat8e4m3fn:
+    return "optional(tensor(float8e4m3fn))";
+  case TensorType::kOptFloat8e4m3fnuz:
+    return "optional(tensor(float8e4m3fnuz))";
+  case TensorType::kOptFloat8e5m2:
+    return "optional(tensor(float8e5m2))";
+  case TensorType::kOptFloat8e5m2fnuz:
+    return "optional(tensor(float8e5m2fnuz))";
+  case TensorType::kOptFloat8e8m0:
+    return "optional(tensor(float8e8m0))";
+  case TensorType::kOptFloat4e2m1:
+    return "optional(tensor(float4e2m1))";
+  case TensorType::kOptUint4:
+    return "optional(tensor(uint4))";
+  case TensorType::kOptInt4:
+    return "optional(tensor(int4))";
+  case TensorType::kOptUint2:
+    return "optional(tensor(uint2))";
+  case TensorType::kOptInt2:
+    return "optional(tensor(int2))";
+  case TensorType::kOptFloat6e2m3:
+    return "optional(tensor(float6e2m3))";
+  case TensorType::kOptFloat6e3m2:
+    return "optional(tensor(float6e3m2))";
   case TensorType::kOptComplex64:
     return "optional(tensor(complex64))";
   case TensorType::kOptComplex128:
@@ -302,8 +419,7 @@ inline constexpr const char *ToTypeString(TensorType type) {
 
 /// Maps a scalar tensor TensorType to the corresponding sequence TensorType
 /// (e.g. kFloat → kSeqFloat). Returns kUndefined when no sequence variant
-/// exists for the given element type (low-precision / extended float types
-/// that ONNX does not define sequence forms for).
+/// exists for the given element type.
 inline constexpr TensorType SeqTypeOf(TensorType elem) {
   switch (elem) {
   case TensorType::kBool:
@@ -332,6 +448,32 @@ inline constexpr TensorType SeqTypeOf(TensorType elem) {
     return TensorType::kSeqFloat;
   case TensorType::kDouble:
     return TensorType::kSeqDouble;
+  case TensorType::kBfloat16:
+    return TensorType::kSeqBfloat16;
+  case TensorType::kFloat8e4m3fn:
+    return TensorType::kSeqFloat8e4m3fn;
+  case TensorType::kFloat8e4m3fnuz:
+    return TensorType::kSeqFloat8e4m3fnuz;
+  case TensorType::kFloat8e5m2:
+    return TensorType::kSeqFloat8e5m2;
+  case TensorType::kFloat8e5m2fnuz:
+    return TensorType::kSeqFloat8e5m2fnuz;
+  case TensorType::kFloat8e8m0:
+    return TensorType::kSeqFloat8e8m0;
+  case TensorType::kFloat4e2m1:
+    return TensorType::kSeqFloat4e2m1;
+  case TensorType::kUint4:
+    return TensorType::kSeqUint4;
+  case TensorType::kInt4:
+    return TensorType::kSeqInt4;
+  case TensorType::kUint2:
+    return TensorType::kSeqUint2;
+  case TensorType::kInt2:
+    return TensorType::kSeqInt2;
+  case TensorType::kFloat6e2m3:
+    return TensorType::kSeqFloat6e2m3;
+  case TensorType::kFloat6e3m2:
+    return TensorType::kSeqFloat6e3m2;
   case TensorType::kComplex64:
     return TensorType::kSeqComplex64;
   case TensorType::kComplex128:
@@ -372,6 +514,32 @@ inline constexpr TensorType OptTypeOf(TensorType elem) {
     return TensorType::kOptFloat;
   case TensorType::kDouble:
     return TensorType::kOptDouble;
+  case TensorType::kBfloat16:
+    return TensorType::kOptBfloat16;
+  case TensorType::kFloat8e4m3fn:
+    return TensorType::kOptFloat8e4m3fn;
+  case TensorType::kFloat8e4m3fnuz:
+    return TensorType::kOptFloat8e4m3fnuz;
+  case TensorType::kFloat8e5m2:
+    return TensorType::kOptFloat8e5m2;
+  case TensorType::kFloat8e5m2fnuz:
+    return TensorType::kOptFloat8e5m2fnuz;
+  case TensorType::kFloat8e8m0:
+    return TensorType::kOptFloat8e8m0;
+  case TensorType::kFloat4e2m1:
+    return TensorType::kOptFloat4e2m1;
+  case TensorType::kUint4:
+    return TensorType::kOptUint4;
+  case TensorType::kInt4:
+    return TensorType::kOptInt4;
+  case TensorType::kUint2:
+    return TensorType::kOptUint2;
+  case TensorType::kInt2:
+    return TensorType::kOptInt2;
+  case TensorType::kFloat6e2m3:
+    return TensorType::kOptFloat6e2m3;
+  case TensorType::kFloat6e3m2:
+    return TensorType::kOptFloat6e3m2;
   case TensorType::kComplex64:
     return TensorType::kOptComplex64;
   case TensorType::kComplex128:
@@ -412,6 +580,32 @@ inline constexpr TensorType OptSeqTypeOf(TensorType elem) {
     return TensorType::kOptSeqFloat;
   case TensorType::kDouble:
     return TensorType::kOptSeqDouble;
+  case TensorType::kBfloat16:
+    return TensorType::kOptSeqBfloat16;
+  case TensorType::kFloat8e4m3fn:
+    return TensorType::kOptSeqFloat8e4m3fn;
+  case TensorType::kFloat8e4m3fnuz:
+    return TensorType::kOptSeqFloat8e4m3fnuz;
+  case TensorType::kFloat8e5m2:
+    return TensorType::kOptSeqFloat8e5m2;
+  case TensorType::kFloat8e5m2fnuz:
+    return TensorType::kOptSeqFloat8e5m2fnuz;
+  case TensorType::kFloat8e8m0:
+    return TensorType::kOptSeqFloat8e8m0;
+  case TensorType::kFloat4e2m1:
+    return TensorType::kOptSeqFloat4e2m1;
+  case TensorType::kUint4:
+    return TensorType::kOptSeqUint4;
+  case TensorType::kInt4:
+    return TensorType::kOptSeqInt4;
+  case TensorType::kUint2:
+    return TensorType::kOptSeqUint2;
+  case TensorType::kInt2:
+    return TensorType::kOptSeqInt2;
+  case TensorType::kFloat6e2m3:
+    return TensorType::kOptSeqFloat6e2m3;
+  case TensorType::kFloat6e3m2:
+    return TensorType::kOptSeqFloat6e3m2;
   case TensorType::kComplex64:
     return TensorType::kOptSeqComplex64;
   case TensorType::kComplex128:

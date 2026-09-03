@@ -10,6 +10,11 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
     # domain string is the default ai.onnx domain used by the registered schemas.
     SWIGLU_KEY = ("", "SwiGLU", 28)
     BITSHIFT_28_KEY = ("", "BitShift", 28)
+    OPTIONAL_28_KEYS = {
+        ("", "Optional", 28),
+        ("", "OptionalGetElement", 28),
+        ("", "OptionalHasElement", 28),
+    }
     ATTENTION_25_KEY = ("", "Attention", 25)
     STFT_KEY = ("", "STFT", 17)
     STFT_DOC_MARKER = "frames = floor((signal_length - frame_length) / frame_step) + 1"
@@ -24,6 +29,14 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         if cls.STFT_DOC_MARKER not in onnx_dict[cls.STFT_KEY].doc:
             light_dict.pop(cls.STFT_KEY)
             onnx_dict.pop(cls.STFT_KEY)
+
+    @classmethod
+    def _remove_optional_28_if_onnx_is_outdated(cls, light_dict, onnx_dict):
+        for key in cls.OPTIONAL_28_KEYS - set(onnx_dict):
+            if isinstance(light_dict, set):
+                light_dict.discard(key)
+            else:
+                light_dict.pop(key, None)
 
     def test_onnx_light_ir_and_opset_versions_match_onnx(self):
         self.assertEqual(onnx_light.onnx.defs.onnx_ir_version(), onnx.IR_VERSION)
@@ -48,6 +61,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             onnx_light_schema_keys.discard(self.SWIGLU_KEY)
         if self.BITSHIFT_28_KEY not in onnx_schema_keys:
             onnx_light_schema_keys.discard(self.BITSHIFT_28_KEY)
+        self._remove_optional_28_if_onnx_is_outdated(onnx_light_schema_keys, onnx_schema_keys)
         if self.ATTENTION_25_KEY not in onnx_schema_keys:
             onnx_light_schema_keys.discard(self.ATTENTION_25_KEY)
 
@@ -62,6 +76,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             light_dict.pop(self.SWIGLU_KEY, None)
         if self.BITSHIFT_28_KEY not in onnx_dict:
             light_dict.pop(self.BITSHIFT_28_KEY, None)
+        self._remove_optional_28_if_onnx_is_outdated(light_dict, onnx_dict)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
         self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)
@@ -96,6 +111,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             light_dict.pop(self.SWIGLU_KEY, None)
         if self.BITSHIFT_28_KEY not in onnx_dict:
             light_dict.pop(self.BITSHIFT_28_KEY, None)
+        self._remove_optional_28_if_onnx_is_outdated(light_dict, onnx_dict)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
         self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)
@@ -132,6 +148,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             light_dict.pop(self.SWIGLU_KEY, None)
         if self.BITSHIFT_28_KEY not in onnx_dict:
             light_dict.pop(self.BITSHIFT_28_KEY, None)
+        self._remove_optional_28_if_onnx_is_outdated(light_dict, onnx_dict)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
         self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)

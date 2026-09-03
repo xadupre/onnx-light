@@ -314,9 +314,8 @@ public:
 /// input dtype. Supported modes mirror ``numpy.pad``: ``"constant"`` (default),
 /// ``"reflect"``, ``"edge"`` and ``"wrap"`` (introduced in opset 19).
 ///
-/// All padding entries must be non-negative (negative pads, i.e. cropping,
-/// are accepted by the schema but the reference implementation rejects them
-/// to keep the kernel focused on the cases covered by the bundled tests).
+/// Negative padding entries crop the input before any positive padding is
+/// applied.
 /// String and sub-byte dtypes are not supported and cause the kernel to
 /// throw ``std::invalid_argument``.
 class Pad : public KernelBase {

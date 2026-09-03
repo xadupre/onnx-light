@@ -708,17 +708,19 @@ TEST(BackendTestCase, LSTMCasesArePresent) {
 
   // ``lstm_batchwise``: layout=1 with batch_size=3, seq_length=1,
   // hidden_size=7. Y has shape [batch, seq, num_directions, hidden] =
-  // [3, 1, 1, 7] and Y_h has shape [batch, num_directions, hidden] = [3, 1, 7].
+  // [3, 1, 1, 7], and Y_h and Y_c have shape [batch, num_directions, hidden] =
+  // [3, 1, 7].
   {
     const GraphProto &graph = batchwise->model().ref_graph();
     ASSERT_EQ(graph.ref_input().size(), 3u);
-    ASSERT_EQ(graph.ref_output().size(), 2u);
+    ASSERT_EQ(graph.ref_output().size(), 3u);
     const auto &ds = batchwise->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
-    ASSERT_EQ(ds.outputs.size(), 2u);
+    ASSERT_EQ(ds.outputs.size(), 3u);
     EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 1, 2}));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 1, 1, 7}));
     EXPECT_EQ(ds.outputs[1].shape, (std::vector<int64_t>{3, 1, 7}));
+    EXPECT_EQ(ds.outputs[2].shape, (std::vector<int64_t>{3, 1, 7}));
   }
 }
 

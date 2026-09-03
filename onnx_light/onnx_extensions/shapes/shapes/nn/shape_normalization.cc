@@ -17,7 +17,48 @@ void ComputeShapeInstanceNormalization(ShapesContext &ctx, const NodeProto &node
 void ComputeShapeGroupNormalization(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "GroupNormalization", "ComputeShapeGroupNormalization");
   const SymTensor &input = ctx.Get(x);
+  const SymShape &x_shape = input.Shape();
   ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), input.Shape()));
+
+  const int opset = ctx.HasOpsetVersion(kOnnxDomain) ? ctx.OpsetVersion(kOnnxDomain) : int{21};
+  if (opset < 21) {
+    return;
+  }
+
+  int64_t num_groups = 0;
+  for (const auto &attr : node.attribute()) {
+    if (attr.name() == "num_groups" && attr.type() == AttributeProto::INT) {
+      num_groups = attr.i();
+    }
+  }
+  EXT_ENFORCE_INVALID(num_groups > 0, "ComputeShapeGroupNormalization: attribute 'num_groups' "
+                                      "must be greater than zero.");
+  EXT_ENFORCE_INVALID(x_shape.Rank() >= 2u,
+                      "ComputeShapeGroupNormalization: input 'X' must have rank >= 2.");
+
+  const SymShape &scale_shape = ctx.Get(node.input(1)).Shape();
+  const SymShape &bias_shape = ctx.Get(node.input(2)).Shape();
+  EXT_ENFORCE_INVALID(scale_shape.Rank() == 1u,
+                      "ComputeShapeGroupNormalization: input 'scale' must have rank 1.");
+  EXT_ENFORCE_INVALID(bias_shape.Rank() == 1u,
+                      "ComputeShapeGroupNormalization: input 'bias' must have rank 1.");
+
+  bool has_channel_count = false;
+  int64_t channel_count = 0;
+  for (const SymDim *dim : {&x_shape[1], &scale_shape[0], &bias_shape[0]}) {
+    if (!dim->IsInt()) {
+      continue;
+    }
+    EXT_ENFORCE_INVALID(!has_channel_count || dim->AsInt() == channel_count,
+                        "ComputeShapeGroupNormalization: channel dimensions must match.");
+    channel_count = dim->AsInt();
+    has_channel_count = true;
+  }
+  if (has_channel_count) {
+    EXT_ENFORCE_INVALID(channel_count % num_groups == 0,
+                        "ComputeShapeGroupNormalization: the number of channels must be divisible "
+                        "by num_groups.");
+  }
 }
 
 void ComputeShapeMeanVarianceNormalization(ShapesContext &ctx, const NodeProto &node,

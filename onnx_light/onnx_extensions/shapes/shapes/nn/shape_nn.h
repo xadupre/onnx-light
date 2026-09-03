@@ -284,19 +284,20 @@ void ComputeShapeInstanceNormalization(ShapesContext &ctx, const NodeProto &node
  * Computes the output :cpp:class:`SymTensor` of a ``GroupNormalization``
  * node and stores it in ``ctx``.
  *
- * The output dtype and shape are always inherited from input ``X``. ``scale``
- * and ``bias`` inputs are not read for shape inference.
+ * The output dtype and shape are inherited from input ``X``. At opset 21 and
+ * later, the function validates the ranks and channel dimensions of ``X``,
+ * ``scale``, and ``bias``, as well as the required ``num_groups`` attribute.
  *
- * @param ctx   In/out context. Must already contain an entry for ``x``; on
+ * @param ctx   In/out context. Must already contain entries for every input; on
  *              return it also contains an entry for ``node.output(0)``.
  * @param node  The ``GroupNormalization`` ``NodeProto``. ``node.op_type()``
  *              must be ``"GroupNormalization"`` and ``node`` must declare at
  *              least one output.
  * @param x     Name of the data input value to read from ``ctx``.
  *
- * @throws std::invalid_argument if ``node.op_type()`` is not
- *         ``"GroupNormalization"`` or if ``node`` has no output.
- * @throws std::out_of_range if ``x`` is not present in ``ctx``.
+ * @throws std::invalid_argument if the node or its known input shapes violate
+ *         the opset-21 schema.
+ * @throws std::out_of_range if an input is not present in ``ctx``.
  */
 void ComputeShapeGroupNormalization(ShapesContext &ctx, const NodeProto &node, const char *x);
 

@@ -3,6 +3,7 @@
 #include "onnx_lib/shape_inference/implementation.h"
 #include <gtest/gtest.h>
 #include <stdexcept>
+#include <tuple>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -489,6 +490,97 @@ TEST(onnx_shape_inference, InferShapesImpl_STFTPartialShapeWithDynamicSignalLeng
   EXPECT_FALSE(dims[1].has_dim_value());
   EXPECT_EQ(dims[2].ref_dim_value(), 3);
   EXPECT_EQ(dims[3].ref_dim_value(), 2);
+}
+
+namespace {
+
+ModelProto MakeGroupNormalizationModel(const std::vector<int64_t> &x_shape,
+                                       const std::vector<int64_t> &scale_shape,
+                                       const std::vector<int64_t> &bias_shape, int64_t num_groups) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(21);
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("group_normalization_graph");
+  auto add_input = [&](const char *name, const std::vector<int64_t> &shape) {
+    ValueInfoProto *input = graph->add_input();
+    input->set_name(name);
+    TypeProto::Tensor *tensor = input->mutable_type()->mutable_tensor_type();
+    tensor->set_elem_type(TensorProto::FLOAT);
+    TensorShapeProto *tensor_shape = tensor->mutable_shape();
+    for (const int64_t dim : shape) {
+      if (dim < 0) {
+        tensor_shape->add_dim();
+      } else {
+        tensor_shape->add_dim()->set_dim_value(dim);
+      }
+    }
+  };
+  add_input("X", x_shape);
+  add_input("scale", scale_shape);
+  add_input("bias", bias_shape);
+
+  ValueInfoProto *output = graph->add_output();
+  output->set_name("Y");
+  output->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+
+  NodeProto *node = graph->add_node();
+  node->set_op_type("GroupNormalization");
+  *node->add_input() = "X";
+  *node->add_input() = "scale";
+  *node->add_input() = "bias";
+  *node->add_output() = "Y";
+  auto *attribute = node->add_attribute();
+  attribute->set_name("num_groups");
+  attribute->set_type(AttributeProto::INT);
+  attribute->set_i(num_groups);
+  return model;
+}
+
+} // namespace
+
+TEST(onnx_shape_inference, InferShapesImpl_GroupNormalization) {
+  ModelProto model = MakeGroupNormalizationModel({2, 4, 0, -1}, {4}, {4}, 2);
+
+  shape_inference::InferShapes(model);
+
+  const auto &output = model.ref_graph().ref_output()[0].ref_type().ref_tensor_type();
+  EXPECT_EQ(output.elem_type(), TensorProto::FLOAT);
+  const auto &dims = output.ref_shape().ref_dim();
+  ASSERT_EQ(dims.size(), 4u);
+  EXPECT_EQ(dims[0].ref_dim_value(), 2);
+  EXPECT_EQ(dims[1].ref_dim_value(), 4);
+  EXPECT_EQ(dims[2].ref_dim_value(), 0);
+  EXPECT_FALSE(dims[3].has_dim_value());
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_GroupNormalizationUnknownChannel) {
+  ModelProto model = MakeGroupNormalizationModel({2, -1, 3}, {-1}, {-1}, 2);
+
+  shape_inference::InferShapes(model);
+
+  const auto &dims =
+      model.ref_graph().ref_output()[0].ref_type().ref_tensor_type().ref_shape().ref_dim();
+  ASSERT_EQ(dims.size(), 3u);
+  EXPECT_FALSE(dims[1].has_dim_value());
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_GroupNormalizationRejectsInvalidInputs) {
+  const std::vector<
+      std::tuple<std::vector<int64_t>, std::vector<int64_t>, std::vector<int64_t>, int64_t>>
+      invalid_inputs = {
+          {{2}, {2}, {2}, 1},    {{2, 4}, {4, 1}, {4}, 2}, {{2, 4}, {3}, {4}, 2},
+          {{2, 4}, {4}, {3}, 2}, {{2, 5}, {5}, {5}, 2},    {{2, 4}, {4}, {4}, 0},
+      };
+  for (const auto &[x_shape, scale_shape, bias_shape, num_groups] : invalid_inputs) {
+    ModelProto model = MakeGroupNormalizationModel(x_shape, scale_shape, bias_shape, num_groups);
+    EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                              ShapeInferenceOptions(false, 1, false)),
+                 ONNX_LIGHT_NAMESPACE::InferenceError);
+  }
 }
 
 TEST(onnx_shape_inference, InferShapesImpl_SplitToSequenceRejectsZeroScalarSplit) {

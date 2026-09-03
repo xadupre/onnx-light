@@ -148,6 +148,12 @@ TEST(onnx_threads, FileStreamWaitForDelayedBlockRethrowsWorkerException) {
   {
     FileStream stream(path);
     stream.StartThreadPool(1);
+
+    std::ofstream truncate(path, std::ios::binary | std::ios::trunc);
+    ASSERT_TRUE(truncate.is_open());
+    truncate.put('\0');
+    truncate.close();
+
     for (int i = 0; i < kBlockCount; ++i) {
       DelayedBlock block;
       block.size = kBlockSize;
@@ -155,10 +161,6 @@ TEST(onnx_threads, FileStreamWaitForDelayedBlockRethrowsWorkerException) {
       block.offset = static_cast<offset_t>(i) * static_cast<offset_t>(kBlockSize);
       stream.ReadDelayedBlock(block);
     }
-
-    std::ofstream truncate(path, std::ios::binary | std::ios::trunc);
-    ASSERT_TRUE(truncate.is_open());
-    truncate.put('\0');
 
     try {
       stream.WaitForDelayedBlock();

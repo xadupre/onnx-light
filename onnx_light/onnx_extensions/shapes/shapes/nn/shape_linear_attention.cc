@@ -185,4 +185,32 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
   }
 }
 
+int64_t ComputePeakMemoryLinearAttention(Device device, const std::vector<SymShape> &input_shapes) {
+  constexpr int64_t kStateElementBytes = 4;
+  (void)device;
+  if (input_shapes.size() < 3 || input_shapes[0].Rank() != 3 || input_shapes[1].Rank() != 3 ||
+      input_shapes[2].Rank() != 3) {
+    return 0;
+  }
+
+  if (input_shapes.size() > 3 && input_shapes[3].Rank() == 4) {
+    int64_t state_elements = 1;
+    for (std::size_t index = 0; index < 4; ++index) {
+      if (!input_shapes[3][index].IsInt()) {
+        return 0;
+      }
+      state_elements *= input_shapes[3][index].AsInt();
+    }
+    return state_elements * kStateElementBytes;
+  }
+
+  const SymDim &batch = input_shapes[0][0];
+  const SymDim &key_hidden = input_shapes[1][2];
+  const SymDim &value_hidden = input_shapes[2][2];
+  if (!batch.IsInt() || !key_hidden.IsInt() || !value_hidden.IsInt()) {
+    return 0;
+  }
+  return batch.AsInt() * key_hidden.AsInt() * value_hidden.AsInt() * kStateElementBytes;
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::nn

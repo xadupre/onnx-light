@@ -1130,6 +1130,26 @@ public:
 };
 
 /**
+ * Fuses a single-token linear-attention recurrence into ``LinearAttention``.
+ *
+ * The matched graph unpacks packed rank-three query, key, and value tensors,
+ * updates a recurrent state with either the linear or gated rule, computes the
+ * scaled query/state product, and repacks the result. The replacement preserves
+ * both the packed output and updated-state value names.
+ */
+class LinearAttentionPattern final : public core::builder::PatternOptimization {
+public:
+  explicit LinearAttentionPattern(int priority = 2)
+      : PatternOptimization(priority, "LinearAttention") {}
+  std::set<std::string> FastOpType() const override;
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
  * Moves matching GQA repeat-interleave branches into a LocalAttention function.
  *
  * @code

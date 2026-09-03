@@ -567,6 +567,21 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
 int64_t ComputePeakMemoryAttention(Device device, const std::vector<SymShape> &input_shapes);
 
 /**
+ * Estimates peak scratch memory for a ``LinearAttention`` node.
+ *
+ * The estimate uses the exact optional past-state shape when available, and
+ * otherwise uses the conservative full packed key/value hidden dimensions for
+ * the recurrent state. It returns zero when the required concrete dimensions
+ * are unavailable.
+ *
+ * @param device       Device on which the operator executes.
+ * @param input_shapes Shapes of query, key, value, and optional inputs.
+ * @returns The estimated peak scratch memory in bytes, or ``0`` when no
+ *          concrete estimate can be produced.
+ */
+int64_t ComputePeakMemoryLinearAttention(Device device, const std::vector<SymShape> &input_shapes);
+
+/**
  * Computes the output :cpp:class:`SymTensor`(s) of a ``LinearAttention``
  * node (since opset 27 in the ``ai.onnx`` domain) and stores them in ``ctx``.
  *

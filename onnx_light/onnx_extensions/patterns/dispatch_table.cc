@@ -316,6 +316,8 @@ void RegisterPatterns() {
     });
     core::builder::RegisterPattern("FunctionAttention",
                                    [] { return std::make_unique<FunctionAttentionPattern>(); });
+    core::builder::RegisterPattern("LinearAttention",
+                                   [] { return std::make_unique<LinearAttentionPattern>(); });
     core::builder::RegisterPattern("FunctionAttentionGQA",
                                    [] { return std::make_unique<FunctionAttentionGQAPattern>(); });
     core::builder::RegisterPattern("AttentionGQA",

@@ -325,6 +325,60 @@ core::builder::GraphBuilder MakeAttentionGqaBuilder(int opset = 23, int64_t cach
   return builder;
 }
 
+core::builder::GraphBuilder MakeLinearAttentionBuilder(bool gated) {
+  core::builder::GraphBuilder builder("linear_attention", SchemaLookup());
+  builder.SetOpsetVersion("", 27);
+  builder.MakeInput("query", core::symbolic::TensorType::kFloat, Shape({1, 1, 8}));
+  builder.MakeInput("key", core::symbolic::TensorType::kFloat, Shape({1, 1, 8}));
+  builder.MakeInput("value", core::symbolic::TensorType::kFloat, Shape({1, 1, 12}));
+  builder.MakeInput("past_state", core::symbolic::TensorType::kFloat, Shape({1, 2, 4, 6}));
+  if (gated) {
+    builder.MakeInput("decay", core::symbolic::TensorType::kFloat, Shape({1, 1, 8}));
+  }
+  AddInt64(builder, "shape_qk", {4}, {0, 1, 2, 4});
+  AddInt64(builder, "shape_v", {4}, {0, 1, 2, 6});
+  AddInt64(builder, "shape_out", {3}, {0, -1, 12});
+  AddInt64(builder, "axis_sequence", {1}, {2});
+  AddInt64(builder, "axis_key", {1}, {-1});
+  AddInt64(builder, "axis_value", {1}, {-2});
+  AddFloat(builder, "scale", {}, {0.5F});
+
+  builder.MakeNode("Reshape", {"query", "shape_qk"}, {"query_r"});
+  builder.MakeNode("Transpose", {"query_r"}, {"query_t"}, "", "", PermAttr({0, 2, 1, 3}));
+  builder.MakeNode("Squeeze", {"query_t", "axis_sequence"}, {"query_s"});
+  builder.MakeNode("Reshape", {"key", "shape_qk"}, {"key_r"});
+  builder.MakeNode("Transpose", {"key_r"}, {"key_t"}, "", "", PermAttr({0, 2, 1, 3}));
+  builder.MakeNode("Squeeze", {"key_t", "axis_sequence"}, {"key_s"});
+  builder.MakeNode("Reshape", {"value", "shape_v"}, {"value_r"});
+  builder.MakeNode("Transpose", {"value_r"}, {"value_t"}, "", "", PermAttr({0, 2, 1, 3}));
+  builder.MakeNode("Squeeze", {"value_t", "axis_sequence"}, {"value_s"});
+  builder.MakeNode("Unsqueeze", {"key_s", "axis_key"}, {"key_u"});
+  builder.MakeNode("Unsqueeze", {"value_s", "axis_value"}, {"value_u"});
+  builder.MakeNode("Mul", {"key_u", "value_u"}, {"kv"});
+
+  std::string previous_state = "past_state";
+  if (gated) {
+    builder.MakeNode("Reshape", {"decay", "shape_qk"}, {"decay_r"});
+    builder.MakeNode("Transpose", {"decay_r"}, {"decay_t"}, "", "", PermAttr({0, 2, 1, 3}));
+    builder.MakeNode("Squeeze", {"decay_t", "axis_sequence"}, {"decay_s"});
+    builder.MakeNode("Exp", {"decay_s"}, {"decay_exp"});
+    builder.MakeNode("Unsqueeze", {"decay_exp", "axis_key"}, {"decay_u"});
+    builder.MakeNode("Mul", {"decay_u", "past_state"}, {"decayed_state"});
+    previous_state = "decayed_state";
+  }
+  builder.MakeNode("Add", {previous_state, "kv"}, {"present_state"}, "", "state_update");
+  builder.MakeNode("Unsqueeze", {"query_s", "axis_value"}, {"query_u"});
+  builder.MakeNode("MatMul", {"query_u", "present_state"}, {"output_mm"});
+  builder.MakeNode("Squeeze", {"output_mm", "axis_value"}, {"output_s"});
+  builder.MakeNode("Mul", {"output_s", "scale"}, {"output_scaled"});
+  builder.MakeNode("Unsqueeze", {"output_scaled", "axis_sequence"}, {"output_u"});
+  builder.MakeNode("Transpose", {"output_u"}, {"output_t"}, "", "", PermAttr({0, 2, 1, 3}));
+  builder.MakeNode("Reshape", {"output_t", "shape_out"}, {"output"});
+  builder.MakeOutput("output", core::symbolic::TensorType::kFloat, Shape({1, 1, 12}));
+  builder.MakeOutput("present_state", core::symbolic::TensorType::kFloat, Shape({1, 2, 4, 6}));
+  return builder;
+}
+
 TEST(RotaryConcatPartPattern, RewritesSplitFormAndRejectsWrongZeroShape) {
   core::builder::GraphBuilder builder("positive", SchemaLookup());
   builder.SetOpsetVersion("", 18);
@@ -655,6 +709,26 @@ TEST(FunctionAttentionPattern, CreatesLocalAttentionAndRejectsPositiveInfinity) 
   core::builder::GraphBuilder rejected = make_builder(std::numeric_limits<float>::infinity());
   core::builder::GraphGraph rejected_graph(rejected);
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[6]).pattern, nullptr);
+}
+
+TEST(LinearAttentionPattern, FusesLinearAndGatedSingleTokenRecurrences) {
+  for (bool gated : {false, true}) {
+    core::builder::GraphBuilder builder = MakeLinearAttentionBuilder(gated);
+    OptimizeAndVerify<onnx_patterns::LinearAttentionPattern>(builder);
+
+    ASSERT_EQ(builder.Nodes().size(), 1u);
+    const NodeProto &node = builder.Nodes()[0];
+    EXPECT_EQ(node.op_type().value(), "LinearAttention");
+    EXPECT_TRUE(node.domain().value().empty());
+    EXPECT_EQ(node.input_size(), gated ? 5 : 4);
+    EXPECT_EQ(node.output_size(), 2);
+    EXPECT_EQ(node.output()[0].value(), "output");
+    EXPECT_EQ(node.output()[1].value(), "present_state");
+    EXPECT_EQ(GetAttributeOr<int64_t>(node, "q_num_heads", 0), 2);
+    EXPECT_EQ(GetAttributeOr<int64_t>(node, "kv_num_heads", 0), 2);
+    EXPECT_FLOAT_EQ(GetAttributeOr<float>(node, "scale", 0.0F), 0.5F);
+    EXPECT_EQ(GetAttributeOr<std::string>(node, "update_rule", ""), gated ? "gated" : "linear");
+  }
 }
 
 TEST(FunctionAttentionGQAPattern, FusesRepeatInterleaveAndRejectsShapeMismatch) {

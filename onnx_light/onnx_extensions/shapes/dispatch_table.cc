@@ -1340,6 +1340,7 @@ using ::onnx_light::core::shapes::ComputePeakMemoryFn;
 const std::unordered_map<std::string, ComputePeakMemoryFn> &BuiltinPeakMemoryFunctions() {
   static const std::unordered_map<std::string, ComputePeakMemoryFn> table = {
       {"ai.onnx:Attention", nn::ComputePeakMemoryAttention},
+      {"ai.onnx:LinearAttention", nn::ComputePeakMemoryLinearAttention},
   };
   return table;
 }

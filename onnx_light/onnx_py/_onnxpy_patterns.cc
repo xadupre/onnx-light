@@ -370,6 +370,8 @@ NB_MODULE(_onnxpypatterns, m) {
       "Replaces half-rotary embedding construction with a local function.");
   BindPattern<onnx_patterns::FunctionAttentionPattern>(
       m, "FunctionAttentionPattern", "Replaces a scaled dot-product attention subgraph.");
+  BindPattern<onnx_patterns::LinearAttentionPattern>(
+      m, "LinearAttentionPattern", "Fuses a single-token linear-attention recurrence.");
   BindPattern<onnx_patterns::FunctionAttentionGQAPattern>(
       m, "FunctionAttentionGQAPattern",
       "Replaces grouped-query attention expressed with local functions.");

@@ -45,6 +45,7 @@ TEST(CpuExecutionPolicy, ProcessVisibleProcessorsAreStableAndUnique) {
 
 TEST(CpuExecutionPolicy, DefaultResolvesToTopologyThreads) {
   CpuExecutionPolicy request;
+  EXPECT_EQ(request.affinity_policy, CpuAffinityPolicy::kNone);
   ResolvedCpuExecutionPolicy resolved = ResolveCpuExecutionPolicy(request);
   EXPECT_GE(resolved.effective_threads, 1u);
   const std::vector<CpuLogicalProcessor> visible = ProcessVisibleLogicalProcessors();

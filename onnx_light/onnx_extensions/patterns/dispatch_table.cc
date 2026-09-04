@@ -260,10 +260,17 @@ void RegisterPatterns() {
     });
     core::builder::RegisterPattern("GemmTranspose",
                                    [] { return std::make_unique<GemmTransposePattern>(); });
+    core::builder::RegisterPattern("GemmSumFusion",
+                                   [] { return std::make_unique<GemmSumFusionPattern>(); });
     core::builder::RegisterPattern("MatMulAdd",
                                    [] { return std::make_unique<MatMulAddPattern>(); });
+    core::builder::RegisterPattern("MatMulBatchNormalizationFusion", [] {
+      return std::make_unique<MatMulBatchNormalizationFusionPattern>();
+    });
     core::builder::RegisterPattern("MatMulReshape2Of3",
                                    [] { return std::make_unique<MatMulReshape2Of3Pattern>(); });
+    core::builder::RegisterPattern("MatMulScaleFusion",
+                                   [] { return std::make_unique<MatMulScaleFusionPattern>(); });
     core::builder::RegisterPattern("MulMulMatMul",
                                    [] { return std::make_unique<MulMulMatMulPattern>(); });
     core::builder::RegisterPattern("ReshapeMatMulReshape",

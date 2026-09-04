@@ -5,7 +5,9 @@
 #include "onnx_extensions/patterns/matmul/matmul_pattern.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <set>
 #include <string>
@@ -341,6 +343,144 @@ bool MultiplyScalarConstants(const TensorProto &left, const TensorProto &right,
   return true;
 }
 
+bool IsFloatingType(TensorProto::DataType type) {
+  return type == TensorProto::DataType::FLOAT16 || type == TensorProto::DataType::BFLOAT16 ||
+         type == TensorProto::DataType::FLOAT || type == TensorProto::DataType::DOUBLE;
+}
+
+bool ReadFloatingTensor(const TensorProto &tensor, std::vector<double> &values) {
+  const auto type = static_cast<TensorProto::DataType>(tensor.data_type());
+  if (type == TensorProto::DataType::FLOAT16 || type == TensorProto::DataType::BFLOAT16) {
+    const std::size_t count = !tensor.int32_data().empty() ? tensor.int32_data().size()
+                                                           : tensor.ref_raw_data().size() / 2;
+    if (count == 0) {
+      return false;
+    }
+    values.clear();
+    values.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+      std::uint16_t bits = 0;
+      if (!tensor.int32_data().empty()) {
+        bits = static_cast<std::uint16_t>(tensor.int32_data()[index]);
+      } else {
+        bits = static_cast<std::uint16_t>(tensor.ref_raw_data()[2 * index]) |
+               (static_cast<std::uint16_t>(tensor.ref_raw_data()[2 * index + 1]) << 8);
+      }
+      const float value = type == TensorProto::DataType::BFLOAT16
+                              ? core::runtime::Bfloat16BitsToFloat(bits)
+                              : core::runtime::Float16BitsToFloat(bits);
+      values.push_back(static_cast<double>(value));
+    }
+    return true;
+  }
+  return ReadFloatingValues(tensor, values);
+}
+
+TensorProto MakeFloatingTensor(const std::string &name, TensorProto::DataType type,
+                               const std::vector<int64_t> &dims,
+                               const std::vector<double> &values) {
+  TensorProto tensor;
+  tensor.set_name(name);
+  tensor.set_data_type(type);
+  for (int64_t dim : dims) {
+    tensor.add_dims(dim);
+  }
+  for (double value : values) {
+    switch (type) {
+    case TensorProto::DataType::FLOAT16:
+      tensor.ref_int32_data().push_back(
+          static_cast<int32_t>(core::runtime::FloatToFloat16Bits(static_cast<float>(value))));
+      break;
+    case TensorProto::DataType::BFLOAT16:
+      tensor.ref_int32_data().push_back(
+          static_cast<int32_t>(core::runtime::FloatToBfloat16Bits(static_cast<float>(value))));
+      break;
+    case TensorProto::DataType::FLOAT:
+      tensor.ref_float_data().push_back(static_cast<float>(value));
+      break;
+    case TensorProto::DataType::DOUBLE:
+      tensor.ref_double_data().push_back(value);
+      break;
+    default:
+      break;
+    }
+  }
+  return tensor;
+}
+
+std::vector<int64_t> TensorDims(const TensorProto &tensor) {
+  std::vector<int64_t> dims;
+  dims.reserve(tensor.dims_size());
+  for (int index = 0; index < tensor.dims_size(); ++index) {
+    dims.push_back(tensor.dims(index));
+  }
+  return dims;
+}
+
+bool IsRankTwo(core::builder::GraphGraph &graph, const std::string &name) {
+  return graph.HasShape(name) && graph.GetShape(name).Shape().Rank() == 2;
+}
+
+bool GemmBiasBroadcasts(const SymShape &output, const SymShape &bias) {
+  if (output.Rank() != 2 || bias.Rank() > 2) {
+    return false;
+  }
+  const std::size_t offset = 2 - bias.Rank();
+  for (std::size_t index = 0; index < bias.Rank(); ++index) {
+    const SymDim &dimension = bias[index];
+    const SymDim &target = output[index + offset];
+    if (dimension != target && (!dimension.IsInt() || dimension.AsInt() != 1)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+struct ScalarScale {
+  const NodeProto *node = nullptr;
+  std::string variable;
+  double factor = 0.0;
+};
+
+std::optional<ScalarScale> ReadScalarScale(core::builder::GraphGraph &graph,
+                                           const NodeProto &node) {
+  if ((!IsDefaultOp(node, "Mul") && !IsDefaultOp(node, "Div")) || node.input_size() != 2 ||
+      node.output_size() != 1) {
+    return std::nullopt;
+  }
+  const bool left_constant = graph.IsConstantScalar(node.input()[0].value());
+  const bool right_constant = graph.IsConstantScalar(node.input()[1].value());
+  if (left_constant == right_constant) {
+    return std::nullopt;
+  }
+  const int constant_index = left_constant ? 0 : 1;
+  if (IsDefaultOp(node, "Div") && constant_index == 0) {
+    return std::nullopt;
+  }
+  const TensorProto *constant = graph.GetComputedConstant(node.input()[constant_index].value());
+  double value = 0.0;
+  if (constant == nullptr || !ReadScalar(*constant, value) || !std::isfinite(value)) {
+    return std::nullopt;
+  }
+  if (IsDefaultOp(node, "Div") && value == 0.0) {
+    return std::nullopt;
+  }
+  const double factor = IsDefaultOp(node, "Div") ? 1.0 / value : value;
+  if (!std::isfinite(factor)) {
+    return std::nullopt;
+  }
+  return ScalarScale{&node, node.input()[1 - constant_index].value(), factor};
+}
+
+bool CanUseGemmAlpha(const TensorProto &scalar, double factor) {
+  const auto type = static_cast<TensorProto::DataType>(scalar.data_type());
+  if (!IsFloatingType(type) || !std::isfinite(factor)) {
+    return false;
+  }
+  return type != TensorProto::DataType::DOUBLE ||
+         static_cast<double>(static_cast<float>(factor)) == factor;
+}
+
 bool IsActivation(const NodeProto &node) {
   static const std::set<std::string> activations = {
       "Cos",  "Cosh", "Elu", "Erf",  "Exp",      "Gelu", "LeakyRelu",
@@ -399,6 +539,69 @@ bool ValidTransposeReshapeSide(core::builder::GraphGraph &graph, const Transpose
 }
 
 } // namespace
+
+std::set<std::string> GemmSumFusionPattern::FastOpType() const { return {"Sum"}; }
+
+core::builder::MatchResult GemmSumFusionPattern::Match(core::builder::GraphGraph &graph,
+                                                       const NodeProto &candidate) const {
+  if (!IsDefaultOp(candidate, "Sum") || candidate.input_size() != 2 ||
+      candidate.output_size() != 1) {
+    return NoMatch(candidate, "candidate is not a two-input default-domain Sum");
+  }
+  const NodeProto *gemm = nullptr;
+  int gemm_input = -1;
+  for (int index = 0; index < 2; ++index) {
+    const NodeProto *producer = graph.NodeBefore(candidate.input()[index].value());
+    if (producer != nullptr && IsDefaultOp(*producer, "Gemm")) {
+      if (gemm != nullptr) {
+        return NoMatch(candidate, "both Sum inputs are produced by Gemm");
+      }
+      gemm = producer;
+      gemm_input = index;
+    }
+  }
+  if (gemm == nullptr || gemm->input_size() != 2 || gemm->output_size() != 1) {
+    return NoMatch(candidate, "the Sum has no unbiased Gemm input");
+  }
+  if (graph.IsUsedMoreThanOnce(gemm->output()[0].value())) {
+    return NoMatch(candidate, "the Gemm output has another consumer, output, or capture");
+  }
+  if (!graph.HasShape(gemm->output()[0].value()) ||
+      !graph.HasShape(candidate.input()[1 - gemm_input].value()) ||
+      !GemmBiasBroadcasts(graph.GetShape(gemm->output()[0].value()).Shape(),
+                          graph.GetShape(candidate.input()[1 - gemm_input].value()).Shape())) {
+    return NoMatch(candidate, "the Sum addend is not a valid Gemm bias");
+  }
+  return core::builder::MatchResult{this, {gemm, &candidate}, &candidate};
+}
+
+utils::RepeatedProtoField<NodeProto>
+GemmSumFusionPattern::Apply(core::builder::GraphGraph &graph,
+                            const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
+    throw BuilderError("GemmSumFusionPattern::Apply expects Gemm followed by Sum.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[1]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError("GemmSumFusionPattern::Apply received an unsafe or inconsistent match.");
+  }
+  const NodeProto &gemm = *nodes[0];
+  const NodeProto &sum = *nodes[1];
+  const std::string &bias =
+      sum.input()[sum.input()[0].value() == gemm.output()[0].value() ? 1 : 0].value();
+  NodeProto replacement =
+      MakePatternNode("Gemm", {gemm.input()[0].value(), gemm.input()[1].value(), bias},
+                      Outputs(sum), "", "GemmSumFusionPattern--" + gemm.name().value());
+  replacement.set_doc_string(gemm.doc_string().value());
+  for (int index = 0; index < gemm.attribute_size(); ++index) {
+    if (gemm.attribute(index).name().value() != "beta") {
+      *replacement.add_attribute() = gemm.attribute(index);
+    }
+  }
+  utils::RepeatedProtoField<NodeProto> replacements;
+  replacements.push_back(std::move(replacement));
+  return replacements;
+}
 
 std::set<std::string> MatMulAddPattern::FastOpType() const { return {"Gemm", "MatMul"}; }
 
@@ -926,6 +1129,260 @@ MulMulMatMulPattern::Apply(core::builder::GraphGraph &graph,
   replacements.push_back(MakePatternNode("MatMul", variables, {intermediate}, "", name + "-1"));
   replacements.push_back(MakePatternNode("Mul", {intermediate, constant_name},
                                          {matmul.output()[0].value()}, "", name + "-2"));
+  return replacements;
+}
+
+std::set<std::string> MatMulBatchNormalizationFusionPattern::FastOpType() const {
+  return {"BatchNormalization"};
+}
+
+core::builder::MatchResult
+MatMulBatchNormalizationFusionPattern::Match(core::builder::GraphGraph &graph,
+                                             const NodeProto &candidate) const {
+  if (!IsDefaultOp(candidate, "BatchNormalization") || candidate.input_size() < 5 ||
+      candidate.output_size() < 1 || GetAttributeOr<int64_t>(candidate, "training_mode", 0) != 0) {
+    return NoMatch(candidate, "candidate is not an inference BatchNormalization");
+  }
+  for (int index = 1; index < candidate.output_size(); ++index) {
+    if (!candidate.output()[index].value().empty() &&
+        graph.IsUsed(candidate.output()[index].value())) {
+      return NoMatch(candidate, "an auxiliary BatchNormalization output is used");
+    }
+  }
+  const NodeProto *matmul = graph.NodeBefore(candidate.input()[0].value());
+  if (matmul == nullptr || !IsDefaultOp(*matmul, "MatMul") || matmul->input_size() != 2 ||
+      matmul->output_size() != 1 || !IsRankTwo(graph, matmul->input()[0].value()) ||
+      !IsRankTwo(graph, matmul->input()[1].value()) ||
+      graph.IsUsedMoreThanOnce(matmul->output()[0].value())) {
+    return NoMatch(candidate, "the BatchNormalization input is not a private rank-two MatMul");
+  }
+  for (int index = 1; index < 5; ++index) {
+    if (!graph.IsConstant(candidate.input()[index].value())) {
+      return NoMatch(candidate, "a BatchNormalization parameter is not constant");
+    }
+  }
+  if (!graph.IsConstant(matmul->input()[1].value())) {
+    return NoMatch(candidate, "the MatMul weight is not constant");
+  }
+  const TensorProto *weight = graph.GetComputedConstant(matmul->input()[1].value());
+  if (weight == nullptr || weight->dims_size() != 2 || weight->dims(1) <= 0) {
+    return NoMatch(candidate, "the MatMul weight is not a valid rank-two tensor");
+  }
+  const auto type = static_cast<TensorProto::DataType>(weight->data_type());
+  if (!IsFloatingType(type)) {
+    return NoMatch(candidate, "the MatMul weight is not floating-point");
+  }
+  const int64_t channels = weight->dims(1);
+  std::vector<double> weight_values;
+  if (!ReadFloatingTensor(*weight, weight_values) ||
+      weight_values.size() != static_cast<std::size_t>(weight->dims(0) * weight->dims(1)) ||
+      !std::all_of(weight_values.begin(), weight_values.end(),
+                   [](double value) { return std::isfinite(value); })) {
+    return NoMatch(candidate, "the MatMul weight has invalid values");
+  }
+  std::vector<std::vector<double>> parameters;
+  for (int index = 1; index < 5; ++index) {
+    const TensorProto *parameter = graph.GetComputedConstant(candidate.input()[index].value());
+    std::vector<double> values;
+    if (parameter == nullptr || parameter->data_type() != weight->data_type() ||
+        parameter->dims_size() != 1 || parameter->dims(0) != channels ||
+        !ReadFloatingTensor(*parameter, values) ||
+        values.size() != static_cast<std::size_t>(channels)) {
+      return NoMatch(candidate, "a BatchNormalization parameter has an incompatible type or shape");
+    }
+    parameters.push_back(std::move(values));
+  }
+  const double epsilon = GetAttributeOr<float>(candidate, "epsilon", 1.0e-5F);
+  if (!std::isfinite(epsilon) || epsilon < 0.0) {
+    return NoMatch(candidate, "BatchNormalization epsilon is invalid");
+  }
+  for (int64_t channel = 0; channel < channels; ++channel) {
+    const std::size_t index = static_cast<std::size_t>(channel);
+    const double denominator = parameters[3][index] + epsilon;
+    if (!(denominator > 0.0) || !std::isfinite(denominator)) {
+      return NoMatch(candidate, "a BatchNormalization variance is invalid");
+    }
+    const double factor = parameters[0][index] / std::sqrt(denominator);
+    const double folded_bias = parameters[1][index] - parameters[2][index] * factor;
+    if (!std::isfinite(factor) || !std::isfinite(folded_bias)) {
+      return NoMatch(candidate, "the folded BatchNormalization parameters are non-finite");
+    }
+  }
+  return core::builder::MatchResult{this, {matmul, &candidate}, &candidate};
+}
+
+utils::RepeatedProtoField<NodeProto>
+MatMulBatchNormalizationFusionPattern::Apply(core::builder::GraphGraph &graph,
+                                             const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
+    throw BuilderError(
+        "MatMulBatchNormalizationFusionPattern::Apply expects MatMul and BatchNormalization.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[1]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError("MatMulBatchNormalizationFusionPattern::Apply received an unsafe match.");
+  }
+  const NodeProto &matmul = *nodes[0];
+  const NodeProto &batch = *nodes[1];
+  const TensorProto *weight = graph.GetComputedConstant(matmul.input()[1].value());
+  if (weight == nullptr) {
+    throw BuilderError(
+        "MatMulBatchNormalizationFusionPattern::Apply could not read the MatMul weight.");
+  }
+  std::vector<double> weight_values;
+  std::vector<double> scale;
+  std::vector<double> bias;
+  std::vector<double> mean;
+  std::vector<double> variance;
+  if (!ReadFloatingTensor(*weight, weight_values) ||
+      !ReadFloatingTensor(*graph.GetComputedConstant(batch.input()[1].value()), scale) ||
+      !ReadFloatingTensor(*graph.GetComputedConstant(batch.input()[2].value()), bias) ||
+      !ReadFloatingTensor(*graph.GetComputedConstant(batch.input()[3].value()), mean) ||
+      !ReadFloatingTensor(*graph.GetComputedConstant(batch.input()[4].value()), variance)) {
+    throw BuilderError(
+        "MatMulBatchNormalizationFusionPattern::Apply could not read constant values.");
+  }
+  const int64_t channels = weight->dims(1);
+  const float epsilon = GetAttributeOr<float>(batch, "epsilon", 1.0e-5F);
+  std::vector<double> folded_bias(static_cast<std::size_t>(channels));
+  std::vector<double> factors(static_cast<std::size_t>(channels));
+  for (int64_t channel = 0; channel < channels; ++channel) {
+    const std::size_t index = static_cast<std::size_t>(channel);
+    factors[index] = scale[index] / std::sqrt(variance[index] + epsilon);
+    folded_bias[index] = bias[index] - mean[index] * factors[index];
+    if (!std::isfinite(factors[index]) || !std::isfinite(folded_bias[index])) {
+      throw BuilderError(
+          "MatMulBatchNormalizationFusionPattern::Apply produced non-finite parameters.");
+    }
+  }
+  for (std::size_t index = 0; index < weight_values.size(); ++index) {
+    weight_values[index] *= factors[index % static_cast<std::size_t>(channels)];
+  }
+  core::builder::GraphBuilder &builder = graph.Builder();
+  const std::string weight_name =
+      FreeInitializerName(builder, "MatMulBatchNormalizationFusionPattern.weight");
+  const std::string bias_name =
+      FreeInitializerName(builder, "MatMulBatchNormalizationFusionPattern.bias");
+  const auto type = static_cast<TensorProto::DataType>(weight->data_type());
+  builder.MakeInitializer(
+      MakeFloatingTensor(weight_name, type, TensorDims(*weight), weight_values));
+  builder.MakeInitializer(MakeFloatingTensor(bias_name, type, {channels}, folded_bias));
+  NodeProto replacement = MakePatternNode(
+      "Gemm", {matmul.input()[0].value(), weight_name, bias_name}, {batch.output()[0].value()}, "",
+      "MatMulBatchNormalizationFusionPattern--" + matmul.name().value());
+  replacement.set_doc_string(matmul.doc_string().value());
+  utils::RepeatedProtoField<NodeProto> replacements;
+  replacements.push_back(std::move(replacement));
+  return replacements;
+}
+
+std::set<std::string> MatMulScaleFusionPattern::FastOpType() const { return {"MatMul"}; }
+
+core::builder::MatchResult MatMulScaleFusionPattern::Match(core::builder::GraphGraph &graph,
+                                                           const NodeProto &candidate) const {
+  if (!IsDefaultOp(candidate, "MatMul") || candidate.input_size() != 2 ||
+      candidate.output_size() != 1 || !IsRankTwo(graph, candidate.input()[0].value()) ||
+      !IsRankTwo(graph, candidate.input()[1].value())) {
+    return NoMatch(candidate, "candidate is not a rank-two default-domain MatMul");
+  }
+  std::vector<const NodeProto *> scales;
+  const std::vector<const NodeProto *> &consumers = graph.NextNodes(candidate.output()[0].value());
+  if (consumers.size() == 1 && !graph.IsUsedMoreThanOnce(candidate.output()[0].value()) &&
+      ReadScalarScale(graph, *consumers[0]).has_value()) {
+    scales.push_back(consumers[0]);
+  }
+  for (int index = 0; index < 2; ++index) {
+    const NodeProto *producer = graph.NodeBefore(candidate.input()[index].value());
+    if (producer != nullptr && !graph.IsUsedMoreThanOnce(producer->output()[0].value()) &&
+        ReadScalarScale(graph, *producer).has_value()) {
+      scales.push_back(producer);
+    }
+  }
+  if (scales.size() != 1) {
+    return NoMatch(candidate, "the MatMul must have exactly one safe adjacent scalar scale");
+  }
+  const ScalarScale scale = ReadScalarScale(graph, *scales[0]).value();
+  std::vector<std::string> inputs = Inputs(candidate);
+  for (std::string &input : inputs) {
+    if (input == scale.node->output()[0].value()) {
+      input = scale.variable;
+    }
+  }
+  const int fold_index = graph.IsConstant(inputs[1]) ? 1 : (graph.IsConstant(inputs[0]) ? 0 : -1);
+  const TensorProto *scalar = nullptr;
+  for (int index = 0; index < scale.node->input_size(); ++index) {
+    if (graph.IsConstantScalar(scale.node->input()[index].value())) {
+      scalar = graph.GetComputedConstant(scale.node->input()[index].value());
+      break;
+    }
+  }
+  if (scalar == nullptr) {
+    return NoMatch(candidate, "the scalar value is unavailable");
+  }
+  if (fold_index >= 0) {
+    const TensorProto *matrix = graph.GetComputedConstant(inputs[fold_index]);
+    std::vector<double> values;
+    if (matrix == nullptr || matrix->data_type() != scalar->data_type() ||
+        !IsFloatingType(static_cast<TensorProto::DataType>(matrix->data_type())) ||
+        !ReadFloatingTensor(*matrix, values)) {
+      return NoMatch(candidate, "the constant matrix cannot absorb the scalar");
+    }
+  } else if (!CanUseGemmAlpha(*scalar, scale.factor)) {
+    return NoMatch(candidate, "the scalar cannot be represented safely as Gemm alpha");
+  }
+  return core::builder::MatchResult{this, {&candidate, scale.node}, scale.node};
+}
+
+utils::RepeatedProtoField<NodeProto>
+MatMulScaleFusionPattern::Apply(core::builder::GraphGraph &graph,
+                                const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
+    throw BuilderError("MatMulScaleFusionPattern::Apply expects MatMul and one scalar scale.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[0]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError("MatMulScaleFusionPattern::Apply received an unsafe or inconsistent match.");
+  }
+  const NodeProto &matmul = *nodes[0];
+  const ScalarScale scale = ReadScalarScale(graph, *nodes[1]).value();
+  std::vector<std::string> inputs = Inputs(matmul);
+  bool post_scale = true;
+  for (std::string &input : inputs) {
+    if (input == scale.node->output()[0].value()) {
+      input = scale.variable;
+      post_scale = false;
+    }
+  }
+  const std::vector<std::string> outputs = post_scale ? Outputs(*scale.node) : Outputs(matmul);
+  const int fold_index = graph.IsConstant(inputs[1]) ? 1 : (graph.IsConstant(inputs[0]) ? 0 : -1);
+  core::builder::GraphBuilder &builder = graph.Builder();
+  const std::string name = "MatMulScaleFusionPattern--" + matmul.name().value();
+  NodeProto replacement;
+  if (fold_index >= 0) {
+    const TensorProto *matrix = graph.GetComputedConstant(inputs[fold_index]);
+    if (matrix == nullptr) {
+      throw BuilderError("MatMulScaleFusionPattern::Apply could not read the constant matrix.");
+    }
+    std::vector<double> values;
+    if (!ReadFloatingTensor(*matrix, values)) {
+      throw BuilderError("MatMulScaleFusionPattern::Apply could not fold the constant matrix.");
+    }
+    for (double &value : values) {
+      value *= scale.factor;
+    }
+    const std::string folded_name = FreeInitializerName(builder, "MatMulScaleFusionPattern.weight");
+    builder.MakeInitializer(
+        MakeFloatingTensor(folded_name, static_cast<TensorProto::DataType>(matrix->data_type()),
+                           TensorDims(*matrix), values));
+    inputs[fold_index] = folded_name;
+    replacement = MakePatternNode("MatMul", inputs, outputs, "", name);
+  } else {
+    replacement = MakePatternNode("Gemm", inputs, outputs, "", name);
+    AddAttribute<float>(replacement, "alpha", static_cast<float>(scale.factor));
+  }
+  replacement.set_doc_string(matmul.doc_string().value());
+  utils::RepeatedProtoField<NodeProto> replacements;
+  replacements.push_back(std::move(replacement));
   return replacements;
 }
 

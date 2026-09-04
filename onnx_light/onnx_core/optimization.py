@@ -98,8 +98,11 @@ LinearAttentionPattern: TypeAlias = _patterns.LinearAttentionPattern
 FunctionAttentionGQAPattern: TypeAlias = _patterns.FunctionAttentionGQAPattern
 AttentionGQAPattern: TypeAlias = _patterns.AttentionGQAPattern
 GemmTransposePattern: TypeAlias = _patterns.GemmTransposePattern
+GemmSumFusionPattern: TypeAlias = _patterns.GemmSumFusionPattern
 MatMulAddPattern: TypeAlias = _patterns.MatMulAddPattern
+MatMulBatchNormalizationFusionPattern: TypeAlias = _patterns.MatMulBatchNormalizationFusionPattern
 MatMulReshape2Of3Pattern: TypeAlias = _patterns.MatMulReshape2Of3Pattern
+MatMulScaleFusionPattern: TypeAlias = _patterns.MatMulScaleFusionPattern
 MulMulMatMulPattern: TypeAlias = _patterns.MulMulMatMulPattern
 ReshapeMatMulReshapePattern: TypeAlias = _patterns.ReshapeMatMulReshapePattern
 ShapeBasedMatMulToMulPattern: TypeAlias = _patterns.ShapeBasedMatMulToMulPattern
@@ -286,6 +289,7 @@ __all__ = [
     "GatherShapePattern",
     "GathersSplitPattern",
     "GeluPattern",
+    "GemmSumFusionPattern",
     "GemmTransposePattern",
     "GraphBuilder",
     "GraphGraph",
@@ -296,7 +300,9 @@ __all__ = [
     "LinearAttentionPattern",
     "LocalRewriting",
     "MatMulAddPattern",
+    "MatMulBatchNormalizationFusionPattern",
     "MatMulReshape2Of3Pattern",
+    "MatMulScaleFusionPattern",
     "MatchResult",
     "MaxReluPattern",
     "MulMulMatMulPattern",

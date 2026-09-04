@@ -314,6 +314,52 @@ class TestPatternsMatmulNormalization(ExtTestCase):
             dynamic_weight, {"X": self._range(2, 3), "B": self._range(3, 2)}, "GemmTranspose"
         )
 
+    def test_gemm_sum_fusion(self):
+        model = self._make_model(
+            [
+                oh.make_node("Gemm", ["X", "W"], ["M"], alpha=0.75, beta=0.25),
+                oh.make_node("Sum", ["S", "M"], ["Y"]),
+            ],
+            [
+                ("X", TensorProto.FLOAT, [2, 3]),
+                ("W", TensorProto.FLOAT, [3, 4]),
+                ("S", TensorProto.FLOAT, [4]),
+            ],
+            [("Y", TensorProto.FLOAT, [2, 4])],
+        )
+        optimized = self._optimize_and_check(
+            model,
+            {"X": self._range(2, 3), "W": self._range(3, 4), "S": self._range(4, bias=0.2)},
+            ["GemmSumFusion"],
+            ["Gemm"],
+            required_pattern="GemmSumFusion",
+            atol=1e-5,
+        )
+        self.assertEqual(["X", "W", "S"], list(optimized.graph.node[0].input))
+        self.assertAlmostEqual(1.0, self._attribute(optimized.graph.node[0], "beta", 1.0))
+
+    def test_gemm_sum_fusion_no_match(self):
+        model = self._make_model(
+            [
+                oh.make_node("Gemm", ["X", "W", "C"], ["M"]),
+                oh.make_node("Sum", ["M", "S"], ["Y"]),
+            ],
+            [
+                ("X", TensorProto.FLOAT, [2, 3]),
+                ("W", TensorProto.FLOAT, [3, 4]),
+                ("C", TensorProto.FLOAT, [4]),
+                ("S", TensorProto.FLOAT, [4]),
+            ],
+            [("Y", TensorProto.FLOAT, [2, 4])],
+        )
+        feeds = {
+            "X": self._range(2, 3),
+            "W": self._range(3, 4),
+            "C": self._range(4),
+            "S": self._range(4, bias=0.2),
+        }
+        self._assert_no_match(model, feeds, "GemmSumFusion")
+
     def test_matmul_add_variants(self):
         variants = [
             (
@@ -507,9 +553,161 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                     ["MulMulMatMul"],
                     ["MatMul", "Mul", "Add"],
                     required_pattern="MulMulMatMul",
-                    initializer_count=3,
+                )
+
+    def test_matmul_batch_normalization_fusion(self):
+        weight = self._range(3, 4, bias=-0.2)
+        scale = np.array([0.5, 1.2, -0.75, 0.3], dtype=np.float32)
+        bias = np.array([0.1, -0.2, 0.4, 0.8], dtype=np.float32)
+        mean = np.array([-0.3, 0.2, 0.5, -0.1], dtype=np.float32)
+        variance = np.array([0.7, 1.4, 0.3, 2.0], dtype=np.float32)
+        model = self._make_model(
+            [
+                oh.make_node("MatMul", ["X", "W"], ["M"]),
+                oh.make_node(
+                    "BatchNormalization",
+                    ["M", "scale", "bias", "mean", "variance"],
+                    ["Y", "", ""],
+                    epsilon=1e-4,
+                ),
+            ],
+            [("X", TensorProto.FLOAT, [2, 3])],
+            [("Y", TensorProto.FLOAT, [2, 4])],
+            [
+                self._initializer("W", weight, np.float32),
+                self._initializer("scale", scale, np.float32),
+                self._initializer("bias", bias, np.float32),
+                self._initializer("mean", mean, np.float32),
+                self._initializer("variance", variance, np.float32),
+            ],
+        )
+        optimized = self._optimize_and_check(
+            model,
+            {"X": self._range(2, 3, bias=-0.1)},
+            ["MatMulBatchNormalizationFusion"],
+            ["Gemm"],
+            required_pattern="MatMulBatchNormalizationFusion",
+            atol=2e-5,
+            rtol=2e-5,
+        )
+        self.assertEqual(3, len(optimized.graph.node[0].input))
+        self.assertNotIn("BatchNormalization", [node.op_type for node in optimized.graph.node])
+
+    def test_matmul_batch_normalization_fusion_no_match(self):
+        model = self._make_model(
+            [
+                oh.make_node("MatMul", ["X", "W"], ["M"]),
+                oh.make_node(
+                    "BatchNormalization",
+                    ["M", "scale", "bias", "mean", "variance"],
+                    ["Y", "running_mean", "running_variance"],
+                    training_mode=1,
+                ),
+            ],
+            [("X", TensorProto.FLOAT, [2, 3]), ("W", TensorProto.FLOAT, [3, 4])],
+            [
+                ("Y", TensorProto.FLOAT, [2, 4]),
+                ("running_mean", TensorProto.FLOAT, [4]),
+                ("running_variance", TensorProto.FLOAT, [4]),
+            ],
+            [
+                self._initializer("scale", np.ones(4), np.float32),
+                self._initializer("bias", np.zeros(4), np.float32),
+                self._initializer("mean", np.zeros(4), np.float32),
+                self._initializer("variance", np.ones(4), np.float32),
+            ],
+        )
+        self._assert_no_match(
+            model,
+            {"X": self._range(2, 3), "W": self._range(3, 4)},
+            "MatMulBatchNormalizationFusion",
+        )
+
+    def test_matmul_scale_fusion_variants(self):
+        variants = [
+            (
+                "fold-output-mul",
+                [
+                    oh.make_node("MatMul", ["X", "W"], ["M"]),
+                    oh.make_node("Mul", ["M", "scale"], ["Y"]),
+                ],
+                [self._initializer("W", self._range(3, 4), np.float32)],
+                [("X", TensorProto.FLOAT, [2, 3])],
+                {"X": self._range(2, 3)},
+                ["MatMul"],
+            ),
+            (
+                "alpha-output-div",
+                [
+                    oh.make_node("MatMul", ["X", "W"], ["M"]),
+                    oh.make_node("Div", ["M", "scale"], ["Y"]),
+                ],
+                [],
+                [("X", TensorProto.FLOAT, [2, 3]), ("W", TensorProto.FLOAT, [3, 4])],
+                {"X": self._range(2, 3), "W": self._range(3, 4)},
+                ["Gemm"],
+            ),
+            (
+                "alpha-input-mul",
+                [
+                    oh.make_node("Mul", ["scale", "X"], ["SX"]),
+                    oh.make_node("MatMul", ["SX", "W"], ["Y"]),
+                ],
+                [],
+                [("X", TensorProto.FLOAT, [2, 3]), ("W", TensorProto.FLOAT, [3, 4])],
+                {"X": self._range(2, 3), "W": self._range(3, 4)},
+                ["Gemm"],
+            ),
+        ]
+        for name, nodes, initializers, inputs, feeds, expected_ops in variants:
+            with self.subTest(name=name):
+                model = self._make_model(
+                    nodes,
+                    inputs,
+                    [("Y", TensorProto.FLOAT, [2, 4])],
+                    [*initializers, self._initializer("scale", np.array(4.0), np.float32)],
+                )
+                optimized = self._optimize_and_check(
+                    model,
+                    feeds,
+                    ["MatMulScaleFusion"],
+                    expected_ops,
+                    required_pattern="MatMulScaleFusion",
                     atol=1e-5,
                 )
+                if expected_ops == ["Gemm"]:
+                    expected_alpha = 0.25 if "div" in name else 4.0
+                    self.assertAlmostEqual(
+                        expected_alpha, self._attribute(optimized.graph.node[0], "alpha", 1.0)
+                    )
+
+    def test_matmul_scale_fusion_no_match(self):
+        numerator_div = self._make_model(
+            [
+                oh.make_node("MatMul", ["X", "W"], ["M"]),
+                oh.make_node("Div", ["scale", "M"], ["Y"]),
+            ],
+            [("X", TensorProto.FLOAT, [2, 3]), ("W", TensorProto.FLOAT, [3, 4])],
+            [("Y", TensorProto.FLOAT, [2, 4])],
+            [self._initializer("scale", np.array(4.0), np.float32)],
+        )
+        self._assert_no_match(
+            numerator_div, {"X": self._range(2, 3), "W": self._range(3, 4)}, "MatMulScaleFusion"
+        )
+
+        two_scales = self._make_model(
+            [
+                oh.make_node("Mul", ["X", "scale"], ["SX"]),
+                oh.make_node("Mul", ["W", "scale"], ["SW"]),
+                oh.make_node("MatMul", ["SX", "SW"], ["Y"]),
+            ],
+            [("X", TensorProto.FLOAT, [2, 3]), ("W", TensorProto.FLOAT, [3, 4])],
+            [("Y", TensorProto.FLOAT, [2, 4])],
+            [self._initializer("scale", np.array(2.0), np.float32)],
+        )
+        self._assert_no_match(
+            two_scales, {"X": self._range(2, 3), "W": self._range(3, 4)}, "MatMulScaleFusion"
+        )
 
     def test_mul_mul_matmul_no_match(self):
         vector_scale = self._make_model(

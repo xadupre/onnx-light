@@ -315,11 +315,19 @@ NB_MODULE(_onnxpypatterns, m) {
       "Exposes the upstream placeholder for additions of two Shape outputs.");
   BindPattern<onnx_patterns::GemmTransposePattern>(m, "GemmTransposePattern",
                                                    "Folds input transposes into a Gemm operation.");
+  BindPattern<onnx_patterns::GemmSumFusionPattern>(
+      m, "GemmSumFusionPattern", "Fuses a two-input Sum into an unbiased Gemm bias input.");
   nb::class_<onnx_patterns::MatMulAddPattern, core::builder::PatternOptimization>(
       m, "MatMulAddPattern", "Replaces a compatible MatMul and Add with Gemm.")
       .def(nb::init<int, bool>(), nb::arg("priority") = 3, nb::arg("allow_reshape") = false);
+  BindPattern<onnx_patterns::MatMulBatchNormalizationFusionPattern>(
+      m, "MatMulBatchNormalizationFusionPattern",
+      "Folds constant inference BatchNormalization parameters into a rank-two MatMul.");
   BindPattern<onnx_patterns::MatMulReshape2Of3Pattern>(
       m, "MatMulReshape2Of3Pattern", "Simplifies compatible reshapes around MatMul.");
+  BindPattern<onnx_patterns::MatMulScaleFusionPattern>(
+      m, "MatMulScaleFusionPattern",
+      "Absorbs one safe scalar Mul or Div adjacent to a rank-two MatMul.");
   BindPattern<onnx_patterns::MulMulMatMulPattern>(
       m, "MulMulMatMulPattern", "Moves compatible scalar multiplications across MatMul.");
   BindPattern<onnx_patterns::ReshapeMatMulReshapePattern>(

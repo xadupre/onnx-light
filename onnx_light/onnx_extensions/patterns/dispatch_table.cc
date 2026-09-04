@@ -27,6 +27,7 @@
 #include "onnx_extensions/patterns/collections/shape_pattern.h"
 #include "onnx_extensions/patterns/collections/slice_pattern.h"
 #include "onnx_extensions/patterns/collections/split_pattern.h"
+#include "onnx_extensions/patterns/decomposition/stft_decomposition.h"
 #include "onnx_extensions/patterns/expand/expand_pattern.h"
 #include "onnx_extensions/patterns/expand/where_pattern.h"
 #include "onnx_extensions/patterns/layout/layout_pattern.h"
@@ -234,6 +235,8 @@ void RegisterPatterns() {
       return std::make_unique<TransposeReshapeTransposePattern>();
     });
     core::builder::RegisterPattern("DivMul", [] { return std::make_unique<DivMulPattern>(); });
+    core::builder::RegisterPattern("STFTDecomposition",
+                                   [] { return std::make_unique<STFTDecompositionPattern>(); });
     core::builder::RegisterPattern("MulMulMulScalar",
                                    [] { return std::make_unique<MulMulMulScalarPattern>(); });
     core::builder::RegisterPattern("SwitchOrderBinary",

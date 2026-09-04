@@ -32,13 +32,16 @@ SplitConcatPattern: TypeAlias = _patterns.SplitConcatPattern
 GathersSplitPattern: TypeAlias = _patterns.GathersSplitPattern
 SlicesSplitPattern: TypeAlias = _patterns.SlicesSplitPattern
 ConcatEmptyPattern: TypeAlias = _patterns.ConcatEmptyPattern
+ConcatSliceEliminationPattern: TypeAlias = _patterns.ConcatSliceEliminationPattern
 ConcatGatherPattern: TypeAlias = _patterns.ConcatGatherPattern
 ConcatTwiceUnaryPattern: TypeAlias = _patterns.ConcatTwiceUnaryPattern
 GatherConcatPattern: TypeAlias = _patterns.GatherConcatPattern
 GatherGatherPattern: TypeAlias = _patterns.GatherGatherPattern
+GatherSliceToSplitPattern: TypeAlias = _patterns.GatherSliceToSplitPattern
 GatherShapePattern: TypeAlias = _patterns.GatherShapePattern
 SliceSlicePattern: TypeAlias = _patterns.SliceSlicePattern
 SliceEliminationPattern: TypeAlias = _patterns.SliceEliminationPattern
+SliceConcatToSpaceToDepthPattern: TypeAlias = _patterns.SliceConcatToSpaceToDepthPattern
 SequenceConstructAtPattern: TypeAlias = _patterns.SequenceConstructAtPattern
 SplitToSequenceSequenceAtPattern: TypeAlias = _patterns.SplitToSequenceSequenceAtPattern
 NotWherePattern: TypeAlias = _patterns.NotWherePattern
@@ -125,6 +128,7 @@ LeakyReluPattern: TypeAlias = _patterns.LeakyReluPattern
 MaxReluPattern: TypeAlias = _patterns.MaxReluPattern
 SoftmaxCrossEntropyLossCastPattern: TypeAlias = _patterns.SoftmaxCrossEntropyLossCastPattern
 TreeEnsemblePattern: TypeAlias = _patterns.TreeEnsemblePattern
+LabelEncoderFusionPattern: TypeAlias = _patterns.LabelEncoderFusionPattern
 TransposeTransposePattern: TypeAlias = _patterns.TransposeTransposePattern
 TransposeGatherPattern: TypeAlias = _patterns.TransposeGatherPattern
 UnsqueezeUnsqueezePattern: TypeAlias = _patterns.UnsqueezeUnsqueezePattern
@@ -273,6 +277,7 @@ __all__ = [
     "ConcatEmptyPattern",
     "ConcatGatherPattern",
     "ConcatReshapePattern",
+    "ConcatSliceEliminationPattern",
     "ConcatTwiceUnaryPattern",
     "ConstantToInitializerPattern",
     "ConvBiasNullPattern",
@@ -291,6 +296,7 @@ __all__ = [
     "GatherConcatPattern",
     "GatherGatherPattern",
     "GatherShapePattern",
+    "GatherSliceToSplitPattern",
     "GathersSplitPattern",
     "GeluPattern",
     "GemmSumFusionPattern",
@@ -298,6 +304,7 @@ __all__ = [
     "GraphBuilder",
     "GraphGraph",
     "IdentityPattern",
+    "LabelEncoderFusionPattern",
     "LayerNormalizationPattern",
     "LayerNormalizationScalePattern",
     "LeakyReluPattern",
@@ -351,6 +358,7 @@ __all__ = [
     "ShapeTransposePattern",
     "ShapedBasedReshapePattern",
     "SliceEliminationPattern",
+    "SliceConcatToSpaceToDepthPattern",
     "SliceSlicePattern",
     "SlicesSplitPattern",
     "SoftmaxCrossEntropyLossCastPattern",

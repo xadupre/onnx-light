@@ -121,6 +121,30 @@ public:
 };
 
 /**
+ * Replaces compatible sibling scalar ``Gather`` and contiguous ``Slice``
+ * ranges covering a complete static axis with one ``Split``. Scalar Gather
+ * outputs are restored with ``Squeeze``.
+ */
+class GatherSliceToSplitPattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit GatherSliceToSplitPattern(int priority = 0)
+      : PatternOptimization(priority, "GatherSliceToSplit") {}
+
+  /// Returns Gather and Slice as possible roots.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds a complete, non-overlapping sibling partition on one axis.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Emits Split and any Squeeze nodes required by scalar Gather outputs.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
  * Merges several sibling ``Slice`` nodes that partition a common input along a
  * single axis into contiguous, non-overlapping ranges into one ``Split``.
  *

@@ -53,6 +53,124 @@ bool ConstScalarInt(core::builder::GraphGraph &graph, const std::string &name, i
   return true;
 }
 
+struct PartitionRange {
+  const NodeProto *node;
+  int64_t start;
+  int64_t end;
+  bool squeeze;
+};
+
+bool ReadPartitionRange(core::builder::GraphGraph &graph, const NodeProto &node, int64_t rank,
+                        int64_t dim_size, int64_t expected_axis, PartitionRange &range) {
+  if (IsDefaultOp(node, "Gather")) {
+    int64_t axis = GetAxis(node, 0);
+    axis = axis < 0 ? axis + rank : axis;
+    int index_rank = 0;
+    int64_t index = 0;
+    if (axis != expected_axis ||
+        !ConstScalarInt(graph, node.input()[1].value(), index, index_rank) || index_rank != 0) {
+      return false;
+    }
+    index = index < 0 ? index + dim_size : index;
+    if (index < 0 || index >= dim_size) {
+      return false;
+    }
+    range = PartitionRange{&node, index, index + 1, true};
+    return true;
+  }
+  if (!IsDefaultOp(node, "Slice") || node.input_size() < 4 || node.input_size() > 5) {
+    return false;
+  }
+  int axis_rank = 0;
+  int64_t axis = 0;
+  int start_rank = 0;
+  int end_rank = 0;
+  int64_t start = 0;
+  int64_t end = 0;
+  if (!ConstScalarInt(graph, node.input()[3].value(), axis, axis_rank) ||
+      !ConstScalarInt(graph, node.input()[1].value(), start, start_rank) ||
+      !ConstScalarInt(graph, node.input()[2].value(), end, end_rank)) {
+    return false;
+  }
+  axis = axis < 0 ? axis + rank : axis;
+  if (axis != expected_axis) {
+    return false;
+  }
+  if (node.input_size() == 5) {
+    int step_rank = 0;
+    int64_t step = 0;
+    if (!ConstScalarInt(graph, node.input()[4].value(), step, step_rank) || step != 1) {
+      return false;
+    }
+  }
+  start = start < 0 ? start + dim_size : start;
+  end = end < 0 ? end + dim_size : end;
+  start = std::max<int64_t>(0, std::min(start, dim_size));
+  end = std::max<int64_t>(0, std::min(end, dim_size));
+  if (start >= end) {
+    return false;
+  }
+  range = PartitionRange{&node, start, end, false};
+  return true;
+}
+
+bool CollectGatherSlicePartition(core::builder::GraphGraph &graph, const NodeProto &candidate,
+                                 std::vector<PartitionRange> &ranges, int64_t &axis) {
+  if (!IsDefaultOp(candidate, "Gather") && !IsDefaultOp(candidate, "Slice")) {
+    return false;
+  }
+  const std::string &data = candidate.input()[0].value();
+  if (!graph.HasShape(data)) {
+    return false;
+  }
+  const core::symbolic::SymShape &shape = graph.GetShape(data).Shape();
+  const int64_t rank = static_cast<int64_t>(shape.Rank());
+  if (IsDefaultOp(candidate, "Gather")) {
+    axis = GetAxis(candidate, 0);
+  } else {
+    int axis_rank = 0;
+    if (candidate.input_size() < 4 ||
+        !ConstScalarInt(graph, candidate.input()[3].value(), axis, axis_rank)) {
+      return false;
+    }
+  }
+  axis = axis < 0 ? axis + rank : axis;
+  if (axis < 0 || axis >= rank || !shape[static_cast<std::size_t>(axis)].IsInt()) {
+    return false;
+  }
+  const int64_t dim_size = shape[static_cast<std::size_t>(axis)].AsInt();
+  bool has_gather = false;
+  bool has_slice = false;
+  for (const NodeProto *consumer : graph.NextNodes(data)) {
+    if (!IsDefaultOp(*consumer, "Gather") && !IsDefaultOp(*consumer, "Slice")) {
+      continue;
+    }
+    PartitionRange range{};
+    if (!ReadPartitionRange(graph, *consumer, rank, dim_size, axis, range)) {
+      return false;
+    }
+    has_gather = has_gather || range.squeeze;
+    has_slice = has_slice || !range.squeeze;
+    ranges.push_back(range);
+  }
+  if (!has_gather || !has_slice ||
+      std::find_if(ranges.begin(), ranges.end(), [&candidate](const PartitionRange &range) {
+        return range.node == &candidate;
+      }) == ranges.end()) {
+    return false;
+  }
+  std::sort(ranges.begin(), ranges.end(),
+            [](const PartitionRange &a, const PartitionRange &b) { return a.start < b.start; });
+  int64_t expected = 0;
+  for (const PartitionRange &range : ranges) {
+    if (range.start != expected) {
+      return false;
+    }
+    expected = range.end;
+  }
+  return expected == dim_size;
+}
+
 } // namespace
 
 std::set<std::string> SplitConcatPattern::FastOpType() const { return {"Split"}; }
@@ -258,6 +376,79 @@ GathersSplitPattern::Apply(core::builder::GraphGraph &graph,
   replacements.push_back(split);
   for (const auto &post : post_nodes) {
     replacements.add() = post;
+  }
+  return replacements;
+}
+
+std::set<std::string> GatherSliceToSplitPattern::FastOpType() const { return {"Gather", "Slice"}; }
+
+core::builder::MatchResult GatherSliceToSplitPattern::Match(core::builder::GraphGraph &graph,
+                                                            const NodeProto &candidate) const {
+  if (graph.Builder().OpsetVersion("") < 13) {
+    return NoMatch(candidate, "the default opset is older than 13");
+  }
+  std::vector<PartitionRange> ranges;
+  int64_t axis = 0;
+  if (!CollectGatherSlicePartition(graph, candidate, ranges, axis)) {
+    return NoMatch(candidate, "the sibling Gather/Slice ranges do not exactly partition one axis");
+  }
+  std::vector<const NodeProto *> nodes;
+  nodes.reserve(ranges.size());
+  for (const PartitionRange &range : ranges) {
+    nodes.push_back(range.node);
+  }
+  return core::builder::MatchResult{this, nodes, nullptr};
+}
+
+utils::RepeatedProtoField<NodeProto>
+GatherSliceToSplitPattern::Apply(core::builder::GraphGraph &graph,
+                                 const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() < 2 || nodes[0] == nullptr) {
+    throw BuilderError("GatherSliceToSplitPattern::Apply expects sibling Gather/Slice nodes.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[0]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError(
+        "GatherSliceToSplitPattern::Apply received an unsafe or inconsistent match.");
+  }
+
+  std::vector<PartitionRange> ranges;
+  int64_t axis = 0;
+  if (!CollectGatherSlicePartition(graph, *nodes[0], ranges, axis)) {
+    throw BuilderError("GatherSliceToSplitPattern::Apply could not rebuild the partition.");
+  }
+  core::builder::GraphBuilder &builder = graph.Builder();
+  const std::string name = "GatherSliceToSplitPattern--" + nodes[0]->name().value();
+  const std::string splits = FreeInitializerName(builder, name + "_splits");
+  const std::string axes = FreeInitializerName(builder, name + "_axes");
+  std::vector<int64_t> sizes;
+  sizes.reserve(ranges.size());
+  for (const PartitionRange &range : ranges) {
+    sizes.push_back(range.end - range.start);
+  }
+  builder.MakeInitializer(MakeInitializerShape(splits.c_str(), sizes));
+  builder.MakeInitializer(MakeInitializerShape(axes.c_str(), {axis}));
+
+  std::vector<std::string> outputs;
+  utils::RepeatedProtoField<NodeProto> squeezes;
+  outputs.reserve(ranges.size());
+  for (const PartitionRange &range : ranges) {
+    if (range.squeeze) {
+      const std::string intermediate = builder.UniqueName(name + "_split");
+      outputs.push_back(intermediate);
+      squeezes.push_back(MakeNode("Squeeze", {intermediate, axes},
+                                  {range.node->output()[0].value()}, "", name.c_str()));
+    } else {
+      outputs.push_back(range.node->output()[0].value());
+    }
+  }
+  NodeProto split =
+      MakeNode("Split", {nodes[0]->input()[0].value(), splits}, outputs, "", name.c_str());
+  AddAttribute<int64_t>(split, "axis", axis);
+  utils::RepeatedProtoField<NodeProto> replacements;
+  replacements.push_back(split);
+  for (const NodeProto &squeeze : squeezes) {
+    replacements.push_back(squeeze);
   }
   return replacements;
 }

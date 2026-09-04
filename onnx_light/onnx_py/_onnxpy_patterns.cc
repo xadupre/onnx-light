@@ -34,6 +34,7 @@
 #include "onnx_extensions/patterns/normalization/activation_pattern.h"
 #include "onnx_extensions/patterns/normalization/normalization_pattern.h"
 #include "onnx_extensions/patterns/reshape/reshape_pattern.h"
+#include "onnx_extensions/patterns/traditionalml/label_encoder_pattern.h"
 #include "onnx_extensions/patterns/traditionalml/tree_ensemble_pattern.h"
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 #include "onnx_extensions/patterns/unsqueeze/unsqueeze_pattern.h"
@@ -152,6 +153,9 @@ NB_MODULE(_onnxpypatterns, m) {
       "Drops empty inputs from a Concat node, reducing it to an Identity when a "
       "single input remains.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
+  BindPattern<onnx_patterns::ConcatSliceEliminationPattern>(
+      m, "ConcatSliceEliminationPattern",
+      "Eliminates a Concat followed by exact slices recovering all inputs.");
   nb::class_<onnx_patterns::ConcatGatherPattern, core::builder::PatternOptimization>(
       m, "ConcatGatherPattern",
       "Rewrites a Gather reading a single Concat input into a Gather on that "
@@ -171,6 +175,9 @@ NB_MODULE(_onnxpypatterns, m) {
       m, "GatherGatherPattern",
       "Collapses two consecutive scalar Gather nodes into a single Gather node.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
+  BindPattern<onnx_patterns::GatherSliceToSplitPattern>(
+      m, "GatherSliceToSplitPattern",
+      "Fuses compatible sibling Gather and Slice ranges into one Split.");
   nb::class_<onnx_patterns::GatherShapePattern, core::builder::PatternOptimization>(
       m, "GatherShapePattern",
       "Rewrites a Gather of a scalar index over a Shape node into a narrowed "
@@ -182,6 +189,9 @@ NB_MODULE(_onnxpypatterns, m) {
   nb::class_<onnx_patterns::SliceEliminationPattern, core::builder::PatternOptimization>(
       m, "SliceEliminationPattern", "Replaces an identity full-range Slice with Identity.")
       .def(nb::init<int>(), nb::arg("priority") = 1);
+  BindPattern<onnx_patterns::SliceConcatToSpaceToDepthPattern>(
+      m, "SliceConcatToSpaceToDepthPattern",
+      "Fuses canonical rank-4 phase slices and channel Concat into SpaceToDepth.");
   nb::class_<onnx_patterns::SequenceConstructAtPattern, core::builder::PatternOptimization>(
       m, "SequenceConstructAtPattern",
       "Replaces a SequenceAt reading a constant index of a SequenceConstruct by "
@@ -406,6 +416,8 @@ NB_MODULE(_onnxpypatterns, m) {
   BindPattern<onnx_patterns::SwapExpandReshapePattern>(
       m, "SwapExpandReshapePattern",
       "Swaps a supported ``Expand`` and constant-shape ``Reshape`` pair.");
+  BindPattern<onnx_patterns::LabelEncoderFusionPattern>(
+      m, "LabelEncoderFusionPattern", "Composes consecutive ai.onnx.ml LabelEncoder mappings.");
   nb::class_<onnx_patterns::TreeEnsemblePattern, core::builder::PatternOptimization>(
       m, "TreeEnsemblePattern",
       "Replaces a classic tree ensemble with the unified ``TreeEnsemble`` operator.")

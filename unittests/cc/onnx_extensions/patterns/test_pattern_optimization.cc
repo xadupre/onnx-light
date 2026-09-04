@@ -835,6 +835,10 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
   EXPECT_EQ(std::count(names.begin(), names.end(), "NotNot"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "PadConv"), 1);
   const std::vector<std::string> new_pattern_names = {
+      "ConcatSliceElimination",
+      "GatherSliceToSplit",
+      "LabelEncoderFusion",
+      "SliceConcatToSpaceToDepth",
       "ConcatReshape",
       "Reshape",
       "ReduceReshape",

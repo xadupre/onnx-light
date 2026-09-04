@@ -36,6 +36,7 @@
 #include "onnx_extensions/patterns/normalization/activation_pattern.h"
 #include "onnx_extensions/patterns/normalization/normalization_pattern.h"
 #include "onnx_extensions/patterns/reshape/reshape_pattern.h"
+#include "onnx_extensions/patterns/traditionalml/label_encoder_pattern.h"
 #include "onnx_extensions/patterns/traditionalml/tree_ensemble_pattern.h"
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 #include "onnx_extensions/patterns/unsqueeze/unsqueeze_pattern.h"
@@ -96,6 +97,10 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ConcatEmptyPattern>();
                                    });
+    core::builder::RegisterPattern("ConcatSliceElimination",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ConcatSliceEliminationPattern>();
+                                   });
     core::builder::RegisterPattern("ConcatGather",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ConcatGatherPattern>();
@@ -120,6 +125,10 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<GathersSplitPattern>();
                                    });
+    core::builder::RegisterPattern("GatherSliceToSplit",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<GatherSliceToSplitPattern>();
+                                   });
     core::builder::RegisterPattern("SliceSlice",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<SliceSlicePattern>();
@@ -133,6 +142,10 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("SplitConcat",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<SplitConcatPattern>();
+                                   });
+    core::builder::RegisterPattern("SliceConcatToSpaceToDepth",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<SliceConcatToSpaceToDepthPattern>();
                                    });
     core::builder::RegisterPattern("SequenceConstructAt",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
@@ -367,6 +380,10 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("TreeEnsemble",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<TreeEnsemblePattern>();
+                                   });
+    core::builder::RegisterPattern("LabelEncoderFusion",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<LabelEncoderFusionPattern>();
                                    });
     core::builder::RegisterPattern("UnsqueezeShape",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {

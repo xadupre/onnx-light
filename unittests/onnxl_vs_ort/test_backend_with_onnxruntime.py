@@ -134,6 +134,8 @@ ORT_EXCLUDE_REGEX = [
     # AveragePool tail windows tracked by microsoft/onnxruntime#29629.
     r"^test_cc_averagepool_18_ceil_count_include_pad_1d$",
     r"^test_cc_averagepool_18_ceil_count_include_pad_2d$",
+    # ORT 1.27 ignores dilations when computing SAME_* output dimensions.
+    r"^test_cc_averagepool_1d_dilations_same_(?:lower|upper)$",
     # ORT is missing kernels for these ops or dtypes.
     r"^test_cc_globallppool_",
     r"^test_cc_maxroipool_",

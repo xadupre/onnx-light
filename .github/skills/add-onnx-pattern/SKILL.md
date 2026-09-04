@@ -32,6 +32,8 @@ Follow every step when adding or porting a graph-rewriting pattern.
    - Add the pattern factory to
      `onnx_light/onnx_extensions/patterns/dispatch_table.cc`.
    - Add the matching nanobind class in `onnx_light/onnx_py/_onnxpy_patterns.cc`.
+   - Export the class and include it in `__all__` in
+     `onnx_light/onnx_core/optimization.py`.
    - Keep the registry name, intrinsic name, and Python class name consistent with
      neighboring patterns.
 

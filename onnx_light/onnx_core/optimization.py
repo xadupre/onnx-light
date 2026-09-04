@@ -74,6 +74,7 @@ SqueezeBinaryUnsqueezePattern: TypeAlias = _patterns.SqueezeBinaryUnsqueezePatte
 SwapUnsqueezeTransposePattern: TypeAlias = _patterns.SwapUnsqueezeTransposePattern
 TransposeEqualReshapePattern: TypeAlias = _patterns.TransposeEqualReshapePattern
 TransposeReshapeTransposePattern: TypeAlias = _patterns.TransposeReshapeTransposePattern
+DivMulPattern: TypeAlias = _patterns.DivMulPattern
 MulMulMulScalarPattern: TypeAlias = _patterns.MulMulMulScalarPattern
 SwitchOrderBinaryPattern: TypeAlias = _patterns.SwitchOrderBinaryPattern
 SwapRangeAddScalarPattern: TypeAlias = _patterns.SwapRangeAddScalarPattern
@@ -268,6 +269,7 @@ __all__ = [
     "ConcatTwiceUnaryPattern",
     "ConstantToInitializerPattern",
     "ConvBiasNullPattern",
+    "DivMulPattern",
     "DropoutPattern",
     "ExpandBroadcastPattern",
     "ExpandPattern",

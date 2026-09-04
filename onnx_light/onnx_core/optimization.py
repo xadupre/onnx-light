@@ -93,6 +93,7 @@ FunctionCausalMaskMulAddPattern: TypeAlias = _patterns.FunctionCausalMaskMulAddP
 FunctionCosSinCachePattern: TypeAlias = _patterns.FunctionCosSinCachePattern
 FunctionHalfRotaryEmbeddingPattern: TypeAlias = _patterns.FunctionHalfRotaryEmbeddingPattern
 FunctionAttentionPattern: TypeAlias = _patterns.FunctionAttentionPattern
+LinearAttentionPattern: TypeAlias = _patterns.LinearAttentionPattern
 FunctionAttentionGQAPattern: TypeAlias = _patterns.FunctionAttentionGQAPattern
 AttentionGQAPattern: TypeAlias = _patterns.AttentionGQAPattern
 GemmTransposePattern: TypeAlias = _patterns.GemmTransposePattern
@@ -290,6 +291,7 @@ __all__ = [
     "LayerNormalizationPattern",
     "LayerNormalizationScalePattern",
     "LeakyReluPattern",
+    "LinearAttentionPattern",
     "LocalRewriting",
     "MatMulAddPattern",
     "MatMulReshape2Of3Pattern",

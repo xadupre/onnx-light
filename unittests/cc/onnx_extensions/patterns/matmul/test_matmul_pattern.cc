@@ -323,6 +323,24 @@ TEST(MatMulBatchNormalizationFusionPattern, FoldsConstantsAndRejectsDynamicWeigh
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[1]).pattern, nullptr);
 }
 
+TEST(MatMulBatchNormalizationFusionPattern, RejectsTrainingOutputsBeforeOpset14) {
+  core::builder::GraphBuilder builder("training", SchemaLookup());
+  builder.SetOpsetVersion("", 13);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  AddFloat(builder, "w", {3, 2}, {1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 6.0F});
+  AddFloat(builder, "scale", {2}, {1.0F, 1.0F});
+  AddFloat(builder, "bias", {2}, {0.0F, 0.0F});
+  AddFloat(builder, "mean", {2}, {0.0F, 0.0F});
+  AddFloat(builder, "variance", {2}, {1.0F, 1.0F});
+  builder.MakeNode("MatMul", {"x", "w"}, {"mm"});
+  builder.MakeNode("BatchNormalization", {"mm", "scale", "bias", "mean", "variance"},
+                   {"out", "running_mean", "running_var", "saved_mean", "saved_var"});
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::MatMulBatchNormalizationFusionPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+}
+
 TEST(MatMulScaleFusionPattern, FoldsWeightAndRejectsUnsafeDivision) {
   core::builder::GraphBuilder builder("positive", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));

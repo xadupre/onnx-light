@@ -352,6 +352,9 @@ core::builder::MatchResult ConcatSliceEliminationPattern::Match(core::builder::G
 
   std::vector<const NodeProto *> ordered(static_cast<std::size_t>(candidate.input_size()), nullptr);
   for (const NodeProto *slice : consumers) {
+    if (slice->input_size() == 0 || slice->input()[0].value() != output) {
+      return NoMatch(candidate, "the Concat output is not the Slice data input");
+    }
     int64_t start = 0;
     int64_t end = 0;
     int64_t slice_axis = 0;

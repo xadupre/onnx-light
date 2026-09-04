@@ -660,7 +660,9 @@ ConvBatchNormalizationFusionPattern::Match(core::builder::GraphGraph &graph,
       bn->output_size() < 1 || bn->output()[0].value().empty()) {
     return NoMatch(candidate, "the BatchNormalization signature is incomplete");
   }
-  if (GetAttributeOr<int64_t>(*bn, "training_mode", 0) != 0) {
+  const int opset = graph.Builder().OpsetVersion("");
+  if ((opset < 14 && bn->output_size() != 1) ||
+      (opset >= 14 && GetAttributeOr<int64_t>(*bn, "training_mode", 0) != 0)) {
     return NoMatch(candidate, "the BatchNormalization is in training mode");
   }
   for (int i = 1; i < bn->output_size(); ++i) {

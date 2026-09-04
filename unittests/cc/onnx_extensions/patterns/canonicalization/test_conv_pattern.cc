@@ -347,5 +347,23 @@ TEST(ConvBatchNormalizationFusionPattern, RejectsOptionalOutput) {
   EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, nullptr);
 }
 
+TEST(ConvBatchNormalizationFusionPattern, RejectsTrainingOutputsBeforeOpset14) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 13);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 1, 2, 2));
+  builder.MakeInitializer(MakeInitializer<float>("w", {1, 1, 1, 1}, {2.0f}));
+  builder.MakeInitializer(MakeInitializer<float>("scale", {1}, {1.0f}));
+  builder.MakeInitializer(MakeInitializer<float>("bn_b", {1}, {0.0f}));
+  builder.MakeInitializer(MakeInitializer<float>("mean", {1}, {0.0f}));
+  builder.MakeInitializer(MakeInitializer<float>("var", {1}, {1.0f}));
+  builder.MakeNode("Conv", {"x", "w"}, {"conv"});
+  builder.MakeNode("BatchNormalization", {"conv", "scale", "bn_b", "mean", "var"},
+                   {"y", "running_mean", "running_var", "saved_mean", "saved_var"});
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::ConvBatchNormalizationFusionPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, nullptr);
+}
+
 } // namespace
 } // namespace Test

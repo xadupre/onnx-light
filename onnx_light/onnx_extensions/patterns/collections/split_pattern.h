@@ -124,6 +124,16 @@ public:
  * Replaces compatible sibling scalar ``Gather`` and contiguous ``Slice``
  * ranges covering a complete static axis with one ``Split``. Scalar Gather
  * outputs are restored with ``Squeeze``.
+ *
+ * @code
+ * Before:
+ *   x --+--> Gather(index=0) ----------> y0
+ *       +--> Slice(starts=1, ends=3) --> y1
+ *
+ * After:
+ *   x --> Split(sizes=[1,2]) --+--> Squeeze --> y0
+ *                              +-------------> y1
+ * @endcode
  */
 class GatherSliceToSplitPattern final : public core::builder::PatternOptimization {
 public:

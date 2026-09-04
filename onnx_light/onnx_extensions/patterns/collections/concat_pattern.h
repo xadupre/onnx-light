@@ -56,6 +56,16 @@ public:
 /**
  * Removes a ``Concat`` whose consumers are exact, non-overlapping ``Slice``
  * nodes that recover every input in order along the concatenation axis.
+ *
+ * @code
+ * Before:
+ *   x0, x1 --> Concat --+--> Slice(range of x0) --> y0
+ *                       +--> Slice(range of x1) --> y1
+ *
+ * After:
+ *   x0 --> Identity --> y0
+ *   x1 --> Identity --> y1
+ * @endcode
  */
 class ConcatSliceEliminationPattern final : public core::builder::PatternOptimization {
 public:
@@ -79,6 +89,17 @@ public:
 /**
  * Replaces the canonical rank-4 four-phase slicing and channel concatenation
  * used by focus layers with the standard ONNX ``SpaceToDepth(blocksize=2)``.
+ *
+ * @code
+ * Before:
+ *   x --+--> Slice(0::2, 0::2) --+
+ *       +--> Slice(0::2, 1::2) --+
+ *       +--> Slice(1::2, 0::2) --+--> Concat(axis=1) --> y
+ *       +--> Slice(1::2, 1::2) --+
+ *
+ * After:
+ *   x --> SpaceToDepth(blocksize=2) --> y
+ * @endcode
  */
 class SliceConcatToSpaceToDepthPattern final : public core::builder::PatternOptimization {
 public:

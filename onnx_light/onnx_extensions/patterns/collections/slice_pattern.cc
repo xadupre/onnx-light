@@ -71,12 +71,12 @@ core::builder::MatchResult SliceEliminationPattern::Match(core::builder::GraphGr
 
   std::vector<int64_t> starts;
   std::vector<int64_t> ends;
+  std::vector<int64_t> axes;
   if (opset < 10) {
     if (!GetAttributeInts(candidate, "starts", starts) ||
         !GetAttributeInts(candidate, "ends", ends)) {
       return NoMatch(candidate, "the attribute-form Slice needs starts and ends");
     }
-    std::vector<int64_t> axes;
     if (GetAttributeInts(candidate, "axes", axes) && axes.size() != starts.size()) {
       return NoMatch(candidate, "the Slice axes size differs from starts");
     }
@@ -86,7 +86,6 @@ core::builder::MatchResult SliceEliminationPattern::Match(core::builder::GraphGr
       return NoMatch(candidate, "the Slice starts and ends must be constant integers");
     }
     if (candidate.input_size() > 3 && !candidate.input()[3].value().empty()) {
-      std::vector<int64_t> axes;
       if (!ReadConstantIntegers(graph, candidate, 3, axes) || axes.size() != starts.size()) {
         return NoMatch(candidate, "the Slice axes must be constant and match starts");
       }
@@ -110,8 +109,25 @@ core::builder::MatchResult SliceEliminationPattern::Match(core::builder::GraphGr
   if (starts.empty() || starts.size() != ends.size()) {
     return NoMatch(candidate, "the Slice starts and ends must have the same non-zero size");
   }
+  const core::symbolic::SymShape *shape = nullptr;
+  if (graph.HasShape(candidate.input()[0].value())) {
+    shape = &graph.GetShape(candidate.input()[0].value()).Shape();
+  }
   for (std::size_t i = 0; i < starts.size(); ++i) {
-    if (starts[i] != 0 || ends[i] != std::numeric_limits<int64_t>::max()) {
+    if (starts[i] != 0) {
+      return NoMatch(candidate, "the Slice does not select the full range");
+    }
+    if (ends[i] == std::numeric_limits<int64_t>::max()) {
+      continue;
+    }
+    int64_t axis = axes.empty() ? static_cast<int64_t>(i) : axes[i];
+    if (shape == nullptr) {
+      return NoMatch(candidate, "a finite Slice end requires a known input shape");
+    }
+    const int64_t rank = static_cast<int64_t>(shape->Rank());
+    axis = axis < 0 ? axis + rank : axis;
+    if (axis < 0 || axis >= rank || !(*shape)[static_cast<std::size_t>(axis)].IsInt() ||
+        ends[i] < (*shape)[static_cast<std::size_t>(axis)].AsInt()) {
       return NoMatch(candidate, "the Slice does not select the full range");
     }
   }

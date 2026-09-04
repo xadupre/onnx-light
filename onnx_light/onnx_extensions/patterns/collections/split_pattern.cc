@@ -142,6 +142,9 @@ bool CollectGatherSlicePartition(core::builder::GraphGraph &graph, const NodePro
   bool has_gather = false;
   bool has_slice = false;
   for (const NodeProto *consumer : graph.NextNodes(data)) {
+    if (consumer->input_size() == 0 || consumer->input()[0].value() != data) {
+      continue;
+    }
     if (!IsDefaultOp(*consumer, "Gather") && !IsDefaultOp(*consumer, "Slice")) {
       continue;
     }
@@ -360,15 +363,17 @@ GathersSplitPattern::Apply(core::builder::GraphGraph &graph,
     const std::size_t slot = static_cast<std::size_t>(value);
     if (scalar_index) {
       const std::string intermediate = builder.UniqueName(name + "_split");
+      const std::string squeeze_name = name + "-Squeeze-" + std::to_string(value);
       post_nodes.push_back(MakeNode("Squeeze", {intermediate, axes_init},
-                                    {user->output()[0].value()}, "", name.c_str()));
+                                    {user->output()[0].value()}, "", squeeze_name.c_str()));
       outputs[slot] = intermediate;
     } else {
       outputs[slot] = user->output()[0].value();
     }
   }
 
-  NodeProto split = MakeNode("Split", {nodes[0]->input()[0].value()}, outputs, "", name.c_str());
+  NodeProto split =
+      MakeNode("Split", {nodes[0]->input()[0].value()}, outputs, "", (name + "-Split").c_str());
   AddAttribute<int64_t>(split, "axis", axis);
   AddAttribute<int64_t>(split, "num_outputs", static_cast<int64_t>(count));
 
@@ -420,30 +425,34 @@ GatherSliceToSplitPattern::Apply(core::builder::GraphGraph &graph,
   core::builder::GraphBuilder &builder = graph.Builder();
   const std::string name = "GatherSliceToSplitPattern--" + nodes[0]->name().value();
   const std::string splits = FreeInitializerName(builder, name + "_splits");
-  const std::string axes = FreeInitializerName(builder, name + "_axes");
   std::vector<int64_t> sizes;
   sizes.reserve(ranges.size());
   for (const PartitionRange &range : ranges) {
     sizes.push_back(range.end - range.start);
   }
   builder.MakeInitializer(MakeInitializerShape(splits.c_str(), sizes));
-  builder.MakeInitializer(MakeInitializerShape(axes.c_str(), {axis}));
 
   std::vector<std::string> outputs;
   utils::RepeatedProtoField<NodeProto> squeezes;
+  std::string axes;
   outputs.reserve(ranges.size());
   for (const PartitionRange &range : ranges) {
     if (range.squeeze) {
+      if (axes.empty()) {
+        axes = FreeInitializerName(builder, name + "_axes");
+        builder.MakeInitializer(MakeInitializerShape(axes.c_str(), {axis}));
+      }
       const std::string intermediate = builder.UniqueName(name + "_split");
       outputs.push_back(intermediate);
       squeezes.push_back(MakeNode("Squeeze", {intermediate, axes},
-                                  {range.node->output()[0].value()}, "", name.c_str()));
+                                  {range.node->output()[0].value()}, "",
+                                  builder.UniqueName(name + "_squeeze").c_str()));
     } else {
       outputs.push_back(range.node->output()[0].value());
     }
   }
-  NodeProto split =
-      MakeNode("Split", {nodes[0]->input()[0].value(), splits}, outputs, "", name.c_str());
+  NodeProto split = MakeNode("Split", {nodes[0]->input()[0].value(), splits}, outputs, "",
+                             builder.UniqueName(name + "_split_node").c_str());
   AddAttribute<int64_t>(split, "axis", axis);
   utils::RepeatedProtoField<NodeProto> replacements;
   replacements.push_back(split);

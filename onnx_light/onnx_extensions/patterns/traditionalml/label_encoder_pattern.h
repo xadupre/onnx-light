@@ -14,6 +14,14 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * The portable subset supports the standard string and int64 list attributes
  * used by LabelEncoder versions 2 and 4.
+ *
+ * @code
+ * Before:
+ *   x --> LabelEncoder(keys1, values1) --> LabelEncoder(keys2, values2) --> y
+ *
+ * After:
+ *   x --> LabelEncoder(composed keys and values) --> y
+ * @endcode
  */
 class LabelEncoderFusionPattern final : public core::builder::PatternOptimization {
 public:

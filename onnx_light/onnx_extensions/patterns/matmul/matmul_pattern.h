@@ -47,6 +47,14 @@ public:
  *
  * The Gemm output must be private to the Sum, and the other Sum input must be
  * unidirectionally broadcastable to the rank-two Gemm output.
+ *
+ * @code
+ * Before:
+ *   A, B --> Gemm --> Sum(C) --> y
+ *
+ * After:
+ *   A, B, C --> Gemm(beta=1) --> y
+ * @endcode
  */
 class GemmSumFusionPattern final : public core::builder::PatternOptimization {
 public:
@@ -217,6 +225,14 @@ public:
  * The MatMul weight and all four BatchNormalization parameters must be
  * floating-point constants. The replacement is a standard Gemm with folded
  * weight and bias initializers.
+ *
+ * @code
+ * Before:
+ *   x, W --> MatMul --> BatchNormalization --> y
+ *
+ * After:
+ *   x, folded_W, folded_bias --> Gemm --> y
+ * @endcode
  */
 class MatMulBatchNormalizationFusionPattern final : public core::builder::PatternOptimization {
 public:
@@ -237,6 +253,14 @@ public:
  * replaced by a standard Gemm whose ``alpha`` attribute carries the scalar.
  * Divisions with the scalar in the numerator and zero or non-finite factors
  * are rejected.
+ *
+ * @code
+ * Before:
+ *   x, W --> MatMul --> Mul(scale) --> y
+ *
+ * After:
+ *   x, folded_W --> MatMul --> y
+ * @endcode
  */
 class MatMulScaleFusionPattern final : public core::builder::PatternOptimization {
 public:

@@ -1140,8 +1140,13 @@ core::builder::MatchResult
 MatMulBatchNormalizationFusionPattern::Match(core::builder::GraphGraph &graph,
                                              const NodeProto &candidate) const {
   if (!IsDefaultOp(candidate, "BatchNormalization") || candidate.input_size() < 5 ||
-      candidate.output_size() < 1 || GetAttributeOr<int64_t>(candidate, "training_mode", 0) != 0) {
+      candidate.output_size() < 1) {
     return NoMatch(candidate, "candidate is not an inference BatchNormalization");
+  }
+  const int opset = graph.Builder().OpsetVersion("");
+  if ((opset < 14 && candidate.output_size() != 1) ||
+      (opset >= 14 && GetAttributeOr<int64_t>(candidate, "training_mode", 0) != 0)) {
+    return NoMatch(candidate, "the BatchNormalization is in training mode");
   }
   for (int index = 1; index < candidate.output_size(); ++index) {
     if (!candidate.output()[index].value().empty() &&

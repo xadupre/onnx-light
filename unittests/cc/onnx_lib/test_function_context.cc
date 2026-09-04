@@ -57,15 +57,6 @@ static TensorProto ToTensor(double value, TensorProto_DataType elem_type) {
   return t;
 }
 
-// Mirrors the original BuildFunctionProto helper: populates nodes and then
-// calls BuildFunction() to set name/domain/inputs/outputs/opset_import.
-static bool LocalBuildFunctionProto(FunctionProto &functionProto, const OpSchema &schema,
-                                    const std::vector<FunctionBodyHelper::NodeDef> &node_defs) {
-  FunctionBodyHelper::BuildNodes(functionProto, node_defs);
-  schema.BuildFunction(functionProto);
-  return true;
-}
-
 // ---------------------------------------------------------------------------
 // Context-dependent function builders
 // ---------------------------------------------------------------------------
@@ -73,10 +64,10 @@ static bool LocalBuildFunctionProto(FunctionProto &functionProto, const OpSchema
 // Monomorphic float builder – same logic as original BuildFloatFunctionBody.
 static bool BuildFloatFunctionBody(const FunctionBodyBuildContext & /*ctx*/, const OpSchema &schema,
                                    FunctionProto &functionProto) {
-  auto two_as_tensor = ToTensor(2.0, TensorProto_DataType_FLOAT);
-  std::vector<FunctionBodyHelper::NodeDef> body{
-      {{"Two"}, "Constant", {}, {{"value", two_as_tensor}}}, {{"Y"}, "Mul", {"X", "Two"}}};
-  return LocalBuildFunctionProto(functionProto, schema, body);
+  FunctionBuilder builder(functionProto);
+  builder.Const("Two", ToTensor(2.0, TensorProto_DataType_FLOAT)).Add("Y = Mul (X, Two)");
+  schema.BuildFunction(functionProto);
+  return true;
 }
 
 // Polymorphic builder – same logic as original BuildFunctionBody.
@@ -86,10 +77,10 @@ static bool BuildPolymorphicFunctionBody(const FunctionBodyBuildContext &ctx,
   if ((tp == nullptr) || (!tp->has_tensor_type()))
     return false;
   auto elem_type = tp->ref_tensor_type().ref_elem_type();
-  auto two_as_tensor = ToTensor(2.0, elem_type);
-  std::vector<FunctionBodyHelper::NodeDef> body{
-      {{"Two"}, "Constant", {}, {{"value", two_as_tensor}}}, {{"Y"}, "Mul", {"X", "Two"}}};
-  return LocalBuildFunctionProto(functionProto, schema, body);
+  FunctionBuilder builder(functionProto);
+  builder.Const("Two", ToTensor(2.0, elem_type)).Add("Y = Mul (X, Two)");
+  schema.BuildFunction(functionProto);
+  return true;
 }
 
 // ---------------------------------------------------------------------------

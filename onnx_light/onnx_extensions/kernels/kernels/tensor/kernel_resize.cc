@@ -65,7 +65,7 @@ Tensor ReadResizeSizes(const Tensor &sizes, std::size_t expected_length,
   }
   const int64_t *values = out.As<int64_t>();
   for (int64_t i = 0; i < n; ++i) {
-    EXT_ENFORCE_INVALID(values[i] > 0, "kernel::Resize: 'sizes' values must be > 0.");
+    EXT_ENFORCE_INVALID(values[i] >= 0, "kernel::Resize: 'sizes' values must be >= 0.");
   }
   return out;
 }
@@ -86,6 +86,8 @@ onnx_kernels::Shape NormaliseAxes(const onnx_kernels::Shape &axes, std::size_t r
     int64_t na = a < 0 ? a + static_cast<int64_t>(rank) : a;
     EXT_ENFORCE_INVALID(na >= 0 && na < static_cast<int64_t>(rank),
                         "kernel::Resize: 'axes' value out of range.");
+    EXT_ENFORCE_INVALID(std::find(out.begin(), out.end(), na) == out.end(),
+                        "kernel::Resize: 'axes' values must not contain duplicates.");
     out.push_back(na);
   }
   return out;

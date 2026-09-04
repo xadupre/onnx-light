@@ -427,6 +427,13 @@ class TestNumpyHelper(ExtTestCase):
                 with self.assertRaises(ValueError):
                     onh.to_array(tensor)
 
+    def test_to_array_reshape_mismatch_hints_wrong_message_type(self) -> None:
+        tensor = onnxl.TensorProto()
+        tensor.data_type = onnxl.TensorProto.FLOAT
+        tensor.dims.extend([111, 112, 116, 95, 105, 110])
+        with self.assertRaisesRegex(ValueError, "not actually a TensorProto"):
+            onh.to_array(tensor)
+
 
 class TestHelperExtensions(ExtTestCase):
     def test_tensor_dtype_to_storage_tensor_dtype(self) -> None:

@@ -1169,6 +1169,54 @@ TEST(RunNodes, RunNodeResizeSizesFromDispatchTable) {
   EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 }
 
+TEST(RunNodes, RunNodeResizeRejectsDuplicateNormalizedAxes) {
+  RuntimeContext rt(KernelContext(DefaultOpset(19)));
+  rt.tensors()["X"] = Tensor::FromFloat("X", {2, 3, 4}, std::vector<float>(24, 1.0f));
+  rt.tensors()["sizes"] = Tensor::FromInt64("sizes", {2}, {5, 5});
+  NodeProto node = MakeNode("Resize", {"X", "", "", "sizes"}, {"Y"});
+  AttributeProto *axes = node.add_attribute();
+  axes->set_name("axes");
+  axes->set_type(AttributeProto::AttributeType::INTS);
+  axes->add_ints(1);
+  axes->add_ints(-2);
+
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
+}
+
+TEST(RunNodes, RunNodeResizePreservesZeroSizedDimensions) {
+  RuntimeContext rt(KernelContext(DefaultOpset(19)));
+  rt.tensors()["X"] = Tensor::FromFloat("X", {0, 3, 4}, {});
+  rt.tensors()["sizes"] = Tensor::FromInt64("sizes", {1}, {5});
+  NodeProto node = MakeNode("Resize", {"X", "", "", "sizes"}, {"Y"});
+  AttributeProto *axes = node.add_attribute();
+  axes->set_name("axes");
+  axes->set_type(AttributeProto::AttributeType::INTS);
+  axes->add_ints(2);
+
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("Y");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{0, 3, 5}));
+  EXPECT_EQ(y.element_count(), 0);
+}
+
+TEST(RunNodes, RunNodeResizeAllowsZeroOutputSize) {
+  RuntimeContext rt(KernelContext(DefaultOpset(19)));
+  rt.tensors()["X"] = Tensor::FromFloat("X", {2, 3, 4}, std::vector<float>(24, 1.0f));
+  rt.tensors()["sizes"] = Tensor::FromInt64("sizes", {1}, {0});
+  NodeProto node = MakeNode("Resize", {"X", "", "", "sizes"}, {"Y"});
+  AttributeProto *axes = node.add_attribute();
+  axes->set_name("axes");
+  axes->set_type(AttributeProto::AttributeType::INTS);
+  axes->add_ints(1);
+
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("Y");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 0, 4}));
+  EXPECT_EQ(y.element_count(), 0);
+}
+
 TEST(RunNodes, RunNodeRegexFullMatchFromDispatchTable) {
   RuntimeContext rt(KernelContext(DefaultOpset(20)));
   rt.tensors()["x"] = Tensor::FromStrings("x", {3}, {"abc", "abcdef", "xyz"});

@@ -48,7 +48,10 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
   const TestCase *avp_2d_pre_same_upper = nullptr;
   const TestCase *avp_2d_same_upper = nullptr;
   const TestCase *avp_2d_same_lower = nullptr;
+  const TestCase *avp_1d_dilations_same_upper = nullptr;
+  const TestCase *avp_1d_dilations_same_lower = nullptr;
   const TestCase *avp_2d_dilations = nullptr;
+  const TestCase *avp_2d_dilations_cip = nullptr;
   const TestCase *avp_2d_dilations_valid = nullptr;
   const TestCase *avp_3d_dilations_small = nullptr;
   const TestCase *avp_3d_dil_large_0_T = nullptr;
@@ -92,8 +95,14 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
       avp_2d_same_upper = &c;
     } else if (c.name == "test_cc_averagepool_2d_same_lower") {
       avp_2d_same_lower = &c;
+    } else if (c.name == "test_cc_averagepool_1d_dilations_same_upper") {
+      avp_1d_dilations_same_upper = &c;
+    } else if (c.name == "test_cc_averagepool_1d_dilations_same_lower") {
+      avp_1d_dilations_same_lower = &c;
     } else if (c.name == "test_cc_averagepool_2d_dilations") {
       avp_2d_dilations = &c;
+    } else if (c.name == "test_cc_averagepool_2d_dilations_count_include_pad") {
+      avp_2d_dilations_cip = &c;
     } else if (c.name == "test_cc_averagepool_2d_dilations_valid") {
       avp_2d_dilations_valid = &c;
     } else if (c.name == "test_cc_averagepool_3d_dilations_small") {
@@ -130,7 +139,10 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
   ASSERT_NE(avp_2d_pre_same_upper, nullptr);
   ASSERT_NE(avp_2d_same_upper, nullptr);
   ASSERT_NE(avp_2d_same_lower, nullptr);
+  ASSERT_NE(avp_1d_dilations_same_upper, nullptr);
+  ASSERT_NE(avp_1d_dilations_same_lower, nullptr);
   ASSERT_NE(avp_2d_dilations, nullptr);
+  ASSERT_NE(avp_2d_dilations_cip, nullptr);
   ASSERT_NE(avp_2d_dilations_valid, nullptr);
   ASSERT_NE(avp_3d_dilations_small, nullptr);
   ASSERT_NE(avp_3d_dil_large_0_T, nullptr);
@@ -171,6 +183,35 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
   {
     const auto &ds = pads->data_sets()[0];
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 5, 5}));
+  }
+
+  // Dilated SAME padding uses the effective kernel extent and splits odd
+  // padding on the side selected by SAME_UPPER/SAME_LOWER.
+  {
+    const auto &upper = avp_1d_dilations_same_upper->data_sets()[0].outputs[0];
+    const auto &lower = avp_1d_dilations_same_lower->data_sets()[0].outputs[0];
+    EXPECT_EQ(upper.shape, (std::vector<int64_t>{1, 1, 3}));
+    EXPECT_EQ(lower.shape, (std::vector<int64_t>{1, 1, 3}));
+    const float *upper_values = upper.AsFloat();
+    const float *lower_values = lower.AsFloat();
+    EXPECT_FLOAT_EQ(upper_values[0], 3.0f);
+    EXPECT_FLOAT_EQ(upper_values[1], 4.0f);
+    EXPECT_FLOAT_EQ(upper_values[2], 5.0f);
+    EXPECT_FLOAT_EQ(lower_values[0], 2.0f);
+    EXPECT_FLOAT_EQ(lower_values[1], 3.0f);
+    EXPECT_FLOAT_EQ(lower_values[2], 4.0f);
+  }
+
+  // Dilated pooling with count_include_pad divides each border window by the
+  // full 2x2 kernel size.
+  {
+    const auto &output = avp_2d_dilations_cip->data_sets()[0].outputs[0];
+    EXPECT_EQ(output.shape, (std::vector<int64_t>{1, 1, 3, 3}));
+    const float *values = output.AsFloat();
+    const std::vector<float> expected = {1.25f, 2.5f, 1.25f, 2.5f, 5.0f, 2.5f, 1.25f, 2.5f, 1.25f};
+    for (size_t i = 0; i < expected.size(); ++i) {
+      EXPECT_FLOAT_EQ(values[i], expected[i]);
+    }
   }
 
   // Dilated VALID case: effective kernel is 5x5, so a 7x7 input yields a 3x3

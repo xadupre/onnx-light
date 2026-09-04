@@ -63,8 +63,14 @@ using onnx_kernels::kernel::AutoPad;
 //     ``auto_pad = SAME_UPPER``.
 //   * ``test_cc_averagepool_2d_same_lower`` — 2x2 kernel,
 //     ``auto_pad = SAME_LOWER``.
+//   * ``test_cc_averagepool_1d_dilations_same_upper`` — 3-wide kernel,
+//     dilations ``(2)``, strides ``(2)``, ``auto_pad = SAME_UPPER``.
+//   * ``test_cc_averagepool_1d_dilations_same_lower`` — 3-wide kernel,
+//     dilations ``(2)``, strides ``(2)``, ``auto_pad = SAME_LOWER``.
 //   * ``test_cc_averagepool_2d_dilations`` — 2x2 kernel, dilations
 //     ``(2, 2)``, ``ceil_mode = 1``.
+//   * ``test_cc_averagepool_2d_dilations_count_include_pad`` — 2x2 kernel,
+//     dilations ``(2, 2)``, pads ``(1, 1, 1, 1)``, ``count_include_pad = 1``.
 //   * ``test_cc_averagepool_2d_dilations_valid`` — 3x3 kernel, dilations
 //     ``(2, 2)``, ``auto_pad = VALID``.
 //   * ``test_cc_averagepool_3d_default`` — 3-D, 2x2x2 kernel.
@@ -604,6 +610,44 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
     });
   }
 
+  // 3-wide kernel, dilation 2 and stride 2 with ``auto_pad = SAME_UPPER``.
+  {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {2});
+    AddAttribute<std::vector<int64_t>>(node, "dilations", {2});
+    AddAttribute<std::string>(node, "auto_pad", std::string("SAME_UPPER"));
+    Expect(registry, std::move(node), "test_cc_averagepool_1d_dilations_same_upper", {opset},
+           []() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 1, 6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+             Tensor y = Tensor::FromFloat("", {1, 1, 3}, {3.0f, 4.0f, 5.0f});
+
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
+  }
+
+  // 3-wide kernel, dilation 2 and stride 2 with ``auto_pad = SAME_LOWER``.
+  {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {2});
+    AddAttribute<std::vector<int64_t>>(node, "dilations", {2});
+    AddAttribute<std::string>(node, "auto_pad", std::string("SAME_LOWER"));
+    Expect(registry, std::move(node), "test_cc_averagepool_1d_dilations_same_lower", {opset},
+           []() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 1, 6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+             Tensor y = Tensor::FromFloat("", {1, 1, 3}, {2.0f, 3.0f, 4.0f});
+
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
+  }
+
   // 2x2 kernel, dilations (2, 2), strides (1, 1), ``ceil_mode = 1`` on a
   // 1x1x4x4 input (mirrors ``test_averagepool_2d_dilations``).
   {
@@ -630,6 +674,28 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
 
       return IoData{{std::move(x)}, {std::move(y)}};
     });
+  }
+
+  // 2x2 kernel with dilation 2, one cell of padding and
+  // ``count_include_pad = 1``.
+  {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
+    AddAttribute<int64_t>(node, "count_include_pad", 1);
+    Expect(registry, std::move(node), "test_cc_averagepool_2d_dilations_count_include_pad", {opset},
+           []() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 1, 3, 3},
+                                          {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
+             Tensor y = Tensor::FromFloat(
+                 "", {1, 1, 3, 3}, {1.25f, 2.5f, 1.25f, 2.5f, 5.0f, 2.5f, 1.25f, 2.5f, 1.25f});
+
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // 3x3 kernel, dilations (2, 2), strides (1, 1), ``auto_pad = VALID`` on a

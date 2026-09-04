@@ -238,6 +238,20 @@ def _unpack_6bit(data: np.ndarray, dims: Sequence[int]) -> npt.NDArray[np.uint8]
     return unpacked.reshape(-1)[:original_size].reshape(dims)
 
 
+def _reshape_or_raise(array: np.ndarray, dims: Sequence[int], tensor: TensorProto) -> np.ndarray:
+    """Reshapes an array and explains when the bytes may represent another message type."""
+    try:
+        return array.reshape(dims)
+    except ValueError as exc:
+        raise ValueError(
+            f"{exc} Failed to reshape tensor '{tensor.name}'. This can happen "
+            "when the parsed bytes are not actually a TensorProto; protobuf "
+            "does not encode message-type information, so a different message "
+            "type (e.g. OptionalProto, SequenceProto, MapProto) can be "
+            "silently misparsed as one."
+        ) from exc
+
+
 def _load_external_data_for_tensor(tensor: TensorProto, base_dir: str) -> None:
     """Loads data from an external file into tensor.raw_data.
 
@@ -330,7 +344,7 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
     if tensor.data_type == TensorProto.STRING:
         utf8_strings = getattr(tensor, storage_field)
         ss = [s.decode("utf-8") if isinstance(s, bytes) else str(s) for s in utf8_strings]
-        return np.asarray(ss).astype(np_dtype).reshape(dims)
+        return _reshape_or_raise(np.asarray(ss).astype(np_dtype), dims, tensor)
 
     # Load raw data from external tensor if it exists
     if int(tensor.data_location) == int(TensorProto.EXTERNAL):
@@ -355,7 +369,7 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
             data = np.frombuffer(raw_data, dtype=np.uint8)
             return _unpack_6bit(data, dims).view(np_dtype)
 
-        return np.frombuffer(raw_data, dtype=np_dtype).reshape(dims)
+        return _reshape_or_raise(np.frombuffer(raw_data, dtype=np_dtype), dims, tensor)
 
     if tensor_dtype in {
         TensorProto.BFLOAT16,
@@ -363,13 +377,11 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
         TensorProto.INT16,
         TensorProto.UINT16,
     }:
-        return (
-            np.array(tensor.int32_data, dtype=np.int32)
-            .view(np.uint32)
-            .astype(np.uint16)
-            .reshape(dims)
-            .view(np_dtype)
-        )
+        return _reshape_or_raise(
+            np.array(tensor.int32_data, dtype=np.int32).view(np.uint32).astype(np.uint16),
+            dims,
+            tensor,
+        ).view(np_dtype)
 
     if tensor_dtype in {
         TensorProto.FLOAT8E4M3FN,
@@ -379,19 +391,23 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
         TensorProto.FLOAT8E8M0,
         TensorProto.BOOL,
     }:
-        return (
+        return _reshape_or_raise(
             np.array(tensor.int32_data, dtype=np.int32)
             .view(np.uint32)
             .astype(np.uint8)
-            .view(np_dtype)
-            .reshape(dims)
+            .view(np_dtype),
+            dims,
+            tensor,
         )
 
     if tensor_dtype in {TensorProto.FLOAT6E2M3, TensorProto.FLOAT6E3M2}:
-        return (
-            (np.array(tensor.int32_data, dtype=np.int32).view(np.uint32).astype(np.uint8) & 0x3F)
-            .view(np_dtype)
-            .reshape(dims)
+        return _reshape_or_raise(
+            (
+                np.array(tensor.int32_data, dtype=np.int32).view(np.uint32).astype(np.uint8)
+                & 0x3F
+            ).view(np_dtype),
+            dims,
+            tensor,
         )
 
     if tensor_dtype in {TensorProto.UINT4, TensorProto.INT4, TensorProto.FLOAT4E2M1}:
@@ -404,9 +420,13 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
 
     data = getattr(tensor, storage_field)
     if tensor_dtype in (TensorProto.COMPLEX64, TensorProto.COMPLEX128):
-        return np.array(data, dtype=storage_np_dtype).view(dtype=np_dtype).reshape(dims)
+        return _reshape_or_raise(
+            np.array(data, dtype=storage_np_dtype).view(dtype=np_dtype), dims, tensor
+        )
 
-    return np.asarray(data, dtype=storage_np_dtype).astype(np_dtype).reshape(dims)
+    return _reshape_or_raise(
+        np.asarray(data, dtype=storage_np_dtype).astype(np_dtype), dims, tensor
+    )
 
 
 def tobytes_little_endian(array: np.ndarray) -> bytes:

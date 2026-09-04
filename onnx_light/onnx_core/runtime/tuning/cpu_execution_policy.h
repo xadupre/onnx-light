@@ -97,7 +97,7 @@ struct CpuExecutionPolicy {
   /// ``0`` for the adaptive and park-immediately policies.
   uint64_t spin_budget = 0;
   /// Requested affinity policy.
-  CpuAffinityPolicy affinity_policy = CpuAffinityPolicy::kPhysicalCores;
+  CpuAffinityPolicy affinity_policy = CpuAffinityPolicy::kNone;
   /// Explicit participant CPU set, required and only allowed for
   /// :cpp:enumerator:`CpuAffinityPolicy::kExplicit`. The first processor is
   /// assigned to the calling participant; the remaining processors are

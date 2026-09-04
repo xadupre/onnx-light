@@ -196,6 +196,11 @@ NB_MODULE(_onnxpypatterns, m) {
       "Rewrites a Gather of a scalar index over a Shape node into a narrowed "
       "Shape node.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::PreShapeNodeEliminationPattern, core::builder::PatternOptimization>(
+      m, "PreShapeNodeEliminationPattern",
+      "Removes a Cast whose output only feeds Shape nodes, redirecting each "
+      "Shape node directly to the Cast's input.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
   nb::class_<onnx_patterns::SliceSlicePattern, core::builder::PatternOptimization>(
       m, "SliceSlicePattern", "Merges two consecutive Slice nodes on distinct axes into one Slice.")
       .def(nb::init<int>(), nb::arg("priority") = 0);

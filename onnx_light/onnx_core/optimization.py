@@ -42,6 +42,7 @@ GatherConcatPattern: TypeAlias = _patterns.GatherConcatPattern
 GatherGatherPattern: TypeAlias = _patterns.GatherGatherPattern
 GatherSliceToSplitPattern: TypeAlias = _patterns.GatherSliceToSplitPattern
 GatherShapePattern: TypeAlias = _patterns.GatherShapePattern
+PreShapeNodeEliminationPattern: TypeAlias = _patterns.PreShapeNodeEliminationPattern
 SliceSlicePattern: TypeAlias = _patterns.SliceSlicePattern
 SliceEliminationPattern: TypeAlias = _patterns.SliceEliminationPattern
 SliceConcatToSpaceToDepthPattern: TypeAlias = _patterns.SliceConcatToSpaceToDepthPattern
@@ -331,6 +332,7 @@ __all__ = [
     "PadConvPattern",
     "PadPadFusionPattern",
     "PatternOptimization",
+    "PreShapeNodeEliminationPattern",
     "RMSNormalizationMulPattern",
     "RMSNormalizationPattern",
     "ReduceArgTopKPattern",

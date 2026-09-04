@@ -133,6 +133,10 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<GatherShapePattern>();
                                    });
+    core::builder::RegisterPattern("PreShapeNodeElimination",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<PreShapeNodeEliminationPattern>();
+                                   });
     core::builder::RegisterPattern("GathersSplit",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<GathersSplitPattern>();

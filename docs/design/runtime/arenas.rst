@@ -94,17 +94,17 @@ intermediates to the execution arena without migration.
 
 .. code-block:: text
 
-    GraphProto::output names
-             |
-             v
+      GraphProto::output names
+                  |
+                  v
     ExecutionPlan: (node, output slot) -> allocation role
-             |
-             v
+                  |
+                  v
     kernel asks for output slot N
-             |
-             +-- execution role --> ExecutionArena
-             |
-             `-- I/O role -------> IOArena
+                  |
+                  +-- execution role --> ExecutionArena
+                  |
+                  `-- I/O role -------> IOArena
 
 Subgraphs and functions follow the same rule relative to their caller. Values
 that remain internal use the child execution arena; a value crossing the child

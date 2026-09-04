@@ -40,6 +40,9 @@ Follow every step when adding or porting a graph-rewriting pattern.
 4. Add focused tests.
    - Add C++ tests in the corresponding
      `unittests/cc/onnx_extensions/patterns/` test file.
+   - Never import or depend on the upstream `onnx` package. Build models with
+     `onnx_light.onnx` and, when numerical execution is needed, use
+     `onnx_light.onnx.reference.ReferenceEvaluator` through `import_or_skip`.
    - Cover each supported input ordering or data type that changes matching logic.
    - Cover every important rejection guard, especially invalid constants, shared
      intermediates, graph outputs, domains, shapes, and types.

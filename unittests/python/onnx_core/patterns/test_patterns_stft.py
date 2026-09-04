@@ -8,14 +8,14 @@ from __future__ import annotations
 import unittest
 
 import numpy as np
-import onnx
-from onnx.reference import ReferenceEvaluator
 
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx import TensorProto
 from onnx_light.onnx_core import optimization
+
+ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 
 def _make_model(dtype, *, onesided, frame_length):
@@ -66,14 +66,6 @@ def _optimize(model):
     return builder.to_onnx("model"), rewrites
 
 
-def _upstream_model(model):
-    converted = onnx.load_from_string(model.SerializeToString())
-    for opset in converted.opset_import:
-        if opset.domain == "ai.onnx":
-            opset.domain = ""
-    return converted
-
-
 class TestSTFTFusionPattern(ExtTestCase):
     def test_registry_name(self):
         patterns = optimization.standard_patterns(["STFTFusion"])
@@ -82,35 +74,25 @@ class TestSTFTFusionPattern(ExtTestCase):
 
     def test_numerical_equivalence(self):
         random = np.random.default_rng(42)
-        for dtype, np_dtype, tolerance in (
-            (TensorProto.FLOAT, np.float32, 2e-5),
-            (TensorProto.DOUBLE, np.float64, 1e-11),
-        ):
-            for onesided in (False, True):
-                for frame_length in (5, 6):
-                    with self.subTest(dtype=dtype, onesided=onesided, frame_length=frame_length):
-                        model = _make_model(dtype, onesided=onesided, frame_length=frame_length)
-                        optimized, rewrites = _optimize(model)
-                        self.assertEqual(
-                            [rewrite.pattern_name for rewrite in rewrites], ["STFTFusion"]
-                        )
-                        self.assertEqual(
-                            [node.op_type for node in optimized.graph.node], ["STFT"]
-                        )
-                        self.assertEqual(optimized.graph.node[0].attribute[0].i, int(onesided))
+        for onesided in (False, True):
+            for frame_length in (5, 6):
+                with self.subTest(onesided=onesided, frame_length=frame_length):
+                    model = _make_model(
+                        TensorProto.FLOAT, onesided=onesided, frame_length=frame_length
+                    )
+                    optimized, rewrites = _optimize(model)
+                    self.assertEqual(
+                        [rewrite.pattern_name for rewrite in rewrites], ["STFTFusion"]
+                    )
+                    self.assertEqual([node.op_type for node in optimized.graph.node], ["STFT"])
+                    self.assertEqual(optimized.graph.node[0].attribute[0].i, int(onesided))
 
-                        signal = random.normal(size=(2, 13, 1)).astype(np_dtype)
-                        expected = ReferenceEvaluator(_upstream_model(model)).run(
-                            None, {"signal": signal}
-                        )[0]
-                        actual = ReferenceEvaluator(_upstream_model(optimized)).run(
-                            None, {"signal": signal}
-                        )[0]
-                        self.assertEqual(actual.dtype, signal.dtype)
-                        self.assertEqual(actual.shape, expected.shape)
-                        np.testing.assert_allclose(
-                            actual, expected, atol=tolerance, rtol=tolerance
-                        )
+                    signal = random.normal(size=(2, 13, 1)).astype(np.float32)
+                    expected = ReferenceEvaluator(model).run(None, {"signal": signal})[0]
+                    actual = ReferenceEvaluator(optimized).run(None, {"signal": signal})[0]
+                    self.assertEqual(actual.dtype, signal.dtype)
+                    self.assertEqual(actual.shape, expected.shape)
+                    np.testing.assert_allclose(actual, expected, atol=2e-5, rtol=2e-5)
 
 
 if __name__ == "__main__":

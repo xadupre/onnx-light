@@ -1132,6 +1132,89 @@ public:
 /**
  * Fuses a single-token linear-attention recurrence into ``LinearAttention``.
  *
+ * @code
+ * Before:
+ *
+ *   query   shape       key    shape       value   shape
+ *     │       │          │       │           │       │
+ *     ↓       ↓          ↓       ↓           ↓       ↓
+ *   ┌───────────┐      ┌───────────┐       ┌───────────┐
+ *   │  Reshape  │      │  Reshape  │       │  Reshape  │
+ *   └───────────┘      └───────────┘       └───────────┘
+ *         │                  │                   │
+ *         ↓                  ↓                   ↓
+ *   ┌───────────┐      ┌───────────┐       ┌───────────┐
+ *   │ Transpose │      │ Transpose │       │ Transpose │
+ *   └───────────┘      └───────────┘       └───────────┘
+ *         │                  │                   │
+ *         ↓                  ↓                   ↓
+ *   ┌───────────┐      ┌───────────┐       ┌───────────┐
+ *   │  Squeeze  │      │  Squeeze  │       │  Squeeze  │
+ *   └───────────┘      └───────────┘       └───────────┘
+ *         │                  │                   │
+ *         │                  ↓                   ↓
+ *         │            ┌───────────┐       ┌───────────┐
+ *         │            │ Unsqueeze │       │ Unsqueeze │
+ *         │            └───────────┘       └───────────┘
+ *         │                  │                   │
+ *         │                  └─────────┬─────────┘
+ *         │                            ↓
+ *         │                         ┌─────┐
+ *         │                         │ Mul │
+ *         │                         └─────┘
+ *         │                            │
+ *         │   past_state               │
+ *         │       │                     │
+ *         │       ├─────────────────────┘
+ *         │       ↓
+ *         │     ┌─────┐
+ *         │     │ Add │────→ present_state
+ *         │     └─────┘
+ *         ↓       ↓
+ *   ┌───────────┐ │
+ *   │ Unsqueeze │ │
+ *   └───────────┘ │
+ *         │       │
+ *         └───┬───┘
+ *             ↓
+ *         ┌────────┐
+ *         │ MatMul │
+ *         └────────┘
+ *             │
+ *             ↓
+ *         ┌─────────┐
+ *         │ Squeeze │
+ *         └─────────┘
+ *             │   scale
+ *             └─────┬
+ *                   ↓
+ *                 ┌─────┐
+ *                 │ Mul │
+ *                 └─────┘
+ *                   │
+ *                   ↓
+ *          Unsqueeze → Transpose → Reshape
+ *                                      │
+ *                                      ↓
+ *                                    output
+ *
+ * For the gated rule, ``past_state`` first passes through
+ * ``Mul(past_state, Unsqueeze(Exp(unpacked_decay)))``.
+ *
+ * After:
+ *
+ *   query   key   value   past_state   [decay]
+ *     │      │      │         │           │
+ *     └──────┴──────┴─────────┴───────────┘
+ *                         ↓
+ *               ┌─────────────────┐
+ *               │ LinearAttention │
+ *               └─────────────────┘
+ *                   │         │
+ *                   ↓         ↓
+ *                 output  present_state
+ * @endcode
+ *
  * The matched graph unpacks packed rank-three query, key, and value tensors,
  * updates a recurrent state with either the linear or gated rule, computes the
  * scaled query/state product, and repacks the result. The replacement preserves

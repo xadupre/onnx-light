@@ -34,6 +34,8 @@ Follow every step when adding or porting a graph-rewriting pattern.
    - Add the matching nanobind class in `onnx_light/onnx_py/_onnxpy_patterns.cc`.
    - Export the class and include it in `__all__` in
      `onnx_light/onnx_core/optimization.py`.
+   - When adding a header, add its ``doxygenfile`` directive to
+     `docs/api/cpp/onnx_extensions/patterns/index.rst`.
    - Keep the registry name, intrinsic name, and Python class name consistent with
      neighboring patterns.
 

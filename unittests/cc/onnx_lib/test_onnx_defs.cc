@@ -791,6 +791,9 @@ TEST(onnx_defs, DocStrings_NonEmpty) {
   EXPECT_GT(strlen(kDoc_Loop_ver23), 0u);
   EXPECT_GT(strlen(kDoc_scan_24), 0u);
   EXPECT_GT(strlen(kDoc_BitCast_ver26), 0u);
+  EXPECT_GT(strlen(kDoc_If_ver25), 0u);
+  EXPECT_GT(strlen(kDoc_SequenceMap_ver17), 0u);
+  EXPECT_GT(strlen(kDoc_ArrayFeatureExtractor_ver1), 0u);
 }
 
 TEST(onnx_defs, DocStrings_ContainExpectedContent) {
@@ -808,4 +811,6 @@ TEST(onnx_defs, DocStrings_ContainExpectedContent) {
   EXPECT_NE(strstr(kDoc_Pad_ver24, "[1.2, 1.0, 1.2, 1.0]"), nullptr);
   EXPECT_NE(strstr(kDoc_Pad_ver24, "Example 3 (`edge` mode)"), nullptr);
   EXPECT_NE(strstr(kDoc_Pad_ver24, "Example 4 (`wrap` mode)"), nullptr);
+  EXPECT_NE(strstr(kDoc_Pad_ver13, "pads = [0, 2, 0, 0]"), nullptr);
+  EXPECT_NE(strstr(kDoc_Pad_ver13, "[1.0, 1.2, 1.0, 1.2]"), nullptr);
 }

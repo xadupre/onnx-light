@@ -445,12 +445,10 @@ ONNX_OPERATOR_SET_SCHEMA(
                         "Constrain input and output types to all tensor types.")
         .TypeAndShapeInferenceFunction(ConstantOpInference));
 
-static constexpr const char *Constant_ver1_doc = R"DOC(A constant tensor.)DOC";
-
 ONNX_OPERATOR_SET_SCHEMA(
     Constant, 1,
     OpSchema()
-        .SetDoc(Constant_ver1_doc)
+        .SetDoc(kDoc_Constant_ver1)
         .Attr("value", "The value for the elements of the output tensor.", AttributeProto::TENSOR)
         .Output(0, "output", "Output tensor containing the same value of the provided tensor.", "T")
         .TypeConstraint("T", {"tensor(float16)", "tensor(float)", "tensor(double)"},
@@ -466,12 +464,12 @@ ONNX_OPERATOR_SET_SCHEMA(
           updateOutputShape(ctx, 0, tensor_proto);
         }));
 
-static const char *const Constant_ver9_doc = Constant_ver1_doc;
+static const char *const Constant_ver9_doc = kDoc_Constant_ver1;
 
 ONNX_OPERATOR_SET_SCHEMA(
     Constant, 9,
     OpSchema()
-        .SetDoc(Constant_ver9_doc)
+        .SetDoc(kDoc_Constant_ver1)
         .Attr("value", "The value for the elements of the output tensor.", AttributeProto::TENSOR)
         .Output(0, "output", "Output tensor containing the same value of the provided tensor.", "T")
         .TypeConstraint("T", OpSchema::all_tensor_types(),
@@ -486,15 +484,10 @@ ONNX_OPERATOR_SET_SCHEMA(
           updateOutputShape(ctx, 0, tensor_proto);
         }));
 
-static constexpr const char *Constant_ver11_doc = R"DOC(
-A constant tensor. Exactly one of the two attributes, either value or sparse_value,
-must be specified.
-)DOC";
-
 ONNX_OPERATOR_SET_SCHEMA(
     Constant, 11,
     OpSchema()
-        .SetDoc(Constant_ver11_doc)
+        .SetDoc(kDoc_Constant_ver11)
         .Attr("value", "The value for the elements of the output tensor.", AttributeProto::TENSOR,
               false)
         .Attr("sparse_value", "The value for the elements of the output tensor in sparse format.",
@@ -756,36 +749,10 @@ ONNX_OPERATOR_SET_SCHEMA(
           }
         }));
 
-static constexpr const char *Range_ver11_doc = R"DOC(
-Generate a tensor containing a sequence of numbers that begin at `start` and extends by increments of `delta`
-up to `limit` (exclusive).
-
-The number of elements in the output of range is computed as below:
-```
-number_of_elements = max( ceil( (limit - start) / delta ) , 0 )
-```
-The pseudocode determining the contents of the output is shown below:
-```
-for(int i=0; i<number_of_elements; ++i) {
-  output[i] =  start + (i * delta);
-}
-```
-Example 1:
-```
-Inputs: start = 3, limit = 9, delta = 3
-Output: [3, 6]
-```
-Example 2:
-```
-Inputs: start = 10, limit = 4, delta = -2
-Output: [10, 8, 6]
-```
-)DOC";
-
 ONNX_OPERATOR_SET_SCHEMA(
     Range, 11,
     OpSchema()
-        .SetDoc(Range_ver11_doc)
+        .SetDoc(kDoc_Range_ver11)
         .Input(0, "start", "Scalar. First entry for the range of output values.", "T")
         .Input(1, "limit", "Scalar. Exclusive upper limit for the range of output values.", "T")
         .Input(2, "delta", "Scalar. Value to step by.", "T")

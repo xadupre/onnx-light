@@ -478,8 +478,6 @@ ONNX_OPERATOR_SET_SCHEMA(
                "T", OpSchema::Optional)
         .FillUsing(RNNDocGenerator_opset1_to_6("RNN")));
 
-static const char *const GRU_ver3_doc = kDoc_GRU_ver1;
-
 ONNX_OPERATOR_SET_SCHEMA(
     GRU, 3,
     OpSchema()

@@ -206,8 +206,6 @@ ONNX_OPERATOR_SET_SCHEMA(
           PropagateShapeDataFromInputToOutput(ctx, 0);
         }));
 
-static const char *const Cast_ver19_doc = kDoc_Cast_ver23;
-
 ONNX_OPERATOR_SET_SCHEMA(
     Cast, 21,
     OpSchema()
@@ -1360,8 +1358,6 @@ ONNX_OPERATOR_SET_SCHEMA(
           }
         }));
 
-static const char *const Reshape_ver5_doc = kDoc_Reshape_ver13;
-
 ONNX_OPERATOR_SET_SCHEMA(
     Reshape, 5,
     OpSchema()
@@ -1635,8 +1631,6 @@ ONNX_OPERATOR_SET_SCHEMA(
         .PartialDataPropagationFunction([](DataPropagationContext &ctx) {
           ShapeOp13DataPropagator(ctx);
         }));
-
-static const char *const Shape_ver1_doc = kDoc_Shape_ver13;
 
 ONNX_OPERATOR_SET_SCHEMA(
     Shape, 1,
@@ -2550,8 +2544,6 @@ ONNX_OPERATOR_SET_SCHEMA(ScatterND, 13,
                                }
                              }));
 
-static const char *const ScatterND_ver11_doc = kDoc_ScatterND_ver13;
-
 ONNX_OPERATOR_SET_SCHEMA(ScatterND, 11,
                          OpSchema()
                              .SetDoc(kDoc_ScatterND_ver13)
@@ -2638,8 +2630,6 @@ ONNX_OPERATOR_SET_SCHEMA(
             propagateShapeFromInputToOutput(ctx, 0, 0);
           }
         }));
-
-static const char *const ScatterElements_ver11_doc = kDoc_ScatterElements_ver13;
 
 ONNX_OPERATOR_SET_SCHEMA(
     ScatterElements, 11,
@@ -3798,8 +3788,6 @@ ONNX_OPERATOR_SET_SCHEMA(
           resizeShapeInference_opset13_to_18(ctx);
         }));
 
-static const char *const Resize_ver11_doc = kDoc_Resize_ver13;
-
 static constexpr const char *Resize_attr_coordinate_transformation_mode_ver11_doc = R"DOC(
 This attribute describes how to transform the coordinate in the resized tensor to the coordinate in the original tensor. <br/>
 
@@ -4253,8 +4241,6 @@ ONNX_OPERATOR_SET_SCHEMA(
              "tensor(int32)", "tensor(int64)", "tensor(uint8)", "tensor(uint16)", "tensor(uint32)",
              "tensor(uint64)", "tensor(bool)"},
             "Constrain output types. Casting to strings and complex are not supported."));
-
-static const char *const Cast_ver6_doc = kDoc_Cast_ver1;
 
 ONNX_OPERATOR_SET_SCHEMA(
     Cast, 6,
@@ -4938,8 +4924,6 @@ ONNX_OPERATOR_SET_SCHEMA(
           GatherOp13DataPropagator(ctx);
         }));
 
-static const char *const Squeeze_ver1_doc = kDoc_Squeeze_ver11;
-
 ONNX_OPERATOR_SET_SCHEMA(
     Squeeze, 1,
     OpSchema()
@@ -5190,8 +5174,6 @@ ONNX_OPERATOR_SET_SCHEMA(
         .TypeConstraint("T", OpSchema::all_tensor_types(),
                         "Constrain input and output types to all tensor types.")
         .TypeConstraint("T1", {"tensor(bool)"}, "Constrain to boolean tensors."));
-
-static const char *const Split_ver2_doc = kDoc_Split_ver11;
 
 ONNX_OPERATOR_SET_SCHEMA(
     Split, 2,

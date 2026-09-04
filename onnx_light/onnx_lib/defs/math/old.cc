@@ -1954,8 +1954,6 @@ ONNX_OPERATOR_SET_SCHEMA(Neg, 1,
                                              {"tensor(float16)", "tensor(float)", "tensor(double)"},
                                              "Constrain input and output types to float tensors."));
 
-static const char *const Abs_ver1_doc = kDoc_Abs_ver6;
-
 ONNX_OPERATOR_SET_SCHEMA(Abs, 1,
                          OpSchema()
                              .SetDoc(kDoc_Abs_ver6)
@@ -1984,8 +1982,6 @@ ONNX_OPERATOR_SET_SCHEMA(Reciprocal, 1,
                                              {"tensor(float16)", "tensor(float)", "tensor(double)"},
                                              "Constrain input and output types to float tensors."));
 
-static const char *const Floor_ver1_doc = kDoc_Floor_ver6;
-
 ONNX_OPERATOR_SET_SCHEMA(Floor, 1,
                          OpSchema()
                              .SetDoc(kDoc_Floor_ver6)
@@ -1999,8 +1995,6 @@ ONNX_OPERATOR_SET_SCHEMA(Floor, 1,
                              .TypeConstraint("T",
                                              {"tensor(float16)", "tensor(float)", "tensor(double)"},
                                              "Constrain input and output types to float tensors."));
-
-static const char *const Ceil_ver1_doc = kDoc_Ceil_ver6;
 
 ONNX_OPERATOR_SET_SCHEMA(Ceil, 1,
                          OpSchema()
@@ -2322,8 +2316,6 @@ ONNX_OPERATOR_SET_SCHEMA(
         .Attr("beta", "Scalar multiplier for input tensor C, the default value is 1.0.",
               AttributeProto::FLOAT, 1.0f));
 
-static const char *const Gemm_ver6_doc = kDoc_Gemm_ver1;
-
 ONNX_OPERATOR_SET_SCHEMA(
     Gemm, 6,
     OpSchema()
@@ -2369,8 +2361,6 @@ ONNX_OPERATOR_SET_SCHEMA(
                 ctx.getInputType(2)->tensor_type().shape();
           }
         }));
-
-static const char *const Gemm_ver7_doc = kDoc_Gemm_ver11;
 
 ONNX_OPERATOR_SET_SCHEMA(
     Gemm, 7,
@@ -2421,8 +2411,6 @@ ONNX_OPERATOR_SET_SCHEMA(
                 {first_input_shape.dim(transA ? 1 : 0), second_input_shape.dim(transB ? 0 : 1)});
           }
         }));
-
-static const char *const Gemm_ver9_doc = kDoc_Gemm_ver11;
 
 ONNX_OPERATOR_SET_SCHEMA(
     Gemm, 9,
@@ -2476,8 +2464,6 @@ ONNX_OPERATOR_SET_SCHEMA(
           }
         }));
 
-static const char *const Max_ver6_doc = kDoc_Max_ver1;
-
 ONNX_OPERATOR_SET_SCHEMA(Max, 6,
                          OpSchema()
                              .SetDoc(kDoc_Max_ver1)
@@ -2489,8 +2475,6 @@ ONNX_OPERATOR_SET_SCHEMA(Max, 6,
                                              "Constrain input and output types to float tensors.")
                              .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput));
 
-static const char *const Min_ver6_doc = kDoc_Min_ver1;
-
 ONNX_OPERATOR_SET_SCHEMA(Min, 6,
                          OpSchema()
                              .SetDoc(kDoc_Min_ver1)
@@ -2500,8 +2484,6 @@ ONNX_OPERATOR_SET_SCHEMA(Min, 6,
                                              {"tensor(float16)", "tensor(float)", "tensor(double)"},
                                              "Constrain input and output types to float tensors.")
                              .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput));
-
-static const char *const Sum_ver6_doc = kDoc_Sum_ver1;
 
 ONNX_OPERATOR_SET_SCHEMA(Sum, 6,
                          OpSchema()
@@ -2513,8 +2495,6 @@ ONNX_OPERATOR_SET_SCHEMA(Sum, 6,
                                              {"tensor(float16)", "tensor(float)", "tensor(double)"},
                                              "Constrain input and output types to float tensors.")
                              .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput));
-
-static const char *const Mean_ver6_doc = kDoc_Mean_ver1;
 
 ONNX_OPERATOR_SET_SCHEMA(Mean, 6,
                          OpSchema()
@@ -2742,8 +2722,6 @@ ONNX_OPERATOR_SET_SCHEMA(
     TopK, 11,
     OpSchema().FillUsing(defs::math::utils::TopKOpGenerator(OpSchema::all_numeric_types())));
 
-static const char *const Clip_ver6_doc = kDoc_Clip_ver1;
-
 ONNX_OPERATOR_SET_SCHEMA(Clip, 6,
                          OpSchema()
                              .SetDoc(kDoc_Clip_ver1)
@@ -2757,8 +2735,6 @@ ONNX_OPERATOR_SET_SCHEMA(Clip, 6,
                                              {"tensor(float16)", "tensor(float)", "tensor(double)"},
                                              "Constrain input and output types to float tensors.")
                              .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput));
-
-static const char *const Clip_ver11_doc = kDoc_Clip_ver12;
 
 ONNX_OPERATOR_SET_SCHEMA(Clip, 11,
                          OpSchema()

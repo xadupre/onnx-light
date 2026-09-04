@@ -3079,8 +3079,6 @@ ONNX_OPERATOR_SET_SCHEMA(
                         "Constrain input and output types to float tensors.")
         .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput));
 
-static const char *const Dropout_ver7_doc = kDoc_Dropout_ver1;
-
 ONNX_OPERATOR_SET_SCHEMA(
     Dropout, 7,
     OpSchema()

@@ -325,8 +325,6 @@ ONNX_OPERATOR_SET_SCHEMA(
           updateOutputShape(ctx, 0, input_shape);
         }));
 
-static const char *const QuantizeLinear_ver23_doc = kDoc_QuantizeLinear_ver24;
-
 ONNX_OPERATOR_SET_SCHEMA(
     QuantizeLinear, 23,
     OpSchema()

@@ -72,6 +72,75 @@ NodeProto NodeWithIntAttribute(const char *op_type, const std::vector<std::strin
   return node;
 }
 
+TEST(DivMulPattern, FusesReciprocalTimesValue) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  AddFloatInitializer(builder, "one", {}, {1.0F});
+  builder.MakeInput("denominator", core::symbolic::TensorType::kFloat, Shape({2}));
+  builder.MakeInput("value", core::symbolic::TensorType::kFloat, Shape({2}));
+  builder.MakeNode("Div", {"one", "denominator"}, {"reciprocal"});
+  builder.MakeNode("Mul", {"value", "reciprocal"}, {"out"});
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::DivMulPattern pattern;
+  const auto match = pattern.Match(graph, builder.Nodes()[0]);
+  ASSERT_EQ(match.pattern, &pattern);
+  const auto replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 1u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Div");
+  EXPECT_EQ(replacements[0].input()[0].value(), "value");
+  EXPECT_EQ(replacements[0].input()[1].value(), "denominator");
+  EXPECT_EQ(replacements[0].output()[0].value(), "out");
+}
+
+TEST(DivMulPattern, RejectsNonUnitAndNonScalarNumerators) {
+  for (const std::vector<float> &values :
+       {std::vector<float>{2.0F}, std::vector<float>{1.0F, 1.0F}}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup());
+    AddFloatInitializer(builder, "numerator", {static_cast<int64_t>(values.size())}, values);
+    builder.MakeInput("denominator", core::symbolic::TensorType::kFloat, Shape({2}));
+    builder.MakeInput("value", core::symbolic::TensorType::kFloat, Shape({2}));
+    builder.MakeNode("Div", {"numerator", "denominator"}, {"reciprocal"});
+    builder.MakeNode("Mul", {"reciprocal", "value"}, {"out"});
+    builder.MakeOutput("out");
+
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::DivMulPattern pattern;
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, nullptr);
+  }
+}
+
+TEST(DivMulPattern, RejectsSharedDivOutput) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  AddFloatInitializer(builder, "one", {}, {1.0F});
+  builder.MakeInput("denominator", core::symbolic::TensorType::kFloat, Shape({2}));
+  builder.MakeInput("value", core::symbolic::TensorType::kFloat, Shape({2}));
+  builder.MakeNode("Div", {"one", "denominator"}, {"reciprocal"});
+  builder.MakeNode("Mul", {"reciprocal", "value"}, {"out"});
+  builder.MakeNode("Identity", {"reciprocal"}, {"shared"});
+  builder.MakeOutput("out");
+  builder.MakeOutput("shared");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::DivMulPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, nullptr);
+}
+
+TEST(DivMulPattern, RejectsDivGraphOutput) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  AddFloatInitializer(builder, "one", {}, {1.0F});
+  builder.MakeInput("denominator", core::symbolic::TensorType::kFloat, Shape({2}));
+  builder.MakeInput("value", core::symbolic::TensorType::kFloat, Shape({2}));
+  builder.MakeNode("Div", {"one", "denominator"}, {"reciprocal"});
+  builder.MakeNode("Mul", {"reciprocal", "value"}, {"out"});
+  builder.MakeOutput("reciprocal");
+  builder.MakeOutput("out");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::DivMulPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, nullptr);
+}
+
 TEST(MulMulMulScalarPattern, CombinesTwoDivisions) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2}));

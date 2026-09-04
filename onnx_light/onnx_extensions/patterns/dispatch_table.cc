@@ -233,6 +233,7 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("TransposeReshapeTranspose", [] {
       return std::make_unique<TransposeReshapeTransposePattern>();
     });
+    core::builder::RegisterPattern("DivMul", [] { return std::make_unique<DivMulPattern>(); });
     core::builder::RegisterPattern("MulMulMulScalar",
                                    [] { return std::make_unique<MulMulMulScalarPattern>(); });
     core::builder::RegisterPattern("SwitchOrderBinary",

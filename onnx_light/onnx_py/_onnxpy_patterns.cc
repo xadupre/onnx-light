@@ -286,6 +286,8 @@ NB_MODULE(_onnxpypatterns, m) {
   BindPattern<onnx_patterns::TransposeReshapeTransposePattern>(
       m, "TransposeReshapeTransposePattern",
       "Simplifies transpose, reshape, and transpose sequences.");
+  BindPattern<onnx_patterns::DivMulPattern>(
+      m, "DivMulPattern", "Fuses multiplication by a reciprocal into one division.");
   BindPattern<onnx_patterns::MulMulMulScalarPattern>(
       m, "MulMulMulScalarPattern", "Combines scalar factors in multiplication chains.");
   BindPattern<onnx_patterns::SwitchOrderBinaryPattern>(

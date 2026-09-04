@@ -9,6 +9,44 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
 /**
+ * Fuses a reciprocal followed by multiplication into one division.
+ *
+ * @code
+ * Before:
+ *                       ┌─────────────┐
+ *   one ───────────────→│             │
+ *                       │     Div     │───→ reciprocal ───┐
+ *   denominator ───────→│             │                   │
+ *                       └─────────────┘                   ↓
+ *                                                   ┌─────────────┐
+ *   value ─────────────────────────────────────────→│     Mul     │───→ output
+ *                                                   └─────────────┘
+ *
+ * After:
+ *
+ *                       ┌─────────────┐
+ *   value ─────────────→│             │
+ *                       │     Div     │───→ output
+ *   denominator ───────→│             │
+ *                       └─────────────┘
+ * @endcode
+ *
+ * ``one`` must be a one-element FLOAT, FLOAT16, DOUBLE, INT32, or INT64
+ * constant equal to one. The intermediate Div output must have no other use.
+ */
+class DivMulPattern final : public core::builder::PatternOptimization {
+public:
+  explicit DivMulPattern(int priority = 0) : PatternOptimization(priority, "DivMul") {}
+
+  std::set<std::string> FastOpType() const override;
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
  * Combines the scalar constants from three nested Mul or Div nodes.
  *
  * @code

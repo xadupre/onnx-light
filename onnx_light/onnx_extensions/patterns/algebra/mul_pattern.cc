@@ -72,6 +72,22 @@ bool ReadScalar(const TensorProto &tensor, double &value) {
   return ReadScalarAsDouble(tensor, value);
 }
 
+bool IsSupportedSingleOne(const TensorProto &tensor) {
+  for (int64_t dim : tensor.dims()) {
+    if (dim != 1) {
+      return false;
+    }
+  }
+  const auto type = static_cast<TensorProto::DataType>(tensor.data_type());
+  if (type != TensorProto::DataType::FLOAT && type != TensorProto::DataType::FLOAT16 &&
+      type != TensorProto::DataType::DOUBLE && type != TensorProto::DataType::INT32 &&
+      type != TensorProto::DataType::INT64) {
+    return false;
+  }
+  double value = 0.0;
+  return ReadScalar(tensor, value) && value == 1.0;
+}
+
 std::vector<int64_t> ProductShape(const TensorProto &left, const TensorProto &right) {
   if (left.dims_size() == 1 || right.dims_size() == 1) {
     return {1};
@@ -309,6 +325,62 @@ int SwitchOrder(const SymShape &shape_left, const SymShape &shape_right,
 }
 
 } // namespace
+
+std::set<std::string> DivMulPattern::FastOpType() const { return {"Div"}; }
+
+core::builder::MatchResult DivMulPattern::Match(core::builder::GraphGraph &graph,
+                                                const NodeProto &candidate) const {
+  if (!IsDefaultOp(candidate, "Div") || candidate.input_size() != 2 ||
+      candidate.output_size() != 1) {
+    return NoMatch(candidate, "candidate is not a default-domain binary Div");
+  }
+  const std::string &div_output = candidate.output()[0].value();
+  if (graph.IsUsedMoreThanOnce(div_output)) {
+    return NoMatch(candidate, "the Div output has another use or is a graph output");
+  }
+  const std::vector<const NodeProto *> &consumers = graph.NextNodes(div_output);
+  if (consumers.size() != 1 || !IsDefaultOp(*consumers[0], "Mul") ||
+      consumers[0]->input_size() != 2 || consumers[0]->output_size() != 1) {
+    return NoMatch(candidate, "the Div is not followed by one default-domain binary Mul");
+  }
+  const NodeProto *mul = consumers[0];
+  const bool is_left_input = mul->input()[0].value() == div_output;
+  const bool is_right_input = mul->input()[1].value() == div_output;
+  if (is_left_input == is_right_input) {
+    return NoMatch(candidate, "the Mul must consume the Div output exactly once");
+  }
+  const TensorProto *one = graph.GetComputedConstant(candidate.input()[0].value());
+  if (one == nullptr || !IsSupportedSingleOne(*one)) {
+    return NoMatch(candidate, "the Div numerator is not a supported one-element constant one");
+  }
+  return core::builder::MatchResult{this, {&candidate, mul}, nullptr};
+}
+
+utils::RepeatedProtoField<NodeProto>
+DivMulPattern::Apply(core::builder::GraphGraph &graph,
+                     const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
+    throw BuilderError("DivMulPattern::Apply expects a Div followed by a Mul.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[0]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError("DivMulPattern::Apply received an unsafe or inconsistent match.");
+  }
+  const NodeProto &div = *nodes[0];
+  const NodeProto &mul = *nodes[1];
+  const std::string &other = mul.input()[0].value() == div.output()[0].value()
+                                 ? mul.input()[1].value()
+                                 : mul.input()[0].value();
+  NodeProto replacement =
+      MakeNode("Div", {other, div.input()[1].value()}, {mul.output()[0].value()}, "",
+               ("DivMulPattern--" + mul.name().value()).c_str());
+  if (mul.has_doc_string()) {
+    replacement.set_doc_string(mul.doc_string().value());
+  }
+  utils::RepeatedProtoField<NodeProto> replacements;
+  replacements.push_back(std::move(replacement));
+  return replacements;
+}
 
 std::set<std::string> MulMulMulScalarPattern::FastOpType() const { return {"Div", "Mul"}; }
 

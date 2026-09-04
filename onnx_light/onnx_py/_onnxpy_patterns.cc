@@ -197,6 +197,11 @@ NB_MODULE(_onnxpypatterns, m) {
       "arithmetic-progression index into a Slice (plus Squeeze for a scalar "
       "index).")
       .def(nb::init<int>(), nb::arg("priority") = 0);
+  BindPattern<onnx_patterns::GatherUpstreamPropagationPattern>(
+      m, "GatherUpstreamPropagationPattern",
+      "Moves a scalar or vector constant-index Gather upstream across one "
+      "compatible producer (pointwise ops, Transpose, Reshape, MatMul batch "
+      "dims, Softmax, LayerNormalization) so it runs on smaller tensors.");
   nb::class_<onnx_patterns::GatherShapePattern, core::builder::PatternOptimization>(
       m, "GatherShapePattern",
       "Rewrites a Gather of a scalar index over a Shape node into a narrowed "
@@ -207,11 +212,6 @@ NB_MODULE(_onnxpypatterns, m) {
       "Removes a Cast whose output only feeds Shape nodes, redirecting each "
       "Shape node directly to the Cast's input.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
-  BindPattern<onnx_patterns::GatherUpstreamPropagationPattern>(
-      m, "GatherUpstreamPropagationPattern",
-      "Moves a scalar or vector constant-index Gather upstream across one "
-      "compatible producer (pointwise ops, Transpose, Reshape, MatMul batch "
-      "dims, Softmax, LayerNormalization) so it runs on smaller tensors.");
   nb::class_<onnx_patterns::SliceSlicePattern, core::builder::PatternOptimization>(
       m, "SliceSlicePattern", "Merges two consecutive Slice nodes on distinct axes into one Slice.")
       .def(nb::init<int>(), nb::arg("priority") = 0);

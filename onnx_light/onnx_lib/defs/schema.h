@@ -1109,7 +1109,12 @@ support).
     DocPopulatorCode                                                                               \
   } while (0)
 #else
-#define POPULATE_OP_DOC_STR(DocPopulatorCode)
+#define POPULATE_OP_DOC_STR(DocPopulatorCode)                                                      \
+  do {                                                                                             \
+    if constexpr (false) {                                                                         \
+      DocPopulatorCode                                                                             \
+    }                                                                                              \
+  } while (0)
 #endif
 
 } // namespace ONNX_LIGHT_NAMESPACE

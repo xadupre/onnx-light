@@ -597,7 +597,7 @@ OpSchema &OpSchema::Input(int n, FormalParameter formal_parameter) {
   return *this;
 }
 
-OpSchema &OpSchema::Input(int n, std::string name, const std::string &description,
+OpSchema &OpSchema::Input(int n, std::string name, [[maybe_unused]] const std::string &description,
                           std::string type_str, OpSchema::FormalParameterOption param_option,
                           bool is_homogeneous, int min_arity,
                           DifferentiationCategory differentiation_category) {
@@ -611,8 +611,9 @@ OpSchema &OpSchema::Input(int n, std::string name, const std::string &descriptio
                                   differentiation_category));
 }
 
-OpSchema &OpSchema::Input(int n, const char *name, const char *description, const char *type_str,
-                          FormalParameterOption param_option, bool is_homogeneous, int min_arity,
+OpSchema &OpSchema::Input(int n, const char *name, [[maybe_unused]] const char *description,
+                          const char *type_str, FormalParameterOption param_option,
+                          bool is_homogeneous, int min_arity,
                           DifferentiationCategory differentiation_category) {
   return Input(n, std::string(name),
 #ifndef __ONNX_NO_DOC_STRINGS
@@ -632,7 +633,7 @@ OpSchema &OpSchema::Output(int n, FormalParameter formal_parameter) {
   return *this;
 }
 
-OpSchema &OpSchema::Output(int n, std::string name, const std::string &description,
+OpSchema &OpSchema::Output(int n, std::string name, [[maybe_unused]] const std::string &description,
                            std::string type_str, OpSchema::FormalParameterOption param_option,
                            bool is_homogeneous, int min_arity,
                            DifferentiationCategory differentiation_category) {
@@ -646,8 +647,9 @@ OpSchema &OpSchema::Output(int n, std::string name, const std::string &descripti
                                    differentiation_category));
 }
 
-OpSchema &OpSchema::Output(int n, const char *name, const char *description, const char *type_str,
-                           FormalParameterOption param_option, bool is_homogeneous, int min_arity,
+OpSchema &OpSchema::Output(int n, const char *name, [[maybe_unused]] const char *description,
+                           const char *type_str, FormalParameterOption param_option,
+                           bool is_homogeneous, int min_arity,
                            DifferentiationCategory differentiation_category) {
   return Output(n, std::string(name),
 #ifndef __ONNX_NO_DOC_STRINGS

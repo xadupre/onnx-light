@@ -30,6 +30,8 @@ This module documents the C++ optimization-pattern headers used by
 .. doxygenfile:: onnx_extensions/patterns/canonicalization/dropout_pattern.h
 .. doxygenfile:: onnx_extensions/patterns/canonicalization/identity_pattern.h
 .. doxygenfile:: onnx_extensions/patterns/canonicalization/not_pattern.h
+.. doxygenfile:: onnx_extensions/patterns/canonicalization/pad_pattern.h
+.. doxygenfile:: onnx_extensions/patterns/canonicalization/stft_pattern.h
 
 .. rubric:: Collections
 
@@ -65,6 +67,7 @@ This module documents the C++ optimization-pattern headers used by
 
 .. rubric:: Traditional ML
 
+.. doxygenfile:: onnx_extensions/patterns/traditionalml/label_encoder_pattern.h
 .. doxygenfile:: onnx_extensions/patterns/traditionalml/tree_ensemble_pattern.h
 
 .. rubric:: Transpose

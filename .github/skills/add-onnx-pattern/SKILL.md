@@ -34,12 +34,17 @@ Follow every step when adding or porting a graph-rewriting pattern.
    - Add the matching nanobind class in `onnx_light/onnx_py/_onnxpy_patterns.cc`.
    - Export the class and include it in `__all__` in
      `onnx_light/onnx_core/optimization.py`.
+   - When adding a header, add its ``doxygenfile`` directive to
+     `docs/api/cpp/onnx_extensions/patterns/index.rst`.
    - Keep the registry name, intrinsic name, and Python class name consistent with
      neighboring patterns.
 
 4. Add focused tests.
    - Add C++ tests in the corresponding
      `unittests/cc/onnx_extensions/patterns/` test file.
+   - Never import or depend on the upstream `onnx` package. Build models with
+     `onnx_light.onnx` and, when numerical execution is needed, use
+     `onnx_light.onnx.reference.ReferenceEvaluator` through `import_or_skip`.
    - Cover each supported input ordering or data type that changes matching logic.
    - Cover every important rejection guard, especially invalid constants, shared
      intermediates, graph outputs, domains, shapes, and types.

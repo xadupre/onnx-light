@@ -147,6 +147,36 @@ TEST(MatMulAddPattern, FusesMatMulAddAndRejectsSharedMatMulOutput) {
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[0]).pattern, nullptr);
 }
 
+TEST(GemmSumFusionPattern, UsesStandardBiasAndRejectsExistingBias) {
+  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  builder.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
+  builder.MakeInput("sum", core::symbolic::TensorType::kFloat, Shape({4}));
+  builder.MakeNode("Gemm", {"x", "w"}, {"gemm"}, "", "gemm", FloatAttr("beta", 0.5F));
+  builder.MakeNode("Sum", {"sum", "gemm"}, {"out"});
+  SeedShape(builder, "gemm", {2, 4});
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::GemmSumFusionPattern pattern;
+  const auto match = pattern.Match(graph, builder.Nodes()[1]);
+  ASSERT_EQ(match.pattern, &pattern);
+  const auto replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 1u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Gemm");
+  EXPECT_EQ(replacements[0].input()[2].value(), "sum");
+  EXPECT_EQ(GetAttributeOr<float>(replacements[0], "beta", 1.0F), 1.0F);
+
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  rejected.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
+  rejected.MakeInput("bias", core::symbolic::TensorType::kFloat, Shape({4}));
+  rejected.MakeInput("sum", core::symbolic::TensorType::kFloat, Shape({4}));
+  rejected.MakeNode("Gemm", {"x", "w", "bias"}, {"gemm"});
+  rejected.MakeNode("Sum", {"gemm", "sum"}, {"out"});
+  SeedShape(rejected, "gemm", {2, 4});
+  core::builder::GraphGraph rejected_graph(rejected);
+  EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[1]).pattern, nullptr);
+}
+
 TEST(GemmTransposePattern, InsertsWeightTransposeAndRejectsExistingTranspose) {
   core::builder::GraphBuilder builder("positive", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
@@ -255,6 +285,87 @@ TEST(MulMulMatMulPattern, MovesScalarProductAfterMatMulAndRejectsBroadcastScalar
   rejected.MakeNode("MatMul", {"left", "right"}, {"out"});
   core::builder::GraphGraph rejected_graph(rejected);
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[2]).pattern, nullptr);
+}
+
+TEST(MatMulBatchNormalizationFusionPattern, FoldsConstantsAndRejectsDynamicWeight) {
+  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  AddFloat(builder, "w", {3, 2}, {1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 6.0F});
+  AddFloat(builder, "scale", {2}, {2.0F, 3.0F});
+  AddFloat(builder, "bias", {2}, {0.5F, -0.5F});
+  AddFloat(builder, "mean", {2}, {1.0F, 2.0F});
+  AddFloat(builder, "variance", {2}, {4.0F, 9.0F});
+  builder.MakeNode("MatMul", {"x", "w"}, {"mm"}, "", "mm");
+  builder.MakeNode("BatchNormalization", {"mm", "scale", "bias", "mean", "variance"},
+                   {"out", "", ""});
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::MatMulBatchNormalizationFusionPattern pattern;
+  const auto match = pattern.Match(graph, builder.Nodes()[1]);
+  ASSERT_EQ(match.pattern, &pattern);
+  const auto replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 1u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Gemm");
+  ASSERT_EQ(replacements[0].input_size(), 3);
+  EXPECT_NE(FindInitializer(builder, replacements[0].input()[1].value()), nullptr);
+  EXPECT_NE(FindInitializer(builder, replacements[0].input()[2].value()), nullptr);
+
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  rejected.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 2}));
+  AddFloat(rejected, "scale", {2}, {1.0F, 1.0F});
+  AddFloat(rejected, "bias", {2}, {0.0F, 0.0F});
+  AddFloat(rejected, "mean", {2}, {0.0F, 0.0F});
+  AddFloat(rejected, "variance", {2}, {1.0F, 1.0F});
+  rejected.MakeNode("MatMul", {"x", "w"}, {"mm"});
+  rejected.MakeNode("BatchNormalization", {"mm", "scale", "bias", "mean", "variance"},
+                    {"out", "", ""});
+  core::builder::GraphGraph rejected_graph(rejected);
+  EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[1]).pattern, nullptr);
+}
+
+TEST(MatMulBatchNormalizationFusionPattern, RejectsTrainingOutputsBeforeOpset14) {
+  core::builder::GraphBuilder builder("training", SchemaLookup());
+  builder.SetOpsetVersion("", 13);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  AddFloat(builder, "w", {3, 2}, {1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 6.0F});
+  AddFloat(builder, "scale", {2}, {1.0F, 1.0F});
+  AddFloat(builder, "bias", {2}, {0.0F, 0.0F});
+  AddFloat(builder, "mean", {2}, {0.0F, 0.0F});
+  AddFloat(builder, "variance", {2}, {1.0F, 1.0F});
+  builder.MakeNode("MatMul", {"x", "w"}, {"mm"});
+  builder.MakeNode("BatchNormalization", {"mm", "scale", "bias", "mean", "variance"},
+                   {"out", "running_mean", "running_var", "saved_mean", "saved_var"});
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::MatMulBatchNormalizationFusionPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+}
+
+TEST(MatMulScaleFusionPattern, FoldsWeightAndRejectsUnsafeDivision) {
+  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  AddFloat(builder, "w", {3, 2}, {1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 6.0F});
+  AddFloat(builder, "scale", {}, {0.5F});
+  builder.MakeNode("MatMul", {"x", "w"}, {"mm"}, "", "mm");
+  builder.MakeNode("Mul", {"mm", "scale"}, {"out"});
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::MatMulScaleFusionPattern pattern;
+  const auto match = pattern.Match(graph, builder.Nodes()[0]);
+  ASSERT_EQ(match.pattern, &pattern);
+  const auto replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 1u);
+  EXPECT_EQ(replacements[0].op_type().value(), "MatMul");
+  EXPECT_NE(replacements[0].input()[1].value(), "w");
+  EXPECT_NE(FindInitializer(builder, replacements[0].input()[1].value()), nullptr);
+
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  rejected.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 2}));
+  AddFloat(rejected, "scale", {}, {2.0F});
+  rejected.MakeNode("MatMul", {"x", "w"}, {"mm"});
+  rejected.MakeNode("Div", {"scale", "mm"}, {"out"});
+  core::builder::GraphGraph rejected_graph(rejected);
+  EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[0]).pattern, nullptr);
 }
 
 TEST(ReshapeMatMulReshapePattern, RemovesThreeReshapesAndRejectsSharedMatMulOutput) {

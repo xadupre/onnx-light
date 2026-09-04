@@ -18,6 +18,8 @@
 #include "onnx_extensions/patterns/canonicalization/dropout_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/pad_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/stft_pattern.h"
 #include "onnx_extensions/patterns/collections/concat_pattern.h"
 #include "onnx_extensions/patterns/collections/gather_pattern.h"
 #include "onnx_extensions/patterns/collections/sequence_pattern.h"
@@ -32,6 +34,7 @@
 #include "onnx_extensions/patterns/normalization/activation_pattern.h"
 #include "onnx_extensions/patterns/normalization/normalization_pattern.h"
 #include "onnx_extensions/patterns/reshape/reshape_pattern.h"
+#include "onnx_extensions/patterns/traditionalml/label_encoder_pattern.h"
 #include "onnx_extensions/patterns/traditionalml/tree_ensemble_pattern.h"
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 #include "onnx_extensions/patterns/unsqueeze/unsqueeze_pattern.h"
@@ -101,12 +104,29 @@ NB_MODULE(_onnxpypatterns, m) {
       "``Clip(x, min) -> Clip(x1, , max)`` becomes one ``Clip(x, min, max)`` "
       "when one Clip defines the minimum and the other the maximum.")
       .def(nb::init<int>(), nb::arg("priority") = 1);
+  nb::class_<onnx_patterns::ReluClipFusionPattern, core::builder::PatternOptimization>(
+      m, "ReluClipFusionPattern",
+      "Removes Relu before Clip when the Clip minimum is constant and non-negative.")
+      .def(nb::init<int>(), nb::arg("priority") = 1);
   nb::class_<onnx_patterns::ConstantToInitializerPattern, core::builder::PatternOptimization>(
       m, "ConstantToInitializerPattern",
       "Replaces a Constant node by an initializer and an Identity node.")
       .def(nb::init<int>(), nb::arg("priority") = 1);
   nb::class_<onnx_patterns::ConvBiasNullPattern, core::builder::PatternOptimization>(
       m, "ConvBiasNullPattern", "Removes a null (all-zero) bias input from a Conv node.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ConvAddFusionPattern, core::builder::PatternOptimization>(
+      m, "ConvAddFusionPattern",
+      "Folds a channel-wise constant Add following a Conv into the Conv bias.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ConvMulFusionPattern, core::builder::PatternOptimization>(
+      m, "ConvMulFusionPattern",
+      "Folds a scalar or channel-wise constant Mul following a Conv into its constants.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ConvBatchNormalizationFusionPattern,
+             core::builder::PatternOptimization>(
+      m, "ConvBatchNormalizationFusionPattern",
+      "Folds inference BatchNormalization following a Conv into its weights and bias.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
   nb::class_<onnx_patterns::DropoutPattern, core::builder::PatternOptimization>(
       m, "DropoutPattern",
@@ -122,6 +142,10 @@ NB_MODULE(_onnxpypatterns, m) {
   nb::class_<onnx_patterns::PadConvPattern, core::builder::PatternOptimization>(
       m, "PadConvPattern", "Folds a Pad node into the ``pads`` attribute of a following Conv node.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::PadPadFusionPattern, core::builder::PatternOptimization>(
+      m, "PadPadFusionPattern",
+      "Merges adjacent constant-mode Pad nodes with equal values by summing their pads.")
+      .def(nb::init<int>(), nb::arg("priority") = 1);
   nb::class_<onnx_patterns::SplitConcatPattern, core::builder::PatternOptimization>(
       m, "SplitConcatPattern",
       "Replaces a Split immediately followed by a Concat that restores the "
@@ -142,6 +166,9 @@ NB_MODULE(_onnxpypatterns, m) {
       "Drops empty inputs from a Concat node, reducing it to an Identity when a "
       "single input remains.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
+  BindPattern<onnx_patterns::ConcatSliceEliminationPattern>(
+      m, "ConcatSliceEliminationPattern",
+      "Eliminates a Concat followed by exact slices recovering all inputs.");
   nb::class_<onnx_patterns::ConcatGatherPattern, core::builder::PatternOptimization>(
       m, "ConcatGatherPattern",
       "Rewrites a Gather reading a single Concat input into a Gather on that "
@@ -161,6 +188,9 @@ NB_MODULE(_onnxpypatterns, m) {
       m, "GatherGatherPattern",
       "Collapses two consecutive scalar Gather nodes into a single Gather node.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
+  BindPattern<onnx_patterns::GatherSliceToSplitPattern>(
+      m, "GatherSliceToSplitPattern",
+      "Fuses compatible sibling Gather and Slice ranges into one Split.");
   nb::class_<onnx_patterns::GatherShapePattern, core::builder::PatternOptimization>(
       m, "GatherShapePattern",
       "Rewrites a Gather of a scalar index over a Shape node into a narrowed "
@@ -169,6 +199,12 @@ NB_MODULE(_onnxpypatterns, m) {
   nb::class_<onnx_patterns::SliceSlicePattern, core::builder::PatternOptimization>(
       m, "SliceSlicePattern", "Merges two consecutive Slice nodes on distinct axes into one Slice.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::SliceEliminationPattern, core::builder::PatternOptimization>(
+      m, "SliceEliminationPattern", "Replaces an identity full-range Slice with Identity.")
+      .def(nb::init<int>(), nb::arg("priority") = 1);
+  BindPattern<onnx_patterns::SliceConcatToSpaceToDepthPattern>(
+      m, "SliceConcatToSpaceToDepthPattern",
+      "Fuses canonical rank-4 phase slices and channel Concat into SpaceToDepth.");
   nb::class_<onnx_patterns::SequenceConstructAtPattern, core::builder::PatternOptimization>(
       m, "SequenceConstructAtPattern",
       "Replaces a SequenceAt reading a constant index of a SequenceConstruct by "
@@ -288,6 +324,9 @@ NB_MODULE(_onnxpypatterns, m) {
       "Simplifies transpose, reshape, and transpose sequences.");
   BindPattern<onnx_patterns::DivMulPattern>(
       m, "DivMulPattern", "Fuses multiplication by a reciprocal into one division.");
+  BindPattern<onnx_patterns::STFTFusionPattern>(
+      m, "STFTFusionPattern",
+      "Fuses a canonical convolution-based DFT subgraph into one standard ONNX STFT.");
   BindPattern<onnx_patterns::MulMulMulScalarPattern>(
       m, "MulMulMulScalarPattern", "Combines scalar factors in multiplication chains.");
   BindPattern<onnx_patterns::SwitchOrderBinaryPattern>(
@@ -315,11 +354,19 @@ NB_MODULE(_onnxpypatterns, m) {
       "Exposes the upstream placeholder for additions of two Shape outputs.");
   BindPattern<onnx_patterns::GemmTransposePattern>(m, "GemmTransposePattern",
                                                    "Folds input transposes into a Gemm operation.");
+  BindPattern<onnx_patterns::GemmSumFusionPattern>(
+      m, "GemmSumFusionPattern", "Fuses a two-input Sum into an unbiased Gemm bias input.");
   nb::class_<onnx_patterns::MatMulAddPattern, core::builder::PatternOptimization>(
       m, "MatMulAddPattern", "Replaces a compatible MatMul and Add with Gemm.")
       .def(nb::init<int, bool>(), nb::arg("priority") = 3, nb::arg("allow_reshape") = false);
+  BindPattern<onnx_patterns::MatMulBatchNormalizationFusionPattern>(
+      m, "MatMulBatchNormalizationFusionPattern",
+      "Folds constant inference BatchNormalization parameters into a rank-two MatMul.");
   BindPattern<onnx_patterns::MatMulReshape2Of3Pattern>(
       m, "MatMulReshape2Of3Pattern", "Simplifies compatible reshapes around MatMul.");
+  BindPattern<onnx_patterns::MatMulScaleFusionPattern>(
+      m, "MatMulScaleFusionPattern",
+      "Absorbs one safe scalar Mul or Div adjacent to a rank-two MatMul.");
   BindPattern<onnx_patterns::MulMulMatMulPattern>(
       m, "MulMulMatMulPattern", "Moves compatible scalar multiplications across MatMul.");
   BindPattern<onnx_patterns::ReshapeMatMulReshapePattern>(
@@ -382,6 +429,8 @@ NB_MODULE(_onnxpypatterns, m) {
   BindPattern<onnx_patterns::SwapExpandReshapePattern>(
       m, "SwapExpandReshapePattern",
       "Swaps a supported ``Expand`` and constant-shape ``Reshape`` pair.");
+  BindPattern<onnx_patterns::LabelEncoderFusionPattern>(
+      m, "LabelEncoderFusionPattern", "Composes consecutive ai.onnx.ml LabelEncoder mappings.");
   nb::class_<onnx_patterns::TreeEnsemblePattern, core::builder::PatternOptimization>(
       m, "TreeEnsemblePattern",
       "Replaces a classic tree ensemble with the unified ``TreeEnsemble`` operator.")

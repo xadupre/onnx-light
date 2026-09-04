@@ -54,6 +54,86 @@ public:
 };
 
 /**
+ * Removes a ``Concat`` whose consumers are exact, non-overlapping ``Slice``
+ * nodes that recover every input in order along the concatenation axis.
+ *
+ * @code
+ * Before:
+ *             +--------+       +--------------------+
+ *   x0, x1 -->| Concat |--+--->| Slice(range of x0) |---> y0
+ *             +--------+  |    +--------------------+
+ *                         |    +--------------------+
+ *                         +--->| Slice(range of x1) |---> y1
+ *                              +--------------------+
+ *
+ * After:
+ *        +----------+
+ *   x0 ->| Identity |---> y0
+ *        +----------+
+ *        +----------+
+ *   x1 ->| Identity |---> y1
+ *        +----------+
+ * @endcode
+ */
+class ConcatSliceEliminationPattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit ConcatSliceEliminationPattern(int priority = 0)
+      : PatternOptimization(priority, "ConcatSliceElimination") {}
+
+  /// Returns ``Concat`` as the only possible root operator.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds exact slices that partition a statically shaped Concat output.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Replaces every Slice with an Identity from its corresponding Concat input.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
+ * Replaces the canonical rank-4 four-phase slicing and channel concatenation
+ * used by focus layers with the standard ONNX ``SpaceToDepth(blocksize=2)``.
+ *
+ * @code
+ * Before:
+ *       +--> Slice(0::2, 0::2) --+
+ *       |                         |
+ *       +--> Slice(0::2, 1::2) --+
+ *       |                         |    +----------------+
+ *   x --+--> Slice(1::2, 0::2) --+--->| Concat(axis=1) |---> y
+ *       |                         |    +----------------+
+ *       +--> Slice(1::2, 1::2) --+
+ *
+ * After:
+ *        +---------------------------+
+ *   x -->| SpaceToDepth(blocksize=2) |---> y
+ *        +---------------------------+
+ * @endcode
+ */
+class SliceConcatToSpaceToDepthPattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit SliceConcatToSpaceToDepthPattern(int priority = 0)
+      : PatternOptimization(priority, "SliceConcatToSpaceToDepth") {}
+
+  /// Returns ``Concat`` as the only possible root operator.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds four canonical spatial phase slices concatenated on channels.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Replaces the five-node subgraph with a standard SpaceToDepth node.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
  * Simplifies ``Gather(Concat(...), cst_index)`` when the index is a constant
  * single-element ``int64`` tensor and every ``Concat`` input is a 1-D tensor of
  * a statically known size.

@@ -43,6 +43,39 @@ public:
 };
 
 /**
+ * Fuses a two-input Sum following an unbiased Gemm into the Gemm bias input.
+ *
+ * The Gemm output must be private to the Sum, and the other Sum input must be
+ * unidirectionally broadcastable to the rank-two Gemm output.
+ *
+ * @code
+ * Before:
+ *          +------+       +-----+
+ *   A, B ->| Gemm |------>| Sum |---> y
+ *          +------+       +-----+
+ *                            ^
+ *                            |
+ *                            C
+ *
+ * After:
+ *             +--------------+
+ *   A, B, C ->| Gemm(beta=1) |---> y
+ *             +--------------+
+ * @endcode
+ */
+class GemmSumFusionPattern final : public core::builder::PatternOptimization {
+public:
+  explicit GemmSumFusionPattern(int priority = 4)
+      : PatternOptimization(priority, "GemmSumFusion") {}
+  std::set<std::string> FastOpType() const override;
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
  * Fuses an Add bias into a MatMul or Gemm.
  *
  * @code
@@ -184,6 +217,76 @@ public:
 class MulMulMatMulPattern final : public core::builder::PatternOptimization {
 public:
   explicit MulMulMatMulPattern(int priority = 1) : PatternOptimization(priority, "MulMulMatMul") {}
+  std::set<std::string> FastOpType() const override;
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
+ * Folds inference BatchNormalization parameters into a constant MatMul weight.
+ *
+ * Both MatMul inputs and the BatchNormalization input/output must be rank two.
+ * The MatMul weight and all four BatchNormalization parameters must be
+ * floating-point constants. The replacement is a standard Gemm with folded
+ * weight and bias initializers.
+ *
+ * @code
+ * Before:
+ *          +--------+       +--------------------+
+ *   x, W ->| MatMul |------>| BatchNormalization |---> y
+ *          +--------+       +--------------------+
+ *                              ^    ^    ^    ^
+ *                              |    |    |    |
+ *                           scale  bias mean variance
+ *
+ * After:
+ *                              +------+
+ *   x, folded_W, folded_bias ->| Gemm |---> y
+ *                              +------+
+ * @endcode
+ */
+class MatMulBatchNormalizationFusionPattern final : public core::builder::PatternOptimization {
+public:
+  explicit MatMulBatchNormalizationFusionPattern(int priority = 5)
+      : PatternOptimization(priority, "MatMulBatchNormalizationFusion") {}
+  std::set<std::string> FastOpType() const override;
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
+ * Absorbs one scalar Mul or safe Div adjacent to a rank-two MatMul.
+ *
+ * A constant matrix operand is folded when available. Otherwise the MatMul is
+ * replaced by a standard Gemm whose ``alpha`` attribute carries the scalar.
+ * Divisions with the scalar in the numerator and zero or non-finite factors
+ * are rejected.
+ *
+ * @code
+ * Before:
+ *          +--------+       +-----+
+ *   x, W ->| MatMul |------>| Mul |---> y
+ *          +--------+       +-----+
+ *                            ^
+ *                            |
+ *                          scale
+ *
+ * After:
+ *                  +--------+
+ *   x, folded_W -->| MatMul |---> y
+ *                  +--------+
+ * @endcode
+ */
+class MatMulScaleFusionPattern final : public core::builder::PatternOptimization {
+public:
+  explicit MatMulScaleFusionPattern(int priority = 4)
+      : PatternOptimization(priority, "MatMulScaleFusion") {}
   std::set<std::string> FastOpType() const override;
   core::builder::MatchResult Match(core::builder::GraphGraph &graph,
                                    const NodeProto &candidate) const override;

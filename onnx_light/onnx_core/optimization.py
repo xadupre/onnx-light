@@ -20,22 +20,31 @@ CastCastPattern: TypeAlias = _patterns.CastCastPattern
 CastCastBinaryPattern: TypeAlias = _patterns.CastCastBinaryPattern
 CastOpCastPattern: TypeAlias = _patterns.CastOpCastPattern
 ClipClipPattern: TypeAlias = _patterns.ClipClipPattern
+ReluClipFusionPattern: TypeAlias = _patterns.ReluClipFusionPattern
 ConstantToInitializerPattern: TypeAlias = _patterns.ConstantToInitializerPattern
 ConvBiasNullPattern: TypeAlias = _patterns.ConvBiasNullPattern
+ConvAddFusionPattern: TypeAlias = _patterns.ConvAddFusionPattern
+ConvMulFusionPattern: TypeAlias = _patterns.ConvMulFusionPattern
+ConvBatchNormalizationFusionPattern: TypeAlias = _patterns.ConvBatchNormalizationFusionPattern
 DropoutPattern: TypeAlias = _patterns.DropoutPattern
 IdentityPattern: TypeAlias = _patterns.IdentityPattern
 NotNotPattern: TypeAlias = _patterns.NotNotPattern
 PadConvPattern: TypeAlias = _patterns.PadConvPattern
+PadPadFusionPattern: TypeAlias = _patterns.PadPadFusionPattern
 SplitConcatPattern: TypeAlias = _patterns.SplitConcatPattern
 GathersSplitPattern: TypeAlias = _patterns.GathersSplitPattern
 SlicesSplitPattern: TypeAlias = _patterns.SlicesSplitPattern
 ConcatEmptyPattern: TypeAlias = _patterns.ConcatEmptyPattern
+ConcatSliceEliminationPattern: TypeAlias = _patterns.ConcatSliceEliminationPattern
 ConcatGatherPattern: TypeAlias = _patterns.ConcatGatherPattern
 ConcatTwiceUnaryPattern: TypeAlias = _patterns.ConcatTwiceUnaryPattern
 GatherConcatPattern: TypeAlias = _patterns.GatherConcatPattern
 GatherGatherPattern: TypeAlias = _patterns.GatherGatherPattern
+GatherSliceToSplitPattern: TypeAlias = _patterns.GatherSliceToSplitPattern
 GatherShapePattern: TypeAlias = _patterns.GatherShapePattern
 SliceSlicePattern: TypeAlias = _patterns.SliceSlicePattern
+SliceEliminationPattern: TypeAlias = _patterns.SliceEliminationPattern
+SliceConcatToSpaceToDepthPattern: TypeAlias = _patterns.SliceConcatToSpaceToDepthPattern
 SequenceConstructAtPattern: TypeAlias = _patterns.SequenceConstructAtPattern
 SplitToSequenceSequenceAtPattern: TypeAlias = _patterns.SplitToSequenceSequenceAtPattern
 NotWherePattern: TypeAlias = _patterns.NotWherePattern
@@ -75,6 +84,7 @@ SwapUnsqueezeTransposePattern: TypeAlias = _patterns.SwapUnsqueezeTransposePatte
 TransposeEqualReshapePattern: TypeAlias = _patterns.TransposeEqualReshapePattern
 TransposeReshapeTransposePattern: TypeAlias = _patterns.TransposeReshapeTransposePattern
 DivMulPattern: TypeAlias = _patterns.DivMulPattern
+STFTFusionPattern: TypeAlias = _patterns.STFTFusionPattern
 MulMulMulScalarPattern: TypeAlias = _patterns.MulMulMulScalarPattern
 SwitchOrderBinaryPattern: TypeAlias = _patterns.SwitchOrderBinaryPattern
 SwapRangeAddScalarPattern: TypeAlias = _patterns.SwapRangeAddScalarPattern
@@ -98,8 +108,11 @@ LinearAttentionPattern: TypeAlias = _patterns.LinearAttentionPattern
 FunctionAttentionGQAPattern: TypeAlias = _patterns.FunctionAttentionGQAPattern
 AttentionGQAPattern: TypeAlias = _patterns.AttentionGQAPattern
 GemmTransposePattern: TypeAlias = _patterns.GemmTransposePattern
+GemmSumFusionPattern: TypeAlias = _patterns.GemmSumFusionPattern
 MatMulAddPattern: TypeAlias = _patterns.MatMulAddPattern
+MatMulBatchNormalizationFusionPattern: TypeAlias = _patterns.MatMulBatchNormalizationFusionPattern
 MatMulReshape2Of3Pattern: TypeAlias = _patterns.MatMulReshape2Of3Pattern
+MatMulScaleFusionPattern: TypeAlias = _patterns.MatMulScaleFusionPattern
 MulMulMatMulPattern: TypeAlias = _patterns.MulMulMatMulPattern
 ReshapeMatMulReshapePattern: TypeAlias = _patterns.ReshapeMatMulReshapePattern
 ShapeBasedMatMulToMulPattern: TypeAlias = _patterns.ShapeBasedMatMulToMulPattern
@@ -118,6 +131,7 @@ LeakyReluPattern: TypeAlias = _patterns.LeakyReluPattern
 MaxReluPattern: TypeAlias = _patterns.MaxReluPattern
 SoftmaxCrossEntropyLossCastPattern: TypeAlias = _patterns.SoftmaxCrossEntropyLossCastPattern
 TreeEnsemblePattern: TypeAlias = _patterns.TreeEnsemblePattern
+LabelEncoderFusionPattern: TypeAlias = _patterns.LabelEncoderFusionPattern
 TransposeTransposePattern: TypeAlias = _patterns.TransposeTransposePattern
 TransposeGatherPattern: TypeAlias = _patterns.TransposeGatherPattern
 UnsqueezeUnsqueezePattern: TypeAlias = _patterns.UnsqueezeUnsqueezePattern
@@ -266,9 +280,13 @@ __all__ = [
     "ConcatEmptyPattern",
     "ConcatGatherPattern",
     "ConcatReshapePattern",
+    "ConcatSliceEliminationPattern",
     "ConcatTwiceUnaryPattern",
     "ConstantToInitializerPattern",
+    "ConvAddFusionPattern",
+    "ConvBatchNormalizationFusionPattern",
     "ConvBiasNullPattern",
+    "ConvMulFusionPattern",
     "DivMulPattern",
     "DropoutPattern",
     "ExpandBroadcastPattern",
@@ -284,19 +302,24 @@ __all__ = [
     "GatherConcatPattern",
     "GatherGatherPattern",
     "GatherShapePattern",
+    "GatherSliceToSplitPattern",
     "GathersSplitPattern",
     "GeluPattern",
+    "GemmSumFusionPattern",
     "GemmTransposePattern",
     "GraphBuilder",
     "GraphGraph",
     "IdentityPattern",
+    "LabelEncoderFusionPattern",
     "LayerNormalizationPattern",
     "LayerNormalizationScalePattern",
     "LeakyReluPattern",
     "LinearAttentionPattern",
     "LocalRewriting",
     "MatMulAddPattern",
+    "MatMulBatchNormalizationFusionPattern",
     "MatMulReshape2Of3Pattern",
+    "MatMulScaleFusionPattern",
     "MatchResult",
     "MaxReluPattern",
     "MulMulMatMulPattern",
@@ -306,12 +329,14 @@ __all__ = [
     "NotWherePattern",
     "OptimizationReport",
     "PadConvPattern",
+    "PadPadFusionPattern",
     "PatternOptimization",
     "RMSNormalizationMulPattern",
     "RMSNormalizationPattern",
     "ReduceArgTopKPattern",
     "ReduceReshapePattern",
     "ReduceSumNormalizePattern",
+    "ReluClipFusionPattern",
     "Reshape2Of3Pattern",
     "ReshapeMatMulReshapePattern",
     "ReshapePattern",
@@ -320,6 +345,7 @@ __all__ = [
     "ReshapeSqueezePattern",
     "RotaryConcatPartPattern",
     "RotaryEmbeddingPattern",
+    "STFTFusionPattern",
     "SameChildrenFromInputPattern",
     "SameChildrenPattern",
     "SequenceConstructAtPattern",
@@ -337,6 +363,8 @@ __all__ = [
     "ShapeBasedStaticExpandPattern",
     "ShapeTransposePattern",
     "ShapedBasedReshapePattern",
+    "SliceConcatToSpaceToDepthPattern",
+    "SliceEliminationPattern",
     "SliceSlicePattern",
     "SlicesSplitPattern",
     "SoftmaxCrossEntropyLossCastPattern",

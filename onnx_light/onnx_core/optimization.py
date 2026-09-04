@@ -84,7 +84,7 @@ SwapUnsqueezeTransposePattern: TypeAlias = _patterns.SwapUnsqueezeTransposePatte
 TransposeEqualReshapePattern: TypeAlias = _patterns.TransposeEqualReshapePattern
 TransposeReshapeTransposePattern: TypeAlias = _patterns.TransposeReshapeTransposePattern
 DivMulPattern: TypeAlias = _patterns.DivMulPattern
-STFTDecompositionPattern: TypeAlias = _patterns.STFTDecompositionPattern
+STFTFusionPattern: TypeAlias = _patterns.STFTFusionPattern
 MulMulMulScalarPattern: TypeAlias = _patterns.MulMulMulScalarPattern
 SwitchOrderBinaryPattern: TypeAlias = _patterns.SwitchOrderBinaryPattern
 SwapRangeAddScalarPattern: TypeAlias = _patterns.SwapRangeAddScalarPattern
@@ -345,7 +345,7 @@ __all__ = [
     "ReshapeSqueezePattern",
     "RotaryConcatPartPattern",
     "RotaryEmbeddingPattern",
-    "STFTDecompositionPattern",
+    "STFTFusionPattern",
     "SameChildrenFromInputPattern",
     "SameChildrenPattern",
     "SequenceConstructAtPattern",

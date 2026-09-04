@@ -19,13 +19,13 @@
 #include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/pad_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/stft_pattern.h"
 #include "onnx_extensions/patterns/collections/concat_pattern.h"
 #include "onnx_extensions/patterns/collections/gather_pattern.h"
 #include "onnx_extensions/patterns/collections/sequence_pattern.h"
 #include "onnx_extensions/patterns/collections/shape_pattern.h"
 #include "onnx_extensions/patterns/collections/slice_pattern.h"
 #include "onnx_extensions/patterns/collections/split_pattern.h"
-#include "onnx_extensions/patterns/decomposition/stft_decomposition.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_extensions/patterns/expand/expand_pattern.h"
 #include "onnx_extensions/patterns/expand/where_pattern.h"
@@ -324,9 +324,9 @@ NB_MODULE(_onnxpypatterns, m) {
       "Simplifies transpose, reshape, and transpose sequences.");
   BindPattern<onnx_patterns::DivMulPattern>(
       m, "DivMulPattern", "Fuses multiplication by a reciprocal into one division.");
-  BindPattern<onnx_patterns::STFTDecompositionPattern>(
-      m, "STFTDecompositionPattern",
-      "Decomposes a supported real-valued STFT into portable ONNX operators.");
+  BindPattern<onnx_patterns::STFTFusionPattern>(
+      m, "STFTFusionPattern",
+      "Fuses a canonical convolution-based DFT subgraph into one standard ONNX STFT.");
   BindPattern<onnx_patterns::MulMulMulScalarPattern>(
       m, "MulMulMulScalarPattern", "Combines scalar factors in multiplication chains.");
   BindPattern<onnx_patterns::SwitchOrderBinaryPattern>(

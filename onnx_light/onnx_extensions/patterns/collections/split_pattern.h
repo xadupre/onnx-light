@@ -127,12 +127,15 @@ public:
  *
  * @code
  * Before:
- *   x --+--> Gather(index=0) ----------> y0
+ *       +--> Gather(index=0) ----------> y0
+ *   x --+
  *       +--> Slice(starts=1, ends=3) --> y1
  *
  * After:
- *   x --> Split(sizes=[1,2]) --+--> Squeeze --> y0
- *                              +-------------> y1
+ *        +--------------------+     +---------+
+ *   x -->| Split(sizes=[1,2]) |--+->| Squeeze |---> y0
+ *        +--------------------+  |  +---------+
+ *                                +---------------> y1
  * @endcode
  */
 class GatherSliceToSplitPattern final : public core::builder::PatternOptimization {

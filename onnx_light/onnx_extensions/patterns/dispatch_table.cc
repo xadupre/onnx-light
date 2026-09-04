@@ -22,13 +22,13 @@
 #include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/pad_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/stft_pattern.h"
 #include "onnx_extensions/patterns/collections/concat_pattern.h"
 #include "onnx_extensions/patterns/collections/gather_pattern.h"
 #include "onnx_extensions/patterns/collections/sequence_pattern.h"
 #include "onnx_extensions/patterns/collections/shape_pattern.h"
 #include "onnx_extensions/patterns/collections/slice_pattern.h"
 #include "onnx_extensions/patterns/collections/split_pattern.h"
-#include "onnx_extensions/patterns/decomposition/stft_decomposition.h"
 #include "onnx_extensions/patterns/expand/expand_pattern.h"
 #include "onnx_extensions/patterns/expand/where_pattern.h"
 #include "onnx_extensions/patterns/layout/layout_pattern.h"
@@ -267,8 +267,8 @@ void RegisterPatterns() {
       return std::make_unique<TransposeReshapeTransposePattern>();
     });
     core::builder::RegisterPattern("DivMul", [] { return std::make_unique<DivMulPattern>(); });
-    core::builder::RegisterPattern("STFTDecomposition",
-                                   [] { return std::make_unique<STFTDecompositionPattern>(); });
+    core::builder::RegisterPattern("STFTFusion",
+                                   [] { return std::make_unique<STFTFusionPattern>(); });
     core::builder::RegisterPattern("MulMulMulScalar",
                                    [] { return std::make_unique<MulMulMulScalarPattern>(); });
     core::builder::RegisterPattern("SwitchOrderBinary",

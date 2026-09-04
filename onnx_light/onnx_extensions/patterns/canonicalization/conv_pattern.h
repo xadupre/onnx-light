@@ -100,8 +100,18 @@ public:
  * remains a standard-domain Conv and keeps any following activation unchanged.
  *
  * @code
- * Before: X, W, B -> Conv -> Add(channel constant) -> Y
- * After:  X, W, folded B -> Conv --------------------> Y
+ * Before:
+ *                   +------+       +-----+
+ *   X, W, B ------->| Conv |------>| Add |-------> Y
+ *                   +------+       +-----+
+ *                                      ^
+ *                                      |
+ *                             channel constant
+ *
+ * After:
+ *                             +------+
+ *   X, W, folded B ---------->| Conv |-----------> Y
+ *                             +------+
  * @endcode
  */
 class ConvAddFusionPattern final : public core::builder::PatternOptimization {
@@ -131,8 +141,18 @@ public:
  * constants must be FLOAT or DOUBLE tensors of one matching type.
  *
  * @code
- * Before: X, W, B -> Conv -> Mul(channel/scalar constant) -> Y
- * After:  X, folded W, folded B -> Conv ------------------> Y
+ * Before:
+ *                   +------+       +-----+
+ *   X, W, B ------->| Conv |------>| Mul |-------> Y
+ *                   +------+       +-----+
+ *                                      ^
+ *                                      |
+ *                         channel/scalar constant
+ *
+ * After:
+ *                                  +------+
+ *   X, folded W, folded B -------->| Conv |-------> Y
+ *                                  +------+
  * @endcode
  */
 class ConvMulFusionPattern final : public core::builder::PatternOptimization {
@@ -163,8 +183,18 @@ public:
  * matching type. Optional BatchNormalization outputs must be absent or unused.
  *
  * @code
- * Before: X, W, B -> Conv -> BatchNormalization -> Y
- * After:  X, folded W, folded B -> Conv -----------> Y
+ * Before:
+ *                +------+       +--------------------+
+ *   X, W, B ---->| Conv |------>| BatchNormalization |----> Y
+ *                +------+       +--------------------+
+ *                                  ^    ^    ^    ^
+ *                                  |    |    |    |
+ *                               scale  bias mean variance
+ *
+ * After:
+ *                                  +------+
+ *   X, folded W, folded B -------->| Conv |-------------> Y
+ *                                  +------+
  * @endcode
  */
 class ConvBatchNormalizationFusionPattern final : public core::builder::PatternOptimization {

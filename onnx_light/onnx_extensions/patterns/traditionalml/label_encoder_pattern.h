@@ -17,10 +17,14 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  *
  * @code
  * Before:
- *   x --> LabelEncoder(keys1, values1) --> LabelEncoder(keys2, values2) --> y
+ *        +------------------------------+     +------------------------------+
+ *   x -->| LabelEncoder(keys1, values1) |---->| LabelEncoder(keys2, values2) |---> y
+ *        +------------------------------+     +------------------------------+
  *
  * After:
- *   x --> LabelEncoder(composed keys and values) --> y
+ *        +-----------------------------------------+
+ *   x -->| LabelEncoder(composed keys and values) |---> y
+ *        +-----------------------------------------+
  * @endcode
  */
 class LabelEncoderFusionPattern final : public core::builder::PatternOptimization {

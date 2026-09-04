@@ -50,10 +50,17 @@ public:
  *
  * @code
  * Before:
- *   A, B --> Gemm --> Sum(C) --> y
+ *          +------+       +-----+
+ *   A, B ->| Gemm |------>| Sum |---> y
+ *          +------+       +-----+
+ *                            ^
+ *                            |
+ *                            C
  *
  * After:
- *   A, B, C --> Gemm(beta=1) --> y
+ *             +--------------+
+ *   A, B, C ->| Gemm(beta=1) |---> y
+ *             +--------------+
  * @endcode
  */
 class GemmSumFusionPattern final : public core::builder::PatternOptimization {
@@ -228,10 +235,17 @@ public:
  *
  * @code
  * Before:
- *   x, W --> MatMul --> BatchNormalization --> y
+ *          +--------+       +--------------------+
+ *   x, W ->| MatMul |------>| BatchNormalization |---> y
+ *          +--------+       +--------------------+
+ *                              ^    ^    ^    ^
+ *                              |    |    |    |
+ *                           scale  bias mean variance
  *
  * After:
- *   x, folded_W, folded_bias --> Gemm --> y
+ *                              +------+
+ *   x, folded_W, folded_bias ->| Gemm |---> y
+ *                              +------+
  * @endcode
  */
 class MatMulBatchNormalizationFusionPattern final : public core::builder::PatternOptimization {
@@ -256,10 +270,17 @@ public:
  *
  * @code
  * Before:
- *   x, W --> MatMul --> Mul(scale) --> y
+ *          +--------+       +-----+
+ *   x, W ->| MatMul |------>| Mul |---> y
+ *          +--------+       +-----+
+ *                            ^
+ *                            |
+ *                          scale
  *
  * After:
- *   x, folded_W --> MatMul --> y
+ *                  +--------+
+ *   x, folded_W -->| MatMul |---> y
+ *                  +--------+
  * @endcode
  */
 class MatMulScaleFusionPattern final : public core::builder::PatternOptimization {

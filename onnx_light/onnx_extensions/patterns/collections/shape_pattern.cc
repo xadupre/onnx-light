@@ -256,6 +256,66 @@ ShapeTransposePattern::Apply(core::builder::GraphGraph &graph,
   return replacements;
 }
 
+std::set<std::string> PreShapeNodeEliminationPattern::FastOpType() const { return {"Cast"}; }
+
+core::builder::MatchResult PreShapeNodeEliminationPattern::Match(core::builder::GraphGraph &graph,
+                                                                 const NodeProto &candidate) const {
+  if (!IsDefaultOp(candidate, "Cast")) {
+    return NoMatch(candidate, "candidate is not a default-domain Cast");
+  }
+  if (candidate.input_size() != 1) {
+    return NoMatch(candidate, "the Cast does not have exactly one input");
+  }
+  if (candidate.output_size() != 1) {
+    return NoMatch(candidate, "the Cast does not have exactly one output");
+  }
+  const std::string &cast_output = candidate.output()[0].value();
+  const NodeProto *shape = nullptr;
+  for (const NodeProto *consumer : graph.NextNodes(cast_output)) {
+    if (consumer != nullptr && IsDefaultOp(*consumer, "Shape")) {
+      shape = consumer;
+      break;
+    }
+  }
+  if (shape == nullptr) {
+    return NoMatch(candidate, "the Cast output is not consumed by a Shape");
+  }
+  if (shape->input_size() != 1) {
+    return NoMatch(candidate, "the Shape node does not have exactly one input");
+  }
+  return core::builder::MatchResult{this, {&candidate, shape}, &candidate};
+}
+
+utils::RepeatedProtoField<NodeProto>
+PreShapeNodeEliminationPattern::Apply(core::builder::GraphGraph &graph,
+                                      const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 2 || nodes[0] == nullptr || nodes[1] == nullptr) {
+    throw BuilderError("PreShapeNodeEliminationPattern::Apply expects a Cast and a Shape node.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[0]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError("PreShapeNodeEliminationPattern::Apply received an unsafe or inconsistent "
+                       "match.");
+  }
+  const NodeProto &cast = *nodes[0];
+  const NodeProto &shape = *nodes[1];
+
+  utils::RepeatedProtoField<NodeProto> replacements;
+  if (graph.IsUsedMoreThanOnce(cast.output()[0].value())) {
+    // Another consumer (another op, a graph output, or a subgraph capture)
+    // still needs the casted value, so the Cast is kept unchanged.
+    replacements.add() = cast;
+  }
+
+  // Copy the Shape node verbatim (name, start/end attributes, metadata,
+  // output) and redirect only its input, since Shape's result never depends
+  // on the element type produced by the Cast.
+  NodeProto new_shape = shape;
+  (*new_shape.mutable_input())[0] = cast.input()[0].value();
+  replacements.push_back(new_shape);
+  return replacements;
+}
+
 std::set<std::string> UnsqueezeShapePattern::FastOpType() const { return {"Unsqueeze"}; }
 
 core::builder::MatchResult UnsqueezeShapePattern::Match(core::builder::GraphGraph &graph,

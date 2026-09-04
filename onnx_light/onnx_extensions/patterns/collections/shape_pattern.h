@@ -128,6 +128,62 @@ public:
 };
 
 /**
+ * Removes a ``Cast`` node whose output only feeds ``Shape`` consumers,
+ * redirecting each such ``Shape`` node directly to the ``Cast``'s input.
+ *
+ * ``Shape`` reports the input tensor's dimensions and never depends on its
+ * element type, so a ``Cast`` immediately followed only by ``Shape`` nodes can
+ * be bypassed without changing any ``Shape`` output, for any opset. Because
+ * only the ``Shape`` node's input is rewritten, its ``start`` / ``end``
+ * attributes (available since opset 15), name, and metadata are preserved
+ * unchanged, and its rank / dimension reporting is unaffected. When the
+ * ``Cast`` output is also consumed elsewhere (another op, a graph output, or a
+ * subgraph capture), the ``Cast`` is retained for that use and only the
+ * matched ``Shape`` node is rewritten; it is dropped once its last ``Shape``
+ * consumer has been rewritten.
+ *
+ * @code
+ * Before:
+ *            ┌──────┐               ┌─────────────────────┐
+ *   x:A ────→│ Cast │────→ c:B ────→│ Shape start=s end=e │────→ y
+ *            └──────┘               └─────────────────────┘
+ *
+ * After:
+ *                     ┌─────────────────────┐
+ *   x:A ─────────────→│ Shape start=s end=e │────→ y
+ *                     └─────────────────────┘
+ *
+ * After (c:B is also consumed elsewhere):
+ *            ┌──────┐
+ *   x:A ────→│ Cast │────→ c:B ────→ other consumer
+ *            └──────┘
+ *
+ *                     ┌─────────────────────┐
+ *   x:A ─────────────→│ Shape start=s end=e │────→ y
+ *                     └─────────────────────┘
+ * @endcode
+ */
+class PreShapeNodeEliminationPattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit PreShapeNodeEliminationPattern(int priority = 0)
+      : PatternOptimization(priority, "PreShapeNodeElimination") {}
+
+  /// Returns ``Cast`` as the only possible root operator.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds a ``Cast`` whose output feeds at least one ``Shape`` node.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Rewrites the matched ``Shape`` node to read directly from the ``Cast``'s
+  /// input, keeping the ``Cast`` alive only if still needed elsewhere.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
  * Replaces ``Shape(Unsqueeze(X, axes))`` by a ``Concat`` of ``Shape(X)`` slices
  * interleaved with constant ``[1]`` tensors at the inserted axis positions.
  *

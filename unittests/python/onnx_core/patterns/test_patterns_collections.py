@@ -597,6 +597,160 @@ class TestCollectionPatterns(ExtTestCase):
         self.assertEqual(optimized.graph.node[0].output[0], "Y")
         self.assert_equivalent(model, optimized, feeds)
 
+    def test_gather_upstream_propagation_add_skips_bias(self):
+        model = make_model(
+            [
+                oh.make_node("Add", ["X", "B"], ["T"]),
+                oh.make_node("Gather", ["T", "indices"], ["Y"], axis=1),
+            ],
+            [
+                make_value_info("X", TensorProto.FLOAT, [2, 3, 4]),
+                make_value_info("B", TensorProto.FLOAT, [4]),
+            ],
+            [make_value_info("Y", TensorProto.FLOAT, [2, 2, 4])],
+            [make_initializer("indices", [0, 2])],
+        )
+        feeds = {"X": make_range(2, 3, 4), "B": make_range(4)}
+
+        optimized, rewrites = self.optimize(model, "GatherUpstreamPropagation")
+
+        self.assertEqual(len(rewrites), 1)
+        self.assertEqual(node_types(optimized), ["Gather", "Add"])
+        gather, add = optimized.graph.node
+        self.assertEqual(gather.input[0], "X")
+        self.assertEqual(list(add.input), [gather.output[0], "B"])
+        self.assertEqual(add.output[0], "Y")
+        self.assert_equivalent(model, optimized, feeds)
+
+    def test_gather_upstream_propagation_rejects_scalar_broadcast(self):
+        model = make_model(
+            [
+                oh.make_node("Add", ["X", "B"], ["T"]),
+                oh.make_node("Gather", ["T", "indices"], ["Y"], axis=0),
+            ],
+            [
+                make_value_info("X", TensorProto.FLOAT, [2, 3, 4]),
+                make_value_info("B", TensorProto.FLOAT, [1, 3, 4]),
+            ],
+            [make_value_info("Y", TensorProto.FLOAT, [3, 4])],
+            [make_initializer("indices", numpy.array(0, dtype=numpy.int64))],
+        )
+
+        optimized, rewrites = self.optimize(model, "GatherUpstreamPropagation")
+
+        self.assertEqual(len(rewrites), 0)
+        self.assertEqual(node_types(optimized), ["Add", "Gather"])
+
+    def test_gather_upstream_propagation_reshape_zero_marker(self):
+        model = make_model(
+            [
+                oh.make_node("Reshape", ["X", "shape"], ["T"]),
+                oh.make_node("Gather", ["T", "indices"], ["Y"], axis=1),
+            ],
+            [make_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
+            [make_value_info("Y", TensorProto.FLOAT, [2, 2, 4])],
+            [make_initializer("shape", [0, 0, 4]), make_initializer("indices", [0, 2])],
+        )
+        feeds = {"X": make_range(2, 3, 4)}
+
+        optimized, rewrites = self.optimize(model, "GatherUpstreamPropagation")
+
+        self.assertEqual(len(rewrites), 1)
+        self.assertEqual(node_types(optimized), ["Gather", "Reshape"])
+        gather, reshape = optimized.graph.node
+        self.assertEqual(gather.input[0], "X")
+        self.assertEqual(reshape.input[1], "shape")
+        self.assert_equivalent(model, optimized, feeds)
+
+    def test_gather_upstream_propagation_reshape_updates_concrete_entry(self):
+        model = make_model(
+            [
+                oh.make_node("Reshape", ["X", "shape"], ["T"]),
+                oh.make_node("Gather", ["T", "indices"], ["Y"], axis=1),
+            ],
+            [make_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
+            [make_value_info("Y", TensorProto.FLOAT, [2, 2, 4])],
+            [make_initializer("shape", [2, 3, 4]), make_initializer("indices", [0, 1])],
+        )
+        feeds = {"X": make_range(2, 3, 4)}
+
+        optimized, rewrites = self.optimize(model, "GatherUpstreamPropagation")
+
+        self.assertEqual(len(rewrites), 1)
+        self.assertEqual(node_types(optimized), ["Gather", "Reshape"])
+        reshape = optimized.graph.node[1]
+        self.assertNotEqual(reshape.input[1], "shape")
+        values = initializer_values(optimized)
+        numpy.testing.assert_array_equal(values[reshape.input[1]], numpy.array([2, 2, 4]))
+        self.assert_equivalent(model, optimized, feeds)
+
+    def test_gather_upstream_propagation_matmul_batch_dim(self):
+        model = make_model(
+            [
+                oh.make_node("MatMul", ["A", "B"], ["T"]),
+                oh.make_node("Gather", ["T", "indices"], ["Y"], axis=0),
+            ],
+            [
+                make_value_info("A", TensorProto.FLOAT, [8, 2, 3]),
+                make_value_info("B", TensorProto.FLOAT, [8, 3, 4]),
+            ],
+            [make_value_info("Y", TensorProto.FLOAT, [2, 2, 4])],
+            [make_initializer("indices", [0, 2])],
+        )
+        feeds = {"A": make_range(8, 2, 3), "B": make_range(8, 3, 4)}
+
+        optimized, rewrites = self.optimize(model, "GatherUpstreamPropagation")
+
+        self.assertEqual(len(rewrites), 1)
+        self.assertEqual(node_types(optimized), ["Gather", "Gather", "MatMul"])
+        self.assert_equivalent(model, optimized, feeds)
+
+    def test_gather_upstream_propagation_softmax_before_reduction_axis(self):
+        model = make_model(
+            [
+                oh.make_node("Softmax", ["X"], ["T"], axis=2),
+                oh.make_node("Gather", ["T", "indices"], ["Y"], axis=0),
+            ],
+            [make_value_info("X", TensorProto.FLOAT, [2, 3, 4])],
+            [make_value_info("Y", TensorProto.FLOAT, [1, 3, 4])],
+            [make_initializer("indices", [0])],
+        )
+        feeds = {"X": make_range(2, 3, 4)}
+
+        optimized, rewrites = self.optimize(model, "GatherUpstreamPropagation")
+
+        self.assertEqual(len(rewrites), 1)
+        self.assertEqual(node_types(optimized), ["Gather", "Softmax"])
+        softmax = optimized.graph.node[1]
+        self.assertEqual(next(a.i for a in softmax.attribute if a.name == "axis"), 2)
+        self.assert_equivalent(model, optimized, feeds)
+
+    def test_gather_upstream_propagation_optimizer_convergence(self):
+        model = make_model(
+            [
+                oh.make_node("Add", ["X", "B1"], ["T1"]),
+                oh.make_node("Add", ["T1", "B2"], ["T2"]),
+                oh.make_node("Gather", ["T2", "indices"], ["Y"], axis=1),
+            ],
+            [
+                make_value_info("X", TensorProto.FLOAT, [2, 3, 4]),
+                make_value_info("B1", TensorProto.FLOAT, [4]),
+                make_value_info("B2", TensorProto.FLOAT, [4]),
+            ],
+            [make_value_info("Y", TensorProto.FLOAT, [2, 2, 4])],
+            [make_initializer("indices", [0, 2])],
+        )
+        feeds = {"X": make_range(2, 3, 4), "B1": make_range(4), "B2": make_range(4)}
+
+        optimized, rewrites = self.optimize(model, "GatherUpstreamPropagation")
+
+        self.assertGreaterEqual(len(rewrites), 1)
+        # Convergence: the only Gather left reads straight from a graph input.
+        gathers = [node for node in optimized.graph.node if node.op_type == "Gather"]
+        self.assertEqual(len(gathers), 1)
+        self.assertEqual(gathers[0].input[0], "X")
+        self.assert_equivalent(model, optimized, feeds)
+
     def make_gather_concat_model(
         self, concat_inputs, constants, indices, output_shape, *, shared=False
     ):

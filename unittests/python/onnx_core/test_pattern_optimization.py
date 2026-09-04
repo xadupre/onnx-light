@@ -187,6 +187,48 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(list(optimized.graph.node[0].input), ["x", "mn", "mx"])
         self.assertEqual(rewrites[0].pattern_name, "ClipClip")
 
+    def test_standard_gather_to_slice_pattern_rewrites_vector_singleton(self):
+        graph = oh.make_graph(
+            [oh.make_node("Gather", ["x", "idx"], ["y"])],
+            "agraph",
+            [oh.make_tensor_value_info("x", TensorProto.FLOAT, [5])],
+            [oh.make_tensor_value_info("y", TensorProto.FLOAT, [1])],
+            initializer=[oh.make_tensor("idx", TensorProto.INT64, [1], [3])],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+
+        builder = optim.GraphBuilder(model)
+        graph = optim.GraphGraph(builder, optim.standard_patterns(["GatherToSlice"]))
+        rewrites = graph.optimize()
+        optimized = builder.to_onnx("model")
+
+        self.assertIn("GatherToSlice", optim.registered_pattern_names())
+        self.assertIsInstance(optim.GatherToSlicePattern(), optim.PatternOptimization)
+        self.assertEqual([node.op_type for node in optimized.graph.node], ["Slice"])
+        self.assertEqual(optimized.graph.node[0].input[0], "x")
+        self.assertEqual(optimized.graph.node[0].output[0], "y")
+        self.assertEqual(rewrites[0].pattern_name, "GatherToSlice")
+
+    def test_standard_gather_to_slice_pattern_rewrites_scalar_index_with_squeeze(self):
+        graph = oh.make_graph(
+            [oh.make_node("Gather", ["x", "idx"], ["y"])],
+            "agraph",
+            [oh.make_tensor_value_info("x", TensorProto.FLOAT, [5])],
+            [oh.make_tensor_value_info("y", TensorProto.FLOAT, [])],
+            initializer=[oh.make_tensor("idx", TensorProto.INT64, [], [2])],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+
+        builder = optim.GraphBuilder(model)
+        graph = optim.GraphGraph(builder, optim.standard_patterns(["GatherToSlice"]))
+        graph.optimize()
+        optimized = builder.to_onnx("model")
+
+        op_types = [node.op_type for node in optimized.graph.node]
+        self.assertEqual(op_types, ["Slice", "Squeeze"])
+        self.assertEqual(optimized.graph.node[0].input[0], "x")
+        self.assertEqual(optimized.graph.node[-1].output[0], "y")
+
     def test_structural_patterns_are_selectable(self):
         names = set(optim.registered_pattern_names())
         self.assertIn("SliceElimination", names)

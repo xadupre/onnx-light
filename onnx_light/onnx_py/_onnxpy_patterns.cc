@@ -18,6 +18,7 @@
 #include "onnx_extensions/patterns/canonicalization/dropout_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/pad_pattern.h"
 #include "onnx_extensions/patterns/collections/concat_pattern.h"
 #include "onnx_extensions/patterns/collections/gather_pattern.h"
 #include "onnx_extensions/patterns/collections/sequence_pattern.h"
@@ -102,6 +103,10 @@ NB_MODULE(_onnxpypatterns, m) {
       "``Clip(x, min) -> Clip(x1, , max)`` becomes one ``Clip(x, min, max)`` "
       "when one Clip defines the minimum and the other the maximum.")
       .def(nb::init<int>(), nb::arg("priority") = 1);
+  nb::class_<onnx_patterns::ReluClipFusionPattern, core::builder::PatternOptimization>(
+      m, "ReluClipFusionPattern",
+      "Removes Relu before Clip when the Clip minimum is constant and non-negative.")
+      .def(nb::init<int>(), nb::arg("priority") = 1);
   nb::class_<onnx_patterns::ConstantToInitializerPattern, core::builder::PatternOptimization>(
       m, "ConstantToInitializerPattern",
       "Replaces a Constant node by an initializer and an Identity node.")
@@ -123,6 +128,10 @@ NB_MODULE(_onnxpypatterns, m) {
   nb::class_<onnx_patterns::PadConvPattern, core::builder::PatternOptimization>(
       m, "PadConvPattern", "Folds a Pad node into the ``pads`` attribute of a following Conv node.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::PadPadFusionPattern, core::builder::PatternOptimization>(
+      m, "PadPadFusionPattern",
+      "Merges adjacent constant-mode Pad nodes with equal values by summing their pads.")
+      .def(nb::init<int>(), nb::arg("priority") = 1);
   nb::class_<onnx_patterns::SplitConcatPattern, core::builder::PatternOptimization>(
       m, "SplitConcatPattern",
       "Replaces a Split immediately followed by a Concat that restores the "
@@ -170,6 +179,9 @@ NB_MODULE(_onnxpypatterns, m) {
   nb::class_<onnx_patterns::SliceSlicePattern, core::builder::PatternOptimization>(
       m, "SliceSlicePattern", "Merges two consecutive Slice nodes on distinct axes into one Slice.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::SliceEliminationPattern, core::builder::PatternOptimization>(
+      m, "SliceEliminationPattern", "Replaces an identity full-range Slice with Identity.")
+      .def(nb::init<int>(), nb::arg("priority") = 1);
   nb::class_<onnx_patterns::SequenceConstructAtPattern, core::builder::PatternOptimization>(
       m, "SequenceConstructAtPattern",
       "Replaces a SequenceAt reading a constant index of a SequenceConstruct by "

@@ -187,6 +187,15 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(list(optimized.graph.node[0].input), ["x", "mn", "mx"])
         self.assertEqual(rewrites[0].pattern_name, "ClipClip")
 
+    def test_structural_patterns_are_selectable(self):
+        names = set(optim.registered_pattern_names())
+        self.assertIn("SliceElimination", names)
+        self.assertIn("PadPadFusion", names)
+        self.assertIn("ReluClipFusion", names)
+        self.assertIsInstance(optim.SliceEliminationPattern(), optim.PatternOptimization)
+        self.assertIsInstance(optim.PadPadFusionPattern(), optim.PatternOptimization)
+        self.assertIsInstance(optim.ReluClipFusionPattern(), optim.PatternOptimization)
+
     def test_tensor_layout_algebra_patterns_are_selectable(self):
         names = (
             "ConcatReshape",

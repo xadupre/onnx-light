@@ -7,6 +7,7 @@
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 
+#include <limits>
 #include <memory>
 
 #include <gtest/gtest.h>
@@ -104,6 +105,61 @@ TEST(SliceSlicePattern, RejectsOverlappingAxes) {
   EXPECT_EQ(match.pattern, nullptr);
   ASSERT_TRUE(match.no_match.has_value());
   EXPECT_EQ(match.no_match->reason, "the two slices share an axis");
+}
+
+TEST(SliceEliminationPattern, ReplacesModernFullRangeSlice) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(4, 5));
+  builder.MakeInitializer(MakeInitializerShape("starts", {0, 0}));
+  builder.MakeInitializer(MakeInitializerShape(
+      "ends", {std::numeric_limits<int64_t>::max(), std::numeric_limits<int64_t>::max()}));
+  builder.MakeInitializer(MakeInitializerShape("axes", {0, 1}));
+  builder.MakeInitializer(MakeInitializerShape("steps", {1, 1}));
+  builder.MakeNode("Slice", {"x", "starts", "ends", "axes", "steps"}, {"y"}, "", "slice");
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::SliceEliminationPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  ASSERT_EQ(match.pattern, &pattern);
+  const auto replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 1u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Identity");
+  EXPECT_EQ(replacements[0].input()[0].value(), "x");
+  EXPECT_EQ(replacements[0].output()[0].value(), "y");
+}
+
+TEST(SliceEliminationPattern, SupportsAttributeForm) {
+  core::builder::GraphBuilder builder("g");
+  builder.SetOpsetVersion("", 9);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(4, 5));
+  NodeProto slice = MakeNode("Slice", {"x"}, {"y"});
+  AddAttribute<std::vector<int64_t>>(slice, "starts", {0});
+  AddAttribute<std::vector<int64_t>>(slice, "ends", {std::numeric_limits<int64_t>::max()});
+  AddAttribute<std::vector<int64_t>>(slice, "axes", {1});
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::SliceEliminationPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, slice).pattern, &pattern);
+}
+
+TEST(SliceEliminationPattern, RejectsNonIdentityParameters) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(4, 5));
+  builder.MakeInitializer(MakeInitializerShape("starts", {0}));
+  builder.MakeInitializer(MakeInitializerShape("ends", {std::numeric_limits<int64_t>::max()}));
+  builder.MakeInitializer(MakeInitializerShape("steps", {2}));
+  builder.MakeNode("Slice", {"x", "starts", "ends", "", "steps"}, {"y"});
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::SliceEliminationPattern pattern;
+  const auto match = pattern.Match(graph, builder.Nodes()[0]);
+  EXPECT_EQ(match.pattern, nullptr);
+  ASSERT_TRUE(match.no_match.has_value());
+  EXPECT_EQ(match.no_match->reason, "the Slice steps are not all one");
 }
 
 } // namespace

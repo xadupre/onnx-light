@@ -21,6 +21,7 @@
 #include "onnx_extensions/patterns/canonicalization/dropout_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/pad_pattern.h"
 #include "onnx_extensions/patterns/collections/concat_pattern.h"
 #include "onnx_extensions/patterns/collections/gather_pattern.h"
 #include "onnx_extensions/patterns/collections/sequence_pattern.h"
@@ -63,6 +64,8 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ClipClipPattern>();
                                    });
+    core::builder::RegisterPattern("ReluClipFusion",
+                                   [] { return std::make_unique<ReluClipFusionPattern>(); });
     core::builder::RegisterPattern("ConstantToInitializer",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ConstantToInitializerPattern>();
@@ -87,6 +90,8 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<PadConvPattern>();
                                    });
+    core::builder::RegisterPattern("PadPadFusion",
+                                   [] { return std::make_unique<PadPadFusionPattern>(); });
     core::builder::RegisterPattern("ConcatEmpty",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ConcatEmptyPattern>();
@@ -119,6 +124,8 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<SliceSlicePattern>();
                                    });
+    core::builder::RegisterPattern("SliceElimination",
+                                   [] { return std::make_unique<SliceEliminationPattern>(); });
     core::builder::RegisterPattern("SlicesSplit",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<SlicesSplitPattern>();

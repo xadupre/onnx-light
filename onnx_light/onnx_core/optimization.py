@@ -20,12 +20,14 @@ CastCastPattern: TypeAlias = _patterns.CastCastPattern
 CastCastBinaryPattern: TypeAlias = _patterns.CastCastBinaryPattern
 CastOpCastPattern: TypeAlias = _patterns.CastOpCastPattern
 ClipClipPattern: TypeAlias = _patterns.ClipClipPattern
+ReluClipFusionPattern: TypeAlias = _patterns.ReluClipFusionPattern
 ConstantToInitializerPattern: TypeAlias = _patterns.ConstantToInitializerPattern
 ConvBiasNullPattern: TypeAlias = _patterns.ConvBiasNullPattern
 DropoutPattern: TypeAlias = _patterns.DropoutPattern
 IdentityPattern: TypeAlias = _patterns.IdentityPattern
 NotNotPattern: TypeAlias = _patterns.NotNotPattern
 PadConvPattern: TypeAlias = _patterns.PadConvPattern
+PadPadFusionPattern: TypeAlias = _patterns.PadPadFusionPattern
 SplitConcatPattern: TypeAlias = _patterns.SplitConcatPattern
 GathersSplitPattern: TypeAlias = _patterns.GathersSplitPattern
 SlicesSplitPattern: TypeAlias = _patterns.SlicesSplitPattern
@@ -36,6 +38,7 @@ GatherConcatPattern: TypeAlias = _patterns.GatherConcatPattern
 GatherGatherPattern: TypeAlias = _patterns.GatherGatherPattern
 GatherShapePattern: TypeAlias = _patterns.GatherShapePattern
 SliceSlicePattern: TypeAlias = _patterns.SliceSlicePattern
+SliceEliminationPattern: TypeAlias = _patterns.SliceEliminationPattern
 SequenceConstructAtPattern: TypeAlias = _patterns.SequenceConstructAtPattern
 SplitToSequenceSequenceAtPattern: TypeAlias = _patterns.SplitToSequenceSequenceAtPattern
 NotWherePattern: TypeAlias = _patterns.NotWherePattern
@@ -313,12 +316,14 @@ __all__ = [
     "NotWherePattern",
     "OptimizationReport",
     "PadConvPattern",
+    "PadPadFusionPattern",
     "PatternOptimization",
     "RMSNormalizationMulPattern",
     "RMSNormalizationPattern",
     "ReduceArgTopKPattern",
     "ReduceReshapePattern",
     "ReduceSumNormalizePattern",
+    "ReluClipFusionPattern",
     "Reshape2Of3Pattern",
     "ReshapeMatMulReshapePattern",
     "ReshapePattern",
@@ -345,6 +350,7 @@ __all__ = [
     "ShapeBasedStaticExpandPattern",
     "ShapeTransposePattern",
     "ShapedBasedReshapePattern",
+    "SliceEliminationPattern",
     "SliceSlicePattern",
     "SlicesSplitPattern",
     "SoftmaxCrossEntropyLossCastPattern",
